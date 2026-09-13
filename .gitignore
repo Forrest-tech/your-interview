@@ -1,0 +1,27 @@
+# --- .NET ---
+bin/
+obj/
+*.user
+*.suo
+.vs/
+# --- Node / Angular ---
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+# --- 本地基础设施数据(不入库) ---
+.run/
+.logs/
+tools/db/data/
+tools/db/postgres.log
+tools/db/node_modules/
+rabbitmq/
+*.pid
+*.log
+# --- 密钥(本地开发用 appsettings.Development.json 内的开发密钥可入库,生产密钥走 Key Vault) ---
+.env
+.env.local
+*.pfx
+# --- 构建产物 ---
+publish/
+artifacts/

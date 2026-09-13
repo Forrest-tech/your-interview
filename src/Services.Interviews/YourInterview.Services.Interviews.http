@@ -1,0 +1,6 @@
+@YourInterview.Services.Interviews_HostAddress = http://localhost:5075
+
+GET {{YourInterview.Services.Interviews_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

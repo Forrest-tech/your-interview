@@ -1,14 +1,55 @@
-# Your Interview — 本地开发基础设施
+# Your Interview — 全栈容器编排
 #
-#   用法(Mac 上):
-#     docker compose up -d          起 PostgreSQL + RabbitMQ
-#     docker compose ps             看状态
-#     docker compose down           停(数据保留在命名卷里)
-#     docker compose down -v        停并清空数据(慎用)
+#   一键起全套(数据库 + 消息队列 + 7 个微服务 + 网关):
+#     docker compose up -d --build
 #
-# 说明:只把「基础设施」放进容器,微服务本身仍在宿主机用 dotnet run 跑。
-# 这样改代码即时生效、断点调试正常,也不用把 7 个服务都塞进容器吃内存。
-# 服务通过 127.0.0.1:5433 / 127.0.0.1:5672 连接,无需改 appsettings.json。
+#   看状态 / 日志:
+#     docker compose ps
+#     docker compose logs -f gateway
+#
+#   停:
+#     docker compose down          停(数据保留)
+#     docker compose down -v       停并清空数据
+#
+# 前端不在容器里 —— 用 `cd web && npm start` 在宿主机跑(开发时热重载更顺手,
+# 也省内存)。前端通过 localhost:5200 访问网关,已在 web/proxy.conf.json 配好。
+#
+# 服务之间用 docker 内部 DNS(服务名当主机名),不经过宿主机端口。
+# 只有网关把 5200 映射出来给前端用。
+
+x-service-env: &service-env
+  ASPNETCORE_ENVIRONMENT: Development
+  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+  # 容器内没有 ICU,关掉 globalization;连库走 docker DNS(主机名 postgres)
+  ConnectionStrings__Identity: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=identity"
+  ConnectionStrings__Jobs: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=jobs"
+  ConnectionStrings__InterviewsDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=interviews"
+  ConnectionStrings__KnowledgeDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=knowledge"
+  ConnectionStrings__AssessmentDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=assessment"
+  ConnectionStrings__AnalyticsDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=analytics"
+  RabbitMq__Host: rabbitmq
+  RabbitMq__Port: "5672"
+  RabbitMq__Username: guest
+  RabbitMq__Password: guest
+
+x-service-build: &service-build
+  context: .
+  dockerfile: Dockerfile.service
+
+x-service-deps: &service-deps
+  postgres:
+    condition: service_healthy
+  rabbitmq:
+    condition: service_healthy
+
+# 服务自身的健康检查(容器内 8080 是 ASPNETCORE_URLS 指定的端口)
+x-service-health: &service-health
+  test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health/live || exit 1"]
+  interval: 10s
+  timeout: 5s
+  retries: 30
+  start_period: 60s
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -18,10 +59,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: yourinterview
-      # 初始化时建库,与服务端 Search Path=<schema> 的分层方案配套
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
-      - "5433:5432"
+      - "5433:5432"          # 映射出来便于用本机 psql/客户端连进去看
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -38,8 +78,8 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"     # AMQP
-      - "15672:15672"   # 管理界面 http://localhost:15672 (guest/guest)
+      - "5672:5672"
+      - "15672:15672"        # 管理界面 http://localhost:15672 (guest/guest)
     volumes:
       - rabbitdata:/var/lib/rabbitmq
     healthcheck:
@@ -47,6 +87,112 @@ services:
       interval: 10s
       timeout: 10s
       retries: 12
+
+  identity:
+    build:
+      <<: *service-build
+      args: { SERVICE: Services.Identity }
+    container_name: yourinterview-identity
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      ASPNETCORE_URLS: "http://+:8080"
+    depends_on: *service-deps
+    healthcheck: *service-health
+
+  jobs:
+    build:
+      <<: *service-build
+      args: { SERVICE: Services.Jobs }
+    container_name: yourinterview-jobs
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      ASPNETCORE_URLS: "http://+:8080"
+    depends_on: *service-deps
+    healthcheck: *service-health
+
+  interviews:
+    build:
+      <<: *service-build
+      args: { SERVICE: Services.Interviews }
+    container_name: yourinterview-interviews
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      ASPNETCORE_URLS: "http://+:8080"
+    depends_on: *service-deps
+    healthcheck: *service-health
+
+  knowledge:
+    build:
+      <<: *service-build
+      args: { SERVICE: Services.Knowledge }
+    container_name: yourinterview-knowledge
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      ASPNETCORE_URLS: "http://+:8080"
+    depends_on: *service-deps
+    healthcheck: *service-health
+
+  assessment:
+    build:
+      <<: *service-build
+      args: { SERVICE: Services.Assessment }
+    container_name: yourinterview-assessment
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      ASPNETCORE_URLS: "http://+:8080"
+    depends_on: *service-deps
+    healthcheck: *service-health
+
+  analytics:
+    build:
+      <<: *service-build
+      args: { SERVICE: Services.Analytics }
+    container_name: yourinterview-analytics
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      ASPNETCORE_URLS: "http://+:8080"
+    depends_on: *service-deps
+    healthcheck: *service-health
+
+  gateway:
+    build:
+      <<: *service-build
+      args: { SERVICE: Services.Gateway }
+    container_name: yourinterview-gateway
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      ASPNETCORE_URLS: "http://+:8080"
+      # YARP 路由表里写的是 127.0.0.1:<port>,容器内要改成服务名。
+      # 下面这些覆盖在 Services.Gateway 的配置读取处生效。
+      ReverseProxy__Clusters__identity__Destinations__d1__Address: "http://identity:8080/"
+      ReverseProxy__Clusters__jobs__Destinations__d1__Address: "http://jobs:8080/"
+      ReverseProxy__Clusters__interviews__Destinations__d1__Address: "http://interviews:8080/"
+      ReverseProxy__Clusters__knowledge__Destinations__d1__Address: "http://knowledge:8080/"
+      ReverseProxy__Clusters__assessment__Destinations__d1__Address: "http://assessment:8080/"
+      ReverseProxy__Clusters__analytics__Destinations__d1__Address: "http://analytics:8080/"
+    ports:
+      - "5200:8080"          # 唯一对外暴露的端口,前端连它
+    depends_on:
+      identity:
+        condition: service_healthy
+      jobs:
+        condition: service_healthy
+      interviews:
+        condition: service_healthy
+      knowledge:
+        condition: service_healthy
+      assessment:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
+    healthcheck: *service-health
 
 volumes:
   pgdata:

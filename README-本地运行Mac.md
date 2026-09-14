@@ -1,22 +1,25 @@
-# Your Interview — 本地运行指南(Mac)
+# Your Interview — 本地运行指南(Mac,全容器版)
 
 给 Forrest 的机器:MacBook Pro 13" Mid 2014 / macOS Big Sur。
 
+整套后端(数据库 + 消息队列 + 7 个微服务 + 网关)全部跑在 Docker 里,
+一条命令起全套。前端在宿主机跑(改代码热重载更顺手)。
+
 ## 一、需要装什么
 
-1. .NET 8 SDK
-   https://dotnet.microsoft.com/download/dotnet/8.0
-   装完验证:`dotnet --version` 应显示 8.x
-
-2. Node.js 18 或 20(LTS)
-   `brew install node@20`
-   验证:`node -v`
-
-3. Docker Desktop for Mac
+1. Docker Desktop for Mac
    https://www.docker.com/products/docker-desktop
    装完打开,确认状态栏图标是运行中。验证:`docker info` 能返回信息。
 
+2. Node.js 18 或 20(只为跑前端)
+   `brew install node@20`
+   验证:`node -v`
+
+就这么两个。不需要装 .NET SDK,不需要装 PostgreSQL 或 RabbitMQ——全在容器里。
+
 注意:Docker Desktop 在 2014 款双核 i5 上启动会慢,耐心等一两分钟。
+首次构建镜像会更久(要下 SDK 镜像 + 还原 NuGet 包 + 构建 8 个项目),
+大概 10-20 分钟,取决于网速。之后就快了。
 
 ## 二、把代码拿到本地
 
@@ -26,27 +29,32 @@ git clone <仓库地址> your-interview
 cd your-interview
 ```
 
-(仓库还没推 GitHub,见文末"待办"。)
-
-## 三、起后端
+## 三、起后端(一条命令)
 
 ```bash
 cd ~/your-interview
-bash tools/dev.macos.sh up
+docker compose up -d --build
 ```
 
-这一步会:用 Docker 起 PostgreSQL(5433)和 RabbitMQ(5672 / 15672),然后依次构建并启动 7 个微服务 + 网关。首次会慢(dotnet 要还原包 + 构建),大概 3-5 分钟。
+这条命令会构建 8 个镜像并启动全部容器。等它返回后,看状态:
 
-看到下面这样就是好了:
+```bash
+docker compose ps
+```
 
+期望看到 9 个容器(postgres / rabbitmq / identity / jobs / interviews /
+knowledge / assessment / analytics / gateway),状态是 running 或 healthy。
+
+第一次启动时,各服务会自动建表和初始化数据(服务启动时会跑 EF 迁移),
+所以头一两分钟日志里可能有重连,属正常。等 gate 变 healthy 即可。
+
+验证后端通了:
+
+```bash
+curl http://localhost:5200/api/gateway/info
 ```
-  ✓ PostgreSQL :5433
-  ✓ RabbitMQ :5672 / :15672
-  ✓ identity 就绪 :5262
-  ...
-  ✓ gateway 就绪 :5200
-▸ 全部就绪
-```
+
+能返回 JSON 就说明网关和下游都活着。
 
 ## 四、起前端
 
@@ -58,42 +66,63 @@ npm install     # 首次需要
 npm start
 ```
 
-然后浏览器打开 http://localhost:4200
+浏览器打开 http://localhost:4200
 
 登录:admin@your-interview.local / Admin!Passw0rd2026
 
 ## 五、常用命令
 
 ```bash
-bash tools/dev.macos.sh up             # 起全部
-bash tools/dev.macos.sh status         # 看状态
-bash tools/dev.macos.sh down           # 停服务(基础设施容器保留)
-bash tools/dev.macos.sh down-all       # 全停,含 Docker 容器
-bash tools/dev.macos.sh restart jobs   # 重启某个服务
-bash tools/dev.macos.sh logs gateway   # 看日志
-bash tools/dev.macos.sh urls           # 打印所有地址
+docker compose up -d --build     # 起(改了代码要重新 build)
+docker compose ps                # 看状态
+docker compose logs -f gateway   # 实时看某个服务日志
+docker compose logs -f identity  # 换服务名即可
+docker compose restart jobs      # 重启单个服务
+docker compose down              # 停全部(数据保留)
+docker compose down -v           # 停并清空数据(彻底重来)
+```
+
+改后端代码后要重新构建对应服务:
+
+```bash
+docker compose up -d --build jobs
 ```
 
 ## 六、出问题怎么办
 
-服务起不来,先看日志:
+先看日志,九成问题都在日志里:
 
 ```bash
-bash tools/dev.macos.sh logs <服务名>
+docker compose logs --tail 100 <服务名>
 ```
 
-常见情况:
+容器起不来 / unhealthy —— 看是不是数据库还没好。`docker compose ps` 里
+postgres 和 rabbitmq 必须是 healthy,其他服务才等得到。
 
-端口被占 —— 5433 或 5672 被别的程序占了,`lsof -i :5433` 查是谁。
+端口被占 —— 5200 / 5433 / 5672 / 15672 有一个被别的程序占了。
 
-Docker 没运行 —— 报 "Docker 没在运行 —— 请先启动 Docker Desktop",打开 Docker Desktop 再重试。
+`lsof -i :5200` 查是谁,关掉它或者改 docker-compose.yml 里的映射端口。
 
-数据库连不上 —— 确认 `docker compose ps` 里 postgres 是 healthy。数据不对想重来:`docker compose down -v` 然后重新 up(会清空数据)。
+数据乱了想重来 —— `docker compose down -v` 然后重新 up(会清空数据)。
 
-构建内存不够 —— 这台机器 16GB,同时跑 7 个 dotnet 进程 + Docker + Angular 会比较紧。如果某个服务构建失败,先 `bash tools/dev.macos.sh down`,单独构建它,再 up。
+构建时内存不够 / 卡死 —— 这台机器 16GB,Docker Desktop 默认可能只给 2GB。
+打开 Docker Desktop → Settings → Resources,把 Memory 调到 6-8GB。
+这是全容器方案在 2014 机器上最可能踩的坑。
 
-## 七、为什么是这套方案
+想省资源,可以只起需要的部分:
 
-基础设施用 Docker(不用在 Mac 上折腾装 PG 和 RabbitMQ,一条命令搞定),微服务用宿主机 dotnet run(改代码即时生效,断点调试正常,也不用把 7 个服务塞容器里吃内存)。
+```bash
+docker compose up -d postgres rabbitmq identity jobs gateway
+```
 
-原来容器里用的 embedded PostgreSQL 二进制和手工解包的 RabbitMQ 都是 Linux 专用,在 macOS 上跑不了,所以这个 Mac 版把这两块换成了 Docker 容器。
+## 七、方案说明
+
+全容器:数据库、消息队列、微服务都在 Docker 里,环境完全一致,
+你 Mac 上不需要装 .NET、PG、RabbitMQ 任何东西。
+
+前端不在容器里。开发时前端热重载很重要,放宿主机跑体验最好,
+前端通过 localhost:5200 访问容器里的网关(web/proxy.conf.json 已配好)。
+
+服务之间走 Docker 内部网络(用服务名当主机名),不经过宿主机端口;
+只有网关把 5200 暴露出来给前端用,5433 / 5672 / 15672 也暴露了方便你用
+本机客户端连进去排查。

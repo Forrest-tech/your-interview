@@ -1,0 +1,30 @@
+# 构建镜像时排除的东西 —— 不排除的话 Docker 会把 1GB+ 的依赖全塞进构建上下文,
+# 构建会慢到无法忍受。
+
+# 依赖与产物
+**/node_modules
+**/bin
+**/obj
+**/dist
+
+# 本地运行时数据(数据库数据目录、日志、进程文件)
+.run/
+.logs/
+tools/db/data/
+tools/db/node_modules/
+tools/db/postgres.log
+storage/
+
+# 开发工具与本机文件
+.git
+.gitignore
+*.md
+!README-本地运行Mac.md
+tools/*.sh
+Dockerfile.service
+docker-compose.yml
+**/erl_crash.dump
+**/.DS_Store
+
+# 前端源码不参与后端镜像构建(前端在宿主机跑)
+web/

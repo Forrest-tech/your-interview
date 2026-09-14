@@ -1,0 +1,63 @@
+# Your Interview — 微服务通用镜像
+#
+# 一个 Dockerfile 构建全部 8 个可执行项目(7 个服务 + Analysis.Worker),
+# 用 SERVICE 构建参数选择要发布的项目。
+#
+#   docker build --build-arg SERVICE=Services.Identity -t yi-identity .
+#
+# 多阶段:先 SDK 里还原+发布,再把产物拷进 ASP.NET 运行时镜像(体积小很多)。
+
+# ---------- 构建阶段 ----------
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+ARG SERVICE
+WORKDIR /repo
+
+# 先只拷解决方案与项目文件,让 restore 层能被缓存(改代码不必重新还原包)
+COPY src/YourInterview.sln ./src/
+COPY src/Directory.Build.props ./src/
+COPY src/Directory.Packages.props ./src/
+COPY src/BuildingBlocks/*.csproj ./src/BuildingBlocks/
+COPY src/SharedContracts/*.csproj ./src/SharedContracts/
+COPY src/Services.Identity/*.csproj ./src/Services.Identity/
+COPY src/Services.Jobs/*.csproj ./src/Services.Jobs/
+COPY src/Services.Interviews/*.csproj ./src/Services.Interviews/
+COPY src/Services.Knowledge/*.csproj ./src/Services.Knowledge/
+COPY src/Services.Assessment/*.csproj ./src/Services.Assessment/
+COPY src/Services.Analytics/*.csproj ./src/Services.Analytics/
+COPY src/Services.Gateway/*.csproj ./src/Services.Gateway/
+COPY src/Analysis.Worker/*.csproj ./src/Analysis.Worker/
+RUN dotnet restore "src/$SERVICE/"
+
+# 再拷全部源码并发布
+COPY src/ ./src/
+RUN dotnet publish "src/$SERVICE/" -c Release -o /app/publish --no-restore
+
+# ---------- 运行阶段 ----------
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+ARG SERVICE
+WORKDIR /app
+COPY --from=build /app/publish ./
+
+# 容器内无 ICU,统一用 invariant globalization
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
+    DOTNET_NOLOGO=1 \
+    ASPNETCORE_ENVIRONMENT=Development
+
+# 各服务监听端口由 compose 的 ASPNETCORE_URLS 指定,这里给个默认
+ENV ASPNETCORE_URLS=http://+:8080
+EXPOSE 8080
+
+# 从构建参数推出入口程序集名:
+#   Services.Identity -> YourInterview.Services.Identity.dll
+#   Analysis.Worker   -> YourInterview.Analysis.Worker.dll
+RUN set -eux; \
+    if [ "$SERVICE" = "Analysis.Worker" ]; then \
+      DLL="YourInterview.Analysis.Worker.dll"; \
+    else \
+      DLL="YourInterview.${SERVICE}.dll"; \
+    fi; \
+    test -f "/app/$DLL"; \
+    printf '#!/bin/sh\nexec dotnet /app/%s "$@"\n' "$DLL" > /app/entrypoint.sh; \
+    chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -71,21 +71,30 @@ public static class IdentityDbSeeder
         // 3) 演示账号(仅开发环境)
         if ((config["Seed:CreateDemoData"] ?? "false").Equals("true", StringComparison.OrdinalIgnoreCase))
         {
-            await SeedDemoAsync(db, scope.ServiceProvider, logger);
+            await SeedDemoAsync(db, scope.ServiceProvider, config, logger);
         }
 
         logger.LogInformation("Identity 数据库就绪:角色 {Roles} 个,用户 {Users} 个",
             await db.Roles.CountAsync(), await db.Users.CountAsync());
     }
 
-    private static async Task SeedDemoAsync(IdentityDbContext db, IServiceProvider sp, ILogger logger)
+    private static async Task SeedDemoAsync(IdentityDbContext db, IServiceProvider sp, IConfiguration config, ILogger logger)
     {
         var hasher = sp.GetRequiredService<Infrastructure.Security.IPasswordHasher>();
         var demoEmail = "demo@your-interview.local";
 
         if (await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == demoEmail)) return;
 
-        var demo = new AppUser(demoEmail, "Forrest (Demo)", hasher.Hash("Demo!Passw0rd2026"));
+        // 演示用户密码从配置读(Seed:DemoPassword), 不硬编码。
+        // 未配置则跳过演示数据播种 —— 只影响本地演示, 不影响正常流程。
+        var demoPassword = config["Seed:DemoPassword"];
+        if (string.IsNullOrWhiteSpace(demoPassword))
+        {
+            logger.LogInformation("未配置 Seed:DemoPassword, 跳过演示数据播种");
+            return;
+        }
+
+        var demo = new AppUser(demoEmail, "Forrest (Demo)", hasher.Hash(demoPassword));
         var role = await db.Roles.FirstAsync(r => r.Name == Roles.PowerUser);
         demo.AssignRole(role.Id);
         db.Users.Add(demo);
@@ -97,7 +106,7 @@ public static class IdentityDbSeeder
 
         for (var i = 1; i <= 12; i++)
         {
-            var u = new AppUser($"user{i:00}@example.com", $"Test User {i:00}", hasher.Hash("Demo!Passw0rd2026"));
+            var u = new AppUser($"user{i:00}@example.com", $"Test User {i:00}", hasher.Hash(demoPassword));
             u.AssignRole(i % 4 == 0 ? viewerRole.Id : userRole.Id);
             if (i % 5 == 0) u.Deactivate();
             db.Users.Add(u);

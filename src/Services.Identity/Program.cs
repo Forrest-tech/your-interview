@@ -57,7 +57,9 @@ builder.AddServiceDefaults(ServiceName, services =>
     // ---------- JWT 认证 ----------
     var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
     if (string.IsNullOrWhiteSpace(jwt.SigningKey))
-        jwt.SigningKey = "dev-only-signing-key-change-me-in-production-0123456789abcdef";
+        throw new InvalidOperationException(
+            "缺少 Jwt:SigningKey 配置。请在本地 appsettings.Development.json 或环境变量 Jwt__SigningKey 中配置" +
+            "(至少 32 字符)。生产环境务必使用随机密钥,不要使用示例值。");
 
     services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>

@@ -34,8 +34,16 @@ storage/
 # Erlang/RabbitMQ 崩溃转储
 **/erl_crash.dump
 
-# 本地开发配置含真实密钥(Azure Speech key / 服务账号密码),
-# 绝不入库。仓库里保留 appsettings.json 模板, 真值放本地覆盖文件或环境变量。
+# 本地开发配置含真实密钥(Azure Speech key / 服务账号密码), 绝不入库。
+# 仓库里只提交 *.example 模板; 真值放本地副本(已被下面规则排除)。
 **/appsettings.Development.json
 **/appsettings.Local.json
+**/appsettings.*.Local.json
+**/.env
+**/.env.local
+.secrets-*.json
 .secrets-analysis-worker-dev.json
+
+# 但模板必须入库
+!**/appsettings.Development.json.example
+!**/.env.example

@@ -29,24 +29,64 @@ git clone <仓库地址> your-interview
 cd your-interview
 ```
 
-## 三、起后端(一条命令)
+## 三、配置本地密钥(必经步骤)
+
+仓库里不含任何真实密钥(密钥都在 `.env` 和你本地的 `appsettings.Development.json` 里,
+已被 gitignore,不会提交)。所以 clone 之后第一件事是配自己的密钥:
+
+```bash
+bash tools/setup-secrets.sh
+```
+
+这个脚本会在仓库根创建 `.env`,并在 `src/Analysis.Worker/` 创建
+`appsettings.Development.json`(都是从 `.example` 模板复制的)。
+然后编辑这两个文件,把 `REPLACE_WITH_*` 换成真值:
+
+`.env`(Docker 路线用,compose 会自动读取):
+
+```
+AZURE_SPEECH_KEY=<Azure 门户 → Speech 资源 → 密钥1>
+AZURE_SPEECH_REGION=canadacentral
+SERVICE_ACCOUNT_EMAIL=service.analysis@your-interview.local
+SERVICE_ACCOUNT_PASSWORD=<自定义一个强密码>
+JWT_SIGNING_KEY=<openssl rand -base64 48 生成>
+ADMIN_PASSWORD=<自定义管理员密码>
+```
+
+`src/Analysis.Worker/appsettings.Development.json`(不开 Docker、直接 dotnet run 时用):
+
+```
+AzureSpeech.Key            = 同上 Azure key
+ServiceAccount.Password    = 同上服务账号密码
+Storage.RootDirectory      = 本机仓库绝对路径
+```
+
+两个文件里的 Azure key 与服务账号密码要保持一致(一个是容器用,一个是本机用)。
+
+检查有没有漏填:
+
+```bash
+grep -rn REPLACE_WITH .env src/Analysis.Worker/appsettings.Development.json
+```
+
+输出为空就说明配好了。
+
+## 四、起后端(Docker 路线,推荐)
 
 ```bash
 cd ~/your-interview
 docker compose up -d --build
 ```
 
-这条命令会构建 8 个镜像并启动全部容器。等它返回后,看状态:
+这条命令会构建 9 个镜像并启动全部容器(数据库 + 消息队列 + 7 微服务 + 网关
++ 分析 Worker)。等它返回后看状态:
 
 ```bash
 docker compose ps
 ```
 
-期望看到 9 个容器(postgres / rabbitmq / identity / jobs / interviews /
-knowledge / assessment / analytics / gateway),状态是 running 或 healthy。
-
-第一次启动时,各服务会自动建表和初始化数据(服务启动时会跑 EF 迁移),
-所以头一两分钟日志里可能有重连,属正常。等 gate 变 healthy 即可。
+期望 10 个容器全 running / healthy。首次启动时各服务会自动建表播种,
+头一两分钟日志有重连属正常。
 
 验证后端通了:
 
@@ -54,9 +94,7 @@ knowledge / assessment / analytics / gateway),状态是 running 或 healthy。
 curl http://localhost:5200/api/gateway/info
 ```
 
-能返回 JSON 就说明网关和下游都活着。
-
-## 四、起前端
+## 五、起前端
 
 另开一个终端:
 
@@ -68,9 +106,9 @@ npm start
 
 浏览器打开 http://localhost:4200
 
-登录:admin@your-interview.local / Admin!Passw0rd2026
+登录用 `.env` 里 `ADMIN_PASSWORD` 配合 `admin@your-interview.local`。
 
-## 五、常用命令
+## 六、常用命令
 
 ```bash
 docker compose up -d --build     # 起(改了代码要重新 build)
@@ -80,6 +118,7 @@ docker compose logs -f identity  # 换服务名即可
 docker compose restart jobs      # 重启单个服务
 docker compose down              # 停全部(数据保留)
 docker compose down -v           # 停并清空数据(彻底重来)
+bash tools/setup-secrets.sh      # 生成/重建本地密钥文件
 ```
 
 改后端代码后要重新构建对应服务:
@@ -88,7 +127,7 @@ docker compose down -v           # 停并清空数据(彻底重来)
 docker compose up -d --build jobs
 ```
 
-## 六、出问题怎么办
+## 七、出问题怎么办
 
 先看日志,九成问题都在日志里:
 
@@ -115,7 +154,7 @@ postgres 和 rabbitmq 必须是 healthy,其他服务才等得到。
 docker compose up -d postgres rabbitmq identity jobs gateway
 ```
 
-## 七、方案说明
+## 八、方案说明
 
 全容器:数据库、消息队列、微服务都在 Docker 里,环境完全一致,
 你 Mac 上不需要装 .NET、PG、RabbitMQ 任何东西。

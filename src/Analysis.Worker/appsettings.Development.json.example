@@ -1,0 +1,26 @@
+{
+  "_README": [
+    "这是 Analysis.Worker 的本地开发配置模板, 可安全提交仓库(无真实密钥)。",
+    "用法: 复制成同目录的 appsettings.Development.json, 再把 REPLACE_WITH_* 换成真实值。",
+    "appsettings.Development.json 已被 .gitignore 排除, 不会提交。",
+    "字段说明: AzureSpeech.Key = Azure 门户 Speech 资源的密钥1;",
+    "ServiceAccount = 本 Worker 回写结果时登录 Identity 用的服务账号(需与 Identity 播种一致);",
+    "Storage.RootDirectory = 本机仓库绝对路径(音频工作目录)。"
+  ],
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug"
+    }
+  },
+  "AzureSpeech": {
+    "Key": "REPLACE_WITH_YOUR_AZURE_SPEECH_KEY",
+    "Region": "canadacentral"
+  },
+  "ServiceAccount": {
+    "Email": "service.analysis@your-interview.local",
+    "Password": "REPLACE_WITH_SERVICE_ACCOUNT_PASSWORD"
+  },
+  "Storage": {
+    "RootDirectory": "REPLACE_WITH_ABSOLUTE_PATH_TO_REPO"
+  }
+}

@@ -45,7 +45,7 @@ show_urls() {
   echo
   echo "  前端:            http://localhost:4200   (cd web && npm start)"
   echo "  网关:            http://localhost:5200"
-  echo "  登录:            admin@your-interview.local / Admin!Passw0rd2026"
+  echo "  登录:            admin@your-interview.local / $ADMIN_PASSWORD(.env 里的)"
   echo "  数据库(外部连):  localhost:5433  postgres / postgres  db=yourinterview"
   echo "  RabbitMQ 管理台: http://localhost:15672  (guest / guest)"
   echo

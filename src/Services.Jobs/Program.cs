@@ -34,7 +34,10 @@ builder.AddServiceDefaults(ServiceName, services =>
 
 // ---------- JWT 认证(校验 Identity 签发的令牌,只验签不查库) ----------
 var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"] ?? "dev-only-signing-key-change-me-in-production-0123456789abcdef";
+var signingKey = jwtSection["SigningKey"]
+    ?? throw new InvalidOperationException(
+        "缺少 Jwt:SigningKey 配置。请在本地 appsettings.Development.json 或环境变量 Jwt__SigningKey 中配置" +
+        "(需与 Services.Identity 签发的密钥一致,至少 32 字符)。");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

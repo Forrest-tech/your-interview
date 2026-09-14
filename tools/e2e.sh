@@ -16,9 +16,9 @@ ANALYTICS=http://127.0.0.1:5267
 GATEWAY=http://127.0.0.1:5200
 
 ADMIN_EMAIL=admin@your-interview.local
-ADMIN_PASS='Admin!Passw0rd2026'
+ADMIN_PASS="${ADMIN_PASSWORD:-}"
 VIEWER_EMAIL=user04@example.com
-VIEWER_PASS='Demo!Passw0rd2026'
+VIEWER_PASS="${VIEWER_PASSWORD:-}"
 
 PASS=0; FAIL=0
 ok()   { echo "  ✓ $1"; PASS=$((PASS+1)); }

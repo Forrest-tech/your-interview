@@ -20,7 +20,7 @@
 x-service-env: &service-env
   ASPNETCORE_ENVIRONMENT: Development
   DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
-  # 容器内没有 ICU,关掉 globalization;连库走 docker DNS(主机名 postgres)
+  # 容器内没有 ICU,关掉 globalization；连库走 docker DNS（主机名 postgres）
   ConnectionStrings__Identity: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=identity"
   ConnectionStrings__Jobs: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=jobs"
   ConnectionStrings__InterviewsDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=interviews"
@@ -31,6 +31,9 @@ x-service-env: &service-env
   RabbitMq__Port: "5672"
   RabbitMq__Username: guest
   RabbitMq__Password: guest
+  # JWT 签名密钥: 从 .env 注入（已在 .gitignore）。六个服务必须用同一个值,
+  # 否则 Identity 签的令牌其它服务验不过。
+  Jwt__SigningKey: "${JWT_SIGNING_KEY:-}"
 
 x-service-build: &service-build
   context: .
@@ -97,6 +100,10 @@ services:
     environment:
       <<: *service-env
       ASPNETCORE_URLS: "http://+:8080"
+      # 管理员密码只在 Identity 播种时用一次,从 .env 注入
+      Seed__AdminPassword: "${ADMIN_PASSWORD:-}"
+      # 演示数据密码; 留空则跳过演示数据播种
+      Seed__DemoPassword: "${DEMO_PASSWORD:-}"
     depends_on: *service-deps
     healthcheck: *service-health
 
@@ -194,6 +201,46 @@ services:
         condition: service_healthy
     healthcheck: *service-health
 
+  # 后台分析服务: 没有 HTTP 端点, 不需要暴露端口, 也不做 healthcheck。
+  # 它消费 RabbitMQ 里的分析请求 → 调 Azure Speech 转写 → 六维诊断 → 回写 Interviews。
+  #
+  # 密钥来源(按优先级): 环境变量 > .env 文件 > appsettings.Development.json(本地)。
+  # compose 会读仓库根的 .env(已在 .gitignore 里), 所以真实 key 不落库。
+  # 首次使用: cp .env.example .env, 再把 AZURE_SPEECH_KEY 等换成真值。
+  analysis-worker:
+    build:
+      <<: *service-build
+      args: { SERVICE: Analysis.Worker }
+    container_name: yourinterview-analysis-worker
+    restart: unless-stopped
+    environment:
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: "5672"
+      RabbitMq__Username: guest
+      RabbitMq__Password: guest
+      # 服务地址走容器 DNS
+      Services__Interviews: "http://interviews:8080"
+      Services__Analytics: "http://analytics:8080"
+      Services__Knowledge: "http://knowledge:8080"
+      Services__Identity: "http://identity:8080"
+      # 密钥从 .env 注入(漏配时为空, Worker 启动会给出明确告警/报错)
+      AzureSpeech__Key: "${AZURE_SPEECH_KEY:-}"
+      AzureSpeech__Region: "${AZURE_SPEECH_REGION:-canadacentral}"
+      ServiceAccount__Email: "${SERVICE_ACCOUNT_EMAIL:-service.analysis@your-interview.local}"
+      ServiceAccount__Password: "${SERVICE_ACCOUNT_PASSWORD:-}"
+      Storage__WorkDirectory: "/app/.analysis"
+    volumes:
+      - analysis-work:/app/.analysis
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      interviews:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+
 volumes:
   pgdata:
   rabbitdata:
+  analysis-work:

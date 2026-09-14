@@ -5,7 +5,9 @@ set -uo pipefail
 
 BASE="${BASE:-http://127.0.0.1:5200}"
 EMAIL="${EMAIL:-admin@your-interview.local}"
-PASS="${PASS:-Admin!Passw0rd2026}"
+# 密码从环境变量取(优先 .env 或显式传入), 不硬编码在仓库里
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+PASS="${PASS:-${ADMIN_PASSWORD:-}}"
 
 PASS_N=0; FAIL_N=0; WARN_N=0
 

@@ -1,0 +1,53 @@
+# Your Interview — 本地开发基础设施
+#
+#   用法(Mac 上):
+#     docker compose up -d          起 PostgreSQL + RabbitMQ
+#     docker compose ps             看状态
+#     docker compose down           停(数据保留在命名卷里)
+#     docker compose down -v        停并清空数据(慎用)
+#
+# 说明:只把「基础设施」放进容器,微服务本身仍在宿主机用 dotnet run 跑。
+# 这样改代码即时生效、断点调试正常,也不用把 7 个服务都塞进容器吃内存。
+# 服务通过 127.0.0.1:5433 / 127.0.0.1:5672 连接,无需改 appsettings.json。
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: yourinterview-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: yourinterview
+      # 初始化时建库,与服务端 Search Path=<schema> 的分层方案配套
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d yourinterview"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: yourinterview-rabbit
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # 管理界面 http://localhost:15672 (guest/guest)
+    volumes:
+      - rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+volumes:
+  pgdata:
+  rabbitdata:

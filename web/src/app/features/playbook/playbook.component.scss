@@ -1,0 +1,339 @@
+/* 机经列表:卡片网格 —— 每条记录的信息量(六维 + 三个计数)决定它塞不进表格行 */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+
+  h2 {
+    margin: 0 0 4px;
+    font-size: 22px;
+  }
+
+  .sub {
+    margin: 0;
+    color: var(--mat-sys-on-surface-variant, #666);
+    font-size: 13px;
+  }
+}
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 错误卡片:统计/列表加载失败时都在这里收口 */
+.err-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-left: 4px solid #d32f2f;
+
+  mat-icon {
+    color: #d32f2f;
+  }
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #666;
+  }
+}
+
+/* 顶部统计条 */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.metric {
+  padding: 14px 16px;
+  text-align: center;
+
+  &.highlight {
+    border-top: 3px solid #f9a825;
+  }
+
+  .metric-val {
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  .metric-label {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--mat-sys-on-surface-variant, #666);
+  }
+}
+
+.filters {
+  padding: 12px 16px 0;
+
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+
+    mat-form-field {
+      min-width: 180px;
+    }
+  }
+}
+
+/* 空状态:写清楚下一步做什么,而不是只说"没有数据" */
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+
+  mat-icon {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: #bbb;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 17px;
+  }
+
+  p {
+    margin: 0 0 8px;
+    color: #666;
+    font-size: 13px;
+  }
+}
+
+/* 卡片网格 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.entry {
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+  }
+
+  mat-card-header {
+    padding-bottom: 0;
+  }
+
+  .entry-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .entry-title {
+    display: flex;
+    flex-direction: column;
+
+    strong {
+      font-size: 16px;
+    }
+
+    .role {
+      font-size: 13px;
+      color: #666;
+    }
+  }
+}
+
+/* 状态胶囊 */
+.chip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  white-space: nowrap;
+
+  &.ok { background: #e8f5e9; color: #2e7d32; }
+  &.bad { background: #ffebee; color: #c62828; }
+  &.busy { background: #e3f2fd; color: #1565c0; }
+  &.ready { background: #fff8e1; color: #f57f17; }
+  &.idle { background: #eeeeee; color: #616161; }
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 8px 0 12px;
+  font-size: 12px;
+  color: #666;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+}
+
+/* 分数区:总分大数字 + 五维小格 */
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.overall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 56px;
+
+  .val {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .lbl {
+    font-size: 11px;
+    color: #888;
+  }
+}
+
+.dims {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  flex: 1;
+}
+
+.dim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 2px;
+  border-radius: 4px;
+  background: #fafafa;
+
+  .dim-lbl {
+    font-size: 10px;
+    color: #888;
+  }
+
+  .dim-val {
+    font-size: 13px;
+    font-weight: 600;
+  }
+}
+
+/* 分数色档 —— 与仪表盘保持同一套阈值,避免两页含义不一致 */
+.good { color: #2e7d32; }
+.mid { color: #f57f17; }
+.bad { color: #c62828; }
+.none { color: #bbb; }
+
+.counts {
+  display: flex;
+  gap: 14px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 13px;
+  color: #555;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .has-transcript {
+    color: #2e7d32;
+  }
+}
+
+mat-card-actions {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 8px;
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 0 24px;
+
+  .pager-info {
+    font-size: 13px;
+    color: #666;
+  }
+}
+
+/* ---- 对话框 ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 720px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 12px;
+}
+
+.wide {
+  width: 100%;
+}
+
+.form-err {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: #c62828;
+  font-size: 13px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 16px 16px;
+}

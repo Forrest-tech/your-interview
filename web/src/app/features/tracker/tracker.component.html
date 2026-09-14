@@ -1,0 +1,197 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h2>投递跟踪</h2>
+      <p class="sub">按状态分列看清整个漏斗,卡住在哪一步一目了然</p>
+    </div>
+    <div class="head-actions">
+      <button mat-stroked-button (click)="reload()">
+        <mat-icon>refresh</mat-icon> 刷新
+      </button>
+      <button mat-raised-button color="primary" (click)="openCreate()">
+        <mat-icon>add</mat-icon> 新建投递
+      </button>
+    </div>
+  </header>
+
+  <!-- 概览指标:数字只在统计接口可用时显示,否则退回列表 total -->
+  <section class="metrics">
+    <mat-card class="metric">
+      <div class="metric-val">{{ statTotal() }}</div>
+      <div class="metric-label">总投递</div>
+    </mat-card>
+    <mat-card class="metric">
+      <div class="metric-val">{{ statActive() }}</div>
+      <div class="metric-label">进行中</div>
+    </mat-card>
+    <mat-card class="metric">
+      <div class="metric-val">{{ statInterview() }}</div>
+      <div class="metric-label">面试中</div>
+    </mat-card>
+    <mat-card class="metric highlight">
+      <div class="metric-val">{{ statOffer() }}</div>
+      <div class="metric-label">Offer</div>
+    </mat-card>
+  </section>
+
+  <!-- 筛选区 -->
+  <mat-card class="filters">
+    <mat-card-content>
+      <div class="filter-row">
+        <mat-form-field appearance="outline" class="search">
+          <mat-label>搜索公司 / 职位 / 备注</mat-label>
+          <input matInput [value]="search()" (input)="onSearchInput($any($event.target).value)"
+                 (keyup.enter)="onSearchEnter()" placeholder="例如 Shopify">
+          <mat-icon matPrefix>search</mat-icon>
+          @if (search()) {
+            <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
+                    matTooltip="清空筛选">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="sort">
+          <mat-label>排序</mat-label>
+          <mat-select [ngModel]="sort()" (ngModelChange)="onSortChange($event)" name="sort">
+            <mat-option value="updatedDesc">最近更新</mat-option>
+            <mat-option value="appliedDesc">投递日期(新→旧)</mat-option>
+            <mat-option value="appliedAsc">投递日期(旧→新)</mat-option>
+            <mat-option value="companyAsc">公司名 A→Z</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <!-- 状态筛选用 chips 而不是 select:状态少,平铺点击成本更低 -->
+      <mat-chip-set class="status-chips">
+        <mat-chip class="fchip" [highlighted]="statusFilter() === null"
+                  (click)="clearFilters()">
+          全部 ({{ total() }})
+        </mat-chip>
+        @for (s of statusOptions; track s) {
+          <mat-chip class="fchip" [class]="statusClass(s)"
+                    [highlighted]="statusFilter() === s"
+                    (click)="toggleStatusFilter(s)">
+            {{ statusLabel(s) }} ({{ stats()?.byStatus?.[s] ?? 0 }})
+          </mat-chip>
+        }
+      </mat-chip-set>
+    </mat-card-content>
+  </mat-card>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  @if (error()) {
+    <mat-card class="err-card">
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>加载失败</strong>
+        <p>{{ error() }}</p>
+      </div>
+    </mat-card>
+  }
+
+  <!-- 看板 -->
+  @if (!loading() && items().length === 0) {
+    <mat-card class="empty-card">
+      <mat-icon>inbox</mat-icon>
+      <p>还没有投递记录。</p>
+      @if (search() || statusFilter()) {
+        <button mat-stroked-button (click)="clearFilters()">清空筛选条件</button>
+      } @else {
+        <button mat-flat-button color="primary" (click)="openCreate()">
+          <mat-icon>add</mat-icon> 记录第一条投递
+        </button>
+      }
+    </mat-card>
+  }
+
+  <div class="board">
+    @for (col of columns(); track col.status) {
+      <section class="column">
+        <header class="col-head" [class]="statusClass(col.status)">
+          <span class="col-dot"></span>
+          <span class="col-name">{{ col.label }}</span>
+          <span class="col-count">{{ col.items.length }}</span>
+        </header>
+
+        <div class="col-body">
+          @for (a of col.items; track a.id) {
+            <mat-card class="app-card" (click)="openDetail(a)">
+              <div class="app-top">
+                <span class="company">{{ a.companyName }}</span>
+                @if (a.priority) {
+                  <span class="pri" [class]="priorityClass(a.priority)"
+                        matTooltip="优先级 {{ a.priority }}">
+                    {{ a.priority }}
+                  </span>
+                }
+              </div>
+
+              <div class="role">{{ a.role }}</div>
+
+              <div class="meta">
+                @if (a.location) {
+                  <span class="meta-item"><mat-icon>place</mat-icon>{{ a.location }}</span>
+                }
+                @if (a.salary) {
+                  <span class="meta-item"><mat-icon>payments</mat-icon>{{ a.salary }}</span>
+                }
+                @if (a.appliedDate) {
+                  <span class="meta-item"><mat-icon>event</mat-icon>{{ a.appliedDate | date: 'MM-dd' }}</span>
+                }
+              </div>
+
+              <div class="tags">
+                @if (a.needsConnectFirst) {
+                  <span class="tag warn">需先 Connect</span>
+                }
+                @if (a.outreachStatus) {
+                  <span class="tag">{{ a.outreachStatus }}</span>
+                }
+                @if (a.resumeScore != null) {
+                  <span class="tag">匹配 {{ a.resumeScore }}</span>
+                }
+              </div>
+
+              <div class="app-actions">
+                <button mat-icon-button matTooltip="编辑" (click)="openEdit(a, $event)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                @if (a.link) {
+                  <a mat-icon-button matTooltip="打开岗位链接" [href]="a.link"
+                     target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">
+                    <mat-icon>open_in_new</mat-icon>
+                  </a>
+                }
+                <button mat-icon-button matTooltip="删除" class="danger"
+                        (click)="remove(a, $event)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </mat-card>
+          }
+
+          @if (col.items.length === 0) {
+            <div class="col-empty">—</div>
+          }
+        </div>
+      </section>
+    }
+  </div>
+
+  <!-- 分页:数据量大时才有必要出现 -->
+  @if (totalPages() > 1) {
+    <div class="pager">
+      <button mat-stroked-button [disabled]="page() <= 1" (click)="goPage(page() - 1)">
+        <mat-icon>chevron_left</mat-icon> 上一页
+      </button>
+      <span class="pager-info">第 {{ page() }} / {{ totalPages() }} 页 · 共 {{ total() }} 条</span>
+      <button mat-stroked-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)">
+        下一页 <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+  }
+</div>

@@ -1,0 +1,210 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h2>AI 模拟面试</h2>
+      <p class="sub">
+        一题一答一评分。练完即时看到六维分数和具体问题,不用等真人反馈。
+      </p>
+    </div>
+    <div class="head-actions">
+      <button mat-stroked-button (click)="load()">
+        <mat-icon>refresh</mat-icon> 刷新
+      </button>
+      @if (auth.can('mock.manage')) {
+        <button mat-flat-button color="primary" (click)="openDialog()">
+          <mat-icon>play_circle</mat-icon> 新建模拟
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  @if (error()) {
+    <mat-card class="err-card">
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>加载失败</strong>
+        <p>{{ error() }}</p>
+      </div>
+      <button mat-stroked-button (click)="load()">重试</button>
+    </mat-card>
+  }
+
+  <!-- 未完成的练习优先展示:这是用户此刻最可能想点的 -->
+  @if (inProgress().length > 0) {
+    <section class="section">
+      <h3 class="section-title">继续练习</h3>
+      <div class="grid">
+        @for (s of inProgress(); track s.id) {
+          <mat-card class="session active" [routerLink]="['/mock', s.id]">
+            <div class="s-head">
+              <strong>{{ s.title }}</strong>
+              <span class="chip busy">{{ statusLabel(s.status) }}</span>
+            </div>
+            <div class="s-meta">
+              <span class="mode">{{ modeLabel(s.mode) }}</span>
+              @if (s.topic) { <span class="topic">{{ s.topic }}</span> }
+            </div>
+            <div class="progress-row">
+              <mat-progress-bar mode="determinate" [value]="progress(s)"></mat-progress-bar>
+              <span class="prog-text">{{ s.answeredCount }} / {{ s.questionCount }} 题</span>
+            </div>
+            <div class="s-actions">
+              <button mat-flat-button color="primary">
+                <mat-icon>play_arrow</mat-icon> 继续答题
+              </button>
+              <span class="spacer"></span>
+              @if (auth.can('mock.manage')) {
+                <button mat-icon-button (click)="remove(s, $event)" title="删除">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              }
+            </div>
+          </mat-card>
+        }
+      </div>
+    </section>
+  }
+
+  <section class="section">
+    @if (inProgress().length > 0) {
+      <h3 class="section-title">历史练习</h3>
+    }
+
+    @if (!loading() && sessions().length === 0) {
+      <mat-card class="empty-card">
+        <mat-icon>record_voice_over</mat-icon>
+        <h3>还没有练习记录</h3>
+        <p>开一场主题专项,10 分钟就能拿到一轮针对性的反馈。</p>
+        @if (auth.can('mock.manage')) {
+          <button mat-flat-button color="primary" (click)="openDialog()">
+            <mat-icon>play_circle</mat-icon> 开始第一场
+          </button>
+        }
+      </mat-card>
+    }
+
+    <div class="grid">
+      @for (s of (inProgress().length > 0 ? finished() : sessions()); track s.id) {
+        <mat-card class="session" [routerLink]="['/mock', s.id]">
+          <div class="s-head">
+            <strong>{{ s.title }}</strong>
+            <span class="chip" [class]="statusClass(s.status)">{{ statusLabel(s.status) }}</span>
+          </div>
+
+          <div class="s-meta">
+            <span class="mode">{{ modeLabel(s.mode) }}</span>
+            @if (s.topic) { <span class="topic">{{ s.topic }}</span> }
+          </div>
+
+          <div class="s-stats">
+            <div class="stat">
+              <span class="val" [class]="scoreClass(s.overallScore)">{{ s.overallScore ?? '—' }}</span>
+              <span class="lbl">总分</span>
+            </div>
+            <div class="stat">
+              <span class="val">{{ s.answeredCount }}/{{ s.questionCount }}</span>
+              <span class="lbl">已答</span>
+            </div>
+            <div class="stat">
+              <span class="val">{{ s.scoredCount }}</span>
+              <span class="lbl">已评</span>
+            </div>
+            <div class="stat">
+              <span class="val">{{ s.startedAt | date: 'MM-dd' }}</span>
+              <span class="lbl">开始</span>
+            </div>
+          </div>
+
+          @if (s.summary) {
+            <p class="s-summary">{{ s.summary }}</p>
+          }
+
+          <div class="s-actions">
+            <a mat-button color="primary" [routerLink]="['/mock', s.id]">
+              <mat-icon>open_in_new</mat-icon> 查看详情
+            </a>
+            <span class="spacer"></span>
+            @if (auth.can('mock.manage')) {
+              <button mat-icon-button color="warn" (click)="remove(s, $event)" title="删除">
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            }
+          </div>
+        </mat-card>
+      }
+    </div>
+  </section>
+
+  @if (total() > 0) {
+    <div class="pager">
+      <button mat-stroked-button [disabled]="!canPrev()" (click)="prevPage()">
+        <mat-icon>chevron_left</mat-icon> 上一页
+      </button>
+      <span class="pager-info">第 {{ page() }} / {{ totalPages() }} 页 · 共 {{ total() }} 场</span>
+      <button mat-stroked-button [disabled]="!canNext()" (click)="nextPage()">
+        下一页 <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+  }
+
+  <!-- 新建对话框 -->
+  @if (dialogOpen()) {
+    <div class="overlay" (click)="closeDialog()">
+      <mat-card class="dialog" (click)="$event.stopPropagation()">
+        <mat-card-header>
+          <mat-card-title>新建模拟练习</mat-card-title>
+          <mat-card-subtitle>选定模式后,进入页面即可让 AI 出题</mat-card-subtitle>
+        </mat-card-header>
+
+        <mat-card-content>
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>标题 *</mat-label>
+            <input matInput [(ngModel)]="form.title"
+                   placeholder="如:EF Core 查询调优专项" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>模式</mat-label>
+            <mat-select [(ngModel)]="form.mode">
+              @for (m of modeOptions; track m.value) {
+                <mat-option [value]="m.value">
+                  {{ m.label }}
+                  <span class="opt-hint">— {{ m.hint }}</span>
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>
+              @if (form.mode === 'CompanyStyle') { 目标公司 * } @else { 主题 * }
+            </mat-label>
+            <input matInput [(ngModel)]="form.topic"
+                   [placeholder]="form.mode === 'CompanyStyle'
+                     ? '如:Geotab 风格的面试' : '如:EF Core 查询调优'" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>难度 (1-5)</mat-label>
+            <input matInput type="number" min="1" max="5" [(ngModel)]="form.difficulty" />
+          </mat-form-field>
+
+          @if (formError()) {
+            <p class="form-err"><mat-icon inline>error_outline</mat-icon> {{ formError() }}</p>
+          }
+        </mat-card-content>
+
+        <mat-card-actions class="dialog-actions">
+          <button mat-button (click)="closeDialog()" [disabled]="saving()">取消</button>
+          <button mat-flat-button color="primary" (click)="save()" [disabled]="saving()">
+            @if (saving()) { 创建中… } @else { 创建并开始 }
+          </button>
+        </mat-card-actions>
+      </mat-card>
+    </div>
+  }
+</div>

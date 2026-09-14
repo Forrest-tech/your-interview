@@ -1,0 +1,51 @@
+/* 沿用登录页的居中布局:这类"全屏说明页"不该出现侧边栏之外的额外装饰 */
+.forbidden-wrap {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+}
+
+.forbidden-card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+mat-card-content { padding: 36px 28px 32px; }
+
+.big-icon {
+  font-size: 56px;
+  width: 56px;
+  height: 56px;
+  color: #b3261e;
+  opacity: 0.8;
+}
+
+h1 {
+  margin: 10px 0 0;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  opacity: 0.35;
+}
+
+.msg {
+  margin: 6px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.6;
+}
+
+.back-btn {
+  margin-top: 24px;
+  height: 42px;
+}

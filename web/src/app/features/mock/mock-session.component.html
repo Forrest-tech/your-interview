@@ -1,0 +1,274 @@
+<div class="page">
+  <a mat-button class="back" routerLink="/mock">
+    <mat-icon>arrow_back</mat-icon> 返回模拟列表
+  </a>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  @if (error()) {
+    <mat-card class="err-card">
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>加载失败</strong>
+        <p>{{ error() }}</p>
+      </div>
+      <button mat-stroked-button (click)="refresh()">重试</button>
+    </mat-card>
+  }
+
+  @if (session(); as s) {
+    <!-- ---------- 顶部:进度与状态 ---------- -->
+    <mat-card class="head-card">
+      <div class="head-top">
+        <div>
+          <h2>{{ s.title }}</h2>
+          <div class="head-meta">
+            <span class="mode">{{ s.mode }}</span>
+            @if (s.topic) { <span class="topic">{{ s.topic }}</span> }
+            <span class="chip" [class.busy]="!isCompleted()" [class.ok]="isCompleted()">
+              {{ statusLabel(s.status) }}
+            </span>
+          </div>
+        </div>
+        <div class="head-score">
+          <span class="val" [class]="scoreClass(s.overallScore)">{{ s.overallScore ?? '—' }}</span>
+          <span class="lbl">总分</span>
+        </div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-labels">
+          <span>已答 {{ answeredCount() }} / {{ questionCount() }} 题</span>
+          <span class="pct">{{ progress() }}%</span>
+        </div>
+        <mat-progress-bar mode="determinate" [value]="progress()"></mat-progress-bar>
+      </div>
+
+      <div class="head-actions">
+        <button mat-stroked-button (click)="refresh()" [disabled]="busy() !== null">
+          <mat-icon>refresh</mat-icon> 刷新
+        </button>
+        @if (auth.can('mock.manage') && !isCompleted()) {
+          <button mat-flat-button color="primary" (click)="complete()"
+                  [disabled]="busy() !== null">
+            <mat-icon>flag</mat-icon>
+            @if (busy() === 'complete') { 生成总评中… } @else { 结束并总结 }
+          </button>
+        }
+      </div>
+    </mat-card>
+
+    <!-- ---------- 总评(结束后出现) ---------- -->
+    @if (summary(); as sum) {
+      <mat-card class="panel summary-card">
+        <mat-card-header>
+          <mat-card-title>本轮总评</mat-card-title>
+          <mat-card-subtitle>共评分 {{ sum.scoredQuestions }} 题</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="summary-top">
+            <div class="summary-score">
+              <span class="val" [class]="scoreClass(sum.overallScore)">
+                {{ sum.overallScore ?? '—' }}
+              </span>
+              <span class="lbl">总分</span>
+            </div>
+            @if (sum.weakestDimension) {
+              <p class="weakest">
+                <mat-icon inline>trending_down</mat-icon>
+                最弱环节:<strong>{{ sum.weakestDimension }}</strong> —— 下次练习优先针对它。
+              </p>
+            }
+          </div>
+
+          @if (sum.weaknesses.length > 0) {
+            <div class="weak-buckets">
+              @for (w of sum.weaknesses; track w.dimension) {
+                <div class="bucket">
+                  <span class="b-dim">{{ w.dimension }}</span>
+                  <span class="b-count">{{ w.count }} 次</span>
+                  <span class="b-sev">均严重度 {{ w.avgSeverity }}</span>
+                </div>
+              }
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+
+    <!-- ---------- 题目列表(左侧/顶部导航) ---------- -->
+    @if (questionCount() === 0) {
+      <mat-card class="panel empty-panel">
+        <mat-icon>inbox</mat-icon>
+        <p>
+          这个会话还没有题目。后端 AI 出题由分析服务生成 ——
+          回到列表页新建一场,或稍后刷新试试。
+        </p>
+      </mat-card>
+    } @else {
+      <div class="question-nav">
+        @for (q of questions(); track q.id) {
+          <button class="q-pill"
+                  [class.current]="q.id === current()?.id"
+                  [class.scored]="q.state === 'Scored'"
+                  [class.answered]="q.state === 'Answered'"
+                  (click)="selectQuestion(q)"
+                  [title]="stateLabel(q.state)">
+            {{ q.sequence }}
+          </button>
+        }
+      </div>
+
+      <!-- ---------- 当前题 ---------- -->
+      @if (current(); as q) {
+        <mat-card class="panel question-card">
+          <div class="q-head">
+            <span class="q-seq">第 {{ q.sequence }} 题</span>
+            @if (q.type) { <span class="q-type">{{ q.type }}</span> }
+            <span class="q-diff">难度 {{ q.difficulty }}/5</span>
+            <span class="chip" [class.ok]="q.state === 'Scored'"
+                  [class.busy]="q.state === 'Answered'"
+                  [class.idle]="q.state === 'Asked'">
+              {{ stateLabel(q.state) }}
+            </span>
+          </div>
+
+          <h3 class="q-text">{{ q.questionText }}</h3>
+
+          <!-- 期望要点:提示用户"这题在考什么",但不直接给答案 -->
+          @if (parseList(q.expectedPointsJson).length > 0) {
+            <details class="expected">
+              <summary>这题想听到的要点(点击展开)</summary>
+              <ul>
+                @for (p of parseList(q.expectedPointsJson); track $index) {
+                  <li>{{ p }}</li>
+                }
+              </ul>
+            </details>
+          }
+
+          <!-- 作答区:未评分时才给输入框 -->
+          @if (q.state !== 'Scored') {
+            <mat-form-field appearance="outline" class="wide answer-field">
+              <mat-label>我的回答</mat-label>
+              <textarea matInput rows="8"
+                        [ngModel]="answerText()"
+                        (ngModelChange)="answerText.set($event)"
+                        placeholder="按 STAR / 结论先行的结构作答……"></textarea>
+              <mat-hint>建议:先给结论,再给依据,最后说权衡。</mat-hint>
+            </mat-form-field>
+
+            <div class="answer-actions">
+              <button mat-flat-button color="primary" (click)="submitAnswer()"
+                      [disabled]="busy() !== null || !answerText().trim()">
+                <mat-icon>send</mat-icon>
+                @if (busy() === 'answer') { 提交中… } @else { 提交回答 }
+              </button>
+              <button mat-stroked-button (click)="nextQuestion()" [disabled]="busy() !== null">
+                下一题 <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </div>
+          } @else {
+            <!-- 已评分:展示当时的回答,只读 -->
+            <div class="my-answer">
+              <span class="label">我的回答</span>
+              <p>{{ q.answerText || '(没有记录回答文本)' }}</p>
+            </div>
+            <div class="answer-actions">
+              <button mat-stroked-button (click)="nextQuestion()" [disabled]="busy() !== null">
+                下一题 <mat-icon>arrow_forward</mat-icon>
+              </button>
+            </div>
+          }
+
+          @if (nextHint()) {
+            <p class="next-hint"><mat-icon inline>info</mat-icon> {{ nextHint() }}</p>
+          }
+        </mat-card>
+
+        <!-- ---------- 评分结果 ---------- -->
+        @if (lastResult(); as r) {
+          <mat-card class="panel result-card">
+            <mat-card-header>
+              <mat-card-title>本题反馈</mat-card-title>
+              @if (r.overall !== undefined) {
+                <mat-card-subtitle>综合 {{ r.overall }} 分</mat-card-subtitle>
+              }
+            </mat-card-header>
+
+            <mat-card-content>
+              <!-- 六维 -->
+              @if (dims().length > 0) {
+                <div class="mini-dims">
+                  @for (d of dims(); track d.key) {
+                    <div class="mini-dim">
+                      <span class="md-val" [class]="scoreClass(d.value)">{{ d.value }}</span>
+                      <span class="md-lbl">{{ d.label }}</span>
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (r.comment) {
+                <div class="feedback">
+                  <strong>点评</strong>
+                  <p>{{ r.comment }}</p>
+                </div>
+              }
+
+              @if (r.topIssueTitle) {
+                <p class="top-issue">
+                  <mat-icon inline>priority_high</mat-icon> 最大问题:{{ r.topIssueTitle }}
+                </p>
+              }
+
+              <!-- 问题明细 -->
+              @if (issues().length > 0) {
+                <div class="issues">
+                  <strong>具体问题</strong>
+                  @for (i of issues(); track $index) {
+                    <div class="issue" [class]="severityClass(i.severity)">
+                      <div class="issue-head">
+                        <span class="issue-dim">{{ i.dimension }}</span>
+                        <span class="issue-title">{{ i.title }}</span>
+                        <span class="issue-sev">严重度 {{ i.severity }}</span>
+                      </div>
+                      @if (i.detail) {
+                        <p class="issue-detail">{{ i.detail }}</p>
+                      }
+                      @if (i.evidence) {
+                        <blockquote class="issue-evidence">“{{ i.evidence }}”</blockquote>
+                      }
+                      @if (i.suggestion) {
+                        <p class="issue-fix">
+                          <mat-icon inline>lightbulb</mat-icon> {{ i.suggestion }}
+                        </p>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- 推荐答案 / 更好的结构 -->
+              @if (r.recommendedAnswer) {
+                <div class="recommended">
+                  <strong><mat-icon inline>star</mat-icon> 推荐答案</strong>
+                  <p>{{ r.recommendedAnswer }}</p>
+                </div>
+              }
+
+              @if (r.betterStructure) {
+                <div class="better-structure">
+                  <strong>更好的结构</strong>
+                  <p>{{ r.betterStructure }}</p>
+                </div>
+              }
+            </mat-card-content>
+          </mat-card>
+        }
+      }
+    }
+  }
+</div>

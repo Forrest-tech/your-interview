@@ -30,3 +30,6 @@ artifacts/
 .analysis/
 storage/
 .logs/
+
+# Erlang/RabbitMQ 崩溃转储
+**/erl_crash.dump

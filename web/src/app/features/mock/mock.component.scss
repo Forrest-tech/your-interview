@@ -1,0 +1,259 @@
+/* AI 模拟列表:未完成的练习单独分区置顶 —— 用户此刻要的是"接着练",不是"看历史" */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+
+  h2 {
+    margin: 0 0 4px;
+    font-size: 22px;
+  }
+
+  .sub {
+    margin: 0;
+    font-size: 13px;
+    color: var(--mat-sys-on-surface-variant, #666);
+  }
+}
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.err-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-left: 4px solid #d32f2f;
+
+  mat-icon { color: #d32f2f; }
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #666;
+  }
+}
+
+.section-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: #444;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+  }
+
+  /* 进行中的卡片描边强调:视觉上告诉用户"这个还没做完" */
+  &.active {
+    border-left: 4px solid #1565c0;
+  }
+}
+
+.s-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+
+  strong { font-size: 16px; }
+}
+
+.chip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  white-space: nowrap;
+
+  &.ok { background: #e8f5e9; color: #2e7d32; }
+  &.busy { background: #e3f2fd; color: #1565c0; }
+  &.idle { background: #eeeeee; color: #616161; }
+}
+
+.s-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+
+  .mode {
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: #eef2f7;
+    color: #445;
+  }
+
+  .topic { color: #888; }
+}
+
+.progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  .prog-text {
+    font-size: 12px;
+    color: #666;
+    text-align: right;
+  }
+}
+
+.s-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0;
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    .val {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .lbl {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #888;
+    }
+  }
+}
+
+.s-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #555;
+
+  /* 摘要只露三行:卡片不是读长文的地方,细节进详情页 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.s-actions {
+  display: flex;
+  align-items: center;
+
+  .spacer { flex: 1; }
+}
+
+/* 分数色档统一阈值 */
+.good { color: #2e7d32; }
+.mid { color: #f57f17; }
+.bad { color: #c62828; }
+.none { color: #bbb; }
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+
+  mat-icon {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: #bbb;
+  }
+
+  h3 { margin: 0; font-size: 17px; }
+
+  p {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #666;
+  }
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 0 24px;
+
+  .pager-info {
+    font-size: 13px;
+    color: #666;
+  }
+}
+
+/* ---- 对话框 ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 560px;
+  padding-bottom: 8px;
+}
+
+.wide { width: 100%; }
+
+.opt-hint {
+  font-size: 12px;
+  color: #999;
+}
+
+.form-err {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #c62828;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 16px 16px;
+}

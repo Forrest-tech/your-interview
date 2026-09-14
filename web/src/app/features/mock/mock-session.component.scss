@@ -1,0 +1,516 @@
+/* 模拟答题页:单列流 —— 一屏只专心答当前这题,不铺开所有题 */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.back {
+  align-self: flex-start;
+  margin-left: -8px;
+}
+
+.err-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-left: 4px solid #d32f2f;
+
+  mat-icon { color: #d32f2f; }
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #666;
+  }
+}
+
+/* ---------------- 头部 ---------------- */
+
+.head-card {
+  padding: 18px 20px;
+}
+
+.head-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+  }
+}
+
+.head-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+
+  .mode {
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: #eef2f7;
+    color: #445;
+  }
+
+  .topic { color: #888; }
+}
+
+.head-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+
+  .val {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .lbl {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #888;
+  }
+}
+
+.chip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  white-space: nowrap;
+
+  &.ok { background: #e8f5e9; color: #2e7d32; }
+  &.busy { background: #e3f2fd; color: #1565c0; }
+  &.idle { background: #eeeeee; color: #616161; }
+}
+
+.progress-wrap {
+  margin: 16px 0 12px;
+
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #666;
+
+    .pct { font-weight: 600; }
+  }
+}
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---------------- 通用面板 ---------------- */
+
+.panel {
+  padding: 4px 0 8px;
+
+  mat-card-content { padding: 0 16px 8px; }
+}
+
+.empty-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 24px;
+  text-align: center;
+  color: #888;
+
+  mat-icon {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+    color: #ccc;
+  }
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.7;
+    max-width: 420px;
+  }
+}
+
+/* 分数色档 */
+.good { color: #2e7d32; }
+.mid { color: #f57f17; }
+.bad { color: #c62828; }
+.none { color: #bbb; }
+.low { color: #2e7d32; }
+
+/* ---------------- 总评 ---------------- */
+
+.summary-card {
+  border-top: 3px solid #1565c0;
+}
+
+.summary-top {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.summary-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  .val {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .lbl {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #888;
+  }
+}
+
+.weakest {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+  color: #555;
+}
+
+.weak-buckets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+
+  .bucket {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: #fafafa;
+    font-size: 12px;
+
+    .b-dim { font-weight: 600; }
+    .b-count { color: #c62828; }
+    .b-sev { color: #888; }
+  }
+}
+
+/* ---------------- 题号导航 ---------------- */
+
+.question-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.q-pill {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+
+  &:hover { border-color: #1565c0; color: #1565c0; }
+
+  /* 三种状态视觉分层:已评分(实心绿)、已作答(浅蓝)、未作答(白) */
+  &.answered { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
+  &.scored { background: #e8f5e9; border-color: #a5d6a7; color: #2e7d32; }
+
+  &.current {
+    background: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+    font-weight: 700;
+  }
+}
+
+/* ---------------- 当前题 ---------------- */
+
+.question-card {
+  padding: 20px 22px;
+}
+
+.q-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+
+  .q-seq {
+    font-weight: 700;
+    color: #1565c0;
+  }
+
+  .q-type {
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: #eef2f7;
+    color: #445;
+  }
+
+  .q-diff { color: #888; }
+}
+
+.q-text {
+  margin: 12px 0 18px;
+  font-size: 19px;
+  line-height: 1.55;
+}
+
+/* 期望要点默认折叠:想自己先想一遍的人不该被剧透 */
+.expected {
+  margin-bottom: 18px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #f7f9fb;
+
+  summary {
+    cursor: pointer;
+    font-size: 13px;
+    color: #1565c0;
+    font-weight: 500;
+  }
+
+  ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #444;
+  }
+}
+
+.answer-field {
+  width: 100%;
+
+  textarea {
+    font-size: 15px;
+    line-height: 1.7;
+  }
+}
+
+.answer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.my-answer {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #fcfcfc;
+  border: 1px solid #eee;
+
+  .label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+}
+
+.next-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 14px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #e8f0fe;
+  font-size: 13px;
+  color: #1565c0;
+}
+
+/* ---------------- 评分结果 ---------------- */
+
+.result-card {
+  border-top: 3px solid #2e7d32;
+}
+
+.mini-dims {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.mini-dim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 6px;
+  background: #fafafa;
+
+  .md-val {
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .md-lbl {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #888;
+  }
+}
+
+.feedback, .better-structure {
+  margin-bottom: 16px;
+
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #555;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+}
+
+.top-issue {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fff3e0;
+  font-size: 13px;
+  color: #e65100;
+}
+
+.issues {
+  margin-bottom: 18px;
+
+  > strong {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #555;
+  }
+}
+
+.issue {
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #fafafa;
+  border-left: 3px solid #bbb;
+
+  &.bad { border-left-color: #c62828; }
+  &.mid { border-left-color: #f9a825; }
+  &.low { border-left-color: #2e7d32; }
+
+  .issue-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+
+    .issue-dim {
+      padding: 1px 8px;
+      border-radius: 10px;
+      background: #eee;
+      font-size: 11px;
+      color: #555;
+    }
+
+    .issue-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .issue-sev {
+      font-size: 11px;
+      color: #888;
+    }
+  }
+
+  .issue-detail {
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #555;
+  }
+
+  .issue-evidence {
+    margin: 6px 0 0;
+    padding: 6px 10px;
+    border-left: 3px solid #ddd;
+    background: #fff;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #666;
+  }
+
+  .issue-fix {
+    display: flex;
+    gap: 4px;
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #2e7d32;
+  }
+}
+
+.recommended {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #f4fbf5;
+  border: 1px solid #cde9d2;
+
+  strong {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #2e7d32;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+}

@@ -1,0 +1,275 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h2>实战机经</h2>
+      <p class="sub">
+        一场面试一条记录:先传录音/转写文本,再跑分析拿到六维与短板。
+      </p>
+    </div>
+    <div class="head-actions">
+      <button mat-stroked-button (click)="load()">
+        <mat-icon>refresh</mat-icon> 刷新
+      </button>
+      @if (auth.can('interviews.write')) {
+        <button mat-flat-button color="primary" (click)="openDialog()">
+          <mat-icon>add</mat-icon> 新建条目
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  @if (error()) {
+    <mat-card class="err-card">
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>加载失败</strong>
+        <p>{{ error() }}</p>
+      </div>
+      <button mat-stroked-button (click)="load()">重试</button>
+    </mat-card>
+  }
+
+  <!-- 统计条:stats 端点失败时整块不渲染,不留空壳 -->
+  @if (stats(); as s) {
+    <section class="metrics">
+      <mat-card class="metric">
+        <div class="metric-val">{{ s.totalEntries }}</div>
+        <div class="metric-label">总场次</div>
+      </mat-card>
+      <mat-card class="metric">
+        <div class="metric-val">{{ s.analyzed }}</div>
+        <div class="metric-label">已分析</div>
+      </mat-card>
+      <mat-card class="metric">
+        <div class="metric-val">{{ s.pendingAnalysis }}</div>
+        <div class="metric-label">待分析</div>
+      </mat-card>
+      <mat-card class="metric">
+        <div class="metric-val">{{ s.averageOverallScore ?? '—' }}</div>
+        <div class="metric-label">平均总分</div>
+      </mat-card>
+      <mat-card class="metric highlight">
+        <div class="metric-val">{{ s.totalWeaknesses }}</div>
+        <div class="metric-label">累计短板</div>
+      </mat-card>
+    </section>
+  }
+
+  <!-- 过滤 -->
+  <mat-card class="filters">
+    <div class="filter-row">
+      <mat-form-field appearance="outline">
+        <mat-label>公司</mat-label>
+        <mat-select [(ngModel)]="companyFilter" (selectionChange)="applyFilter()">
+          <mat-option value="">全部公司</mat-option>
+          @for (c of companies(); track c.companyId) {
+            <mat-option [value]="c.companyName">
+              {{ c.companyName }}（{{ c.entryCount }} 场）
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>状态</mat-label>
+        <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilter()">
+          <mat-option value="">全部状态</mat-option>
+          @for (o of statusOptions; track o.value) {
+            <mat-option [value]="o.value">{{ o.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <button mat-button (click)="resetFilter()">
+        <mat-icon>filter_alt_off</mat-icon> 清除筛选
+      </button>
+    </div>
+  </mat-card>
+
+  <!-- 列表 -->
+  @if (!loading() && entries().length === 0) {
+    <mat-card class="empty-card">
+      <mat-icon>inbox</mat-icon>
+      <h3>还没有机经记录</h3>
+      <p>面试完趁记忆还热,先把这一场建下来,再补录音或转写文本。</p>
+      @if (auth.can('interviews.write')) {
+        <button mat-flat-button color="primary" (click)="openDialog()">
+          <mat-icon>add</mat-icon> 新建第一条
+        </button>
+      }
+    </mat-card>
+  }
+
+  <div class="grid">
+    @for (e of entries(); track e.id) {
+      <mat-card class="entry" [routerLink]="['/playbook', e.id]">
+        <mat-card-header>
+          <div class="entry-head">
+            <div class="entry-title">
+              <strong>{{ e.companyName }}</strong>
+              <span class="role">{{ e.role }}</span>
+            </div>
+            <span class="chip" [class]="statusClass(e.status)">{{ statusLabel(e.status) }}</span>
+          </div>
+        </mat-card-header>
+
+        <mat-card-content>
+          <div class="meta">
+            <span><mat-icon inline>repeat</mat-icon> 第 {{ e.roundNo }} 轮</span>
+            @if (e.interviewDate) {
+              <span><mat-icon inline>event</mat-icon> {{ e.interviewDate }}</span>
+            }
+            @if (e.interviewFormat) {
+              <span><mat-icon inline>laptop</mat-icon> {{ e.interviewFormat }}</span>
+            }
+          </div>
+
+          <!-- 总分 + 六维小条:不必点进去就能看出"哪场最有问题" -->
+          <div class="score-row">
+            <div class="overall" [class]="scoreClass(e.overallScore)">
+              <span class="val">{{ e.overallScore ?? '—' }}</span>
+              <span class="lbl">总分</span>
+            </div>
+            <div class="dims">
+              @for (d of dims(e); track d.key) {
+                <div class="dim">
+                  <span class="dim-lbl">{{ d.label }}</span>
+                  <span class="dim-val" [class]="scoreClass(d.value)">{{ d.value ?? '—' }}</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="counts">
+            <span title="问答数"><mat-icon inline>help_outline</mat-icon> {{ e.questionCount ?? 0 }}</span>
+            <span title="短板数"><mat-icon inline>report_problem</mat-icon> {{ e.weaknessCount ?? 0 }}</span>
+            <span title="材料数"><mat-icon inline>attach_file</mat-icon> {{ e.assetCount ?? 0 }}</span>
+            @if (e.hasTranscript) {
+              <span class="has-transcript"><mat-icon inline>check_circle</mat-icon> 已转写</span>
+            }
+          </div>
+        </mat-card-content>
+
+        <mat-card-actions>
+          <a mat-button color="primary" [routerLink]="['/playbook', e.id]">
+            <mat-icon>open_in_new</mat-icon> 查看复盘
+          </a>
+          <span class="spacer"></span>
+          @if (auth.can('interviews.delete')) {
+            <button mat-icon-button color="warn" (click)="remove(e, $event)" title="删除">
+              <mat-icon>delete_outline</mat-icon>
+            </button>
+          }
+        </mat-card-actions>
+      </mat-card>
+    }
+  </div>
+
+  @if (total() > 0) {
+    <div class="pager">
+      <button mat-stroked-button [disabled]="!canPrev()" (click)="prevPage()">
+        <mat-icon>chevron_left</mat-icon> 上一页
+      </button>
+      <span class="pager-info">第 {{ page() }} / {{ totalPages() }} 页 · 共 {{ total() }} 条</span>
+      <button mat-stroked-button [disabled]="!canNext()" (click)="nextPage()">
+        下一页 <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+  }
+
+  <!-- 新建对话框:用固定层而不是 cdk Dialog,
+       少一层 dialog config 样板,也让这个组件自包含不依赖外部入口 -->
+  @if (dialogOpen()) {
+    <div class="overlay" (click)="closeDialog()">
+      <mat-card class="dialog" (click)="$event.stopPropagation()">
+        <mat-card-header>
+          <mat-card-title>新建机经条目</mat-card-title>
+          <mat-card-subtitle>先记下公司、岗位、轮次与日期,材料和问答可以稍后补</mat-card-subtitle>
+        </mat-card-header>
+
+        <mat-card-content>
+          <div class="form-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>公司名 *</mat-label>
+              <input matInput [(ngModel)]="form.companyName" placeholder="Geotab" />
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>岗位 *</mat-label>
+              <input matInput [(ngModel)]="form.role" placeholder="Senior .NET Developer" />
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>第几轮</mat-label>
+              <input matInput type="number" min="1" max="20" [(ngModel)]="form.roundNo" />
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>面试日期</mat-label>
+              <input matInput type="date" [(ngModel)]="form.interviewDate" />
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>形式</mat-label>
+              <mat-select [(ngModel)]="form.interviewFormat">
+                <mat-option value="">未指定</mat-option>
+                @for (f of formatOptions; track f) {
+                  <mat-option [value]="f">{{ f }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>面试官</mat-label>
+              <input matInput [(ngModel)]="form.interviewers" placeholder="姓名/职位" />
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>地点</mat-label>
+              <input matInput [(ngModel)]="form.location" placeholder="线上 / 多伦多办公室" />
+            </mat-form-field>
+          </div>
+
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>JD 摘要</mat-label>
+            <textarea matInput rows="2" [(ngModel)]="form.jdSummary"
+                      placeholder="岗位要求的关键词,便于后续对比"></textarea>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>JD 原文</mat-label>
+            <textarea matInput rows="3" [(ngModel)]="form.jdText"
+                      placeholder="可整段粘贴招聘页面内容"></textarea>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>公司背景</mat-label>
+            <textarea matInput rows="2" [(ngModel)]="form.companyProfile"
+                      placeholder="规模/行业/技术栈,便于以后回忆"></textarea>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>备注</mat-label>
+            <textarea matInput rows="2" [(ngModel)]="form.notes"
+                      placeholder="现场感受、面试官关注点等"></textarea>
+          </mat-form-field>
+
+          @if (formError()) {
+            <p class="form-err"><mat-icon inline>error_outline</mat-icon> {{ formError() }}</p>
+          }
+        </mat-card-content>
+
+        <mat-card-actions class="dialog-actions">
+          <button mat-button (click)="closeDialog()" [disabled]="saving()">取消</button>
+          <button mat-flat-button color="primary" (click)="save()" [disabled]="saving()">
+            @if (saving()) { 保存中… } @else { 创建并进入 }
+          </button>
+        </mat-card-actions>
+      </mat-card>
+    </div>
+  }
+</div>

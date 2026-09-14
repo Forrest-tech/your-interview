@@ -1,0 +1,236 @@
+.page { max-width: 1400px; }
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.page-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.page-head .sub { margin: 4px 0 0; font-size: 13px; opacity: 0.6; }
+
+mat-card { border-radius: 8px; }
+
+/* ---------- 统计行 ---------- */
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+}
+
+.m-icon {
+  font-size: 24px;
+  width: 24px;
+  height: 24px;
+  color: #3f51b5;
+  opacity: 0.75;
+  flex: 0 0 auto;
+}
+
+.metric-val { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.metric-label { font-size: 12px; opacity: 0.55; margin-top: 2px; }
+
+/* ---------- Tabs ---------- */
+
+.tabs { background: transparent; }
+
+::ng-deep .tabs .mat-mdc-tab-header {
+  border-radius: 8px 8px 0 0;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-bottom: none;
+}
+
+::ng-deep .tabs .mat-mdc-tab-body-wrapper {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+}
+
+.tab-body { padding: 16px 18px 22px; }
+
+.tab-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.search { flex: 1 1 260px; max-width: 420px; }
+
+.count-note {
+  font-size: 12.5px;
+  opacity: 0.55;
+  margin-left: auto;
+}
+
+/* ---------- 表格 ---------- */
+
+.data-table {
+  width: 100%;
+  background: transparent;
+}
+
+.data-table th.mat-mdc-header-cell {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  opacity: 0.6;
+}
+
+.data-table td.mat-mdc-cell {
+  font-size: 13px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.col-actions {
+  width: 176px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data-table td.col-actions { padding-right: 4px; }
+
+.detail-cell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.danger { color: #b3261e; }
+
+.muted { opacity: 0.42; }
+
+/* ---------- 状态与标记 ---------- */
+
+.status-pill {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.status-pill.on { background: rgba(46, 125, 50, 0.14); color: #2e7d32; }
+.status-pill.off { background: rgba(0, 0, 0, 0.07); color: #5f6368; }
+
+.mini-chip {
+  --mdc-chip-label-text-size: 11px;
+  font-size: 11px;
+  min-height: 22px;
+  padding: 0 4px;
+}
+
+.perm-chip {
+  --mdc-chip-label-text-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.act-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0, 0, 0, 0.06);
+  color: #5f6368;
+}
+
+.act-danger { background: rgba(179, 38, 30, 0.12); color: #b3261e; }
+.act-create { background: rgba(46, 125, 50, 0.13); color: #2e7d32; }
+.act-update { background: rgba(21, 101, 192, 0.12); color: #1565c0; }
+.act-auth { background: rgba(249, 168, 37, 0.2); color: #a15c00; }
+.act-other { background: rgba(0, 0, 0, 0.06); color: #5f6368; }
+
+/* ---------- 角色卡 ---------- */
+
+.role-card { margin-bottom: 10px; }
+
+.role-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.role-head:hover { background: rgba(0, 0, 0, 0.02); }
+
+.expand { font-size: 20px; width: 20px; height: 20px; opacity: 0.5; flex: 0 0 auto; }
+
+.role-name { font-size: 14px; font-weight: 600; flex: 0 0 auto; }
+
+.role-desc {
+  font-size: 12.5px;
+  opacity: 0.55;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-meta {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.5;
+  flex: 0 0 auto;
+}
+
+.role-perms {
+  padding: 4px 16px 16px 46px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+  padding-top: 12px;
+}
+
+/* ---------- 空态 / 错误 / 分页 ---------- */
+
+.empty {
+  font-size: 13px;
+  opacity: 0.5;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.err-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border-left: 3px solid #b3261e;
+}
+
+.err-card mat-icon { color: #b3261e; }
+.err-card p { margin: 4px 0 0; font-size: 13px; opacity: 0.75; }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.pager-info { font-size: 12.5px; opacity: 0.6; }

@@ -1,0 +1,295 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h2>管理后台</h2>
+      <p class="sub">用户、角色与操作审计</p>
+    </div>
+    <button mat-stroked-button (click)="loadStats()">
+      <mat-icon>refresh</mat-icon> 刷新统计
+    </button>
+  </header>
+
+  <!-- 统计行:接口失败则整行隐藏,后端没有这个接口时页面照样能用 -->
+  @if (statRows().length > 0) {
+    <section class="metrics">
+      @for (s of statRows(); track s.label) {
+        <mat-card class="metric">
+          <mat-icon class="m-icon">{{ s.icon }}</mat-icon>
+          <div>
+            <div class="metric-val">{{ s.value }}</div>
+            <div class="metric-label">{{ s.label }}</div>
+          </div>
+        </mat-card>
+      }
+    </section>
+  }
+
+  <mat-tab-group class="tabs" (selectedIndexChange)="onTabChange($event)"
+                 animationDuration="120ms">
+
+    <!-- ============================ 用户 ============================ -->
+    <mat-tab label="用户">
+      <div class="tab-body">
+        <div class="tab-toolbar">
+          <mat-form-field appearance="outline" class="search">
+            <mat-label>搜索邮箱 / 显示名</mat-label>
+            <input matInput [value]="userSearch()"
+                   (input)="onUserSearchInput($any($event.target).value)"
+                   (keyup.enter)="onUserSearchEnter()">
+            <mat-icon matPrefix>search</mat-icon>
+          </mat-form-field>
+          <span class="count-note">共 {{ userTotal() }} 个用户</span>
+          <button mat-stroked-button (click)="loadUsers()">
+            <mat-icon>refresh</mat-icon> 刷新
+          </button>
+        </div>
+
+        @if (usersLoading()) {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        }
+
+        @if (usersError()) {
+          <mat-card class="err-card">
+            <mat-icon>error_outline</mat-icon>
+            <div>
+              <strong>加载失败</strong>
+              <p>{{ usersError() }}</p>
+            </div>
+          </mat-card>
+        }
+
+        @if (!usersLoading() && users().length === 0 && !usersError()) {
+          <p class="empty">没有匹配的用户。</p>
+        }
+
+        @if (users().length > 0) {
+          <table mat-table [dataSource]="users()" class="data-table">
+            <ng-container matColumnDef="email">
+              <th mat-header-cell *matHeaderCellDef>邮箱</th>
+              <td mat-cell *matCellDef="let u" class="mono">{{ u.email }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="displayName">
+              <th mat-header-cell *matHeaderCellDef>显示名</th>
+              <td mat-cell *matCellDef="let u">{{ u.displayName }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="roles">
+              <th mat-header-cell *matHeaderCellDef>角色</th>
+              <td mat-cell *matCellDef="let u">
+                @if ((u.roles?.length ?? 0) === 0) {
+                  <span class="muted">—</span>
+                } @else {
+                  <mat-chip-set>
+                    @for (r of u.roles; track r) {
+                      <mat-chip class="mini-chip">{{ r }}</mat-chip>
+                    }
+                  </mat-chip-set>
+                }
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="isActive">
+              <th mat-header-cell *matHeaderCellDef>状态</th>
+              <td mat-cell *matCellDef="let u">
+                <span class="status-pill" [class.on]="u.isActive" [class.off]="!u.isActive">
+                  {{ u.isActive ? '启用' : '停用' }}
+                </span>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="lastLoginAt">
+              <th mat-header-cell *matHeaderCellDef>最近登录</th>
+              <td mat-cell *matCellDef="let u">
+                {{ u.lastLoginAt ? (u.lastLoginAt | date: 'yyyy-MM-dd HH:mm') : '—' }}
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef class="col-actions">操作</th>
+              <td mat-cell *matCellDef="let u" class="col-actions">
+                <button mat-icon-button matTooltip="编辑" (click)="openEditUser(u)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button
+                        [matTooltip]="u.isActive ? '停用' : '启用'"
+                        (click)="toggleActive(u, $event)">
+                  <mat-icon>{{ u.isActive ? 'block' : 'check_circle_outline' }}</mat-icon>
+                </button>
+                <button mat-icon-button matTooltip="重置密码" (click)="resetPassword(u, $event)">
+                  <mat-icon>lock_reset</mat-icon>
+                </button>
+                <button mat-icon-button matTooltip="删除" class="danger"
+                        (click)="deleteUser(u, $event)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="userColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: userColumns;"></tr>
+          </table>
+        }
+
+        @if (userTotalPages() > 1) {
+          <div class="pager">
+            <button mat-stroked-button [disabled]="userPage() <= 1"
+                    (click)="userGoPage(userPage() - 1)">
+              <mat-icon>chevron_left</mat-icon> 上一页
+            </button>
+            <span class="pager-info">第 {{ userPage() }} / {{ userTotalPages() }} 页</span>
+            <button mat-stroked-button [disabled]="userPage() >= userTotalPages()"
+                    (click)="userGoPage(userPage() + 1)">
+              下一页 <mat-icon>chevron_right</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    </mat-tab>
+
+    <!-- ============================ 角色 ============================ -->
+    <mat-tab label="角色">
+      <div class="tab-body">
+        @if (rolesLoading()) {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        }
+
+        @if (rolesError()) {
+          <mat-card class="err-card">
+            <mat-icon>error_outline</mat-icon>
+            <div>
+              <strong>加载失败</strong>
+              <p>{{ rolesError() }}</p>
+            </div>
+          </mat-card>
+        }
+
+        @if (!rolesLoading() && roles().length === 0 && !rolesError()) {
+          <p class="empty">还没有定义任何角色。</p>
+        }
+
+        @for (r of roles(); track r.id) {
+          <mat-card class="role-card">
+            <div class="role-head" (click)="toggleRole(r.id)">
+              <mat-icon class="expand">
+                {{ isRoleExpanded(r.id) ? 'expand_less' : 'expand_more' }}
+              </mat-icon>
+              <span class="role-name">{{ r.name }}</span>
+              @if (r.description) {
+                <span class="role-desc">{{ r.description }}</span>
+              }
+              <span class="role-meta">
+                {{ r.permissions.length }} 项权限
+                @if (r.userCount != null) { · {{ r.userCount }} 个用户 }
+              </span>
+            </div>
+
+            @if (isRoleExpanded(r.id)) {
+              <div class="role-perms">
+                @if (r.permissions.length === 0) {
+                  <span class="muted">该角色没有任何权限</span>
+                } @else {
+                  <mat-chip-set>
+                    @for (p of r.permissions; track p) {
+                      <mat-chip class="perm-chip">{{ p }}</mat-chip>
+                    }
+                  </mat-chip-set>
+                }
+              </div>
+            }
+          </mat-card>
+        }
+      </div>
+    </mat-tab>
+
+    <!-- ============================ 审计日志 ============================ -->
+    <mat-tab label="审计日志">
+      <div class="tab-body">
+        <div class="tab-toolbar">
+          <span class="count-note">共 {{ logTotal() }} 条记录</span>
+          <button mat-stroked-button (click)="loadLogs()">
+            <mat-icon>refresh</mat-icon> 刷新
+          </button>
+        </div>
+
+        @if (logsLoading()) {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        }
+
+        @if (logsError()) {
+          <mat-card class="err-card">
+            <mat-icon>error_outline</mat-icon>
+            <div>
+              <strong>加载失败</strong>
+              <p>{{ logsError() }}</p>
+            </div>
+          </mat-card>
+        }
+
+        @if (!logsLoading() && logs().length === 0 && !logsError()) {
+          <p class="empty">暂无审计记录。</p>
+        }
+
+        @if (logs().length > 0) {
+          <table mat-table [dataSource]="logs()" class="data-table">
+            <ng-container matColumnDef="occurredAt">
+              <th mat-header-cell *matHeaderCellDef>时间</th>
+              <td mat-cell *matCellDef="let l">
+                {{ l.occurredAt | date: 'yyyy-MM-dd HH:mm:ss' }}
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="action">
+              <th mat-header-cell *matHeaderCellDef>动作</th>
+              <td mat-cell *matCellDef="let l">
+                <span class="act-pill" [class]="actionClass(l.action)">{{ l.action }}</span>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="entityType">
+              <th mat-header-cell *matHeaderCellDef>对象</th>
+              <td mat-cell *matCellDef="let l">
+                {{ l.entityType ?? '—' }}
+                @if (l.entityId) {
+                  <span class="muted mono"> {{ l.entityId }}</span>
+                }
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="userEmail">
+              <th mat-header-cell *matHeaderCellDef>操作人</th>
+              <td mat-cell *matCellDef="let l">{{ l.userEmail ?? '—' }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="ip">
+              <th mat-header-cell *matHeaderCellDef>IP</th>
+              <td mat-cell *matCellDef="let l" class="mono">{{ l.ip ?? '—' }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="detail">
+              <th mat-header-cell *matHeaderCellDef>详情</th>
+              <td mat-cell *matCellDef="let l" class="detail-cell">{{ l.detail ?? '—' }}</td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="logColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: logColumns;"></tr>
+          </table>
+        }
+
+        @if (logTotalPages() > 1) {
+          <div class="pager">
+            <button mat-stroked-button [disabled]="logPage() <= 1"
+                    (click)="logGoPage(logPage() - 1)">
+              <mat-icon>chevron_left</mat-icon> 上一页
+            </button>
+            <span class="pager-info">第 {{ logPage() }} / {{ logTotalPages() }} 页</span>
+            <button mat-stroked-button [disabled]="logPage() >= logTotalPages()"
+                    (click)="logGoPage(logPage() + 1)">
+              下一页 <mat-icon>chevron_right</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</div>

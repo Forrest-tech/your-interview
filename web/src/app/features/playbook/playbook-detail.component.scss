@@ -1,0 +1,555 @@
+/* 机经详情:页签式复盘页。核心是「问答」页的左右对照排版 */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px;
+}
+
+.back {
+  align-self: flex-start;
+  margin-left: -8px;
+}
+
+.err-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-left: 4px solid #d32f2f;
+
+  mat-icon { color: #d32f2f; }
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #666;
+  }
+}
+
+/* ---------------- 头部 ---------------- */
+
+.head-card {
+  padding: 20px;
+}
+
+.head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.head-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  h2 {
+    margin: 0;
+    font-size: 22px;
+  }
+
+  .role {
+    font-size: 15px;
+    color: #555;
+  }
+}
+
+.head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+  color: #666;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .result {
+    color: #1565c0;
+    font-weight: 600;
+  }
+}
+
+/* 状态胶囊(与列表页同一套色档,保证跨页一致) */
+.chip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  white-space: nowrap;
+
+  &.ok { background: #e8f5e9; color: #2e7d32; }
+  &.bad { background: #ffebee; color: #c62828; }
+  &.busy { background: #e3f2fd; color: #1565c0; }
+  &.ready { background: #fff8e1; color: #f57f17; }
+  &.idle { background: #eeeeee; color: #616161; }
+}
+
+/* 六维徽章:总分单独高亮,是唯一有底色的一块 */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+
+  .badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 60px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fafafa;
+
+    &.primary {
+      background: #e3f2fd;
+    }
+
+    .badge-val {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .badge-lbl {
+      margin-top: 3px;
+      font-size: 11px;
+      color: #777;
+    }
+  }
+
+  .no-score {
+    margin: 0;
+    font-size: 13px;
+    color: #888;
+  }
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+
+  .polling {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #1565c0;
+
+    mat-icon {
+      animation: spin 1.6s linear infinite;
+    }
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 失败横幅:说清「为什么失败」和「接下来点哪里」 */
+.failed-banner {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #fff3e0;
+  border-left: 4px solid #ef6c00;
+
+  mat-icon { color: #ef6c00; }
+
+  strong { font-size: 14px; }
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #5d4037;
+  }
+
+  .hint { color: #8d6e63; }
+}
+
+/* ---------------- 页签 ---------------- */
+
+.tabs {
+  ::ng-deep .mat-mdc-tab-body-wrapper {
+    padding-top: 4px;
+  }
+}
+
+.tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.tab-intro {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.panel {
+  padding: 4px 0 8px;
+
+  mat-card-content { padding: 0 16px 8px; }
+}
+
+.empty-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 24px;
+  text-align: center;
+  color: #888;
+
+  mat-icon {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+    color: #ccc;
+  }
+
+  p { margin: 0; font-size: 13px; }
+}
+
+.prose {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.muted { color: #888; }
+.small { font-size: 12px; }
+
+/* ---------------- 六维进度条 ---------------- */
+
+.dim {
+  margin-bottom: 14px;
+
+  .dim-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .dim-name {
+    font-size: 14px;
+
+    .dim-hint {
+      margin-left: 6px;
+      font-size: 11px;
+      font-style: normal;
+      color: #999;
+    }
+  }
+
+  .dim-score {
+    font-size: 16px;
+    font-weight: 700;
+  }
+}
+
+/* 进度条颜色跟分数档位走 —— 用 ::ng-deep 是因为 md-bar 的颜色在组件内部节点上 */
+mat-progress-bar {
+  &.good ::ng-deep .mdc-linear-progress__bar-inner { background-color: #2e7d32 !important; }
+  &.mid ::ng-deep .mdc-linear-progress__bar-inner { background-color: #f9a825 !important; }
+  &.bad ::ng-deep .mdc-linear-progress__bar-inner { background-color: #c62828 !important; }
+}
+
+.good { color: #2e7d32; }
+.mid { color: #f57f17; }
+.bad { color: #c62828; }
+.none { color: #bbb; }
+.low { color: #2e7d32; }
+
+/* ---------------- 短板 ---------------- */
+
+.weakness {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #fafafa;
+  border-left: 3px solid #bbb;
+
+  &.bad { border-left-color: #c62828; }
+  &.mid { border-left-color: #f9a825; }
+  &.low { border-left-color: #2e7d32; }
+
+  .wk-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+
+    .wk-sev {
+      font-weight: 600;
+    }
+
+    .wk-cat {
+      padding: 1px 8px;
+      border-radius: 10px;
+      background: #eee;
+      color: #555;
+    }
+
+    .wk-count { color: #888; }
+
+    .spacer { flex: 1; }
+  }
+
+  h4 {
+    margin: 6px 0 4px;
+    font-size: 15px;
+  }
+
+  .wk-detail {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.6;
+  }
+
+  /* 证据单独做成引文块:这是最有说服力的部分,不能和说明混在一起 */
+  .wk-evidence {
+    margin: 0 0 8px;
+    padding: 8px 12px;
+    border-left: 3px solid #ddd;
+    background: #fff;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #444;
+
+    strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 11px;
+      color: #999;
+      font-weight: 500;
+    }
+  }
+
+  .wk-fix {
+    display: flex;
+    gap: 4px;
+    margin: 0;
+    font-size: 13px;
+    color: #2e7d32;
+    line-height: 1.6;
+  }
+}
+
+/* ---------------- 问答(核心区)—— 左右对照 ---------------- */
+
+.question {
+  padding: 16px 20px;
+
+  .q-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+
+    .q-seq {
+      font-weight: 700;
+      color: #1565c0;
+    }
+
+    .q-cat {
+      padding: 1px 8px;
+      border-radius: 10px;
+      background: #eef2f7;
+      color: #445;
+    }
+
+    .q-diff { color: #888; }
+
+    .q-stuck {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      color: #c62828;
+      font-weight: 600;
+    }
+
+    .spacer { flex: 1; }
+  }
+
+  .q-text {
+    margin: 10px 0 16px;
+    font-size: 17px;
+    line-height: 1.5;
+  }
+}
+
+/* 两栏对照:宽屏左右并排(方便逐句比对),窄屏自动叠成一上一下 */
+.answer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.answer {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #eee;
+
+  &.mine { background: #fcfcfc; }
+
+  &.ideal {
+    background: #f4fbf5;
+    border-color: #cde9d2;
+  }
+
+  .answer-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+  }
+
+  .answer-body {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+}
+
+.assessment {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #fffde7;
+  font-size: 13px;
+  line-height: 1.7;
+
+  strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #f57f17;
+  }
+
+  p { margin: 0; }
+}
+
+.missed {
+  margin-top: 12px;
+  font-size: 13px;
+
+  strong {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #c62828;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 20px;
+    line-height: 1.8;
+    color: #444;
+  }
+}
+
+.stuck-reason {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #c62828;
+}
+
+/* ---------------- 表单 ---------------- */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 12px;
+  align-items: center;
+}
+
+.wide { width: 100%; }
+
+.add-block, .add-question {
+  margin-top: 8px;
+
+  .add-title {
+    margin: 16px 0 12px;
+    font-size: 14px;
+  }
+}
+
+/* ---------------- 材料 ---------------- */
+
+.upload-card {
+  padding: 4px 0 12px;
+
+  input[type="file"] {
+    padding: 10px;
+    border: 1px dashed #bbb;
+    border-radius: 6px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+.asset {
+  padding: 14px 18px;
+
+  .asset-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .asset-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: #1565c0;
+    }
+
+    .asset-info {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+
+      .asset-meta {
+        margin-top: 2px;
+        font-size: 12px;
+        color: #888;
+      }
+    }
+  }
+
+  .player {
+    width: 100%;
+    margin-top: 12px;
+  }
+
+  .transcript-box {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed #e0e0e0;
+  }
+}

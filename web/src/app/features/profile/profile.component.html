@@ -1,0 +1,84 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h2>个人资料</h2>
+      <p class="sub">这里展示的是后端当前认可的账号信息与权限</p>
+    </div>
+    <button mat-stroked-button (click)="load()">
+      <mat-icon>refresh</mat-icon> 刷新
+    </button>
+  </header>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  @if (error()) {
+    <mat-card class="warn-card">
+      <mat-icon>cloud_off</mat-icon>
+      <div>
+        <strong>未能获取最新资料</strong>
+        <p>{{ error() }} —— 以下内容来自本地缓存,可能不是最新的。</p>
+      </div>
+    </mat-card>
+  }
+
+  <div class="cols">
+    <!-- 身份卡 -->
+    <mat-card class="identity">
+      <mat-card-content>
+        <div class="avatar">{{ initials() }}</div>
+        <h3>{{ displayName() }}</h3>
+        <p class="email">
+          <mat-icon>mail_outline</mat-icon>
+          <span>{{ user()?.email ?? '—' }}</span>
+        </p>
+
+        <div class="roles">
+          <span class="section-label">角色</span>
+          @if ((user()?.roles?.length ?? 0) === 0) {
+            <span class="muted">未分配角色</span>
+          } @else {
+            <mat-chip-set>
+              @for (r of user()?.roles ?? []; track r) {
+                <mat-chip class="role-chip" highlighted>{{ r }}</mat-chip>
+              }
+            </mat-chip-set>
+          }
+        </div>
+
+        <a mat-stroked-button routerLink="/dashboard" class="back">
+          <mat-icon>arrow_back</mat-icon> 返回总览
+        </a>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- 权限清单 -->
+    <mat-card class="perms">
+      <mat-card-header>
+        <mat-card-title>权限清单</mat-card-title>
+        <mat-card-subtitle>共 {{ permissionCount() }} 项,按模块分组</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        @if (permissionCount() === 0) {
+          <p class="empty">当前账号没有任何细粒度权限,仅能访问基础页面。</p>
+        } @else {
+          @for (g of permissionGroups(); track g.prefix) {
+            <section class="group">
+              <div class="group-head">
+                <span class="group-name">{{ g.label }}</span>
+                <span class="group-code">{{ g.prefix }}</span>
+                <span class="group-count">{{ g.permissions.length }}</span>
+              </div>
+              <mat-chip-set>
+                @for (p of g.permissions; track p) {
+                  <mat-chip class="perm-chip">{{ p }}</mat-chip>
+                }
+              </mat-chip-set>
+            </section>
+          }
+        }
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

@@ -1,0 +1,256 @@
+.page { max-width: 1320px; }
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.page-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.page-head .sub { margin: 4px 0 0; font-size: 13px; opacity: 0.6; }
+
+mat-card { border-radius: 8px; }
+
+/* ---------- 结论卡 ---------- */
+
+.insight-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  border-left: 3px solid #3f51b5;
+  background: linear-gradient(90deg, rgba(63, 81, 181, 0.06), rgba(63, 81, 181, 0.01));
+}
+
+.insight-card mat-icon { color: #3f51b5; flex: 0 0 auto; margin-top: 2px; }
+
+.insight-body strong { font-size: 13px; letter-spacing: 0.3px; }
+
+.insight-body p {
+  margin: 5px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* ---------- 布局 ---------- */
+
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .cols { grid-template-columns: minmax(0, 1fr); }
+}
+
+.right-col { display: flex; flex-direction: column; gap: 14px; }
+
+.panel { padding-bottom: 6px; }
+
+.radar-host {
+  width: 100%;
+  height: 340px;
+}
+
+/* ---------- 雷达图例与短板 ---------- */
+
+.radar-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: -8px 0 12px;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.dot.cur { background: #3f51b5; }
+.dot.best { background: #2e7d32; }
+.dot.mastered { background: #2e7d32; }
+.dot.familiar { background: #1565c0; }
+.dot.learning { background: #c5cae9; }
+
+.weak-list {
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  padding-top: 10px;
+}
+
+.weak-title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.55;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.weak-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 13px;
+}
+
+.w-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.w-score {
+  font-weight: 700;
+  font-size: 14px;
+  min-width: 30px;
+  text-align: right;
+}
+
+.w-score.good { color: #2e7d32; }
+.w-score.mid { color: #a15c00; }
+.w-score.bad { color: #b3261e; }
+
+.w-best { font-size: 11.5px; opacity: 0.5; }
+
+.w-delta { font-size: 11.5px; }
+.w-delta.up { color: #2e7d32; }
+.w-delta.down { color: #b3261e; }
+
+/* ---------- 漏斗 ---------- */
+
+.funnel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.f-label {
+  flex: 0 0 70px;
+  font-size: 12.5px;
+}
+
+.f-bar {
+  flex: 1 1 auto;
+  height: 14px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.f-fill {
+  height: 100%;
+  border-radius: 4px;
+  min-width: 2px;
+  transition: width 240ms ease;
+}
+
+.f-count {
+  flex: 0 0 34px;
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* ---------- 熟练度 ---------- */
+
+.legend-row {
+  display: flex;
+  gap: 16px;
+  font-size: 11.5px;
+  opacity: 0.6;
+  margin-bottom: 10px;
+}
+
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.m-topic {
+  flex: 0 0 96px;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-bar {
+  flex: 1 1 auto;
+  display: flex;
+  height: 12px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.m-seg { height: 100%; }
+
+.m-seg.mastered { background: #2e7d32; }
+.m-seg.familiar { background: #1565c0; }
+.m-seg.learning { background: #c5cae9; }
+
+.m-num {
+  flex: 0 0 48px;
+  text-align: right;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+/* ---------- 趋势 ---------- */
+
+.trend-panel { margin-top: 14px; }
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.trend-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.t-name { font-size: 12.5px; opacity: 0.7; margin-bottom: 4px; }
+
+.t-delta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 17px;
+  font-weight: 700;
+  opacity: 0.6;
+}
+
+.t-delta mat-icon { font-size: 20px; width: 20px; height: 20px; }
+.t-delta.up { color: #2e7d32; opacity: 1; }
+.t-delta.down { color: #b3261e; opacity: 1; }
+
+.t-from { font-size: 11.5px; opacity: 0.5; margin-top: 3px; }
+
+/* ---------- 空态 / 错误 ---------- */
+
+.empty { font-size: 13px; opacity: 0.5; line-height: 1.7; margin: 8px 0 14px; }
+
+.err-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border-left: 3px solid #b3261e;
+}
+
+.err-card mat-icon { color: #b3261e; }
+.err-card p { margin: 4px 0 0; font-size: 13px; opacity: 0.75; }

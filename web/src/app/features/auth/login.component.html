@@ -1,0 +1,52 @@
+<div class="login-wrap">
+  <mat-card class="login-card">
+    @if (busy()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
+
+    <mat-card-header>
+      <div class="head">
+        <span class="mark">▮</span>
+        <div>
+          <h1>Your Interview</h1>
+          <p>求职与面试全流程平台</p>
+        </div>
+      </div>
+    </mat-card-header>
+
+    <mat-card-content>
+      <form (ngSubmit)="submit()" #f="ngForm">
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>邮箱</mat-label>
+          <input matInput type="email" name="email" [(ngModel)]="email"
+                 autocomplete="username" required autofocus>
+          <mat-icon matPrefix>mail_outline</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>密码</mat-label>
+          <input matInput [type]="hidePassword() ? 'password' : 'text'"
+                 name="password" [(ngModel)]="password"
+                 autocomplete="current-password" required>
+          <mat-icon matPrefix>lock_outline</mat-icon>
+          <button mat-icon-button matSuffix type="button"
+                  (click)="hidePassword.set(!hidePassword())" tabindex="-1">
+            <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+        </mat-form-field>
+
+        @if (error()) {
+          <div class="err">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ error() }}</span>
+          </div>
+        }
+
+        <button mat-raised-button color="primary" class="full submit"
+                type="submit" [disabled]="busy() || !email || !password">
+          {{ busy() ? '登录中…' : '登录' }}
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <p class="foot">个人使用 · 数据仅存本地</p>
+</div>

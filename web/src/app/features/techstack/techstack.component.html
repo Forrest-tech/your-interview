@@ -1,0 +1,222 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h2>技术栈</h2>
+      <p class="sub">每个概念九块拆解:从一句话直觉到面试话术</p>
+    </div>
+    <div class="head-actions">
+      <button mat-stroked-button (click)="reload()">
+        <mat-icon>refresh</mat-icon> 刷新
+      </button>
+      <button mat-raised-button color="primary" (click)="openCreate()">
+        <mat-icon>add</mat-icon> 新增条目
+      </button>
+    </div>
+  </header>
+
+  <!-- 熟练度分布:接口失败时整块隐藏,不显示误导性的全 0 -->
+  @if (buckets()) {
+    <mat-card class="buckets">
+      <mat-card-content>
+        <div class="buckets-head">
+          <span class="buckets-title">熟练度分布</span>
+          <span class="buckets-total">共 {{ buckets()?.totalItems }} 个条目</span>
+        </div>
+        <div class="bucket-row">
+          @for (b of bucketRows(); track b.level) {
+            <div class="bucket" [class]="'b-' + b.level.toLowerCase()">
+              <div class="bucket-top">
+                <span class="bucket-label">{{ b.label }}</span>
+                <span class="bucket-count">{{ b.count }}</span>
+              </div>
+              <div class="bar"><div class="bar-fill" [style.width.%]="b.pct"></div></div>
+              <div class="bucket-pct">{{ b.pct }}%</div>
+            </div>
+          }
+        </div>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- 筛选 -->
+  <mat-card class="filters">
+    <mat-card-content>
+      <div class="filter-row">
+        <mat-form-field appearance="outline" class="search">
+          <mat-label>搜索术语 / 释义</mat-label>
+          <input matInput [value]="search()" (input)="onSearchInput($any($event.target).value)"
+                 (keyup.enter)="onSearchEnter()" placeholder="例如 async">
+          <mat-icon matPrefix>search</mat-icon>
+          @if (search()) {
+            <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
+                    matTooltip="清空筛选">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </mat-form-field>
+      </div>
+
+      <div class="chip-line">
+        <span class="chip-label">主题</span>
+        <mat-chip-set>
+          <mat-chip class="fchip" [highlighted]="topic() === null" (click)="selectTopic(null)">
+            全部
+          </mat-chip>
+          @for (t of topics(); track t) {
+            <mat-chip class="fchip" [highlighted]="topic() === t" (click)="selectTopic(t)">
+              {{ t }}
+            </mat-chip>
+          }
+        </mat-chip-set>
+        @if (topicSource() === 'derived' && topics().length > 0) {
+          <span class="chip-note" matTooltip="主题来自当前结果推导,后端主题接口不可用">推导</span>
+        }
+      </div>
+
+      <div class="chip-line">
+        <span class="chip-label">熟练度</span>
+        <mat-chip-set>
+          @for (m of masteryOrder; track m) {
+            <mat-chip class="fchip" [class]="masteryClass(m)"
+                      [highlighted]="mastery() === m" (click)="toggleMastery(m)">
+              {{ masteryLabel(m) }}
+            </mat-chip>
+          }
+        </mat-chip-set>
+        @if (hasFilters()) {
+          <button mat-button class="clear-btn" (click)="clearFilters()">清空全部</button>
+        }
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  @if (error()) {
+    <mat-card class="err-card">
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>加载失败</strong>
+        <p>{{ error() }}</p>
+      </div>
+    </mat-card>
+  }
+
+  <div class="split">
+    <!-- 左:条目列表 -->
+    <mat-card class="list-pane">
+      <div class="list-head">
+        <span>{{ total() }} 个条目</span>
+      </div>
+      <div class="list-body">
+        @if (!loading() && items().length === 0) {
+          <p class="empty">
+            @if (hasFilters()) { 没有符合筛选条件的条目。 }
+            @else { 知识库还是空的,点右上角新增第一条。 }
+          </p>
+        }
+
+        @for (it of items(); track it.id) {
+          <button class="list-item" [class.active]="isSelected(it)" (click)="select(it)">
+            <div class="li-top">
+              <span class="li-term">{{ it.title }}</span>
+              <span class="li-mastery" [class]="masteryClass(it.mastery)">
+                {{ masteryLabel(it.mastery) }}
+              </span>
+            </div>
+            <div class="li-foot">
+              <span class="li-topic">{{ it.topic }}</span>
+              @if (it.source === 'FromInterview') {
+                <span class="li-src" matTooltip="来自实战机经复盘">机经</span>
+              }
+              <span class="li-review">复习 {{ it.reviewCount }} 次</span>
+            </div>
+          </button>
+        }
+      </div>
+
+      @if (totalPages() > 1) {
+        <div class="list-pager">
+          <button mat-icon-button [disabled]="page() <= 1" (click)="goPage(page() - 1)"
+                  matTooltip="上一页">
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+          <span>{{ page() }} / {{ totalPages() }}</span>
+          <button mat-icon-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)"
+                  matTooltip="下一页">
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        </div>
+      }
+    </mat-card>
+
+    <!-- 右:九块详情 -->
+    <mat-card class="detail-pane">
+      @if (selected(); as it) {
+        <div class="detail-head">
+          <div class="dh-main">
+            <h3>{{ it.title }}</h3>
+          </div>
+          <div class="dh-meta">
+            <span class="li-mastery" [class]="masteryClass(it.mastery)">
+              {{ masteryLabel(it.mastery) }}
+            </span>
+            <span class="dh-topic">{{ it.topic }}</span>
+            <span class="dh-topic">难度 {{ it.difficulty }}</span>
+            <span class="dh-topic">重要度 {{ it.importance }}</span>
+          </div>
+          <div class="dh-actions">
+            <button mat-stroked-button color="primary"
+                    [disabled]="acting()" (click)="promote(it)">
+              <mat-icon>trending_up</mat-icon> 提升熟练度
+            </button>
+            <button mat-stroked-button [disabled]="acting()"
+                    [matMenuTriggerFor]="reviewMenu">
+              <mat-icon>check_circle_outline</mat-icon> 记录复习
+              <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
+            </button>
+            <mat-menu #reviewMenu="matMenu">
+              <!-- 四档直接对应 SM-2 的 Again/Hard/Good/Easy:
+                   档位决定下次间隔怎么算,所以必须让用户选,不能写死。 -->
+              @for (r of reviewChoices; track r.value) {
+                <button mat-menu-item (click)="review(it, r.value)">{{ r.label }}</button>
+              }
+            </mat-menu>
+          </div>
+          <div class="dh-stats">
+            <span>复习 {{ it.reviewCount }} 次</span>
+            <span>下次复习 {{ nextReviewLabel(it) }}</span>
+            @if (it.easinessFactor) { <span>难度因子 {{ it.easinessFactor | number:'1.2-2' }}</span> }
+            @if (it.source === 'FromInterview') { <span>来源:实战机经复盘</span> }
+          </div>
+        </div>
+
+        <div class="detail-body">
+          @for (b of blocks; track b.key) {
+            @if (blockText(it, b.key)) {
+              <section class="block">
+                <header class="block-head">
+                  <mat-icon>{{ b.icon }}</mat-icon>
+                  <span class="block-label">{{ b.label }}</span>
+                  <span class="block-hint">{{ b.hint }}</span>
+                </header>
+                <p class="block-text">{{ blockText(it, b.key) }}</p>
+              </section>
+            }
+          }
+
+          @if (allBlocksEmpty(it)) {
+            <p class="empty">这个条目还没填内容,先补齐「一句话直觉」再背其他部分。</p>
+          }
+        </div>
+      } @else {
+        <div class="no-selection">
+          <mat-icon>touch_app</mat-icon>
+          <p>从左侧选一个条目查看九块拆解。</p>
+        </div>
+      }
+    </mat-card>
+  </div>
+</div>

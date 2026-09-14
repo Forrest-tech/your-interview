@@ -1,0 +1,60 @@
+<!-- 顶栏:品牌 + 账户。细而稳,不抢内容区视觉重心。 -->
+<mat-toolbar class="topbar" color="primary">
+  <button mat-icon-button (click)="toggleSidebar()" matTooltip="折叠/展开导航">
+    <mat-icon>menu</mat-icon>
+  </button>
+
+  <a class="brand" routerLink="/dashboard">
+    <span class="brand-mark">▮</span>
+    <span class="brand-name">Your Interview</span>
+    <span class="brand-sub">求职与面试全流程</span>
+  </a>
+
+  <span class="spacer"></span>
+
+  <!-- 账户菜单:显示名 + 下拉(身份/权限可见,便于自查) -->
+  <button mat-button [matMenuTriggerFor]="accountMenu" class="account-btn">
+    <mat-icon>account_circle</mat-icon>
+    <span class="account-name">{{ auth.displayName() }}</span>
+    <mat-icon class="caret">expand_more</mat-icon>
+  </button>
+
+  <mat-menu #accountMenu="matMenu" xPosition="before">
+    <div class="menu-head">
+      <div class="menu-name">{{ auth.displayName() }}</div>
+      <div class="menu-role">{{ auth.user()?.roles?.join(' · ') }}</div>
+    </div>
+    <mat-divider></mat-divider>
+    <button mat-menu-item (click)="goProfile()">
+      <mat-icon>person</mat-icon><span>我的账户</span>
+    </button>
+    <mat-divider></mat-divider>
+    <button mat-menu-item (click)="logout()">
+      <mat-icon>logout</mat-icon><span>退出登录</span>
+    </button>
+  </mat-menu>
+</mat-toolbar>
+
+<div class="shell-body">
+  <!-- 侧边导航 -->
+  <nav class="sidebar" [class.collapsed]="collapsed()">
+    @for (item of nav(); track item.path) {
+      <a class="nav-item"
+         [routerLink]="item.path"
+         routerLinkActive="active"
+         [matTooltip]="collapsed() ? item.label : ''"
+         matTooltipPosition="right">
+        <mat-icon>{{ item.icon }}</mat-icon>
+        @if (!collapsed()) {
+          <span class="nav-label">{{ item.label }}</span>
+          <span class="nav-en">{{ item.labelEn }}</span>
+        }
+      </a>
+    }
+  </nav>
+
+  <!-- 内容区 -->
+  <main class="content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

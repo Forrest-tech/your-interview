@@ -39,6 +39,13 @@ fi
 
 start() {
   if status >/dev/null 2>&1; then echo "[rabbit] 已在运行"; return 0; fi
+  # 容器/最小化环境里 /etc/hosts 只有 localhost 与部分短名,ERTS 在启动
+  # net_kernel 时若无法解析本机 hostname 会直接 crash(nodistribution),
+  # 现象是 rabbitmq_prelaunch 退出、erl_crash.dump。显式补 hosts 记录是根因修复。
+  local hn; hn="$(hostname)"
+  if ! grep -qiE "[[:space:]]$hn([[:space:]]|$)" /etc/hosts 2>/dev/null; then
+    printf '127.0.0.1\t%s\n' "$hn" >> /etc/hosts 2>/dev/null && echo "[rabbit] 已补 /etc/hosts: 127.0.0.1 $hn" || true
+  fi
   echo "[rabbit] 启动 RabbitMQ(node=$NODE_NAME, amqp=$AMQP_PORT, mgmt=$MGMT_PORT) …"
   "$RABBIT/bin/rabbitmq-server" > "$LOGS/console.log" 2>&1 &
   for i in $(seq 1 60); do

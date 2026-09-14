@@ -1,1 +1,189 @@
-/* You can add global styles to this file, and also import other style files */
+/* ============================================================================
+   全局样式
+   只放三样东西:主题变量、跨模块的通用工具类、第三方补丁。
+   组件自己的样式一律留在组件 .scss 里 —— 全局样式越少,后面越不容易互相打架。
+   ============================================================================ */
+
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+/* 字体族抽成变量 —— 主题配置和 body 都要用同一份,硬编码两遍必然不同步 */
+$app-font: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif';
+
+/* 主题:靛蓝主色 + 琥珀强调。偏冷静专业,不抢数据本身的注意力。 */
+$primary: mat.define-palette(mat.$indigo-palette, 600);
+$accent: mat.define-palette(mat.$amber-palette, 700);
+$warn: mat.define-palette(mat.$red-palette);
+
+$theme: mat.define-light-theme((
+  color: (primary: $primary, accent: $accent, warn: $warn),
+  typography: mat.define-typography-config($font-family: $app-font),
+  density: 0
+));
+
+@include mat.all-component-themes($theme);
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: $app-font;
+  font-size: 14px;
+  color: #24262b;
+  background: #f7f7fa;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+/* ---------------- 通用页面骨架(各模块复用,保证视觉一致) ---------------- */
+
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+
+  h2 {
+    margin: 0;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .sub {
+    margin: 5px 0 0;
+    font-size: 13px;
+    color: #6b6f76;
+    line-height: 1.5;
+  }
+
+  .insight {
+    display: inline-block;
+    margin-left: 2px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: rgba(63, 81, 181, 0.09);
+    color: #303f9f;
+  }
+}
+
+/* 卡片面板统一留白 —— Material 默认偏紧,内容多的页面会显得挤 */
+mat-card {
+  border-radius: 10px !important;
+}
+
+mat-card-header { padding-bottom: 6px; }
+
+mat-card-title { font-size: 15.5px !important; font-weight: 600 !important; }
+
+mat-card-subtitle { font-size: 12.5px !important; }
+
+/* ---------------- 分数色档(全站统一语义) ---------------- */
+
+.good { color: #1b7f4b; }
+.mid  { color: #b06a00; }
+.bad  { color: #b3261e; }
+
+mat-progress-bar.good .mdc-linear-progress__bar-inner { border-color: #1b7f4b !important; }
+mat-progress-bar.mid  .mdc-linear-progress__bar-inner { border-color: #e0a030 !important; }
+mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !important; }
+
+/* ---------------- 状态标签 ---------------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+.chip.saved     { background: #eceff1; color: #455a64; }
+.chip.applied   { background: #e3f2fd; color: #1565c0; }
+.chip.screen    { background: #fff8e1; color: #a06a00; }
+.chip.interview { background: #ede7f6; color: #4527a0; }
+.chip.offer     { background: #e8f5e9; color: #1b7f4b; }
+.chip.rejected  { background: #fdecea; color: #b3261e; }
+.chip.paused    { background: #f3f3f6; color: #6b6f76; }
+.chip.withdrawn { background: #f3f3f6; color: #6b6f76; }
+
+/* ---------------- 空态 ---------------- */
+
+.empty {
+  padding: 26px 12px;
+  text-align: center;
+  color: #8b8f96;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.err-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-left: 3px solid #b3261e !important;
+
+  mat-icon { color: #b3261e; }
+  strong { font-size: 14px; }
+  p { margin: 3px 0 0; font-size: 13px; color: #6b6f76; }
+}
+
+/* ---------------- 表单通用 ---------------- */
+
+.full { width: 100%; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+
+  .span-2 { grid-column: 1 / -1; }
+}
+
+@media (max-width: 720px) {
+  .form-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------------- 长文本展示(机经问答、知识库条目用) ---------------- */
+
+.text-block {
+  padding: 11px 13px;
+  border-radius: 8px;
+  background: #fafafc;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 13.5px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.text-block.mine { background: #f7f9fd; }
+.text-block.recommended {
+  background: #f4fbf6;
+  border-color: rgba(27, 127, 75, 0.2);
+}
+
+/* ---------------- 滚动条(内容区深色细条,不抢视觉) ---------------- */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }

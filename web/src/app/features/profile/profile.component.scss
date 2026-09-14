@@ -153,3 +153,29 @@ mat-card { border-radius: 8px; }
   font-size: 13px;
   opacity: 0.75;
 }
+
+// 加载失败且无缓存可兑底:给一个明确的出路,不要把用户困在空白页
+.err-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 16px;
+  border-left: 3px solid #c62828;
+}
+
+.err-card mat-icon { color: #c62828; flex: 0 0 auto; }
+
+.err-card p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.err-card .err-actions {
+  flex: 1 0 100%;
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  padding-left: 34px;
+}

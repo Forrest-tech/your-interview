@@ -47,6 +47,30 @@ export class ProfileComponent implements OnInit {
   /** 接口失败时用本地缓存兜底 —— 用户至少还能看到自己是谁。 */
   readonly user = computed<AuthUser | null>(() => this.me() ?? this.auth.user());
 
+  /**
+   * 是否处于"接口失败"态。三态判定统一走这几个 computed,
+   * 避免模板里散落 error() && !loading() 之类的组合条件写错。
+   */
+  readonly hasError = computed(() => !this.loading() && this.error() !== null);
+
+  /** 接口失败且连本地缓存都没有 —— 无任何可展示数据,只能引导重新登录。 */
+  readonly hasNothingToShow = computed(() => this.hasError() && this.user() === null);
+
+  /**
+   * 是否展示"正在用缓存兜底"的降级提示。
+   * 失败 + 有缓存 = 页面还能看,但要明确告知不是最新的。
+   * 失败 + 无缓存 = 走 hasNothingToShow 的兜底块,不再叠加这个提示。
+   */
+  readonly usedFallback = computed(() => this.hasError() && this.user() !== null);
+
+  /** 成功加载且确实没有权限 —— 真正的空态,与"加载失败"不是一回事。 */
+  readonly isEmptyPermissions = computed(
+    () => !this.loading() && !this.hasError() && this.permissionCount() === 0
+  );
+
+  /** 成功加载且拿到了账号 —— 才渲染身份卡与权限清单。 */
+  readonly hasUser = computed(() => !this.loading() && this.user() !== null);
+
   readonly displayName = computed(() =>
     this.user()?.displayName || this.auth.displayName() || '未命名用户'
   );
@@ -99,7 +123,7 @@ export class ProfileComponent implements OnInit {
       },
       // 失败不整页报错:本地缓存的 user 仍可展示,只在顶部提示"不是最新的"
       error: (e: Error) => {
-        this.error.set(e.message);
+        this.error.set(e.message || '网络异常,请稍后重试');
         this.loading.set(false);
       }
     });

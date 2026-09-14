@@ -526,7 +526,7 @@ public sealed class UpdateInterviewRoundCommandHandler(JobsDbContext db)
 
 // ============================ Handler:统计与看板 ============================
 
-public sealed class GetTrackerStatsQueryHandler(JobsDbContext db, TimeProvider clock)
+public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
     : IRequestHandler<GetTrackerStatsQuery, Result<TrackerStats>>
 {
     public async Task<Result<TrackerStats>> Handle(GetTrackerStatsQuery request, CancellationToken ct)

@@ -25,3 +25,8 @@ rabbitmq/
 # --- 构建产物 ---
 publish/
 artifacts/
+
+# 分析工作目录(临时产物,不进版本库)
+.analysis/
+storage/
+.logs/

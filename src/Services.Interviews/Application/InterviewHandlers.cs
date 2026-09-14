@@ -1,0 +1,703 @@
+using FluentValidation;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using YourInterview.BuildingBlocks.Results;
+using YourInterview.Services.Interviews.Domain;
+using YourInterview.Services.Interviews.Infrastructure.Persistence;
+
+namespace YourInterview.Services.Interviews.Application;
+
+// ============================ DTO ============================
+// DTO 一律用 record + 精确定义,不用匿名对象 —— 前端 TypeScript 类型可直接照抄。
+
+public sealed record AssetDto(
+    Guid Id, string Kind, string FileName, string? ContentType, long SizeBytes,
+    string? BlobUrl, double? DurationSeconds, string SourceLanguage, bool HasTranscript,
+    int TranscriptLength, DateTimeOffset UploadedAt);
+
+public sealed record QuestionDto(
+    Guid Id, int Sequence, string QuestionText, string? MyAnswerText, string Category,
+    int Difficulty, string? Assessment, bool GotStuck, string? StuckReason,
+    string? RecommendedAnswer, double? AskedAtSeconds, string? WeaknessTagsJson,
+    string? FollowUpQuestionsJson, string? MissedPointsJson);
+
+public sealed record WeaknessDto(
+    Guid Id, string Category, string Title, string? Detail, string? Evidence,
+    int Severity, string? Suggestion, int OccurrenceCount, string SourceType,
+    DateTimeOffset CreatedAt);
+
+public sealed record InterviewEntryDto(
+    Guid Id, Guid CompanyId, string CompanyName, Guid? JobApplicationId, string Role,
+    string? CompanyProfile, string? JdText, string? JdSummary,
+    int RoundNo, DateOnly? InterviewDate, string? InterviewFormat, string? Interviewers,
+    string? Location, string? Result, string? Notes,
+    string Status, string? FailureReason, DateTimeOffset? TranscribedAt, DateTimeOffset? AnalyzedAt,
+    int? OverallScore, int? PronunciationScore, int? FluencyScore, int? StructureScore,
+    int? TechnicalDepthScore, int? RelevanceScore, string? AnalysisSummary,
+    int AssetCount, int QuestionCount, int WeaknessCount,
+    List<AssetDto> Assets, List<QuestionDto> Questions, List<WeaknessDto> Weaknesses,
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+
+public sealed record InterviewEntryListItemDto(
+    Guid Id, Guid CompanyId, string CompanyName, string Role, int RoundNo,
+    DateOnly? InterviewDate, string? InterviewFormat, string Status, string? Result,
+    int? OverallScore, int? PronunciationScore, int? FluencyScore, int? StructureScore,
+    int? TechnicalDepthScore, int? RelevanceScore,
+    int AssetCount, int QuestionCount, int WeaknessCount, bool HasTranscript,
+    DateTimeOffset CreatedAt);
+
+public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
+{
+    public int TotalPages => PageSize <= 0 ? 0 : (int)Math.Ceiling(Total / (double)PageSize);
+    public bool HasNext => Page < TotalPages;
+    public bool HasPrevious => Page > 1;
+}
+
+public sealed record CompanySummaryDto(
+    Guid CompanyId, string CompanyName, int EntryCount, int AnalyzedCount,
+    double? AverageScore, DateOnly? LatestInterviewDate, string? LatestResult);
+
+public sealed record InterviewStatsDto(
+    int TotalEntries, int Draft, int Transcribing, int Transcribed, int Analyzing,
+    int Analyzed, int Failed,
+    int TotalQuestions, int GotStuckQuestions, int TotalWeaknesses,
+    double? AverageOverallScore, double? AveragePronunciation, double? AverageFluency,
+    double? AverageStructure, double? AverageTechnicalDepth, double? AverageRelevance,
+    List<CategoryCountDto> WeaknessByCategory,
+    List<CategoryCountDto> QuestionsByCategory,
+    List<TrendPointDto> ScoreTrend,
+    int PendingAnalysis);
+
+public sealed record CategoryCountDto(string Category, int Count, double? AverageSeverity = null);
+
+public sealed record TrendPointDto(DateOnly Date, int Score, string CompanyName);
+
+// ============================ 查询 ============================
+
+public sealed record ListEntriesQuery(
+    int Page = 1, int PageSize = 20, Guid? CompanyId = null, string? Status = null,
+    string? Search = null) : IRequest<Result<PagedResult<InterviewEntryListItemDto>>>;
+
+public sealed record GetEntryQuery(Guid Id) : IRequest<Result<InterviewEntryDto>>;
+
+public sealed record GetCompanySummariesQuery : IRequest<Result<IReadOnlyList<CompanySummaryDto>>>;
+
+public sealed record GetInterviewStatsQuery : IRequest<Result<InterviewStatsDto>>;
+
+public sealed record ListWeaknessesQuery(Guid EntryId, string? Category = null)
+    : IRequest<Result<IReadOnlyList<WeaknessDto>>>;
+
+// ============================ 命令 ============================
+
+public sealed record CreateEntryCommand(
+    Guid CompanyId, string CompanyName, string Role, Guid? JobApplicationId = null,
+    string? CompanyProfile = null, string? JdText = null, string? JdSummary = null,
+    string? InterviewFormat = null, string? Interviewers = null, DateOnly? InterviewDate = null)
+    : IRequest<Result<Guid>>;
+
+public sealed record UpdateEntryCommand(
+    Guid Id, string CompanyName, string Role, string? CompanyProfile, string? JdText,
+    string? JdSummary, int RoundNo, DateOnly? InterviewDate, string? InterviewFormat,
+    string? Interviewers, string? Location, string? Result, string? Notes) : IRequest<Result>;
+
+public sealed record DeleteEntryCommand(Guid Id) : IRequest<Result>;
+
+public sealed record AttachAssetCommand(
+    Guid EntryId, string Kind, string FileName, string? ContentType, long SizeBytes,
+    string? StoragePath, string? BlobUrl, string? TranscriptText, string? TranscriptSegmentsJson,
+    double? DurationSeconds, string SourceLanguage = "en") : IRequest<Result<Guid>>;
+
+public sealed record SaveTranscriptCommand(Guid EntryId, Guid AssetId, string FullText,
+    string? SegmentsJson) : IRequest<Result>;
+
+/// <summary>开始转写(由分析 Worker 调用,把条目从 AssetsUploaded 推进到 Transcribing)。</summary>
+public sealed record BeginTranscriptionCommand(Guid EntryId) : IRequest<Result>;
+
+public sealed class BeginTranscriptionCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<BeginTranscriptionCommand, Result>
+{
+    public async Task<Result> Handle(BeginTranscriptionCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
+            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        try
+        {
+            e.StartTranscription();   // 幂等:已在 Transcribed/Analyzed 直接返回
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.Conflict("Transcription.InvalidState", ex.Message));
+        }
+    }
+}
+
+public sealed record RequestAnalysisCommand(Guid EntryId) : IRequest<Result>;
+
+public sealed record ApplyAnalysisCommand(
+    Guid EntryId, int Overall, int Pronunciation, int Fluency, int Structure,
+    int TechnicalDepth, int Relevance, string? Summary,
+    List<QuestionDraft>? Questions, List<WeaknessDraft>? Weaknesses) : IRequest<Result>;
+
+public sealed record MarkEntryFailedCommand(Guid EntryId, string Reason) : IRequest<Result>;
+
+public sealed record AddQuestionCommand(
+    Guid EntryId, string QuestionText, string? MyAnswerText, string Category, int Difficulty,
+    string? Assessment = null) : IRequest<Result<Guid>>;
+
+public sealed record UpdateQuestionCommand(
+    Guid EntryId, Guid QuestionId, string QuestionText, string? MyAnswerText, string Category,
+    int Difficulty, string? Assessment, bool GotStuck, string? StuckReason,
+    string? RecommendedAnswer) : IRequest<Result>;
+
+public sealed record RemoveQuestionCommand(Guid EntryId, Guid QuestionId) : IRequest<Result>;
+
+public sealed record AddWeaknessCommand(
+    Guid EntryId, string Category, string Title, string? Detail, string? Evidence,
+    int Severity, string? Suggestion) : IRequest<Result<Guid>>;
+
+public sealed record RemoveWeaknessCommand(Guid EntryId, Guid WeaknessId) : IRequest<Result>;
+
+// ============================ 校验器 ============================
+// 注意:校验器由 ServiceDefaults 的反射扫描自动注册(踩过"忘了注册导致校验静默失效"的坑)。
+
+public sealed class CreateEntryCommandValidator : AbstractValidator<CreateEntryCommand>
+{
+    public CreateEntryCommandValidator()
+    {
+        RuleFor(x => x.CompanyName).NotEmpty().MaximumLength(300)
+            .WithMessage("公司名不能为空且不超过 300 字");
+        RuleFor(x => x.Role).NotEmpty().MaximumLength(300).WithMessage("岗位名不能为空");
+        RuleFor(x => x.JdText).MaximumLength(60000);
+    }
+}
+
+public sealed class UpdateEntryCommandValidator : AbstractValidator<UpdateEntryCommand>
+{
+    public UpdateEntryCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.CompanyName).NotEmpty().MaximumLength(300);
+        RuleFor(x => x.Role).NotEmpty().MaximumLength(300);
+        RuleFor(x => x.RoundNo).InclusiveBetween(1, 20).WithMessage("轮次应在 1-20 之间");
+    }
+}
+
+public sealed class AttachAssetCommandValidator : AbstractValidator<AttachAssetCommand>
+{
+    private static readonly string[] AllowedKinds = ["Audio", "Transcript", "Notes"];
+
+    public AttachAssetCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.FileName).NotEmpty().MaximumLength(500);
+        RuleFor(x => x.Kind).Must(k => AllowedKinds.Contains(k, StringComparer.OrdinalIgnoreCase))
+            .WithMessage("材料类型只能是 Audio / Transcript / Notes");
+        // 文本类材料必须有内容 —— 这条规则挡掉了"传了个空的 Transcript"
+        RuleFor(x => x.TranscriptText)
+            .NotEmpty()
+            .When(x => !string.Equals(x.Kind, "Audio", StringComparison.OrdinalIgnoreCase))
+            .WithMessage("文本类材料必须提供内容");
+    }
+}
+
+public sealed class AddQuestionCommandValidator : AbstractValidator<AddQuestionCommand>
+{
+    public AddQuestionCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.QuestionText).NotEmpty().MaximumLength(8000);
+        RuleFor(x => x.Difficulty).InclusiveBetween(1, 5);
+    }
+}
+
+public sealed class AddWeaknessCommandValidator : AbstractValidator<AddWeaknessCommand>
+{
+    public AddWeaknessCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
+        RuleFor(x => x.Severity).InclusiveBetween(1, 5);
+    }
+}
+
+// ============================ 映射(扩展方法,和 Jobs 服务保持一致风格) ============================
+
+public static class InterviewMappingExtensions
+{
+    public static AssetDto ToDto(this InterviewAsset a) => new(
+        a.Id, a.Kind.ToString(), a.FileName, a.ContentType, a.SizeBytes, a.BlobUrl,
+        a.DurationSeconds, a.SourceLanguage, a.HasTranscript,
+        a.TranscriptText?.Length ?? 0, a.UploadedAt);
+
+    public static QuestionDto ToDto(this InterviewQuestion q) => new(
+        q.Id, q.Sequence, q.QuestionText, q.MyAnswerText, q.Category.ToString(), q.Difficulty,
+        q.Assessment, q.GotStuck, q.StuckReason, q.RecommendedAnswer, q.AskedAtSeconds,
+        q.WeaknessTagsJson, q.FollowUpQuestionsJson, q.MissedPointsJson);
+
+    public static WeaknessDto ToDto(this InterviewWeakness w) => new(
+        w.Id, w.Category.ToString(), w.Title, w.Detail, w.Evidence, w.Severity, w.Suggestion,
+        w.OccurrenceCount, w.SourceType.ToString(), w.CreatedAt);
+
+    public static InterviewEntryDto ToDto(this InterviewEntry e) => new(
+        e.Id, e.CompanyId, e.CompanyName, e.JobApplicationId, e.Role,
+        e.CompanyProfile, e.JdText, e.JdSummary,
+        e.RoundNo, e.InterviewDate, e.InterviewFormat, e.Interviewers, e.Location, e.Result, e.Notes,
+        e.Status.ToString(), e.FailureReason, e.TranscribedAt, e.AnalyzedAt,
+        e.OverallScore, e.PronunciationScore, e.FluencyScore, e.StructureScore,
+        e.TechnicalDepthScore, e.RelevanceScore, e.AnalysisSummary,
+        e.Assets.Count, e.Questions.Count, e.Weaknesses.Count,
+        e.Assets.OrderBy(x => x.UploadedAt).Select(x => x.ToDto()).ToList(),
+        e.Questions.OrderBy(x => x.Sequence).Select(x => x.ToDto()).ToList(),
+        e.Weaknesses.OrderByDescending(x => x.Severity).Select(x => x.ToDto()).ToList(),
+        e.CreatedAt, e.UpdatedAt);
+
+    /// <summary>列表项只带聚合的标量字段(不带子集合),避免列表页把大文本拖出来。</summary>
+    public static InterviewEntryListItemDto ToListItemDto(this InterviewEntry e) => new(
+        e.Id, e.CompanyId, e.CompanyName, e.Role, e.RoundNo, e.InterviewDate, e.InterviewFormat,
+        e.Status.ToString(), e.Result,
+        e.OverallScore, e.PronunciationScore, e.FluencyScore, e.StructureScore,
+        e.TechnicalDepthScore, e.RelevanceScore,
+        e.Assets.Count, e.Questions.Count, e.Weaknesses.Count,
+        e.Assets.Any(a => a.TranscriptText != null),
+        e.CreatedAt);
+}
+
+// ============================ Handler:查询 ============================
+
+public sealed class ListEntriesQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<ListEntriesQuery, Result<PagedResult<InterviewEntryListItemDto>>>
+{
+    public async Task<Result<PagedResult<InterviewEntryListItemDto>>> Handle(
+        ListEntriesQuery request, CancellationToken ct)
+    {
+        var page = request.Page < 1 ? 1 : request.Page;
+        var size = request.PageSize is < 1 or > 200 ? 20 : request.PageSize;
+
+        var q = db.Entries.AsNoTracking()
+            .Include(x => x.Assets)
+            .Include(x => x.Questions)
+            .Include(x => x.Weaknesses)
+            .AsQueryable();
+
+        if (request.CompanyId is { } cid) q = q.Where(x => x.CompanyId == cid);
+
+        if (!string.IsNullOrWhiteSpace(request.Status)
+            && Enum.TryParse<InterviewStatus>(request.Status, true, out var st))
+            q = q.Where(x => x.Status == st);
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var s = request.Search.Trim().ToLowerInvariant();
+            q = q.Where(x => x.CompanyName.ToLower().Contains(s)
+                          || x.Role.ToLower().Contains(s)
+                          || (x.Interviewers != null && x.Interviewers.ToLower().Contains(s)));
+        }
+
+        var total = await q.CountAsync(ct);
+        var items = await q
+            .OrderByDescending(x => x.InterviewDate ?? DateOnly.MinValue)
+            .ThenByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * size).Take(size)
+            .ToListAsync(ct);
+
+        return Result.Success(new PagedResult<InterviewEntryListItemDto>(
+            items.Select(x => x.ToListItemDto()).ToList(), total, page, size));
+    }
+}
+
+public sealed class GetEntryQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetEntryQuery, Result<InterviewEntryDto>>
+{
+    public async Task<Result<InterviewEntryDto>> Handle(GetEntryQuery request, CancellationToken ct)
+    {
+        // 详情必须 Include 子集合:它们是字段访问模式,不显式加载会得到空集合(踩过的坑)
+        var e = await db.Entries.AsNoTracking()
+            .Include(x => x.Assets)
+            .Include(x => x.Questions)
+            .Include(x => x.Weaknesses)
+            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+
+        return e is null
+            ? Result.Failure<InterviewEntryDto>(Error.NotFound("面试条目"))
+            : Result.Success(e.ToDto());
+    }
+}
+
+public sealed class GetCompanySummariesQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetCompanySummariesQuery, Result<IReadOnlyList<CompanySummaryDto>>>
+{
+    public async Task<Result<IReadOnlyList<CompanySummaryDto>>> Handle(
+        GetCompanySummariesQuery request, CancellationToken ct)
+    {
+        // 前端左侧"公司树"用:按公司聚合出场次、已分析数、平均分、最近一场
+        var rows = await db.Entries.AsNoTracking()
+            .GroupBy(x => new { x.CompanyId, x.CompanyName })
+            .Select(g => new CompanySummaryDto(
+                g.Key.CompanyId,
+                g.Key.CompanyName,
+                g.Count(),
+                g.Count(x => x.Status == InterviewStatus.Analyzed),
+                g.Where(x => x.OverallScore != null).Average(x => (double?)x.OverallScore),
+                g.Max(x => x.InterviewDate),
+                g.OrderByDescending(x => x.InterviewDate).Select(x => x.Result).FirstOrDefault()))
+            .ToListAsync(ct);
+
+        return Result.Success<IReadOnlyList<CompanySummaryDto>>(
+            rows.OrderByDescending(r => r.LatestInterviewDate ?? DateOnly.MinValue).ToList());
+    }
+}
+
+public sealed class ListWeaknessesQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<ListWeaknessesQuery, Result<IReadOnlyList<WeaknessDto>>>
+{
+    public async Task<Result<IReadOnlyList<WeaknessDto>>> Handle(
+        ListWeaknessesQuery request, CancellationToken ct)
+    {
+        var q = db.Weaknesses.AsNoTracking().Where(w => w.InterviewEntryId == request.EntryId);
+
+        if (!string.IsNullOrWhiteSpace(request.Category)
+            && Enum.TryParse<WeaknessCategory>(request.Category, true, out var cat))
+            q = q.Where(w => w.Category == cat);
+
+        var list = await q.OrderByDescending(w => w.Severity).ThenBy(w => w.Category)
+            .ToListAsync(ct);
+
+        return Result.Success<IReadOnlyList<WeaknessDto>>(list.Select(w => w.ToDto()).ToList());
+    }
+}
+
+public sealed class GetInterviewStatsQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetInterviewStatsQuery, Result<InterviewStatsDto>>
+{
+    public async Task<Result<InterviewStatsDto>> Handle(GetInterviewStatsQuery request,
+        CancellationToken ct)
+    {
+        var entries = await db.Entries.AsNoTracking().ToListAsync(ct);
+        var weaknesses = await db.Weaknesses.AsNoTracking().ToListAsync(ct);
+        var questions = await db.Questions.AsNoTracking().ToListAsync(ct);
+
+        var analyzed = entries.Where(e => e.Status == InterviewStatus.Analyzed).ToList();
+
+        double? Avg(Func<Domain.InterviewEntry, int?> sel)
+        {
+            var vals = analyzed.Select(sel).Where(v => v.HasValue).Select(v => (double)v!.Value).ToList();
+            return vals.Count == 0 ? null : Math.Round(vals.Average(), 1);
+        }
+
+        var weaknessByCat = weaknesses
+            .GroupBy(w => w.Category.ToString())
+            .Select(g => new CategoryCountDto(g.Key, g.Count(),
+                Math.Round(g.Average(w => (double)w.Severity), 1)))
+            .OrderByDescending(x => x.Count)
+            .ToList();
+
+        var questionByCat = questions
+            .GroupBy(q => q.Category.ToString())
+            .Select(g => new CategoryCountDto(g.Key, g.Count()))
+            .OrderByDescending(x => x.Count)
+            .ToList();
+
+        // 进步曲线:按面试日期排序的总分序列(前端折线图)
+        var trend = analyzed
+            .Where(e => e.OverallScore.HasValue && e.InterviewDate.HasValue)
+            .OrderBy(e => e.InterviewDate)
+            .Select(e => new TrendPointDto(e.InterviewDate!.Value, e.OverallScore!.Value, e.CompanyName))
+            .ToList();
+
+        return Result.Success(new InterviewStatsDto(
+            entries.Count,
+            entries.Count(e => e.Status == InterviewStatus.Draft),
+            entries.Count(e => e.Status == InterviewStatus.Transcribing),
+            entries.Count(e => e.Status == InterviewStatus.Transcribed),
+            entries.Count(e => e.Status == InterviewStatus.Analyzing),
+            entries.Count(e => e.Status == InterviewStatus.Analyzed),
+            entries.Count(e => e.Status == InterviewStatus.Failed),
+            questions.Count,
+            questions.Count(q => q.GotStuck),
+            weaknesses.Count,
+            Avg(e => e.OverallScore),
+            Avg(e => e.PronunciationScore),
+            Avg(e => e.FluencyScore),
+            Avg(e => e.StructureScore),
+            Avg(e => e.TechnicalDepthScore),
+            Avg(e => e.RelevanceScore),
+            weaknessByCat,
+            questionByCat,
+            trend,
+            entries.Count(e => e.Status is InterviewStatus.Transcribed or InterviewStatus.AssetsUploaded
+                or InterviewStatus.Transcribing)));
+    }
+}
+
+// ============================ Handler:命令 ============================
+
+public sealed class CreateEntryCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<CreateEntryCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(CreateEntryCommand request, CancellationToken ct)
+    {
+        var entry = new InterviewEntry(request.CompanyId, request.CompanyName, request.Role,
+            request.JobApplicationId);
+
+        if (request.CompanyProfile is not null || request.JdText is not null
+            || request.Interviewers is not null || request.InterviewDate is not null)
+        {
+            entry.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,
+                request.JdText, request.JdSummary, 1, request.InterviewDate,
+                request.InterviewFormat, request.Interviewers, null, null, null);
+        }
+
+        db.Entries.Add(entry);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(entry.Id);
+    }
+}
+
+public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<UpdateEntryCommand, Result>
+{
+    public async Task<Result> Handle(UpdateEntryCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        e.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,
+            request.JdText, request.JdSummary, request.RoundNo, request.InterviewDate,
+            request.InterviewFormat, request.Interviewers, request.Location, request.Result,
+            request.Notes);
+
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public sealed class DeleteEntryCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<DeleteEntryCommand, Result>
+{
+    public async Task<Result> Handle(DeleteEntryCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        e.MarkDeleted();   // 软删除:全局查询过滤器会自动隐藏
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public sealed class AttachAssetCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<AttachAssetCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(AttachAssetCommand request, CancellationToken ct)
+    {
+        // 带子集合加载 —— 聚合方法要往集合里加东西
+        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
+            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
+
+        if (!Enum.TryParse<AssetKind>(request.Kind, true, out var kind))
+            return Result.Failure<Guid>(Error.Validation("Asset.InvalidKind", "材料类型无效"));
+
+        try
+        {
+            var asset = e.AttachAsset(kind, request.FileName, request.ContentType, request.SizeBytes,
+                request.StoragePath, request.BlobUrl, request.TranscriptText,
+                request.TranscriptSegmentsJson, request.DurationSeconds, request.SourceLanguage);
+            await db.SaveChangesAsync(ct);
+            return Result.Success(asset.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure<Guid>(Error.Conflict("Asset.InvalidState", ex.Message));
+        }
+    }
+}
+
+public sealed class SaveTranscriptCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<SaveTranscriptCommand, Result>
+{
+    public async Task<Result> Handle(SaveTranscriptCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
+            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        try
+        {
+            e.CompleteTranscription(request.AssetId, request.FullText, request.SegmentsJson);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.Conflict("Transcript.InvalidState", ex.Message));
+        }
+    }
+}
+
+public sealed class RequestAnalysisCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<RequestAnalysisCommand, Result>
+{
+    public async Task<Result> Handle(RequestAnalysisCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
+            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        try
+        {
+            e.StartAnalysis();
+            await db.SaveChangesAsync(ct);   // 领域事件在保存后由拦截器发布 → 触发 Worker
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.Conflict("Analysis.InvalidState", ex.Message));
+        }
+    }
+}
+
+public sealed class ApplyAnalysisCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<ApplyAnalysisCommand, Result>
+{
+    public async Task<Result> Handle(ApplyAnalysisCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
+            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        try
+        {
+            e.ApplyAnalysis(request.Overall, request.Pronunciation, request.Fluency,
+                request.Structure, request.TechnicalDepth, request.Relevance, request.Summary,
+                request.Questions, request.Weaknesses);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.Conflict("Analysis.InvalidState", ex.Message));
+        }
+    }
+}
+
+public sealed class MarkEntryFailedCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<MarkEntryFailedCommand, Result>
+{
+    public async Task<Result> Handle(MarkEntryFailedCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try
+        {
+            e.MarkFailed(request.Reason);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.Conflict("Entry.InvalidState", ex.Message));
+        }
+    }
+}
+
+public sealed class AddQuestionCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<AddQuestionCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(AddQuestionCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Questions).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
+
+        if (!Enum.TryParse<QuestionCategory>(request.Category, true, out var cat))
+            return Result.Failure<Guid>(Error.Validation("Question.InvalidCategory", "问题类型无效"));
+
+        var q = e.AddQuestion(request.QuestionText, request.MyAnswerText, cat, request.Difficulty);
+        if (request.Assessment is not null)
+            q.UpdateFromAnalysis(request.QuestionText, request.MyAnswerText, request.Assessment,
+                cat, request.Difficulty, false, null, null, null);
+
+        await db.SaveChangesAsync(ct);
+        return Result.Success(q.Id);
+    }
+}
+
+public sealed class UpdateQuestionCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<UpdateQuestionCommand, Result>
+{
+    public async Task<Result> Handle(UpdateQuestionCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Questions).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        if (!Enum.TryParse<QuestionCategory>(request.Category, true, out var cat))
+            return Result.Failure(Error.Validation("Question.InvalidCategory", "问题类型无效"));
+
+        try
+        {
+            e.UpdateQuestion(request.QuestionId, request.QuestionText, request.MyAnswerText, cat,
+                request.Difficulty, request.Assessment, request.GotStuck, request.StuckReason,
+                request.RecommendedAnswer);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+
+public sealed class RemoveQuestionCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<RemoveQuestionCommand, Result>
+{
+    public async Task<Result> Handle(RemoveQuestionCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Questions).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try
+        {
+            e.RemoveQuestion(request.QuestionId);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+
+public sealed class AddWeaknessCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<AddWeaknessCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(AddWeaknessCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
+
+        if (!Enum.TryParse<WeaknessCategory>(request.Category, true, out var cat))
+            return Result.Failure<Guid>(Error.Validation("Weakness.InvalidCategory", "短板分类无效"));
+
+        var w = e.AddWeakness(cat, request.Title, request.Detail, request.Evidence,
+            request.Severity, request.Suggestion);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(w.Id);
+    }
+}
+
+public sealed class RemoveWeaknessCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<RemoveWeaknessCommand, Result>
+{
+    public async Task<Result> Handle(RemoveWeaknessCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        e.RemoveWeakness(request.WeaknessId);
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}

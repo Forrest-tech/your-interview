@@ -72,3 +72,28 @@ public sealed record AuditEventRecorded(
     string? Detail,
     string? IpAddress
 ) : IntegrationEvent;
+
+/// <summary>Interviews 服务:材料转写完成 → 请求 Analysis.Worker 开跑六维分析。</summary>
+public sealed record InterviewAnalysisRequested(
+    Guid InterviewEntryId,
+    Guid AssetId,
+    Guid UserId,
+    string? StoragePath,
+    string? TranscriptText
+) : IntegrationEvent;
+
+/// <summary>Interviews 服务:分析完成 → 请求 Knowledge 服务把答不好的题沉淀成技术知识点。</summary>
+public sealed record InterviewKnowledgeExtractionRequested(
+    Guid InterviewEntryId,
+    Guid CompanyId,
+    int OverallScore
+) : IntegrationEvent;
+
+/// <summary>Knowledge 服务:知识点掌握度变化(int 等级版,给 Analytics 用)。</summary>
+public sealed record KnowledgeLevelChanged(
+    Guid KnowledgeItemId,
+    Guid UserId,
+    string Topic,
+    string Mastery,
+    int Level
+) : IntegrationEvent;

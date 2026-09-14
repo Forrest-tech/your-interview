@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # 本地开发栈一键管理:PostgreSQL + RabbitMQ + 各微服务
 #
-#   ./dev.sh up            起全部(pg + rabbitmq + identity + jobs)
+#   ./dev.sh up            起全部(pg + rabbitmq + 七个微服务 + 网关)
 #   ./dev.sh down          停全部
-#   ./dev.sh restart <svc> 重启单个服务(identity|jobs|interviews|knowledge|assessment|analytics)
+#   ./dev.sh restart <svc> 重启单个服务(identity|jobs|interviews|knowledge|assessment|analytics|gateway)
+#   ./dev.sh build         预构建全部(不启动)
 #   ./dev.sh status        看状态
 #   ./dev.sh logs <svc>    tail 日志
+#   ./dev.sh e2e [svc]     跑端到端自测
 #   ./dev.sh urls          打印所有地址
 set -uo pipefail
 
@@ -40,6 +42,13 @@ start_svc() {
   local proj="$SRC/$(svc_project "$1")"
   [ -d "$proj" ] || { echo "  ✗ $s 项目不存在"; return 1; }
   if is_running "$s"; then echo "  · $s 已在运行"; return 0; fi
+
+  # 先构建再启动 —— dotnet run --no-build 会用旧二进制。
+  # 这个坑在加 EF 迁移时尤其折磨(迁移文件是新的,跑的却是旧代码)。
+  if ! dotnet build "$proj" -v q --nologo > "$LOGS/$s.build.log" 2>&1; then
+    echo "  ✗ $s 构建失败,详见 $LOGS/$s.build.log"; return 1
+  fi
+
   ( cd "$proj" && setsid nohup dotnet run --no-build --urls "http://127.0.0.1:$port" \
       > "$(svc_log "$s")" 2>&1 < /dev/null & echo $! > "$(svc_pidfile "$s")" )
   echo "  ↻ $s 启动中 (port $port) …"
@@ -53,7 +62,7 @@ svc_project() {
     knowledge) echo Services.Knowledge ;;
     assessment) echo Services.Assessment ;;
     analytics) echo Services.Analytics ;;
-    gateway) echo Gateway ;;
+    gateway) echo Services.Gateway ;;
   esac
 }
 
@@ -87,8 +96,8 @@ case "${1:-status}" in
     node "$ROOT/tools/db/db.js" start >/dev/null 2>&1 && echo "  ✓ PostgreSQL :5433" || echo "  ⚠ PG 启动异常"
     "$ROOT/tools/rabbit/rabbit.sh" start >/dev/null 2>&1 && echo "  ✓ RabbitMQ :5672 / :15672" || echo "  ⚠ RabbitMQ 启动异常"
     echo "▸ 微服务"
-    for s in identity jobs; do start_svc "$s"; done
-    for s in identity jobs; do wait_health "$s"; done
+    for s in identity jobs interviews knowledge assessment analytics gateway; do start_svc "$s"; done
+    for s in identity jobs interviews knowledge assessment analytics gateway; do wait_health "$s"; done
     echo "▸ 全部就绪"
     "$0" urls
     ;;
@@ -128,5 +137,18 @@ case "${1:-status}" in
   PostgreSQL      127.0.0.1:5433  yourinterview
 EOF
     ;;
-  *) echo "用法: dev.sh {up|down|restart <svc>|status|logs <svc>|urls}"; exit 1 ;;
+  e2e)
+    bash "$ROOT/tools/e2e.sh" "${2:-all}"
+    ;;
+  build)
+    for s in identity jobs interviews knowledge assessment analytics gateway; do
+      proj="$SRC/$(svc_project "$s")"
+      if dotnet build "$proj" -v q --nologo > "$LOGS/$s.build.log" 2>&1; then
+        echo "  ✓ $s 构建通过"
+      else
+        echo "  ✗ $s 构建失败 (见 $LOGS/$s.build.log)"
+      fi
+    done
+    ;;
+  *) echo "用法: dev.sh {up|down|restart <svc>|build|status|logs <svc>|e2e [svc]|urls}"; exit 1 ;;
 esac

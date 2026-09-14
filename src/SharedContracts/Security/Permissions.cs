@@ -27,6 +27,10 @@ public static class Permissions
     public const string MockAnswer = "mock.answer";
     public const string MockManage = "mock.manage";
 
+    // 数据分析(Analytics 读模型:仪表盘 / 雷达图 / 漏斗趋势)
+    public const string AnalyticsRead = "analytics.read";
+    public const string AnalyticsWrite = "analytics.write";
+
     // 管理面
     public const string AdminUsersRead = "admin.users.read";
     public const string AdminUsersWrite = "admin.users.write";
@@ -41,6 +45,7 @@ public static class Permissions
         InterviewsRead, InterviewsWrite, InterviewsAnalyze, InterviewsDelete,
         KnowledgeRead, KnowledgeWrite, KnowledgeDelete,
         MockRead, MockAnswer, MockManage,
+        AnalyticsRead, AnalyticsWrite,
         AdminUsersRead, AdminUsersWrite, AdminRolesWrite,
         AdminContentModerate, AdminAuditRead, AdminSystemWrite
     ];
@@ -65,6 +70,7 @@ public static class Roles
             Permissions.InterviewsRead, Permissions.InterviewsWrite, Permissions.InterviewsAnalyze, Permissions.InterviewsDelete,
             Permissions.KnowledgeRead, Permissions.KnowledgeWrite, Permissions.KnowledgeDelete,
             Permissions.MockRead, Permissions.MockAnswer, Permissions.MockManage,
+            Permissions.AnalyticsRead, Permissions.AnalyticsWrite,
             Permissions.AdminAuditRead
         ],
         [User] =
@@ -72,12 +78,13 @@ public static class Roles
             Permissions.JobsRead, Permissions.JobsWrite,
             Permissions.InterviewsRead, Permissions.InterviewsWrite, Permissions.InterviewsAnalyze,
             Permissions.KnowledgeRead, Permissions.KnowledgeWrite,
-            Permissions.MockRead, Permissions.MockAnswer
+            Permissions.MockRead, Permissions.MockAnswer,
+            Permissions.AnalyticsRead
         ],
         [Viewer] =
         [
             Permissions.JobsRead, Permissions.InterviewsRead,
-            Permissions.KnowledgeRead, Permissions.MockRead
+            Permissions.KnowledgeRead, Permissions.MockRead, Permissions.AnalyticsRead
         ]
     };
 }

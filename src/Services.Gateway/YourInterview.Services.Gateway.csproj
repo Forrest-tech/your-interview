@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UserSecretsId>your-interview-gateway</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- YARP = .NET 官方的反向代理库。
+         选它的理由:和 ASP.NET Core 同源、配置驱动(改路由不用改代码)、
+         性能与 Kestrel 同级,而且支持直接写自定义中间件做鉴权 —— 不需要引入 Nginx/Kong。 -->
+    <PackageReference Include="Yarp.ReverseProxy" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="AspNetCore.HealthChecks.Uris" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharedContracts\YourInterview.SharedContracts.csproj" />
+  </ItemGroup>
+
+</Project>

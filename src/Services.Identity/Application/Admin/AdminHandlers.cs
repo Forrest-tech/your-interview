@@ -1,3 +1,4 @@
+using YourInterview.BuildingBlocks.Security;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;

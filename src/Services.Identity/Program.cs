@@ -10,8 +10,8 @@ using YourInterview.Services.Identity.Application.Abstractions;
 using YourInterview.Services.Identity.Application.Auth;
 using YourInterview.Services.Identity.Infrastructure.Persistence;
 using YourInterview.BuildingBlocks.Security;
-using YourInterview.Services.Identity.Infrastructure.Security;
 using YourInterview.Services.Identity.Infrastructure.Services;
+using YourInterview.Services.Identity.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 const string ServiceName = "identity-api";

@@ -1,3 +1,4 @@
+using YourInterview.BuildingBlocks.Security;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -13,12 +14,5 @@ public interface IIdentityUnitOfWork
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 
-/// <summary>当前请求用户上下文(IHttpContextAccessor 的抽象,便于单测)。</summary>
-public interface ICurrentUser
-{
-    Guid? UserId { get; }
-    string? Email { get; }
-    bool IsAuthenticated { get; }
-    string? IpAddress { get; }
-    string? UserAgent { get; }
-}
+// 当前请求用户上下文 ICurrentUser 已提升到 BuildingBlocks.Security
+// (Tracker / 实战机经 / 模拟练习都要用,统一一份抽象)。

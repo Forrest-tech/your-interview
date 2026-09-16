@@ -169,10 +169,10 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> AssessPronunciation([FromBody] AssessPronunciationBody body,
         CancellationToken ct)
     {
-        if (!assessor.IsConfigured)
+        if (!await assessor.IsAvailableAsync(Me, ct))
             return Results.Problem(
                 title: "Azure Speech 未配置",
-                detail: "服务端缺少 AzureSpeech:Key,发音评估不可用。",
+                detail: "服务端缺少可用的 AzureSpeech key,发音评估不可用。请先在 AI 语音设置里保存密钥。",
                 statusCode: StatusCodes.Status503ServiceUnavailable);
 
         if (body.Samples is null || body.Samples.Length == 0)
@@ -396,7 +396,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
     public async Task<IResult> TestSpeech(CancellationToken ct)
     {
-        if (!assessor.IsConfigured)
+        if (!await assessor.IsAvailableAsync(Me, ct))
             return Results.Problem(title: "Azure Speech 未配置",
                 detail: "服务端还没有可用的密钥,请先在 AI 语音设置里保存密钥。",
                 statusCode: StatusCodes.Status503ServiceUnavailable);

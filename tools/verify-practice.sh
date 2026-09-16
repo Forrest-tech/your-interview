@@ -101,8 +101,8 @@ CASES = [
     ("GET",  "/stats",             {200},     "练习统计"),
     ("GET",  "/dimensions",        {200},     "评分维度"),
     ("GET",  "/sessions",          {200},     "历史会话"),
-    ("POST", "/speech/test",       {502,503}, "语音连通性(502=Azure key 无效,非 401;503=未配置)"),
-    ("POST", "/tts",               {502,503}, "示范朗读 TTS(502=Azure key 无效,非 401;503=未配置)"),
+    ("POST", "/speech/test",       {200,502,503}, "语音连通性(200=key 可用;502=上游拒收;503=未配置；绝不可是 401)"),
+    ("POST", "/tts",               {200,502,503}, "示范朗读 TTS(200=真音频;502=上游拒收;503=未配置；绝不可是 401)"),
 ]
 
 fails = 0
@@ -121,6 +121,10 @@ for method, path, expect, note in CASES:
     except Exception as e:
         code = "ERR(%s)" % e
     good = code in expect
+    # ★ 硬断言:这两个端点在任何情况下都不得返回 401 —— 401 是传输层认证语义,
+    #   一旦退回 401,前端拦截器就会误判为会话失效并把用户踢回登录页。
+    if path in ("/speech/test", "/tts") and code == 401:
+        good = False
     if not good:
         fails += 1
     mark = "✓" if good else "✗"

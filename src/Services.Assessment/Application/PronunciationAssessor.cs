@@ -30,6 +30,17 @@ public sealed class PronunciationAssessor(
     private const int MaxAudioBytes = 9 * 1024 * 1024;
 
     /// <summary>
+    /// 调用 Azure Speech 时带的 User-Agent。
+    ///
+    /// ⚠️ 2026-09-16 血泪教训:**Azure 语音的接入层(istio-envoy)会拒收不带
+    ///    User-Agent 的请求,直接回 400 且 body 为空**。
+    ///    .NET 的 HttpClient 默认不发 UA,而 curl / Python urllib 都自带,
+    ///    所以工具直连总是 200、服务代码永远 400 —— 极难察觉。
+    ///    常量提到这里,所有 Azure 调用点共用,避免再漏。
+    /// </summary>
+    private const string UserAgent = "YourInterview/1.0 (assessment-service)";
+
+    /// <summary>
     /// ⚠️ 2026-09-15 第十七轮改:key 不再在构造时读死。
     ///
     /// 原因:界面上保存的 key 存在数据库里,构造时还不知道是哪一把;
@@ -42,13 +53,34 @@ public sealed class PronunciationAssessor(
     private readonly string _configRegion = config["AzureSpeech:Region"] ?? "canadacentral";
 
     /// <summary>
-    /// 是否已配置 key。
-    /// ⚠️ 这是**同步**判断,只能看配置来源(查库是异步的)。
-    /// 端点用它给"完全没配过"的快速提示;真正的可用性以调用时的解析结果为准。
+    /// 是否已配置 key —— ⚠️ **不能只看配置文件**,必须看数据库(界面保存的 key 在那里)。
+    ///
+    /// 2026-09-16 修的真实缺陷(Forrest 现场发现):
+    ///   旧实现只查 config["AzureSpeech:Key"] 与 AZURE_SPEECH_KEY 环境变量。
+    ///   而设置页保存的 key 是写进**数据库**的(SpeechSettings 表)。
+    ///   于是用户明明保存成功,speech/test 却因为 IsConfigured==false
+    ///   直接返回 503"Azure 未配置" —— 用户看到的"凭据验证失败"是假的,
+    ///   key 其实好好在库里。
+    ///
+    /// 不能在这里改异步查库(它是**属性**,而 DbContext 是 Scoped,
+    /// 且本类是单例 —— 属性里没法 await)。
+    ///   解法:调用方改用 **IsAvailableAsync**,以该用户为口径
+    ///   经 ISpeechKeyProvider 解析后再判断。
+    ///   本属性保留,仅作"配置源是否已配"的快速参考,不再用于拦截请求。
     /// </summary>
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(config["AzureSpeech:Key"])
         || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AZURE_SPEECH_KEY"));
+
+    /// <summary>
+    /// 真·可用性判定 —— 按用户口径解析 key(数据库 > 环境变量 > appsettings)。
+    /// 端点应改用这个,不要再用 IsConfigured。
+    /// </summary>
+    public async Task<bool> IsAvailableAsync(Guid? userId, CancellationToken ct)
+    {
+        var snapshot = await _keys.ResolveAsync(userId ?? Guid.Empty, ct);
+        return snapshot.HasKey;
+    }
 
     /// <summary>
     /// 连通性测试 —— 拿当前 key 真去 Azure 走一次最小请求。
@@ -79,6 +111,9 @@ public sealed class PronunciationAssessor(
 
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
         req.Headers.Add("Ocp-Apim-Subscription-Key", _key);
+        // ⚠️ 必须带 User-Agent,否则 Azure 接入层(istio-envoy)回 400 空 body ——
+        //    见 UserAgent 常量的详细说明。
+        req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
         req.Content = new ByteArrayContent([]);
         req.Content.Headers.ContentType =
             new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
@@ -160,6 +195,8 @@ public sealed class PronunciationAssessor(
                 using var req = new HttpRequestMessage(HttpMethod.Post, url);
                 req.Headers.Add("Ocp-Apim-Subscription-Key", _key);
                 req.Headers.Add("Pronunciation-Assessment", paConfig);
+                // ⚠️ 必须带 User-Agent,否则 Azure 接入层(istio-envoy)回 400 空 body。
+                req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
 
                 // 显式 Content-Length:Azure REST 端点在 chunked 上传下会 Broken pipe
                 var ms = new MemoryStream(audio, writable: false);
@@ -300,6 +337,17 @@ public sealed class SpeechSynthesizer(
     /// <summary>默认音色 —— 北美面试语境用 en-US 女声,Aria 是最常用的自然音色。</summary>
     private const string DefaultVoice = "en-US-AriaNeural";
 
+    /// <summary>
+    /// 调用 Azure Speech 时带的 User-Agent。
+    ///
+    /// ⚠️ 2026-09-16 血泪教训:**Azure 语音的接入层(istio-envoy)会拒收不带
+    ///    User-Agent 的请求,直接回 400 且 body 为空**
+    ///    (x-envoy-upstream-service-time 只有 1ms 就是被边缘拒的铁证)。
+    ///    .NET 的 HttpClient 默认不发 UA,而 curl / Python urllib 都自带,
+    ///    所以工具直连总是 200、服务代码永远 400 —— 极难察觉。
+    /// </summary>
+    private const string UserAgent = "YourInterview/1.0 (assessment-service)";
+
     /// <summary>单次合成文本上限。示范朗读是一段答案,不该长到几万字。</summary>
     private const int MaxTextLength = 4000;
 
@@ -352,7 +400,32 @@ public sealed class SpeechSynthesizer(
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
         req.Headers.Add("Ocp-Apim-Subscription-Key", snapshot.Key);
         req.Headers.Add("X-Microsoft-OutputFormat", "audio-24khz-48kbitrate-mono-mp3");
-        req.Content = new StringContent(ssml, System.Text.Encoding.UTF8, "application/ssml+xml");
+        var content = new StringContent(ssml, System.Text.Encoding.UTF8, "application/ssml+xml");
+        // ⚠️ StringContent 会自作主张在 Content-Type 后面追加 "; charset=utf-8"。
+        //    这里显式清掉 charset,只保留 application/ssml+xml
+        //    —— 与官方文档示例及 curl 实测一致。
+        content.Headers.ContentType!.CharSet = null;
+        req.Content = content;
+
+        // ⚠️⚠️ 必传 User-Agent —— 这是 2026-09-16 花了很久才挖出的真因!
+        //
+        //    Azure 语音的接入层(响应头里的 istio-envoy)会拒收**不带 User-Agent**
+        //    的请求,直接回 400 **且 body 为空**,根本到不了 Speech 服务
+        //    (x-envoy-upstream-service-time 只有 1ms 就是铁证)。
+        //
+        //    .NET 的 HttpClient **默认不发 User-Agent**;而 curl / Python urllib
+        //    都会自带一个(如 python-urllib/3.11),所以用它们直连永远 200。
+        //    于是形成极隐蔽的"工具测通、代码必败"假象:
+        //      同一 URL、同一 key、同一 192 字节 SSML、同一 Content-Type,
+        //      curl → 200,Python → 200,HttpClient → 400。
+        //
+        //    实测(同一台机器、逐项删头):
+        //      去掉 User-Agent → 400；加上 → 200。
+        //
+        //    ⚠️ 直接用请求头加,不要依赖 HttpClient 默认头 —— 不同实现
+        //       对全局默认 UA 的处理不一致,显式加最稳。
+        if (!req.Headers.Contains("User-Agent"))
+            req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
 
         var client = httpFactory.CreateClient("azure-speech");
         using var res = await client.SendAsync(req, ct);
@@ -369,6 +442,15 @@ public sealed class SpeechSynthesizer(
         if (!res.IsSuccessStatusCode)
         {
             var body = await res.Content.ReadAsStringAsync(ct);
+            // ★ 关键诊断:Azure 失败时把【实际发出的 Content-Type / 是否带 User-Agent / bytes】
+            //   与原始响应一起打出。这行日志是 2026-09-16 挖出"缺 User-Agent 被
+            //   istio-envoy 边缘拒收"的功臣,保留为长期诊断能力(不输出 key 明文)。
+            logger.LogError("TTS 上游失败 {Status} | url={Url} | voice={Voice} | rate={Rate} | " +
+                "outbound-bytes={OutBytes} | content-type={Ct} | has-ua={HasUa} | azure-body=<<{Body}>>",
+                (int)res.StatusCode, url, v, rate,
+                Encoding.UTF8.GetByteCount(ssml),
+                req.Content?.Headers.ContentType?.ToString() ?? "(none)",
+                req.Headers.Contains("User-Agent"), body);
             throw new InvalidOperationException(
                 $"Azure 语音合成失败(HTTP {(int)res.StatusCode}): {body[..Math.Min(body.Length, 300)]}");
         }

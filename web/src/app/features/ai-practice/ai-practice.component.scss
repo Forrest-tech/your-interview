@@ -504,65 +504,74 @@
 }
 .rec-zone.has-take { background: #edf9f1; }
 
-/* ---------- 待提交录音条(Forrest 本轮:录完 → 提交 → 进列表) ---------- */
-.pending-take {
-  position: absolute;
-  left: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
+/* ---------- 提交 / 重录 按钮行(Forrest 2026-09-16 本轮)----------
+   ⚠️ 之前是一个 absolute 定位的 .pending-take 胶囊飘在左侧,
+      看起来像"多出来的第三个按钮"。现在改为圆按钮**正下方**
+      与 Retry 并排的一行,语义清楚:录完 → 提交 or 重录。 */
+.rec-actions {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 12px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid #b9e2c8;
-  box-shadow: 0 2px 8px rgba(34, 163, 92, .12);
-  max-width: 46%;
+  margin-top: 10px;
 }
-.pt-info {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #2b6b45;
-  white-space: nowrap;
-}
-.pt-info mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
-.pt-play,
-.pt-discard {
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: #5b6472;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.pt-play:hover { background: #eef4ff; color: #2f6fed; }
-.pt-discard:hover { background: #fdecea; color: #c5221f; }
-
-.pt-submit {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 12px;
-  border: 0;
+/* 提交:实心绿;置灰时用统一的 disabled 视觉 */
+.rec-actions .ra-submit {
+  height: 32px;
+  padding: 0 14px;
   border-radius: 999px;
   background: #22a35c;
   color: #fff;
   font-size: 12.5px;
   font-weight: 600;
-  cursor: pointer;
-  transition: background .15s ease;
+  line-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
-.pt-submit:hover { background: #1b8c4d; }
-.pt-submit mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.rec-actions .ra-submit mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.rec-actions .ra-submit:not([disabled]):hover { background: #1b8c4d; }
+/* ⚠️ 置灰必须一眼看出"不可点",而不是看起来像正常按钮 */
+.rec-actions .ra-submit[disabled] {
+  background: #e3e8ef;
+  color: #9aa1ab;
+  cursor: not-allowed;
+}
+
+/* 重录:描边按钮,与提交并排 */
+.rec-actions .ra-retry {
+  height: 32px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  line-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rec-actions .ra-retry mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+/* 次要动作(试听 / 丢弃)—— 只在有待提交录音时出现,不抢主按钮位 */
+.rec-minor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.rm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.rm-btn:hover { background: #f2f5f9; color: #2f6fed; }
+.rm-btn.danger:hover { background: #fdecea; color: #c5221f; }
+.rm-btn mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
 /* 圆形主按钮 + 下方标签 */
 .big-round {

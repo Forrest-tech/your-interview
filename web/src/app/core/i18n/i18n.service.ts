@@ -161,6 +161,16 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.pendingTake': { zh: '待提交录音', en: 'Take ready', fr: 'Prise prête' },
   'practice.pendingHint': { zh: '点"提交"保存到下方列表', en: 'Click Submit to add it to the list below', fr: 'Cliquez sur Soumettre pour l’ajouter à la liste' },
   'practice.discardTake': { zh: '丢弃这条录音', en: 'Discard this take', fr: 'Jeter cette prise' },
+  'practice.submitNeedsRecording': {
+    zh: '还没有可提交的录音 —— 先录一段,录好后按钮会激活',
+    en: 'No take to submit yet — record one first and this button activates',
+    fr: 'Aucune prise à soumettre — enregistrez-en une, le bouton s’activera'
+  },
+  'practice.previewTake': {
+    zh: '试听',
+    en: 'Preview',
+    fr: 'Écouter'
+  },
   'practice.recNo': { zh: '第', en: 'Take', fr: 'Prise' },
   'practice.recIdle': { zh: '录音', en: 'Record', fr: 'Enregistrer' },
   'practice.recordingHint': { zh: '停止', en: 'Stop', fr: 'Arrêter' },

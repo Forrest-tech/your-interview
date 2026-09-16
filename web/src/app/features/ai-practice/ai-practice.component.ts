@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, computed, inject, signal
+  Component, OnDestroy, OnInit, computed, effect, inject, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -343,7 +343,35 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 能否提交评分:三个条件全满足。 */
   readonly canSubmitScoring = computed(() => {
     const t = this.activeTake();
-    return this.azureReady() && !!t && !t.score && !t.grading;
+    // ⚠️ 2026-09-16(真机 404 根因):必须同时满足
+    //   · 已上传到服务端(t.uploaded)—— 否则 recordings/{id:guid}/score 直接 404
+    //   · 还没评过分、也不在评分中
+    return this.azureReady() && !!t && t.uploaded && !t.score && !t.grading;
+  });
+
+  /**
+   * 待提交的录音是否可以提交。
+   * 2026-09-16(Forrest 本轮):提交按钮的行为定义 ——
+   *   · 没有录音        → 置灰
+   *   · 录好了(有待提交) → 激活
+   * 这是界面上的硬门禁,不让用户点到注定失败的按钮。
+   */
+  readonly canSubmitTake = computed(() => {
+    const pt = this.recorder.pendingTake();
+    if (!pt) return false;
+    // 素材不是 GUID(本地种子)→ 后端存不了,先如实置灰(保存素材树后再来)
+    return RecorderService.isGuid(pt.materialId);
+  });
+
+  /**
+   * 待提交录音是否正在上传。
+   * 为什么需要这个:提交 → 列表落一条本地记录 → 上传异步完成。
+   * 上传未回来之前,那条录音还不能评分(否则 404)。
+   * 界面用这个标志告诉用户"还在上传",而不是让人对着一颗灰按钮发愣。
+   */
+  readonly uploadingPending = computed(() => {
+    const list = this.recorder.recordings();
+    return list.some((r) => !r.uploaded);
   });
 
   // ⚠️ 2026-09-16(Forrest 第 4 条):底部"提交 AI 评分"按钮已删除 ——
@@ -1024,7 +1052,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   // ---------- 待提交录音(Forrest 本轮:录完 → 提交 → 进列表) ----------
 
   /** 正在试听待提交的录音。 */
-  private readonly previewingPending = signal(false);
+  /** 试听待提交录音的播放状态。⚠️ 必须是 public —— 模板里绑定了它
+   *  ({{ previewingPending() ? 'pause' : 'play_arrow' }})。
+   *  2026-09-16 教训:Angular 编译器对模板引用的 private 成员直接报 NG1,
+   *  而 `tsc` 根本不查模板 → 本地 tsc 0 error 也拦不住。 */
+  readonly previewingPending = signal(false);
 
   /** 试听/停止试听待提交的录音。 */
   previewPending(): void {
@@ -1068,11 +1100,35 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.previewingPending.set(false);
 
     this.recorder.submitPending();
-    // 提交后把它设为当前作品 —— 用户下一步大概率就是回听/评分它
+    // 提交后把它设为当前作品 —— 用户下一步大概率就是回听/评分它。
+    // ⚠️ 2026-09-16:这里是**本地临时 id**;上传成功后后端会换成正式 GUID,
+    //    下面的 effect 会跟着把 activeTakeId 改过去,否则 activeTake() 会找不到人。
     this.activeTakeId.set(pt.id);
     this.toast(this.t('practice.submitTake'));
 
-    // 若这条已上传成功,后端会回传正式 id;列表已经在 submitPending 里更新。
+    // 上传完成前先记住"待接替的本地 id"。
+    this.pendingIdRemap = pt.id;
+  }
+
+  /**
+   * 上传成功后,把当前作品 id 从本地临时 id 改后端 GUID。
+   * 不做这一步的后果:列表里已经是 GUID,而 activeTakeId 还指向 r_xxx
+   * → activeTake() 返回 null → 评分/回放全部"无反应"。
+   */
+  private pendingIdRemap: string | null = null;
+
+  private syncPendingIdRemap(): void {
+    const oldId = this.pendingIdRemap;
+    if (!oldId) return;
+    // 本地 id 已不存在 = 已被后端 GUID 替掉
+    const stillLocal = this.recorder.recordings().some((r) => r.id === oldId);
+    if (stillLocal) return;
+
+    const candidate = this.recorder.recordings().find((r) => r.uploaded);
+    if (!candidate) return;
+
+    if (this.activeTakeId() === oldId) this.activeTakeId.set(candidate.id);
+    this.pendingIdRemap = null;
   }
 
   /** 丢弃待提交录音。 */
@@ -1483,6 +1539,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       // 播完自然暂停也会触发这里 —— 用 ended 已处理归零,这里只清高亮
       if (this.audio.ended) return;
       this.playingId.set(null);
+    });
+
+    // 监听录音列表变化:上传成功后把"当前作品"从本地临时 id 接到后端 GUID。
+    // 不接的后果:activeTake() 找不到人 → 评分/回放全部无反应。
+    effect(() => {
+      this.recorder.recordings();   // 依赖
+      this.syncPendingIdRemap();
     });
   }
 

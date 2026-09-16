@@ -20,6 +20,13 @@ export interface Recording {
   score: RecordingScore | null;
   /** 评分状态。 */
   grading: boolean;
+  /**
+   * 是否已在服务端存在(拿到了真实 GUID id)。
+   * ⚠️ 2026-09-16(真机 404 根因):本地 take 的 id 是 `r_xxx` 临时串,
+   *    而后端路由是 `recordings/{id:guid}/score` —— 拿临时 id 去打就是 **404**。
+   *    所以必须有一个明确的"已落库"标志,而不是靠 `id.startsWith('r_')` 猜。
+   */
+  uploaded: boolean;
   /** 评分失败原因。 */
   error: string | null;
 }
@@ -184,6 +191,7 @@ export class RecorderService {
       url: URL.createObjectURL(blob),
       score: null,
       grading: false,
+      uploaded: false,
       error: null
     };
 
@@ -233,7 +241,7 @@ export class RecorderService {
           // 用后端 id 替换本地临时 id:后续评分/删除都走后端 id
           this.recordings.update((list) => list.map((r) =>
             r.id === localId
-              ? { ...r, id: dto.id, createdAt: new Date(dto.createdAt).getTime(), url: '' }
+              ? { ...r, id: dto.id, uploaded: true, createdAt: new Date(dto.createdAt).getTime(), url: '' }
               : r));
           this.persistError.set('');
         },
@@ -277,7 +285,7 @@ export class RecorderService {
         // 服务端是唯一真相:把该素材的本地条目替换为服务端记录。
         // 只保留仍在"上传中"的本地条目(它们还没有后端 id)。
         const uploading = this.recordings().filter((r) =>
-          r.materialId === materialId && r.id.startsWith('r_'));
+          r.materialId === materialId && !r.uploaded);
         const fromServer = dtos.map((d) => RecorderService.fromDto(d));
         this.recordings.update((list) => [
           ...uploading,
@@ -325,6 +333,8 @@ export class RecorderService {
       url: '',
       score: sc ? RecorderService.scoreFromDto(sc) : null,
       grading: false,
+      // 能从后端列出来的录音,必然已在服务端存在
+      uploaded: true,
       error: null
     };
   }
@@ -359,8 +369,8 @@ export class RecorderService {
     const rec = this.recordings().find((r) => r.id === id);
     if (rec) this.revoke(rec);
 
-    // 还没上传成功的本地条目(临时 id)→ 仅本地删
-    if (!rec || rec.id.startsWith('r_')) {
+    // 还没上传成功的本地条目 → 仅本地删(上传成功后会有真实 GUID 与 uploaded=true)
+    if (!rec || !rec.uploaded) {
       this.recordings.update((list) => list.filter((r) => r.id !== id));
       return;
     }
@@ -422,18 +432,29 @@ export class RecorderService {
     const rec = this.recordings().find((r) => r.id === id);
     if (!rec || rec.grading) return;
 
+    // ⚠️ 2026-09-16(真机 404 根因修复):
+    //    后端路由是 `recordings/{id:guid}/score` —— 拿本地临时 id(`r_xxx`)
+    //    或未上传成功的录音去请求,会直接撞上路由约束 → **404**。
+    //    以前靠 `id.startsWith('r_')` 猜,不可靠(上传失败时 id 仍是临时串,
+    //    但字节已经进了列表)。现在看明确的 `uploaded` 标志。
+    if (!rec.uploaded) {
+      this.patch(id, {
+        grading: false,
+        error: '这条录音还没保存到服务端(或保存失败),无法评分。'
+          + '请等上传完成后再点,或重录一次。'
+      });
+      return;
+    }
+
     // 需求第 4 条:"评分信息入库,避免重复评分"。
     // 已落库的录音先问后端要缓存分数 —— 命中就免掉一次 Azure 调用(省钱省时间)。
-    // 尚未上传的本地录音(_r 前缀)没有后端记录,跳过这一步。
-    if (!id.startsWith('r_')) {
-      try {
-        const cached = await firstValueFrom(this.practiceApi.getRecordingScore(id));
-        this.patch(id, { grading: false, score: RecorderService.scoreFromDto(cached), error: null });
-        return;
-      } catch {
-        // 404(还没评分过)或后端不可用 → 继续走真实评分。
-        // 这里静默是对的:缓存未命中是正常路径,不该弹错。
-      }
+    try {
+      const cached = await firstValueFrom(this.practiceApi.getRecordingScore(id));
+      this.patch(id, { grading: false, score: RecorderService.scoreFromDto(cached), error: null });
+      return;
+    } catch {
+      // 404(还没评分过)或后端不可用 → 继续走真实评分。
+      // 这里静默是对的:缓存未命中是正常路径,不该弹错。
     }
 
     this.patch(id, { grading: true, error: null });
@@ -479,7 +500,8 @@ export class RecorderService {
       // 把评分结果落库 → 需求第 4 条"下次不必重复评分"。
       // 落库失败**不影响本次结果展示**(分数已在界面上),
       // 但如实记录原因,免得用户下次发现又要重评却不知为何。
-      if (!id.startsWith('r_')) {
+      // ⚠️ 只在 uploaded 时才发(否则又撞 404)。
+      if (rec.uploaded) {
         this.practiceApi.saveScore(id, {
           pronScore: score.pronScore,
           accuracyScore: score.accuracyScore,

@@ -177,9 +177,10 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  /* 2026-09-16 第十九轮(Forrest 重构指令):页面背景浅灰,
-     主体内容居中限宽 max-width 1040px / padding 24px 16px。
-     两张独立白底卡片在它内部垂直排列。 */
+  /* ★ 第二十二轮:自身不滚动 —— 滚动交给内部 .practice-main-panel。
+     overflow:hidden 才能让子元素 calc(100vh - 64px) 的高度约束真正生效,
+     否则子元素被撑开 → 滚动条永不出现(就是"下方内容被截断无法下滑"的根因)。 */
+  overflow: hidden;
   background: #f8fafc;
 }
 
@@ -258,12 +259,16 @@
   flex: 1 1 auto;
   min-height: 0;
   height: calc(100vh - 64px);
-  /* 页面背景浅灰 + 主体内容居中限宽 max-width 1040px。 */
-  padding: 24px 16px;
+  padding: 24px 16px 80px;   /* 第二十二轮:底部留 80px,滚到底完整露出内容 */
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
+  box-sizing: border-box;
+  /* ★ 第二十二轮:滚动容器内垂直排列 + 子项水平居中(卡片自身限宽 1040px) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* ★ 第二十轮:Forrest 指令中的 .practice-main-panel = 右侧主工作区滚动容器。
@@ -279,6 +284,7 @@
   overflow-x: hidden;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
+  padding-bottom: 80px;   /* 第二十二轮:滚到底部完整露出内容 */
 }
 
 /* --- 滚动条美化(WebKit / Chromium) --- */
@@ -306,9 +312,11 @@
   scrollbar-color: #cbd5e1 #f1f5f9;
 }
 
-/* ★ 两张卡片共用的限宽居中容器:
-   因为 .main-body 里直接放的是 .placeholder / .exam-card / .hist-card,
-   所以用「子选择器整体居中」——宽度 100%、max-width 1040px、margin auto。 */
+/* ★ 第二十二轮:滚动容器 = .practice-main-panel.main-body(DOM 上两个类同时挂)。
+   卡片在这个 flex column + align-items:center 的容器里限宽居中。 */
+.practice-main-panel > .exam-card,
+.practice-main-panel > .hist-card,
+.practice-main-panel > .placeholder,
 .main-body > .exam-card,
 .main-body > .hist-card,
 .main-body > .placeholder {
@@ -317,6 +325,7 @@
   margin-left: auto;
   margin-right: auto;
   box-sizing: border-box;
+  flex: 0 0 auto;
 }
 
 .placeholder {
@@ -1146,14 +1155,9 @@
    ============================================================ */
 
 /* 正文限宽居中 —— 答题卡观感,不让文字在宽屏上拉成一条长线 */
-.main-body {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  max-width: 1060px;
-  width: 100%;
-  margin: 0 auto;
-}
+/* ★ 第二十二轮:此处原有一条陈旧 .main-body(align-items:stretch /
+   max-width:1060px / margin:0 auto),会与新滚动容器冲突,已删除。
+   现行定义见文件上方 .main-body 与 .practice-main-panel。 */
 
 /* ---------- ① 顶部状态栏 ---------- */
 .q-chip {
@@ -2500,13 +2504,28 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .card-head .ch-edit mat-icon { font-size: 19px; width: 19px; height: 19px; }
 
 /* ---------- 卡片① 核心待读文本框 ---------- */
-/* ★ 第二十轮:纯正文框 —— 内部只有英文段落,无任何按钮。
-   操作按钮全部上移到 .card-head 右侧的 .header-actions-group。 */
-.text-box {
+/* ★ 第二十二轮:统一灰边大容器 ——
+   把「待读正文」+「Sample Reading / Record 两控制条」包在同一个灰色边框内。
+   (Forrest 指令:border 1px #e5e7eb / radius 16px / padding 32px / bg #fff)
+   内部子块一律不再有各自独立边框。 */
+.practice-box-border {
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 24px 28px;
-  background: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* ★ 第二十轮:纯正文块 —— 内部只有英文段落,无任何按钮。
+   第二十二轮:外层已有灰边大容器 → 此处【去边框/去背景/去内边距】,
+   只保留正文排版。操作按钮全部在 .card-head 右侧 .header-actions-group。 */
+.text-box {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
   min-height: 160px;
   display: flex;
   flex-direction: column;
@@ -2865,14 +2884,15 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 
 /* ---------- 卡片① 底部导航控制栏 ---------- */
 .card-foot {
+  /* ★ 第二十二轮:去掉 Submit/Retry 上方的那条水平分割线(Forrest 指令)。 */
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid #f1f5f9;
+  padding-top: 0;
+  border-top: 0;
 }
 .card-foot .cf-left,
 .card-foot .cf-right {

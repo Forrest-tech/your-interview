@@ -124,6 +124,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.findFile(this.nodes(), this.selectedId())
   );
 
+  /**
+   * 当前条目所属【父文件夹名称】(第二十二轮:顶部路径用文件夹名替代题号)。
+   * MaterialNode 没有 parentId 字段 → 在树上递归回溯查找。
+   * 例如:素材树里 自我介绍 / 学历  → 顶部显示「自我介绍」,大标题显示「学历」。
+   * 找不到父文件夹(顶层文件)时回退为 null,模板层再用默认文案。
+   */
+  readonly parentFolderName = computed(() =>
+    this.findParentFolderName(this.nodes(), this.selectedId(), null)
+  );
+
   /** 只读态显示的正文。 */
   readonly readonlyText = computed(() => this.saved());
 
@@ -1749,6 +1759,27 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       if (n.children?.length) {
         const hit = this.findFile(n.children, id);
         if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 递归查找某节点所属的【父文件夹名称】(第二十二轮新增)。
+   * 返回最靠近它的那层文件夹名;顶层文件返回传入的回退值。
+   */
+  private findParentFolderName(
+    list: MaterialNode[],
+    id: string | null,
+    fallback: string | null
+  ): string | null {
+    if (!id) return fallback;
+    for (const n of list) {
+      if (n.id === id) return fallback;
+      if (n.children?.length) {
+        const next = n.folder ? n.name : fallback;
+        const hit = this.findParentFolderName(n.children, id, next);
+        if (hit !== null) return hit;
       }
     }
     return null;

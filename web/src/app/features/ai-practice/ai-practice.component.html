@@ -87,6 +87,11 @@
        ============================================================ -->
   <main class="col-main">
 
+    <!-- ★ 第二十二轮:真正的滚动容器(此前 SCSS 定义了 .main-body / .practice-main-panel
+         但 HTML 里【根本没有这个元素】,所以滚动从未生效 → Recordings/Score Results
+         被截断无法下滑)。现在补上 DOM,并加 padding-bottom 保证滚到底完整露出。 -->
+    <div class="practice-main-panel main-body">
+
     @if (!selectedId()) {
       <!-- 未选素材:只给一个克制的空态,不铺两张空卡片 -->
       <div class="placeholder">
@@ -103,7 +108,8 @@
         <!-- ①-1 顶部标题栏:左 = 分类 + 题名(大号) / 右 = 编辑 ✏️ -->
         <header class="card-head">
           <div class="ch-left">
-            <span class="ch-kicker">{{ t('practice.question') }} #{{ qIndex() }} / {{ nodes().length }}</span>
+            <!-- 第二十二轮:顶部路径改为【父文件夹名称】(不再是 QUESTION #n / 总题数) -->
+            <span class="ch-kicker">{{ parentFolderName() || t('practice.uncategorized') }}</span>
             <h2 class="ch-title">{{ selectedNode()?.name || t('practice.noSelection') }}</h2>
           </div>
 
@@ -192,8 +198,13 @@
           }
         </header>
 
-        <!-- ①-3 纯英文待读文本框(★ 内部严禁任何操作按钮/标记) -->
-        <div class="text-box" [style.--read-fs.px]="readFontPx()">
+        <!-- ①-3 统一灰边大容器:把「待读正文」+「Sample Reading / Record 两控制条」
+             一起包在同一个灰色边框内(第二十二轮,Forrest 指令)。
+             ⚠️ 容器内部不再有各自独立边框,也不再有任何水平分割线。 -->
+        <div class="practice-box-border" [style.--read-fs.px]="readFontPx()">
+
+        <!-- 纯英文待读正文(★ 内部严禁任何操作按钮/标记) -->
+        <div class="text-box">
 
 
           <!-- 正文:编辑态 = 文本域;只读态 = 无衬线正文(18px / 1.8) -->
@@ -360,6 +371,7 @@
             }
           </div>
         </div>
+        </div><!-- /.practice-box-border -->
 
         <!-- ①-5 卡片底部导航控制栏:两端对齐 -->
         <footer class="card-foot">
@@ -648,6 +660,8 @@
         </section>
       </section>
     }
+      </div><!-- /.practice-main-panel -->
+
   </main>
 
   <!-- 轻量 toast:被置灰的按钮点不了 → 用可点入口给出反馈 -->

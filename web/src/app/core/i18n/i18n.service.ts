@@ -143,6 +143,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.noRecordings': { zh: '还没有录音。点上方「开始录音」录一遍,录音会保存在这里。', en: 'No recordings yet. Hit Record above to capture a take.', fr: 'Aucun enregistrement. Cliquez sur Enregistrer.' },
   'practice.wordDetail': { zh: '逐词明细', en: 'Word-by-word detail', fr: 'Détail par mot' },
   'practice.question': { zh: '题目', en: 'Question', fr: 'Question' },
+  // 第二十二轮:顶部路径改用父文件夹名;顶层文件无文件夹时用此兜底
+  'practice.uncategorized': { zh: '未分类', en: 'Uncategorized', fr: 'Non classé' },
   'practice.completed': { zh: '已完成', en: 'Completed', fr: 'Terminé' },
   'practice.expandTree': { zh: '展开素材', en: 'Show materials', fr: 'Afficher les supports' },
   'practice.collapseTree': { zh: '收起素材', en: 'Hide materials', fr: 'Masquer les supports' },

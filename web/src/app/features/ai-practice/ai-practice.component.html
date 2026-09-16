@@ -201,10 +201,15 @@
           </div>
         </section>
 
-        <!-- ③ 示范朗读条 + TTS 引擎设置 -->
-        <!-- 示范朗读条(任务书第一节,对标 ynwac):
-             左 = 文字标签;中 = 进度条(flex:1)+ 时间 + 倍速 + 齿轮;
-             最右 = 蓝底白箭头圆播放键。 -->
+        <!-- ③④ 朗读条 + 录音区 —— 合并进**同一个方框**(Forrest 本轮):
+             要求:
+               1) Sample Reading 与 Record 放在同一个方框里
+               2) 两者高度完全一致
+               3) 整体宽度缩为原来的 2/3
+               4) 布局参考 ynwac:一行内紧凑排列
+             ⚠️ 外层 .dock-box 负责唯一的边框/圆角/背景/宽度,
+                内部两块不再各自画框,否则会出现"框套框"。 -->
+        <div class="dock-box">
         <div class="sample-pill">
           <span class="sample-label">
             <mat-icon>volume_up</mat-icon>
@@ -359,6 +364,8 @@
             <span class="rec-err"><mat-icon>error_outline</mat-icon>{{ recError() }}</span>
           }
         </div>
+        </div>
+        <!-- /.dock-box:朗读条 + 录音区 的共同方框 -->
 
         <!-- ⑤ 底部操作栏:左提交评分 / 右翻页 -->
         <footer class="act-bar">
@@ -419,16 +426,10 @@
               }
             </div>
 
-            <!-- 被置灰时点击不可点按钮不会触发 click 事件,这里给一个可点的
-                 替代入口 + toast 提示,保证"点了有反馈"。 -->
-            <!-- ⚠️ 2026-09-16:底部"提交 AI 评分"按钮已删(第 4 条),
-                 这里改成在**唯一入口(run ai scoring 胶囊)**未就绪时
-                 给出说明文案,否则用户会不知道为什么按钮点不动。 -->
-            @if (!canSubmitScoring() && azureReady() && !activeTake()?.score) {
-              <span class="submit-hint">
-                {{ activeTake() ? t('practice.needScoreRetry') : t('practice.needRecording') }}
-              </span>
-            }
+            <!-- 2026-09-16(Forrest 本轮):删掉这里的未就绪提示文案。
+                 "Record an audio take first, then submit for scoring." 与
+                 "This take is already scored..." 这两句不再显示 ——
+                 按钮置灰 + tooltip 已经说清楚,不需要在页面上多一行字。 -->
           </div>
 
           <div class="act-nav">

@@ -360,11 +360,35 @@
    圆形主按钮 + 下方文字标签。
    ============================================================ */
 
+/* ---------- ③④ 朗读条 + 录音区 的共同方框(Forrest 2026-09-16 本轮)----------
+   要求原文:
+     · 将图片中的内容都放在一起方框里 —— Sample Reading 和 Record 同框
+     · 两者高度要一样
+     · 长度缩小三分之一(即整宽变原来的 2/3)
+     · 参考第二张截图(ynwac 风格):一行紧凑排列,外部一个圆角框
+   实现:外框只由 .dock-box 画一次;内部 .sample-pill / .rec-zone
+         去掉各自的 border / background / margin,只作为两行内容。
+   宽度:.main-body 是 1060px,2/3 ≈ 706px,并用 margin auto 居中。 */
+.dock-box {
+  box-sizing: border-box;
+  width: 66.6667%;
+  max-width: 706px;
+  min-width: 420px;
+  margin: 0 auto 12px;
+  padding: 8px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .04);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* ---------- ① Sample Reading 播放器 pill ---------- */
 .sample-pill {
-  
-  /* 与 .rec-zone 严格等高(任务书:两栏"高度必须严格一致")
-     实测:9+34+9 = 52px。下列三值写死,以后改尺寸必须同步改 .rec-zone。 */
+  /* 与 .rec-zone 严格等高 —— 任务书要求"两者高度一致"。
+     外框已由 .dock-box 提供,这里不再画边框/底色/margin。 */
   height: 52px;
   box-sizing: border-box;
   display: flex;
@@ -372,9 +396,9 @@
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  margin: 0 0 12px;
-  padding: 0 20px;
-  border-radius: 26px;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 14px;
   /* 参考站是浅蓝底 —— 和下面的 mint 录音区形成"听 / 说"两段色彩区隔 */
   background: #eef4ff;
   border: 1px solid #dbe7ff;
@@ -485,7 +509,11 @@
      第一个子元素(.rec-center)顶到最左。现改为:
        .rec-zone 只做容器(position:relative)
        .rec-center 绝对定位 + translate 真正居中 —— 不受左右元素数量影响。
-     右侧 .zone-side 仍靠 margin-left:auto 靠右。 */
+     右侧 .zone-side 仍靠 margin-left:auto 靠右。
+     ⚠️ 2026-09-16(Forrest 本轮):本块已进入 .dock-box 与朗读条同框,
+        高度必须与 .sample-pill 完全一致 → 写死 height: 52px,
+        不再用 min-height: 78px + 自己的 margin/圆角/边框。
+        圆按钮与文字用 flex 居中在同一行内。 */
   position: relative;
   box-sizing: border-box;
   display: flex;
@@ -493,14 +521,35 @@
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  /* 内容高 = outer 38 + gap 5 + label 14 = 57px;上下 padding 各 10 → 77px。
-     写死 min-height 保证按钮绝不压到边缘。 */
-  min-height: 78px;
-  padding: 10px 20px;
-  margin-bottom: 12px;
-  border-radius: 34px;
+  height: 52px;
+  padding: 0 14px;
+  margin: 0;
+  border-radius: 14px;
   background: #f0faf4;
   border: 1px solid #d6f0e0;
+}
+/* 圆按钮 + 下方小字在 52px 行高里放不下,
+   改为横向排:圆按钮在左,文字紧随其后,右侧放评分胶囊。
+   ⚠️ 基础 .rec-center 定义在后面(第 1053 行附近)并且是 absolute 定位,
+      这里必须用更高优先级把它拉回文档流,否则 52px 行内会高低错位。 */
+.rec-zone .rec-center.rec-center {
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  margin-right: auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.rec-zone .big-round { flex-direction: row; align-items: center; gap: 8px; }
+.rec-zone .zone-side.zone-side {
+  position: static;
+  right: auto;
+  top: auto;
+  transform: none;
+  flex: 0 0 auto;
 }
 .rec-zone.has-take { background: #edf9f1; }
 
@@ -1103,7 +1152,8 @@
   .act-bar { flex-wrap: nowrap; overflow-x: auto; }
   .act-nav { margin-left: auto; width: auto; justify-content: flex-end; flex: 0 0 auto; }
   .act-left { flex: 0 0 auto; }
-  .rec-center { flex-direction: column; align-items: flex-start; gap: 10px; }
+  /* .dock-box 的 66.6% 在窄屏会退化得过窄 → 窄屏占满 */
+  .dock-box { width: 100%; min-width: 0; }
 }
 
 /* ============================================================

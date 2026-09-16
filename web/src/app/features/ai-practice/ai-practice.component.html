@@ -88,8 +88,6 @@
          **全部收进同一个白底大卡片**(.main-exam-card),
          卡片外只留最下方操作/分页栏。
          以前正文卡与音频条是分离的碎块,现统一为一个框。 -->
-    <div class="main-exam-card">
-
     <!-- ① 顶部 Meta 栏:题号 + 完成状态 + 题名 + 编辑 -->
     <header class="main-head">
       <span class="q-chip">{{ t('practice.question') }} #{{ qIndex() }}</span>
@@ -124,6 +122,13 @@
     </header>
 
     <div class="main-body">
+
+    <!-- ★ 2026-09-16(Forrest 本轮重构):主练习大白卡。
+         包住:英文正文 + Sample Reading + Record。
+         ⚠️ Meta 栏(.main-head)留在卡外 —— 它跨 @if/@else 分支,
+            放进卡内会把 @if 块截断(Angular 禁止跨块嵌套)。
+         卡外保留:Meta 栏、底部操作栏、历史录音列表、评分报告区。 -->
+    <div class="main-exam-card">
 
       @if (!selectedId()) {
         <div class="placeholder">
@@ -374,8 +379,11 @@
         </div>
         <!-- /.audio-controls-wrapper:朗读条 + 录音区 的共同方框 -->
 
-        </div>
-        <!-- /.main-exam-card:主练习大白卡到此结束(卡片外只留下面操作栏) -->
+      }
+      <!-- 关闭 main-body 内的 @if/@else 分支 -->
+
+    </div>
+    <!-- /.main-exam-card:主练习大白卡到此结束(卡片外只留下面操作栏) -->
 
         <!-- ⑤ 底部操作栏:左提交评分 / 右翻页 -->
         <footer class="act-bar">
@@ -683,7 +691,6 @@
             </p>
           }
         </section>
-      }
     </div>
   </main>
 

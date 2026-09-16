@@ -330,7 +330,60 @@ const DICT: Record<string, Record<Lang, string>> = {
   'setting.savedButFail': { zh: '已保存,但连通性测试未通过:', en: 'Saved, but the connectivity test failed: ', fr: 'Enregistrée, mais le test a échoué : ' },
   'setting.saveFail': { zh: '保存失败:', en: 'Save failed: ', fr: 'Échec de l’enregistrement : ' },
   'setting.testFail': { zh: '测试未通过:', en: 'Test failed: ', fr: 'Échec du test : ' },
-  'setting.testOk': { zh: '连接正常,密钥可用。', en: 'Connection OK — the key works.', fr: 'Connexion OK — la clé fonctionne.' }
+  'setting.testOk': { zh: '连接正常,密钥可用。', en: 'Connection OK — the key works.', fr: 'Connexion OK — la clé fonctionne.' },
+
+  // ---------- 配置教程(2026-09-16 Forrest:参考截图添加配置教程) ----------
+  'setting.tutTitle': { zh: '配置教程', en: 'Setup Guide', fr: 'Guide de configuration' },
+  'setting.tutIntro': {
+    zh: '这里填写的是您自己在微软 Azure 上创建的 Azure AI Speech 资源的 Speech Key 和 Speech Region。',
+    en: 'Enter the Speech Key and Speech Region of the Azure AI Speech resource you created in your own Microsoft Azure account.',
+    fr: 'Indiquez la clé Speech et la région Speech de la ressource Azure AI Speech créée dans votre propre compte Microsoft Azure.'
+  },
+  'setting.tutNote1': {
+    zh: '当您使用“自行配置微软 Azure”模式时,本站实际调用的是您自己的微软 Azure Speech API,因此额度、计费、区域可用性和限制均以微软官方规则为准。',
+    en: 'In “Bring your own Microsoft Azure” mode, this site calls your own Azure Speech API. Quotas, billing, regional availability, and limits are governed by Microsoft official terms.',
+    fr: 'En mode « votre propre Microsoft Azure », ce site appelle votre propre API Azure Speech. Les quotas, la facturation, la disponibilité régionale et les limites relèvent des conditions officielles de Microsoft.'
+  },
+  'setting.tutNote2': {
+    zh: '微软官方当前价格页显示,Free (F0) 层对 Speech to Text 提供每月 5 小时免费音频额度;超出后 Azure 可能会产生收费,具体价格和免费额度可能调整,请以微软官方页面为准。',
+    en: 'Microsoft current pricing page states that the Free (F0) tier includes 5 hours of free speech-to-text audio per month. Beyond that, Azure may charge you. Prices and free allowances may change — always check Microsoft official page.',
+    fr: 'La page tarifaire actuelle de Microsoft indique que le niveau Free (F0) inclut 5 heures d’audio de reconnaissance vocale gratuites par mois. Au-delà, Azure peut facturer. Les prix et quotas gratuits peuvent changer — vérifiez la page officielle de Microsoft.'
+  },
+  'setting.tutNote3': {
+    zh: '如果您已购买平台流量包,系统会优先使用平台流量,尽量避免先消耗您个人 Azure 账号的额度。',
+    en: 'If you have purchased a platform traffic pack, the system uses it first, to avoid consuming your personal Azure account quota whenever possible.',
+    fr: 'Si vous avez acheté un forfait de trafic de la plateforme, le système l’utilise en priorité afin d’éviter de consommer le quota de votre compte Azure personnel.'
+  },
+  'setting.tutStepsTitle': { zh: '大概步骤', en: 'Rough steps', fr: 'Étapes principales' },
+  'setting.tutStep1': { zh: '登录 Azure Portal', en: 'Sign in to the Azure Portal', fr: 'Connectez-vous au portail Azure' },
+  'setting.tutStep2': { zh: '创建一个 Azure AI Speech 资源。', en: 'Create an Azure AI Speech resource.', fr: 'Créez une ressource Azure AI Speech.' },
+  'setting.tutStep3': {
+    zh: '打开该资源,进入 Keys and Endpoint 页面。',
+    en: 'Open the resource and go to the “Keys and Endpoint” page.',
+    fr: 'Ouvrez la ressource et allez sur la page « Clés et point de terminaison ».'
+  },
+  'setting.tutStep4': { zh: '复制其中一个 Key。', en: 'Copy one of the keys.', fr: 'Copiez l’une des clés.' },
+  'setting.tutStep5': {
+    zh: '记录该资源所在区域,例如 eastus。',
+    en: 'Note the resource region, for example eastus.',
+    fr: 'Notez la région de la ressource, par exemple eastus.'
+  },
+  'setting.tutStep6': {
+    zh: '回到本站,填写 Speech Key 和 Speech Region 并保存。',
+    en: 'Back on this site, fill in the Speech Key and Speech Region, then save.',
+    fr: 'De retour sur ce site, saisissez la clé Speech et la région Speech, puis enregistrez.'
+  },
+  'setting.tutDocsTitle': { zh: '微软相关文档', en: 'Microsoft documentation', fr: 'Documentation Microsoft' },
+  'setting.tutDocPricing': {
+    zh: '查看免费额度与官方价格',
+    en: 'Free tier and official pricing',
+    fr: 'Niveau gratuit et tarifs officiels'
+  },
+  'setting.tutDocKeys': {
+    zh: 'Keys and Endpoint 在哪里?',
+    en: 'Where are Keys and Endpoint?',
+    fr: 'Où trouver Clés et point de terminaison ?'
+  },
 };
 
 @Injectable({ providedIn: 'root' })

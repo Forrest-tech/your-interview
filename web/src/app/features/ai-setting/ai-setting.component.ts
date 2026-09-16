@@ -83,11 +83,20 @@ export class AiSettingComponent {
     }
   ];
 
-  /** Azure 可用区域(常用几个,给下拉选,避免用户手打出错)。 */
+  /** Azure 可用区域(常用几个,给下拉选,避免用户手打出错)。
+   *  2026-09-16(Forrest 本轮):参照他提供的截图补全 ——
+   *  截图里出现了 East Asia / Southeast Asia / Australia East / East US 2 /
+   *  West US 2 / West Europe / Japan East,本页全部收录。 */
   readonly regions = [
-    'canadacentral', 'canadaeast', 'eastus', 'eastus2',
-    'westus2', 'westeurope', 'southeastasia', 'japaneast'
+    'canadacentral', 'canadaeast',
+    'eastus', 'eastus2', 'westus2', 'westus3',
+    'westeurope', 'northeurope',
+    'eastasia', 'southeastasia', 'australiaeast', 'japaneast'
   ];
+
+  /** 微软官方文档链接(配置教程里的"微软相关文档"区)。 */
+  readonly pricingUrl = 'https://azure.microsoft.com/en-us/pricing/details/cognitive-services/speech-services/';
+  readonly keysDocUrl = 'https://learn.microsoft.com/en-us/azure/ai-services/speech-service/get-started-speech-to-text';
 
   /** 当前选中的引擎偏好。 */
   readonly engine = signal<'browser' | 'azure'>('browser');

@@ -74,6 +74,14 @@ export class RecorderService {
   /** 载入/上传失败的真实原因(不吞错)。 */
   readonly persistError = signal('');
 
+  /**
+   * ★ 第二十七轮:等待补传的录音 id 列表。
+   * 场景:录音时素材还没保存到服务端(本地种子 id)→ 无法上传;
+   *       等素材树保存拿到真 GUID 后,由 flushPendingUploads() 自动补传。
+   * 目的:彻底杜绝"录音只存内存、刷新即丢"。
+   */
+  readonly pendingUploads = signal<string[]>([]);
+
   /** 已从后端载入过的素材 id —— 避免同一素材反复拉取。 */
   private loadedMaterials = new Set<string>();
 
@@ -222,28 +230,60 @@ export class RecorderService {
     this.recordings.update((list) => [rec, ...list]);
 
     const materialId = rec.materialId;
-    const blob = rec.blob;
-    const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
 
-    // 非 GUID 素材(本地种子)无法上传 —— 如实标记,不发注定 404 的请求。
+    // ★ 第二十七轮(Forrest 报"录音后数据全丢"的根治点):
+    //   非 GUID 素材(本地种子 'f_intro_edu' 等)无法上传 —— 后端路由要求 GUID。
+    //   旧实现只 patch 一条 error 就 return → 录音**永不上传** → 只存内存 → 刷新即丢。
+    //   现在:① 明确告知用户数据【尚未保存,刷新会丢】;② 把这条录音挂进
+    //   "待重传队列",等素材树拿到真 GUID 后自动补传(见 flushPendingUploads)。
     if (!RecorderService.isGuid(materialId)) {
       this.patch(rec.id, {
-        error: '该素材尚未保存到服务端,录音只保留在本次会话。请先点"保存修改"把素材树存到后端。'
+        error: '⚠️ 该素材还没保存到服务端,录音暂未入库 —— 刷新页面会丢失。'
+          + '请点侧栏「保存修改」后再重试,或重录一次。'
       });
+      // 入队等素材拿到 GUID 后自动补传
+      this.pendingUploads.set([...this.pendingUploads(), rec.id]);
       return;
     }
 
+    this.upload(rec.id);
+  }
+
+  /**
+   * 上传一条已在列表里的录音(按当前 id 与 materialId)。
+   *
+   * ★ 第二十七轮抽出:submitPending 与 flushPendingUploads 共用同一段上传逻辑,
+   *   避免两处实现分叉(第七轮教训:同一危险模式只修一处 = 没修完)。
+   */
+  upload(id: string): void {
+    const rec = this.recordings().find((r) => r.id === id);
+    if (!rec || rec.uploaded || !RecorderService.isGuid(rec.materialId)) return;
+
+    const blob = rec.blob;
+    if (!blob || !blob.size) {
+      this.patch(id, { error: '录音数据已不在内存,无法上传。请重录一次。' });
+      return;
+    }
+    const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
     const localId = rec.id;
-    this.practiceApi.uploadRecording(materialId, blob, rec.duration,
+
+    this.practiceApi.uploadRecording(rec.materialId, blob, rec.duration,
       `take-${Date.now()}.${ext}`, blob.type || 'audio/webm')
       .subscribe({
         next: (dto) => {
           // 用后端 id 替换本地临时 id:后续评分/删除都走后端 id
           this.recordings.update((list) => list.map((r) =>
             r.id === localId
-              ? { ...r, id: dto.id, uploaded: true, createdAt: new Date(dto.createdAt).getTime(), url: '' }
+              ? { ...r, id: dto.id, uploaded: true, error: null,
+                  createdAt: new Date(dto.createdAt).getTime(), url: '' }
               : r));
           this.persistError.set('');
+          // 上传成功后若这条还在补传队列里 → 移除
+          if (this.pendingUploads().includes(localId)) {
+            this.pendingUploads.set(this.pendingUploads().filter((x) => x !== localId));
+          }
+          // ★ 第二十七轮:这条录音若已有评分但当时没能写库,现在用真 GUID 补写
+          this.flushPendingScore(localId, dto.id);
         },
         error: (e) => {
           const msg = String((e as { message?: string } | null)?.message ?? e ?? '');
@@ -251,6 +291,36 @@ export class RecorderService {
           this.persistError.set(msg.slice(0, 200));
         }
       });
+  }
+
+  /**
+   * ★ 第二十七轮:补传"因素材没有 GUID 而积压"的录音。
+   *
+   * 调用时机:素材树保存成功、前端拿到真 GUID 之后(组件里 refreshTreeFromServer
+   * 完成时调用)。把每条积压录音按它所属素材重新解析 id 再上传。
+   *
+   * 为什么需要:录音上传要求 materialId 是 GUID;而素材可能是本地种子,
+   *   保存到服务端后 id 会变成 GUID。旧实现遇到种子 id 直接放弃 →
+   *   录音永远进不了库 → 刷新即丢(Forrest 报的严重 bug)。
+   */
+  flushPendingUploads(resolveMaterialId: (oldId: string) => string | null): void {
+    const queue = this.pendingUploads();
+    if (!queue.length) return;
+
+    const stillPending: string[] = [];
+    for (const recId of queue) {
+      const rec = this.recordings().find((r) => r.id === recId);
+      if (!rec) continue;                       // 已被删除,丢弃
+      const mapped = resolveMaterialId(rec.materialId);
+      if (!RecorderService.isGuid(mapped)) {
+        stillPending.push(recId);               // 还没拿到 GUID,继续等
+        continue;
+      }
+      // 用新 GUID 就地改掉 materialId,然后走正常上传
+      this.patch(recId, { materialId: mapped! });
+      this.upload(recId);
+    }
+    this.pendingUploads.set(stillPending);
   }
 
   /** 丢弃待提交的录音(用户不想提交)。 */
@@ -454,26 +524,20 @@ export class RecorderService {
     }
 
     // 需求第 4 条:"评分信息入库,避免重复评分"。
-    // 已落库的录音先问后端要缓存分数 —— 命中就免掉一次 Azure 调用(省钱省时间)。
     //
-    // ⚠️ 2026-09-16(真机反馈):这里以前是 `catch {}` 全吞。
-    //    后果—— 未评分过的录音本就会返回 404,虽然继续走真实评分没错,
-    //    但浏览器 Network 面板里会留下一片刺眼的红色 404,
-    //    Forrest 看到的就是"点 run ai scoring 很多报错"。
-    //    修法:先拿本地已有分数短接(根本不发请求);
-    //    真要发时,把"还没评分(404)"与"后端异常"分开处理,
-    //    404 属于**预期路径**,不再让它显得像故障。
-    if (rec.score) return;
-
-    try {
-      const cached = await firstValueFrom(this.practiceApi.getRecordingScore(id));
-      this.patch(id, { grading: false, score: RecorderService.scoreFromDto(cached), error: null });
-      return;
-    } catch (e) {
-      // 404 = 这条录音还没评分过 → 完全正常,继续往下走真实评分。
-      // 其他错(后端没起/500)→ 也让真实评分链路去报,同样不在这里弹错。
-      void e;
-    }
+    // ⚠️ 第二十七轮(Forrest 报"点击 run ai scoring 还是报错"的真凶):
+    //    旧实现在这里**发了一个 GET /recordings/{id}/score 探测缓存**。
+    //    而该端点在后端是这样写的 —— 没有评分记录时返回 404:
+    //      if (score is null) return Result.Failure(Error.NotFound("评分"));
+    //    于是**每一次对未评分录音点评分,控制台必留一条红色 404**,
+    //    看起来就像"功能坏了"(其实只是"还没评过")。
+    //
+    //    修法:**不再探测**。理由:
+    //      · 录音列表本来就已经带了 score 字段(列表接口返回的 DTO 里有),
+    //        有分就是有分,直接读本地即可,根本不需要为此再发一次请求;
+    //      · 评分结果一旦产生,会由 saveScore 写库并在列表刷新时带回来;
+    //      · 消除这个探测请求 = 彻底消除那条红色 404。
+    if (rec.score) return;                 // 本地已有分数(列表带回来的)→ 不再重复评分
 
     this.patch(id, { grading: true, error: null });
 
@@ -518,23 +582,14 @@ export class RecorderService {
       // 把评分结果落库 → 需求第 4 条"下次不必重复评分"。
       // 落库失败**不影响本次结果展示**(分数已在界面上),
       // 但如实记录原因,免得用户下次发现又要重评却不知为何。
-      // ⚠️ 只在 uploaded 时才发(否则又撞 404)。
-      if (rec.uploaded) {
-        this.practiceApi.saveScore(id, {
-          pronScore: score.pronScore,
-          accuracyScore: score.accuracyScore,
-          fluencyScore: score.fluencyScore,
-          completenessScore: score.completenessScore,
-          prosodyScore: score.prosodyScore,
-          recognized: score.recognized,
-          words: score.words,
-          referenceText
-        }).subscribe({
-          error: (e) => this.persistError.set(
-            '评分已生成但未能存入历史(下次会重新评分):' +
-            String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 160))
-        });
-      }
+      //
+      // ★ 第二十七轮(Forrest 报"数据都丢失了,必须都存数据库"):
+      //   旧实现只在 `rec.uploaded` 时才落库 —— 若录音还没上传成功
+      //   (例如素材当时没有 GUID),**评分结果也一并被丢掉**,
+      //   刷新后连分数都没了。这是"数据丢失"的第二条链路。
+      //   现在:评分一产生就尝试落库;失败则把这条录音放进
+      //   "待补存评分"队列,等录音上传成功后再补写。
+      this.persistScore(id, rec, score, referenceText);
     } catch (e) {
       // 后端没起 / 未配 key / Azure 报错 —— 全部如实告知,不造分。
       const raw = String((e as { message?: string })?.message ?? e ?? '');
@@ -577,6 +632,76 @@ export class RecorderService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * ★ 第二十七轮:把评分结果写进后端。
+   *
+   * 与旧实现的区别:**不再要求 rec.uploaded**。
+   *   录音已上传 → 直接写;
+   *   录音尚未上传 → 记入 pendingScores,等 flushPendingUploads 上传成功后补写。
+   *
+   * 为什么必须这样:否则"素材还没 GUID 时录的音",分数评出来了却存不进库,
+   * 刷新后连结果都看不到 —— 正是 Forrest 报的"数据都丢失了"。
+   */
+  private persistScore(id: string, rec: Recording, score: RecordingScore,
+    referenceText: string): void {
+    if (!rec.uploaded || !RecorderService.isGuid(id)) {
+      // 还不能写库 → 入队等录音上传成功后补写
+      this.pendingScores.set([...this.pendingScores(), { id, referenceText }]);
+      return;
+    }
+
+    this.practiceApi.saveScore(id, {
+      pronScore: score.pronScore,
+      accuracyScore: score.accuracyScore,
+      fluencyScore: score.fluencyScore,
+      completenessScore: score.completenessScore,
+      prosodyScore: score.prosodyScore,
+      recognized: score.recognized,
+      words: score.words,
+      referenceText
+    }).subscribe({
+      next: () => {
+        // 落库成功 → 从待补队列移除
+        this.pendingScores.set(this.pendingScores().filter((x) => x.id !== id));
+      },
+      error: (e) => this.persistError.set(
+        '评分已生成但未能存入历史(下次会重新评分):' +
+        String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 160))
+    });
+  }
+
+  /** ★ 第二十七轮:等待补写库的评分(录音上传成功后统一补写)。 */
+  readonly pendingScores = signal<{ id: string; referenceText: string }[]>([]);
+
+  /**
+   * ★ 第二十七轮:录音上传成功(拿到真 GUID)后,把当时评出的分数补写进库。
+   * localId = 上传前的临时 id;serverId = 后端返回的 GUID。
+   */
+  private flushPendingScore(localId: string, serverId: string): void {
+    const item = this.pendingScores().find((x) => x.id === localId);
+    if (!item) return;
+    const rec = this.recordings().find((r) => r.id === serverId);
+    if (!rec?.score) {
+      this.pendingScores.set(this.pendingScores().filter((x) => x.id !== localId));
+      return;
+    }
+    const sc = rec.score;
+    this.practiceApi.saveScore(serverId, {
+      pronScore: sc.pronScore,
+      accuracyScore: sc.accuracyScore,
+      fluencyScore: sc.fluencyScore,
+      completenessScore: sc.completenessScore,
+      prosodyScore: sc.prosodyScore,
+      recognized: sc.recognized,
+      words: sc.words,
+      referenceText: item.referenceText
+    }).subscribe({
+      next: () => this.pendingScores.set(this.pendingScores().filter((x) => x.id !== localId)),
+      error: (e) => this.persistError.set(
+        '评分未能存入历史:' + String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 160))
+    });
   }
 
   private patch(id: string, part: Partial<Recording>): void {

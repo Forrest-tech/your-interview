@@ -173,11 +173,20 @@ start_assessment() {
   #    拼接会把密钥变成 110 字符(翻倍)→ 与容器 identity 的签名不一致 → 业务接口全 401。
   local _jwt="${Jwt__SigningKey:-}"
   [ -n "$_jwt" ] || _jwt="${JWT_SIGNING_KEY:-}"
+  # ⚠️ 第二十七轮(Forrest 报"录音数据全丢"):
+  #    音频落盘根目录走 IAudioStore 的兜底逻辑 = cwd/storage/recordings。
+  #    而 cwd 取决于启动方式(shell / IDE / launchd 各不相同),
+  #    一旦 cwd 变了,旧录音就"找不到文件" → 表现为数据丢失。
+  #    这里**显式注入绝对路径**,让落盘与 cwd 彻底解耦。
+  local _storage="${PRACTICE_STORAGE_DIR:-$ROOT/storage/recordings}"
+  mkdir -p "$_storage"
+
   if command -v setsid >/dev/null 2>&1; then
     ( cd "$ROOT" && \
       env "ConnectionStrings__AssessmentDb=${ConnectionStrings__AssessmentDb:-}" \
           "Jwt__SigningKey=$_jwt" \
           "ASPNETCORE_ENVIRONMENT=$_env" \
+          "PRACTICE_STORAGE_DIR=$_storage" \
           "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=$_inv" \
       setsid "$dotnet_bin" run --project src/Services.Assessment \
         $_no_build_flag --no-launch-profile --urls "http://127.0.0.1:$A_PORT" \
@@ -187,6 +196,7 @@ start_assessment() {
       env "ConnectionStrings__AssessmentDb=${ConnectionStrings__AssessmentDb:-}" \
           "Jwt__SigningKey=$_jwt" \
           "ASPNETCORE_ENVIRONMENT=$_env" \
+          "PRACTICE_STORAGE_DIR=$_storage" \
           "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=$_inv" \
       nohup "$dotnet_bin" run --project src/Services.Assessment \
         $_no_build_flag --no-launch-profile --urls "http://127.0.0.1:$A_PORT" \

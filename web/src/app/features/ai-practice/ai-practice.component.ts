@@ -580,6 +580,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       next: () => {
         this.treeDirty.set(false);
         this.treeError.set('');
+        // ★ 第二十七轮(Bug2 真根因修复):
+        //   后端 PUT /materials 只返回 { saved: N } ——
+        //   它给**新建**的素材生成了 GUID,却**不回传**。
+        //   若不回读,前端 nodes 里永远是 'f_intro_edu' 这类种子 id,
+        //   于是 submitPending 的 isGuid(materialId) 判定为 false →
+        //   录音**静默不上传** → 只存内存 → 刷新即丢(Forrest 报的数据丢失)。
+        //   修法:保存成功后立刻回读后端树,用真实 GUID 替换本地节点。
+        this.refreshTreeFromServer();
       },
       error: (e) => {
         // 绝不假装保存成功 —— 把后端给的真实原因显示出来
@@ -587,6 +595,95 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         this.treeDirty.set(true);
       }
     });
+  }
+
+  /**
+   * 从后端回读整棵树,替换本地节点(拿到真正的 GUID)。
+   *
+   * ★ 第二十七轮新增。用途:
+   *   1. saveTree 成功后同步服务端生成的 GUID(否则录音上传永远被 isGuid 挡住);
+   *   2. 任何"本地 id 与服务端 id 可能不一致"的时刻,重新对齐。
+   *
+   * 为什么必须回读:后端新建素材时会生成新 GUID,但 PUT 的响应体里没有它。
+   *   不回读 = 前端永远不知道自己的种子 id 已被服务端换成 GUID。
+   */
+  private refreshTreeFromServer(): void {
+    this.practiceApi.getMaterials().subscribe({
+      next: (dtos) => {
+        if (!dtos.length) return;   // 异常情况:服务端为空,保持本地不动
+        const prevSelected = this.selectedId();
+        const fresh = AiPracticeComponent.fromDto(dtos);
+        this.nodes.set(fresh);
+        // 新树的 id→名字 进缓存(id 换成 GUID 后仍能按名回找)
+        this.cacheNames(fresh);
+        // 选中项也要按"名字"对齐到新 GUID —— 否则 selectedId 悬空,
+        // 界面看起来"没选中任何素材",录音无处可挂。
+        if (prevSelected) {
+          const remapped = this.findByLegacyIdOrName(prevSelected);
+          if (remapped) {
+            this.selectedId.set(remapped.id);
+            this.rememberMaterialId(remapped.id);
+          }
+        }
+        // ★ 第二十七轮:树里现在有真 GUID 了 → 把积压的录音补传上去。
+        //   映射规则:旧 id 找不到时按"记忆中同 id 的旧节点名字"回找。
+        this.recorder.flushPendingUploads((oldId) => {
+          const hit = this.findById(this.nodes(), oldId);
+          return hit ? hit.id : null;
+        });
+      },
+      error: () => {
+        // 回读失败不影响已成功的保存 —— 但要记住树脏了(下次再对齐)
+        this.treeDirty.set(true);
+      }
+    });
+  }
+
+  /**
+   * 用旧的(可能已失效的)id 或名字,在新树里找回对应节点。
+   * 场景:保存前 selectedId='f_intro_edu',保存后端换成 GUID;
+   *       旧 id 已不存在 → 退化为按"内容/名字"匹配。
+   */
+  private findByLegacyIdOrName(oldId: string): MaterialNode | null {
+    const byId = this.findById(this.nodes(), oldId);
+    if (byId) return byId;
+    const firstName = this.lastKnownName.get(oldId);
+    if (firstName) {
+      const byName = this.findFileByName(this.nodes(), firstName);
+      if (byName) return byName;
+    }
+    return null;
+  }
+
+  /** 按 id 在整棵树里找节点。 */
+  private findById(list: MaterialNode[], id: string): MaterialNode | null {
+    for (const n of list) {
+      if (n.id === id) return n;
+      const hit = n.children?.length ? this.findById(n.children, id) : null;
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  /** 按名字找第一个文件节点(名字在同一用户下通常唯一,够用)。 */
+  private findFileByName(list: MaterialNode[], name: string): MaterialNode | null {
+    for (const n of list) {
+      if (!n.folder && n.name === name) return n;
+      const hit = n.children?.length ? this.findFileByName(n.children, name) : null;
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  /** 旧 id → 最近一次已知的名字(用于 id 失效后按名回找)。 */
+  private readonly lastKnownName = new Map<string, string>();
+
+  /** 递归把整棵树的 id→名字 写进缓存。 */
+  private cacheNames(list: MaterialNode[]): void {
+    for (const n of list) {
+      this.lastKnownName.set(n.id, n.name);
+      if (n.children?.length) this.cacheNames(n.children);
+    }
   }
 
   /**
@@ -830,6 +927,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   private selectFile(n: MaterialNode): void {
     this.selectedId.set(n.id);
+    // ★ 第二十七轮:记住 id↔名字,便于回读后端树后按名找回选中项
+    this.lastKnownName.set(n.id, n.name);
     // 持久化选中项(任务书第三节):刷新/切题后仍停在同一素材
     this.rememberMaterialId(n.id);
     // 换素材 → 拉该素材的历史录音(2026-09-15 第十七轮:录音已落库)。
@@ -862,7 +961,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   private persistQuiet(): void {
     this.practiceApi.saveMaterials(AiPracticeComponent.toPayload(this.nodes())).subscribe({
-      next: () => { this.treeError.set(''); },
+      next: () => {
+        this.treeError.set('');
+        // ★ 第二十七轮:自动保存同样要回读 —— 否则拖拽/新建之后
+        //   前端仍持种子 id,录音上传被 isGuid 挡住(同 saveTree 的坑)。
+        this.refreshTreeFromServer();
+      },
       error: (e) => {
         this.treeError.set(this.errText(e));
         this.treeDirty.set(true);

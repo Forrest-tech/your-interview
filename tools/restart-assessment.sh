@@ -147,8 +147,33 @@ c_ok "构建通过"
 
 LAUNCH=""
 command -v setsid >/dev/null 2>&1 && LAUNCH="setsid "
+
+# -----------------------------------------------------------------------------
+# ⚠️ 第二十七轮(Forrest 报"录音数据全丢"与"设置页保存报 28P01"):
+#    本脚本此前**什么都不注入**就启动 assessment,后果有三:
+#      ① DB 连接串缺失 → 回落 appsettings 占位符口令 → 28P01 认证失败;
+#      ② JWT 密钥缺失 → 发出去的令牌签不出来 / 与 identity 不一致 → 业务接口全 401;
+#      ③ PRACTICE_STORAGE_DIR 缺失 → 音频落到 cwd/storage/recordings,
+#         cwd 一变旧录音就找不回 → 表现为"录音数据丢失"。
+#    现在与 tools/hybrid.sh 口径完全一致(同一模式必须一次修全,第七轮教训)。
+# -----------------------------------------------------------------------------
+mkdir -p "$ROOT/.run" "$ROOT/storage/recordings"
+if [ -f "$ROOT/.env" ]; then
+  set -a; . "$ROOT/.env"; set +a
+fi
+_jwt="${Jwt__SigningKey:-}"; [ -n "$_jwt" ] || _jwt="${JWT_SIGNING_KEY:-}"
+_storage="${PRACTICE_STORAGE_DIR:-$ROOT/storage/recordings}"
+_env="${ASPNETCORE_ENVIRONMENT:-Development}"
+_inv="${DOTNET_SYSTEM_GLOBALIZATION_INVARIANT:-1}"
+
 echo "▸ 启动 assessment (port $PORT)"
-( cd "$ROOT" && ${LAUNCH}nohup dotnet run --project src/Services.Assessment \
+( cd "$ROOT" && ${LAUNCH}nohup env \
+    "ConnectionStrings__AssessmentDb=${ConnectionStrings__AssessmentDb:-}" \
+    "Jwt__SigningKey=$_jwt" \
+    "ASPNETCORE_ENVIRONMENT=$_env" \
+    "PRACTICE_STORAGE_DIR=$_storage" \
+    "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=$_inv" \
+    dotnet run --project src/Services.Assessment \
     --no-build --no-launch-profile --urls "http://127.0.0.1:$PORT" \
     > "$LOG" 2>&1 < /dev/null & echo $! > "$ROOT/.run/assessment.pid" )
 

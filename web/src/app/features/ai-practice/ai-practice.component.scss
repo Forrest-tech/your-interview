@@ -797,10 +797,12 @@
 
 /* 圆形主按钮 + 下方标签 */
 .big-round {
+  /* ★ 第二十三轮:改横向 —— 圆形绿麦 32px + 右侧文字并排。
+     (第二十轮的纵向 46px 大圆钮会让录音条比示范朗读条臃肿,已按本轮指令收紧。) */
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -808,10 +810,10 @@
   padding: 0;
 }
 .big-round .outer {
-  /* 与上方蓝色 play-round 统一 38px(Forrest 第十一轮:太大压到上边缘)。
-     38 + gap 5 + label 14 = 57px 总高。 */
-  width: 38px;
-  height: 38px;
+  /* ★ 第二十三轮:32px 圆钮(原 38px),配合录音条压到 52px 与示范朗读条等高。
+     文字改为并排右侧(原纵向堆叠),故不再需要 38+gap+label 的纵向总高。 */
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: #22a35c;
   color: #fff;
@@ -826,7 +828,17 @@
   box-shadow: 0 2px 9px rgba(34, 163, 92, .38);
 }
 .big-round:active .outer { transform: scale(.95); }
-.big-round .outer mat-icon { font-size: 22px; width: 22px; height: 22px; }
+.big-round .outer mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+/* ★ 第二十三轮:麦克风右侧文字 —— 沿用原左侧标签规范
+   (13px / 500 / #047857),紧贴圆钮右侧,不再纵向堆叠。 */
+.br-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #047857;
+  white-space: nowrap;
+  line-height: 1;
+}
 
 /* 极简标签:只显示"录音 / 00:15 停止 / 回听"几个字 */
 .rec-label {
@@ -2389,7 +2401,28 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 
 /* ② retry 无效的根因不在 CSS,已在 TS 修(见 retryTake);
    这里保证绝对居中的 rec-center 不被左右元素遮挡点击 */
-.rec-center { z-index: 1; }
+/* ★ 第二十三轮:录音按钮组 —— 横向:圆形绿麦 + 紧贴右侧绿色小字。
+   文字样式沿用原左侧 rec-label 规范(13px / 500 / #047857),
+   gap 收紧到 6px 使其"适度贴合"。 */
+.rec-center {
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+/* 左右等宽占位:保证中间麦克风组真正水平居中(vs 右侧操作组) */
+.rec-hold {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.audio-stack .rec-pill .rec-side.rec-hold {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .zone-side { z-index: 2; }
 
 
@@ -2757,12 +2790,15 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 
 /* 录音交互条(浅绿胶囊) */
 .audio-stack .rec-pill {
+  /* ★ 第二十三轮:与上方 Sample Reading 条高度【完全一致】(同为 52px),
+     圆角恢复胶囊;内部一律 align-items:center 垂直居中。 */
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 78px;
-  padding: 10px 14px 10px 18px;
-  border-radius: 20px;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 16px;
+  border-radius: 9999px;
   border: 1px solid #d6f0e0;
   background: #f0faf4;
   box-sizing: border-box;

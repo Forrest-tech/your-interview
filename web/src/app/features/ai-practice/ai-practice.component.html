@@ -311,21 +311,11 @@
                右侧保留「Run AI Scoring」胶囊 + 重置刷新按钮。 -->
           <div class="rec-pill" [class.has-take]="!!activeTake()">
 
-            <span class="rec-label">
-              @if (recorder.pendingTake(); as pt) {
-                {{ t('practice.pendingHint') }} · {{ fmtDuration(pt.duration) }}
-              } @else if (!recorder.recording() && !activeTake()) {
-                {{ t('practice.recIdle') }}
-              } @else if (recorder.recording()) {
-                {{ t('practice.recordingHint') }}
-              } @else {
-                {{ activePlaying() ? t('practice.recPaused') : t('practice.recPlay') }}
-              }
-            </span>
+            <!-- 左侧占位留白:保证中间麦克风组真正居中(与右侧操作组等宽) -->
+            <span class="rec-hold"></span>
 
-            <span class="spacer"></span>
-
-            <!-- 中间:垂直布局 —— 上圆形绿麦 / 下灰色小字 -->
+            <!-- 居中:圆形绿麦 + 紧贴右侧的绿色小字(第二十三轮:横向排布,
+                 文字样式沿用原左侧标签 13px/500/#047857)。 -->
             <div class="rec-center">
               @if (!recorder.recording() && !activeTake()) {
                 <button class="big-round" (click)="startRecording()"
@@ -350,10 +340,8 @@
               }
             </div>
 
-            <span class="spacer"></span>
-
-            <!-- 右侧:AI 评分胶囊 + 重置刷新 -->
-            <div class="rec-side">
+            <!-- 右侧:AI 评分胶囊 + 重置刷新(与左侧占位等宽,保证中间真居中) -->
+            <div class="rec-side rec-hold">
               <button class="side-score" [disabled]="!activeTake() || activeTake()?.grading"
                       (click)="scoreActiveTake()">
                 <mat-icon>{{ activeTake()?.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>

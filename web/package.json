@@ -7,7 +7,10 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "start:host": "ng serve --proxy-config proxy.conf.json --host 0.0.0.0 --disable-host-check"
+    "start:host": "ng serve --proxy-config proxy.conf.json --host 0.0.0.0 --disable-host-check",
+    "check-templates": "node tools/check-templates.mjs",
+    "prestart": "npm run check-templates",
+    "prebuild": "npm run check-templates"
   },
   "private": true,
   "dependencies": {
@@ -21,6 +24,8 @@
     "@angular/platform-browser": "^17.3.0",
     "@angular/platform-browser-dynamic": "^17.3.0",
     "@angular/router": "^17.3.0",
+    "@material/feature-targeting": "^14.0.0",
+    "@material/rtl": "^14.0.0",
     "@ngrx/effects": "^17.2.0",
     "@ngrx/store": "^17.2.0",
     "@ngrx/store-devtools": "^17.2.0",

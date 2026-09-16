@@ -174,8 +174,6 @@ export class RecorderService {
     const materialId = this.targetMaterialId;
     const duration = Math.max(1, Math.round((Date.now() - this.startedAt) / 1000));
 
-    // 本地先落一条(id 用后端回传的为准),让用户立刻能回放,
-    // 不必等上传完成 —— 上传失败再如实标记。
     const localId = 'r_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
     const rec: Recording = {
       id: localId,
@@ -188,22 +186,47 @@ export class RecorderService {
       grading: false,
       error: null
     };
+
+    // ⚠️ 2026-09-16(Forrest 本轮)：**录完不再自动进列表**。
+    //    改为持在 pendingTake —— 界面上出现"提交"按钮,
+    //    用户点提交后才真正进下方列表(并上传后端)。
+    //    这样"录音完 -> 无任何反应"的问题彻底消失:
+    //    录完立刻有明确的下一步(提交按钮)。
+    this.pendingTake.set(rec);
+  }
+
+  /**
+   * 待提交的录音(录完但用户还没点"提交")。
+   * null = 没有待提交的录音。
+   */
+  readonly pendingTake = signal<Recording | null>(null);
+
+  /**
+   * 提交待提交的录音 —— 进列表 + 上传后端。
+   * 由界面的"提交"按钮调用(Forrest 本轮需求)。
+   */
+  submitPending(): void {
+    const rec = this.pendingTake();
+    if (!rec) return;
+    this.pendingTake.set(null);
+
+    // 进列表(本地先落一条,让用户立刻能回放/评分)
     this.recordings.update((list) => [rec, ...list]);
 
-    // 上传后端落库(音频字节落磁盘,元数据落 PG)。
-    // 失败时把后端 id 换成 null 并标记 —— 明确告诉用户这条**没保存住**,
-    // 而不是让它看起来和保存成功的录音一样。
+    const materialId = rec.materialId;
+    const blob = rec.blob;
     const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
-    // ⚠️ 2026-09-16:非 GUID 素材 id(本地种子)无法上传 —— 后端路由只收 GUID,
-    //    发出去必 404。此时如实标记"未同步"并保留本地可回放的那一条,
-    //    而不是发一个注定失败的请求。
+
+    // 非 GUID 素材(本地种子)无法上传 —— 如实标记,不发注定 404 的请求。
     if (!RecorderService.isGuid(materialId)) {
-      this.patch(localId, {
+      this.patch(rec.id, {
         error: '该素材尚未保存到服务端,录音只保留在本次会话。请先点"保存修改"把素材树存到后端。'
       });
       return;
     }
-    this.practiceApi.uploadRecording(materialId, blob, duration,
+
+    const localId = rec.id;
+    this.practiceApi.uploadRecording(materialId, blob, rec.duration,
       `take-${Date.now()}.${ext}`, blob.type || 'audio/webm')
       .subscribe({
         next: (dto) => {
@@ -220,6 +243,14 @@ export class RecorderService {
           this.persistError.set(msg.slice(0, 200));
         }
       });
+  }
+
+  /** 丢弃待提交的录音(用户不想提交)。 */
+  discardPending(): void {
+    const rec = this.pendingTake();
+    if (!rec) return;
+    try { URL.revokeObjectURL(rec.url); } catch { /* 忽略 */ }
+    this.pendingTake.set(null);
   }
 
   /**
@@ -261,6 +292,19 @@ export class RecorderService {
         this.loading.set(false);
       }
     });
+  }
+
+  /**
+   * 强制重新拉取某素材的录音列表(忽略"已加载"缓存)。
+   *
+   * ⚠️ 2026-09-16(Forrest 本轮):Retry 按钮要"刷新下面的内容"。
+   *   旧实现用 loadedMaterials 集合做一次性加载,再次调用会被直接 return
+   *   → 列表永远不刷新。此方法先把缓存标记去掉再调 loadForMaterial。
+   */
+  reloadForMaterial(materialId: string | null): void {
+    if (!materialId) return;
+    this.loadedMaterials.delete(materialId);
+    this.loadForMaterial(materialId);
   }
 
   /** 是否是后端可接受的素材 id(GUID)。非 GUID = 本地种子,没有服务端录音。 */

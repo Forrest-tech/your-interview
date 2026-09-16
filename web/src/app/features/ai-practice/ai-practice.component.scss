@@ -504,6 +504,66 @@
 }
 .rec-zone.has-take { background: #edf9f1; }
 
+/* ---------- 待提交录音条(Forrest 本轮:录完 → 提交 → 进列表) ---------- */
+.pending-take {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #b9e2c8;
+  box-shadow: 0 2px 8px rgba(34, 163, 92, .12);
+  max-width: 46%;
+}
+.pt-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #2b6b45;
+  white-space: nowrap;
+}
+.pt-info mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+.pt-play,
+.pt-discard {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #5b6472;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pt-play:hover { background: #eef4ff; color: #2f6fed; }
+.pt-discard:hover { background: #fdecea; color: #c5221f; }
+
+.pt-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #22a35c;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.pt-submit:hover { background: #1b8c4d; }
+.pt-submit mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
 /* 圆形主按钮 + 下方标签 */
 .big-round {
   display: flex;
@@ -737,8 +797,14 @@
 /* 识别结果:左逐词文本 + 右错误图例 */
 .recog-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
-  gap: 14px;
+  /* ⚠️ 2026-09-16(Forrest 本轮):"Recognition 里面的显示内容有重叠"。
+     旧值右侧固定 150px,而 .err-cards 内是 1fr/1fr 两列 + 标签文字
+     (Mispronunciation = 16 字符) → 两列挤在 150px 里会**溢出重叠**。
+     改为:右侧列自适应最小 168px,且用 minmax(0,…) 防溢出;
+     窄屏直接单列堆叠。 */
+  grid-template-columns: minmax(0, 1fr) minmax(168px, 220px);
+  gap: 16px;
+  align-items: start;
 }
 @media (max-width: 1100px) {
   .recog-grid { grid-template-columns: minmax(0, 1fr); }
@@ -749,6 +815,10 @@
   line-height: 2.1;
   font-size: 14px;
   color: #2b3340;
+  /* 长句词块要能换行,不能让词块把右侧列挤跑 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 /* 逐词:按 Azure ErrorType 上色 —— 比只看分数更有指导性 */
@@ -758,6 +828,8 @@
   cursor: default;
 }
 .rw.e-ok { color: #2b3340; }
+/* ⚠️ 2026-09-16:无词级数据 —— 不能被当作"读对"刷成普通色 */
+.rw.e-na { color: #98a1ad; }
 .rw.e-mispron {
   background: #fff4d6;
   color: #9a6b00;
@@ -842,6 +914,7 @@
   color: #2f6fed;
 }
 .wg-score.s-good { color: #2e9e5b; }
+.wg-score.na { color: #98a1ad; font-weight: 500; }
 .wg-score.s-mid  { color: #2f6fed; }
 .wg-score.s-warn { color: #e8952f; }
 .wg-score.s-bad  { color: #e53935; }
@@ -1306,6 +1379,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 7px;
   align-content: start;
+  min-width: 0;
 }
 .ec {
   display: flex;
@@ -1315,6 +1389,10 @@
   border-radius: 7px;
   background: #f7f8fa;
   border: 1px solid #eef0f4;
+  min-width: 0;
+  /* ⚠️ 2026-09-16:长标签(Mispronunciation)在窄列里要能换行不溢出 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .ec b {
   font-size: 15px;

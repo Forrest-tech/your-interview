@@ -414,11 +414,29 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   private ttsUrl: string | null = null;
 
   /**
-   * 本次示范朗读实际用的引擎说明（如 "Azure 神经语音(服务端合成)"、
+   * 本次示范朗读实际用的引擎说明(如 "Azure 神经语音(服务端合成)"、
    * "Azure 语音未配置,已回退浏览器语音"）。
    * ⚠️ 这是诚实标记:回退时必须显示,不能让用户误以为听到了 Azure 人声。
    */
   readonly ttsNote = signal('');
+
+  /**
+   * 示范朗读条上要不要显示引擎提示。
+   *
+   * ⚠️ 2026-09-16(Forrest 本轮明确要求):
+   *   · **不显示** "Azure 神经语音(服务端合成)"这类"正常走 Azure"的标记 ——
+   *     用户只想看进度,不关心底层引擎。
+   *   · **必须显示**"回退/失败/未配置"类提示 —— 否则用户会把浏览器语音
+   *     当成 Azure 人声,这是诚实红线,与"想不想看"无关。
+   * 实现:只放行包含 回退/未配置/失败/无法/拦截 等警示词的 note。
+   */
+  readonly showTtsNote = computed(() => {
+    const n = this.ttsNote();
+    if (!n) return false;
+    // 合成中的进度提示也不显示(用户看进度条就够)
+    if (n.includes('合成')) return false;
+    return /回退|未配置|失败|无法|拦截|invalid|failed/i.test(n);
+  });
 
   /**
    * 示范朗读引擎。任务书第三节要求二选一,且选中状态要记住。
@@ -809,12 +827,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
     // ---- 浏览器默认 TTS(Web Speech API) ----
     if (typeof speechSynthesis === 'undefined') return;
+    this.speakDone.set(false);   // 点"朗读"即清除上一次的已读完定格
 
     const u = new SpeechSynthesisUtterance(text);
     u.rate = this.rate();
     u.lang = this.config().lang === 'zh' ? 'zh-CN'
       : this.config().lang === 'fr' ? 'fr-FR' : 'en-US';
-    u.onend = () => this.stopSpeak();
+    u.onend = () => { this.speakDone.set(true); this.stopSpeak(); };
     u.onerror = () => this.stopSpeak();
     this.utterance = u;
     this.speaking.set(true);
@@ -837,7 +856,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *     在此重置会把评分按钮连带锁死。
    */
   private speakAzure(text: string): void {
-    this.ttsNote.set('正在用 Azure 神经语音合成…');
+    // ⚠️ 2026-09-16(Forrest 本轮):开播时**不显示**"正在用 Azure 神经语音合成…" ——
+    //    这是正常路径不是警示,用户只想看进度条。回退/出错时才会写入 note。
+    this.ttsNote.set('');
 
     this.practiceApi.synthesize(text, undefined, this.rate()).subscribe({
       next: (blob) => {
@@ -848,10 +869,19 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
         this.stopSpeakTimerOnly();
         this.speakElapsed.set(0);
+        this.speakDone.set(false);   // 新一次播放:清除上一次的"已读完"定格
         this.speaking.set(true);
-        this.ttsNote.set('Azure 神经语音(服务端合成)');
+        // ⚠️ 2026-09-16(Forrest 本轮):这里**不再**设置
+        //    "Azure 神经语音(服务端合成)" 这类正常标记 —— 样板朗读条上不显示引擎.
+        //    回退/失败时下面的 error 分支会设入警示文案,那种才会显示(见 showTtsNote)。
+        this.ttsNote.set('');
         this.ttsAudio = new Audio(url);
-        this.ttsAudio.onended = () => this.stopSpeak();
+        // ⚠️ 2026-09-16:onended = **自然读完** → 先置 speakDone(进度条定格 100%),再 stopSpeak。
+        //    顺序要紧:stopSpeak 会清零 elapsed,若后置 speakDone 会被看成一瞬间的 0%。
+        this.ttsAudio.onended = () => {
+          this.speakDone.set(true);
+          this.stopSpeak();
+        };
         this.ttsAudio.onerror = () => {
           // 合成成功但浏览器放不出来(极罕见)→ 如实回退,不装无声
           this.ttsNote.set('音频无法播放,已回退浏览器语音');
@@ -891,7 +921,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = this.rate();
     u.lang = 'en-US';
-    u.onend = () => this.stopSpeak();
+    u.onend = () => { this.speakDone.set(true); this.stopSpeak(); };
     u.onerror = () => this.stopSpeak();
     this.utterance = u;
     this.speaking.set(true);
@@ -905,6 +935,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   private startSpeakTimer(): void {
     this.speakElapsed.set(0);
+    this.speakDone.set(false);   // 开播即清除"已读完"定格,进度条重新从 0 走
     this.clearSpeakTimer();
     // ⚠️ 2026-09-16(第 2 条 bug B):总量在**开播那一刻锁死**。
     //    旧实现每秒钟重新调 estimateSeconds(),而它可能因实测值写入而变小,
@@ -942,7 +973,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       this.ttsAudio = null;
     }
     this.clearSpeakTimer();
-    this.speakElapsed.set(0);
+    // ⚠️ 2026-09-16(Forrest 本轮):这里**故意不再清零 speakElapsed**。
+    //    因为清零会让 speakProgress() 瞬间返回 0 → 进度条读完后又回跑。
+    //    进度条改由 speakProgress() 用 speakDone 定格 100%(见其注释);
+    //    elapsed 的清零统一在"下一次开播"(startSpeakTimer / speakAzure)做。
     this.speaking.set(false);
     this.utterance = null;
   }
@@ -981,9 +1015,74 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   stopRecording(): void {
     this.recorder.stop();
-    // 录完自动把这一条设为“当前作品” —— 用户刚录完,大概率就是要回听/评分它
-    const list = this.myRecordings();
-    if (list.length) this.activeTakeId.set(list[0].id);
+    // ⚠️ 2026-09-16(Forrest 本轮):**不再自动选中**刚录的这条。
+    //    录音会停在 recorder.pendingTake(),界面出现"提交"按钮;
+    //    用户点提交后它才进列表、才被选中。
+    //    (旧行为是立刻选中 → 中间按钮变成"播放" → 用户以为没反应。)
+  }
+
+  // ---------- 待提交录音(Forrest 本轮:录完 → 提交 → 进列表) ----------
+
+  /** 正在试听待提交的录音。 */
+  private readonly previewingPending = signal(false);
+
+  /** 试听/停止试听待提交的录音。 */
+  previewPending(): void {
+    const pt = this.recorder.pendingTake();
+    if (!pt) return;
+
+    if (this.previewingPending()) {
+      this.pendingAudio?.pause();
+      this.pendingAudio = null;
+      this.previewingPending.set(false);
+      return;
+    }
+
+    // 试听前停掉其他声音(示范朗读 / 历史回放),避免叠音
+    this.stopSpeak();
+    this.stopPlayback();
+
+    this.pendingAudio = new Audio(pt.url);
+    this.pendingAudio.onended = () => {
+      this.previewingPending.set(false);
+      this.pendingAudio = null;
+    };
+    void this.pendingAudio.play().catch(() => {
+      this.previewingPending.set(false);
+      this.pendingAudio = null;
+    });
+    this.previewingPending.set(true);
+  }
+
+  private pendingAudio: HTMLAudioElement | null = null;
+
+  /** 提交待提交录音 → 进列表。 */
+  submitPending(): void {
+    const pt = this.recorder.pendingTake();
+    if (!pt) return;
+    // 停掉试听
+    if (this.pendingAudio) {
+      this.pendingAudio.pause();
+      this.pendingAudio = null;
+    }
+    this.previewingPending.set(false);
+
+    this.recorder.submitPending();
+    // 提交后把它设为当前作品 —— 用户下一步大概率就是回听/评分它
+    this.activeTakeId.set(pt.id);
+    this.toast(this.t('practice.submitTake'));
+
+    // 若这条已上传成功,后端会回传正式 id;列表已经在 submitPending 里更新。
+  }
+
+  /** 丢弃待提交录音。 */
+  discardPending(): void {
+    if (this.pendingAudio) {
+      this.pendingAudio.pause();
+      this.pendingAudio = null;
+    }
+    this.previewingPending.set(false);
+    this.recorder.discardPending();
   }
 
   removeRecording(id: string): void {
@@ -1058,19 +1157,36 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *   录音还在 → activeTake() 仍非 null → 中间按钮仍是"回听",
    *   用户点完看到的界面几乎没变化,自然觉得"retry 没有用"。
    *
-   * 现在改成真的"重录一遍":
-   *   1. 停掉回放;
-   *   2. 删掉这条录音(连同它的分数)—— 用户就是要重来;
-   *   3. 若已有权限/可以录,立即开录。
+   * 现在改成真的"重录一遍" + **刷新下方列表**:
+   *   2026-09-16(Forrest 本轮):
+   *     · Retry 不再要求先选中某条 —— 没选中时也能用(只刷新列表);
+   *     · 有选中时:删掉这条、重录;
+   *     · 无论哪种,最后都重新拉一次录音列表("刷新下面的内容")。
    */
   retryTake(): void {
     const t = this.activeTake();
-    if (!t) return;
     this.stopPlayback();
-    this.recorder.remove(t.id);
-    this.wordsOpen.set(new Set());
-    this.activeTakeId.set(null);
-    void this.startRecording();
+
+    if (t) {
+      // 有当前作品:这条不要了,删掉重录
+      this.recorder.remove(t.id);
+      this.wordsOpen.set(new Set());
+      this.activeTakeId.set(null);
+      void this.startRecording();
+    } else {
+      // 没选中:当作"刷新下方列表"按钮
+      this.toast(this.t('practice.retryRefreshed'));
+    }
+
+    // 强制重新拉取当前素材的录音列表 —— 这就是 Forrest 要的"刷新下面的内容"。
+    this.refreshRecordings();
+  }
+
+  /** 强制重新拉取当前素材的录音列表(忽略已加载缓存)。 */
+  refreshRecordings(): void {
+    const id = this.selectedId();
+    if (!id) return;
+    this.recorder.reloadForMaterial(id);
   }
 
   /** 停掉当前回放。 */
@@ -1159,20 +1275,46 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   private speakTotalSnapshot = 0;
 
-  /** 示范朗读进度百分比。 */
+  /** 示范朗读进度百分比。
+   *
+   * ⚠️ 2026-09-16(Forrest 本轮):**读完了进度条就停在 100%,不要再动**。
+   *    旧实现在播放结束时 stopSpeak() 会把 speakElapsed 清零 + speaking=false,
+   *    于是 speakProgress() 立刻返回 0 → 进度条唰地**倒回去**,
+   *    正是 Forrest 反映的"读完了进度条又自己往回跑"。
+   *
+   *    现在改成三态:
+   *      · 播放中 → 按已过/锁定总量的真实百分比;)
+   *      · 已读完(见 speakDone)→ 恒定 100%,停在满格不动;
+   *      · 从未播放 → 0%。
+   *    speakDone 只在**自然读完**时置位,手动停播不会置位(避免假装读完)。
+   */
   speakProgress(): number {
-    if (!this.speaking()) return 0;
-    // 用开播时锁定的总量,保证分母恒定 → 进度只前进
+    if (this.speakDone()) return 100;   // 读完了:定格满格,不再回跑
+    if (!this.speaking()) return 0;     // 从未播放/已重置
     const total = this.speakTotalSnapshot || this.estimateSeconds();
     if (!total) return 0;
     return Math.min(100, (this.speakElapsed() / total) * 100);
   }
 
-  /** 评分后的识别率 = 被正确识别的词占比。拿不到就返回 0。 */
+  /**
+   * 本次示范朗读是否已**自然读完**(读到结尾)。
+   * ⚠️ 只有 onend 才算;用户中途按停**不算**(否则会伪装成"读完了")。
+   * 切素材 / 重新开播 / 手动停播都会清除它。
+   */
+  readonly speakDone = signal(false);
+
+  /**
+   * 评分后的识别率 = 被正确识别的词占比。拿不到就返回 0。
+   *
+   * ⚠️ 2026-09-16(Forrest 本轮):只有**有词级数据且 errorType === 'None'**
+   *    才计入"正确";无词级数据的词(errorType 为空串)不能算正确 ——
+   *    否则会凭空空提高识别率,让报告看起来"假"。
+   */
   recognitionPct(sc: RecordingScore): number {
-    if (!sc.words.length) return 0;
-    const ok = sc.words.filter((w) => w.errorType === 'None').length;
-    return Math.round((ok / sc.words.length) * 100);
+    const scored = sc.words.filter((w) => !!w.errorType);
+    if (!scored.length) return 0;
+    const ok = scored.filter((w) => w.errorType === 'None').length;
+    return Math.round((ok / scored.length) * 100);
   }
 
   /**
@@ -1210,6 +1352,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       case 'Insertion': return 'e-insertion';
       case 'UnexpectedBreak': return 'e-break';
       case 'MissingBreak': return 'e-pause';
+      // ⚠️ 2026-09-16:空串 = 该词无词级评估数据(Azure 未返回)。
+      //    不能归为 e-ok(那会让它看起来"读对了"),用 e-na 中性色。
+      case '': return 'e-na';
       default: return 'e-ok';
     }
   }
@@ -1222,8 +1367,18 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       case 'Insertion': return this.t('err.insertion');
       case 'UnexpectedBreak': return this.t('err.unexpectedBreak');
       case 'MissingBreak': return this.t('err.missingBreak');
+      case '': return this.t('err.noData');
       default: return this.t('err.ok');
     }
+  }
+
+  /**
+   * 词是否带评分数据。
+   * ⚠️ 2026-09-16(Forrest 本轮):没用它之前,无数据的词会渲染成 "0.0",
+   *    看起来像"发音 0 分",其实是 Azure 没返回词级分 —— 这就是"假报告"的观感来源。
+   */
+  hasWordScore(w: { accuracy?: number; errorType?: string }): boolean {
+    return !!w.errorType && typeof w.accuracy === 'number';
   }
 
   /** 录音时长格式化。 */

@@ -196,10 +196,18 @@
             <div class="sample-fill" [style.width.%]="speakProgress()"></div>
           </div>
 
-          <span class="sample-time">{{ fmtDuration(speakElapsed()) }} / {{ fmtDuration(estimateSeconds()) }}</span>
+          <!-- ⚠️ 2026-09-16(Forrest 本轮):读完定格后秒数也要显示满值,
+               不能因为 elapsed 不再清零而停在中间数字。speakDone 时直接展示总量。 -->
+          <span class="sample-time">{{ fmtDuration(speakDone() ? estimateSeconds() : speakElapsed()) }} / {{ fmtDuration(estimateSeconds()) }}</span>
 
           <!-- 实际使用的引擎标记:azure 回退到浏览器时必须显示,避免误以为听到的是 Azure 人声 -->
-          @if (ttsNote()) {
+          <!-- ⚠️ 2026-09-16(Forrest 本轮):**不要**在示范朗读条上显示
+               "Azure 神经语音(服务端合成)"这类引擎标签 —— 用户只想看进度,
+               不关心底层用的哪个引擎。
+               但**回退类提示必须保留**(Azure 未配/失败→已用浏览器语音),
+               否则用户会以为听到的是 Azure 人声 —— 那是诚实红线。
+               所以这里只在 note 是"回退/失败"性质时才渲染。 -->
+          @if (showTtsNote()) {
             <span class="tts-note" [title]="ttsNote()">{{ ttsNote() }}</span>
           }
 
@@ -272,6 +280,31 @@
              居中主体 = 上圆按钮 + 下小字(垂直排布,严禁并排);
              右侧 = 「点击进行AI评分」白底胶囊 + 圆形重置。 -->
         <div class="rec-zone">
+          <!-- ⚠️ 2026-09-16(Forrest 本轮):录完音后必须出现"提交"按钮。
+               流程:录音中 → 点结束 → 出现提交/丢弃 → 点提交才进下方列表。
+               这样"录音完点结束没任何反应"的问题就不存在了。 -->
+          @if (recorder.pendingTake(); as pt) {
+            <div class="pending-take">
+              <div class="pt-info">
+                <mat-icon>graphic_eq</mat-icon>
+                <span>{{ t('practice.pendingTake') }} · {{ fmtDuration(pt.duration) }}</span>
+              </div>
+              <button class="pt-play" (click)="previewPending()"
+                      [matTooltip]="t('practice.recPlay')">
+                <mat-icon>{{ previewingPending() ? 'pause' : 'play_arrow' }}</mat-icon>
+              </button>
+              <button class="pt-submit" (click)="submitPending()"
+                      [matTooltip]="t('practice.submitTakeTip')">
+                <mat-icon>check</mat-icon>
+                <span>{{ t('practice.submitTake') }}</span>
+              </button>
+              <button class="pt-discard" (click)="discardPending()"
+                      [matTooltip]="t('practice.discardTake')">
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            </div>
+          }
+
           <div class="rec-center">
             @if (!recorder.recording() && !activeTake()) {
               <button class="big-round" (click)="startRecording()">
@@ -291,7 +324,9 @@
 
             <!-- 正下方小字(12px):录音 / Play / 00:00 / 停止 -->
             <span class="rec-label">
-              @if (!recorder.recording() && !activeTake()) {
+              @if (recorder.pendingTake()) {
+                {{ t('practice.pendingHint') }}
+              } @else if (!recorder.recording() && !activeTake()) {
                 {{ t('practice.recIdle') }}
               } @else if (recorder.recording()) {
                 {{ t('practice.recordingHint') }}
@@ -344,9 +379,14 @@
                    scoreActiveTake),重复出现只会让人不知道该点哪个。
                    现保留唯一的 run ai scoring 入口。 -->
 
+              <!-- ⚠️ 2026-09-16(Forrest 本轮):Retry 之前一直不可点
+                   (disabled 绑 activeTake,未选中就永灰)。
+                   改为:始终可点 —— 按下后**重新拉取下方录音/评分列表**,
+                   同时若已有当前作品则重录一遍。
+                   "刷新下面的内容"是 Forrest 的明确诉求。 -->
               <button mat-stroked-button class="retry-btn"
-                      [disabled]="!activeTake()" (click)="retryTake()"
-                      [matTooltip]="activeTake() ? t('practice.retryTip') : t('practice.retryPickFirst')">
+                      (click)="retryTake()"
+                      [matTooltip]="t('practice.retryTip')">
                 <mat-icon>restart_alt</mat-icon>
                 <span>{{ t('practice.retry') }}</span>
               </button>
@@ -582,7 +622,12 @@
                   @for (w of sc.words; track $index) {
                     <div class="wg-cell">
                       <span class="wg-word">{{ w.word }}</span>
-                      <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
+                      <!-- ⚠️ 2026-09-16:无词级数据就显示 "—",不显示误导性的 0.0 -->
+                      @if (hasWordScore(w)) {
+                        <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
+                      } @else {
+                        <span class="wg-score na">{{ t('common.na') }}</span>
+                      }
                     </div>
                   }
                 </div>

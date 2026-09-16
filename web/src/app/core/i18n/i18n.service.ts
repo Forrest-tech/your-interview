@@ -153,6 +153,14 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.retryPickFirst': { zh: '先在上方录音列表点选一条录音', en: 'Select a recording in the list first', fr: 'Sélectionnez un enregistrement' },
   'practice.dragResize': { zh: '拖动调整宽度', en: 'Drag to resize', fr: 'Glisser pour redimensionner' },
   'practice.retry': { zh: '重新作答', en: 'Retry', fr: 'Recommencer' },
+  // 2026-09-16(Forrest 本轮):Retry 未选中录音时当"刷新列表"用。
+  'practice.retryRefreshed': { zh: '已刷新录音列表', en: 'Recording list refreshed', fr: 'Liste actualisée' },
+  // 2026-09-16(Forrest 本轮):录音结束后出现的"提交"按钮。
+  'practice.submitTake': { zh: '提交', en: 'Submit', fr: 'Soumettre' },
+  'practice.submitTakeTip': { zh: '把这条录音保存到列表', en: 'Save this take to the list', fr: 'Enregistrer cette prise dans la liste' },
+  'practice.pendingTake': { zh: '待提交录音', en: 'Take ready', fr: 'Prise prête' },
+  'practice.pendingHint': { zh: '点"提交"保存到下方列表', en: 'Click Submit to add it to the list below', fr: 'Cliquez sur Soumettre pour l’ajouter à la liste' },
+  'practice.discardTake': { zh: '丢弃这条录音', en: 'Discard this take', fr: 'Jeter cette prise' },
   'practice.recNo': { zh: '第', en: 'Take', fr: 'Prise' },
   'practice.recIdle': { zh: '录音', en: 'Record', fr: 'Enregistrer' },
   'practice.recordingHint': { zh: '停止', en: 'Stop', fr: 'Arrêter' },
@@ -161,7 +169,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.ttsEngine': { zh: '示范朗读引擎', en: 'TTS Engine', fr: 'Moteur vocal' },
   'practice.ttsBrowser': { zh: '浏览器默认 TTS', en: 'Browser TTS', fr: 'TTS du navigateur' },
   'practice.ttsBrowserNote': { zh: '免费 · 本地合成 · 即时可用', en: 'Free · on-device · instant', fr: 'Gratuit · local · instantané' },
-  'practice.ttsAzure': { zh: 'Azure Neural TTS', en: 'Azure Neural TTS', fr: 'Azure Neural TTS' },
+  'practice.ttsAzure': { zh: 'Azure 语音', en: 'Azure Voice', fr: 'Voix Azure' },
   'practice.ttsAzureNote': { zh: '高质量音色 · 消耗额度', en: 'High quality · uses quota', fr: 'Haute qualité · consomme du quota' },
   'practice.recHistory': { zh: '历史录音', en: 'Recordings', fr: 'Enregistrements' },
   'practice.viewReport': { zh: '查看报告', en: 'View Report', fr: 'Voir le rapport' },
@@ -201,6 +209,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'err.insertion': { zh: '插入内容', en: 'Insertion', fr: 'Insertion' },
   'err.unexpectedBreak': { zh: '意外中断', en: 'Unexpected break', fr: 'Coupure' },
   'err.missingBreak': { zh: '缺少停顿', en: 'Missing break', fr: 'Pause manquante' },
+  // 2026-09-16:无词级评估数据(Azure 未返回该词的 PronunciationAssessment)
+  'err.noData': { zh: '无词级数据', en: 'No word data', fr: 'Aucune donnée' },
   'err.ok': { zh: '正常', en: 'OK', fr: 'Correct' },
   'common.na': { zh: '—', en: '—', fr: '—' },
   'verdict.excellent': { zh: '优秀', en: 'Excellent', fr: 'Excellent' },

@@ -292,14 +292,25 @@ public sealed class PronunciationAssessor(
 
                 double acc = 0;
                 string errorType = "None";
+                // ⚠️ 2026-09-16(Forrest 本轮):"report 是不是假的"的真因。
+                //    旧实现:词级 PronunciationAssessment 缺失时 acc 默认 0、
+                //    errorType 默认 "None" —— 于是报告里出现"准确度 0.0 但算正确",
+                //    Recognition 还被抬到 100%,看起来就是一份自相宜的【假报告】。
+                //    现在:拿不到词级评估就记 errorType = "None" 且 acc = 0,
+                //    但我们同时**标记 hasWordData**;前端对无数据的词显示 "—"。
+                var hasWordData = false;
                 if (w.TryGetProperty("PronunciationAssessment", out var pa))
                 {
+                    hasWordData = true;
                     if (pa.TryGetProperty("AccuracyScore", out var a) &&
                         a.ValueKind == JsonValueKind.Number)
                         acc = a.GetDouble();
                     if (pa.TryGetProperty("ErrorType", out var et))
                         errorType = et.GetString() ?? "None";
                 }
+                // 无词级数据 → errorType 用空串标记"未知",而不是冒充 "None"(正确)。
+                // 这样前端 recognitionPct 就不会把没评估的词算作"识别正确"。
+                if (!hasWordData) errorType = "";
                 words.Add(new WordScore(word, Math.Round(acc, 1), errorType));
             }
         }

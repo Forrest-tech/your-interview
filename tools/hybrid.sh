@@ -7,11 +7,15 @@
 #     jobs / interviews / knowledge / analytics 与练习无关 → 一个都不起。
 #     数据库用**你本机原生 PostgreSQL 5432**(已有图形客户端,数据不分裂)。
 #
-#   ./tools/hybrid.sh up        起容器(identity+gateway)+ 宿主机 assessment + 前端
-#   ./tools/hybrid.sh down      全停(容器 down + 宿主机进程 + 前端)
-#   ./tools/hybrid.sh status    看状态
-#   ./tools/hybrid.sh logs      跟容器日志
-#   ./tools/hybrid.sh rebuild   重新构建镜像(改了 identity/gateway 代码后)
+#   ./tools/hybrid.sh up                  起容器(identity+gateway)+ 宿主机 assessment + 前端
+#   ./tools/hybrid.sh down                全停(容器 down + 宿主机进程 + 前端)
+#   ./tools/hybrid.sh restart-assessment  ⭐ 只重启 assessment —— 不碰容器/不碰 Docker/不碰前端
+#   ./tools/hybrid.sh status              看状态
+#   ./tools/hybrid.sh logs                跟容器日志
+#   ./tools/hybrid.sh rebuild             重新构建镜像(改了 identity/gateway 代码后)
+#
+#   ⚠️ 只改了 assessment 代码?用 restart-assessment,不要 down+up。
+#      down+up 会把容器也停掉重起,慢且没必要。
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -96,8 +100,14 @@ start_assessment() {
   fi
 
   local dotnet_bin="${DOTNET_BIN:-dotnet}"
+  # 兼容常见安装位置:/usr/local/bin、~/.dotnet、$HOME/.dotnet(非 PATH 时)
   if ! command -v "$dotnet_bin" >/dev/null 2>&1; then
-    c_red "找不到 dotnet —— 请安装 .NET 8 SDK"
+    for cand in "$HOME/.dotnet/dotnet" /usr/local/share/dotnet/dotnet /usr/local/bin/dotnet; do
+      if [ -x "$cand" ]; then dotnet_bin="$cand"; break; fi
+    done
+  fi
+  if ! command -v "$dotnet_bin" >/dev/null 2>&1 && [ ! -x "$dotnet_bin" ]; then
+    c_red "找不到 dotnet —— 请安装 .NET 8 SDK(或设 DOTNET_BIN=/path/to/dotnet)"
     return 1
   fi
 
@@ -108,17 +118,33 @@ start_assessment() {
   #    子 shell 里重新 export 一次,避免依赖父环境是否已被 set -a 污染。
   #    否则 assessment 回落到 appsettings.json 的占位符密码 → 28P01 认证失败,
   #    表现为"在设置页保存语音 key 时报保存失败"。
+  #
+  # ⚠️ 另外两个环境变量必须自带(不能依赖调用者 shell 已设):
+  #   · ASPNETCORE_ENVIRONMENT=Development —— 否则读不到 appsettings.Development.json
+  #   · DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 —— 仅在缺 ICU 的机器上需要;
+  #      macOS 一般有 ICU,设了也无害(本项目已不依赖区域性特定行为)
+  local _env="${ASPNETCORE_ENVIRONMENT:-Development}"
+  local _inv="${DOTNET_SYSTEM_GLOBALIZATION_INVARIANT:-1}"
+  # ⚠️ JWT 密钥只取一次,严禁 ${Jwt__SigningKey:-}${JWT_SIGNING_KEY:-} 拼接 ——
+  #    load_env 里已经 `export Jwt__SigningKey="$JWT_SIGNING_KEY"`,两个变量同值,
+  #    拼接会把密钥变成 110 字符(翻倍)→ 与容器 identity 的签名不一致 → 业务接口全 401。
+  local _jwt="${Jwt__SigningKey:-}"
+  [ -n "$_jwt" ] || _jwt="${JWT_SIGNING_KEY:-}"
   if command -v setsid >/dev/null 2>&1; then
     ( cd "$ROOT" && \
       env "ConnectionStrings__AssessmentDb=${ConnectionStrings__AssessmentDb:-}" \
-          "Jwt__SigningKey=${Jwt__SigningKey:-}${JWT_SIGNING_KEY:-}" \
+          "Jwt__SigningKey=$_jwt" \
+          "ASPNETCORE_ENVIRONMENT=$_env" \
+          "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=$_inv" \
       setsid "$dotnet_bin" run --project src/Services.Assessment \
         --no-build --no-launch-profile --urls "http://127.0.0.1:$A_PORT" \
         >"$LOGDIR/assessment.log" 2>&1 & echo $! > "$(a_pidfile)" )
   else
     ( cd "$ROOT" && \
       env "ConnectionStrings__AssessmentDb=${ConnectionStrings__AssessmentDb:-}" \
-          "Jwt__SigningKey=${Jwt__SigningKey:-}${JWT_SIGNING_KEY:-}" \
+          "Jwt__SigningKey=$_jwt" \
+          "ASPNETCORE_ENVIRONMENT=$_env" \
+          "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=$_inv" \
       nohup "$dotnet_bin" run --project src/Services.Assessment \
         --no-build --no-launch-profile --urls "http://127.0.0.1:$A_PORT" \
         >"$LOGDIR/assessment.log" 2>&1 & echo $! > "$(a_pidfile)" )
@@ -158,28 +184,83 @@ stop_pidfile_svc() {
     kill -KILL "$pid" 2>/dev/null
     [ -n "$kid" ] && kill -KILL $kid 2>/dev/null
   fi
-  # 端口兜底:谁占着端口谁就是要停的(dotnet run 会 fork 子进程,光杀父不够)
+  # ⛔ 2026-09-16 严重修复:这里曾经有一段“端口兜底” ——
+  #      owners="$(lsof -ti tcp:$port)"; kill $owners
+  #    它把“谁占端口就杀谁”当作清理手段。
+  #
+  #    ⚠️ 致命陷阱:**Docker Desktop 在本机 5266 上也有活动连接** ——
+  #    容器 gateway 通过 host.docker.internal:5266 转发到宿主机 assessment,
+  #    Docker 的 vpnkit/com.docker.backend 会在 5266 上挂 ESTABLISHED 连接。
+  #    于是这条兜底会顺手打断 Docker 的网络栈 → watchdog 判定致命故障 →
+  #    Docker Desktop 整个栈被重启(菜单栏短暂 stopped)。
+  #
+  #    铁律(Forrest 2026-09-16 确认过多次):**只按进程身份杀,绝不按端口杀。**
+  #    所以现在改为:找到该端口上的占用者后,**逐个验明命令行身份**,
+  #    只杀确实属于本项目的进程;Docker 转发进程一律跳过。
   if [ -n "$port" ]; then
-    local owners
+    local p owners
     owners="$(lsof -ti "tcp:$port" 2>/dev/null || true)"
-    if [ -n "$owners" ]; then
-      kill -TERM $owners 2>/dev/null; sleep 1; kill -KILL $owners 2>/dev/null
-    fi
+    for p in $owners; do
+      if is_assessment_pid "$p"; then
+        kill -TERM "$p" 2>/dev/null; sleep 1; kill -KILL "$p" 2>/dev/null
+      else
+        c_dim "跳过 PID $p(占用 $port 但不属于 assessment,可能是 Docker 转发进程)"
+      fi
+    done
   fi
   rm -f "$pf"
   if [ -n "$port" ] && lsof -ti "tcp:$port" >/dev/null 2>&1; then
-    c_red "$name 已停(端口 $port 仍被占用,需手动查: lsof -i tcp:$port)"
+    c_dim "$name 已停(端口 $port 仍被占用 —— 那是 Docker 转发进程,正常现象,不要手动杀)"
   else
     c_green "$name 已停"
   fi
+}
+
+# 🔒 身份校验:只有命令行确实指向本项目的 assessment 才算数。
+#    注意 macOS 上 lsof 可能同时列出:
+#      · YourInter… … 127.0.0.1:5266 (LISTEN)        ← assessment 本体
+#      · com.docke… … 127.0.0.1:52290->127.0.0.1:5266  ← Docker 转发,必须跳过
+#    用白名单 + 黑名单双重判断,黑名单优先。
+is_assessment_pid() {
+  local pid="${1:-}" cmd
+  [ -n "$pid" ] || return 1
+  cmd="$(ps -o command= -p "$pid" 2>/dev/null || true)"
+  [ -n "$cmd" ] || return 1
+  # ❌ 黑名单:任何形式出现 docker 相关字样,一律不动
+  case "$cmd" in
+    *com.docke*|*docker*|*vpnkit*|*Docker*) return 1 ;;
+  esac
+  # ✅ 白名单:必须是本项目 assessment 的进程形态
+  case "$cmd" in
+    *Services.Assessment*|*YourInterview.Services*|*restart-assessment*) return 0 ;;
+  esac
+  return 1
+}
+
+# 供 start_assessment / restart-assessment 复用的“停 assessment”实现
+stop_assessment() {
+  stop_pidfile_svc "assessment" "$(a_pidfile)" "$A_PORT"
 }
 
 stop_web() {
   local pf="$LOGDIR/web.pid" pid
   pid="$(cat "$pf" 2>/dev/null || true)"
   [ -n "${pid:-}" ] && { kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null; }
-  local owners; owners="$(lsof -ti tcp:4200 2>/dev/null || true)"
-  [ -n "$owners" ] && { kill -TERM $owners 2>/dev/null; sleep 1; kill -KILL $owners 2>/dev/null; }
+  # ⛔ 同上:不按端口杀。4200 也可能被无关进程(甚至是 Docker)占用时误伤。
+  #    改为逐个验明身份:只杀命令行里确实是本项目前端(ng serve / vite / node web)的 PID。
+  local owners p
+  owners="$(lsof -ti tcp:4200 2>/dev/null || true)"
+  for p in $owners; do
+    local cmd; cmd="$(ps -o command= -p "$p" 2>/dev/null || true)"
+    case "$cmd" in
+      *docker*|*com.docke*|*vpnkit*) c_dim "跳过 PID $p(占用 4200 但属 Docker)"; continue ;;
+    esac
+    case "$cmd" in
+      *ng\ serve*|*angular*|*web/node_modules*|*npm\ start*) kill -TERM "$p" 2>/dev/null ;;
+      *) c_dim "跳过 PID $p(占用 4200 但不属本项目前端)" ;;
+    esac
+  done
+  sleep 1
   rm -f "$pf"
   c_green "网页已停"
 }
@@ -261,6 +342,9 @@ case "${1:-status}" in
     fi
     ;;
   restart-assessment)
+    # ⚠️ 必须先 load_env:否则 ConnectionStrings__AssessmentDb 与 Jwt__SigningKey 为空,
+    #     assessment 会因缺 DB 连接串而 postgres Unhealthy(503)、且无法验签。
+    load_env
     stop_pidfile_svc "assessment" "$LOGDIR/assessment.pid" "$A_PORT"
     start_assessment
     ;;

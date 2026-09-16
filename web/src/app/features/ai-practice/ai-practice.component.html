@@ -5,7 +5,8 @@
 
        卡片①  .exam-card   主练习与作答控制
                ①-1 .card-head        标题栏(左:分类 + 题名 / 右:编辑 ✏️)
-               ①-2 .card-tools       缩放胶囊 [-] 280% [+] + 标记下拉 [⚑ 标记 ▾]
+               ①-2 .header-actions-group  缩放胶囊 [-] 280% [+] + 标记下拉 [⚑ 标记 ▾]
+                                       (同一横向 flex 容器,不重叠)
                ①-3 .text-box         核心待读文本框(内嵌灰边大框,无衬线 1.8)
                ①-4 .audio-stack      音频控制器组合(70%/max 680px 居中)
                                        · .sample-pill 浅蓝胶囊 示范朗读条
@@ -123,11 +124,14 @@
           }
         </header>
 
-        <!-- ①-3 核心待读文本框(工具条 .card-tools 绝对定位在右上角,见 SCSS) -->
+        <!-- ①-3 核心待读文本框。工具条不再绝对定位(会与文本框内容叠层),
+             改为「标题行内右侧的横向 flex 组」——见 .header-actions-group。 -->
         <div class="text-box" [style.--read-fs.px]="readFontPx()">
 
-          <!-- ①-2 工具栏小组件:缩放胶囊 + 标记下拉(浮在文本框右上角) -->
-          <div class="card-tools">
+          <!-- ①-2 工具栏小组件:缩放胶囊 + 标记下拉
+               2026-09-16 第二十轮:两者原本各自 absolute → 互相堆叠。
+               现改为同一横向 flex 容器 .header-actions-group,水平并列不重叠。 -->
+          <div class="header-actions-group">
             <div class="zoom-controls">
               <button class="zoom-btn" (click)="decreaseFont()"
                       [disabled]="!canDecreaseFont()"
@@ -289,8 +293,10 @@
             </button>
           </div>
 
-          <!-- 录音交互条(浅绿胶囊):中间绿色麦克风(带文字「录音」)
-               + 右侧「点击进行AI评分」胶囊 + 最右重置刷新图标 -->
+          <!-- 录音交互区(浅绿底):2026-09-16 第二十轮 —— 彻底去掉横向
+               「麦克风 + Start recording」胶囊条,改为上下垂直居中:
+               上方 = 圆形绿色大麦克风(直径 46px),下方 = 灰色小字「录音」。
+               右侧保留「Run AI Scoring」胶囊 + 重置刷新按钮。 -->
           <div class="rec-pill" [class.has-take]="!!activeTake()">
 
             <span class="rec-label">
@@ -307,20 +313,23 @@
 
             <span class="spacer"></span>
 
-            <!-- 中间:绿色大麦克风按钮 + 紧邻文字「录音」 -->
+            <!-- 中间:垂直布局 —— 上圆形绿麦 / 下灰色小字 -->
             <div class="rec-center">
               @if (!recorder.recording() && !activeTake()) {
-                <button class="big-round" (click)="startRecording()">
+                <button class="big-round" (click)="startRecording()"
+                        [matTooltip]="t('practice.record')">
                   <span class="outer"><mat-icon>mic</mat-icon></span>
-                  <span class="br-text">{{ t('practice.record') }}</span>
+                  <span class="br-text">{{ t('practice.recIdle') }}</span>
                 </button>
               } @else if (recorder.recording()) {
-                <button class="big-round recording" (click)="stopRecording()">
+                <button class="big-round recording" (click)="stopRecording()"
+                        [matTooltip]="t('practice.stopRec')">
                   <span class="outer"><span class="rec-dot"></span></span>
                   <span class="br-text">{{ t('practice.stopRec') }}</span>
                 </button>
               } @else {
-                <button class="big-round" (click)="togglePlayActive()">
+                <button class="big-round" (click)="togglePlayActive()"
+                        [matTooltip]="activePlaying() ? t('practice.recPaused') : t('practice.recPlay')">
                   <span class="outer">
                     <mat-icon>{{ activePlaying() ? 'pause' : 'play_arrow' }}</mat-icon>
                   </span>

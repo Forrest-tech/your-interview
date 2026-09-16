@@ -229,9 +229,9 @@
 
           <!-- 示范朗读条(浅蓝胶囊):标签 + 进度 + 时间 + 倍速 + 引擎 + 圆形播放键 -->
           <div class="sample-pill">
-            <span class="sample-label">
+            <!-- ★ 第二十五轮:删除 "Sample Reading" 文本,只保留喇叭图标 -->
+            <span class="sample-label" [matTooltip]="t('practice.sampleReading')">
               <mat-icon>volume_up</mat-icon>
-              <span>{{ t('practice.sampleReading') }}</span>
             </span>
 
             <div class="sample-track">
@@ -317,17 +317,17 @@
             <!-- 居中:圆形绿麦 + 紧贴右侧的绿色小字(第二十三轮:横向排布,
                  文字样式沿用原左侧标签 13px/500/#047857)。 -->
             <div class="rec-center">
+              <!-- ★ 第二十五轮:胶囊内禁止任何单词文本 → br-text 已全部移除;
+                   状态语义改由 matTooltip + 图标本身承载(信息不丢)。 -->
               @if (!recorder.recording() && !activeTake()) {
                 <button class="big-round" (click)="startRecording()"
                         [matTooltip]="t('practice.record')">
                   <span class="outer"><mat-icon>mic</mat-icon></span>
-                  <span class="br-text">{{ t('practice.recIdle') }}</span>
                 </button>
               } @else if (recorder.recording()) {
                 <button class="big-round recording" (click)="stopRecording()"
                         [matTooltip]="t('practice.stopRec')">
                   <span class="outer"><span class="rec-dot"></span></span>
-                  <span class="br-text">{{ t('practice.stopRec') }}</span>
                 </button>
               } @else {
                 <button class="big-round" (click)="togglePlayActive()"
@@ -335,7 +335,6 @@
                   <span class="outer">
                     <mat-icon>{{ activePlaying() ? 'pause' : 'play_arrow' }}</mat-icon>
                   </span>
-                  <span class="br-text">{{ activePlaying() ? t('practice.recPaused') : t('practice.recPlay') }}</span>
                 </button>
               }
             </div>

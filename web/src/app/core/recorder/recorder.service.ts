@@ -543,13 +543,16 @@ export class RecorderService {
 
     // 唯一路径:真实后端。没有模拟分支。
     try {
+      this.decodeError.set('');
       const samples = await this.decodeToPcm(rec.blob);
       if (!samples) {
         // 解不出 PCM 就直说。以前这里会偷偷造分,现在不做了。
-        this.patch(id, {
-          grading: false,
-          error: '无法解析该录音格式(需 webm/opus 或 wav)。请重新录制。'
-        });
+        // ★ 第二十八轮:文案不再笼统归罪于"格式" —— 改为回传**真实原因**
+        //   (Safari 的 decodeAudioData 兼容问题与录制格式无关,
+        //    笼统说"需 webm/opus 或 wav"会把人往错误方向引)。
+        const why = this.decodeError()
+          || '无法解析该录音格式。请重新录制,或改用 Chrome 打开本页。';
+        this.patch(id, { grading: false, error: why });
         return;
       }
 
@@ -613,25 +616,92 @@ export class RecorderService {
   private async decodeToPcm(
     blob: Blob
   ): Promise<{ data: number[]; rate: number } | null> {
-    try {
-      const Ctor = window.AudioContext
-        || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctor) return null;
+    const Ctor = window.AudioContext
+      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
 
-      const ctx = new Ctor();
+    const ctx = new Ctor();
+    try {
       const buf = await blob.arrayBuffer();
-      const audio = await ctx.decodeAudioData(buf);
+
+      // ============================================================
+      // ★★ 第二十八轮(Forrest 真机:点 Run AI Scoring 报
+      //    "无法解析该录音格式(需 webm/opus 或 wav)。请重新录制。")★★
+      //
+      // 真根因:旧写法 `await ctx.decodeAudioData(buf)` 用的是
+      //   **Promise 形式**,而 Safari / 旧 WebKit **不支持 Promise 形式**,
+      //   只支持**回调形式**。于是 await 立刻拿到 undefined,
+      //   紧接着 `audio.getChannelData(0)` 抛 TypeError,
+      //   被外层 catch 吞掉 → 返回 null → 界面报"格式无法解析"。
+      //
+      //   ⚠️ 这与你实际录的是什么格式【完全无关】——
+      //   webm/opus 也好,mp4 也好,在 Safari 上统统解不开。
+      //
+      // 修法:两种调用形式都兼容 ——
+      //   优先走 Promise(Chrome/Firefox/新版 Safari);
+      //   若返回值不是 Promise(Safari 旧式),回退到回调 + 手写 Promise。
+      // ============================================================
+      const audio = await RecorderService.decodeCompat(ctx, buf);
 
       // 取单声道(多声道就取第一轨 —— 语音评测不需要立体声)
       const ch = audio.getChannelData(0);
       const data = Array.from(ch);
       const rate = audio.sampleRate;
 
-      await ctx.close();
       return { data, rate };
-    } catch {
+    } catch (e) {
+      // 不静默:把真实原因留给调用方诊断(仍返回 null 以保持既有契约)
+      this.decodeError.set(RecorderService.describeDecodeError(e));
       return null;
+    } finally {
+      try { await ctx.close(); } catch { /* 已关闭/不支持 close,忽略 */ }
     }
+  }
+
+  /**
+   * ★ 第二十八轮:兼容 Safari 的 decodeAudioData 调用封装。
+   *
+   * 背景:规范说 decodeAudioData 返回 Promise,但 Safari 长期只实现
+   * **回调形式**,调用后返回 undefined。旧代码 await 一个 undefined,
+   * 拿到 undefined 再取声道 → TypeError → 被吞成"格式不支持"。
+   *
+   * 这里两种形式都试,任一成功即可。失败时抛错,由上层如实上报。
+   */
+  private static decodeCompat(ctx: BaseAudioContext, buf: ArrayBuffer): Promise<AudioBuffer> {
+    return new Promise<AudioBuffer>((resolve, reject) => {
+      let settled = false;
+      const ok = (b: AudioBuffer) => { if (!settled) { settled = true; resolve(b); } };
+      const bad = (e: unknown) => { if (!settled) { settled = true; reject(e); } };
+
+      try {
+        // 形式一:Promise(Chrome / Firefox / 新版 Safari)
+        const maybe = ctx.decodeAudioData(buf, ok, bad) as unknown;
+        if (maybe && typeof (maybe as Promise<AudioBuffer>).then === 'function') {
+          (maybe as Promise<AudioBuffer>).then(ok, bad);
+        }
+        // 形式二:回调(Safari 旧式)—— 上面已把 ok/bad 传进去了。
+        //   若某种实现既不返回 Promise 也不回调,则由下面的超时兜底。
+        else if (maybe instanceof AudioBuffer) {
+          ok(maybe);
+        }
+      } catch (e) {
+        bad(e);
+      }
+
+      // 兜底:3 秒没有任何结果 → 明确报"解码超时",而不是无限挂起
+      setTimeout(() => bad(new Error('decodeAudioData 超时(3s)未返回结果')), 3000);
+    });
+  }
+
+  /** 把解码异常翻译成用户能看懂、且能指向真因的中文说明。 */
+  private static describeDecodeError(e: unknown): string {
+    const m = String((e as { message?: string } | null)?.message ?? e ?? '');
+    if (/timeout|超时/i.test(m)) return '音频解码超时:浏览器未能解析该录音。请重录一次。';
+    if (/EncodingError|Unable to decode|decode/i.test(m)) {
+      return '浏览器无法解码该录音(EncodingError)。'
+        + '常见于 Safari 录制的音轨格式不被 Web Audio 支持 —— 请重录,或改用 Chrome 打开本页。';
+    }
+    return '音频解码失败:' + m.slice(0, 120);
   }
 
   /**
@@ -671,6 +741,9 @@ export class RecorderService {
         String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 160))
     });
   }
+
+  /** ★ 第二十八轮:上一次解码失败的真实原因(不静默)。 */
+  readonly decodeError = signal('');
 
   /** ★ 第二十七轮:等待补写库的评分(录音上传成功后统一补写)。 */
   readonly pendingScores = signal<{ id: string; referenceText: string }[]>([]);

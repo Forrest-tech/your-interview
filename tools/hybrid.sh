@@ -111,6 +111,49 @@ start_assessment() {
     return 1
   fi
 
+  # ------------------------------------------------------------------
+  # ⚠️ 关键防御(2026-09-16 Forrest Mac 实测踩坑):
+  #    --no-build 会无条件信任 bin/ 里已有的东西。若 bin/ 里的
+  #    apphost 是**别的操作系统构建出来的**(典型:在 Linux 沙箱/CI 里
+  #    build 过一次,产物随仓库同步到 macOS),启动时会报:
+  #      System.ComponentModel.Win32Exception (8): Exec format error
+  #    运行环境无法执行异构二进制。
+  #
+  #    判据:Linux ELF 魔数 = 7f 45 4c 46,hex 串里含 ' 45 4c 46';
+  #          macOS Mach-O = cf fa ed fe / fe ed fa cf。
+  #    这里检测「产物架构/OS 与当前机器不一致」→ 自动改为**带 build** 启动。
+  #    绝不静默失败,也绝不让用户自己去猜。
+  # ------------------------------------------------------------------
+  local _app="$ROOT/src/Services.Assessment/bin/Debug/net8.0/YourInterview.Services.Assessment"
+  local _need_build=0
+  if [ -f "$_app" ]; then
+    # 取文件头 16 字节 hex
+    local _hdr
+    _hdr="$(od -A n -t x1 -N 16 "$_app" 2>/dev/null | tr -d ' \n')"
+    case "$_hdr" in
+      7f454c46*)
+        # 当前机器是 macOS(非 Linux)→ ELF 无法执行 → 必须重建
+        if [ "$(uname -s)" != "Linux" ]; then
+          c_red "⚠️ bin/ 里的 assessment 是 Linux 产物(ELF),在 $(uname -s) 上无法执行 —— 将自动重新构建"
+          _need_build=1
+        fi
+        ;;
+    esac
+  else
+    _need_build=1
+  fi
+
+  if [ "$_need_build" = "1" ]; then
+    c_dim "正在构建 assessment(首次或架构不符)…"
+    if ! ( cd "$ROOT" && "$dotnet_bin" build src/Services.Assessment -v q --nologo ) ; then
+      c_red "✗ assessment 构建失败 —— 请先修复编译错误"
+      return 1
+    fi
+    c_green "✓ assessment 构建完成"
+  fi
+  local _no_build_flag="--no-build"
+  [ "$_need_build" = "1" ] && _no_build_flag=""
+
   c_dim "assessment 启动中 (port $A_PORT) …"
   # ⚠️ macOS 没有 setsid → 探测后回退 nohup
   # ⚠️ --no-launch-profile:项目 launchSettings 的 applicationUrl/launchBrowser 会跟 --urls 打架
@@ -137,7 +180,7 @@ start_assessment() {
           "ASPNETCORE_ENVIRONMENT=$_env" \
           "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=$_inv" \
       setsid "$dotnet_bin" run --project src/Services.Assessment \
-        --no-build --no-launch-profile --urls "http://127.0.0.1:$A_PORT" \
+        $_no_build_flag --no-launch-profile --urls "http://127.0.0.1:$A_PORT" \
         >"$LOGDIR/assessment.log" 2>&1 & echo $! > "$(a_pidfile)" )
   else
     ( cd "$ROOT" && \
@@ -146,7 +189,7 @@ start_assessment() {
           "ASPNETCORE_ENVIRONMENT=$_env" \
           "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=$_inv" \
       nohup "$dotnet_bin" run --project src/Services.Assessment \
-        --no-build --no-launch-profile --urls "http://127.0.0.1:$A_PORT" \
+        $_no_build_flag --no-launch-profile --urls "http://127.0.0.1:$A_PORT" \
         >"$LOGDIR/assessment.log" 2>&1 & echo $! > "$(a_pidfile)" )
   fi
 

@@ -324,6 +324,24 @@
                 提交按钮与 Retry 并排放在圆按钮正下方 —— 没录音时置灰,
                 录好(有待提交 take)才激活。 -->
         <div class="rec-zone">
+          <!-- ⚠️ 2026-09-16(Forrest 本轮明确):「绿色的 Record 放中间位置」。
+               布局改为三区对中:左 slot(状态小字) / 中间(Record 圆按钮) / 右 slot(评分胶囊 + 重置)。
+               左、右 slot 各 flex:1 1 0 → 中间的 .rec-center 恒定落在胶囊正中,
+               与左右内容多少无关。 -->
+          <div class="zone-left">
+            <span class="rec-label">
+              @if (recorder.pendingTake(); as pt) {
+                {{ t('practice.pendingHint') }} · {{ fmtDuration(pt.duration) }}
+              } @else if (!recorder.recording() && !activeTake()) {
+                {{ t('practice.recIdle') }}
+              } @else if (recorder.recording()) {
+                {{ t('practice.recordingHint') }}
+              } @else {
+                {{ activePlaying() ? t('practice.recPaused') : t('practice.recPlay') }}
+              }
+            </span>
+          </div>
+
           <div class="rec-center">
             @if (!recorder.recording() && !activeTake()) {
               <button class="big-round" (click)="startRecording()">
@@ -341,24 +359,12 @@
               </button>
             }
 
-            <!-- 正下方小字(12px):录音 / Play / 00:00 / 停止 -->
-            <span class="rec-label">
-              @if (recorder.pendingTake(); as pt) {
-                {{ t('practice.pendingHint') }} · {{ fmtDuration(pt.duration) }}
-              } @else if (!recorder.recording() && !activeTake()) {
-                {{ t('practice.recIdle') }}
-              } @else if (recorder.recording()) {
-                {{ t('practice.recordingHint') }}
-              } @else {
-                {{ activePlaying() ? t('practice.recPaused') : t('practice.recPlay') }}
-              }
-            </span>
-
             <!-- 2026-09-16(Forrest 本轮第 3 条):提交/重录已移到下方 operate 栏,
                    与 Previous / Next 同一行。这里不再保留重复按钮。 -->
           </div>
 
-          <!-- 右侧:评分胶囊 + 重置 -->
+          <!-- 右 slot:评分胶囊 + 重置(靠右) -->
+          <div class="zone-right">
           <div class="zone-side">
             <button class="side-score" [disabled]="!activeTake() || activeTake()?.grading"
                     (click)="scoreActiveTake()">
@@ -370,6 +376,7 @@
                     [disabled]="!activeTake()" (click)="resetTake()">
               <mat-icon>refresh</mat-icon>
             </button>
+          </div>
           </div>
 
           @if (recError()) {

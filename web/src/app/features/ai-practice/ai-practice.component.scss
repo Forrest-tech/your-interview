@@ -578,11 +578,18 @@
         圆按钮与文字用 flex 居中在同一行内。 */
   position: relative;
   box-sizing: border-box;
+  /* 2026-09-16(Forrest 本轮明确):「绿色的 Record 放中间位置」。
+     实现要点:
+       ① Record 必须**真正居中于胶囊**(不是靠 margin 凑),所以用
+          左/右两个 slot 各占 flex:1 1 0,把中间的 .rec-center 顶到正中;
+       ② .rec-center 回到文档流(不再 absolute),否则它无法参与
+          "左右等宽 slot 夹住"的居中计算;
+       ③ 左 slot 内放录音状态小字,右 slot 内放评分胶囊 + 重置。 */
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 10px;
   height: 52px;
   padding: 0 14px;
   margin: 0;
@@ -590,20 +597,43 @@
   background: #f0faf4;
   border: 1px solid #d6f0e0;
 }
+
+/* 左 slot:录音状态小字(空闲 / 录音中 / 播放中 / 待提交) */
+.rec-zone .zone-left {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+/* 右 slot:评分胶囊 + 重置,始终靠右 */
+.rec-zone .zone-right {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
 /* 圆按钮 + 下方小字在 52px 行高里放不下,
    改为横向排:圆按钮在左,文字紧随其后,右侧放评分胶囊。
    ⚠️ 基础 .rec-center 定义在后面(第 1053 行附近)并且是 absolute 定位,
       这里必须用更高优先级把它拉回文档流,否则 52px 行内会高低错位。 */
+/* ★ Record 居中关键:让 .rec-center 回到文档流,并在左右等宽 slot 之间
+   被顶到正中(flex: 0 0 auto + 两侧 flex:1)。 */
 .rec-zone .rec-center.rec-center {
   position: static;
   left: auto;
   top: auto;
   transform: none;
-  margin-right: auto;
+  margin: 0;
+  flex: 0 0 auto;
   flex-direction: row;
   align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
 }
 /* 录音条内:圆按钮 + 文字同行。
    ⚠️ Forrest 要求圆按钮居中、文字在其正下方 —— 但两条音频高度被同时
@@ -621,6 +651,10 @@
   top: auto;
   transform: none;
   flex: 0 0 auto;
+  margin-left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .rec-zone.has-take { background: #edf9f1; }
 

@@ -719,7 +719,7 @@
       缩到 32px,给 52px 行高留出安全余量。 */
 .rec-zone .big-round { flex-direction: row; align-items: center; gap: 8px; }
 .rec-zone .big-round .outer { width: 32px; height: 32px; }
-.rec-zone .big-round .outer mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.rec-zone .big-round .outer mat-icon { font-size: 16px; width: 16px; height: 16px; line-height: 16px; }
 .rec-zone .rec-label { font-size: 12.5px; }
 .rec-zone .zone-side.zone-side {
   position: static;
@@ -797,23 +797,28 @@
 
 /* 圆形主按钮 + 下方标签 */
 .big-round {
-  /* ★ 第二十三轮:改横向 —— 圆形绿麦 32px + 右侧文字并排。
-     (第二十轮的纵向 46px 大圆钮会让录音条比示范朗读条臃肿,已按本轮指令收紧。) */
+  /* ★ 第二十四轮:横向并排(圆钮 32px + 文字),零 position:absolute。
+     height:100% 让内容随胶囊垂直居中;overflow:visible 只作用于按钮本身,
+     真正兜底溢出的是胶囊的 overflow:hidden。 */
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
   border: none;
   background: transparent;
   cursor: pointer;
   flex: 0 0 auto;
   padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .big-round .outer {
-  /* ★ 第二十三轮:32px 圆钮(原 38px),配合录音条压到 52px 与示范朗读条等高。
-     文字改为并排右侧(原纵向堆叠),故不再需要 38+gap+label 的纵向总高。 */
+  /* ★ 第二十四轮:32px 圆钮, flex:0 0 auto 防止被压缩;48px 胶囊内上下各留 8px。 */
   width: 32px;
   height: 32px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: #22a35c;
   color: #fff;
@@ -833,11 +838,14 @@
 /* ★ 第二十三轮:麦克风右侧文字 —— 沿用原左侧标签规范
    (13px / 500 / #047857),紧贴圆钮右侧,不再纵向堆叠。 */
 .br-text {
+  /* ★ 第二十四轮:字号/粗细与左侧 Sample Reading(.sample-label 13px/600)完全对齐;
+     颜色用主题深绿 emerald-700。line-height:1 保证 48px 内不撑高。 */
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: #047857;
   white-space: nowrap;
   line-height: 1;
+  flex: 0 0 auto;
 }
 
 /* 极简标签:只显示"录音 / 00:15 停止 / 回听"几个字 */
@@ -2401,27 +2409,30 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 
 /* ② retry 无效的根因不在 CSS,已在 TS 修(见 retryTake);
    这里保证绝对居中的 rec-center 不被左右元素遮挡点击 */
-/* ★ 第二十三轮:录音按钮组 —— 横向:圆形绿麦 + 紧贴右侧绿色小字。
-   文字样式沿用原左侧 rec-label 规范(13px / 500 / #047857),
-   gap 收紧到 6px 使其"适度贴合"。 */
+/* ★ 第二十四轮:录音按钮组 —— 严格包裹在胶囊内 + 垂直居中 + 水平严格居中。
+   严禁任何 position:absolute(Forrest 本轮明令)。 */
 .rec-center {
   z-index: 1;
   display: flex;
-  align-items: center;
+  align-items: center;      /* 垂直居中 */
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   flex: 0 0 auto;
+  height: 100%;             /* 撑满 48px 胶囊,子元素垂直居中不溢出 */
 }
-/* 左右等宽占位:保证中间麦克风组真正水平居中(vs 右侧操作组) */
+/* 左右等宽占位:保证中间麦克风组相对右侧操作组【绝对居中】。
+   (对应 Forrest 示意里的 <div class="w-36"></div> 占位思想) */
 .rec-hold {
   flex: 1 1 0;
   min-width: 0;
 }
 .audio-stack .rec-pill .rec-side.rec-hold {
   display: flex;
-  align-items: center;
+  align-items: center;      /* 垂直居中 */
   justify-content: flex-end;
   gap: 8px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 .zone-side { z-index: 2; }
 
@@ -2695,12 +2706,14 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 52px;
-  padding: 0 16px;
+  height: 48px;              /* ★ 第二十四轮:两胶囊条统一 48px(Forrest 指令) */
+  min-height: 48px;
+  padding: 0 20px;
   border-radius: 9999px;
   border: 1px solid #dbe7ff;
   background: #eef4ff;
   box-sizing: border-box;
+  overflow: hidden;          /* 双保险:任何子元素绝不溢出胶囊 */
 }
 .audio-stack .sample-pill .sample-label {
   display: inline-flex;
@@ -2792,16 +2805,19 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .audio-stack .rec-pill {
   /* ★ 第二十三轮:与上方 Sample Reading 条高度【完全一致】(同为 52px),
      圆角恢复胶囊;内部一律 align-items:center 垂直居中。 */
+  /* ★ 第二十四轮:与 Sample Reading 完全一致 48px;
+     用 3 段等宽(占位 / 居中组 / 操作组)保证中间绝对居中;
+     overflow:hidden 兜底,麦克风与文字绝不溢出胶囊。 */
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 52px;
-  min-height: 52px;
-  padding: 0 16px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 20px;
   border-radius: 9999px;
   border: 1px solid #d6f0e0;
   background: #f0faf4;
   box-sizing: border-box;
+  overflow: hidden;
 }
 .audio-stack .rec-pill.has-take { background: #e9f8ef; }
 .audio-stack .rec-pill .rec-label {
@@ -2820,17 +2836,21 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
    上 = 圆形绿色大麦克风(直径 46px,#10b981),
    下 = 灰色小字「录音」(12px / #6b7280 / margin-top 4px)。
    旧的横向「麦克风 + Start recording」胶囊条已彻底移除。 */
+/* ★ 第二十四轮:此处原为 flex-direction:column(第二十轮竖排)。本轮改为横向,
+   且必须在这里改 —— 它的特异性(.audio-stack .rec-pill .rec-center = 0,3,0)
+   高于文件末尾的裸 .rec-center(0,1,0)。 */
 .audio-stack .rec-pill .rec-center {
   flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 8px;
+  height: 100%;
 }
 .audio-stack .rec-pill .big-round {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 0;

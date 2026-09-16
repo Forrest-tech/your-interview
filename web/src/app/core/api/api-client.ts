@@ -50,6 +50,41 @@ export class ApiClient {
       .pipe(catchError(this.rethrow));
   }
 
+  /**
+   * POST 并拿回二进制(示范朗读的 MP3 合成结果)。
+   *
+   * 为什么单独一个方法:HttpClient 默认按 JSON 解析响应,
+   * 音频流那样做会直接报解析错。这里显式声明 responseType: 'blob'。
+   */
+  postBlob(path: string, body?: unknown): Observable<Blob> {
+    return this.http.post(this.url(path), body ?? {}, { responseType: 'blob' })
+      .pipe(catchError(this.rethrow));
+  }
+
+  /**
+   * GET 并拿回二进制(录音回放)。
+   *
+   * ★ 第二十六轮:这个方法是"401 修复"的关键。
+   *   录音回放端点 [Authorize] 保护,而 <audio src="/api/..."> 这种用法
+   *   **由浏览器直接发请求,不会带 Authorization 头** → 必 401。
+   *   正确做法:走 HttpClient(拦截器会自动附 Bearer,并享受 401 自动刷新),
+   *   responseType:'blob' 拿回二进制,再用 URL.createObjectURL 交给 <audio>。
+   */
+  getBlob(path: string): Observable<Blob> {
+    return this.http.get(this.url(path), { responseType: 'blob' })
+      .pipe(catchError(this.rethrow));
+  }
+
+  /**
+   * 用已有 FormData 做 POST。
+   * 与 upload() 的区别:upload 接收单个 File,这里适合**多字段**表单
+   * (录音上传要同时带 durationSeconds / contentType / language)。
+   */
+  postForm<T>(path: string, form: FormData): Observable<T> {
+    return this.http.post<T>(this.url(path), form)
+      .pipe(catchError(this.rethrow));
+  }
+
   private url(path: string): string {
     return path.startsWith('http') ? path : `${this.base}${path.startsWith('/') ? '' : '/'}${path}`;
   }

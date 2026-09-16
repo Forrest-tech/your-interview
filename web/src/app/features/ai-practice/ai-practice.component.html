@@ -477,8 +477,10 @@
 
               <span class="spacer"></span>
 
+              <!-- ★ 第二十六轮:图标由 add(+)统一为 auto_awesome(✦ 星芒),
+                   与上方录音条 .side-score 完全一致。 -->
               <button class="hi-score" [disabled]="r.grading" (click)="$event.stopPropagation(); gradeRecording(r.id)">
-                <mat-icon>{{ r.grading ? 'hourglass_top' : 'add' }}</mat-icon>
+                <mat-icon>{{ r.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
                 <span>{{ r.grading ? t('practice.grading') : t('practice.runAiScoring') }}</span>
               </button>
 

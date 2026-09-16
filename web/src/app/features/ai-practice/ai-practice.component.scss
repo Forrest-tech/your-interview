@@ -3159,12 +3159,15 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .hist-card .hist-item .spacer { flex: 1 1 auto; min-width: 0; }
 
 .hist-card .hist-item .hi-score {
+  /* ★ 第二十六轮:与录音条 .side-score 完全统一 ——
+     淡绿底 bg-emerald-50 / 深绿边 border-emerald-200 / 深绿字 text-emerald-700 /
+     药丸圆角 rounded-full;高度与字号也和 .side-score 对齐(32px / 12.5px)。 */
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 12px;
+  gap: 5px;
+  height: 32px;
+  padding: 0 14px;
   border: 1px solid #bbf7d0;
   border-radius: 9999px;
   background: #dcfce7;

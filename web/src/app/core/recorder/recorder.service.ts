@@ -352,10 +352,17 @@ export class RecorderService {
     };
   }
 
-  /** 某条录音的播放地址(走后端流;本地未上传的用 objectURL)。 */
+  /**
+   * 某条录音的播放地址。
+   *
+   * ⚠️ 第二十六轮:后端录音端点是 [Authorize] 保护的,直接把它喂给
+   *   <audio src> 会 **401**(浏览器不带 Authorization 头)。
+   *   所以这里**只返回本地 Object URL**;已上传的录音请走
+   *   PracticeApi.fetchRecordingAudio() 由 HttpClient 带 token 拉 blob。
+   *   (该方法保留是为了给调用方一个明确信号:没有本地 url 时应走鉴权拉流。)
+   */
   audioSrc(rec: Recording): string {
-    if (rec.url) return rec.url;
-    return this.practiceApi.audioUrl(rec.id);
+    return rec.url ?? '';
   }
 
   /**

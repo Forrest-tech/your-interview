@@ -126,9 +126,27 @@ export class PracticeApi {
       `${PracticeApi.BASE}/materials/${materialId}/recordings`, fd);
   }
 
-  /** 回放地址 —— 直接给 <audio src> 用。 */
+  /**
+   * 回放地址 —— ⚠️ 第二十六轮起**不再直接给 <audio src> 用**。
+   *
+   * 原因:该端点带 [Authorize],而 <audio src> 由浏览器自行发请求,
+   * **不会带 Authorization 头** → 一直 401。
+   * 保留此方法仅供"已有 token 的媒体源"等特殊场景/调试;
+   * 正常回放请用 fetchRecordingAudio() 拿 blob。
+   */
   audioUrl(recordingId: string): string {
     return `${PracticeApi.BASE}/recordings/${recordingId}/audio`;
+  }
+
+  /**
+   * 取录音音频流(带鉴权)。
+   *
+   * ★ 第二十六轮(401 修复):走 ApiClient → HttpClient →
+   *   authInterceptor 自动附 `Authorization: Bearer <token>`,
+   *   401 时还会触发全局刷新链路。拿到 blob 后由调用方 createObjectURL。
+   */
+  fetchRecordingAudio(recordingId: string): Observable<Blob> {
+    return this.api.getBlob(`${PracticeApi.BASE}/recordings/${recordingId}/audio`);
   }
 
   deleteRecording(recordingId: string): Observable<void> {

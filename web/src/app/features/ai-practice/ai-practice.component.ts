@@ -811,6 +811,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       this.ttsUrl = null;
     }
     this.stopPlayback();
+    // ★ 第二十六轮:回收鉴权拉流产生的 objectURL(否则离页泄漏)
+    for (const u of this.audioBlobUrls.values()) URL.revokeObjectURL(u);
+    this.audioBlobUrls.clear();
     // 离开页面时若还在录,直接丢弃,避免录到无关声音
     if (this.recorder.recording()) this.recorder.cancel();
   }
@@ -1556,6 +1559,18 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   private readonly audio = new Audio();
   readonly playingId = signal<string | null>(null);
   readonly playPos = signal(0);
+
+  /**
+   * ★ 第二十六轮:已上传录音的 blob → objectURL 缓存(按 recording id)。
+   * 认证拉流拿到的 blob 不再重复下载;同时集中回收,防内存泄漏。
+   */
+  private readonly audioBlobUrls = new Map<string, string>();
+
+  /** 正在"拉流加载"中的录音 id(界面可显示 loading)。 */
+  readonly audioLoadingId = signal<string | null>(null);
+
+  /** 拉流失败的真实原因(如实展示,绝不静默)。 */
+  readonly audioError = signal<string | null>(null);
   /** 逐词明细展开状态(按录音 id)。 */
   /** 评分报告面板是否展开(任务书第三节:可随时收起/展开)。默认展开。 */
   readonly reportOpen = signal(true);
@@ -1646,7 +1661,21 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     return this.playingId() === id;
   }
 
-  /** 播放/暂停切换。切到另一条时先停掉当前这条。 */
+  /**
+   * 播放/暂停切换。切到另一条时先停掉当前这条。
+   *
+   * ★ 第二十六轮(401 修复):
+   *   旧实现 `this.audio.src = api.audioUrl(id)` 把后端录音端点直接交给
+   *   <audio src> —— 浏览器发这个请求**不带 Authorization 头**,
+   *   而端点带 [Authorize] → 必然 401(Forrest 控制台看到的报错)。
+   *
+   *   新实现分两条路:
+   *     a) 本页刚录、还没上传的 → 直接用本地 Object URL(零网络,零鉴权);
+   *     b) 已上传的历史录音 → 先用 HttpClient(带 Bearer)拉回 blob,
+   *        再 createObjectURL 交给 <audio>;blob 缓存在本组件 Map 里,
+   *        同一条重复播放不再重复下载。
+   *   拉取失败时如实提示,绝不静默假装能播。
+   */
   togglePlay(r: Recording): void {
     // 播放期间先把示范朗读停掉,避免两种声音叠在一起
     this.stopSpeak();
@@ -1660,9 +1689,41 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // 换目标:若正在放别的,先停
     if (this.playingId() !== null) this.audio.pause();
 
-    // audioSrc:本地刚录的用 objectURL;已上传的走后端音频流端点
-    // (已上传的录音不再把音频留在浏览器内存里,长列表才不会吃爆内存)
-    this.audio.src = this.recorder.audioSrc(r);
+    // (a) 本地 Object URL:刚录完、还没上传完成的,直接播,不发请求。
+    if (r.url) {
+      this.startAudio(r, r.url);
+      return;
+    }
+
+    // (b) 已上传:命中缓存就直接播。
+    const cached = this.audioBlobUrls.get(r.id);
+    if (cached) {
+      this.startAudio(r, cached);
+      return;
+    }
+
+    // (b-2) 走带鉴权的 HttpClient 拉 blob(拦截器自动附 Bearer + 401 刷新)。
+    this.audioLoadingId.set(r.id);
+    this.practiceApi.fetchRecordingAudio(r.id).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        this.audioBlobUrls.set(r.id, url);
+        this.audioLoadingId.set(null);
+        this.startAudio(r, url);
+      },
+      error: (e) => {
+        this.audioLoadingId.set(null);
+        // 如实报错,绝不静默。401 已被拦截器处理;其余错误给出可读原因。
+        const msg = String((e as { message?: string } | null)?.message ?? e ?? '');
+        this.audioError.set(msg || '录音回放加载失败,请稍后重试。');
+        this.toast(this.audioError()!);
+      }
+    });
+  }
+
+  /** 绑定 src 并起播(播放/暂停本地共用的收尾逻辑)。 */
+  private startAudio(r: Recording, src: string): void {
+    this.audio.src = src;
     this.audio.currentTime = 0;
     this.playPos.set(0);
     void this.audio.play().then(

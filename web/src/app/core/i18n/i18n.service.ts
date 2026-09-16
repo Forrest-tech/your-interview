@@ -212,6 +212,15 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.viewReportDetail': { zh: '查看详情', en: 'View Report', fr: 'Voir le rapport' },
   'practice.gotoConfig': { zh: '前往配置 ↗', en: 'Configure ↗', fr: 'Configurer ↗' },
   'practice.reportEmpty': { zh: '还没有评测结果。录一段朗读并点击「AI 评分」后,这里会显示发音准确度、流利度、逐词对比与错误统计。', en: 'No assessment yet. Record a take and click "AI Scoring" to see pronunciation accuracy, fluency, word-by-word diff and error stats here.', fr: 'Aucune évaluation. Enregistrez puis lancez l evaluation.' },
+
+  // ---------- 2026-09-16 第十九轮:骨架重构新增 ----------
+  'practice.mark': { zh: '标记', en: 'Mark', fr: 'Marquer' },
+  'practice.markWord': { zh: '标记当前词', en: 'Mark this word', fr: 'Marquer ce mot' },
+  'practice.markClear': { zh: '清除标记', en: 'Clear mark', fr: 'Effacer la marque' },
+  'practice.jumpTo': { zh: '跳转', en: 'Go', fr: 'Aller' },
+  'practice.jumpLabel': { zh: '跳转到第几题', en: 'Jump to question number', fr: 'Aller à la question' },
+  'practice.jumpInvalid': { zh: '请输入有效的题号。', en: 'Enter a valid question number.', fr: 'Entrez un numéro valide.' },
+  'practice.recordingHistoryCount': { zh: '录音记录', en: 'Recordings', fr: 'Enregistrements' },
   'practice.saveFailed': { zh: '保存失败,请检查浏览器存储权限', en: 'Save failed — check browser storage permissions', fr: 'Échec de l enregistrement' },
   'practice.sampleReading': { zh: '示范朗读', en: 'Sample Reading', fr: 'Lecture exemple' },
   'practice.runScoring': { zh: 'AI 评分', en: 'Run AI Scoring', fr: 'Lancer le score IA' },

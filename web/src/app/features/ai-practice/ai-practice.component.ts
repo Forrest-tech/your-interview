@@ -443,6 +443,31 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.goRelative(1);
   }
 
+  // ---------- 2026-09-16 第十九轮:题号跳转(底部操作栏右侧) ----------
+  /** 跳转输入框的当前值。 */
+  readonly jumpDraft = signal('');
+
+  /** 输入框变化(只允许数字)。 */
+  onJumpDraftChange(v: string): void {
+    this.jumpDraft.set(v.replace(/[^0-9]/g, ''));
+  }
+
+  /** 执行跳转:输入题号 → 选中对应素材。越界则 toast 提示,不静默失败。 */
+  jumpToItem(): void {
+    if (this.editing()) return; // 编辑中先保存或取消
+    const n = Number(this.jumpDraft());
+    const total = this.flatItems().length;
+    if (!n || n < 1 || n > total) {
+      this.toast(this.t('practice.jumpInvalid'));
+      return;
+    }
+    const target = this.flatItems()[n - 1];
+    if (target) {
+      this.selectFile(target);
+      this.jumpDraft.set('');
+    }
+  }
+
   private goRelative(step: number): void {
     if (this.editing()) return; // 编辑中先保存或取消
     const i = this.qIndex();
@@ -700,6 +725,20 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 当前在逐词区点开的单词下标（null = 未点开）。 */
   readonly pickedWord = signal<number | null>(null);
+
+  // ---------- 2026-09-16 第十九轮:朗读文本「标记」开关 ----------
+  /** 正文是否处于已标记(高亮)状态。 */
+  readonly marked = signal(false);
+
+  /** 标记当前朗读文本(高亮正文)。 */
+  markAllText(): void {
+    this.marked.set(true);
+  }
+
+  /** 清除标记。 */
+  clearMark(): void {
+    this.marked.set(false);
+  }
 
   /** 点词展开音标与得分；再点同一个则收起。 */
   pickWord(i: number): void {

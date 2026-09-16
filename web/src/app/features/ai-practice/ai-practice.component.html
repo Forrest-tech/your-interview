@@ -1,29 +1,39 @@
 <!-- AI 面试练习(/practice)
-     2026-09-15 第三轮任务书重构:双栏流式布局 + Azure 评测工作流
+     ============================================================
+     2026-09-16 第十九轮:Forrest 精准重构指令 —— 严格按示意图还原布局。
+     骨架 = **两大独立白底卡片垂直排列**(间距 24px),互不嵌套、互不污染:
 
-     左侧 = 「面试素材」树,直接作为一级侧栏(不再是贴边小抽屉),
-            左上角 ◀/▶ 折叠,折叠后正文自动扩展居中。
-     右侧 = 主作答与评测区,限宽 1100px 居中,自上而下:
-            顶部状态栏 → 朗读文本卡 → 示范朗读(TTS)+录音控制器
-            → 底部操作栏 → 历史录音列表 → 评分报告结果区
+       卡片①  .exam-card   主练习与作答控制
+               ①-1 .card-head        标题栏(左:分类 + 题名 / 右:编辑 ✏️)
+               ①-2 .card-tools       缩放胶囊 [-] 280% [+] + 标记下拉 [⚑ 标记 ▾]
+               ①-3 .text-box         核心待读文本框(内嵌灰边大框,无衬线 1.8)
+               ①-4 .audio-stack      音频控制器组合(70%/max 680px 居中)
+                                       · .sample-pill 浅蓝胶囊 示范朗读条
+                                       · .rec-pill    浅绿胶囊 录音交互条
+               ①-5 .card-foot        底部导航控制栏(左:提交/重置 右:跳转 + 上/下一题)
 
-     支撑本轮的关键事实(与后端/参考站一致,不要改):
-       • Azure Free F0 + conversation 端点只返回 AccuracyScore,
-         Fluency/Prosody 拿不到 —— 一律 null,界面显示"—",绝不用 0 充数。
-       • 逐词 ErrorType 五类: Mispronunciation / Omission / Insertion /
-         UnexpectedBreak / MissingBreak(另有 None 表示正常)。 -->
+       卡片②  .hist-card   录音历史与评分报告
+               ②-1 .hist-head        Recordings (数量)
+               ②-2 .hist-item        单条录音通栏
+               ②-3 .report-section   Score Results(空状态 / 完整报告)
+
+     ⚠️ 关键结构约束(踩过坑,不要改):
+       • Angular 控制流块 @if/@else 的开闭标签必须落在**同一个** Angular 块作用域内,
+         否则报 NG5002。所以每张卡片只包一层最外层 @if。
+       • 左侧素材树仍是一级侧栏(不在卡片内),页面背景统一浅灰。
+       • Azure Free F0 只返回 AccuracyScore;Fluency/Prosody 拿不到 → null → 显示"—"。
+       • 逐词 ErrorType: Mispronunciation / Omission / Insertion /
+         UnexpectedBreak / MissingBreak(另有 None)。
+     ============================================================ -->
 <div class="practice" [class.tree-open]="treeOpen()" [style.--tree-w.px]="treeWidth()">
 
   <!-- ============================================================
-       左侧一级侧栏:面试素材树
-       默认展开 —— 任务书要求树是"一级侧边栏",不再默认收起。
+       左侧一级侧栏:面试素材树(保持在卡片之外)
        ============================================================ -->
   <aside class="col-tree">
 
-    <!-- ⚠️ 2026-09-15 第十四轮:按钮位置最终定案 ——
-         折叠按钮属于**素材树这一栏自己**,固定贴着该栏右边缘。
-         它放在 @if (treeOpen()) **之外**,所以收起后依然存在;
-         折叠态该栏收成一根 34px 细竖条,按钮就贴在竖条上(见 SCSS)。 -->
+    <!-- 折叠按钮属于素材树这一栏自己,固定贴该栏右边缘;放在 @if 之外,
+         所以收起后依然存在(折叠态该栏收成 34px 细竖条)。 -->
     <button class="side-toggle" (click)="toggleTree()"
             [matTooltip]="treeOpen() ? t('practice.collapseTree') : t('practice.expandTree')">
       <mat-icon>{{ treeOpen() ? 'chevron_left' : 'chevron_right' }}</mat-icon>
@@ -36,7 +46,6 @@
 
         <span class="spacer"></span>
 
-        <!-- 保存修改:任务书要求提供显式保存入口 -->
         <button mat-button class="save-tree"
                 [class.dirty]="treeDirty()"
                 [disabled]="!treeDirty()"
@@ -46,9 +55,7 @@
           <span>{{ treeDirty() ? t('practice.saveChanges') : t('practice.saved') }}</span>
         </button>
       </div>
-    }
 
-    @if (treeOpen()) {
       <div class="tree-body">
         <app-material-tree
           [nodes]="nodes()"
@@ -63,84 +70,128 @@
     }
   </aside>
 
-  <!-- 拖动分割线(Forrest 第十三轮):拖动即可调整左侧素材板块宽度。
-       仅展开时存在;宽度会被 clamp 到 220-560px 并记住。 -->
+  <!-- 拖动分割线:仅展开时存在;宽度 clamp 到 220-560px 并记住。 -->
   @if (treeOpen()) {
     <div class="col-resizer" (mousedown)="startResize($event)"
          [matTooltip]="t('practice.dragResize')"></div>
   }
 
-  <!-- 侧栏遮罩:窄屏展开时点击空白处收起。
-       ⚠️ 第十三轮修正:原来是 inset:0 全屏铺满且 z-index:20,
-       会盖住侧栏本身 —— 点侧栏里任何地方都被它吃掉并再次 toggle,
-       导致"收起后点不回来"。现改为只盖主区、且不覆盖侧栏。 -->
+  <!-- 侧栏遮罩:窄屏展开时点击空白处收起(只盖主区,不覆盖侧栏)。 -->
   @if (treeOpen()) {
     <div class="drawer-scrim" (click)="toggleTree()"></div>
   }
 
   <!-- ============================================================
-       右侧主作答与评测区(自上而下)
+       右侧主区:两大独立卡片垂直排列
        ============================================================ -->
   <main class="col-main">
 
-    <!-- ★ 2026-09-16(Forrest 本轮重构):主练习大白卡。
-         要求原文:把 meta 栏 + 英文正文 + Sample Reading + Record
-         **全部收进同一个白底大卡片**(.main-exam-card),
-         卡片外只留最下方操作/分页栏。
-         以前正文卡与音频条是分离的碎块,现统一为一个框。 -->
-    <!-- ① 顶部 Meta 栏:题号 + 完成状态 + 题名 + 编辑 -->
-    <header class="main-head">
-      <span class="q-chip">{{ t('practice.question') }} #{{ qIndex() }}</span>
-      <span class="q-total">/ {{ nodes().length }}</span>
+    @if (!selectedId()) {
+      <!-- 未选素材:只给一个克制的空态,不铺两张空卡片 -->
+      <div class="placeholder">
+        <mat-icon>touch_app</mat-icon>
+        <p>{{ t('practice.pickHint') }}</p>
+      </div>
+    } @else {
 
-      @if (selectedId()) {
-        <span class="mode-chip" [class.editing]="editing()" [class.readonly]="!editing()">
-          <mat-icon>{{ editing() ? 'edit' : 'check_circle' }}</mat-icon>
-          {{ editing() ? t('practice.modeEditing') : t('practice.completed') }}
-        </span>
-      }
+      <!-- ==========================================================
+           卡片① 主练习与作答控制卡片
+           ========================================================== -->
+      <section class="exam-card">
 
-      <span class="spacer"></span>
+        <!-- ①-1 顶部标题栏:左 = 分类 + 题名(大号) / 右 = 编辑 ✏️ -->
+        <header class="card-head">
+          <div class="ch-left">
+            <span class="ch-kicker">{{ t('practice.question') }} #{{ qIndex() }} / {{ nodes().length }}</span>
+            <h2 class="ch-title">{{ selectedNode()?.name || t('practice.noSelection') }}</h2>
+          </div>
 
-      <span class="crumb-text" [matTooltip]="selectedNode()?.name || ''">
-        {{ selectedNode()?.name || t('practice.noSelection') }}
-      </span>
+          <span class="spacer"></span>
 
-      @if (!editing()) {
-        <button mat-icon-button [matTooltip]="t('practice.edit')"
-                [disabled]="!selectedId()" (click)="startEdit()">
-          <mat-icon>edit</mat-icon>
-        </button>
-      } @else {
-        <button mat-icon-button [matTooltip]="t('practice.save')" (click)="saveEdit()">
-          <mat-icon>save</mat-icon>
-        </button>
-        <button mat-icon-button [matTooltip]="t('practice.cancel')" (click)="cancelEdit()">
-          <mat-icon>close</mat-icon>
-        </button>
-      }
-    </header>
+          @if (!editing()) {
+            <button class="ch-edit" [matTooltip]="t('practice.edit')"
+                    [disabled]="!selectedId()" (click)="startEdit()">
+              <mat-icon>edit</mat-icon>
+            </button>
+          } @else {
+            <button class="ch-edit" [matTooltip]="t('practice.save')" (click)="saveEdit()">
+              <mat-icon>save</mat-icon>
+            </button>
+            <button class="ch-edit" [matTooltip]="t('practice.cancel')" (click)="cancelEdit()">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </header>
 
-    <div class="main-body">
+        <!-- ①-3 核心待读文本框(工具条 .card-tools 绝对定位在右上角,见 SCSS) -->
+        <div class="text-box" [style.--read-fs.px]="readFontPx()">
 
-    <!-- ★ 2026-09-16(Forrest 本轮重构):主练习大白卡。
-         包住:英文正文 + Sample Reading + Record。
-         ⚠️ Meta 栏(.main-head)留在卡外 —— 它跨 @if/@else 分支,
-            放进卡内会把 @if 块截断(Angular 禁止跨块嵌套)。
-         卡外保留:Meta 栏、底部操作栏、历史录音列表、评分报告区。 -->
-    <div class="main-exam-card">
+          <!-- ①-2 工具栏小组件:缩放胶囊 + 标记下拉(浮在文本框右上角) -->
+          <div class="card-tools">
+            <div class="zoom-controls">
+              <button class="zoom-btn" (click)="decreaseFont()"
+                      [disabled]="!canDecreaseFont()"
+                      [matTooltip]="t('practice.zoomOut')"
+                      aria-label="decrease font size">−</button>
 
-      @if (!selectedId()) {
-        <div class="placeholder">
-          <mat-icon>touch_app</mat-icon>
-          <p>{{ t('practice.pickHint') }}</p>
-        </div>
-      } @else {
+              <button class="zoom-label" type="button"
+                      [matMenuTriggerFor]="zoomMenu"
+                      [matTooltip]="t('practice.zoomEditHint')"
+                      aria-label="set font size">{{ fontZoomLevel() }}%</button>
 
-        <!-- ② 朗读文本卡(核心区,绝不可删)
-             结构:纯白 + 阴影大卡片,内嵌待读英文文本 18px / 行高 1.8 / 深灰。
-             它紧跟在 .main-head 之后、.sample-pill 之前,与任务书骨架一致。 -->
-        <section class="reading-text-card" [style.--read-fs.px]="readFontPx()">
+              <mat-menu #zoomMenu="matMenu" class="zoom-menu" xPosition="before">
+                @for (p of zoomPresets(); track p) {
+                  <button mat-menu-item class="zm-item"
+                          [class.on]="p === fontZoomLevel()"
+                          (click)="setZoomPreset(p)">
+                    <span>{{ p }}%</span>
+                  </button>
+                }
+                <div class="zm-sep"></div>
+                <button mat-menu-item class="zm-item zm-edit" (click)="startZoomEdit()">
+                  <mat-icon>edit</mat-icon>
+                  <span>{{ t('practice.zoomCustom') }}</span>
+                </button>
+              </mat-menu>
+
+              @if (zoomEditing()) {
+                <input class="zoom-input" type="text" inputmode="numeric"
+                       [ngModel]="zoomDraft()"
+                       (ngModelChange)="onZoomDraftChange($event)"
+                       (blur)="commitZoomEdit()"
+                       (keydown.enter)="onZoomEnter()"
+                       (keydown.escape)="cancelZoomEdit()"
+                       aria-label="font size percent"
+                       #zoomInput autofocus>
+                <span class="zoom-pct">%</span>
+              }
+
+              <button class="zoom-btn" (click)="increaseFont()"
+                      [disabled]="!canIncreaseFont()"
+                      [matTooltip]="t('practice.zoomIn')"
+                      aria-label="increase font size">+</button>
+            </div>
+
+            <!-- 标记下拉:对当前朗读文本做标记(高亮当前词) -->
+            <button class="mark-btn" type="button" [matMenuTriggerFor]="markMenu">
+              <mat-icon>flag</mat-icon>
+              <span>{{ t('practice.mark') }}</span>
+              <mat-icon class="caret">expand_more</mat-icon>
+            </button>
+
+            <mat-menu #markMenu="matMenu" class="mark-menu" xPosition="before">
+              <button mat-menu-item (click)="markAllText()">
+                <mat-icon>highlight</mat-icon>
+                <span>{{ t('practice.markWord') }}</span>
+              </button>
+              <button mat-menu-item (click)="clearMark()">
+                <mat-icon>remove_done</mat-icon>
+                <span>{{ t('practice.markClear') }}</span>
+              </button>
+            </mat-menu>
+          </div>
+
+          <!-- 正文:编辑态 = 文本域;只读态 = 无衬线正文(18px / 1.8) -->
           @if (editing()) {
             <textarea class="draft"
                       [ngModel]="draft()"
@@ -150,185 +201,98 @@
                       [placeholder]="t('practice.placeholder')"></textarea>
           } @else {
             @if (readonlyText()) {
-              <p class="read-text">{{ readonlyText() }}</p>
+              <p class="read-text" [class.marked]="marked()">{{ readonlyText() }}</p>
             } @else {
-              <!-- 只有素材真的空着才走到这 —— 不是“卡片没了”,是这条素材没写内容 -->
               <p class="readonly-empty">{{ t('practice.emptyContent') }}</p>
             }
           }
+        </div>
 
-          <!-- 字号缩放条(A- / 百分比 / A+)
-               任务书第二节:支持 80%–150%、步进 10%、基准 18px,
-               并持久化到 localStorage('user_practice_zoom'),
-               **切换题目 / 刷新页面 / 换分类都要保持生效**。 -->
-          <div class="zoom-controls">
-            <button class="zoom-btn" (click)="decreaseFont()"
-                    [disabled]="!canDecreaseFont()"
-                    [matTooltip]="t('practice.zoomOut')"
-                    aria-label="decrease font size">−</button>
+        <!-- ①-4 音频控制器组合:70% / max 680px 居中,垂直排两个胶囊条 -->
+        <div class="audio-stack">
 
-            <!-- 2026-09-16(Forrest 最新一条):点中间的数字 → 弹出下拉列表,
-                 选择具体档位。档位是等差数列(首项 100,公差 40):
-                 100 / 140 / 180 / 220 / 260 / 300 / 340 / 380。
-                 另有"手动输入"入口 —— 保留精确输入能力,不因下拉而丢失。 -->
-            <button class="zoom-label" type="button"
-                    [matMenuTriggerFor]="zoomMenu"
-                    [matTooltip]="t('practice.zoomEditHint')"
-                    aria-label="set font size">{{ fontZoomLevel() }}%</button>
+          <!-- 示范朗读条(浅蓝胶囊):标签 + 进度 + 时间 + 倍速 + 引擎 + 圆形播放键 -->
+          <div class="sample-pill">
+            <span class="sample-label">
+              <mat-icon>volume_up</mat-icon>
+              <span>{{ t('practice.sampleReading') }}</span>
+            </span>
 
-            <mat-menu #zoomMenu="matMenu" class="zoom-menu" xPosition="before">
-              @for (p of zoomPresets(); track p) {
-                <!-- 2026-09-16(Forrest 本轮):选中项不再打勾 —— 直接蓝色标记。
-                     去掉右侧的 check 图标,只靠 .on 的蓝字 + 蓝底来标识当前档位。 -->
-                <button mat-menu-item class="zm-item"
-                        [class.on]="p === fontZoomLevel()"
-                        (click)="setZoomPreset(p)">
-                  <span>{{ p }}%</span>
+            <div class="sample-track">
+              <div class="sample-bg"></div>
+              <div class="sample-fill" [style.width.%]="speakProgress()"></div>
+            </div>
+
+            <!-- speakDone 时直接展示总时长,避免定格在中途秒数 -->
+            <span class="sample-time">{{ fmtDuration(speakDone() ? estimateSeconds() : speakElapsed()) }} / {{ fmtDuration(estimateSeconds()) }}</span>
+
+            <!-- 只在"回退/失败"性质时才渲染引擎提示(诚实红线) -->
+            @if (showTtsNote()) {
+              <span class="tts-note" [title]="ttsNote()">{{ ttsNote() }}</span>
+            }
+
+            <button class="speed-badge" [matMenuTriggerFor]="rateMenu">
+              x{{ rate() }}
+            </button>
+            <mat-menu #rateMenu="matMenu">
+              @for (r of rates; track r) {
+                <button mat-menu-item (click)="setRate(r)">
+                  <mat-icon>{{ rate() === r ? 'check' : 'blank' }}</mat-icon>
+                  <span>{{ r }}x</span>
                 </button>
               }
-              <div class="zm-sep"></div>
-              <button mat-menu-item class="zm-item zm-edit" (click)="startZoomEdit()">
-                <mat-icon>edit</mat-icon>
-                <span>{{ t('practice.zoomCustom') }}</span>
+            </mat-menu>
+
+            <button class="engine-btn" [matMenuTriggerFor]="engineMenu"
+                    [matTooltip]="t('practice.ttsEngine')">
+              <mat-icon>settings</mat-icon>
+            </button>
+            <mat-menu #engineMenu="matMenu" xPosition="before" class="engine-menu">
+              <div class="em-head">{{ t('practice.ttsEngine') }}</div>
+              <p class="em-sub">{{ t('practice.ttsEngineHint') }}</p>
+
+              <button mat-menu-item class="em-card" [class.on]="engine() === 'browser'"
+                      (click)="setEngine('browser')">
+                <span class="em-radio" [class.checked]="engine() === 'browser'"></span>
+                <span class="em-item">
+                  <span class="em-name">{{ t('practice.ttsBrowser') }}</span>
+                  <span class="em-note">{{ t('practice.ttsBrowserNote') }}</span>
+                </span>
+              </button>
+
+              <button mat-menu-item class="em-card" [class.on]="engine() === 'azure'"
+                      (click)="setEngine('azure')">
+                <span class="em-radio" [class.checked]="engine() === 'azure'"></span>
+                <span class="em-item">
+                  <span class="em-name">{{ t('practice.ttsAzure') }}</span>
+                  <span class="em-note">{{ t('practice.ttsAzureNote') }}</span>
+                </span>
+              </button>
+
+              @if (engine() === 'azure' && !azureReady()) {
+                <p class="em-warn">
+                  <mat-icon>info_outline</mat-icon>
+                  <span>{{ t('practice.azureFallbackNote') }}</span>
+                </p>
+              }
+
+              <div class="em-sep"></div>
+              <button mat-menu-item class="em-goto" (click)="goAiSetting()">
+                <mat-icon>open_in_new</mat-icon>
+                <span>{{ t('practice.gotoConfig') }}</span>
               </button>
             </mat-menu>
 
-            <!-- 手动输入态 (保留) -->
-            @if (zoomEditing()) {
-              <input class="zoom-input" type="text" inputmode="numeric"
-                     [ngModel]="zoomDraft()"
-                     (ngModelChange)="onZoomDraftChange($event)"
-                     (blur)="commitZoomEdit()"
-                     (keydown.enter)="onZoomEnter()"
-                     (keydown.escape)="cancelZoomEdit()"
-                     aria-label="font size percent"
-                     #zoomInput autofocus>
-              <span class="zoom-pct">%</span>
-            }
-
-            <button class="zoom-btn" (click)="increaseFont()"
-                    [disabled]="!canIncreaseFont()"
-                    [matTooltip]="t('practice.zoomIn')"
-                    aria-label="increase font size">+</button>
-          </div>
-        </section>
-
-        <!-- ③④ 朗读条 + 录音区 —— 合并进**同一个方框**(Forrest 本轮):
-             要求:
-               1) Sample Reading 与 Record 放在同一个方框里
-               2) 两者高度完全一致
-               3) 整体宽度缩为原来的 2/3
-               4) 布局参考 ynwac:一行内紧凑排列
-             ⚠️ 外层 .audio-controls-wrapper 负责居中与限宽,
-                内部两块不再各自画框,否则会出现"框套框"。 -->
-        <div class="audio-controls-wrapper">
-        <div class="sample-pill">
-          <span class="sample-label">
-            <mat-icon>volume_up</mat-icon>
-            <span>{{ t('practice.sampleReading') }}</span>
-          </span>
-
-          <div class="sample-track">
-            <div class="sample-bg"></div>
-            <div class="sample-fill" [style.width.%]="speakProgress()"></div>
+            <button class="play-round" (click)="speak()"
+                    [matTooltip]="speaking() ? t('practice.stop') : t('practice.demoRead')">
+              <mat-icon>{{ speaking() ? 'stop' : 'play_arrow' }}</mat-icon>
+            </button>
           </div>
 
-          <!-- ⚠️ 2026-09-16(Forrest 本轮):读完定格后秒数也要显示满值,
-               不能因为 elapsed 不再清零而停在中间数字。speakDone 时直接展示总量。 -->
-          <span class="sample-time">{{ fmtDuration(speakDone() ? estimateSeconds() : speakElapsed()) }} / {{ fmtDuration(estimateSeconds()) }}</span>
+          <!-- 录音交互条(浅绿胶囊):中间绿色麦克风(带文字「录音」)
+               + 右侧「点击进行AI评分」胶囊 + 最右重置刷新图标 -->
+          <div class="rec-pill" [class.has-take]="!!activeTake()">
 
-          <!-- 实际使用的引擎标记:azure 回退到浏览器时必须显示,避免误以为听到的是 Azure 人声 -->
-          <!-- ⚠️ 2026-09-16(Forrest 本轮):**不要**在示范朗读条上显示
-               "Azure 神经语音(服务端合成)"这类引擎标签 —— 用户只想看进度,
-               不关心底层用的哪个引擎。
-               但**回退类提示必须保留**(Azure 未配/失败→已用浏览器语音),
-               否则用户会以为听到的是 Azure 人声 —— 那是诚实红线。
-               所以这里只在 note 是"回退/失败"性质时才渲染。 -->
-          @if (showTtsNote()) {
-            <span class="tts-note" [title]="ttsNote()">{{ ttsNote() }}</span>
-          }
-
-          <button class="speed-badge" [matMenuTriggerFor]="rateMenu">
-            x{{ rate() }}
-          </button>
-          <mat-menu #rateMenu="matMenu">
-            @for (r of rates; track r) {
-              <button mat-menu-item (click)="setRate(r)">
-                <mat-icon>{{ rate() === r ? 'check' : 'blank' }}</mat-icon>
-                <span>{{ r }}x</span>
-              </button>
-            }
-          </mat-menu>
-
-          <!-- TTS 引擎切换(任务书第三节) -->
-          <button class="engine-btn" [matMenuTriggerFor]="engineMenu"
-                  [matTooltip]="t('practice.ttsEngine')">
-            <mat-icon>settings</mat-icon>
-          </button>
-          <mat-menu #engineMenu="matMenu" xPosition="before" class="engine-menu">
-            <!-- 2026-09-16(Forrest 本轮):这是全站唯一的朗读引擎入口。
-                 AI Voice Settings 页的那张 TTS Engine 卡片已删除,
-                 用户在这里选“朗读的方式”(浏览器内置 / Azure 神经网络)。 -->
-            <div class="em-head">{{ t('practice.ttsEngine') }}</div>
-            <p class="em-sub">{{ t('practice.ttsEngineHint') }}</p>
-
-            <!-- 选项卡:完全对标 /account/ai-setting 的 .eng-row 视觉
-                 (Radio 圆圈 + 图标 + 两行文案 + 选中态浅蓝底/蓝边) -->
-            <!-- 2026-09-16(Forrest 第 5 条):去掉蓝/灰图标,只保留文字 + 选中态,
-                 与 /account/ai-setting 的示范朗读引擎展示保持一致。 -->
-            <button mat-menu-item class="em-card" [class.on]="engine() === 'browser'"
-                    (click)="setEngine('browser')">
-              <span class="em-radio" [class.checked]="engine() === 'browser'"></span>
-              <span class="em-item">
-                <span class="em-name">{{ t('practice.ttsBrowser') }}</span>
-                <span class="em-note">{{ t('practice.ttsBrowserNote') }}</span>
-              </span>
-            </button>
-
-            <button mat-menu-item class="em-card" [class.on]="engine() === 'azure'"
-                    (click)="setEngine('azure')">
-              <span class="em-radio" [class.checked]="engine() === 'azure'"></span>
-              <span class="em-item">
-                <span class="em-name">{{ t('practice.ttsAzure') }}</span>
-                <span class="em-note">{{ t('practice.ttsAzureNote') }}</span>
-              </span>
-            </button>
-
-            <!-- Excel Azure 提示:选 Azure 但后端未接入时如实告知 -->
-            @if (engine() === 'azure' && !azureReady()) {
-              <p class="em-warn">
-                <mat-icon>info_outline</mat-icon>
-                <span>{{ t('practice.azureFallbackNote') }}</span>
-              </p>
-            }
-
-            <!-- 底部跳转(任务书:保留 Configure ↗) -->
-            <div class="em-sep"></div>
-            <button mat-menu-item class="em-goto" (click)="goAiSetting()">
-              <mat-icon>open_in_new</mat-icon>
-              <span>{{ t('practice.gotoConfig') }}</span>
-            </button>
-          </mat-menu>
-
-          <!-- 最右:蓝底白箭头圆形播放键(任务书第一节,约 38px) -->
-          <button class="play-round" (click)="speak()"
-                  [matTooltip]="speaking() ? t('practice.stop') : t('practice.demoRead')">
-            <mat-icon>{{ speaking() ? 'stop' : 'play_arrow' }}</mat-icon>
-          </button>
-        </div>
-
-        <!-- ④ 录音控制器(任务书第二节)
-             居中主体 = 上圆按钮 + 下小字(垂直排布,严禁并排);
-             右侧 = 「点击进行AI评分」白底胶囊 + 圆形重置。
-             ⚠️ 2026-09-16(Forrest 本轮):删掉多余的独立"提交"行。
-                提交按钮与 Retry 并排放在圆按钮正下方 —— 没录音时置灰,
-                录好(有待提交 take)才激活。 -->
-        <div class="rec-zone">
-          <!-- ⚠️ 2026-09-16(Forrest 本轮明确):「绿色的 Record 放中间位置」。
-               布局改为三区对中:左 slot(状态小字) / 中间(Record 圆按钮) / 右 slot(评分胶囊 + 重置)。
-               左、右 slot 各 flex:1 1 0 → 中间的 .rec-center 恒定落在胶囊正中,
-               与左右内容多少无关。 -->
-          <div class="zone-left">
             <span class="rec-label">
               @if (recorder.pendingTake(); as pt) {
                 {{ t('practice.pendingHint') }} · {{ fmtDuration(pt.duration) }}
@@ -340,222 +304,203 @@
                 {{ activePlaying() ? t('practice.recPaused') : t('practice.recPlay') }}
               }
             </span>
-          </div>
 
-          <div class="rec-center">
-            @if (!recorder.recording() && !activeTake()) {
-              <button class="big-round" (click)="startRecording()">
-                <span class="outer"><mat-icon>mic</mat-icon></span>
-              </button>
-            } @else if (recorder.recording()) {
-              <button class="big-round recording" (click)="stopRecording()">
-                <span class="outer"><span class="rec-dot"></span></span>
-              </button>
-            } @else {
-              <button class="big-round" (click)="togglePlayActive()">
-                <span class="outer">
-                  <mat-icon>{{ activePlaying() ? 'pause' : 'play_arrow' }}</mat-icon>
-                </span>
-              </button>
-            }
+            <span class="spacer"></span>
 
-            <!-- 2026-09-16(Forrest 本轮第 3 条):提交/重录已移到下方 operate 栏,
-                   与 Previous / Next 同一行。这里不再保留重复按钮。 -->
-          </div>
-
-          <!-- 右 slot:评分胶囊 + 重置(靠右) -->
-          <div class="zone-right">
-          <div class="zone-side">
-            <button class="side-score" [disabled]="!activeTake() || activeTake()?.grading"
-                    (click)="scoreActiveTake()">
-              <mat-icon>{{ activeTake()?.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
-              <span>{{ t('practice.runAiScoring') }}</span>
-            </button>
-
-            <button class="reset-round" [matTooltip]="t('practice.reset')"
-                    [disabled]="!activeTake()" (click)="resetTake()">
-              <mat-icon>refresh</mat-icon>
-            </button>
-          </div>
-          </div>
-
-          @if (recError()) {
-            <span class="rec-err"><mat-icon>error_outline</mat-icon>{{ recError() }}</span>
-          }
-        </div>
-        </div>
-        <!-- /.audio-controls-wrapper:朗读条 + 录音区 的共同方框 -->
-
-      }
-      <!-- 关闭 main-body 内的 @if/@else 分支 -->
-
-    </div>
-    <!-- /.main-exam-card:主练习大白卡到此结束(卡片外只留下面操作栏) -->
-
-        <!-- ⑤ 底部操作栏:左提交评分 / 右翻页 -->
-        <footer class="act-bar">
-          <div class="act-left">
-            <!-- 未配置 Azure Key 时的拦截提示(任务书第六节)
-                 诚实原则:后端拿不到 key 就无法真评分,
-                 所以按钮必须先置灰,点它则引导去配置,而不是假装能跑。 -->
-            @if (!azureReady()) {
-              <div class="key-warn">
-                <mat-icon>warning_amber</mat-icon>
-                <div class="kw-text">
-                  <span>{{ t('practice.azureKeyMissing') }}</span>
-                  <button class="kw-link" (click)="goAiSetting()">
-                    {{ t('practice.gotoConfigKey') }}
-                  </button>
-                </div>
-              </div>
-            }
-
-            <div class="act-btns">
-              <!-- 2026-09-16(Forrest 第 4 条):删除底部的"提交 AI 评分"按钮。
-                   它与录音区右侧的"Run AI Scoring"是同一个动作(都调
-                   scoreActiveTake),重复出现只会让人不知道该点哪个。
-                   现保留唯一的 run ai scoring 入口。 -->
-
-              <!-- 2026-09-16(Forrest 本轮第 3 条):提交 + 重录放在这里。
-                   它们就位于右侧 Previous / Next 的**同一行**(act-bar 是
-                   flex,左边 act-left、右边 act-nav,margin-left:auto 顶到右边)。
-                   以前放在录音圆按钮下方,Forrest 指出位置不对。 -->
-              <button mat-flat-button class="ra-submit"
-                      [disabled]="!canSubmitTake()"
-                      (click)="submitPending()"
-                      [matTooltip]="canSubmitTake() ? t('practice.submitTakeTip') : t('practice.submitNeedsRecording')">
-                <mat-icon>{{ uploadingPending() ? 'cloud_upload' : 'check' }}</mat-icon>
-                <span>{{ t('practice.submitTake') }}</span>
-              </button>
-
-              <button mat-stroked-button class="ra-retry"
-                      [disabled]="!recorder.pendingTake() && !activeTake()"
-                      (click)="retryTake()"
-                      [matTooltip]="t('practice.retryTip')">
-                <mat-icon>restart_alt</mat-icon>
-                <span>{{ t('practice.retry') }}</span>
-              </button>
-
-              <!-- 待提交时额外给一个试听 + 丢弃,是次要动作,跟在后面 -->
-              @if (recorder.pendingTake()) {
-                <button class="rm-btn" (click)="previewPending()"
-                        [matTooltip]="t('practice.recPlay')">
-                  <mat-icon>{{ previewingPending() ? 'pause' : 'play_arrow' }}</mat-icon>
-                  <span>{{ t('practice.previewTake') }}</span>
+            <!-- 中间:绿色大麦克风按钮 + 紧邻文字「录音」 -->
+            <div class="rec-center">
+              @if (!recorder.recording() && !activeTake()) {
+                <button class="big-round" (click)="startRecording()">
+                  <span class="outer"><mat-icon>mic</mat-icon></span>
+                  <span class="br-text">{{ t('practice.record') }}</span>
                 </button>
-                <button class="rm-btn danger" (click)="discardPending()"
-                        [matTooltip]="t('practice.discardTake')">
-                  <mat-icon>delete_outline</mat-icon>
-                  <span>{{ t('practice.discardTake') }}</span>
+              } @else if (recorder.recording()) {
+                <button class="big-round recording" (click)="stopRecording()">
+                  <span class="outer"><span class="rec-dot"></span></span>
+                  <span class="br-text">{{ t('practice.stopRec') }}</span>
+                </button>
+              } @else {
+                <button class="big-round" (click)="togglePlayActive()">
+                  <span class="outer">
+                    <mat-icon>{{ activePlaying() ? 'pause' : 'play_arrow' }}</mat-icon>
+                  </span>
+                  <span class="br-text">{{ activePlaying() ? t('practice.recPaused') : t('practice.recPlay') }}</span>
                 </button>
               }
             </div>
 
-            <!-- 2026-09-16(Forrest 本轮):删掉这里的未就绪提示文案。
-                 "Record an audio take first, then submit for scoring." 与
-                 "This take is already scored..." 这两句不再显示 ——
-                 按钮置灰 + tooltip 已经说清楚,不需要在页面上多一行字。 -->
+            <span class="spacer"></span>
+
+            <!-- 右侧:AI 评分胶囊 + 重置刷新 -->
+            <div class="rec-side">
+              <button class="side-score" [disabled]="!activeTake() || activeTake()?.grading"
+                      (click)="scoreActiveTake()">
+                <mat-icon>{{ activeTake()?.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
+                <span>{{ t('practice.runAiScoring') }}</span>
+              </button>
+
+              <button class="reset-round" [matTooltip]="t('practice.reset')"
+                      [disabled]="!activeTake()" (click)="resetTake()">
+                <mat-icon>refresh</mat-icon>
+              </button>
+            </div>
+
+            @if (recError()) {
+              <span class="rec-err"><mat-icon>error_outline</mat-icon>{{ recError() }}</span>
+            }
+          </div>
+        </div>
+
+        <!-- ①-5 卡片底部导航控制栏:两端对齐 -->
+        <footer class="card-foot">
+          <div class="cf-left">
+            <button class="btn-primary"
+                    [disabled]="!canSubmitTake()"
+                    (click)="submitPending()"
+                    [matTooltip]="canSubmitTake() ? t('practice.submitTakeTip') : t('practice.submitNeedsRecording')">
+              <mat-icon>{{ uploadingPending() ? 'cloud_upload' : 'check' }}</mat-icon>
+              <span>{{ t('practice.submitTake') }}</span>
+            </button>
+
+            <button class="btn-ghost"
+                    [disabled]="!recorder.pendingTake() && !activeTake()"
+                    (click)="retryTake()"
+                    [matTooltip]="t('practice.retryTip')">
+              <mat-icon>restart_alt</mat-icon>
+              <span>{{ t('practice.retry') }}</span>
+            </button>
+
+            <!-- 待提交时的次要动作:试听 + 丢弃 -->
+            @if (recorder.pendingTake()) {
+              <button class="btn-mini" (click)="previewPending()"
+                      [matTooltip]="t('practice.recPlay')">
+                <mat-icon>{{ previewingPending() ? 'pause' : 'play_arrow' }}</mat-icon>
+                <span>{{ t('practice.previewTake') }}</span>
+              </button>
+              <button class="btn-mini danger" (click)="discardPending()"
+                      [matTooltip]="t('practice.discardTake')">
+                <mat-icon>delete_outline</mat-icon>
+                <span>{{ t('practice.discardTake') }}</span>
+              </button>
+            }
           </div>
 
-          <div class="act-nav">
-            <button mat-stroked-button class="nav-btn"
-                    [disabled]="!hasPrev()" (click)="prevItem()">
+          <div class="cf-right">
+            <!-- 题号跳转:# 输入框 + 跳转按钮 -->
+            <div class="jump-box">
+              <input class="jump-input" type="text" inputmode="numeric"
+                     [ngModel]="jumpDraft()"
+                     (ngModelChange)="onJumpDraftChange($event)"
+                     (keydown.enter)="jumpToItem()"
+                     [placeholder]="'#'"
+                     [attr.aria-label]="t('practice.jumpLabel')">
+              <button class="jump-go" (click)="jumpToItem()">{{ t('practice.jumpTo') }}</button>
+            </div>
+
+            <button class="nav-btn" [disabled]="!hasPrev()" (click)="prevItem()">
               <mat-icon>arrow_back</mat-icon>
               <span>{{ t('practice.prev') }}</span>
             </button>
-            <button mat-stroked-button class="nav-btn"
-                    [disabled]="!hasNext()" (click)="nextItem()">
+            <button class="nav-btn" [disabled]="!hasNext()" (click)="nextItem()">
               <span>{{ t('practice.next') }}</span>
               <mat-icon>arrow_forward</mat-icon>
             </button>
           </div>
         </footer>
 
-        <!-- ⑥ 历史录音列表(任务书第四节) -->
-        <section class="rec-list">
-          <div class="rl-head">
-            <h3>{{ t('practice.recHistory') }}</h3>
-            <span class="rl-count">{{ myRecordings().length }}</span>
+        <!-- 未配置 Azure Key 时的拦截提示(诚实原则:后端无 key 就不能假装能评分) -->
+        @if (!azureReady()) {
+          <div class="key-warn">
+            <mat-icon>warning_amber</mat-icon>
+            <div class="kw-text">
+              <span>{{ t('practice.azureKeyMissing') }}</span>
+              <button class="kw-link" (click)="goAiSetting()">
+                {{ t('practice.gotoConfigKey') }}
+              </button>
+            </div>
           </div>
+        }
+      </section>
 
-          @if (!myRecordings().length) {
-            <p class="rl-empty">{{ t('practice.noRecordings') }}</p>
-          } @else {
-            @for (r of myRecordings(); track r.id) {
-              <!-- 任务书第三节:压扁为单行紧凑模式(44-48px 高)。
-                   顺序:小播放键 → Take #n + 时间/时长 → 细进度条 →
-                         AI 评分胶囊 → 查看报告 ▾ 切换 → 垃圾桶。 -->
-              <!-- ⚠️ Forrest 第十一轮:Retry 点不动,因为整行没有"选中"手柄 →
-                   未评分的录音既点不到"查看报告",也无法成为 activeTake,
-                   于是 Retry 一直处于 disabled。现让整行点击即选中。 -->
-              <div class="rl-item" [class.active]="activeTakeId() === r.id"
-                   [class.grading]="r.grading"
-                   (click)="selectTake(r.id)"
-                   tabindex="0"
-                   (keyup.enter)="selectTake(r.id)">
+      <!-- ==========================================================
+           卡片② 录音历史与评分报告卡片(与卡片① 间距 24px)
+           ========================================================== -->
+      <section class="hist-card">
 
-                <button class="rl-play" (click)="$event.stopPropagation(); togglePlay(r)" [disabled]="r.grading"
-                        [matTooltip]="isPlaying(r.id) ? t('practice.stop') : t('practice.recPlay')">
-                  <mat-icon>{{ isPlaying(r.id) ? 'pause' : 'play_arrow' }}</mat-icon>
-                </button>
+        <!-- ②-1 Recordings 列表区标头 -->
+        <div class="hist-head">
+          <mat-icon class="hh-icon">graphic_eq</mat-icon>
+          <h3>{{ t('practice.recHistory') }}</h3>
+          <span class="hh-count">({{ myRecordings().length }})</span>
+        </div>
 
-                <span class="rl-idx">Take #{{ $index + 1 }}</span>
-                <span class="rl-meta">{{ fmtTime(r.createdAt) }} · {{ fmtDuration(r.duration) }}</span>
+        @if (!myRecordings().length) {
+          <p class="hist-empty">{{ t('practice.noRecordings') }}</p>
+        } @else {
+          <!-- ②-2 单条录音:横向通栏
+               播放键 → Take #n + 时间/时长 → 进度条 → AI 评分 → 查看报告 → 删除 -->
+          @for (r of myRecordings(); track r.id) {
+            <div class="hist-item" [class.active]="activeTakeId() === r.id"
+                 [class.grading]="r.grading"
+                 (click)="selectTake(r.id)"
+                 tabindex="0"
+                 (keyup.enter)="selectTake(r.id)">
 
-                @if (r.score) {
-                  <span class="rl-badge" [class]="scoreClass(r.score.pronScore)">
-                    {{ r.score.pronScore }}
-                  </span>
-                }
+              <button class="hi-play" (click)="$event.stopPropagation(); togglePlay(r)" [disabled]="r.grading"
+                      [matTooltip]="isPlaying(r.id) ? t('practice.stop') : t('practice.recPlay')">
+                <mat-icon>{{ isPlaying(r.id) ? 'pause' : 'play_arrow' }}</mat-icon>
+              </button>
 
-                <div class="track rl-track" (click)="$event.stopPropagation(); seek(r, $event)">
-                  <div class="track-bg"></div>
-                  <div class="track-fill" [style.width.%]="progress(r)"></div>
-                </div>
-                <span class="rl-time">{{ playingTime(r) }} / {{ fmtDuration(r.duration) }}</span>
+              <span class="hi-idx">Take #{{ $index + 1 }}</span>
+              <span class="hi-meta">{{ fmtTime(r.createdAt) }} · {{ fmtDuration(r.duration) }}</span>
 
-                <span class="spacer"></span>
+              @if (r.score) {
+                <span class="hi-badge" [class]="scoreClass(r.score.pronScore)">
+                  {{ r.score.pronScore }}
+                </span>
+              }
 
-                <button class="rl-score" [disabled]="r.grading" (click)="$event.stopPropagation(); gradeRecording(r.id)">
-                  <mat-icon>{{ r.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
-                  <span>{{ r.grading ? t('practice.grading') : t('practice.runAiScoring') }}</span>
-                </button>
-
-                @if (r.score) {
-                  <button class="rl-view" [class.on]="isTakeReportOpen(r.id)"
-                          (click)="$event.stopPropagation(); toggleTakeReport(r.id)">
-                    <span>
-                      {{ isTakeReportOpen(r.id) ? t('practice.collapseReport') : t('practice.viewReport') }}
-                    </span>
-                    <mat-icon>{{ isTakeReportOpen(r.id) ? 'expand_less' : 'expand_more' }}</mat-icon>
-                  </button>
-                }
-
-                <button class="rl-del" [matTooltip]="t('practice.deleteRec')"
-                        (click)="$event.stopPropagation(); removeRecording(r.id)">
-                  <mat-icon>delete_outline</mat-icon>
-                </button>
-
-                @if (r.error) {
-                  <p class="rl-fail"><mat-icon>error_outline</mat-icon>{{ r.error }}</p>
-                }
+              <div class="track hi-track" (click)="$event.stopPropagation(); seek(r, $event)">
+                <div class="track-bg"></div>
+                <div class="track-fill" [style.width.%]="progress(r)"></div>
               </div>
-            }
-          }
-        </section>
+              <span class="hi-time">{{ playingTime(r) }} / {{ fmtDuration(r.duration) }}</span>
 
-        <!-- ⑦ 评分报告结果区(任务书第五节)
-             任务书要求"即使当前没有评测数据,也必须把完整的评测结果组件与 DOM 结构
-             编写完整(有数据时条件渲染展示)"。
-             所以这里改为**始终渲染外框与标题**,只在分数部分分两种情况:
-               有分 → 完整报告;没分 → 引导空状态(告诉用户怎样才会出报告)。
-             这样 DOM 结构稳定,不会出现"报告区时有时无"的观感。 -->
-        <section class="azure-assessment-report">
+              <span class="spacer"></span>
+
+              <button class="hi-score" [disabled]="r.grading" (click)="$event.stopPropagation(); gradeRecording(r.id)">
+                <mat-icon>{{ r.grading ? 'hourglass_top' : 'add' }}</mat-icon>
+                <span>{{ r.grading ? t('practice.grading') : t('practice.runAiScoring') }}</span>
+              </button>
+
+              @if (r.score) {
+                <button class="hi-view" [class.on]="isTakeReportOpen(r.id)"
+                        (click)="$event.stopPropagation(); toggleTakeReport(r.id)">
+                  <span>
+                    {{ isTakeReportOpen(r.id) ? t('practice.collapseReport') : t('practice.viewReport') }}
+                  </span>
+                  <mat-icon>{{ isTakeReportOpen(r.id) ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </button>
+              }
+
+              <button class="hi-del" [matTooltip]="t('practice.deleteRec')"
+                      (click)="$event.stopPropagation(); removeRecording(r.id)">
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+
+              @if (r.error) {
+                <p class="hi-fail"><mat-icon>error_outline</mat-icon>{{ r.error }}</p>
+              }
+            </div>
+          }
+        }
+
+        <!-- ②-3 Score Results 评测报告区(始终渲染外框与标题,DOM 稳定) -->
+        <section class="report-section">
           <div class="rep-title">
             <mat-icon>assessment</mat-icon>
             <h3>{{ t('practice.scoreResults') }}</h3>
 
-            <!-- 折叠控制器(任务书第三节):有分才需要收起/展开 -->
             @if (activeTake()?.score) {
               <span class="spacer"></span>
               <button mat-button class="rep-toggle" (click)="toggleReport()">
@@ -566,142 +511,136 @@
           </div>
 
           @if (activeTake()?.score; as sc) {
-          @if (reportOpen()) {
-          <div class="result-wrap">
+            @if (reportOpen()) {
+              <div class="result-wrap">
 
-            <!-- Score Results:总分 + 四维胶囊 -->
-            <section class="res-block">
-              <div class="res-head">
-                <h3>{{ t('practice.scoreResults') }}</h3>
-                <span class="res-total" [class]="scoreClass(sc.pronScore)">
-                  {{ sc.pronScore }}<i>{{ t('practice.points') }}</i>
-                </span>
-              </div>
-
-              <div class="pills">
-                <span class="pill p-blue">
-                  <i class="dot"></i>{{ t('dim.pronunciation') }}
-                  <b>{{ sc.pronScore }}</b>
-                </span>
-
-                @if (sc.fluencyScore !== null) {
-                  <span class="pill p-green">
-                    <i class="dot"></i>{{ t('dim.fluency') }}<b>{{ sc.fluencyScore }}</b>
-                  </span>
-                } @else {
-                  <!-- Free F0 不返回流利度:明示,不拿 0 充数 -->
-                  <span class="pill p-na">
-                    <i class="dot"></i>{{ t('dim.fluency') }}<b>{{ t('common.na') }}</b>
-                  </span>
-                }
-
-                @if (sc.completenessScore !== null) {
-                  <span class="pill p-purple">
-                    <i class="dot"></i>{{ t('dim.completeness') }}<b>{{ sc.completenessScore }}</b>
-                  </span>
-                } @else {
-                  <span class="pill p-na">
-                    <i class="dot"></i>{{ t('dim.completeness') }}<b>{{ t('common.na') }}</b>
-                  </span>
-                }
-
-                <span class="pill p-dark">
-                  <i class="dot"></i>{{ t('dim.recognition') }}<b>{{ recognitionPct(sc) }}%</b>
-                </span>
-
-                @if (sc.accuracyScore !== null) {
-                  <span class="pill p-teal">
-                    <i class="dot"></i>{{ t('dim.accuracy') }}<b>{{ sc.accuracyScore }}</b>
-                  </span>
-                }
-              </div>
-
-              <!-- 2026-09-15 第八轮:已删除"当前为模拟评分"提示条 ——
-                   模拟评分逻辑已彻底移除,该分支永远不会命中,
-                   留着只会让人误以为还有假数据。 -->
-            </section>
-
-            <!-- Recognition Result:左侧逐词 Diff + 右侧错误统计 -->
-            <section class="res-block">
-              <div class="res-head">
-                <h3>{{ t('practice.recognition') }}</h3>
-              </div>
-              <p class="res-note">{{ t('practice.recognitionNote') }}</p>
-
-              <div class="recog-grid">
-                <p class="recog-text">
-                  @for (w of sc.words; track $index) {
-                    <span class="rw" [class]="errorClass(w.errorType)"
-                          [class.picked]="pickedWord() === $index"
-                          (click)="pickWord($index)"
-                          [matTooltip]="errLabel(w.errorType) + ' · ' + w.accuracy">{{ w.word }}</span>
-                  }
-                </p>
-
-                <div class="err-cards">
-                  @for (c of errorCounts(); track c.key) {
-                    <span class="ec" [class]="c.cls">
-                      <b>{{ c.n }}</b>
-                      <span class="ec-label">{{ t(c.key) }}</span>
+                <!-- 总分 + 四维胶囊 -->
+                <section class="res-block">
+                  <div class="res-head">
+                    <h3>{{ t('practice.scoreResults') }}</h3>
+                    <span class="res-total" [class]="scoreClass(sc.pronScore)">
+                      {{ sc.pronScore }}<i>{{ t('practice.points') }}</i>
                     </span>
-                  }
-                </div>
-              </div>
+                  </div>
 
-              <!-- 点击单词展开:目标发音 + 得分 -->
-              @if (pickedWord() !== null && sc.words[pickedWord()!]; as pw) {
-                <div class="word-pop">
-                  <span class="wp-word">{{ pw.word }}</span>
-                  @if (phonetic(pw.word); as ph) {
-                    <span class="wp-phon">/{{ ph }}/</span>
-                  } @else {
-                    <span class="wp-phon na">{{ t('practice.noPhonetic') }}</span>
-                  }
-                  <span class="wp-err">{{ errLabel(pw.errorType) }}</span>
-                  <span class="wp-score" [class]="scoreClass(pw.accuracy)">{{ pw.accuracy.toFixed(1) }}</span>
-                </div>
-              }
-            </section>
+                  <div class="pills">
+                    <span class="pill p-blue">
+                      <i class="dot"></i>{{ t('dim.pronunciation') }}
+                      <b>{{ sc.pronScore }}</b>
+                    </span>
 
-            <!-- Word Scores:逐词分值网格 -->
-            <section class="res-block">
-              <button mat-button class="words-toggle" (click)="toggleWords('active')">
-                <mat-icon>{{ isWordsOpen('active') ? 'expand_less' : 'expand_more' }}</mat-icon>
-                <span>{{ t('practice.wordScores') }}</span>
-              </button>
+                    @if (sc.fluencyScore !== null) {
+                      <span class="pill p-green">
+                        <i class="dot"></i>{{ t('dim.fluency') }}<b>{{ sc.fluencyScore }}</b>
+                      </span>
+                    } @else {
+                      <!-- Free F0 不返回流利度:明示,不拿 0 充数 -->
+                      <span class="pill p-na">
+                        <i class="dot"></i>{{ t('dim.fluency') }}<b>{{ t('common.na') }}</b>
+                      </span>
+                    }
 
-              @if (isWordsOpen('active')) {
-                <div class="word-grid">
-                  @for (w of sc.words; track $index) {
-                    <div class="wg-cell">
-                      <span class="wg-word">{{ w.word }}</span>
-                      <!-- ⚠️ 2026-09-16:无词级数据就显示 "—",不显示误导性的 0.0 -->
-                      @if (hasWordScore(w)) {
-                        <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
+                    @if (sc.completenessScore !== null) {
+                      <span class="pill p-purple">
+                        <i class="dot"></i>{{ t('dim.completeness') }}<b>{{ sc.completenessScore }}</b>
+                      </span>
+                    } @else {
+                      <span class="pill p-na">
+                        <i class="dot"></i>{{ t('dim.completeness') }}<b>{{ t('common.na') }}</b>
+                      </span>
+                    }
+
+                    <span class="pill p-dark">
+                      <i class="dot"></i>{{ t('dim.recognition') }}<b>{{ recognitionPct(sc) }}%</b>
+                    </span>
+
+                    @if (sc.accuracyScore !== null) {
+                      <span class="pill p-teal">
+                        <i class="dot"></i>{{ t('dim.accuracy') }}<b>{{ sc.accuracyScore }}</b>
+                      </span>
+                    }
+                  </div>
+                </section>
+
+                <!-- Recognition Result:左逐词 Diff + 右错误统计 -->
+                <section class="res-block">
+                  <div class="res-head">
+                    <h3>{{ t('practice.recognition') }}</h3>
+                  </div>
+                  <p class="res-note">{{ t('practice.recognitionNote') }}</p>
+
+                  <div class="recog-grid">
+                    <p class="recog-text">
+                      @for (w of sc.words; track $index) {
+                        <span class="rw" [class]="errorClass(w.errorType)"
+                              [class.picked]="pickedWord() === $index"
+                              (click)="pickWord($index)"
+                              [matTooltip]="errLabel(w.errorType) + ' · ' + w.accuracy">{{ w.word }}</span>
+                      }
+                    </p>
+
+                    <div class="err-cards">
+                      @for (c of errorCounts(); track c.key) {
+                        <span class="ec" [class]="c.cls">
+                          <b>{{ c.n }}</b>
+                          <span class="ec-label">{{ t(c.key) }}</span>
+                        </span>
+                      }
+                    </div>
+                  </div>
+
+                  @if (pickedWord() !== null && sc.words[pickedWord()!]; as pw) {
+                    <div class="word-pop">
+                      <span class="wp-word">{{ pw.word }}</span>
+                      @if (phonetic(pw.word); as ph) {
+                        <span class="wp-phon">/{{ ph }}/</span>
                       } @else {
-                        <span class="wg-score na">{{ t('common.na') }}</span>
+                        <span class="wp-phon na">{{ t('practice.noPhonetic') }}</span>
+                      }
+                      <span class="wp-err">{{ errLabel(pw.errorType) }}</span>
+                      <span class="wp-score" [class]="scoreClass(pw.accuracy)">{{ pw.accuracy.toFixed(1) }}</span>
+                    </div>
+                  }
+                </section>
+
+                <!-- Word Scores:逐词分值网格 -->
+                <section class="res-block">
+                  <button mat-button class="words-toggle" (click)="toggleWords('active')">
+                    <mat-icon>{{ isWordsOpen('active') ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    <span>{{ t('practice.wordScores') }}</span>
+                  </button>
+
+                  @if (isWordsOpen('active')) {
+                    <div class="word-grid">
+                      @for (w of sc.words; track $index) {
+                        <div class="wg-cell">
+                          <span class="wg-word">{{ w.word }}</span>
+                          <!-- 无词级数据就显示 "—",不显示误导性的 0.0 -->
+                          @if (hasWordScore(w)) {
+                            <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
+                          } @else {
+                            <span class="wg-score na">{{ t('common.na') }}</span>
+                          }
+                        </div>
                       }
                     </div>
                   }
-                </div>
-              }
-            </section>
-
-          </div>
-          }
+                </section>
+              </div>
+            }
           } @else {
-            <!-- 空状态:报告区骨架在位,引导用户产出报告。
-                 不显示假分数——没评测就说没评测。 -->
+            <!-- 空状态:报告区骨架在位,引导用户产出报告;不显示假分数 -->
             <p class="rep-empty">
               <mat-icon>info_outline</mat-icon>
               <span>{{ t('practice.reportEmpty') }}</span>
             </p>
           }
         </section>
-    </div>
+      </section>
+    }
   </main>
 
-  <!-- 轻量 toast:被置灰的提交按钮点不了 → 用可点入口给出反馈 -->
+  <!-- 轻量 toast:被置灰的按钮点不了 → 用可点入口给出反馈 -->
   @if (toastMsg()) {
     <div class="ap-toast">
       <mat-icon>warning_amber</mat-icon>

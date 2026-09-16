@@ -1,0 +1,222 @@
+/* AI / Azure 语音设置页 —— 2026-09-15 第六轮新增 */
+
+.setting-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 22px 20px 48px;
+}
+
+/* ---------- 页头 ---------- */
+.sp-head {
+  margin-bottom: 18px;
+}
+.sp-head .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #2f6fed;
+  text-decoration: none;
+}
+.sp-head .back:hover { text-decoration: underline; }
+.sp-head .back mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+.sp-head h1 {
+  margin: 0 0 6px;
+  font-size: 21px;
+  font-weight: 700;
+  color: #1f2733;
+}
+.sp-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #6b7280;
+}
+
+/* ---------- 卡片 ---------- */
+.sp-card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, .07);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
+  padding: 18px 20px 20px;
+  margin-bottom: 14px;
+}
+.sp-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #1f2733;
+}
+.sp-card-title mat-icon {
+  font-size: 19px;
+  width: 19px;
+  height: 19px;
+  color: #2f6fed;
+}
+.sp-card-desc {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #6b7280;
+}
+.sp-card-desc strong { color: #3b4351; }
+
+/* ---------- 引擎选项(与 /practice 弹窗同款视觉) ---------- */
+.eng-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.eng-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.eng-row:hover { border-color: #c3d6f7; background: #f8fbff; }
+.eng-row.on {
+  border-color: #2f6fed;
+  background: #f2f7ff;
+  box-shadow: 0 0 0 1px rgba(47, 111, 237, .18);
+}
+
+/* 单选圆圈:显式尺寸 + 居中,避免"圆圈未对齐"的老问题 */
+.eng-radio {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #c5cdd9;
+  box-sizing: border-box;
+  position: relative;
+  transition: border-color .15s ease;
+}
+.eng-radio.checked { border-color: #2f6fed; }
+.eng-radio.checked::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: #2f6fed;
+}
+
+.eng-icon {
+  flex: 0 0 auto;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  color: #5b6472;
+}
+.eng-row.on .eng-icon { color: #2f6fed; }
+
+.eng-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.eng-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1f2733;
+}
+.eng-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #9aa1ab;
+}
+
+.eng-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2f6fed;
+  background: #e4eeff;
+  border-radius: 9px;
+  padding: 2px 8px;
+}
+
+/* ---------- 表单 ---------- */
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.form-grid .full { width: 100%; }
+
+.act-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.key-preview {
+  font-size: 12px;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+.saved-hint {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #22a35c; /* 成功 = 绿色 */
+}
+
+/* ⚠️ 失败必须与成功视觉上区分开。以前无此分支,错误信息被染成绿色,
+   用户会把 "保存失败:...28P01..." 误读为成功。 */
+.saved-hint.err {
+  color: #c0392b; /* 失败 = 红色 */
+}
+
+/* ---------- 诚实提示条 ---------- */
+.warn-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #fff8e6;
+  border: 1px solid #f5e3b3;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #8a6d1f;
+}
+.warn-note mat-icon {
+  flex: 0 0 auto;
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+}
+.warn-note strong { color: #6f5714; }
+
+/* ---------- 事实清单 ---------- */
+.fact-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  line-height: 1.85;
+  color: #5b6472;
+}
+.fact-list strong { color: #3b4351; }
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 720px) {
+  .setting-page { padding: 16px 14px 40px; }
+  .sp-card { padding: 15px 15px 17px; }
+}

@@ -1,0 +1,125 @@
+<!-- AI / Azure 语音设置
+     2026-09-15 第六轮新增:为 /practice「TTS 引擎 → 前往配置 ↗」提供真实落点。
+     ⚠️ 诚实原则:后端密钥托管接口未实现 = 直说,不做假成功提示。 -->
+<div class="setting-page">
+
+  <header class="sp-head">
+    <a class="back" routerLink="/practice">
+      <mat-icon>arrow_back</mat-icon>
+      <span>返回 AI 面试练习</span>
+    </a>
+    <h1>AI 语音设置</h1>
+    <p class="sp-sub">选择示范朗读使用的语音引擎,并配置 Azure 语音服务凭据。</p>
+  </header>
+
+  <!-- 引擎选择 -->
+  <section class="sp-card">
+    <h2 class="sp-card-title">
+      <mat-icon>settings_voice</mat-icon>
+      <span>示范朗读引擎</span>
+    </h2>
+
+    <div class="eng-list">
+      @for (e of engines; track e.key) {
+        <button class="eng-row" [class.on]="engine() === e.key"
+                (click)="setEngine(e.key)">
+          <span class="eng-radio" [class.checked]="engine() === e.key"></span>
+          <mat-icon class="eng-icon">{{ e.icon }}</mat-icon>
+          <span class="eng-body">
+            <span class="eng-name">{{ e.name }}</span>
+            <span class="eng-note">{{ e.note }}</span>
+          </span>
+          @if (engine() === e.key) {
+            <span class="eng-badge">当前</span>
+          }
+        </button>
+      }
+    </div>
+
+    <!-- 诚实提示:Azure 尚未真正接通 -->
+    @if (engine() === 'azure') {
+      <p class="warn-note">
+        <mat-icon>info_outline</mat-icon>
+        <span>
+          后端尚未提供语音合成接口,练习页选择 Azure 时<strong>会回退到浏览器语音</strong>以保证有声音,
+          这是当前的真实行为,不是故障。配置密钥后仍需后端接入才能真正生效。
+        </span>
+      </p>
+    }
+  </section>
+
+  <!-- Azure 凭据配置 -->
+  <section class="sp-card">
+    <h2 class="sp-card-title">
+      <mat-icon>key</mat-icon>
+      <span>Azure Speech 凭据</span>
+    </h2>
+
+    <p class="sp-card-desc">
+      在 Azure 门户创建 Speech 资源后,从「密钥和终结点」页复制 Key 与区域填入下方。
+      凭据仅用于服务端调用,<strong>不会写入浏览器存储</strong>。
+    </p>
+
+    <div class="form-grid">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Azure Speech Key</mat-label>
+        <input matInput type="password" autocomplete="off" spellcheck="false"
+               [ngModel]="azureKey()"
+               (ngModelChange)="azureKey.set($event)"
+               placeholder="粘贴 32 位密钥">
+        <mat-hint>形如 1a2b3c4d5e6f7g8h9i0j…(32 位十六进制)</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>区域 (Region)</mat-label>
+        <mat-select [ngModel]="region()" (ngModelChange)="onRegionChange($event)">
+          @for (r of regions; track r) {
+            <mat-option [value]="r">{{ r }}</mat-option>
+          }
+        </mat-select>
+        <mat-hint>必须与资源实际创建区域一致,否则会返回 401/403</mat-hint>
+      </mat-form-field>
+    </div>
+
+    <div class="act-row">
+      <button mat-flat-button color="primary"
+              [disabled]="!keyFilled()"
+              (click)="saveKey()">
+        <mat-icon>save</mat-icon>
+        <span>保存密钥</span>
+      </button>
+
+      @if (keyFilled()) {
+        <span class="key-preview">当前输入:{{ keyMasked() }}</span>
+      }
+
+      @if (savedHint()) {
+        <span class="saved-hint" [class.err]="savedHintKind() === 'err'">{{ savedHint() }}</span>
+      }
+    </div>
+
+    @if (!backendReady()) {
+      <p class="warn-note">
+        <mat-icon>construction</mat-icon>
+        <span>
+          后端密钥托管接口<strong>尚未接入</strong>,保存按钮不会假装成功。
+          接入后凭据将由服务端加密保存,前端只传一次。
+        </span>
+      </p>
+    }
+  </section>
+
+  <!-- 发音评测说明 -->
+  <section class="sp-card">
+    <h2 class="sp-card-title">
+      <mat-icon>fact_check</mat-icon>
+      <span>发音评测</span>
+    </h2>
+    <ul class="fact-list">
+      <li>练习页的 AI 评分走服务端 Azure 发音评测接口,Key 由服务端持有。</li>
+      <li>当前订阅档位(Free F0)只返回<strong>发音准确度</strong>,流利度与完整度拿不到,界面显示「—」。</li>
+      <li>评测结果不返回音标,单词详情里音标位置显示「暂无音标」。</li>
+    </ul>
+  </section>
+
+</div>

@@ -1,6 +1,7 @@
 import {
   Component, OnDestroy, OnInit, computed, effect, inject, signal
 } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -1785,6 +1786,33 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         }
       }
     });
+
+    // ★ 第三十轮:静态波形 —— 当前作品/待提交录音变化时重算波形柱高。
+    //   同一段音频只解码一次(结果进 waveCache);
+    //   异步完成后用 queueMicrotask 写信号,避开 effect 内写信号的 NG0600。
+    effect(() => {
+      const id = this.waveTargetId();
+      const take = this.activeTake() ?? this.recorder.pendingTake();
+      if (!id || !take) {
+        queueMicrotask(() => this.waveBars.set([]));
+        return;
+      }
+      const cached = this.waveCache.get(id);
+      if (cached) {
+        queueMicrotask(() => this.waveBars.set(cached));
+        return;
+      }
+      queueMicrotask(() => this.waveBars.set([]));
+      void (async () => {
+        const src = await this.waveAudioSource(take);
+        if (!src || src.size === 0) return;
+        const bars = await this.computeWaveBars(src);
+        if (!bars) return;
+        this.waveCache.set(id, bars);
+        // 只有当前目标仍是这条录音时才写入(避免异步竞态写错人的波形)
+        if (this.waveTargetId() === id) this.waveBars.set(bars);
+      })();
+    });
   }
 
   isPlaying(id: string): boolean {
@@ -1860,6 +1888,118 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       () => this.playingId.set(r.id),
       () => this.playingId.set(null)  // 浏览器拦自动播放时如实置回
     );
+  }
+
+  // ============================================================
+  // ★ 第三十轮:静态波形(录完后)
+  //   从当前作品/待提交录音的真实音频解出峰值柱,而不是画一条假的装饰波形。
+  //   缓存:同一段音频只解码一次(waveCache),避免每次变更检测都重算。
+  // ============================================================
+
+  /** 当前是否有可供画波形的录音。 */
+  readonly showWaveform = computed(() => {
+    const t = this.activeTake();
+    if (t) return true;
+    return !!this.recorder.pendingTake();
+  });
+
+  /** 当前波形归属的录音 id(作品优先,否则待提交)。 */
+  private waveTargetId(): string | null {
+    const t = this.activeTake();
+    if (t) return t.id;
+    const p = this.recorder.pendingTake();
+    return p?.id ?? null;
+  }
+
+  /** 静态波形的柱高数组(0~100,已按最大值归一化)。 */
+  readonly waveBars = signal<number[]>([]);
+
+  /** 解码结果缓存:录音 id → 柱高数组。 */
+  private readonly waveCache = new Map<string, number[]>();
+
+  /**
+   * 音频源:优先内存里的 blob(刚录完),否则走带鉴权接口把已上传录音取回。
+   * 与评分同一个取数策略(第二十九轮),避免「刷新后没有 blob」时波形画不出来。
+   */
+  private async waveAudioSource(rec: Recording): Promise<Blob | null> {
+    const b = (rec as { blob?: Blob }).blob;
+    if (b && b.size > 0) return b;
+    if (RecorderService.isGuid(rec.id)) {
+      try {
+        return await firstValueFrom(this.practiceApi.fetchRecordingAudio(rec.id));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /** 解码音频并算出波形柱高。 */
+  private async computeWaveBars(blob: Blob, bars = 56): Promise<number[] | null> {
+    const Ctor = window.AudioContext
+      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+    const ctx = new Ctor();
+    try {
+      const buf = await blob.arrayBuffer();
+      const audio = await this.decodeCompat(ctx, buf);
+      const data = audio.getChannelData(0);
+      if (!data.length) return null;
+      const block = Math.max(1, Math.floor(data.length / bars));
+      const out: number[] = [];
+      let peak = 0;
+      for (let i = 0; i < bars; i++) {
+        let max = 0;
+        const start = i * block;
+        const end = Math.min(data.length, start + block);
+        for (let j = start; j < end; j++) {
+          const v = Math.abs(data[j]);
+          if (v > max) max = v;
+        }
+        out.push(max);
+        if (max > peak) peak = max;
+      }
+      // 归一化到 0~100:说话录音峰值通常远小于 1,必须归一化才看得出形状。
+      const norm = peak > 0 ? out.map((v) => Math.max(6, Math.round((v / peak) * 100))) : [];
+      return norm.length ? norm : null;
+    } catch {
+      return null;
+    } finally {
+      if (ctx.state !== 'closed') void ctx.close().catch(() => undefined);
+    }
+  }
+
+  /** 与录音服务同款双形态解码(Safari 只支持回调式)。 */
+  private decodeCompat(ctx: BaseAudioContext, buf: ArrayBuffer): Promise<AudioBuffer> {
+    return new Promise<AudioBuffer>((resolve, reject) => {
+      const anyCtx = ctx as unknown as {
+        decodeAudioData: (
+          b: ArrayBuffer,
+          ok?: (x: AudioBuffer) => void,
+          bad?: (e: unknown) => void
+        ) => Promise<AudioBuffer> | void;
+      };
+      try {
+        const ret = anyCtx.decodeAudioData(buf, resolve, reject);
+        if (ret && typeof (ret as Promise<AudioBuffer>).then === 'function') {
+          (ret as Promise<AudioBuffer>).then(resolve).catch(reject);
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  /** 播放位置对应第几根柱子已播过(用于高亮)。 */
+  wavePlayed(index: number): boolean {
+    const bars = this.waveBars().length;
+    if (!bars) return false;
+    const t = this.activeTake();
+    const p = this.recorder.pendingTake();
+    const isActive = !!t && this.playingId() === t.id;
+    const isPending = !!p && this.previewingPending();
+    if (!isActive && !isPending) return false;
+    return index / bars <= this.playPos() / Math.max(1, t?.duration ?? p?.duration ?? 1);
   }
 
   /** 播放进度百分比。 */

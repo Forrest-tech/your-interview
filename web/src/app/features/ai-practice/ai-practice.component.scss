@@ -3316,3 +3316,70 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .hist-card .report-section .words-toggle mat-icon {
   font-size: 17px; width: 17px; height: 17px; color: #64748b;
 }
+
+/* ============================================================
+   2026-09-16 第三十轮:音频波形
+   ① .live-wave  录音中的实时跳动柱(胶囊内,纯视觉增强)
+   ② .wave-strip 录完后的静态波形条(胶囊下方一行,展示音频真实形状)
+   特异性说明:两处都用完整父链选择器,避免被既有的
+   .audio-stack .rec-pill .xxx 规则压过(第二十四轮血的教训)。
+   ============================================================ */
+
+/* ---------- ① 录音中的实时波形(胶囊内) ---------- */
+.audio-stack .rec-pill .live-wave {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;      /* 柱条以中线对齐,上下对称 */
+  justify-content: center;
+  gap: 2px;
+  height: 30px;
+  padding: 0 8px;
+  overflow: hidden;
+}
+.audio-stack .rec-pill .live-wave .lw-bar {
+  display: block;
+  width: 3px;
+  min-height: 2px;
+  border-radius: 2px;
+  background: #10b981;      /* 与录音麦克风同色 */
+  transition: height 60ms linear, opacity 60ms linear;
+}
+
+/* ---------- ② 录完后的静态波形条 ---------- */
+.audio-stack .wave-strip {
+  width: 100%;
+  height: 54px;
+  padding: 6px 20px;
+  border-radius: 14px;
+  border: 1px solid #d6f0e0;
+  background: #f7fdf9;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+.audio-stack .wave-strip .ws-bars {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;      /* 波形以中线为轴对称 */
+  justify-content: space-between;
+  gap: 1px;
+  height: 100%;
+  cursor: default;
+}
+.audio-stack .wave-strip .ws-bar {
+  flex: 1 1 0;
+  min-width: 1px;
+  max-width: 4px;
+  border-radius: 2px;
+  background: #a7d9be;      /* 未播放:浅绿 */
+  transition: background 120ms linear, height 120ms ease-out;
+}
+.audio-stack .wave-strip .ws-bar.played {
+  background: #10b981;      /* 已播放:实绿 */
+}
+/* 播放中整条轻微提亮,提示"正在读这里" */
+.audio-stack .wave-strip.wave-live {
+  border-color: #bbf7d0;
+  background: #f0fdf6;
+}

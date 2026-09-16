@@ -339,6 +339,18 @@
               }
             </div>
 
+            <!-- ★ 第三十轮:实时波形 —— 录音时在胶囊内显示跳动的音量柱。
+                 纯视觉增强,失败不影响录音;liveWave 为空时不占位。 -->
+            @if (recorder.recording() && recorder.liveWave().length) {
+              <div class="live-wave" aria-hidden="true">
+                @for (v of recorder.liveWave(); track $index) {
+                  <span class="lw-bar"
+                        [style.height.%]="8 + v * 92"
+                        [style.opacity]="0.45 + v * 0.55"></span>
+                }
+              </div>
+            }
+
             <!-- 右侧:AI 评分胶囊 + 重置刷新(与左侧占位等宽,保证中间真居中) -->
             <div class="rec-side rec-hold">
               <button class="side-score" [disabled]="!activeTake() || activeTake()?.grading"
@@ -357,6 +369,21 @@
               <span class="rec-err"><mat-icon>error_outline</mat-icon>{{ recError() }}</span>
             }
           </div>
+
+          <!-- ★ 第三十轮:录完后的静态波形 + 回放进度。
+               纯展示用(不可拖动定位),与上方胶囊同宽。
+               未录音(无 activeTake 且无 pendingTake)时不显示。 -->
+          @if (showWaveform()) {
+            <div class="wave-strip" [class.wave-live]="activePlaying() || previewingPending()">
+              <div class="ws-bars" [matTooltip]="t('practice.recPlay')">
+                @for (b of waveBars(); track $index) {
+                  <span class="ws-bar"
+                        [style.height.%]="b"
+                        [class.played]="wavePlayed($index)"></span>
+                }
+              </div>
+            </div>
+          }
         </div>
         </div><!-- /.practice-box-border -->
 

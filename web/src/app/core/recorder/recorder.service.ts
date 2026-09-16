@@ -95,6 +95,13 @@ export class RecorderService {
   /** 是否正在录。 */
   readonly recording = signal(false);
 
+  /**
+   * ★ 第三十轮:录音中的实时音量波形(0~1 归一化的一小段柱状数据)。
+   *   由 AnalyserNode 定时采样得到,供录音条画出「正在说话」的实时动效。
+   *   录音结束/取消后清空,避免残留。
+   */
+  readonly liveWave = signal<number[]>([]);
+
   /** 录音已进行的秒数(用于计时显示)。 */
   readonly elapsed = signal(0);
 
@@ -104,6 +111,11 @@ export class RecorderService {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private stream: MediaStream | null = null;
+
+  /** 第三十轮:实时波形采样(AnalyserNode + 定时器),录音结束后必须释放。 */
+  private analyserCtx: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private waveTimer: ReturnType<typeof setInterval> | null = null;
   private startedAt = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -147,6 +159,7 @@ export class RecorderService {
     this.mediaRecorder.onstop = () => this.finalize();
 
     this.mediaRecorder.start();
+    this.startLiveWave();          // ★ 第三十轮:启动实时波形采样
     this.recording.set(true);
     this.startedAt = Date.now();
     this.elapsed.set(0);
@@ -162,6 +175,7 @@ export class RecorderService {
       this.mediaRecorder.stop();
     }
     this.recording.set(false);
+    this.stopLiveWave();           // ★ 第三十轮:停止实时波形采样
     this.clearTimer();
   }
 
@@ -172,6 +186,7 @@ export class RecorderService {
       this.mediaRecorder.stop();
     }
     this.recording.set(false);
+    this.stopLiveWave();           // ★ 第三十轮:停止实时波形采样
     this.clearTimer();
     this.releaseStream();
   }
@@ -873,7 +888,73 @@ export class RecorderService {
     }
   }
 
+  // ============================================================
+  // ★ 第三十轮:录音中的实时波形
+  //   直接从已有的 MediaStream 挂 AnalyserNode,不额外申请麦克风。
+  //   每 60ms 采样一次,取时域数据的 RMS 归一化后推入 liveWave,
+  //   前端据此画出「正在说话」的跳动柱条。
+  //   ⚠️ 必须在 stop/cancel/ngOnDestroy 释放,否则 AudioContext 泄漏。
+  // ============================================================
+  private startLiveWave(): void {
+    this.stopLiveWave();
+    if (!this.stream) return;
+    const Ctor = window.AudioContext
+      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return;
+    try {
+      this.analyserCtx = new Ctor();
+      const src = this.analyserCtx.createMediaStreamSource(this.stream);
+      this.analyser = this.analyserCtx.createAnalyser();
+      // 32 个柱位;FFT 取小一点,够画音量强度即可
+      this.analyser.fftSize = 64;
+      this.analyser.smoothingTimeConstant = 0.6;
+      src.connect(this.analyser);
+      // 注意:不 connect 到 destination —— 否则会把麦克风回放出来(啸叫)。
+
+      const buf = new Uint8Array(this.analyser.frequencyBinCount);
+      const BARS = 28;
+      this.liveWave.set(new Array(BARS).fill(0));
+
+      this.waveTimer = setInterval(() => {
+        if (!this.analyser) return;
+        this.analyser.getByteFrequencyData(buf);
+        // 把频域分箱压缩成 BARS 根柱子,取每段平均后归一化到 0~1
+        const out: number[] = [];
+        const step = Math.max(1, Math.floor(buf.length / BARS));
+        for (let i = 0; i < BARS; i++) {
+          let sum = 0;
+          for (let j = 0; j < step; j++) sum += buf[i * step + j] ?? 0;
+          const avg = sum / step / 255;
+          // 轻微放大低音量段,让小声说话也能看到起伏
+          out.push(Math.min(1, Math.pow(avg, 0.75) * 1.25));
+        }
+        this.liveWave.set(out);
+      }, 60);
+    } catch {
+      // 波形纯粹是视觉增强:失败绝不能影响录音主流程。
+      this.stopLiveWave();
+    }
+  }
+
+  private stopLiveWave(): void {
+    if (this.waveTimer) {
+      clearInterval(this.waveTimer);
+      this.waveTimer = null;
+    }
+    if (this.analyser) {
+      try { this.analyser.disconnect(); } catch { /* 已断开 */ }
+      this.analyser = null;
+    }
+    if (this.analyserCtx && this.analyserCtx.state !== 'closed') {
+      void this.analyserCtx.close().catch(() => undefined);
+    }
+    this.analyserCtx = null;
+    this.liveWave.set([]);
+  }
+
   private releaseStream(): void {
+    // 第三十轮:释放麦克风前先停掉波形采样,避免 AnalyserNode 持有已关闭的流。
+    this.stopLiveWave();
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
   }

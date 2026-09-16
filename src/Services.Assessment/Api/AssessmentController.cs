@@ -382,7 +382,55 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         var userId = currentUser.RequireUserId();
         var result = await sender.Send(new SaveSpeechSettingCommand(
             userId, body.Key, body.Region, body.Endpoint), ct);
-        return result.IsSuccess ? Results.Ok(result.Value) : result.ToProblemDetails();
+        if (result.IsSuccess) return Results.Ok(result.Value);
+
+        // ⚠️ 2026-09-16(Forrest 第 1 条):保存前会先去 Azure 真测。
+        //    凭据被拒时必须回 **502**(上游拒收我们的凭据),
+        //    不能让它落到 ToProblemDetails 的默认分支变成 500 ——
+        //    更不能是 401/403(前端会当成会话失效而登出)。
+        var code = result.Error?.Code ?? string.Empty;
+        if (code is "Speech.CredentialRejected" or "Speech.ProbeUnexpected")
+        {
+            return Results.Problem(
+                title: "密钥或区域无效",
+                detail: result.Error?.Description ?? "凭据验证失败,未保存。",
+                statusCode: StatusCodes.Status502BadGateway,
+                extensions: new Dictionary<string, object?> { ["code"] = code });
+        }
+
+        return result.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 测试一把**尚未保存**的候选凭据(Forrest 第 1 条需求:先测后存)。
+    ///
+    /// 与 /speech/test 的区别:
+    ///   · /speech/test        → 测"当前已保存的 key"
+    ///   · /speech/test-credential → 测请求体里这把候选 key,**不落库**
+    /// 前端流程:先在输入框填 key → 调本端点 → 通过才调 PUT /speech/settings 保存。
+    ///
+    /// 失败一律映射为 **502**(上游 Azure 拒收我们的凭据),
+    /// 绝不用 401/403 —— 那些码在前端意味着"会话失效",会把用户踢回登录页。
+    /// </summary>
+    [HttpPost("speech/test-credential")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> TestSpeechCredential([FromBody] SpeechCredentialBody body,
+        CancellationToken ct)
+    {
+        var r = await sender.Send(new TestSpeechCredentialCommand(body.Key, body.Region), ct);
+        if (r.IsSuccess)
+            return Results.Ok(new { ok = true, message = r.Value.Message });
+
+        // 区分"参数没填"(400)与"Azure 拒收"(502):
+        // 前者是用户输入问题,后者是凭据问题,前端提示不同。
+        var code = r.Error?.Code ?? string.Empty;
+        var isValidation = code is "Speech.KeyEmpty" or "Speech.RegionEmpty";
+        return Results.Problem(
+            title: isValidation ? "填写不完整" : "密钥或区域无效",
+            detail: r.Error?.Description ?? "凭据验证失败。",
+            statusCode: isValidation
+                ? StatusCodes.Status400BadRequest
+                : StatusCodes.Status502BadGateway);
     }
 
     /// <summary>
@@ -509,6 +557,12 @@ public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessmen
 
 /// <summary>Azure Speech 设置提交。⚠️ 只入不出 —— 保存后绝不回传 key。</summary>
 public sealed record SpeechSettingsBody(string Key, string Region, string? Endpoint);
+
+/// <summary>
+/// 测试一把**尚未保存**的候选凭据(先测后存)。
+/// 与 /speech/settings 的 body 同形,但语义完全不同:这里只验证,不写库。
+/// </summary>
+public sealed record SpeechCredentialBody(string Key, string Region);
 
 /// <summary>
 /// 评分落库请求体。

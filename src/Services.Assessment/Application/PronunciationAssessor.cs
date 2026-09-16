@@ -99,18 +99,35 @@ public sealed class PronunciationAssessor(
         if (!snapshot.HasKey)
             throw new InvalidOperationException("未配置 AzureSpeech:Key，请先保存密钥。");
 
-        var _key = snapshot.Key!;
-        var _endpoint = ResolveSttBase(snapshot);
+        return await PingWithAsync(snapshot.Key!, snapshot.Region, ct);
+    }
+
+    /// <summary>
+    /// 用**指定凭据**做连通性测试 —— 不读库、不写库。
+    ///
+    /// 用途(Forrest 第 1 条需求:先测后存):用户在设置页输入一把**尚未保存**的
+    /// 候选 key,我们要先验证它可用,通过了才允许写入数据库。
+    /// 此时库里那把旧的(或根本没有)都不该参与 —— 必须直接测参数里的凭据。
+    ///
+    /// region 为空时回落默认区域,避免拼出非法主机名。
+    /// </summary>
+    public async Task<bool> PingWithAsync(string key, string? region, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException("未提供可测试的密钥。");
+
+        var r = string.IsNullOrWhiteSpace(region) ? _configRegion : region.Trim();
+        var endpoint = $"https://{r}.stt.speech.microsoft.com";
 
         // STT 短音频端点。⚠️ 路径必须是 /speech/recognition/... ——
         //   /stt/ 前缀只属于"自定义子域"主机({name}.cognitiveservices.azure.com);
         //   我们用区域主机({region}.stt.speech.microsoft.com),不能带 /stt,
         //   否则 Azure 返回 404。
-        var url = $"{_endpoint}/speech/recognition/conversation/cognitiveservices/v1" +
+        var url = $"{endpoint}/speech/recognition/conversation/cognitiveservices/v1" +
                   "?language=en-US&format=simple";
 
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
-        req.Headers.Add("Ocp-Apim-Subscription-Key", _key);
+        req.Headers.Add("Ocp-Apim-Subscription-Key", key);
         // ⚠️ 必须带 User-Agent,否则 Azure 接入层(istio-envoy)回 400 空 body ——
         //    见 UserAgent 常量的详细说明。
         req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);

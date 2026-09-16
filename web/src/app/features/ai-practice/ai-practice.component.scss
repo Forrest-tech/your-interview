@@ -1,0 +1,2062 @@
+/* ⚠️ 2026-09-15 第十六轮:宿主 <app-ai-practice> 必须自己撑满高度,
+   否则里面的 .practice { height:100% } 拿不到确定高度 → 塌成内容高
+   (或撑破父容器 → 外层长滚动条 + 底部空白)。
+   父容器 .content 已通过 :has(> app-ai-practice) 设为 padding:0; overflow:hidden。 */
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+/* /practice = 双栏流式布局(2026-09-15 第三轮任务书)
+   左侧 = 「面试素材」树,直接作为一级侧栏(不再是贴边小抽屉)。
+   右侧 = 主作答与评测区,限宽 1100px 居中。
+   侧栏可折叠:折叠后宽度归零,右侧自动扩展并保持居中 ——
+   宽度过渡交给 grid-template-columns,内容不换行抖动。 */
+.practice {
+  position: relative;
+  display: grid;
+  /* 展开 = 可拖动的 --tree-w(默认 300px)⇄ 折叠 0,
+     右侧 minmax(0,1fr) 自动吃掉剩余宽度。Forrest 第十三轮加拖动。 */
+  grid-template-columns: var(--tree-w, 300px) minmax(0, 1fr);
+  /* ⚠️ 2026-09-15 第十六轮:原来是 height: calc(100vh - 60px) —— 硬编码
+     "视口高减顶栏",但它忽略了 shell 里**页脚**也占高度,于是 .practice
+     比它实际能拿到的高度更高 → 撑破父容器 → 把页脚推下去
+     → :host 出现长滚动条 + 底部大片空白(Forrest 报的问题)。
+     正解:不再自己算视口高,改为**吃满父容器给的高度**。
+       · height:100% 依赖父链有确定高度(见 shell 侧 padding 修正);
+       · min-height:0 允许内部滚动区正确收缩;
+       · 父链:.content(:has 规则 padding:0 + overflow:hidden)
+              → app-ai-practice(:host height:100%)
+              → .practice(height:100%) 一路有确定高度。 */
+  height: 100%;
+  min-height: 0;
+  transition: grid-template-columns .28s cubic-bezier(.4, 0, .2, 1);
+}
+.practice:not(.tree-open) {
+  /* 折叠:素材栏收成一根 **34px 细竖条**,而不是 0 ——
+     这样驻留在该栏内的折叠按钮依然可见可点,
+     用户随时能再点开(旧版压成 0 宽 = 按钮消失 = 永久失联)。 */
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+/* ---------- 左侧一级侧栏:面试素材树 ---------- */
+.col-tree {
+  position: relative;          /* 常驻折叠按钮以此为准贴右边缘 */
+  grid-column: 1;              /* 双保险:素材栏永远在第 1 列 */
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
+  border-right: 1px solid rgba(0, 0, 0, 0.07);
+  transition: opacity .2s ease;
+}
+
+/* 常驻折叠按钮:贴在素材树这一栏的**右边缘**、标题行高度位置。
+   它不在 @if(treeOpen()) 里,所以收起后仍然存在 —— 这就是
+   "点了 hide material 就再也回不来"的根本解法。 */
+.col-tree > .side-toggle {
+  position: absolute;
+  top: 9px;
+  right: 7px;
+  z-index: 6;
+  background: #fff;
+}
+.practice:not(.tree-open) .col-tree {
+  /* 折叠后:保留栏本身(34px竖条)+ 其中的按钮,
+     仅隐藏 @if 内的树内容(树内容本来就没渲染)。 */
+  opacity: 1;
+  pointer-events: auto;
+  background: #fbfcfe;
+}
+/* 竖条里的按钮:改为贴顶居中 */
+.practice:not(.tree-open) .col-tree > .side-toggle {
+  right: 50%;
+  transform: translateX(50%);
+  top: 8px;
+}
+
+/* 侧栏头部:折叠按钮 + 标题 + 保存修改 */
+.tree-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  /* 右内边距留出 40px 给常驻折叠按钮(它绝对定位在右上角) */
+  padding: 9px 40px 9px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  background: #fff;
+  min-height: 44px;
+}
+.th-icon {
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+  color: #2f6fed;
+  flex: 0 0 auto;
+}
+.th-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #34383f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ◀ / ▶ 折叠按钮 */
+.side-toggle {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 7px;
+  background: #fff;
+  color: #5b6472;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background .15s ease, color .15s ease;
+}
+.side-toggle:hover { background: #f2f6fd; color: #2f6fed; }
+.side-toggle mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+/* 「保存修改」:脏时高亮可点,干净时置灰显示"已保存" */
+.save-tree {
+  font-size: 11.5px !important;
+  height: 30px !important;
+  padding: 0 8px !important;
+  min-width: 0 !important;
+  color: #9aa1ab !important;
+}
+.save-tree mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.save-tree.dirty {
+  color: #2f6fed !important;
+  background: #eef4ff !important;
+}
+
+.tree-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 折叠态侧栏头部已随 @if 整体不渲染(按钮移到导航栏了)*/
+
+/* 小屏侧栏打开时的遮罩。
+   ⚠️ 第十三轮修正:原为 inset:0 全屏铺满 + z-index:20,
+   会**盖住侧栏本身** —— 用户点侧栏里任何地方都先被遮罩吃掉并再次 toggle,
+   于是"收起后就再也点不回来"。现改为:
+     · 只覆盖主区(left = 侧栏宽度),不压侧栏
+     · z-index 降到 5,确保任何侧栏内容都在它之上 */
+.drawer-scrim {
+  position: absolute;   /* 绝对定位 → 不参与 grid(见上方说明)*/
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: var(--tree-w, 300px);
+  z-index: 5;
+  background: rgba(15, 23, 42, 0.22);
+}
+@media (min-width: 1101px) {
+  /* 宽屏有位置放侧栏,不需要遮罩 */
+  .drawer-scrim { display: none; }
+}
+
+/* ---------- 中 ---------- */
+.col-main {
+  /* 双保险:主工作区永远在第 2 列第 1 行。
+     防止任何意外插入的网格项把它挤到第 2 行(掉到素材栏下面)。 */
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #fdfdfe;
+}
+
+.main-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  background: #fff;
+}
+
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #34383f;
+  min-width: 0;
+}
+
+.crumb mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: #6d7787;
+}
+
+.crumb-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spacer { flex: 1 1 auto; }
+
+/* 只读/编辑状态徽标 */
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 3px 9px;
+  border-radius: 11px;
+  text-transform: uppercase;
+}
+
+.mode-chip mat-icon {
+  font-size: 13px;
+  width: 13px;
+  height: 13px;
+}
+
+.mode-chip.readonly {
+  background: rgba(0, 0, 0, 0.06);
+  color: #6b7280;
+}
+
+.mode-chip.editing {
+  background: rgba(251, 140, 0, 0.15);
+  color: #e65100;
+}
+
+.main-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px 22px;
+  overflow-y: auto;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: #9aa1ab;
+  font-size: 13.5px;
+  text-align: center;
+}
+
+.placeholder mat-icon {
+  font-size: 42px;
+  width: 42px;
+  height: 42px;
+  opacity: 0.55;
+}
+
+/* 只读态:像文稿,可选中复制但改不了 */
+.readonly-text {
+  font-size: 16px;
+  line-height: 1.9;
+  color: #24272c;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+  min-height: 100%;
+}
+
+/* .readonly-empty 统一定义在下方 .text-card 组内,此处不再重复 */
+
+/* 编辑态:稿纸输入区 */
+.draft {
+  width: 100%;
+  min-height: 100%;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.9;
+  font-family: inherit;
+  color: #24272c;
+}
+
+.main-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  background: #fff;
+}
+
+/* 示范朗读控件:播放键 + 倍速 */
+.tts-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 2px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  background: #fafafc;
+}
+
+.tts-group .speak-btn {
+  width: 34px;
+  height: 34px;
+  line-height: 34px;
+  padding: 0;
+}
+
+.tts-group .speak-btn mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  color: #3f51b5;
+}
+
+.tts-group .speak-btn.speaking mat-icon { color: #e53935; }
+
+.rate-btn {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #4b5563;
+  padding: 0 6px;
+  height: 28px;
+  line-height: 28px;
+  min-width: 44px;
+  border-radius: 14px;
+}
+
+.rate-btn:hover { background: rgba(0, 0, 0, 0.06); }
+
+.hint {
+  font-size: 11.5px;
+  color: #9aa1ab;
+}
+
+/* ============================================================
+   练习区重构(2026-09-15,对齐 ynwac.com/en/ra 参考站)
+   参考站的核心是"单题工作流":听示范 → 录 → 回听 → 评分 → 看识别结果。
+   视觉语言:浅蓝 pill 容器装播放器,mint 绿容器装录音操作,
+   圆形主按钮 + 下方文字标签。
+   ============================================================ */
+
+/* ---------- ① Sample Reading 播放器 pill ---------- */
+.sample-pill {
+  
+  /* 与 .rec-zone 严格等高(任务书:两栏"高度必须严格一致")
+     实测:9+34+9 = 52px。下列三值写死,以后改尺寸必须同步改 .rec-zone。 */
+  height: 52px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0 20px;
+  border-radius: 26px;
+  /* 参考站是浅蓝底 —— 和下面的 mint 录音区形成"听 / 说"两段色彩区隔 */
+  background: #eef4ff;
+  border: 1px solid #dbe7ff;
+}
+
+.sample-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #2f6fed;
+  flex: 0 0 auto;
+}
+.sample-label mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+.play-round {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: #2f6fed;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .15s ease, transform .1s ease;
+}
+.play-round:hover { background: #2560d8; }
+.play-round:active { transform: scale(.94); }
+.play-round mat-icon { font-size: 22px; width: 22px; height: 22px; }
+
+.sample-track {
+  /* ⚠️ 必须有 position:relative —— 内部 .sample-bg/.sample-fill 是 absolute,
+     没有它就会相对更外层定位,那条 3px 横线会横穿到左侧文字上
+     (Forrest 2026-09-15 截图里的"中间一条线"就是这个 bug)。 */
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  cursor: default;
+}
+.sample-bg {
+  position: absolute;
+  left: 0; right: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: #d3e0f7;
+}
+.sample-fill {
+  position: absolute;
+  left: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: #2f6fed;
+  transition: width .9s linear;
+}
+
+.sample-time {
+  font-size: 11px;
+  color: #6b86b8;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* 实际引擎标记(第十七轮)。
+   作用:Azure 合成失败回退浏览器语音时,**显式说明**当前不是 Azure 人声。
+   所以它必须低调但可读 —— 用中性灰,不抢进度条注意,但一眼能看到字。 */
+.tts-note {
+  flex: 0 0 auto;
+  max-width: 220px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 倍速徽章(参考站的 x1.0 样式) */
+.speed-badge {
+  flex: 0 0 auto;
+  border: 1px solid #c3d6f7;
+  background: #fff;
+  color: #2f6fed;
+  border-radius: 12px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.speed-badge:hover { background: #f5f9ff; }
+
+/* ---------- ② 录音 / 评分操作区(mint 容器) ---------- */
+.rec-zone {
+  /* 任务书第二节:居中主体垂直排布(圆按钮 + 下方小字)。
+     ⚠️ Record 曾跑到左边:因为 justify-content: space-between 会把
+     第一个子元素(.rec-center)顶到最左。现改为:
+       .rec-zone 只做容器(position:relative)
+       .rec-center 绝对定位 + translate 真正居中 —— 不受左右元素数量影响。
+     右侧 .zone-side 仍靠 margin-left:auto 靠右。 */
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  /* 内容高 = outer 38 + gap 5 + label 14 = 57px;上下 padding 各 10 → 77px。
+     写死 min-height 保证按钮绝不压到边缘。 */
+  min-height: 78px;
+  padding: 10px 20px;
+  margin-bottom: 12px;
+  border-radius: 34px;
+  background: #f0faf4;
+  border: 1px solid #d6f0e0;
+}
+.rec-zone.has-take { background: #edf9f1; }
+
+/* 圆形主按钮 + 下方标签 */
+.big-round {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 0;
+}
+.big-round .outer {
+  /* 与上方蓝色 play-round 统一 38px(Forrest 第十一轮:太大压到上边缘)。
+     38 + gap 5 + label 14 = 57px 总高。 */
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #22a35c;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 5px rgba(34, 163, 92, .3);
+  transition: background .15s ease, transform .1s ease, box-shadow .15s ease;
+}
+.big-round:hover .outer {
+  background: #1d8f50;
+  box-shadow: 0 2px 9px rgba(34, 163, 92, .38);
+}
+.big-round:active .outer { transform: scale(.95); }
+.big-round .outer mat-icon { font-size: 22px; width: 22px; height: 22px; }
+
+/* 极简标签:只显示"录音 / 00:15 停止 / 回听"几个字 */
+.rec-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #4b5462;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.rec-label .st-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #e53935;
+}
+.rec-label .st-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.rec-label .st-sep { color: #c5cdd9; }
+.big-round .cap {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1d8f50;
+}
+.big-round .cap-time {
+  font-size: 11px;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 录音中:红点 + 呼吸动画 */
+.rec-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: #fff;
+  animation: recPulse 1.1s ease-in-out infinite;
+}
+@keyframes recPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .35; transform: scale(.78); }
+}
+
+/* 录音中:红色 + 呼吸光环(直径 34px,光环半径相应收小到 8px) */
+.big-round.recording .outer {
+  background: #e53935;
+  box-shadow: 0 1px 4px rgba(229, 57, 53, .3);
+  animation: recHalo 1.6s ease-out infinite;
+}
+@keyframes recHalo {
+  0%   { box-shadow: 0 0 0 0 rgba(229, 57, 53, .42); }
+  70%  { box-shadow: 0 0 0 8px rgba(229, 57, 53, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0); }
+}
+.big-round.recording .cap { color: #e53935; }
+
+/* 重置刷新按钮:绝对定位贴右侧边缘中线(任务书要求) */
+.zone-side {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+
+.run-score {
+  font-size: 12.5px !important;
+  height: 36px !important;
+  background: #2f6fed !important;
+  color: #fff !important;
+}
+.run-score mat-icon { font-size: 17px; width: 17px; height: 17px; }
+.run-score[disabled] { background: #b9c6da !important; color: #fff !important; }
+
+/* 参考站原文 "Reset before scoring again" */
+.reset-hint {
+  font-size: 11.5px;
+  color: #6b7280;
+  max-width: 150px;
+  line-height: 1.4;
+}
+
+.reset-round {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid #f0a83c;
+  border-radius: 50%;
+  background: #fff;
+  color: #e8952f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.reset-round:hover:not([disabled]) { background: #fff8ec; }
+.reset-round[disabled] { opacity: .4; cursor: not-allowed; }
+.reset-round mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+.rec-err {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #d93025;
+}
+.rec-err mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+/* ============================================================
+   评分与识别结果
+   ============================================================ */
+.result-wrap {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.res-block {
+  border: 1px solid #e8eaed;
+  border-radius: 10px;
+  padding: 13px 15px;
+  background: #fff;
+}
+
+.res-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.res-head h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #2b3340;
+}
+
+/* 总分:参考站是大号红字 —— 这里沿用四档配色,但字号放大 */
+.res-total {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #2f6fed;
+  line-height: 1;
+}
+.res-total.s-good { color: #2e9e5b; }
+.res-total.s-mid  { color: #2f6fed; }
+.res-total.s-warn { color: #e8952f; }
+.res-total.s-bad  { color: #e53935; }
+
+.res-dims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.dim-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #5b6472;
+}
+.dim-item b {
+  color: #2b3340;
+  font-variant-numeric: tabular-nums;
+}
+.dim-item.na { color: #a8aeb8; }
+.dim-item.na b { color: #a8aeb8; }
+
+/* 维度圆点(参考站用彩色圆点区分各维度) */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+.d-blue { background: #2f6fed; }
+.d-teal { background: #14b8a6; }
+.d-green { background: #2e9e5b; }
+.d-purple { background: #8b5cf6; }
+.d-dark { background: #475569; }
+.d-grey { background: #cbd5e1; }
+
+.res-note {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: #8b93a1;
+}
+
+/* 识别结果:左逐词文本 + 右错误图例 */
+.recog-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 14px;
+}
+@media (max-width: 1100px) {
+  .recog-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.recog-text {
+  margin: 0;
+  line-height: 2.1;
+  font-size: 14px;
+  color: #2b3340;
+}
+
+/* 逐词:按 Azure ErrorType 上色 —— 比只看分数更有指导性 */
+.rw {
+  padding: 1px 3px;
+  border-radius: 3px;
+  cursor: default;
+}
+.rw.e-ok { color: #2b3340; }
+.rw.e-mispron {
+  background: #fff4d6;
+  color: #9a6b00;
+  text-decoration: underline wavy #e8952f;
+}
+.rw.e-omission {
+  background: #f1f3f5;
+  color: #98a1ad;
+  text-decoration: line-through;
+}
+.rw.e-insertion {
+  background: #fde8f0;
+  color: #b8266b;
+}
+.rw.e-break {
+  background: #ffe4e0;
+  color: #c5221f;
+}
+.rw.e-pause {
+  background: #e8eef7;
+  color: #4a6285;
+  border-bottom: 2px dotted #4a6285;
+}
+
+/* 错误分类计数(参考站右侧竖排) */
+.err-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lg {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: #5b6472;
+  background: #f7f8fa;
+}
+.lg b {
+  font-variant-numeric: tabular-nums;
+  color: #2b3340;
+  min-width: 14px;
+}
+.lg.e-mispron { background: #fff4d6; }
+.lg.e-omission { background: #f1f3f5; }
+.lg.e-insertion { background: #fde8f0; }
+.lg.e-break { background: #ffe4e0; }
+.lg.e-pause { background: #e8eef7; }
+
+/* 逐词得分表 */
+.word-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.wg-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: 7px;
+  background: #fafbfc;
+  border: 1px solid #f0f2f5;
+}
+.wg-word {
+  font-size: 12px;
+  color: #2b3340;
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.3;
+}
+.wg-score {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #2f6fed;
+}
+.wg-score.s-good { color: #2e9e5b; }
+.wg-score.s-mid  { color: #2f6fed; }
+.wg-score.s-warn { color: #e8952f; }
+.wg-score.s-bad  { color: #e53935; }
+
+/* ============================================================
+   单题答题卡新增结构(2026-09-15 任务书)
+   顶部状态栏 / 核心文本卡 / 录音状态区 / 底部操作栏
+   ============================================================ */
+
+/* 正文限宽居中 —— 答题卡观感,不让文字在宽屏上拉成一条长线 */
+.main-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 1060px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ---------- ① 顶部状态栏 ---------- */
+.q-chip {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #2f6fed;
+  background: #eef4ff;
+  border-radius: 11px;
+  padding: 3px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.q-total {
+  font-size: 12px;
+  color: #9aa1ab;
+  font-variant-numeric: tabular-nums;
+  margin-left: -2px;
+}
+
+/* ---------- ② 核心朗读文本卡 ---------- */
+/* 核心朗读文本卡。类名对齐任务书骨架的 .reading-text-card;
+   旧的 .text-card 一起保留 —— 模板换名后样式不丢,也方便对照。 */
+.text-card,
+.reading-text-card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  /* 任务书要求"纯白带阴影的大卡片"——阴影给足一点,它是视觉主体 */
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.07);
+  padding: 26px 30px;
+  /* 底部多留 26px 给右下角的缩放条,正文不会被压 */
+  padding-bottom: 44px;
+  margin-bottom: 14px;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* 缩放条绝对定位的锚点 */
+  position: relative;
+  /* 字号基准变量:由模板 [style.--read-fs.px] 注入。
+     默认 18px 是兵库,万一变量未注入也不会变成默认 16px。 */
+  --read-fs: 18px;
+}
+.text-card .draft,
+.reading-text-card .draft {
+  width: 100%;
+  min-height: 140px;
+  border: 0;
+  outline: 0;
+  resize: vertical;
+  background: transparent;
+  font-family: inherit;
+  /* 编辑态同样跟随缩放 —— 否则一进编辑就"字号跳回 18px" */
+  font-size: var(--read-fs, 18px);
+  line-height: 1.8;
+  color: #2b3340;
+}
+
+/* 素材无内容时的占位 —— 已在上方 .text-card 组内统一定义,此处不重复 */
+
+/* 18px / 1.8 —— 任务书指定,朗读时眼睛要能轻松跟行。
+   字号改用 CSS 变量 --read-fs:随右上角 A-/A+ 缩放,默认 18px。 */
+.read-text {
+  margin: 0;
+  font-size: var(--read-fs, 18px);
+  line-height: 1.8;
+  color: #2b3340;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+}
+
+/* 编辑态:只调高度,其余继承上方规则 */
+.reading-text-card .draft {
+  min-height: 170px;
+}
+
+/* ---------- ④ 录音状态区 ---------- */
+/* 单行横向:麦克风在左、状态文案紧跟其后(任务书第四节改为 row 排列) */
+.rec-center {
+  /* 绝对定位于胶囊正中,与左右两侧元素无关 —— 这是 Record 居中的关键。 */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+/* .rec-status / .rec-no 已删除:模板改用极简 .rec-label(2026-09-15 第八轮) */
+.st-idle { font-size: 13px; color: #6b7280; }
+.st-done { font-size: 13px; color: #1d8f50; font-weight: 600; }
+.st-reset { font-size: 11.5px; color: #9aa1ab; }
+
+/* 录音中:红点呼吸 + 计时 */
+.st-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: #d93025;
+  font-weight: 600;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e53935;
+  animation: recPulse 1.1s ease-in-out infinite;
+}
+.st-time {
+  font-variant-numeric: tabular-nums;
+  color: #d93025;
+}
+
+/* ---------- ⑤ 底部操作栏 ---------- */
+.act-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 4px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  margin-top: 4px;
+}
+.act-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.act-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.submit-btn {
+  font-size: 13px !important;
+  height: 38px !important;
+}
+.submit-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+.retry-btn,
+.nav-btn {
+  font-size: 12.5px !important;
+  height: 38px !important;
+  color: #5b6472 !important;
+  border-color: rgba(0, 0, 0, 0.16) !important;
+}
+.retry-btn mat-icon,
+.nav-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+/* ---------- 结果区在窄屏下的退让 ---------- */
+@media (max-width: 1100px) {
+  .main-body { max-width: none; }
+  .text-card { padding: 20px 22px; }
+  .read-text { font-size: 17px; }
+}
+
+@media (max-width: 720px) {
+  .act-bar { flex-wrap: wrap; }
+  .act-nav { margin-left: 0; width: 100%; justify-content: flex-end; }
+  .rec-center { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
+
+/* ============================================================
+   第三轮任务书新增结构样式(2026-09-15)
+   历史录音列表 / 评分报告胶囊 / 逐词 Diff / 错误统计卡 / 单词弹层
+   ============================================================ */
+
+/* ---------- ③ TTS 引擎设置按钮 ---------- */
+.engine-btn {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #6b86b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color .15s ease, transform .2s ease;
+}
+.engine-btn:hover { color: #2f6fed; transform: rotate(38deg); }
+.engine-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+/* 引擎菜单项:名称 + 说明两行 */
+.engine-menu .em-head {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: #9aa1ab;
+}
+.engine-menu .em-item {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+.engine-menu .em-name { font-size: 13px; color: #2b3340; }
+.engine-menu .em-note { font-size: 11px; color: #9aa1ab; }
+
+/* ---------- ⑥ 历史录音列表 ---------- */
+.rec-list {
+  margin-top: 18px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  padding-top: 14px;
+}
+.rl-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.rl-head h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #2b3340;
+}
+.rl-count {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #5a6270;
+  background: rgba(0, 0, 0, 0.07);
+  border-radius: 9px;
+  padding: 1px 8px;
+}
+.rl-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #9aa1ab;
+  font-style: italic;
+}
+
+/* 单条录音卡片:当前作品高亮左边框 */
+.rl-item {
+  border: 1px solid #e8eaed;
+  border-left: 3px solid #e8eaed;
+  border-radius: 9px;
+  padding: 10px 12px 11px;
+  margin-bottom: 9px;
+  background: #fff;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.rl-item:hover { box-shadow: 0 1px 5px rgba(15, 23, 42, .07); }
+.rl-item.active {
+  border-left-color: #2f6fed;
+  background: #fafcff;
+}
+.rl-item.grading { opacity: .72; }
+
+.rl-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 7px;
+}
+.rl-idx {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2b3340;
+}
+.rl-meta {
+  font-size: 11px;
+  color: #8b93a1;
+  font-variant-numeric: tabular-nums;
+}
+.rl-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 9px;
+  padding: 1px 8px;
+  font-variant-numeric: tabular-nums;
+  background: #eef4ff;
+  color: #2f6fed;
+}
+.rl-badge.s-good { background: #e6f6ec; color: #2e9e5b; }
+.rl-badge.s-mid  { background: #eef4ff; color: #2f6fed; }
+.rl-badge.s-warn { background: #fff4e5; color: #e8952f; }
+.rl-badge.s-bad  { background: #fdecea; color: #e53935; }
+
+.rl-del { color: #9aa1ab !important; }
+.rl-del:hover { color: #e53935 !important; }
+.rl-del mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+/* 试听播放器(自绘) */
+.player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.play-btn {
+  flex: 0 0 auto;
+  color: #2f6fed !important;
+}
+.play-btn mat-icon { font-size: 19px; width: 19px; height: 19px; }
+
+.track {
+  position: relative;
+  flex: 1 1 auto;
+  /* 命中区做高一些(20px),视觉条只 4px —— 点击好点得多 */
+  height: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  min-width: 40px;
+}
+.track-bg {
+  position: absolute;
+  left: 0; right: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: #e5e9f0;
+}
+.track-fill {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: #2f6fed;
+}
+.track-knob {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #2f6fed;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.time {
+  font-size: 11px;
+  color: #8b93a1;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.rl-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+.score-btn {
+  font-size: 12px !important;
+  height: 32px !important;
+}
+.score-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.view-btn {
+  font-size: 12px !important;
+  height: 32px !important;
+  color: #5b6472 !important;
+  border-color: rgba(0, 0, 0, .16) !important;
+}
+.view-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+.rl-fail {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  color: #d93025;
+}
+.rl-fail mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+/* ---------- ⑦ 评分报告:四维胶囊 ---------- */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 18px;
+  font-size: 12px;
+  color: #5b6472;
+  background: #f5f7fa;
+  border: 1px solid #e8ecf2;
+}
+.pill b {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #2b3340;
+}
+.pill .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.p-blue   { background: #eef4ff; border-color: #dbe7ff; }
+.p-blue   .dot { background: #2f6fed; }
+.p-teal   { background: #e8f8f6; border-color: #d3f0ec; }
+.p-teal   .dot { background: #14b8a6; }
+.p-green  { background: #e9f8ef; border-color: #d6f0e0; }
+.p-green  .dot { background: #2e9e5b; }
+.p-purple { background: #f3eeff; border-color: #e6dcff; }
+.p-purple .dot { background: #8b5cf6; }
+.p-dark   { background: #eef1f5; border-color: #e0e5ec; }
+.p-dark   .dot { background: #475569; }
+.p-na     { background: #f7f8fa; border-color: #eceff3; color: #a8aeb8; }
+.p-na     .dot { background: #cbd5e1; }
+.p-na     b { color: #a8aeb8; }
+
+/* 总分后的小字单位 */
+.res-total i {
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+  margin-left: 2px;
+  opacity: .7;
+}
+
+/* ---------- 逐词 Diff:可点击 ---------- */
+.rw {
+  padding: 1px 3px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: outline-color .15s ease;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+}
+.rw:hover { outline-color: rgba(47, 111, 237, .35); }
+.rw.picked { outline-color: #2f6fed; }
+
+/* ---------- 错误统计卡(参考站右侧 2 列卡片) ---------- */
+.err-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  align-content: start;
+}
+.ec {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: #f7f8fa;
+  border: 1px solid #eef0f4;
+}
+.ec b {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: #2b3340;
+  line-height: 1.2;
+}
+.ec-label {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: #7c8593;
+}
+.ec.e-mispron { background: #fff8e8; border-color: #f6e6c4; }
+.ec.e-omission { background: #f5f6f8; border-color: #e8eaee; }
+.ec.e-insertion { background: #fdf0f6; border-color: #f7dbe8; }
+.ec.e-break { background: #fff0ee; border-color: #f8dcd8; }
+.ec.e-pause { background: #eef3fa; border-color: #dee7f4; }
+
+/* ---------- 单词弹层:音标 + 错误类型 + 得分 ---------- */
+.word-pop {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #f7f9fc;
+  border: 1px solid #e8ecf2;
+}
+.wp-word {
+  font-size: 15px;
+  font-weight: 700;
+  color: #2b3340;
+}
+.wp-phon {
+  font-size: 13px;
+  color: #5b6472;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+.wp-phon.na {
+  font-size: 11.5px;
+  color: #a8aeb8;
+  font-style: italic;
+}
+.wp-err {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #eef1f5;
+  color: #5b6472;
+}
+.wp-score {
+  margin-left: auto;
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #2f6fed;
+}
+.wp-score.s-good { color: #2e9e5b; }
+.wp-score.s-mid  { color: #2f6fed; }
+.wp-score.s-warn { color: #e8952f; }
+.wp-score.s-bad  { color: #e53935; }
+
+/* ---------- 结果区展开动画 ---------- */
+.result-wrap {
+  animation: resIn .22s ease-out;
+}
+@keyframes resIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- 窄屏退让 ---------- */
+@media (max-width: 1100px) {
+  .err-cards { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   2026-09-15 第四轮:报告区始终在位 + 空状态 + 录音区居中收尾
+   ============================================================ */
+
+/* 报告区外框:无论有没有分数都渲染,保证 DOM 结构稳定 */
+.azure-assessment-report {
+  margin-top: 18px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  padding-top: 14px;
+}
+.rep-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+.rep-title mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #2f6fed;
+}
+.rep-title h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #2b3340;
+}
+
+/* 空状态:不显示假分数,只说明怎样产出报告 */
+.rep-empty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 9px;
+  background: #f7f9fc;
+  border: 1px dashed #dde3ec;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #7c8593;
+}
+.rep-empty mat-icon {
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+  color: #9aa1ab;
+  flex: 0 0 auto;
+}
+
+/* 窄屏:只把水平内边距收一点。
+   ⚠️ 不再改 padding-left/right 为非对称值 —— 那会让两条胶囊的内侧起边错位,
+   破坏"严格等高对齐"。高度统一 52px 永不变。 */
+@media (max-width: 720px) {
+  .sample-pill,
+  .rec-zone { padding: 0 14px; }
+  .zone-side { right: 10px; }
+  /* 窄屏下示范朗读条可能挤,允许横向裁切而不换行 */
+  .sample-track { min-width: 28px; }
+}
+
+/* ============================================================
+   2026-09-15 第六轮:字号缩放条 + TTS 引擎弹窗重构
+   ============================================================ */
+
+/* ---------- 朗读文本卡右下角:字号缩放条 ---------- */
+.zoom-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #f6f8fb;
+  border: 1px solid #e5e9f0;
+  /* 不遮挡正文:卡片底部已留 44px */
+}
+
+.zoom-btn {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #5b6472;
+  /* 2026-09-16:图标从 A-/A+ 改为纯符号 − / +,
+     字号需稍大才清晰(符号本身比字母视觉重量小)。 */
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s ease, color .15s ease;
+}
+.zoom-btn:hover:not(:disabled) { background: #e4eeff; color: #2f6fed; }
+.zoom-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.zoom-label {
+  min-width: 42px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #5b6472;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* ---------- TTS 引擎弹窗:卡片式,对标 /account/ai-setting 的 .eng-row ---------- */
+::ng-deep .engine-menu.mat-mdc-menu-panel {
+  /* 任务书:宽 360px、圆角 12px、白卡片 + 平滑阴影、内边距 16px */
+  min-width: 360px !important;
+  max-width: 360px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, .1),
+              0 4px 10px -4px rgba(0, 0, 0, .06) !important;
+  overflow: hidden;
+}
+::ng-deep .engine-menu .mat-mdc-menu-content {
+  padding: 16px !important;
+}
+
+/* 弹窗标题 */
+::ng-deep .engine-menu .em-head {
+  padding: 0 0 12px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid #eef1f5;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2733;
+}
+
+/* 选项卡外壳 —— 与设置页 .eng-row 同款:细边框 + 大圆角 + 整行可点 */
+::ng-deep .engine-menu .em-card.mat-mdc-menu-item {
+  height: auto !important;
+  min-height: 58px !important;
+  padding: 11px 12px !important;
+  margin-bottom: 8px;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  line-height: normal !important;
+  transition: border-color .15s ease, background .15s ease;
+}
+::ng-deep .engine-menu .em-card.mat-mdc-menu-item:hover {
+  border-color: #c3d6f7 !important;
+  background: #f8fbff !important;
+}
+/* 选中态:浅蓝底 + 蓝边框(对标设置页当前选中样式) */
+::ng-deep .engine-menu .em-card.mat-mdc-menu-item.on {
+  border-color: #2f6fed !important;
+  background: #f2f7ff !important;
+  box-shadow: 0 0 0 1px rgba(47, 111, 237, .18);
+}
+::ng-deep .engine-menu .em-card.mat-mdc-menu-item .mdc-list-item__primary-text {
+  display: flex !important;
+  align-items: center !important;
+  gap: 11px !important;
+  width: 100%;
+  white-space: normal !important;
+}
+
+/* Radio 圆圈:自绘。尺寸写死 17px + flex:0 0 auto,
+   不会再被 Material 的单选图标挤成"一条竖线"。 */
+::ng-deep .engine-menu .em-radio {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 2px solid #c5cdd9;
+  box-sizing: border-box;
+  position: relative;
+  transition: border-color .15s ease;
+}
+::ng-deep .engine-menu .em-radio.checked { border-color: #2f6fed; }
+::ng-deep .engine-menu .em-radio.checked::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: #2f6fed;
+}
+
+/* 引擎图标已移除(2026-09-16,Forrest 第 5 条:与 ai-setting 的引擎展示保持一致,
+   只留文字)。保留 .em-ic 规则仅作兼容 —— 若日后重新加图标可直接复用。 */
+::ng-deep .engine-menu .em-ic {
+  flex: 0 0 auto;
+  font-size: 20px !important;
+  width: 20px !important;
+  height: 20px !important;
+  color: #5b6472 !important;
+}
+::ng-deep .engine-menu .em-card.on .em-ic { color: #2f6fed !important; }
+
+/* 两行文案 */
+::ng-deep .engine-menu .em-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+::ng-deep .engine-menu .em-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1f2733;
+}
+::ng-deep .engine-menu .em-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #9aa1ab;
+  white-space: normal;
+}
+
+/* Azure 未接入时的诚实提示 */
+::ng-deep .engine-menu .em-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #fff8e6;
+  border: 1px solid #f5e3b3;
+  font-size: 12px;
+  line-height: 1.65;
+  color: #8a6d1f;
+}
+::ng-deep .engine-menu .em-warn mat-icon {
+  flex: 0 0 auto;
+  font-size: 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin-top: 1px;
+}
+
+/* 分隔线 + Configure ↗ */
+::ng-deep .engine-menu .em-sep {
+  height: 1px;
+  background: #eef1f5;
+  margin: 4px 0 8px;
+}
+::ng-deep .engine-menu .em-goto.mat-mdc-menu-item {
+  min-height: 40px !important;
+  padding: 0 12px !important;
+  border-radius: 9px;
+}
+::ng-deep .engine-menu .em-goto .mdc-list-item__primary-text {
+  color: #2f6fed !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+::ng-deep .engine-menu .em-goto mat-icon {
+  font-size: 17px !important;
+  width: 17px !important;
+  height: 17px !important;
+  color: #2f6fed !important;
+}
+
+/* ============================================================
+   2026-09-15 第七轮:提交评分门禁(未配 Azure Key)+ toast
+   ============================================================ */
+
+/* 警告条:未配置密钥时显示在提交按钮上方 */
+.key-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff8e6;
+  border: 1px solid #f5e3b3;
+  color: #8a6d1f;
+}
+.key-warn > mat-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: #d9a30a;
+}
+.kw-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.kw-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2f6fed;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.kw-link:hover { color: #1b57d0; }
+
+/* 操作栏左侧改纵向:提示条在上,按钮组在下 */
+.act-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.act-btns {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* 置灰态:任务书要求 disabled + opacity .5 + not-allowed */
+.submit-btn.blocked,
+.submit-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/* 其它原因的未就绪提示(没录音 / 已评分需重录) */
+.submit-hint {
+  margin-top: 7px;
+  font-size: 12px;
+  color: #8b93a1;
+}
+
+/* 轻量 toast:右上角浮出 */
+.ap-toast {
+  position: fixed;
+  top: 76px;
+  right: 24px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+  padding: 12px 15px;
+  border-radius: 10px;
+  background: #fff8e6;
+  border: 1px solid #f5e3b3;
+  color: #8a6d1f;
+  font-size: 13px;
+  line-height: 1.55;
+  box-shadow: 0 8px 22px -6px rgba(15, 23, 42, .18);
+  animation: apToastIn .22s ease-out;
+}
+.ap-toast mat-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #d9a30a;
+}
+@keyframes apToastIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 720px) {
+  .ap-toast { left: 14px; right: 14px; max-width: none; }
+}
+
+/* ============================================================
+   2026-09-15 第八轮:极简录音区 + 报告折叠 + 卡片化
+   ============================================================ */
+
+/* 录音胶囊:内容更少了,改为纯居中;重设按钮绝对定位在右 */
+.rec-zone {
+  gap: 10px;
+}
+
+/* 报告面板折叠控制器 */
+.rep-title {
+  position: relative;
+}
+.rep-title .spacer { flex: 1 1 auto; }
+
+.rep-toggle.mat-mdc-button {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #2f6fed;
+}
+.rep-toggle.mat-mdc-button:hover { background: #f2f7ff; }
+.rep-toggle mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+}
+
+/* 报告区整体:独立纯白圆角卡片 + 轻投影(任务书第三节视觉要求) */
+.azure-assessment-report {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, .07);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, .06);
+  padding: 18px 20px 20px;
+  margin-top: 14px;
+}
+
+/* 已展开的 View Report 按钮:蓝色高亮,表明"再点就是收起" */
+.view-btn.on {
+  border-color: #2f6fed !important;
+  color: #2f6fed !important;
+  background: #f2f7ff !important;
+}
+
+/* ============================================================
+   2026-09-15 第九轮:示范朗读条(播放键移右)、绿色录音条(垂直居中 + 评分胶囊)、
+   紧凑单行录音列表、NeetCode 风素材树
+   ============================================================ */
+
+/* ---- 第一节:示范朗读条。播放键已在 DOM 末尾,靠 track 的 flex:1 顶到最右 ---- */
+.sample-pill .play-round { margin-left: 4px; }
+
+/* ---- 第二节:绿色录音条右侧操作组 ---- */
+.zone-side {
+  position: static;          /* 不再绝对定位:改为 flex 行内靠右 */
+  right: auto;
+  top: auto;
+  transform: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* 小字:12px,垂直居中在圆按钮正下方 */
+.rec-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5462;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* 「点击进行AI评分」白底圆角轻量胶囊 */
+.side-score {
+  height: 32px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #d6f0e0;
+  border-radius: 16px;
+  background: #fff;
+  color: #1d8f50;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease;
+}
+.side-score:hover:not(:disabled) { background: #f4fdf8; border-color: #b6e5cb; }
+.side-score:disabled { opacity: .5; cursor: not-allowed; }
+.side-score mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+/* 圆按钮:与上方蓝色 play-round 统一为 38px(Forrest 2026-09-15 第十一轮)。
+   ⚠️ 之前是 44px,溢出的原因:
+     outer(44) + gap(5) + label(~14) ≈ 63px,而 .rec-zone 内容区只有 48px
+     → 向上溢出,压到胶囊上边缘。
+   38px 后:38 + 5 + 14 = 57px,放进 56px 内容区仍略紧 → 见下方 .rec-zone 调整。 */
+.big-round .outer { width: 38px; height: 38px; }
+.big-round .outer mat-icon { font-size: 20px; width: 20px; height: 20px; }
+.big-round .rec-dot { width: 12px; height: 12px; }
+
+/* ---- 第三节:紧凑单行录音列表(44-48px) ---- */
+.rl-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 6px 16px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #fff;
+  transition: background .15s ease, border-color .15s ease;
+}
+.rl-item:hover { background: #f9fafb; }
+.rl-item.active { border-color: #d6f0e0; background: #f7fdfa; }
+
+/* 小播放键 */
+.rl-play {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: #eef4ff;
+  color: #2f6fed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.rl-play:disabled { opacity: .5; cursor: not-allowed; }
+.rl-play mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+.rl-idx {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+  white-space: nowrap;
+}
+.rl-meta {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* 细进度条(单行里占剩余空间) */
+.rl-track {
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+}
+.rl-time {
+  font-size: 11.5px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* AI 评分小胶囊 */
+.rl-score {
+  height: 28px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  border-radius: 14px;
+  background: #22a35c;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease;
+}
+.rl-score:hover:not(:disabled) { background: #1d8f50; }
+.rl-score:disabled { opacity: .55; cursor: not-allowed; }
+.rl-score mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+/* 查看报告 ▾ / 收起 ▴ */
+.rl-view {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid #dbe7ff;
+  border-radius: 14px;
+  background: #fff;
+  color: #2f6fed;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease;
+}
+.rl-view:hover { background: #f2f7ff; }
+.rl-view.on { background: #f2f7ff; border-color: #2f6fed; }
+.rl-view mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+/* 垃圾桶图标钮 */
+.rl-del {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.rl-del:hover { background: #fef2f2; color: #dc2626; }
+.rl-del mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+/* 失败提示独占一行 */
+.rl-item .rl-fail {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rl-item .rl-fail mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+
+/* ============================================================
+   2026-09-15 第十轮:Forrest 截图反馈 6 项修复
+   ============================================================ */
+
+/* ② retry 无效的根因不在 CSS,已在 TS 修(见 retryTake);
+   这里保证绝对居中的 rec-center 不被左右元素遮挡点击 */
+.rec-center { z-index: 1; }
+.zone-side { z-index: 2; }
+
+
+/* ============================================================
+   2026-09-15 第十三轮:折叠按钮移到导航栏右侧 + 可拖动分栏
+   ============================================================ */
+
+/* 中间可拖动分割线:8px 命中区,视觉上只 1px 细线 */
+.practice:not(.tree-open) .col-resizer { display: none; }
+
+/* ⚠️ 2026-09-15 第十五轮:**必须脱离 grid 流**。
+   .practice 是 2 列 grid;如果手柄/scrim 作为普通网格项出现,
+   网格项数量就变成 4 个 → .col-main 被挤到第 2 行 → 工作区掉到
+   素材栏下面(Forrest 报的"错乱")。故改绝对定位,不参与 grid。 */
+.col-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--tree-w, 300px);
+  width: 8px;
+  margin-left: -4px;      /* 压在列边界上,视觉仍在中间 */
+  cursor: col-resize;
+  z-index: 8;
+  background: transparent;
+}
+.col-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.07);
+  transition: background .15s ease, width .15s ease;
+}
+.col-resizer:hover::before,
+.col-resizer:active::before {
+  width: 3px;
+  background: #2f6fed;
+  border-radius: 2px;
+}

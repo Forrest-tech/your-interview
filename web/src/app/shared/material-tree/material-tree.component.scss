@@ -1,0 +1,418 @@
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.tree-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #fff;
+  border-right: 1px solid rgba(0, 0, 0, 0.09);
+}
+
+.tree-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px 8px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  flex: 0 0 auto;
+}
+
+.head-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #5a6270;
+}
+
+.head-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #3a3f47;
+}
+
+.spacer { flex: 1 1 auto; }
+
+.tree-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0 24px;
+}
+
+.tree-empty {
+  margin: 18px 16px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #8a9099;
+}
+
+/* ---------- 节点行 ---------- */
+.node-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 0;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: #363a41;
+  border-radius: 6px;
+  margin: 0 6px;
+  transition: background 110ms ease;
+  user-select: none;
+}
+
+.node-row:hover { background: rgba(0, 0, 0, 0.045); }
+
+.node-row.selected {
+  background: rgba(63, 81, 181, 0.13);
+  color: #303f9f;
+  font-weight: 600;
+}
+
+.chev {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: #7b828c;
+}
+
+.chev-ph {
+  flex: 0 0 18px;
+  width: 18px;
+}
+
+.node-icon {
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+}
+
+.node-icon.folder { color: #d9a326; }
+.node-icon.file { color: #6d7787; }
+
+.node-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-count {
+  font-size: 11px;
+  color: #9aa1ab;
+  padding: 0 4px;
+}
+
+.rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 2px 6px;
+  border: 1px solid #3f51b5;
+  border-radius: 4px;
+  outline: none;
+}
+
+/* 行尾三点菜单:平时淡出,hover 才明显 */
+.row-more {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  padding: 0;
+  opacity: 0.35;
+  transition: opacity 120ms ease;
+}
+
+.row-more mat-icon {
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+}
+
+.node-row:hover .row-more { opacity: 0.85; }
+
+/* ---------- 拖拽落点指示(2026-09-15 新增) ---------- */
+.node-row.dragging {
+  opacity: 0.45;
+}
+
+/* 移入文件夹:整行高亮 + 蓝色描边 */
+.node-row.drop-into {
+  background: rgba(63, 81, 181, 0.16);
+  box-shadow: inset 0 0 0 2px #3f51b5;
+}
+
+/* 插到前面:顶部一条粗线 */
+.node-row.drop-before {
+  box-shadow: inset 0 3px 0 0 #3f51b5;
+}
+
+/* 插到后面:底部一条粗线 */
+.node-row.drop-after {
+  box-shadow: inset 0 -3px 0 0 #3f51b5;
+}
+
+/* 空白区落点:虚线框提示"放这里=移到最外层" */
+.tree-body.root-drop {
+  background: rgba(63, 81, 181, 0.06);
+  outline: 2px dashed #3f51b5;
+  outline-offset: -6px;
+}
+
+/* ---------- 「移动到…」弹层 ---------- */
+.move-panel {
+  margin: 4px 10px 8px;
+  padding: 6px;
+  border: 1px solid rgba(63, 81, 181, 0.3);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.09);
+}
+
+.move-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #7b828c;
+  text-transform: uppercase;
+  padding: 4px 6px 6px;
+}
+
+.move-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: #363a41;
+  text-align: left;
+  cursor: pointer;
+}
+
+.move-item:hover { background: rgba(63, 81, 181, 0.1); }
+
+.move-item mat-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #d9a326;
+  flex: 0 0 16px;
+}
+
+.move-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-empty {
+  margin: 4px 8px;
+  font-size: 11.5px;
+  color: #9aa1ab;
+}
+
+/* ---------- 回收站 ---------- */
+.tree-trash {
+  flex: 0 0 auto;
+  max-height: 168px;
+  overflow-y: auto;
+  border-top: 1px solid rgba(0, 0, 0, 0.09);
+  background: #fbfbfd;
+  padding: 4px 4px 8px;
+}
+
+.trash-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 6px 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #6d7787;
+  text-transform: uppercase;
+}
+
+.trash-head mat-icon {
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+}
+
+.trash-head button {
+  width: 26px;
+  height: 26px;
+  line-height: 26px;
+  padding: 0;
+  opacity: 0.6;
+}
+
+.trash-head button:hover { opacity: 1; }
+
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  font-size: 12.5px;
+  color: #5a6270;
+}
+
+.trash-icon {
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  color: #9aa1ab;
+}
+
+.trash-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: line-through;
+  text-decoration-color: rgba(0, 0, 0, 0.25);
+}
+
+.trash-row button {
+  width: 26px;
+  height: 26px;
+  line-height: 26px;
+  padding: 0;
+  opacity: 0.55;
+}
+
+.trash-row button:hover { opacity: 1; }
+
+.trash-row button mat-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+}
+
+/* ============================================================
+   2026-09-15 第九轮:NeetCode 极简手风琴风(任务书第四节)
+   去掉黄色文件夹图标与虚线,换成卡片式列表 + 状态圆。
+   ============================================================ */
+
+/* 一级分类行 */
+.node-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .12s ease;
+  border: 1px solid transparent;
+}
+.node-row:hover { background: #f3f4f6; }
+
+/* 一级图标:单色线性,不再是彩色黄文件夹 */
+.node-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #6b7280;
+}
+.node-row.selected .node-icon { color: #2563eb; }
+
+/* 一级标题 */
+.node-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* 右侧折叠细箭头 */
+.chev {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+/* 二级子项:小状态圆(绿勾 / 灰圆点) */
+.node-dot {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1.5px solid #d1d5db;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.node-dot.done {
+  border-color: #22a35c;
+  background: #22a35c;
+  color: #fff;
+}
+.node-dot.done mat-icon {
+  font-size: 12px;
+  width: 12px;
+  height: 12px;
+  font-weight: 700;
+}
+
+/* 选中态:浅薄荷绿底 + 文字加粗高亮 */
+.node-row.selected {
+  background: #f0fdf4;
+  border-color: #d6f0e0;
+}
+.node-row.selected .node-name {
+  color: #166534;
+  font-weight: 700;
+}
+
+/* 二级缩进:用细灰对齐线代替虚线 */
+.node-row {
+  position: relative;
+}
+
+/* ---- 第十轮:树行「⋯」弹出的菜单过大(Forrest 反馈) ----
+   Material 默认菜单把行高撑到 48px+、图标 24px,在 300px 侧栏里显得笨重。
+   这里收窄宽度、压低行高、缩小图标与字号。 */
+::ng-deep .mat-mdc-menu-panel.tree-row-menu {
+  min-width: 168px !important;
+  max-width: 200px !important;
+  border-radius: 8px;
+}
+::ng-deep .tree-row-menu .mat-mdc-menu-item {
+  min-height: 34px !important;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+::ng-deep .tree-row-menu .mat-mdc-menu-item .mat-icon,
+::ng-deep .tree-row-menu .mat-mdc-menu-item mat-icon {
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+  margin-right: 10px;
+  color: #6b7280;
+}
+::ng-deep .tree-row-menu .mat-mdc-menu-item-text {
+  font-size: 13px;
+  line-height: 1.2;
+}

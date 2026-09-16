@@ -1,0 +1,170 @@
+<!-- 可复用控件:分层文件夹 / 文件树
+     顶部一行工具(新建文件夹 / 新建素材),下面递归渲染层级。
+     拖拽语义(2026-09-15 修):
+       悬停行上 1/4 = 插到它前面;下 1/4 = 插到它后面;中间 = 移入文件夹。
+       拖到列表空白处 = 移到最外层。之前只能进不能出,现已补全。
+     另有「移动到…」菜单作为不依赖拖拽的兜底路径。 -->
+<div class="tree-wrap">
+  <header class="tree-head">
+    <mat-icon class="head-icon">folder_copy</mat-icon>
+    <span class="head-title">{{ title }}</span>
+    @if (editable) {
+      <span class="spacer"></span>
+      <button mat-icon-button matTooltip="新建文件夹" (click)="addFolder(null)">
+        <mat-icon>create_new_folder</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="新建素材" (click)="addFile(null)">
+        <mat-icon>note_add</mat-icon>
+      </button>
+    }
+  </header>
+
+  <!-- 空白落点:拖到这里 = 移到最外层 -->
+  <div class="tree-body"
+       (dragover)="onRootDragOver($event)"
+       (drop)="onRootDrop($event)"
+       [class.root-drop]="dropMode() === 'root'">
+    @if (nodes.length === 0) {
+      <p class="tree-empty">{{ emptyHint }}</p>
+    }
+    <ng-container
+      [ngTemplateOutlet]="level"
+      [ngTemplateOutletContext]="{ items: nodes, depth: 0, parent: null }">
+    </ng-container>
+  </div>
+
+  <!-- 回收站 -->
+  @if (editable && trash().length > 0) {
+    <footer class="tree-trash">
+      <div class="trash-head">
+        <mat-icon>delete_outline</mat-icon>
+        <span>回收站 {{ trash().length }}</span>
+        <span class="spacer"></span>
+        <button mat-icon-button matTooltip="清空回收站" (click)="emptyTrash()">
+          <mat-icon>delete_forever</mat-icon>
+        </button>
+      </div>
+      @for (t of trash(); track t.id) {
+        <div class="trash-row">
+          <mat-icon class="trash-icon">{{ t.folder ? 'folder' : 'description' }}</mat-icon>
+          <span class="trash-name">{{ t.name }}</span>
+          <button mat-icon-button matTooltip="恢复" (click)="restore(t)">
+            <mat-icon>restore_from_trash</mat-icon>
+          </button>
+          <button mat-icon-button matTooltip="彻底删除" (click)="purge(t)">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+    </footer>
+  }
+</div>
+
+<!-- ---------- 递归模板 ---------- -->
+<ng-template #level let-items="items" let-depth="depth" let-parent="parent">
+  @for (n of items; track n.id) {
+    <div class="node-row"
+         [style.padding-left.px]="6 + depth * 15"
+         [class.selected]="!n.folder && n.id === selectedId"
+         [class.drop-into]="dropTargetId() === n.id && dropMode() === 'into'"
+         [class.drop-before]="dropTargetId() === n.id && dropMode() === 'before'"
+         [class.drop-after]="dropTargetId() === n.id && dropMode() === 'after'"
+         [class.dragging]="draggingId === n.id"
+         draggable="true"
+         (dragstart)="onDragStart(n, $event)"
+         (dragend)="onDragEnd()"
+         (dragover)="onRowDragOver(n, $event)"
+         (dragleave)="onRowDragLeave(n)"
+         (drop)="onRowDrop(n, $event)"
+         (click)="select(n)">
+
+      <!-- 展开箭头 / 子项状态圆(任务书第四节:NeetCode 手风琴风)
+           一级:单色线性图标 + 右侧细箭头(向下=展开 / 向右=收起)
+           二级:小状态圆 —— 已完成绿勾 / 未完成灰圆点 -->
+      @if (n.folder) {
+        <!-- 任务书第十轮(Forrest):一级分类前不再挂任何图标 ——
+             文件夹会很多,逐个配图标既费事又杂乱。
+             展开箭头保留在最右侧。 -->
+        <span class="node-name">{{ n.name }}</span>
+        @if (n.children?.length) {
+          <span class="node-count">{{ n.children?.length }}</span>
+        }
+        <span class="spacer"></span>
+        <mat-icon class="chev" (click)="toggle(n); $event.stopPropagation()">
+          {{ n.expanded ? 'expand_more' : 'chevron_right' }}
+        </mat-icon>
+      } @else {
+        <!-- 任务书第十轮(Forrest):二级项前的圆圈一律去掉 ——
+             素材会很多,每个前面挂个圈显得杂乱。 -->
+        @if (renamingId() === n.id) {
+          <input class="rename-input"
+                 [value]="n.name"
+                 (click)="$event.stopPropagation()"
+                 (keyup.enter)="commitRename(n, $any($event.target).value)"
+                 (keyup.escape)="cancelRename()"
+                 (blur)="commitRename(n, $any($event.target).value)">
+        } @else {
+          <span class="node-name" (dblclick)="startRename(n)">{{ n.name }}</span>
+        }
+      }
+
+      @if (editable) {
+        <button class="row-more" mat-icon-button
+                [matMenuTriggerFor]="rowMenu"
+                (click)="$event.stopPropagation()">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        <mat-menu #rowMenu="matMenu" xPosition="before" class="tree-row-menu">
+          @if (n.folder) {
+            <button mat-menu-item (click)="addFile(n)">
+              <mat-icon>note_add</mat-icon><span>新建素材</span>
+            </button>
+            <button mat-menu-item (click)="addFolder(n)">
+              <mat-icon>create_new_folder</mat-icon><span>新建子文件夹</span>
+            </button>
+          }
+          <button mat-menu-item (click)="openMoveMenu(n)">
+            <mat-icon>drive_file_move</mat-icon><span>移动到…</span>
+          </button>
+          <button mat-menu-item (click)="startRename(n)">
+            <mat-icon>edit</mat-icon><span>重命名</span>
+          </button>
+          <button mat-menu-item (click)="remove(n, parent)">
+            <mat-icon>delete_outline</mat-icon><span>删除</span>
+          </button>
+        </mat-menu>
+      }
+    </div>
+
+    <!-- 「移动到…」弹层:不依赖拖拽的兜底路径 -->
+    @if (moveMenuId() === n.id) {
+      <div class="move-panel" [style.margin-left.px]="18 + depth * 15">
+        <div class="move-title">移动到…</div>
+        @if (!isRoot(n)) {
+          <button class="move-item" (click)="moveTo(n, null)">
+            <mat-icon>vertical_align_top</mat-icon>
+            <span>最外层</span>
+          </button>
+        }
+        @for (f of folderOptions(); track f.id) {
+          <button class="move-item" [style.padding-left.px]="10 + f.depth * 12"
+                  (click)="moveTo(n, f.id)">
+            <mat-icon>folder</mat-icon>
+            <span>{{ f.name }}</span>
+          </button>
+        }
+        @if (folderOptions().length === 0 && isRoot(n)) {
+          <p class="move-empty">没有其它可选文件夹</p>
+        }
+      </div>
+    }
+
+    <!-- 子级 -->
+    @if (n.folder && n.expanded && n.children?.length) {
+      <ng-container
+        [ngTemplateOutlet]="level"
+        [ngTemplateOutletContext]="{ items: n.children, depth: depth + 1, parent: n.children }">
+      </ng-container>
+    }
+  }
+</ng-template>

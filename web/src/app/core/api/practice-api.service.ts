@@ -1,0 +1,209 @@
+import { Injectable, inject } from '@angular/core';
+import { Observable } from 'rxjs';
+
+import { ApiClient } from './api-client';
+
+/**
+ * /practice 页的后端访问层(2026-09-15 第十七轮)。
+ *
+ * 为什么单独一个服务而不是组件里直接调 ApiClient:
+ *   1. 端点路径只写一遍 —— 后端改路径时前端只改这里;
+ *   2. 组件里彻底不出现 URL 字符串,组件只管交互;
+ *   3. 返回类型集中声明,和 C# 那头的 DTO 一一对照,改名时两边一起改。
+ *
+ * 与前端的对应关系:
+ *   MaterialNodeDto  ↔ MaterialNode(material-tree 组件)
+ *   RecordingDto     ↔ Recording(recorder.service)
+ */
+
+// ---------- 素材树 ----------
+
+/** 后端返回的素材节点(与 C# MaterialNodeDto 对齐)。 */
+export interface MaterialNodeDto {
+  id: string;
+  name: string;
+  folder: boolean;
+  sortOrder: number;
+  expanded: boolean;
+  content: string | null;
+  children: MaterialNodeDto[];
+}
+
+/** 提交给后端的节点(前端 MaterialNode 直接映射过来)。 */
+export interface MaterialNodeIn {
+  id: string | null;
+  name: string;
+  folder: boolean;
+  content: string | null;
+  sortOrder: number;
+  expanded: boolean;
+  children: MaterialNodeIn[];
+}
+
+// ---------- 录音 ----------
+
+export interface WordScoreDto {
+  word: string;
+  accuracy: number;
+  errorType: string;
+}
+
+/**
+ * 评分结果。
+ * ⚠️ 可空字段 = 后端拿不到 → 界面必须显示 "—",绝不用 0 冒充。
+ */
+export interface RecordingScoreDto {
+  pronScore: number | null;
+  accuracyScore: number | null;
+  fluencyScore: number | null;
+  completenessScore: number | null;
+  prosodyScore: number | null;
+  recognized: string;
+  words: WordScoreDto[];
+  referenceText: string;
+  assessedAt: string;
+}
+
+export interface RecordingDto {
+  id: string;
+  materialId: string;
+  durationSeconds: number;
+  sizeBytes: number;
+  contentType: string;
+  createdAt: string;
+  score: RecordingScoreDto | null;
+}
+
+// ---------- Azure 语音设置 ----------
+
+export interface SpeechSettingStatusDto {
+  hasKey: boolean;
+  region: string | null;
+  maskedKey: string | null;
+  /** 'database' | 'configuration' | 'none' —— 让界面能说清 key 是从哪来的。 */
+  source: string;
+  endpoint: string | null;
+}
+
+@Injectable({ providedIn: 'root' })
+export class PracticeApi {
+  private readonly api = inject(ApiClient);
+
+  private static readonly BASE = '/api/assessment';
+
+  // ---------- 素材树 ----------
+
+  /** 取整棵素材树。 */
+  getMaterials(): Observable<MaterialNodeDto[]> {
+    return this.api.get<MaterialNodeDto[]>(`${PracticeApi.BASE}/materials`);
+  }
+
+  /** 整树覆盖保存(新建/改名/改正文/排序/删除 全走这一个)。 */
+  saveMaterials(nodes: MaterialNodeIn[]): Observable<{ saved: number }> {
+    return this.api.put<{ saved: number }>(`${PracticeApi.BASE}/materials`, { nodes });
+  }
+
+  // ---------- 录音 ----------
+
+  listRecordings(materialId: string): Observable<RecordingDto[]> {
+    return this.api.get<RecordingDto[]>(
+      `${PracticeApi.BASE}/materials/${materialId}/recordings`);
+  }
+
+  /**
+   * 上传一次录音。
+   * durationSeconds 走查询参数之外的表单字段,与后端 [FromForm] 对齐。
+   */
+  uploadRecording(materialId: string, blob: Blob, durationSeconds: number,
+    fileName: string, contentType: string): Observable<RecordingDto> {
+    const fd = new FormData();
+    fd.append('file', blob, fileName);
+    fd.append('durationSeconds', String(durationSeconds));
+    fd.append('contentType', contentType);
+    fd.append('language', 'en-US');
+    // 必须走 postForm —— FormData 交给普通 post 会被当成 JSON 序列化,后端收不到文件
+    return this.api.postForm<RecordingDto>(
+      `${PracticeApi.BASE}/materials/${materialId}/recordings`, fd);
+  }
+
+  /** 回放地址 —— 直接给 <audio src> 用。 */
+  audioUrl(recordingId: string): string {
+    return `${PracticeApi.BASE}/recordings/${recordingId}/audio`;
+  }
+
+  deleteRecording(recordingId: string): Observable<void> {
+    return this.api.delete<void>(`${PracticeApi.BASE}/recordings/${recordingId}`);
+  }
+
+  /** 读已缓存的评分(不调 Azure)。命中就不必重新花额度。 */
+  getRecordingScore(recordingId: string): Observable<RecordingScoreDto> {
+    return this.api.get<RecordingScoreDto>(
+      `${PracticeApi.BASE}/recordings/${recordingId}/score`);
+  }
+
+  /**
+   * 把评分结果存进后端(需求第 4 条:避免重复评分)。
+   *
+   * 存的是"已经算出来的分数",不是触发一次新评分 —— 所以后端不调 Azure,
+   * 只做落库。下次打开这个素材时直接读缓存,不再花额度。
+   */
+  saveScore(recordingId: string, score: {
+    pronScore: number | null; accuracyScore: number | null;
+    fluencyScore: number | null; completenessScore: number | null;
+    prosodyScore: number | null; recognized: string; referenceText: string;
+    words: { word: string; accuracy: number; errorType: string }[];
+  }): Observable<RecordingScoreDto> {
+    return this.api.post<RecordingScoreDto>(
+      `${PracticeApi.BASE}/recordings/${recordingId}/score`, {
+        pronScore: score.pronScore,
+        accuracyScore: score.accuracyScore,
+        fluencyScore: score.fluencyScore,
+        completenessScore: score.completenessScore,
+        prosodyScore: score.prosodyScore,
+        recognizedText: score.recognized,
+        referenceText: score.referenceText,
+        words: score.words
+      });
+  }
+
+  // ---------- Azure 语音设置 ----------
+
+  getSpeechSettings(): Observable<SpeechSettingStatusDto> {
+    return this.api.get<SpeechSettingStatusDto>(`${PracticeApi.BASE}/speech/settings`);
+  }
+
+  saveSpeechSettings(key: string, region: string, endpoint?: string):
+    Observable<SpeechSettingStatusDto> {
+    return this.api.put<SpeechSettingStatusDto>(
+      `${PracticeApi.BASE}/speech/settings`, { key, region, endpoint });
+  }
+
+  /** 真连通性测试 —— 拿当前 key 去 Azure 走一次。失败会返回 401/403。 */
+  testSpeech(): Observable<{ ok: boolean; message: string }> {
+    return this.api.post<{ ok: boolean; message: string }>(`${PracticeApi.BASE}/speech/test`);
+  }
+
+  /**
+   * 测试一把**尚未保存**的候选凭据(先测后存)。
+   *
+   * 2026-09-16(Forrest 第 1 条):与 testSpeech() 的区别在于 ——
+   *   · testSpeech()          → 测服务端**已保存**的 key
+   *   · testSpeechCredential() → 测请求体里这把**候选** key,不落库
+   * 失败时后端返回 502(凭据错)或 400(没填全)。
+   */
+  testSpeechCredential(key: string, region: string): Observable<{ ok: boolean; message: string }> {
+    return this.api.post<{ ok: boolean; message: string }>(
+      `${PracticeApi.BASE}/speech/test-credential`, { key, region });
+  }
+
+  // ---------- 示范朗读(TTS) ----------
+
+  /**
+   * Azure 神经语音合成。
+   * 返回 Blob(MP3)而不是 JSON —— 前端直接 objectURL 播放。
+   * 未配 key 时后端返回 503,调用方据此**如实**回退浏览器语音。
+   */
+  synthesize(text: string, voice?: string, speed?: number): Observable<Blob> {
+    return this.api.postBlob(`${PracticeApi.BASE}/tts`, { text, voice, speed });
+  }
+}

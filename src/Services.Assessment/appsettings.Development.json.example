@@ -1,0 +1,22 @@
+{
+  "_README": [
+    "这是 Services.Assessment 的本地开发配置模板, 可安全提交仓库(无真实密钥)。",
+    "用法: 复制成同目录的 appsettings.Development.json, 再把 REPLACE_WITH_* 换成真实值。",
+    "appsettings.Development.json 已被 .gitignore 排除, 不会提交。",
+    "字段说明: AzureSpeech.Key = Azure 门户 Speech 资源的密钥1。",
+    "",
+    "⚠️ 2026-09-16(Forrest 要求):**这里不要预置真实 key**。",
+    "   本文件里的 key 只是服务端兜底,界面上的\"已配置\"状态一律以",
+    "   用户在 /account/ai-setting 页面保存到数据库的凭据为准。",
+    "   预置 key 会让人误以为\"写死在文件里\",也会掩盖配置流程的问题。",
+    "   推荐做法: 留空, 在 AI 语音设置页填入并测试通过后保存。"
+  ],
+  "AzureSpeech": {
+    "Key": "",
+    "Region": "canadacentral",
+    "Endpoint": ""
+  },
+  "Messaging": {
+    "Enabled": false
+  }
+}

@@ -1,0 +1,29 @@
+<!-- 法律条款页:条款 / 隐私 / 版权 三合一,靠 URL 区分 -->
+<div class="legal-page">
+  @if (docs[kind()]; as doc) {
+    <header class="lg-head">
+      <a class="lg-back" routerLink="/practice">
+        <mat-icon>arrow_back</mat-icon>
+        <span>返回</span>
+      </a>
+      <h1>{{ doc.title }}</h1>
+      <p class="lg-updated">{{ doc.updated }}</p>
+    </header>
+
+    <article class="lg-body">
+      @for (s of doc.sections; track s.h) {
+        <section class="lg-sec">
+          <h2>{{ s.h }}</h2>
+          @for (p of s.ps; track p) {
+            <p>{{ p }}</p>
+          }
+        </section>
+      }
+    </article>
+
+    <footer class="lg-foot">
+      <p>Your Interview · 27 East Dr, Unionville, ON L6G 1A3, Canada</p>
+      <a href="mailto:forrestlin2024&#64;gmail.com">forrestlin2024&#64;gmail.com</a>
+    </footer>
+  }
+</div>

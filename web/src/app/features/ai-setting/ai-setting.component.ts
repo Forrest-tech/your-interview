@@ -2,9 +2,9 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
 
 import { PracticeApi } from '../../core/api/practice-api.service';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -31,11 +31,12 @@ import { MatTooltipModule } from '@angular/material/tooltip';
  * SaveSpeechSettingCommand / PingAsync),本页从"待后端接入"切换为真实调用。
  */
 
-/** 一个 TTS 引擎选项(与 /practice 的引擎菜单同源)。 */
+/** 一个 TTS 引擎选项(与 /practice 的引擎菜单同源)。
+ *  nameKey/noteKey 是 i18n 字典键 —— 模板里用 t() 取当前语言文案。 */
 interface EngineOption {
   key: 'browser' | 'azure';
-  name: string;
-  note: string;
+  nameKey: string;
+  noteKey: string;
   icon: string;
 }
 
@@ -54,18 +55,30 @@ const REGION_KEY = 'practice.azureRegion';
   styleUrl: './ai-setting.component.scss'
 })
 export class AiSettingComponent {
-  /** 与 /practice 引擎菜单共用的两个选项,文案保持一致。 */
+  /** i18n —— 页面文案随顶栏语言切换(2026-09-16 Forrest 第 6 条)。 */
+  readonly i18n = inject(I18nService);
+
+  /** 模板用:直接暴露 t() 给模板调用。 */
+  t(key: string): string {
+    return this.i18n.t(key);
+  }
+
+  /**
+   * 与 /practice 引擎菜单共用的两个选项。
+   * ⚠️ name/note 改成 **i18n 的 key** —— 模板里再 t() 出当前语言的文案。
+   *    2026-09-16 之前这里是写死的中文,导致网页切到英文后此页仍是中文。
+   */
   readonly engines: EngineOption[] = [
     {
       key: 'browser',
-      name: '浏览器内置语音',
-      note: '本地合成 · 免费 · 即时生成',
+      nameKey: 'setting.engineBrowserName',
+      noteKey: 'setting.engineBrowserNote',
       icon: 'record_voice_over'
     },
     {
       key: 'azure',
-      name: 'Azure 神经网络语音',
-      note: '高质量自然人声 · 需消耗额度',
+      nameKey: 'setting.engineAzureName',
+      noteKey: 'setting.engineAzureNote',
       icon: 'graphic_eq'
     }
   ];
@@ -92,19 +105,25 @@ export class AiSettingComponent {
   //    导致"保存失败:...Npgsql...28P01..."也渲染成绿色"成功"样式 —— 极具误导性。
   readonly savedHintKind = signal<'ok' | 'err'>('ok');
 
-  /**
-   * 后端密钥托管接口是否已实现。
-   * 2026-09-15 第十七轮:后端接口已就绪 → true。
-   */
-  readonly backendReady = signal(true);
-
   /** 后端当前的配置状态(hasKey / region / 掩码 / 来源)。null = 还没查过。 */
   readonly remoteStatus = signal<{
     hasKey: boolean; region: string | null; maskedKey: string | null; source: string;
   } | null>(null);
 
+  /**
+   * 保存前的"先测试"状态:null=未测,true=通过,false=失败。
+   * 2026-09-16(Forrest 第 1 条):必须**测试通过后才能保存**。
+   */
+  readonly tested = signal<boolean | null>(null);
+
+  /** 正在测试连接。 */
+  readonly testing = signal(false);
+
   /** 保存中 / 测试中的忙碌标记 —— 防止重复点击。 */
   readonly busy = signal(false);
+
+  /** 只有"测试通过了"才允许保存 —— 这是 Forrest 要求的硬门禁。 */
+  readonly canSave = computed(() => this.keyFilled() && this.tested() === true && !this.busy());
 
   /** 服务端返回的掩码 key(用于展示"已配置的是哪一把")。 */
   readonly remoteMasked = computed(() => this.remoteStatus()?.maskedKey ?? '');
@@ -141,7 +160,7 @@ export class AiSettingComponent {
     try {
       localStorage.setItem(ENGINE_KEY, e);
     } catch { /* 存储不可用:仅本次会话生效 */ }
-    this.flash('偏好已保存');
+    this.flash(this.t('setting.prefSaved'));
   }
 
   /** 区域变更同样落盘。 */
@@ -153,41 +172,74 @@ export class AiSettingComponent {
   }
 
   /**
-   * 保存 Azure 密钥。
+   * Key 输入框变更。
+   * ⚠️ 2026-09-16(Forrest 第 1 条):一旦改动 key,之前的"测试通过"状态立即作废 ——
+   *    否则用户测了 A 通过、又把输入改成 B,保存按钮还会亮着,又把错 key 存进去。
+   */
+  onKeyInput(v: string): void {
+    this.azureKey.set(v);
+    this.tested.set(null);
+  }
+
+  /**
+   * 测试当前输入框里的**候选凭据**(不落库)。
    *
-   * ⚠️ 后端尚未提供密钥托管接口,所以这里**不假装保存成功**。
-   *    只提示"待后端接入",并把用户填的内容留在输入框里。
+   * 2026-09-16(Forrest 第 1 条):这是新的强制流程的第一步 ——
+   * 用户填 key → 测试 → 通过才解锁保存按钮。
+   * 测试直接拿输入框里的值去 Azure 验证,与库里旧 key 无关。
+   */
+  testKey(): void {
+    if (!this.keyFilled() || this.testing() || this.busy()) return;
+    this.testing.set(true);
+    this.tested.set(null);
+
+    this.practiceApi.testSpeechCredential(this.azureKey().trim(), this.region())
+      .subscribe({
+        next: (r) => {
+          this.tested.set(true);
+          this.testing.set(false);
+          this.flash(r.message || this.t('setting.testOk'));
+        },
+        error: (e) => {
+          this.tested.set(false);
+          this.testing.set(false);
+          this.flash(this.t('setting.testFail') + this.errText(e), 'err');
+        }
+      });
+  }
+
+  /**
+   * 保存 Azure 密钥 —— 仅在**测试通过后**才允许。
    *
-   *    2026-09-15 第七轮补充:为了让 /practice 的"未配置"门禁可被解除,
-   *    这里写入一个**声明级**标记位 azure_speech_configured=1 ——
-   *    它不代表密钥真的可用,只代表"用户已声明配置过",
-   *    使练习页不再拦住用户。真校验仍在服务端。
+   * 2026-09-16(Forrest 第 1 条)重写:
+   *   旧流程是"先存再测",结果是错的 key 也进了库。
+   *   新流程:testKey() → canSave() 为真才点得动保存 → 落库。
+   *   保存成功后无需再测(已经测过了),直接标记为已配置。
+   *
+   * ⚠️ 后端仍会独立做校验(key 不能为空 / 太短),前端门禁不是唯一防线。
    */
   saveKey(): void {
-    if (!this.keyFilled() || this.busy()) return;
+    // 硬门禁:未测试通过绝不允许保存(Forrest 要求)
+    if (!this.canSave()) {
+      if (!this.keyFilled()) this.flash(this.t('setting.keyHint'), 'err');
+      else if (this.tested() !== true) this.flash(this.t('setting.testFirst'), 'err');
+      return;
+    }
     this.busy.set(true);
 
     this.practiceApi.saveSpeechSettings(this.azureKey().trim(), this.region())
       .subscribe({
-        next: async (status) => {
-          // 保存成功 → 立刻做一次真连通性测试。
-          // 不测的话,用户填错区域也会看到"保存成功",到练习时才炸 —— 那是骗人。
-          try {
-            const test = await firstValueFrom(this.practiceApi.testSpeech());
-            this.remoteStatus.set(status);
-            this.markConfigured();
-            this.azureKey.set('');            // 提交后清空输入框,密钥不在页面久留
-            this.flash(test.message || '已保存并通过连通性测试');
-          } catch (e) {
-            // 存进去了但 key 不可用 —— 如实说明,不让用户误以为能用
-            this.remoteStatus.set(status);
-            this.flash('已保存到服务端,但连通性测试未通过:' + this.errText(e), 'err');
-          }
+        next: (status) => {
+          this.remoteStatus.set(status);
+          this.markConfigured();
+          this.azureKey.set('');      // 提交后清空输入框,密钥不在页面久留
+          this.tested.set(null);      // 重置测试状态,下一把 key 需重新测
+          this.flash(this.t('setting.savedOk'));
           this.busy.set(false);
         },
         error: (e) => {
           // 保存本身失败:绝不写声明标记,绝不假装成功
-          this.flash('保存失败:' + this.errText(e), 'err');
+          this.flash(this.t('setting.saveFail') + this.errText(e), 'err');
           this.busy.set(false);
         }
       });

@@ -42,7 +42,9 @@ function readAzureReadyFlag(): boolean {
 }
 
 function readZoomFromStorage(): number {
-  const MIN = 80, MAX = 150, DEFAULT = 100;
+  // ⚠️ 2026-09-16:MAX 必须与类里的 ZOOM_MAX 同步(150 → 400),
+  //    否则旧值 150 会被当成"超上限"在初始化时被夹回去,用户调大后刷新又变小。
+  const MIN = 80, MAX = 400, DEFAULT = 100;
   try {
     const raw = localStorage.getItem('user_practice_zoom');
     if (!raw) return DEFAULT;
@@ -208,9 +210,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 基准字号 18px —— 100% 时的正文大小(任务书指定)。 */
   private static readonly BASE_FONT_PX = 18;
 
-  /** 缩放百分比下限 / 上限 / 步进。 */
+  /**
+   * 缩放百分比下限 / 上限 / 步进。
+   *
+   * ⚠️ 2026-09-16(Forrest 第 3 条):上限从 150 提到 **400**。
+   *    原因:150% 太小,用户想放大看清长句时直接被顶住。
+   *    上限 400% 配合基准 18px → 最大 72px,足够把一句话放大到可逐词精读。
+   *    步进仍 10%(400/10 = 40 档,手感够细)。
+   */
   private static readonly ZOOM_MIN = 80;
-  private static readonly ZOOM_MAX = 150;
+  private static readonly ZOOM_MAX = 400;
   private static readonly ZOOM_STEP = 10;
 
   /**
@@ -279,25 +288,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   readonly azureReady = signal(readAzureReadyFlag());
 
-  /** 能否提交评分:三个条件全满足。 */  readonly canSubmitScoring = computed(() => {
+  /** 能否提交评分:三个条件全满足。 */
+  readonly canSubmitScoring = computed(() => {
     const t = this.activeTake();
     return this.azureReady() && !!t && !t.score && !t.grading;
   });
 
-  /**
-   * 提交按钮点击。
-   * 按钮 disabled 时浏览器不会派发 click,所以这里只处理"可点但仍然
-   * 不该跑"的边界情况 —— 统一给 toast + 引导。
-   */
-  onSubmitScoringClick(): void {
-    if (!this.azureReady()) {
-      this.toast(this.t('practice.azureKeyMissing'));
-      this.goAiSetting();
-      return;
-    }
-    if (!this.canSubmitScoring()) return;
-    this.runActiveScoring();
-  }
+  // ⚠️ 2026-09-16(Forrest 第 4 条):底部"提交 AI 评分"按钮已删除 ——
+  //    它与录音区右侧的 run ai scoring 胶囊是同一动作,重复只会让人困惑。
+  //    onSubmitScoringClick() 随之移除(仅有的调用点就是那个被删的按钮)。
+  //    现在唯一的评分入口是 scoreActiveTake(),它内部自行处理未就绪分支。
 
   /** 轻量 toast(不引入 MatSnackBar,避免多一个依赖)。 */
   readonly toastMsg = signal('');
@@ -854,13 +854,18 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   private startSpeakTimer(): void {
     this.speakElapsed.set(0);
     this.clearSpeakTimer();
+    // ⚠️ 2026-09-16(第 2 条 bug B):总量在**开播那一刻锁死**。
+    //    旧实现每秒钟重新调 estimateSeconds(),而它可能因实测值写入而变小,
+    //    导致"已过秒数不变、总量变小"→ 进度条百分比反而往回退。
+    //    现在把开播时的总量快照入变量,全程不变 —— 进度条只前进不后退。
+    this.speakTotalSnapshot = this.estimateSeconds();
     this.speakTimer = setInterval(() => {
       this.speakElapsed.update((s) => {
         const next = s + 1;
-        // 超出估算时长就停在估算值上,只是不让进度条冲过 100%。
+        // 超出锁定的总时长就停在总量上,不让进度条冲过 100%。
         // ⚠️ 这**不会**截断音频 —— 朗读照样继续到 onend,
         //    只是秒表停在估算刻度(估算本身就偏保守)。
-        return next > this.estimateSeconds() ? this.estimateSeconds() : next;
+        return next > this.speakTotalSnapshot ? this.speakTotalSnapshot : next;
       });
     }, 1000);
   }
@@ -869,8 +874,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // ⚠️ 顺序要紧:只有"自然读完"才算实测时长。
     //    用户在播放中途手动停止时不能把它当成总时长 —— 否则下次显示就偏短。
     //    所以下面记录实测前,先判断本次是否已经走到 onend(onend 会先置 speaking=false)。
+    //
+    // ⚠️ 2026-09-16(第 2 条 bug B):写入实测值必须同时写 measuredKey ——
+    //    否则这个时长会被误用到下一段不同的文本上,导致 "0s / Ns" 显示错误。
     if (this.speaking() && this.speakElapsed() > 0) {
       this.measuredSpeakSeconds.set(this.speakElapsed());
+      this.measuredKey.set(this.textKey(this.readonlyText() || ''));
     }
     if (typeof speechSynthesis !== 'undefined') {
       speechSynthesis.cancel();
@@ -1039,10 +1048,34 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *    实测来源 = 录音回放(HTMLAudioElement.duration),或 speak() 完成后的计量。
    *    拿不到实测才回落词数估算——估算只用于进度条,不参与任何逻辑判断。
    */
+  /**
+   * 示范朗读总时长(秒),用于进度条与 "0s / Ns" 显示。
+   *
+   * ⚠️ 2026-09-16(Forrest 第 2 条)修两个真 bug:
+   *
+   *   bug A — 切换素材后时长显示错:
+   *     旧实现只存一个全局 measuredSpeakSeconds。读完文本 A(比如 8s)
+   *     再切到文本 B(比如长句),measured 仍是 A 的 8s → 界面显示
+   *     "0s / 8s",与实际不符。
+   *     → 现在把实测值**绑定到它对应的文本哈希**。文本一变,实测值立即失效,
+   *       回落词数估算。这样"切换一下时间就错了"不会再发生。
+   *
+   *   bug B — 读完后进度条往回跑:
+   *     秒表在跑的时候用的是**估算值**(比如 12s);读完后 stopSpeak 写回
+   *     实测值(比如 9s)。总量突然从 12 变 9,而滑块位置 = 已过/总量,
+   *     于是进度条会从 75% 猛地跳回 100% 再回落 —— 视觉上就是"往回跑"。
+   *     → 现在实测值只在**同一文本、且未在播放中**时接管;
+   *       播放期间总量恒定不变,进度条只前进不后退。
+   */
   readonly estimateSeconds = computed(() => {
-    const measured = this.measuredSpeakSeconds();
-    if (measured > 0) return measured;
     const text = this.readonlyText() || '';
+
+    // 只有"实测值属于当前这段文本"时才采用实测 —— 切文本即失效
+    if (this.measuredKey() === this.textKey(text)) {
+      const measured = this.measuredSpeakSeconds();
+      if (measured > 0) return measured;
+    }
+
     const words = text.trim().split(/\s+/).filter(Boolean).length;
     // 英语朗读大约 150 词/分钟 ≈ 2.5 词/秒,除以倍速
     return Math.max(1, Math.round(words / 2.5 / this.rate()));
@@ -1050,18 +1083,35 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /**
    * 实测的示范朗读时长(秒)。0 = 尚未测得。
-   * speak() 结束时把实际花费的秒数写到这里 —— 这是"真实总时长",
-   * 不是估算。下次同一文本再播时,分就秒就准了。
+   * ⚠️ 必须与 measuredKey 配套使用 —— 单看它无法判断这个时长属于哪段文本。
    */
   readonly measuredSpeakSeconds = signal(0);
+
+  /** 上面那个实测值对应的文本指纹(空 = 无实测值可用)。 */
+  private readonly measuredKey = signal('');
+
+  /** 文本指纹:用长度 + 首尾片段做轻量标识,足够区分"换没换素材"。 */
+  private textKey(text: string): string {
+    const t = (text || '').trim();
+    if (!t) return '';
+    return t.length + ':' + t.slice(0, 24) + ':' + t.slice(-24);
+  }
 
   readonly speakElapsed = signal(0);
   private speakTimer: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * 开播那一刻锁定的总时长(秒)。
+   * ⚠️ 2026-09-16(第 2 条 bug B):进度条必须用**锁定的快照**而不是实时
+   *    estimateSeconds();否则实测值写入使总量变小时,百分比会往回退。
+   */
+  private speakTotalSnapshot = 0;
+
   /** 示范朗读进度百分比。 */
   speakProgress(): number {
     if (!this.speaking()) return 0;
-    const total = this.estimateSeconds();
+    // 用开播时锁定的总量,保证分母恒定 → 进度只前进
+    const total = this.speakTotalSnapshot || this.estimateSeconds();
     if (!total) return 0;
     return Math.min(100, (this.speakElapsed() / total) * 100);
   }

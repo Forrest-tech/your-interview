@@ -553,7 +553,34 @@ export class RecorderService {
     // 唯一路径:真实后端。没有模拟分支。
     try {
       this.decodeError.set('');
-      const samples = await this.decodeToPcm(rec.blob);
+
+      // ★★ 第二十九轮:评分用的音频来源必须健壮 ★★
+      //   刚录完的录音:blob 在内存里,直接解码,零请求。
+      //   刷新后/历史录音:fromDto() 只给了空占位 blob —— 此时
+      //   **带鉴权**从后端把音频流拉回来再解码(与回放同一套机制,
+      //   走 authInterceptor,不会像 <audio src> 那样 401)。
+      let source: Blob | null = rec.blob && rec.blob.size > 0 ? rec.blob : null;
+      if (!source && RecorderService.isGuid(id)) {
+        try {
+          source = await firstValueFrom(this.practiceApi.fetchRecordingAudio(id));
+        } catch (e) {
+          this.patch(id, {
+            grading: false,
+            error: '取回录音音频失败,无法评分:'
+              + String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 120)
+          });
+          return;
+        }
+      }
+      if (!source || source.size === 0) {
+        this.patch(id, {
+          grading: false,
+          error: '这条录音没有可用的音频数据,无法评分。请重新录制。'
+        });
+        return;
+      }
+
+      const samples = await this.decodeToPcm(source);
       if (!samples) {
         // 解不出 PCM 就直说。以前这里会偷偷造分,现在不做了。
         // ★ 第二十八轮:文案不再笼统归罪于"格式" —— 改为回传**真实原因**
@@ -628,6 +655,20 @@ export class RecorderService {
     const Ctor = window.AudioContext
       || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return null;
+
+    // ★★ 第二十九轮(Forrest 真机:评分出来却是 Recognition 0%、无逐词分数)★★
+    //   真凶:fromDto() 把【来自服务端的录音】的 blob 设成 new Blob([]) (空),
+    //   而 grade() 曾经直接拿 rec.blob 去解码。
+    //   空 blob 在部分浏览器不抛错、返回 0 长度 AudioBuffer →
+    //   getChannelData(0) 得到空数组 → 后端即使拒收也先浪费一次往返;
+    //   在另一些浏览器则直接解码失败,被吞成"格式无法解析"。
+    //   这里显式挡掉空 blob,让调用方去走"从后端拉流"的正路。
+    if (!blob || blob.size === 0) {
+      this.decodeError.set(
+        '这条录音的音频不在浏览器内存里(通常是刷新页面后加载的历史录音)。'
+        + '正在从服务端取回音频…');
+      return null;
+    }
 
     const ctx = new Ctor();
     try {

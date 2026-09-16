@@ -49,26 +49,87 @@ if [ -z "${Jwt__SigningKey:-}" ] && [ -f "$ROOT/.env" ]; then
   unset _jwt
 fi
 
-# ---------- 1) 停:只处理 5266 的持有者,单个 PID,不杀进程组 ----------
-echo "▸ 停止 5266 上的 assessment(若有)"
-holders="$(lsof -ti "tcp:$PORT" 2>/dev/null || true)"
-if [ -z "$holders" ]; then
-  c_dim "5266 空闲,无需停止"
-else
-  for h in $holders; do
-    # 只对这一个 PID,不用负号(= 不碰进程组,不碰 Docker)
-    kill -TERM "$h" 2>/dev/null || true
-    c_dim "已向 PID $h 发送 TERM"
+# ---------------------------------------------------------------------------
+# 1) 停 —— ⚠️ 绝对不能用 lsof -ti tcp:5266 无脑杀!
+#
+#    Forrest 2026-09-16 亲历两次 Docker Desktop 被"关"(实为重启),真根因在此:
+#    容器里的 gateway 通过 host.docker.internal:5266 转发到宿主机 assessment
+#    (docker-compose.hybrid.yml 第 79 行)。macOS 上这个转发由 Docker 的
+#    vpnkit/com.docker.backend 进程持有 —— 它在 5266 上有一条 ESTABLISHED 连接。
+#    lsof -ti tcp:5266 会把 **Docker 的转发进程一并列出来**,
+#    于是"按端口杀"就顺手打断了 Docker 的网络栈,
+#    Docker Desktop 的 watchdog 判定链路致命故障 → **整个 Docker 栈重启**
+#    (菜单栏短暂显示 stopped,随后是一批全新 PID)。
+#
+#    实测证据(lsof -nP -iTCP:5266):
+#      YourInter 54624 ... 127.0.0.1:5266 (LISTEN)
+#      com.docke 55058 ... 127.0.0.1:52290->127.0.0.1:5266 (ESTABLISHED)  ← 元凶
+#
+#    ✅ 正确做法:只认"命令行确实是 assessment"的进程,别的(尤其 Docker)一概不碰。
+#       宁可少杀、让用户自己处理,也绝不误伤 Docker。
+# ---------------------------------------------------------------------------
+
+# 判断某 PID 是否真的是我们的 assessment 服务
+is_assessment_pid() {
+  local pid="$1" cmd
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  cmd="$(ps -o command= -p "$pid" 2>/dev/null || true)"
+  [ -n "$cmd" ] || return 1
+  # 只认这几种特征:dotnet run --project .../Services.Assessment,或已编译的
+  # YourInterview.Services.Assessment 宿主进程。其余(含 Docker、com.docke)一律不认。
+  case "$cmd" in
+    *"Services.Assessment"*) return 0 ;;
+    *YourInterview.Services.Assessment*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+echo "▸ 停止 assessment(只杀命令行确认为 assessment 的进程,绝不碰 Docker)"
+stopped=0
+# 候选一:pidfile 里的 PID(我们上次启动时记下的),但必须先验证身份
+if [ -f "$ROOT/.run/assessment.pid" ]; then
+  pf_pid="$(cat "$ROOT/.run/assessment.pid" 2>/dev/null || true)"
+  if is_assessment_pid "$pf_pid"; then
+    kill -TERM "$pf_pid" 2>/dev/null || true
+    c_dim "已向 pidfile 中的 assessment (PID $pf_pid) 发送 TERM"
+    stopped=1
+  elif [ -n "$pf_pid" ]; then
+    c_dim "pidfile 里的 PID $pf_pid 已不是 assessment(可能已被系统复用),忽略它"
+  fi
+fi
+
+# 候选二:监听 5266 的进程里,**逐个用命令行验明身份**,只对确认是 assessment 的下手
+if [ "$stopped" = "0" ]; then
+  for h in $(lsof -ti "tcp:$PORT" 2>/dev/null || true); do
+    if is_assessment_pid "$h"; then
+      kill -TERM "$h" 2>/dev/null || true
+      c_dim "已向占着 $PORT 的 assessment (PID $h) 发送 TERM"
+      stopped=1
+    else
+      c_dim "PID $h 占着 $PORT 但不是 assessment(可能是 Docker 转发),跳过不碰"
+    fi
   done
-  # 给它 5 秒优雅退出,否则只对**同一个 PID** 强杀
+fi
+
+if [ "$stopped" = "0" ]; then
+  c_dim "没发现运行中的 assessment,无需停止"
+else
+  # 优雅退出等待:只检查"是否还存在仍是 assessment 的进程"
   for _ in $(seq 1 5); do
-    lsof -ti "tcp:$PORT" >/dev/null 2>&1 || break
+    still_alive=0
+    for h in $(lsof -ti "tcp:$PORT" 2>/dev/null || true); do
+      is_assessment_pid "$h" && still_alive=1
+    done
+    [ "$still_alive" = "0" ] && break
     sleep 1
   done
-  still="$(lsof -ti "tcp:$PORT" 2>/dev/null || true)"
-  for h in $still; do
-    kill -KILL "$h" 2>/dev/null || true
-    c_dim "PID $h 未退出,已 KILL"
+  # 仍未退出的,只对**确认是 assessment** 的 PID 强杀
+  for h in $(lsof -ti "tcp:$PORT" 2>/dev/null || true); do
+    if is_assessment_pid "$h"; then
+      kill -KILL "$h" 2>/dev/null || true
+      c_dim "assessment (PID $h) 未退出,已 KILL"
+    fi
   done
   c_ok "assessment 已停"
 fi

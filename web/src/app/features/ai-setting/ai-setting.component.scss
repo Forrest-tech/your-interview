@@ -182,6 +182,40 @@
   color: #c0392b; /* 失败 = 红色 */
 }
 
+/* ---------- 服务端已保存凭据的状态行 ---------- */
+/* ⚠️ 2026-09-16(Forrest 本轮第 2 条):显示在输入框下方的"已保存"状态行。
+   之前类名是 remote-line 但 SCSS 里从未定义过 —— 本次补上。 */
+.remote-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #6b7280;
+}
+.remote-line mat-icon {
+  flex: 0 0 auto;
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+}
+.remote-line.on { color: #22a35c; }
+.remote-line strong {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+}
+
+/* "律师字体" —— 正式衬线体。Forrest 明确要求这一行用衬线体显示，
+   以区别于普通 UI 正文(无衬线)。font-family 写了完整回退栈:
+   Georgia(最普及的屏幕衬线) → Times New Roman → 系统衬线 → 最后回到 serif。 */
+.remote-line.serif {
+  font-family: Georgia, 'Times New Roman', 'Songti SC', 'SimSun', serif;
+  font-size: 13.5px;
+  letter-spacing: .15px;
+}
+
 /* ---------- 诚实提示条 ---------- */
 .warn-note {
   display: flex;

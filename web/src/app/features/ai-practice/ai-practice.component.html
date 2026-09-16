@@ -154,7 +154,26 @@
                     [disabled]="!canDecreaseFont()"
                     [matTooltip]="t('practice.zoomOut')"
                     aria-label="decrease font size">−</button>
-            <span class="zoom-label">{{ fontZoomLevel() }}%</span>
+
+            <!-- 2026-09-16(Forrest 本轮第 2 条):点中间的数字可直接输入精确百分比。
+                 平时是只读文本;点击后变成输入框,回车/失焦提交,Esc 取消。 -->
+            @if (zoomEditing()) {
+              <input class="zoom-input" type="text" inputmode="numeric"
+                     [ngModel]="zoomDraft()"
+                     (ngModelChange)="onZoomDraftChange($event)"
+                     (blur)="commitZoomEdit()"
+                     (keydown.enter)="onZoomEnter()"
+                     (keydown.escape)="cancelZoomEdit()"
+                     aria-label="font size percent"
+                     #zoomInput autofocus>
+              <span class="zoom-pct">%</span>
+            } @else {
+              <button class="zoom-label" type="button"
+                      (click)="startZoomEdit()"
+                      [matTooltip]="t('practice.zoomEditHint')"
+                      aria-label="set font size">{{ fontZoomLevel() }}%</button>
+            }
+
             <button class="zoom-btn" (click)="increaseFont()"
                     [disabled]="!canIncreaseFont()"
                     [matTooltip]="t('practice.zoomIn')"

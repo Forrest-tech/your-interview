@@ -220,7 +220,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   private static readonly ZOOM_MIN = 80;
   private static readonly ZOOM_MAX = 400;
-  private static readonly ZOOM_STEP = 10;
+  /**
+   * ⚠️ 2026-09-16(Forrest 本轮第 2 条):步进从 10% 改为 **50%**。
+   *    10% 太碎,从 100% 调到 200% 要点十次;50% 两下就到。
+   *    另新增"点数字直接输入精确值"(见 startZoomEdit / commitZoomEdit),
+   *    需要细调时用输入框,不必依赖步进。
+   */
+  private static readonly ZOOM_STEP = 50;
 
   /**
    * 当前缩放百分比(100 = 基准)。
@@ -247,6 +253,52 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   increaseFont(): void {
     if (!this.canIncreaseFont()) return;
     this.applyZoom(this.fontZoomLevel() + AiPracticeComponent.ZOOM_STEP);
+  }
+
+  // ---------- 点中间数字直接输入精确百分比(Forrest 本轮第 2 条) ----------
+
+  /** 是否处于"手动输入百分比"状态。 */
+  readonly zoomEditing = signal(false);
+
+  /** 输入框里正在编辑的原始文本(不立即生效,回车/失焦才提交)。 */
+  readonly zoomDraft = signal('');
+
+  /** 点百分比数字 → 进入编辑态,预填当前值。 */
+  startZoomEdit(): void {
+    this.zoomDraft.set(String(this.fontZoomLevel()));
+    this.zoomEditing.set(true);
+  }
+
+  /** 输入框内容变化(只存草稿,不落盘)。 */
+  onZoomDraftChange(v: string): void {
+    // 只允许数字(去掉 % 与空格等干扰字符)
+    this.zoomDraft.set(String(v ?? '').replace(/[^0-9]/g, ''));
+  }
+
+  /**
+   * 提交输入框里的百分比。
+   * - 非数字 / 空 → 放弃本次编辑,保持原值。
+   * - 越界值由 applyZoom 统一夹到 [ZOOM_MIN, ZOOM_MAX]。
+   */
+  commitZoomEdit(): void {
+    if (!this.zoomEditing()) return;
+    const raw = this.zoomDraft().trim();
+    this.zoomEditing.set(false);
+    if (!raw) return;                       // 清空 = 不改
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;        // 非数字 = 不改
+    this.applyZoom(n);                      // 越界自动夹取
+  }
+
+  /** 回车提交。 */
+  onZoomEnter(): void {
+    this.commitZoomEdit();
+  }
+
+  /** Esc 取消编辑,不改变字号。 */
+  cancelZoomEdit(): void {
+    this.zoomEditing.set(false);
+    this.zoomDraft.set('');
   }
 
   /** 写入 signal + 落盘 localStorage。越界值一律夹到合法区间。 */

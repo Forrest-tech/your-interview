@@ -12,11 +12,17 @@
     <p class="sp-sub">{{ t('setting.subtitle') }}</p>
   </header>
 
-  <!-- 引擎选择 -->
+  <!-- 引擎选择
+       ⚠️ 2026-09-16(Forrest 本轮第 3 条):
+         · 原本这里还有一个独立的 "Sample Reading Engine" 区块(= 本区块),
+           与 /practice 的 TTS Engine 菜单重复。Forrest 要求去掉独立区块,
+           统一归到 TTS Engine 下面。
+         · 处理:标题改用 TTS 引擎的措辞(setting.ttsEngineTitle),
+           本区块就是唯一的引擎选择入口 —— 不再另设 "Sample Reading Engine"。 -->
   <section class="sp-card">
     <h2 class="sp-card-title">
       <mat-icon>settings_voice</mat-icon>
-      <span>{{ t('setting.engineTitle') }}</span>
+      <span>{{ t('setting.ttsEngineTitle') }}</span>
     </h2>
 
     <div class="eng-list">
@@ -93,11 +99,15 @@
       }
     </div>
 
-    <!-- 服务端已保存的凭据状态(不显示明文) -->
-    <p class="remote-line" [class.on]="remoteStatus()?.hasKey">
+    <!-- 服务端已保存的凭据状态(不显示明文)
+         2026-09-16(Forrest 本轮第 2 条):
+           · 文案改为"你有有效的 key: <掩码>,可以尽情享受 Azure Speech 服务。"
+           · 字体用正式衬线体("律师字体")—— 见 SCSS 的 .remote-line.serif -->
+    <p class="remote-line" [class.on]="remoteStatus()?.hasKey"
+       [class.serif]="remoteStatus()?.hasKey">
       @if (remoteStatus()?.hasKey) {
         <mat-icon>check_circle</mat-icon>
-        <span>{{ t('setting.savedMasked') }}{{ remoteMasked() }} · {{ t('setting.sourceDb') }}</span>
+        <span>{{ t('setting.validKeyPrefix') }} <strong>{{ remoteMasked() }}</strong>{{ t('setting.validKeySuffix') }}</span>
       } @else {
         <mat-icon>info_outline</mat-icon>
         <span>{{ t('setting.noKey') }}</span>

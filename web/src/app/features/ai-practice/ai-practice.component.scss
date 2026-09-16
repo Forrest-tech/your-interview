@@ -1505,6 +1505,41 @@
   user-select: none;
 }
 
+/* 2026-09-16(Forrest 本轮第 2 条):中间的百分比现在可点击 → 变成
+   "点数字直接输入精确值的入口"。给它按钮语义:悬停高亮 + 指针。 */
+button.zoom-label {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 0 4px;
+  height: 26px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
+
+/* 输入态:输入框 + % 紧贴在一起,尺寸与原来的 label 对齐避免跳动 */
+.zoom-input {
+  width: 42px;
+  height: 22px;
+  padding: 0 2px;
+  border: 1px solid #2f6fed;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2733;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+.zoom-pct {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #5b6472;
+  user-select: none;
+}
+
 /* ---------- TTS 引擎弹窗:卡片式,对标 /account/ai-setting 的 .eng-row ---------- */
 ::ng-deep .engine-menu.mat-mdc-menu-panel {
   /* 任务书:宽 360px、圆角 12px、白卡片 + 平滑阴影、内边距 16px */

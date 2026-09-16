@@ -111,6 +111,21 @@ export class AiSettingComponent {
   } | null>(null);
 
   /**
+   * 输入框里显示的是"服务端掩码"(保存后回填)而不是用户手打的真 key ——
+   * 此时它不可作为凭据提交。
+   *
+   * 2026-09-16(Forrest 第 1 条):保存后输入框回填 `Delt••••••••OVCi`。
+   * ⚠️ 该串不能被当成 key 再次提交(会把掩码写进库、覆盖真 key),
+   *    所以这里识别出"值是掩码"→ 直接判定为"不是有效输入"。
+   *    判据:含有掩码点号 • 的串一定是掩码。
+   */
+  private readonly isMaskedValue = computed(() => this.azureKey().includes('•'));
+
+  /** 输入框是否为一个"可提交的真 key"(排除掩码回填)。 */
+  readonly keyInputUsable = computed(
+    () => this.keyFilled() && !this.isMaskedValue());
+
+  /**
    * 保存前的"先测试"状态:null=未测,true=通过,false=失败。
    * 2026-09-16(Forrest 第 1 条):必须**测试通过后才能保存**。
    */
@@ -123,7 +138,8 @@ export class AiSettingComponent {
   readonly busy = signal(false);
 
   /** 只有"测试通过了"才允许保存 —— 这是 Forrest 要求的硬门禁。 */
-  readonly canSave = computed(() => this.keyFilled() && this.tested() === true && !this.busy());
+  readonly canSave = computed(
+    () => this.keyInputUsable() && this.tested() === true && !this.busy());
 
   /** 服务端返回的掩码 key(用于展示"已配置的是哪一把")。 */
   readonly remoteMasked = computed(() => this.remoteStatus()?.maskedKey ?? '');
@@ -189,7 +205,9 @@ export class AiSettingComponent {
    * 测试直接拿输入框里的值去 Azure 验证,与库里旧 key 无关。
    */
   testKey(): void {
-    if (!this.keyFilled() || this.testing() || this.busy()) return;
+    // ⚠️ 用 keyInputUsable 而非 keyFilled —— 保存后输入框里是掩码,
+    //    不能拿掩码去测(白跑一次 Azure 并报错)。
+    if (!this.keyInputUsable() || this.testing() || this.busy()) return;
     this.testing.set(true);
     this.tested.set(null);
 
@@ -221,7 +239,7 @@ export class AiSettingComponent {
   saveKey(): void {
     // 硬门禁:未测试通过绝不允许保存(Forrest 要求)
     if (!this.canSave()) {
-      if (!this.keyFilled()) this.flash(this.t('setting.keyHint'), 'err');
+      if (!this.keyInputUsable()) this.flash(this.t('setting.keyHint'), 'err');
       else if (this.tested() !== true) this.flash(this.t('setting.testFirst'), 'err');
       return;
     }
@@ -232,8 +250,12 @@ export class AiSettingComponent {
         next: (status) => {
           this.remoteStatus.set(status);
           this.markConfigured();
-          this.azureKey.set('');      // 提交后清空输入框,密钥不在页面久留
-          this.tested.set(null);      // 重置测试状态,下一把 key 需重新测
+          // 2026-09-16(Forrest 第 1 条):保存成功后输入框显示**服务端回传的掩码 key**
+          //   (如 Delt••••••••OVCi),而不是清空。用户一眼就能确认"生效的是哪一把"。
+          //   ⚠️ 仅显示掩码,明文 key 绝不回传、绝不留在页面。
+          this.azureKey.set(status.maskedKey ?? '');
+          // 掩码不是可提交的凭据 → 立即作废测试态,防止"拿掩码当 key 再存一次"(会把掩码写进库)。
+          this.tested.set(null);
           this.flash(this.t('setting.savedOk'));
           this.busy.set(false);
         },

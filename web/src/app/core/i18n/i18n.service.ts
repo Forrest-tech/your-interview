@@ -173,6 +173,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.savedHint': { zh: '素材已保存到本地', en: 'Materials saved locally', fr: 'Supports enregistrés localement' },
   'practice.zoomIn': { zh: '放大字号', en: 'Increase font size', fr: 'Agrandir le texte' },
   'practice.zoomOut': { zh: '缩小字号', en: 'Decrease font size', fr: 'Réduire le texte' },
+  // 2026-09-16(Forrest 本轮第 2 条):中间的百分比数字可点击 → 输入精确值。
+  'practice.zoomEditHint': { zh: '点击输入精确百分比', en: 'Click to type an exact percentage', fr: 'Cliquez pour saisir un pourcentage exact' },
   'practice.azureKeyMissing': { zh: '尚未配置 Azure Speech 密钥，无法执行发音评分。', en: 'Azure Speech key is not configured, so pronunciation scoring is unavailable.', fr: "La clé Azure Speech n'est pas configurée ; l'évaluation de prononciation est indisponible." },
   'practice.gotoConfigKey': { zh: '前往配置 API Key ↗', en: 'Configure API Key ↗', fr: 'Configurer la clé API ↗' },
   'practice.azureFallbackNote': { zh: '后端合成接口未接入，选择 Azure 仍会回退到浏览器语音。', en: 'Backend synthesis is not wired up yet, so Azure falls back to browser speech.', fr: "La synthèse côté serveur n'est pas en place : Azure retombe sur la voix du navigateur." },
@@ -245,6 +247,9 @@ const DICT: Record<string, Record<Lang, string>> = {
     fr: 'Choisissez le moteur de lecture et configurez vos identifiants Azure Speech.'
   },
   'setting.engineTitle': { zh: '示范朗读引擎', en: 'Sample Reading Engine', fr: 'Moteur de lecture' },
+  // 2026-09-16(Forrest 本轮第 3 条):独立"Sample Reading Engine"区块已取消,
+  // 统一归入 TTS 引擎。此键是设置页引擎卡片的新标题。
+  'setting.ttsEngineTitle': { zh: 'TTS 引擎', en: 'TTS Engine', fr: 'Moteur vocal' },
   'setting.engineBrowserName': { zh: '浏览器内置语音', en: 'Browser Built-in Voice', fr: 'Voix du navigateur' },
   'setting.engineBrowserNote': { zh: '本地合成 · 免费 · 即时生成', en: 'On-device · free · instant', fr: 'Local · gratuit · instantané' },
   'setting.engineAzureName': { zh: 'Azure 神经网络语音', en: 'Azure Neural Voice', fr: 'Voix neuronale Azure' },
@@ -286,6 +291,14 @@ const DICT: Record<string, Record<Lang, string>> = {
   },
   'setting.savedMasked': { zh: '已保存:', en: 'Saved: ', fr: 'Enregistrée : ' },
   'setting.sourceDb': { zh: '来源:本页保存', en: 'Source: saved here', fr: 'Source : enregistrée ici' },
+  // 2026-09-16(Forrest 本轮第 2 条):已有有效凭据时的展示文案。
+  // 分两段拼装:前缀 + 掩码 key + 后缀 —— 掩码由服务端回传,不能写死在字典里。
+  'setting.validKeyPrefix': { zh: '你有有效的 key:', en: 'You have a valid key:', fr: 'Vous disposez d’une clé valide :' },
+  'setting.validKeySuffix': {
+    zh: ',可以尽情享受 Azure Speech 服务。',
+    en: ' — enjoy the full Azure Speech experience.',
+    fr: ' — profitez pleinement du service Azure Speech.'
+  },
   'setting.assessTitle': { zh: '发音评测', en: 'Pronunciation Assessment', fr: 'Évaluation de prononciation' },
   'setting.assess1': {
     zh: '练习页的 AI 评分走服务端 Azure 发音评测接口,Key 由服务端持有。',

@@ -221,12 +221,32 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   private static readonly ZOOM_MIN = 80;
   private static readonly ZOOM_MAX = 400;
   /**
-   * ⚠️ 2026-09-16(Forrest 本轮第 2 条):步进从 10% 改为 **50%**。
-   *    10% 太碎,从 100% 调到 200% 要点十次;50% 两下就到。
-   *    另新增"点数字直接输入精确值"(见 startZoomEdit / commitZoomEdit),
-   *    需要细调时用输入框,不必依赖步进。
+   * ⚠️ 2026-09-16(Forrest 最新一条):步进改回 **10**。
+   *    点 − / + 每次变动 10(80 → 90 → …),手感细。
+   *    (此前曾改 50,Forrest 本轮明确要求回到 10。)
    */
-  private static readonly ZOOM_STEP = 50;
+  private static readonly ZOOM_STEP = 10;
+
+  /**
+   * 下拉可选档位(Forrest 最新一条:等差数列,首项 100,公差 40)。
+   *   100, 140, 180, 220, 260, 300, 340, 380
+   * 为什么不用"80–400 每 10 一档"的完整序列:
+   *   那样下拉会很长;Forrest 指定的是"从 100 开始、公差 40"这一串。
+   * ⚠️ 注意:等差数列不覆盖 80(下限)。手动输入/步进仍可到 80,
+   *    下拉只是"快捷档位",不是唯一取值集合。
+   */
+  private static readonly ZOOM_PRESETS: readonly number[] = (() => {
+    const out: number[] = [];
+    for (let v = 100; v <= AiPracticeComponent.ZOOM_MAX; v += 40) out.push(v);
+    return out;
+  })();
+
+  /** 下拉档位列表:等差数列 + (当前值若不在序列里,补进去,免得下拉里看不到自己)。 */
+  readonly zoomPresets = computed<number[]>(() => {
+    const cur = this.fontZoomLevel();
+    const list = AiPracticeComponent.ZOOM_PRESETS;
+    return list.includes(cur) ? [...list] : [...list, cur].sort((a, b) => a - b);
+  });
 
   /**
    * 当前缩放百分比(100 = 基准)。
@@ -267,6 +287,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   startZoomEdit(): void {
     this.zoomDraft.set(String(this.fontZoomLevel()));
     this.zoomEditing.set(true);
+  }
+
+  /**
+   * 选中下拉里的某个档位(Forrest 最新一条)。
+   * 与手动输入走同一个 applyZoom,越界同样自动夹取。
+   */
+  setZoomPreset(pct: number): void {
+    this.applyZoom(pct);
   }
 
   /** 输入框内容变化(只存草稿,不落盘)。 */

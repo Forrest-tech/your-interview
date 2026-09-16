@@ -1627,6 +1627,54 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   user-select: none;
 }
 
+/* ---------- 字号档位下拉(Forrest 2026-09-16:点数字 → 选具体档位)----------
+   档位为等差数列 100/140/180/…/380;另有"手动输入…"入口。 */
+::ng-deep .zoom-menu.mat-mdc-menu-panel {
+  min-width: 132px !important;
+  max-width: 132px !important;
+  border-radius: 10px !important;
+  padding: 4px 0;
+}
+::ng-deep .zoom-menu .mat-mdc-menu-content { padding: 0; }
+
+::ng-deep .zoom-menu .zm-item {
+  height: 34px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* 当前档位:加粗 + 打勾,一眼看出"我现在在哪一档" */
+::ng-deep .zoom-menu .zm-item.on {
+  font-weight: 700;
+  color: #2f6fed;
+}
+::ng-deep .zoom-menu .zm-item .zm-check {
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  margin-left: auto;
+  color: #2f6fed;
+}
+/* mat-menu-item 内部默认是 flex,给数字与勾留出左右分布 */
+::ng-deep .zoom-menu .zm-item .mat-mdc-menu-item-text {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* 分隔线 + 手动输入项 */
+::ng-deep .zoom-menu .zm-sep {
+  height: 1px;
+  background: #e8ecf2;
+  margin: 4px 0;
+}
+::ng-deep .zoom-menu .zm-edit mat-icon {
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  margin-right: 6px;
+  color: #7a8393;
+}
+
 /* ---------- TTS 引擎弹窗:卡片式,对标 /account/ai-setting 的 .eng-row ---------- */
 ::ng-deep .engine-menu.mat-mdc-menu-panel {
   /* 任务书:宽 360px、圆角 12px、白卡片 + 平滑阴影、内边距 16px */

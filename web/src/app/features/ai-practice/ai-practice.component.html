@@ -155,8 +155,34 @@
                     [matTooltip]="t('practice.zoomOut')"
                     aria-label="decrease font size">−</button>
 
-            <!-- 2026-09-16(Forrest 本轮第 2 条):点中间的数字可直接输入精确百分比。
-                 平时是只读文本;点击后变成输入框,回车/失焦提交,Esc 取消。 -->
+            <!-- 2026-09-16(Forrest 最新一条):点中间的数字 → 弹出下拉列表,
+                 选择具体档位。档位是等差数列(首项 100,公差 40):
+                 100 / 140 / 180 / 220 / 260 / 300 / 340 / 380。
+                 另有"手动输入"入口 —— 保留精确输入能力,不因下拉而丢失。 -->
+            <button class="zoom-label" type="button"
+                    [matMenuTriggerFor]="zoomMenu"
+                    [matTooltip]="t('practice.zoomEditHint')"
+                    aria-label="set font size">{{ fontZoomLevel() }}%</button>
+
+            <mat-menu #zoomMenu="matMenu" class="zoom-menu" xPosition="before">
+              @for (p of zoomPresets(); track p) {
+                <button mat-menu-item class="zm-item"
+                        [class.on]="p === fontZoomLevel()"
+                        (click)="setZoomPreset(p)">
+                  <span>{{ p }}%</span>
+                  @if (p === fontZoomLevel()) {
+                    <mat-icon class="zm-check">check</mat-icon>
+                  }
+                </button>
+              }
+              <div class="zm-sep"></div>
+              <button mat-menu-item class="zm-item zm-edit" (click)="startZoomEdit()">
+                <mat-icon>edit</mat-icon>
+                <span>{{ t('practice.zoomCustom') }}</span>
+              </button>
+            </mat-menu>
+
+            <!-- 手动输入态 (保留) -->
             @if (zoomEditing()) {
               <input class="zoom-input" type="text" inputmode="numeric"
                      [ngModel]="zoomDraft()"
@@ -167,11 +193,6 @@
                      aria-label="font size percent"
                      #zoomInput autofocus>
               <span class="zoom-pct">%</span>
-            } @else {
-              <button class="zoom-label" type="button"
-                      (click)="startZoomEdit()"
-                      [matTooltip]="t('practice.zoomEditHint')"
-                      aria-label="set font size">{{ fontZoomLevel() }}%</button>
             }
 
             <button class="zoom-btn" (click)="increaseFont()"

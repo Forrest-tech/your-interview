@@ -192,7 +192,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.zoomIn': { zh: '放大字号', en: 'Increase font size', fr: 'Agrandir le texte' },
   'practice.zoomOut': { zh: '缩小字号', en: 'Decrease font size', fr: 'Réduire le texte' },
   // 2026-09-16(Forrest 本轮第 2 条):中间的百分比数字可点击 → 输入精确值。
-  'practice.zoomEditHint': { zh: '点击输入精确百分比', en: 'Click to type an exact percentage', fr: 'Cliquez pour saisir un pourcentage exact' },
+  'practice.zoomEditHint': { zh: '点击选择字号档位或输入精确百分比', en: 'Click to pick a size or type an exact percentage', fr: 'Cliquez pour choisir une taille ou saisir un pourcentage' },
+  'practice.zoomCustom': { zh: '手动输入…', en: 'Custom value…', fr: 'Valeur personnalisée…' },
   'practice.azureKeyMissing': { zh: '尚未配置 Azure Speech 密钥，无法执行发音评分。', en: 'Azure Speech key is not configured, so pronunciation scoring is unavailable.', fr: "La clé Azure Speech n'est pas configurée ; l'évaluation de prononciation est indisponible." },
   'practice.gotoConfigKey': { zh: '前往配置 API Key ↗', en: 'Configure API Key ↗', fr: 'Configurer la clé API ↗' },
   'practice.azureFallbackNote': { zh: '后端合成接口未接入，选择 Azure 仍会回退到浏览器语音。', en: 'Backend synthesis is not wired up yet, so Azure falls back to browser speech.', fr: "La synthèse côté serveur n'est pas en place : Azure retombe sur la voix du navigateur." },

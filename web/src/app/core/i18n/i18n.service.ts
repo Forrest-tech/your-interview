@@ -176,7 +176,14 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.recordingHint': { zh: '停止', en: 'Stop', fr: 'Arrêter' },
   'practice.recReady': { zh: '回听', en: 'Play', fr: 'Écouter' },
   'practice.recPaused': { zh: '暂停', en: 'Pause', fr: 'Pause' },
-  'practice.ttsEngine': { zh: '示范朗读引擎', en: 'TTS Engine', fr: 'Moteur vocal' },
+  // 2026-09-16(Forrest 本轮):措辞统一为 TTS Engine —— 中文不再叫“示范朗读引擎”。
+  // 该弹窗现在是全站**唯一**的朗读引擎选择入口(设置页那张卡片已删)。
+  'practice.ttsEngine': { zh: 'TTS 引擎', en: 'TTS Engine', fr: 'Moteur vocal' },
+  'practice.ttsEngineHint': {
+    zh: '选择示范朗读使用的方式',
+    en: 'Choose how sample readings are spoken',
+    fr: 'Choisissez la voix de lecture des exemples'
+  },
   'practice.ttsBrowser': { zh: '浏览器默认 TTS', en: 'Browser TTS', fr: 'TTS du navigateur' },
   'practice.ttsBrowserNote': { zh: '免费 · 本地合成 · 即时可用', en: 'Free · on-device · instant', fr: 'Gratuit · local · instantané' },
   'practice.ttsAzure': { zh: 'Azure 语音', en: 'Azure Voice', fr: 'Voix Azure' },
@@ -262,10 +269,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   // 现全部接入 i18n,顶栏切语言时本页同步变化。
   'setting.back': { zh: '返回 AI 面试练习', en: 'Back to AI Practice', fr: 'Retour à la pratique IA' },
   'setting.title': { zh: 'AI 语音设置', en: 'AI Voice Settings', fr: 'Paramètres vocaux IA' },
+  // 2026-09-16(Forrest 本轮第 6 条):设置页不再负责"选朗读引擎" ——
+  // 引擎选择已归到练习页的 TTS 弹窗,本页只管 Azure 凭据。
   'setting.subtitle': {
-    zh: '选择示范朗读使用的语音引擎,并配置 Azure 语音服务凭据。',
-    en: 'Choose the engine used for sample readings, and configure your Azure Speech credentials.',
-    fr: 'Choisissez le moteur de lecture et configurez vos identifiants Azure Speech.'
+    zh: '配置你的 Azure 语音服务凭据。朗读引擎请到 AI 面试练习页的 TTS 弹窗中选择。',
+    en: 'Configure your Azure Speech credentials. Pick the reading engine from the TTS popup on the AI Practice page.',
+    fr: 'Configurez vos identifiants Azure Speech. Choisissez le moteur de lecture dans la fenêtre TTS de la page d’entraînement IA.'
   },
   'setting.engineTitle': { zh: '示范朗读引擎', en: 'Sample Reading Engine', fr: 'Moteur de lecture' },
   // 2026-09-16(Forrest 本轮第 3 条):独立"Sample Reading Engine"区块已取消,

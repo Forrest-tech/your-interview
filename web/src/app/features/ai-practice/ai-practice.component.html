@@ -166,13 +166,12 @@
 
             <mat-menu #zoomMenu="matMenu" class="zoom-menu" xPosition="before">
               @for (p of zoomPresets(); track p) {
+                <!-- 2026-09-16(Forrest 本轮):选中项不再打勾 —— 直接蓝色标记。
+                     去掉右侧的 check 图标,只靠 .on 的蓝字 + 蓝底来标识当前档位。 -->
                 <button mat-menu-item class="zm-item"
                         [class.on]="p === fontZoomLevel()"
                         (click)="setZoomPreset(p)">
                   <span>{{ p }}%</span>
-                  @if (p === fontZoomLevel()) {
-                    <mat-icon class="zm-check">check</mat-icon>
-                  }
                 </button>
               }
               <div class="zm-sep"></div>
@@ -250,7 +249,11 @@
             <mat-icon>settings</mat-icon>
           </button>
           <mat-menu #engineMenu="matMenu" xPosition="before" class="engine-menu">
+            <!-- 2026-09-16(Forrest 本轮):这是全站唯一的朗读引擎入口。
+                 AI Voice Settings 页的那张 TTS Engine 卡片已删除,
+                 用户在这里选“朗读的方式”(浏览器内置 / Azure 神经网络)。 -->
             <div class="em-head">{{ t('practice.ttsEngine') }}</div>
+            <p class="em-sub">{{ t('practice.ttsEngineHint') }}</p>
 
             <!-- 选项卡:完全对标 /account/ai-setting 的 .eng-row 视觉
                  (Radio 圆圈 + 图标 + 两行文案 + 选中态浅蓝底/蓝边) -->
@@ -334,44 +337,8 @@
               }
             </span>
 
-            <!-- 圆按钮正下方:提交 + 重录(并排两枚)。
-                 提交要满足两件事才可点:
-                   1) 有待提交的录音(录好才激活)
-                   2) 后端把这条录音存下了(uploaded)→ 否则评不了分
-                 否则点了就是 404。 -->
-            <div class="rec-actions">
-              <button mat-flat-button class="ra-submit"
-                      [disabled]="!canSubmitTake()"
-                      (click)="submitPending()"
-                      [matTooltip]="canSubmitTake() ? t('practice.submitTakeTip') : t('practice.submitNeedsRecording')">
-                <mat-icon>{{ uploadingPending() ? 'cloud_upload' : 'check' }}</mat-icon>
-                <span>{{ t('practice.submitTake') }}</span>
-              </button>
-
-              <button mat-stroked-button class="ra-retry"
-                      [disabled]="!recorder.pendingTake() && !activeTake()"
-                      (click)="retryTake()"
-                      [matTooltip]="t('practice.retryTip')">
-                <mat-icon>restart_alt</mat-icon>
-                <span>{{ t('practice.retry') }}</span>
-              </button>
-            </div>
-
-            <!-- 待提交时额外给一个试听 + 丢弃,不占主按钮位 -->
-            @if (recorder.pendingTake()) {
-              <div class="rec-minor">
-                <button class="rm-btn" (click)="previewPending()"
-                        [matTooltip]="t('practice.recPlay')">
-                  <mat-icon>{{ previewingPending() ? 'pause' : 'play_arrow' }}</mat-icon>
-                  <span>{{ t('practice.previewTake') }}</span>
-                </button>
-                <button class="rm-btn danger" (click)="discardPending()"
-                        [matTooltip]="t('practice.discardTake')">
-                  <mat-icon>delete_outline</mat-icon>
-                  <span>{{ t('practice.discardTake') }}</span>
-                </button>
-              </div>
-            }
+            <!-- 2026-09-16(Forrest 本轮第 3 条):提交/重录已移到下方 operate 栏,
+                   与 Previous / Next 同一行。这里不再保留重复按钮。 -->
           </div>
 
           <!-- 右侧:评分胶囊 + 重置 -->
@@ -417,10 +384,39 @@
                    scoreActiveTake),重复出现只会让人不知道该点哪个。
                    现保留唯一的 run ai scoring 入口。 -->
 
-              <!-- ⚠️ 2026-09-16(Forrest 本轮):底部的 Retry 也移走了 ——
-                   它现在与"提交"并排在录音圆按钮正下方(见 rec-zone),
-                   两个动作放在一起才符合直觉:录完 → 提交 or 重录。
-                   这里不再重复一个 Retry。 -->
+              <!-- 2026-09-16(Forrest 本轮第 3 条):提交 + 重录放在这里。
+                   它们就位于右侧 Previous / Next 的**同一行**(act-bar 是
+                   flex,左边 act-left、右边 act-nav,margin-left:auto 顶到右边)。
+                   以前放在录音圆按钮下方,Forrest 指出位置不对。 -->
+              <button mat-flat-button class="ra-submit"
+                      [disabled]="!canSubmitTake()"
+                      (click)="submitPending()"
+                      [matTooltip]="canSubmitTake() ? t('practice.submitTakeTip') : t('practice.submitNeedsRecording')">
+                <mat-icon>{{ uploadingPending() ? 'cloud_upload' : 'check' }}</mat-icon>
+                <span>{{ t('practice.submitTake') }}</span>
+              </button>
+
+              <button mat-stroked-button class="ra-retry"
+                      [disabled]="!recorder.pendingTake() && !activeTake()"
+                      (click)="retryTake()"
+                      [matTooltip]="t('practice.retryTip')">
+                <mat-icon>restart_alt</mat-icon>
+                <span>{{ t('practice.retry') }}</span>
+              </button>
+
+              <!-- 待提交时额外给一个试听 + 丢弃,是次要动作,跟在后面 -->
+              @if (recorder.pendingTake()) {
+                <button class="rm-btn" (click)="previewPending()"
+                        [matTooltip]="t('practice.recPlay')">
+                  <mat-icon>{{ previewingPending() ? 'pause' : 'play_arrow' }}</mat-icon>
+                  <span>{{ t('practice.previewTake') }}</span>
+                </button>
+                <button class="rm-btn danger" (click)="discardPending()"
+                        [matTooltip]="t('practice.discardTake')">
+                  <mat-icon>delete_outline</mat-icon>
+                  <span>{{ t('practice.discardTake') }}</span>
+                </button>
+              }
             </div>
 
             <!-- 被置灰时点击不可点按钮不会触发 click 事件,这里给一个可点的

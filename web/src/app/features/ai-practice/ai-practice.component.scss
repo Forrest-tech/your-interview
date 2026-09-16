@@ -504,59 +504,50 @@
 }
 .rec-zone.has-take { background: #edf9f1; }
 
-/* ---------- 提交 / 重录 按钮行(Forrest 2026-09-16 本轮)----------
-   ⚠️ 之前是一个 absolute 定位的 .pending-take 胶囊飘在左侧,
-      看起来像"多出来的第三个按钮"。现在改为圆按钮**正下方**
-      与 Retry 并排的一行,语义清楚:录完 → 提交 or 重录。 */
-.rec-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-}
+/* ---------- 提交 / 重录 按钮(Forrest 2026-09-16 本轮第 3 条)----------
+   ⚠️ 位置修正:这两个按钮**不再**待在录音圆按钮下方,而是移到最下面的
+      操作栏里,与右侧 Previous / Next 处在**同一行**。
+      操作栏 .act-bar 是 flex:.act-left(左)+ .act-nav(右,margin-left:auto)。
+      提交/重录进 .act-left,于是自然与翻页在同一水平线上。
+   尺寸与 nav-btn 一致(38px 高),整行看起来才是同一组控件。 */
+.act-btns { gap: 8px; }
 
-/* 提交:实心绿;置灰时用统一的 disabled 视觉 */
-.rec-actions .ra-submit {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: #22a35c;
-  color: #fff;
-  font-size: 12.5px;
+/* 提交:实心绿;置灰时统一灰底。高度对齐 nav-btn(38px) */
+.ra-submit {
+  height: 38px !important;
+  padding: 0 16px !important;
+  border-radius: 999px !important;
+  background: #22a35c !important;
+  color: #fff !important;
+  font-size: 13px !important;
   font-weight: 600;
-  line-height: 32px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
-.rec-actions .ra-submit mat-icon { font-size: 16px; width: 16px; height: 16px; }
-.rec-actions .ra-submit:not([disabled]):hover { background: #1b8c4d; }
+.ra-submit mat-icon { font-size: 17px; width: 17px; height: 17px; }
+.ra-submit:not([disabled]):hover { background: #1b8c4d !important; }
 /* ⚠️ 置灰必须一眼看出"不可点",而不是看起来像正常按钮 */
-.rec-actions .ra-submit[disabled] {
-  background: #e3e8ef;
-  color: #9aa1ab;
+.ra-submit[disabled] {
+  background: #e3e8ef !important;
+  color: #9aa1ab !important;
   cursor: not-allowed;
 }
 
-/* 重录:描边按钮,与提交并排 */
-.rec-actions .ra-retry {
-  height: 32px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  line-height: 30px;
+/* 重录:描边按钮,与提交同高同圆角,和 nav-btn 视觉一致 */
+.ra-retry {
+  height: 38px !important;
+  border-radius: 999px !important;
+  font-size: 12.5px !important;
+  color: #5b6472 !important;
+  border-color: rgba(0, 0, 0, .16) !important;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
-.rec-actions .ra-retry mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.ra-retry mat-icon { font-size: 17px; width: 17px; height: 17px; }
 
 /* 次要动作(试听 / 丢弃)—— 只在有待提交录音时出现,不抢主按钮位 */
-.rec-minor {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-}
 .rm-btn {
   display: inline-flex;
   align-items: center;
@@ -568,6 +559,7 @@
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 6px;
+  height: 38px;
 }
 .rm-btn:hover { background: #f2f5f9; color: #2f6fed; }
 .rm-btn.danger:hover { background: #fdecea; color: #c5221f; }
@@ -1105,8 +1097,12 @@
 }
 
 @media (max-width: 720px) {
-  .act-bar { flex-wrap: wrap; }
-  .act-nav { margin-left: 0; width: 100%; justify-content: flex-end; }
+  /* Forrest 本轮第 3 条:提交/重录要求与 Previous / Next 同行。
+     窄屏下不再把 act-nav 挤到第二行 —— 整行允许横向滚动,
+     保证"同一行"这个视觉关系在任何宽度都成立。 */
+  .act-bar { flex-wrap: nowrap; overflow-x: auto; }
+  .act-nav { margin-left: auto; width: auto; justify-content: flex-end; flex: 0 0 auto; }
+  .act-left { flex: 0 0 auto; }
   .rec-center { flex-direction: column; align-items: flex-start; gap: 10px; }
 }
 
@@ -1642,19 +1638,12 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }
-/* 当前档位:加粗 + 打勾,一眼看出"我现在在哪一档" */
+/* 当前档位:蓝色标记(不再打勾 —— Forrest 本轮:选中不要有对勾,直接蓝色标记) */
 ::ng-deep .zoom-menu .zm-item.on {
   font-weight: 700;
   color: #2f6fed;
+  background: #f2f7ff !important;
 }
-::ng-deep .zoom-menu .zm-item .zm-check {
-  font-size: 15px;
-  width: 15px;
-  height: 15px;
-  margin-left: auto;
-  color: #2f6fed;
-}
-/* mat-menu-item 内部默认是 flex,给数字与勾留出左右分布 */
 ::ng-deep .zoom-menu .zm-item .mat-mdc-menu-item-text {
   display: flex;
   align-items: center;
@@ -1697,6 +1686,13 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   font-size: 13px;
   font-weight: 700;
   color: #1f2733;
+}
+/* 副标题:解释这个弹窗是干什么的(Forrest 本轮:让用户知道可以在这里选朗读方式) */
+::ng-deep .engine-menu .em-sub {
+  margin: -6px 0 10px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #9aa1ab;
 }
 
 /* 选项卡外壳 —— 与设置页 .eng-row 同款:细边框 + 大圆角 + 整行可点 */

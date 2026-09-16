@@ -33,13 +33,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 /** 一个 TTS 引擎选项(与 /practice 的引擎菜单同源)。
  *  nameKey/noteKey 是 i18n 字典键 —— 模板里用 t() 取当前语言文案。 */
-interface EngineOption {
-  key: 'browser' | 'azure';
-  nameKey: string;
-  noteKey: string;
-  icon: string;
-}
-
 const ENGINE_KEY = 'practice.ttsEngine';
 const REGION_KEY = 'practice.azureRegion';
 
@@ -63,27 +56,7 @@ export class AiSettingComponent {
     return this.i18n.t(key);
   }
 
-  /**
-   * 与 /practice 引擎菜单共用的两个选项。
-   * ⚠️ name/note 改成 **i18n 的 key** —— 模板里再 t() 出当前语言的文案。
-   *    2026-09-16 之前这里是写死的中文,导致网页切到英文后此页仍是中文。
-   */
-  readonly engines: EngineOption[] = [
-    {
-      key: 'browser',
-      nameKey: 'setting.engineBrowserName',
-      noteKey: 'setting.engineBrowserNote',
-      icon: 'record_voice_over'
-    },
-    {
-      key: 'azure',
-      nameKey: 'setting.engineAzureName',
-      noteKey: 'setting.engineAzureNote',
-      icon: 'graphic_eq'
-    }
-  ];
-
-  /** Azure 可用区域(常用几个,给下拉选,避免用户手打出错)。
+    /** Azure 可用区域(常用几个,给下拉选,避免用户手打出错)。
    *  2026-09-16(Forrest 本轮):参照他提供的截图补全 ——
    *  截图里出现了 East Asia / Southeast Asia / Australia East / East US 2 /
    *  West US 2 / West Europe / Japan East,本页全部收录。 */
@@ -179,16 +152,7 @@ export class AiSettingComponent {
     this.loadRemoteStatus();
   }
 
-  /** 切换引擎偏好 —— 立即落盘,与 /practice 保持同步。 */
-  setEngine(e: 'browser' | 'azure'): void {
-    this.engine.set(e);
-    try {
-      localStorage.setItem(ENGINE_KEY, e);
-    } catch { /* 存储不可用:仅本次会话生效 */ }
-    this.flash(this.t('setting.prefSaved'));
-  }
-
-  /** 区域变更同样落盘。 */
+    /** 区域变更同样落盘。 */
   onRegionChange(r: string): void {
     this.region.set(r);
     try {

@@ -12,36 +12,7 @@
     <p class="sp-sub">{{ t('setting.subtitle') }}</p>
   </header>
 
-  <!-- 引擎选择
-       ⚠️ 2026-09-16(Forrest 本轮第 3 条):
-         · 原本这里还有一个独立的 "Sample Reading Engine" 区块(= 本区块),
-           与 /practice 的 TTS Engine 菜单重复。Forrest 要求去掉独立区块,
-           统一归到 TTS Engine 下面。
-         · 处理:标题改用 TTS 引擎的措辞(setting.ttsEngineTitle),
-           本区块就是唯一的引擎选择入口 —— 不再另设 "Sample Reading Engine"。 -->
-  <section class="sp-card">
-    <h2 class="sp-card-title">
-      <mat-icon>settings_voice</mat-icon>
-      <span>{{ t('setting.ttsEngineTitle') }}</span>
-    </h2>
 
-    <div class="eng-list">
-      @for (e of engines; track e.key) {
-        <button class="eng-row" [class.on]="engine() === e.key"
-                (click)="setEngine(e.key)">
-          <span class="eng-radio" [class.checked]="engine() === e.key"></span>
-          <mat-icon class="eng-icon">{{ e.icon }}</mat-icon>
-          <span class="eng-body">
-            <span class="eng-name">{{ t(e.nameKey) }}</span>
-            <span class="eng-note">{{ t(e.noteKey) }}</span>
-          </span>
-          @if (engine() === e.key) {
-            <span class="eng-badge">{{ t('setting.current') }}</span>
-          }
-        </button>
-      }
-    </div>
-  </section>
 
   <!-- Azure 凭据配置 -->
   <section class="sp-card">

@@ -1142,6 +1142,17 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 上传成功后,把当前作品 id 从本地临时 id 改后端 GUID。
    * 不做这一步的后果:列表里已经是 GUID,而 activeTakeId 还指向 r_xxx
    * → activeTake() 返回 null → 评分/回放全部"无反应"。
+   *
+   * ⚠️ 2026-09-16(真机报错,严重):这个方法里会写 activeTakeId,
+   *    而它是在 effect 里被调用的 —— Angular 默认禁止在 effect 里写 signal,
+   *    直接抛 NG0600 "Writing to signals is not allowed in a computed or an effect"。
+   *    后果不只是这条报错:effect 整个炸掉,而 Submit / Retry 的可用状态
+   *    依赖 recorder 状态流转 —— 于是按钮永远灰着、点了没反应。
+   *
+   *    修法:不在 effect 里直接写。改为把"待接替 id"记下来,
+   *    用 queueMicrotask 推到 effect 之外再写 signal。
+   *    (不用 allowSignalWrites:会引 Angular 18+ 才稳定的选项,
+   *     且容易掩盖真实的循环依赖问题。)
    */
   private pendingIdRemap: string | null = null;
 
@@ -1155,8 +1166,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     const candidate = this.recorder.recordings().find((r) => r.uploaded);
     if (!candidate) return;
 
-    if (this.activeTakeId() === oldId) this.activeTakeId.set(candidate.id);
     this.pendingIdRemap = null;
+
+    // ⚠️ 关键:状态写入必须跳出 effect 的同步执行上下文。
+    const newId = candidate.id;
+    queueMicrotask(() => {
+      if (this.activeTakeId() === oldId) this.activeTakeId.set(newId);
+    });
   }
 
   /** 丢弃待提交录音。 */

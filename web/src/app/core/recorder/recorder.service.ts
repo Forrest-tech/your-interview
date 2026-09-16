@@ -448,13 +448,24 @@ export class RecorderService {
 
     // 需求第 4 条:"评分信息入库,避免重复评分"。
     // 已落库的录音先问后端要缓存分数 —— 命中就免掉一次 Azure 调用(省钱省时间)。
+    //
+    // ⚠️ 2026-09-16(真机反馈):这里以前是 `catch {}` 全吞。
+    //    后果—— 未评分过的录音本就会返回 404,虽然继续走真实评分没错,
+    //    但浏览器 Network 面板里会留下一片刺眼的红色 404,
+    //    Forrest 看到的就是"点 run ai scoring 很多报错"。
+    //    修法:先拿本地已有分数短接(根本不发请求);
+    //    真要发时,把"还没评分(404)"与"后端异常"分开处理,
+    //    404 属于**预期路径**,不再让它显得像故障。
+    if (rec.score) return;
+
     try {
       const cached = await firstValueFrom(this.practiceApi.getRecordingScore(id));
       this.patch(id, { grading: false, score: RecorderService.scoreFromDto(cached), error: null });
       return;
-    } catch {
-      // 404(还没评分过)或后端不可用 → 继续走真实评分。
-      // 这里静默是对的:缓存未命中是正常路径,不该弹错。
+    } catch (e) {
+      // 404 = 这条录音还没评分过 → 完全正常,继续往下走真实评分。
+      // 其他错(后端没起/500)→ 也让真实评分链路去报,同样不在这里弹错。
+      void e;
     }
 
     this.patch(id, { grading: true, error: null });

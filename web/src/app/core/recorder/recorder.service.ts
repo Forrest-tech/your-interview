@@ -266,11 +266,18 @@ export class RecorderService {
       this.patch(id, { error: '录音数据已不在内存,无法上传。请重录一次。' });
       return;
     }
-    const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
+    // ⚠️ 第二十八轮:扩展名与 mime 必须从 blob 的**真实类型**推导。
+    //   Safari 录的是 mp4 字节;若这里谎报 webm,后端 GuessExtension
+    //   会把文件存成 .webm 而内容是 mp4 → 回放/解码时按错类型处理。
+    const mime = blob.type || 'audio/webm';
+    const ext = mime.includes('ogg') ? 'ogg'
+      : mime.includes('mp4') || mime.includes('m4a') ? 'm4a'
+      : mime.includes('wav') ? 'wav'
+      : 'webm';
     const localId = rec.id;
 
     this.practiceApi.uploadRecording(rec.materialId, blob, rec.duration,
-      `take-${Date.now()}.${ext}`, blob.type || 'audio/webm')
+      `take-${Date.now()}.${ext}`, mime)
       .subscribe({
         next: (dto) => {
           // 用后端 id 替换本地临时 id:后续评分/删除都走后端 id

@@ -241,7 +241,31 @@ public sealed class PronunciationAssessor(
                     continue;
                 }
 
-                return Parse(body);
+                var parsed = Parse(body);
+
+                // ★ 第二十九轮诊断:把词级解析结果打到日志。
+                //   用途:界面出现"总分正常但 Recognition 0%、逐词无分"时,
+                //   一眼就能分辨是 **Azure 没给词级数据** 还是 **我们解析丢了** ——
+                //   没有这条日志只能在两边来回猜。
+                //   (只打统计量,不打音频内容。)
+                try
+                {
+                    var withData = parsed.Words.Count(x => !string.IsNullOrEmpty(x.ErrorType));
+                    var noneOk = parsed.Words.Count(x => x.ErrorType == "None");
+                    var omitted = parsed.Words.Count(x => x.ErrorType == "Omission");
+                    var w0 = parsed.Words.FirstOrDefault();
+                    logger.LogInformation(
+                        "发音评估解析:词数={Total} 有词级数据={WithData} None={NoneOk} " +
+                        "Omission={Omitted} 样例=({Word}/{Acc}/{Err}) " +
+                        "Pron={Pron} Acc={Acc2} 识别文本长度={RecLen}",
+                        parsed.Words.Count, withData, noneOk, omitted,
+                        w0?.Word ?? "-", w0?.Accuracy ?? -1, w0?.ErrorType ?? "-",
+                        parsed.PronScore, parsed.AccuracyScore,
+                        (parsed.RecognizedText ?? "").Length);
+                }
+                catch { /* 诊断日志绝不影响主流程 */ }
+
+                return parsed;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -298,8 +322,25 @@ public sealed class PronunciationAssessor(
                 //    Recognition 还被抬到 100%,看起来就是一份自相宜的【假报告】。
                 //    现在:拿不到词级评估就记 errorType = "None" 且 acc = 0,
                 //    但我们同时**标记 hasWordData**;前端对无数据的词显示 "—"。
+                // ★★ 第二十九轮真凶(Forrest 真机:Recognition 恒 0%、逐词无分数)★★
+                //    Azure 的 detailed 响应里,词级评估字段是【平铺】在词对象上的:
+                //      { "Word": "...", "Offset": .., "Duration": ..,
+                //        "Confidence": .., "AccuracyScore": .., "ErrorType": "None" }
+                //    —— 并**没有**嵌套的 PronunciationAssessment 子对象。
+                //
+                //    旧实现只读嵌套路径 `w.PronunciationAssessment.AccuracyScore`,
+                //    于是 **永远读不到** → hasWordData 恒 false → errorType 被置空串
+                //    → 前端 recognitionPct 过滤掉全部词 → **恒定返回 0%**,
+                //    逐词网格也因 !!errorType 为假而全部显示 "—"。
+                //    但总分(PronScore/Accuracy/Fluency/Completeness)来自 NBest 顶层,
+                //    照常返回 —— 于是报告呈现为"分数正常却 Recognition 0%、无逐词分",
+                //    正是 Forrest 截图里的样子。
+                //
+                //    修法:**两种形态都读** —— 优先嵌套(个别配置/未来版本),
+                //    读不到再回退平铺(当前实测形态)。这样不会再被响应形态变化打懵。
                 var hasWordData = false;
-                if (w.TryGetProperty("PronunciationAssessment", out var pa))
+                if (w.TryGetProperty("PronunciationAssessment", out var pa) &&
+                    pa.ValueKind == JsonValueKind.Object)
                 {
                     hasWordData = true;
                     if (pa.TryGetProperty("AccuracyScore", out var a) &&
@@ -308,12 +349,29 @@ public sealed class PronunciationAssessor(
                     if (pa.TryGetProperty("ErrorType", out var et))
                         errorType = et.GetString() ?? "None";
                 }
+                else
+                {
+                    // 回退:平铺形态(当前实测如此)
+                    if (w.TryGetProperty("AccuracyScore", out var a2) &&
+                        a2.ValueKind == JsonValueKind.Number)
+                    {
+                        acc = a2.GetDouble();
+                        hasWordData = true;
+                    }
+                    if (w.TryGetProperty("ErrorType", out var et2) &&
+                        et2.ValueKind == JsonValueKind.String)
+                    {
+                        errorType = et2.GetString() ?? "None";
+                        hasWordData = true;
+                    }
+                }
                 // 无词级数据 → errorType 用空串标记"未知",而不是冒充 "None"(正确)。
                 // 这样前端 recognitionPct 就不会把没评估的词算作"识别正确"。
                 if (!hasWordData) errorType = "";
                 words.Add(new WordScore(word, Math.Round(acc, 1), errorType));
             }
         }
+
 
         return new PronunciationResult(
             pron is null ? null : Math.Round(pron.Value, 1),

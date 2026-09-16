@@ -178,7 +178,9 @@ export class RecorderService {
 
   private finalize(): void {
     const blob = new Blob(this.chunks, {
-      type: this.mediaRecorder?.mimeType || 'audio/webm'
+      // ★ 第二十八轮:Safari 录的是 mp4 —— 兜底不能再写死 webm,
+      //   否则 blob.type 与真实字节不符,后续上传/解码都按错类型处理。
+      type: this.mediaRecorder?.mimeType || this.chunks[0]?.type || 'audio/webm'
     });
     this.chunks = [];
     this.releaseStream();
@@ -783,12 +785,28 @@ export class RecorderService {
     );
   }
 
+  /**
+   * 挑选录音容器/编码。
+   *
+   * ★ 第二十八轮:Safari 不支持 webm —— 旧候选表把 audio/mp4 放在最后,
+   *   虽然最终能轮到它,但**顺序上先问 webm 是纯浪费**,且更关键的是:
+   *   Safari 对 `audio/mp4` 的 isTypeSupported 常返回 true 而具体 codec 需细化。
+   *   这里把 mp4/aac 明确补齐,并保留 webm/opus 优先(Chrome 下体积更小)。
+   *
+   * 不管录成什么格式,后续评分都靠 Web Audio 解码 ——
+   * 而 Web Audio 的解码能力各浏览器不同(见 decodeCompat 的说明)。
+   */
   private pickMime(): string {
     const cands = [
+      // Chrome / Firefox 首选:webm+opus,语音场景体积小
       'audio/webm;codecs=opus',
       'audio/webm',
+      // Safari / iOS:mp4 容器 + AAC
+      'audio/mp4;codecs=mp4a.40.2',
+      'audio/mp4',
+      // 少数实现只认 ogg
       'audio/ogg;codecs=opus',
-      'audio/mp4'
+      'audio/ogg'
     ];
     for (const c of cands) {
       try {

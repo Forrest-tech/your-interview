@@ -1737,6 +1737,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     return this.activeTakeId() === id && this.reportOpen();
   }
 
+  /**
+   * 逐词明细折叠状态。
+   *
+   * ★ 第二十九轮(Forrest 按 ynwac 参考站提要求):
+   *   参考站的逐词分数网格【默认展开】,点完评分直接看到每个词多少分。
+   *   我们此前默认收起,把最关键的逐词反馈藏起来了 ——
+   *   这也让"评分没有单词打分"看起来像功能缺失。
+   *   现改为:评分产出的那一刻自动展开该录音的明细;
+   *   用户仍可点标题手动收起。
+   */
   private readonly wordsOpen = signal<Set<string>>(new Set());
 
   constructor() {
@@ -1758,6 +1768,22 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     effect(() => {
       this.recorder.recordings();   // 依赖
       this.syncPendingIdRemap();
+    });
+
+    // ★ 第二十九轮(对齐 ynwac 参考站):评分一产出,就把该录音的
+    //   逐词分数明细【自动展开】。参考站点完评分立刻能看到每个词多少分;
+    //   我们此前默认收起,把最关键的信息藏在折叠里 ——
+    //   这也让"评分没有单词打分"看起来像功能缺失。
+    //
+    //   ⚠️ 记忆铁律:绝不在 effect 里写 signal(会触发 NG0600)。
+    //   这里通过 queueMicrotask 把写操作推迟到 effect 之外执行。
+    effect(() => {
+      const withScore = this.recorder.recordings().filter((r) => !!r.score);
+      for (const r of withScore) {
+        if (!this.wordsOpen().has(r.id)) {
+          queueMicrotask(() => this.ensureWordsOpen(r.id));
+        }
+      }
     });
   }
 
@@ -1873,6 +1899,20 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     const next = new Set(this.wordsOpen());
     if (next.has(id)) next.delete(id);
     else next.add(id);
+    this.wordsOpen.set(next);
+  }
+
+  /**
+   * ★ 第二十九轮:确保某条录音的逐词明细处于展开状态(幂等)。
+   *
+   * 与 toggleWords 的区别:**只展开,不收起** —— 供"评分完成后自动展开"
+   * 使用。用户在展开后手动收起,不应被下一次数据刷新重新弹开,
+   * 所以只对"尚未展开过"的 id 生效(由调用方判断 has())。
+   */
+  private ensureWordsOpen(id: string): void {
+    if (this.wordsOpen().has(id)) return;
+    const next = new Set(this.wordsOpen());
+    next.add(id);
     this.wordsOpen.set(next);
   }
 

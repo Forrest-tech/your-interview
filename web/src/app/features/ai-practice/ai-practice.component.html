@@ -83,7 +83,14 @@
        ============================================================ -->
   <main class="col-main">
 
-    <!-- ① 顶部状态栏:题号 + 完成状态 + 题名 + 编辑 -->
+    <!-- ★ 2026-09-16(Forrest 本轮重构):主练习大白卡。
+         要求原文:把 meta 栏 + 英文正文 + Sample Reading + Record
+         **全部收进同一个白底大卡片**(.main-exam-card),
+         卡片外只留最下方操作/分页栏。
+         以前正文卡与音频条是分离的碎块,现统一为一个框。 -->
+    <div class="main-exam-card">
+
+    <!-- ① 顶部 Meta 栏:题号 + 完成状态 + 题名 + 编辑 -->
     <header class="main-head">
       <span class="q-chip">{{ t('practice.question') }} #{{ qIndex() }}</span>
       <span class="q-total">/ {{ nodes().length }}</span>
@@ -207,9 +214,9 @@
                2) 两者高度完全一致
                3) 整体宽度缩为原来的 2/3
                4) 布局参考 ynwac:一行内紧凑排列
-             ⚠️ 外层 .dock-box 负责唯一的边框/圆角/背景/宽度,
+             ⚠️ 外层 .audio-controls-wrapper 负责居中与限宽,
                 内部两块不再各自画框,否则会出现"框套框"。 -->
-        <div class="dock-box">
+        <div class="audio-controls-wrapper">
         <div class="sample-pill">
           <span class="sample-label">
             <mat-icon>volume_up</mat-icon>
@@ -365,7 +372,10 @@
           }
         </div>
         </div>
-        <!-- /.dock-box:朗读条 + 录音区 的共同方框 -->
+        <!-- /.audio-controls-wrapper:朗读条 + 录音区 的共同方框 -->
+
+        </div>
+        <!-- /.main-exam-card:主练习大白卡到此结束(卡片外只留下面操作栏) -->
 
         <!-- ⑤ 底部操作栏:左提交评分 / 右翻页 -->
         <footer class="act-bar">

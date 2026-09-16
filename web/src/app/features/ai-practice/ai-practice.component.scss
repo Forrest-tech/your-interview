@@ -360,35 +360,97 @@
    圆形主按钮 + 下方文字标签。
    ============================================================ */
 
-/* ---------- ③④ 朗读条 + 录音区 的共同方框(Forrest 2026-09-16 本轮)----------
+/* ============================================================
+   ★ 2026-09-16(Forrest 本轮重构):主练习大白卡
+   ============================================================
+   要求原文:创建一个统一的 .main-exam-card,内部自上而下依次是
+     1) 顶部 Meta 栏 [Question #1] / 题目名 / 考过 / 标记
+     2) 待读英文核心文本区
+     3) 示范朗读条 Sample Reading
+     4) 录音控制条 Record
+   卡片外部仅保留最下方操作与分页按钮。
+   以前正文卡与音频条各自带框带阴影,视觉上是分离碎块 ——
+   现在只由这一层画框,内部全部退为无框内容。 */
+.main-exam-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 24px 32px 36px 32px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1060px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Meta 栏在大卡片内不再是一条独立横条的分隔线 */
+.main-exam-card .main-head {
+  padding-bottom: 14px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #f1f3f7;
+}
+
+/* 文本区在大卡片内:去掉自己的白底/边框/阴影/外边距,
+   只保留字号与内边距 —— 否则会出现"白卡里再套一张白卡"的厚重感。 */
+.main-exam-card .text-card,
+.main-exam-card .reading-text-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 12px 0 18px;
+  margin: 0;
+  min-height: 120px;
+}
+
+/* 正文无衬线字体(Forrest:放弃带衬线字体,与参考图一致) */
+.main-exam-card .read-text,
+.main-exam-card .reading-text-card .draft {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  font-size: var(--read-fs, 18px);
+  line-height: 1.8;
+  color: #374151;
+  font-weight: 400;
+}
+
+/* ============================================================
+   ③④ 朗读条 + 录音区 的统一容器(Forrest 2026-09-16 本轮)
+   ============================================================ 
    要求原文:
      · 将图片中的内容都放在一起方框里 —— Sample Reading 和 Record 同框
      · 两者高度要一样
      · 长度缩小三分之一(即整宽变原来的 2/3)
      · 参考第二张截图(ynwac 风格):一行紧凑排列,外部一个圆角框
-   实现:外框只由 .dock-box 画一次;内部 .sample-pill / .rec-zone
+   实现:居中限宽由 .audio-controls-wrapper 负责;内部 .sample-pill / .rec-zone
          去掉各自的 border / background / margin,只作为两行内容。
    宽度:.main-body 是 1060px,2/3 ≈ 706px,并用 margin auto 居中。 */
-.dock-box {
+.audio-controls-wrapper {
+  /* Forrest 指定:width 70% / max-width 680px / 水平居中 / 与上方文字拉开间距。
+     ⚠️ 它与 .sample-pill / .rec-zone 同处 .main-exam-card 内部,
+        所以自己不再画白底外框 —— 大卡片就是那个框。 */
   box-sizing: border-box;
-  width: 66.6667%;
-  max-width: 706px;
-  min-width: 420px;
-  margin: 0 auto 12px;
-  padding: 8px;
-  border-radius: 20px;
-  background: #fff;
-  border: 1px solid #e3e8ef;
-  box-shadow: 0 1px 3px rgba(16, 24, 40, .04);
+  width: 70%;
+  max-width: 680px;
+  min-width: 380px;
+  margin: 32px auto 0 auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
 
 /* ---------- ① Sample Reading 播放器 pill ---------- */
 .sample-pill {
-  /* 与 .rec-zone 严格等高 —— 任务书要求"两者高度一致"。
-     外框已由 .dock-box 提供,这里不再画边框/底色/margin。 */
+  /* 与 .rec-zone 严格等高 52px(Forrest:高度要一样),
+     圆角统一为胶囊 9999px(Forrest 指定)。
+     外层容器 .audio-controls-wrapper 负责居中与限宽,这里只管自身。 */
   height: 52px;
   box-sizing: border-box;
   display: flex;
@@ -398,7 +460,7 @@
   gap: 10px;
   margin: 0;
   padding: 0 14px;
-  border-radius: 14px;
+  border-radius: 9999px;
   /* 参考站是浅蓝底 —— 和下面的 mint 录音区形成"听 / 说"两段色彩区隔 */
   background: #eef4ff;
   border: 1px solid #dbe7ff;
@@ -510,7 +572,7 @@
        .rec-zone 只做容器(position:relative)
        .rec-center 绝对定位 + translate 真正居中 —— 不受左右元素数量影响。
      右侧 .zone-side 仍靠 margin-left:auto 靠右。
-     ⚠️ 2026-09-16(Forrest 本轮):本块已进入 .dock-box 与朗读条同框,
+     ⚠️ 2026-09-16(Forrest 本轮):本块与朗读条同处于 .main-exam-card 内,
         高度必须与 .sample-pill 完全一致 → 写死 height: 52px,
         不再用 min-height: 78px + 自己的 margin/圆角/边框。
         圆按钮与文字用 flex 居中在同一行内。 */
@@ -524,7 +586,7 @@
   height: 52px;
   padding: 0 14px;
   margin: 0;
-  border-radius: 14px;
+  border-radius: 9999px;
   background: #f0faf4;
   border: 1px solid #d6f0e0;
 }
@@ -543,7 +605,16 @@
   justify-content: flex-start;
   gap: 10px;
 }
+/* 录音条内:圆按钮 + 文字同行。
+   ⚠️ Forrest 要求圆按钮居中、文字在其正下方 —— 但两条音频高度被同时
+      锁死在 52px,而 38px 圆 + 5px gap + 14px 文字 = 57px,上下结构
+      在 52px 胶囊里物理上塞不下(会向上溢出被裁切)。
+      因此保持"图标 + 紧邻文字"的紧凑观感,并把圆按钮在录音条内
+      缩到 32px,给 52px 行高留出安全余量。 */
 .rec-zone .big-round { flex-direction: row; align-items: center; gap: 8px; }
+.rec-zone .big-round .outer { width: 32px; height: 32px; }
+.rec-zone .big-round .outer mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.rec-zone .rec-label { font-size: 12.5px; }
 .rec-zone .zone-side.zone-side {
   position: static;
   right: auto;
@@ -1152,8 +1223,10 @@
   .act-bar { flex-wrap: nowrap; overflow-x: auto; }
   .act-nav { margin-left: auto; width: auto; justify-content: flex-end; flex: 0 0 auto; }
   .act-left { flex: 0 0 auto; }
-  /* .dock-box 的 66.6% 在窄屏会退化得过窄 → 窄屏占满 */
-  .dock-box { width: 100%; min-width: 0; }
+  /* .audio-controls-wrapper 的 70% 在窄屏会退化得过窄 → 窄屏占满 */
+  .audio-controls-wrapper { width: 100%; min-width: 0; margin-top: 20px; }
+  /* 大卡片在窄屏收紧内边距(Forrest 指定值是按桌面给的) */
+  .main-exam-card { padding: 18px 16px 24px; border-radius: 14px; }
 }
 
 /* ============================================================

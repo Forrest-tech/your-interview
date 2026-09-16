@@ -28,7 +28,11 @@ artifacts/
 
 # 分析工作目录(临时产物,不进版本库)
 .analysis/
-storage/
+# ⚠️ 必须锚定到仓库根,只忽略根级 storage/。
+#    旧写法 `storage/` 会匹配任意深度的同名目录,误伤 C# 源码目录
+#    src/Services.Assessment/Infrastructure/Storage/(内含 SpeechKeyProvider.cs、
+#    IAudioStore.cs)—— 导致这两个源文件从未入库,新克隆无法编译。
+/storage/
 .logs/
 
 # Erlang/RabbitMQ 崩溃转储

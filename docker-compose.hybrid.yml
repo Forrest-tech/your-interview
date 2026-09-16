@@ -1,0 +1,88 @@
+# Your Interview —— 混合开发编排(容器两个 + 宿主机一个)
+#
+# 目标(Forrest 2026-09-15 定):改代码要即时生效的那个服务留在宿主机,
+# 不需要动的支撑服务进容器。
+#
+#   Docker 里:  postgres(用你本机的?见下) / identity / gateway
+#   宿主机里:    assessment   ← 唯一在开发的服务,dotnet run 直跑,可断点
+#   完全不起:    jobs / interviews / knowledge / analytics(与练习无关)
+#
+# ⚠️ 数据库:本文件**不含** postgres 服务 —— 按 A2 方案用你**本机原生 PostgreSQL**。
+#    宿主机 assessment  → 127.0.0.1:5432
+#    容器内 identity    → host.docker.internal:5432
+#
+# 用法:
+#   docker compose -f docker-compose.hybrid.yml up -d --build
+#   docker compose -f docker-compose.hybrid.yml logs -f gateway
+#   docker compose -f docker-compose.hybrid.yml down
+#
+#   ⚠️ 首次构建镜像要 3-10 分钟(要 restore + publish .NET 8)。
+#   ⚠️ 端口冲突:本文件的容器**不占** 5262(identity 在容器内监听 8080)。
+
+x-hybrid-env: &hybrid-env
+  ASPNETCORE_ENVIRONMENT: Development
+  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+  # JWT 签名密钥:容器内外必须同一个值,否则 identity 签的令牌 assessment 验不过
+  # JWT 签名密钥:必须与宿主机 assessment 用的一致,否则 identity 签的令牌 assessment 验不过。
+  # Issuer/Audience 与各服务 appsettings.json 的 Jwt 节保持相同值(改这里必须同步改那边)。
+  Jwt__SigningKey: "${JWT_SIGNING_KEY}"
+  Jwt__Issuer: "your-interview.identity"
+  Jwt__Audience: "your-interview.api"
+
+services:
+  identity:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args: { SERVICE: Services.Identity }
+    image: yi-identity:hybrid
+    container_name: yi-hybrid-identity
+    restart: unless-stopped
+    environment:
+      <<: *hybrid-env
+      ASPNETCORE_URLS: "http://+:8080"
+      # 🔑 容器内的 127.0.0.1 是容器自己 —— 必须走 host.docker.internal 才能连到
+      #    你 Mac 上的原生 PostgreSQL 5432(Docker Desktop 提供该 DNS 名)。
+      ConnectionStrings__Identity: "Host=host.docker.internal;Port=5432;Database=yourinterview;Username=postgres;Password=${PGPASSWORD_LOCAL};Search Path=identity"
+      # 管理员密码只在 Identity 播种时用一次
+      Seed__AdminPassword: "${ADMIN_PASSWORD}"
+      Seed__DemoPassword: "${DEMO_PASSWORD}"
+    # ⚠️ 刻意不映射 5262:assessment(宿主机)用不到 identity 的 HTTP 端口
+    #    (JWT 是对称密钥本地验签,不回调 identity)。
+    #    只有 gateway(容器)需要访问它,走 Docker 网络即可。
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8080' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args: { SERVICE: Services.Gateway }
+    image: yi-gateway:hybrid
+    container_name: yi-hybrid-gateway
+    restart: unless-stopped
+    environment:
+      <<: *hybrid-env
+      ASPNETCORE_URLS: "http://+:8080"
+      # 🔑 只探实际在跑的两个下游 —— 否则未启动的 jobs/interviews/knowledge/analytics
+      #    会让 /health/live 恒返 503(gateway 明明健康却被判"没起来")。
+      # 逗号分隔单键 —— 不走数组索引,零歧义
+      ReverseProxy__HealthChecks__EnabledClusters: "identity,assessment"
+      # gateway 在容器里,下游地址要重写:
+      #   identity  → 容器间走 Docker DNS(服务名)
+      #   assessment→ 在宿主机,必须走 host.docker.internal
+      ReverseProxy__Clusters__identity__Destinations__d1__Address: "http://identity:8080/"
+      ReverseProxy__Clusters__assessment__Destinations__d1__Address: "http://host.docker.internal:5266/"
+    ports:
+      - "5200:8080"          # 唯一对外暴露的端口,前端连它
+    depends_on:
+      identity:
+        condition: service_healthy
+    extra_hosts:
+      # Linux 上的 Docker 不自带 host.docker.internal,显式补一条;
+      # macOS/Windows 的 Docker Desktop 本来就提供,写这里无害。
+      - "host.docker.internal:host-gateway"

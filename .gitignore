@@ -51,3 +51,14 @@ artifacts/
 # 但模板必须入库
 !**/appsettings.Development.json.example
 !**/.env.example
+
+# 运行期用户数据:上传的录音 blob(会随使用无限增长,绝不入库)
+# ⚠️ 同样必须锚定路径 —— 不能只写 storage/(见上文教训)
+/src/Services.Assessment/storage/
+
+# 一次性调试脚本(已解决的问题留下的痕迹,保留在本地即可)
+/tools/fix-tts.sh
+/tools/fix-tts3.sh
+/tools/fix-tts4.sh
+/tools/fix-tts5.sh
+/tools/tts-diag.sh

@@ -266,6 +266,21 @@
   overscroll-behavior: contain;
 }
 
+/* ★ 第二十轮:Forrest 指令中的 .practice-main-panel = 右侧主工作区滚动容器。
+   .main-body 已具备同等行为(height calc(100vh - 64px) / overflow-y auto /
+   scrollbar-gutter stable),此处给 .practice-main-panel 同样的兜底定义,
+   两个类名任选其一都能工作。 */
+.practice-main-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: calc(100vh - 64px);
+  padding: 24px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
 /* --- 滚动条美化(WebKit / Chromium) --- */
 .main-body::-webkit-scrollbar {
   width: 10px;
@@ -862,14 +877,13 @@
 }
 .big-round.recording .cap { color: #e53935; }
 
-/* 重置刷新按钮:绝对定位贴右侧边缘中线(任务书要求) */
-.zone-side {
-  position: absolute;
-  right: 20px;
-  top: 50%;
-  transform: translateY(-50%);
+/* ★ 2026-09-16 第二十轮:旧 .zone-side { position:absolute; right:20px;
+   top:50% } 已【删除】—— 模板已不再使用 .zone-side(.rec-side 取代),
+   且它正是"右侧按钮飘出容器"的同类元凶。 */
+.rec-side {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .run-score {
@@ -1216,21 +1230,10 @@
   min-height: 170px;
 }
 
-/* ---------- ④ 录音状态区 ---------- */
-/* 单行横向:麦克风在左、状态文案紧跟其后(任务书第四节改为 row 排列) */
-.rec-center {
-  /* 绝对定位于胶囊正中,与左右两侧元素无关 —— 这是 Record 居中的关键。 */
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  pointer-events: auto;
-}
+/* ---------- ④ 录音状态区 ----------
+   ★ 2026-09-16 第二十轮:旧规则 .rec-center { position:absolute; left:50%; top:50%;
+   transform:translate(-50%,-50%) } 已【删除】—— 这就是"麦克风飘到音频条上方"的真凶。
+   现由文件末尾新骨架段的 .audio-stack .rec-pill .rec-center(flex column, 文档流)接管。 */
 
 /* .rec-status / .rec-no 已删除:模板改用极简 .rec-label(2026-09-15 第八轮) */
 .st-idle { font-size: 13px; color: #6b7280; }
@@ -1752,19 +1755,9 @@
    ============================================================ */
 
 /* ---------- 朗读文本卡右下角:字号缩放条 ---------- */
-.zoom-controls {
-  position: absolute;
-  right: 16px;
-  bottom: 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 999px;
-  background: #f6f8fb;
-  border: 1px solid #e5e9f0;
-  /* 不遮挡正文:卡片底部已留 44px */
-}
+/* ★ 2026-09-16 第二十轮:旧 .zoom-controls { position:absolute; right:16px;
+   bottom:14px } 已【删除】—— 这就是"缩放按钮掉到屏幕右下角"的真凶。
+   现由 .header-actions-group .zoom-controls(文档流 flex 组内)接管。 */
 
 .zoom-btn {
   width: 26px;
@@ -2461,12 +2454,14 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 
 /* ---------- 卡片① 顶部标题栏 ---------- */
 .card-head {
+  /* ★ 第二十轮:题目路径/题名在左,缩放+Mark+编辑在右,同一水平线两端对齐 */
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   padding-bottom: 16px;
   border-bottom: 1px solid #f1f5f9;
   margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 .card-head .ch-left { min-width: 0; }
 .card-head .ch-kicker {
@@ -2505,21 +2500,28 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .card-head .ch-edit mat-icon { font-size: 19px; width: 19px; height: 19px; }
 
 /* ---------- 卡片① 核心待读文本框 ---------- */
+/* ★ 第二十轮:纯正文框 —— 内部只有英文段落,无任何按钮。
+   操作按钮全部上移到 .card-head 右侧的 .header-actions-group。 */
 .text-box {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  padding: 28px;
+  padding: 24px 28px;
   background: #fff;
-  min-height: 180px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 /* ★ 2026-09-16 第二十轮:缩放胶囊 + Mark 按钮放进同一个横向 flex 容器。
    原先两者各自 position:absolute → 图层堆叠互相覆盖(Forrest 报的 bug)。
    现在改为普通文档流 + flex 水平并列,严禁重叠。 */
-.text-box .header-actions-group {
+/* ★ 第二十轮:缩放胶囊 + Mark 按钮的横向 flex 容器。
+   已从文本框内移到卡片标题行右侧 —— 故不再需要 margin-bottom。 */
+.header-actions-group {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  flex: 0 0 auto;
 }
 
 /* 缩放胶囊 [-] 280% [+] */

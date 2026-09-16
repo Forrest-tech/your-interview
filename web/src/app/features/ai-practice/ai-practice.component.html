@@ -109,25 +109,7 @@
 
           <span class="spacer"></span>
 
-          @if (!editing()) {
-            <button class="ch-edit" [matTooltip]="t('practice.edit')"
-                    [disabled]="!selectedId()" (click)="startEdit()">
-              <mat-icon>edit</mat-icon>
-            </button>
-          } @else {
-            <button class="ch-edit" [matTooltip]="t('practice.save')" (click)="saveEdit()">
-              <mat-icon>save</mat-icon>
-            </button>
-            <button class="ch-edit" [matTooltip]="t('practice.cancel')" (click)="cancelEdit()">
-              <mat-icon>close</mat-icon>
-            </button>
-          }
-        </header>
-
-        <!-- ①-3 核心待读文本框。工具条不再绝对定位(会与文本框内容叠层),
-             改为「标题行内右侧的横向 flex 组」——见 .header-actions-group。 -->
-        <div class="text-box" [style.--read-fs.px]="readFontPx()">
-
+          <!-- 工具栏:缩放胶囊 + Mark 下拉(与题名同一水平线,右端对齐) -->
           <!-- ①-2 工具栏小组件:缩放胶囊 + 标记下拉
                2026-09-16 第二十轮:两者原本各自 absolute → 互相堆叠。
                现改为同一横向 flex 容器 .header-actions-group,水平并列不重叠。 -->
@@ -194,6 +176,25 @@
               </button>
             </mat-menu>
           </div>
+
+          @if (!editing()) {
+            <button class="ch-edit" [matTooltip]="t('practice.edit')"
+                    [disabled]="!selectedId()" (click)="startEdit()">
+              <mat-icon>edit</mat-icon>
+            </button>
+          } @else {
+            <button class="ch-edit" [matTooltip]="t('practice.save')" (click)="saveEdit()">
+              <mat-icon>save</mat-icon>
+            </button>
+            <button class="ch-edit" [matTooltip]="t('practice.cancel')" (click)="cancelEdit()">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </header>
+
+        <!-- ①-3 纯英文待读文本框(★ 内部严禁任何操作按钮/标记) -->
+        <div class="text-box" [style.--read-fs.px]="readFontPx()">
+
 
           <!-- 正文:编辑态 = 文本域;只读态 = 无衬线正文(18px / 1.8) -->
           @if (editing()) {

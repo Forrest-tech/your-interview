@@ -85,7 +85,7 @@
         <!-- 任务书第十轮(Forrest):一级分类前不再挂任何图标 ——
              文件夹会很多,逐个配图标既费事又杂乱。
              展开箭头保留在最右侧。 -->
-        <span class="node-name">{{ n.name }}</span>
+        <span class="node-name is-folder">{{ n.name }}</span>
         @if (n.children?.length) {
           <span class="node-count">{{ n.children?.length }}</span>
         }
@@ -104,7 +104,7 @@
                  (keyup.escape)="cancelRename()"
                  (blur)="commitRename(n, $any($event.target).value)">
         } @else {
-          <span class="node-name" (dblclick)="startRename(n)">{{ n.name }}</span>
+          <span class="node-name is-leaf" (dblclick)="startRename(n)">{{ n.name }}</span>
         }
       }
 

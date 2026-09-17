@@ -513,6 +513,36 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly ttsNote = signal('');
 
   /**
+   * ★ 第三十三轮(Forrest):示范朗读的**额度消耗**提示。
+   *
+   * 三种取值,必须在界面上说清楚(不猜、不含糊):
+   *   · 'fresh'  = 本次真调了 Azure 合成 → **消耗了额度**
+   *   · 'cache'  = 服务端本地缓存命中 → **未消耗额度**
+   *   · ''       = 无提示(未播 / 回退浏览器语音 / 非 Azure 引擎)
+   *
+   * 数据来源:后端 `X-Tts-Cache: hit|miss` 响应头。
+   * ⚠️ 前端**无法自行判断**服务端有没有缓存 ——
+   *    所以绝不能根据"这段文本我播过没"在本地猜,
+   *    猜错就是骗用户(比如另一个标签页/另一台设备已经合成过)。
+   */
+  readonly ttsCost = signal<'' | 'fresh' | 'cache'>('');
+
+  /**
+   * ★ 第三十三轮(Forrest):AI 评分的**额度消耗**标记。
+   *
+   * 与示范朗读同理,必须告诉用户这次到底花没花 Azure 额度:
+   *   · 'fresh' = 本次真调了 Azure 发音评估 → 消耗了额度
+   *   · 'cache' = 该录音已有入库评分,直接读库 → 未消耗额度
+   *   · ''      = 无提示
+   *
+   * 为什么评分这边"未消耗"也是真实可考据的:
+   *   grade() 开头有一道 `if (rec.score) return;` ——
+   *   列表接口已把历史评分带回,有分就不再发请求。
+   *   所以看到分数且本次未发评估请求 = 确实是读库的。
+   */
+  readonly scoreCost = signal<'' | 'fresh' | 'cache'>('');
+
+  /**
    * 示范朗读条上要不要显示引擎提示。
    *
    * ⚠️ 2026-09-16(Forrest 本轮明确要求):
@@ -1072,9 +1102,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // ⚠️ 2026-09-16(Forrest 本轮):开播时**不显示**"正在用 Azure 神经语音合成…" ——
     //    这是正常路径不是警示,用户只想看进度条。回退/出错时才会写入 note。
     this.ttsNote.set('');
+    this.ttsCost.set('');   // 新一次朗读:先清掉上次的额度提示,结果出来再如实标记
 
     this.practiceApi.synthesize(text, undefined, this.rate()).subscribe({
-      next: (blob) => {
+      next: (res) => {
+        const blob = res.blob;
+        // ★ 第三十三轮:如实标记本次到底花没花额度。
+        //   来源是后端响应头,不是本地猜测。
+        this.ttsCost.set(res.fromCache ? 'cache' : 'fresh');
         const url = URL.createObjectURL(blob);
         // 上一次的 TTS objectURL 要先回收,否则连播多次会攒住内存
         if (this.ttsUrl) URL.revokeObjectURL(this.ttsUrl);
@@ -1118,6 +1153,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
             ? 'Azure 密钥/区域无效'
             : '语音合成失败';
         this.ttsNote.set(`${why},已回退浏览器语音`);
+        this.ttsCost.set('');   // 回退了就不是 Azure 合成,额度提示必须清掉
         this.speakAzureFallback(text);
       }
     });
@@ -1387,6 +1423,19 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     const t = this.activeTake();
     if (!t) return;
     this.stopPlayback();
+
+    // ★ 第三十三轮(Forrest):如实标记本次评分花没花 Azure 额度。
+    //
+    // 判定依据不是"猜",而是 grade() 里那条硬规则:
+    //   `if (rec.score) return;` —— 列表接口已把历史分带回,
+    //   有分就直接返回、**不发任何评估请求**。
+    // 所以:
+    //   有分 → 本次不会调 Azure → 'cache'(读取本地已存评分)
+    //   无分 → 本次会真调 Azure → 'fresh'(消耗额度)
+    // ⚠️ 必须在 grade() **之前**就定下来,因为它可能直接把分数拿回来了,
+    //    事后看 rec.score 已经判不出"本次到底发没发请求"。
+    this.scoreCost.set(t.score ? 'cache' : 'fresh');
+
     await this.recorder.grade(t.id, this.currentText());
   }
 

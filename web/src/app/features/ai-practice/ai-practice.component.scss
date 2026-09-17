@@ -988,6 +988,43 @@
   color: #2b3340;
 }
 
+/* ★ 第三十三轮(Forrest):额度消耗提示芯片。
+   两种状态靠颜色一眼区分,不靠读字就懂花没花钱:
+     · .fresh 消耗 → 琥珀色(花钱了,要看得见)
+     · .local 未消耗 → 绿色(省钱,安心)
+   与 .tts-note 一样是内联小标签,不占布局行高。 */
+.cost-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: default;
+}
+.cost-chip mat-icon {
+  font-size: 13px;
+  width: 13px;
+  height: 13px;
+}
+.cost-chip.fresh {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+.cost-chip.local {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+/* ⚠️ .res-head 用 justify-content: space-between —— 多插入一个子元素
+   后总分会被推到右边而不居中对齐。总分前的 .spacer 已解决这一点
+   (flex:1 吃掉空白,把总分挤到最右)。此处只确保标题不被压扁。 */
+.res-head h3 { flex: 0 0 auto; }
+
 /* 总分:参考站是大号红字 —— 这里沿用四档配色,但字号放大 */
 .res-total {
   font-size: 26px;

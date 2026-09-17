@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, catchError, throwError } from 'rxjs';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
+import { Observable, catchError, map, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 /**
@@ -55,10 +55,33 @@ export class ApiClient {
    *
    * 为什么单独一个方法:HttpClient 默认按 JSON 解析响应,
    * 音频流那样做会直接报解析错。这里显式声明 responseType: 'blob'。
+   *
+   * ★ 第三十三轮(Forrest:要看到底消没消耗额度):
+   *   改为 `observe: 'response'` 并把 `X-Tts-Cache` 响应头一并交给调用方 ——
+   *   后端用这个头如实标记这次是**本地缓存命中(hit,未花额度)**
+   *   还是**真调了 Azure(miss,消耗了额度)**。
+   *   只把 Blob 交出去的话,前端就无从知道到底花没花钱,只能猜。
+   *
+   * 兼容性:调用方若只关心字节,用 `.pipe(map(r => r.body))` 取即可;
+   * 这里改为返回完整响应而非 Blob,是为了让「消耗」对上层可见。
+   */
+  postBlobWithHeaders(path: string, body?: unknown): Observable<HttpResponse<Blob>> {
+    return this.http.post(this.url(path), body ?? {}, {
+      responseType: 'blob',
+      observe: 'response'
+    }).pipe(catchError(this.rethrow));
+  }
+
+  /**
+   * POST 并拿回二进制(只要字节,不要响应头)。
+   *
+   * ⚠️ 注意:`observe: 'response'` 下 Angular 默认会**过滤掉**未在
+   *   `Access-Control-Expose-Headers` 列出的响应头。后端 /tts 已显式
+   *   expose `X-Tts-Cache`,所以 postBlobWithHeaders 拿得到;
+   *   若日后新增头,记得同步后端 expose,否则前端读到 null。
    */
   postBlob(path: string, body?: unknown): Observable<Blob> {
-    return this.http.post(this.url(path), body ?? {}, { responseType: 'blob' })
-      .pipe(catchError(this.rethrow));
+    return this.postBlobWithHeaders(path, body).pipe(map((r) => r.body as Blob));
   }
 
   /**

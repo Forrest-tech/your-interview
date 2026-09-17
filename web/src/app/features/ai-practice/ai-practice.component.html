@@ -247,6 +247,24 @@
               <span class="tts-note" [title]="ttsNote()">{{ ttsNote() }}</span>
             }
 
+            <!-- ★ 第三十三轮(Forrest):示范朗读的额度消耗提示。
+                 有消耗 → 如实报"本次调用了 Azure,消耗额度";
+                 无消耗 → 明确说"这是本地存储的音频,未消耗额度"。
+                 两者都不掩盖 —— 用户有权知道什么在花钱。 -->
+            @if (ttsCost() === 'fresh') {
+              <span class="cost-chip fresh"
+                    [title]="t('practice.ttsCostFreshHint')">
+                <mat-icon>cloud_upload</mat-icon>
+                <span>{{ t('practice.ttsCostFresh') }}</span>
+              </span>
+            } @else if (ttsCost() === 'cache') {
+              <span class="cost-chip local"
+                    [title]="t('practice.ttsCostLocalHint')">
+                <mat-icon>sd_storage</mat-icon>
+                <span>{{ t('practice.ttsCostLocal') }}</span>
+              </span>
+            }
+
             <button class="speed-badge" [matMenuTriggerFor]="rateMenu">
               x{{ rate() }}
             </button>
@@ -564,6 +582,25 @@
                 <section class="res-block">
                   <div class="res-head">
                     <h3>{{ t('practice.scoreResults') }}</h3>
+
+                    <!-- ★ 第三十三轮(Forrest):评分额度消耗提示。
+                         有消耗 → 报"本次调用了 Azure,消耗额度";
+                         无消耗 → 报"读取本地点存评分,未消耗额度"。 -->
+                    @if (scoreCost() === 'fresh') {
+                      <span class="cost-chip fresh"
+                            [title]="t('practice.scoreCostFreshHint')">
+                        <mat-icon>cloud_upload</mat-icon>
+                        <span>{{ t('practice.scoreCostFresh') }}</span>
+                      </span>
+                    } @else if (scoreCost() === 'cache') {
+                      <span class="cost-chip local"
+                            [title]="t('practice.scoreCostLocalHint')">
+                        <mat-icon>sd_storage</mat-icon>
+                        <span>{{ t('practice.scoreCostLocal') }}</span>
+                      </span>
+                    }
+
+                    <span class="spacer"></span>
                     <span class="res-total" [class]="scoreClass(sc.pronScore)">
                       {{ sc.pronScore }}<i>{{ t('practice.points') }}</i>
                     </span>

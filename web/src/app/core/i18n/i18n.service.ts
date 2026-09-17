@@ -209,6 +209,42 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.needRecording': { zh: '请先录一段音频，再提交评分。', en: 'Record an audio take first, then submit for scoring.', fr: "Enregistrez d'abord un audio, puis soumettez pour évaluation." },
   'practice.needScoreRetry': { zh: '该录音已评分，重新作答后可再次提交。', en: 'This take is already scored. Re-record to submit again.', fr: "Cet enregistrement est déjà évalué. Réenregistrez pour soumettre à nouveau." },
   'practice.audioWaveform': { zh: '音频波形', en: 'Audio Waveform', fr: 'Forme d onde audio' },
+
+  // ★ 第三十三轮(Forrest):额度消耗透明提示 —— 有消耗就报,没消耗就说清楚
+  //   "这是本地存储的音频"。不猜、不含糊。
+  'practice.ttsCostFresh': {
+    zh: '消耗额度 · 本次调用 Azure 合成',
+    en: 'Credits used · synthesized via Azure now',
+    fr: 'Credits utilises · synthese Azure a l instant' },
+  'practice.ttsCostFreshHint': {
+    zh: '这段文本还没在本机合成过,本次调用 Azure 神经语音生成音频,会消耗额度。下次朗读同样内容会直接回放本地音频,不再消耗。',
+    en: 'This text had no local audio yet, so Azure neural TTS generated it now and used credits. Replaying the same text later will serve the local file with no further usage.',
+    fr: "Ce texte n'avait pas encore d'audio local: Azure a genere l'audio maintenant et des credits ont ete utilises." },
+  'practice.ttsCostLocal': {
+    zh: '未消耗额度 · 播放本地存储的音频',
+    en: 'No credits used · playing locally stored audio',
+    fr: 'Aucun credit utilise · lecture du fichier local' },
+  'practice.ttsCostLocalHint': {
+    zh: '同一段文本之前已经合成过,音频存在本机文件系统里。本次直接回放,没有调用 Azure,未消耗任何额度。',
+    en: 'This exact text was synthesized before and the audio is stored on the server filesystem. It is served directly with no Azure call and no credit usage.',
+    fr: "Ce texte a deja ete synthetise et l'audio est stocke sur le disque. Aucun appel Azure, aucun credit consomme." },
+
+  'practice.scoreCostFresh': {
+    zh: '消耗额度 · 本次调用 Azure 评分',
+    en: 'Credits used · scored via Azure now',
+    fr: 'Credits utilises · evaluation Azure a l instant' },
+  'practice.scoreCostFreshHint': {
+    zh: '这条录音还没有存过的评分,本次调用 Azure 发音评估,会消耗额度。评分结果已存入数据库,下次打开直接读取,不再重复消耗。',
+    en: 'This recording had no stored score, so Azure pronunciation assessment ran now and used credits. The result is saved to the database; opening it again reads from storage with no further usage.',
+    fr: "Cet enregistrement n'avait pas de score: Azure a evalue maintenant et des credits ont ete utilises. Le resultat est enregistre en base." },
+  'practice.scoreCostLocal': {
+    zh: '未消耗额度 · 读取本地已存评分',
+    en: 'No credits used · reading stored score',
+    fr: 'Aucun credit utilise · score deja enregistre' },
+  'practice.scoreCostLocalHint': {
+    zh: '这条录音之前已经评过分,分数存在数据库里。本次直接读取历史评分,没有调用 Azure,未消耗任何额度。若要重新评分并覆盖旧分,请先重置该录音的评分。',
+    en: 'This recording was already scored and the result is in the database. It is read back directly with no Azure call and no credit usage. To re-score and overwrite, reset the score for this recording first.',
+    fr: "Cet enregistrement a deja ete evalue et le score est en base. Lecture directe, aucun appel Azure, aucun credit consomme." },
   'practice.recPlay': { zh: 'Play', en: 'Play', fr: 'Lire' },
   'practice.runAiScoring': { zh: '点击进行AI评分', en: 'Run AI Scoring', fr: 'Lancer l évaluation IA' },
   'practice.collapseReport': { zh: '收起报告', en: 'Collapse', fr: 'Réduire' },

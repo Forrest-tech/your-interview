@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import { ApiClient } from './api-client';
 
@@ -218,10 +219,32 @@ export class PracticeApi {
 
   /**
    * Azure 神经语音合成。
-   * 返回 Blob(MP3)而不是 JSON —— 前端直接 objectURL 播放。
+   *
+   * ★ 第三十三轮(Forrest):返回体从 Blob 改为
+   *   `{ blob, fromCache }` —— 让调用方能如实告知用户
+   *   「这是本地缓存的音频,未消耗额度」还是「本次调用了 Azure,消耗了额度」。
+   *   fromCache 直接取自后端 `X-Tts-Cache: hit|miss` 响应头,
+   *   不靠前端自己猜(前端无法判断服务端有没有缓存)。
+   *
    * 未配 key 时后端返回 503,调用方据此**如实**回退浏览器语音。
    */
-  synthesize(text: string, voice?: string, speed?: number): Observable<Blob> {
-    return this.api.postBlob(`${PracticeApi.BASE}/tts`, { text, voice, speed });
+  synthesize(text: string, voice?: string, speed?: number,
+             force = false): Observable<TtsSynthesisResult> {
+    return this.api
+      .postBlobWithHeaders(`${PracticeApi.BASE}/tts`, { text, voice, speed, force })
+      .pipe(map((res) => ({
+        blob: res.body as Blob,
+        fromCache: (res.headers.get('X-Tts-Cache') ?? '').toLowerCase() === 'hit'
+      })));
   }
+}
+
+/** 示范朗读合成结果:音频字节 + 是否来自本地缓存(诚实来源标记)。 */
+export interface TtsSynthesisResult {
+  blob: Blob;
+  /**
+   * true = 服务端本地缓存命中,本次**未消耗** Azure 额度。
+   * false = 本次真调了 Azure 合成,**消耗了**额度。
+   */
+  fromCache: boolean;
 }

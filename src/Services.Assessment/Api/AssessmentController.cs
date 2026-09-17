@@ -270,7 +270,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SaveMaterials([FromBody] SaveTreeBody body, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        var result = await sender.Send(new SaveMaterialTreeCommand(userId, body.Nodes ?? []), ct);
+        var result = await sender.Send(new SaveMaterialTreeCommand(userId, body.Nodes ?? [], body.Force), ct);
         return result.IsSuccess ? Results.Ok(new { saved = result.Value })
                                 : result.ToProblemDetails();
     }
@@ -284,6 +284,21 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     {
         var userId = currentUser.RequireUserId();
         var list = await sender.Send(new ListRecordingsQuery(userId, materialId), ct);
+        return Results.Ok(list);
+    }
+
+    /// <summary>
+    /// ★ 第三十九轮:列出**当前用户的全部录音**(不按素材过滤)。
+    ///   用途:数据安全兼底 —— 即使某个素材被删/ID 变动导致前端按
+    ///   materialId 查不到,用户的录音也不会"凭空消失"。
+    ///   前端可用它做"孤儿录音"发现与恢复。
+    /// </summary>
+    [HttpGet("recordings")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    public async Task<IResult> ListAllRecordings(CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var list = await sender.Send(new ListAllRecordingsQuery(userId), ct);
         return Results.Ok(list);
     }
 
@@ -604,7 +619,7 @@ public sealed record AssessPronunciationBody(
 // ---- /practice 页请求体(2026-09-15 第十七轮)----
 
 /// <summary>整树提交的根。</summary>
-public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessment.Application.MaterialNodeIn>? Nodes);
+public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessment.Application.MaterialNodeIn>? Nodes, bool Force = false);
 
 /// <summary>Azure Speech 设置提交。⚠️ 只入不出 —— 保存后绝不回传 key。</summary>
 public sealed record SpeechSettingsBody(string Key, string Region, string? Endpoint);

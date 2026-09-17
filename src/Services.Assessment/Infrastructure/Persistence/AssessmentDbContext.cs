@@ -118,6 +118,11 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(10).IsRequired();
             e.Property(x => x.Content).HasColumnType("text");
 
+            // ★ 第三十九轮:软删除过滤器 —— 所有查询默认只看未删节点。
+            //   配合实体上的 MarkDeleted(),整树保存不再硬删数据。
+            //   排查/恢复时可 IgnoreQueryFilters() 看到全部行。
+            e.HasQueryFilter(x => !x.IsDeleted);
+
             // 自引用邻接表:删父节点时级联删子节点。
             // 树是用户资产,删除必须是显式动作,但删了就该连根走 ——
             // 留一堆孤儿节点比删不干净更糟。

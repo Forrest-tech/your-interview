@@ -73,7 +73,7 @@ public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
 ///   整树提交是一个原子操作:要么全新状态,要么什么都没变。
 ///   素材树是纯私有小数据(几十节点、几 KB),整树传输的成本可以忽略。
 /// </remarks>
-public sealed record SaveMaterialTreeCommand(Guid UserId, IReadOnlyList<MaterialNodeIn> Nodes)
+public sealed record SaveMaterialTreeCommand(Guid UserId, IReadOnlyList<MaterialNodeIn> Nodes, bool Force = false)
     : MediatR.IRequest<Result<int>>;
 
 /// <summary>前端提交的节点(Id 为 null = 新建)。</summary>
@@ -87,6 +87,7 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
     public async Task<Result<int>> Handle(SaveMaterialTreeCommand r, CancellationToken ct)
     {
         var existing = await db.Materials
+            .IgnoreQueryFilters()
             .Where(x => x.UserId == r.UserId)
             .ToListAsync(ct);
         var byId = existing.ToDictionary(x => x.Id);
@@ -123,6 +124,8 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
                 }
                 else
                 {
+                    // ★ 第三十九轮:若这个节点之前被软删过,重新出现就恢复它。
+                    entity.Restore();
                     entity.Rename(n.Name);
                     // 文件夹不持有正文 → 不去碰它的 Content(避免无意义的 Touch);
                     // 文件才写正文。
@@ -139,11 +142,40 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
 
         Walk(r.Nodes, null);
 
-        // 前端没再提交的旧节点 = 已被删除。
-        // 走软/硬删都行,这里硬删 —— 树是整树提交,没提交就是用户真的删了它。
-        // 级联会把子树一起带走(见 DbContext 的自引用 Cascade 配置)。
-        var removed = existing.Where(x => !incoming.Contains(x.Id)).ToList();
-        if (removed.Count > 0) db.Materials.RemoveRange(removed);
+        // 前端没再提交的旧节点 = 用户已经删了它。
+        //
+        // ★★ 第三十九轮 数据安全修复(Forrest 报“录音记录都没了”):
+        //   旧代码这里走 `db.Materials.RemoveRange(removed)` —— **硬删**。
+        //   但整树覆盖只要出现一次不完整的提交(并发 PUT、网络重试、
+        //   前端状态未回读、本地种子 id 未换 GUID),就会把用户真正存在的
+        //   素材连根硬删,挂在其下的录音也随即变孤儿,
+        //   界面按 MaterialId 查不到 → 用户看到“录音全没了”。
+        //   **数据丢失是不可接受的** —— 现在一律改软删:
+        //   标记 IsDeleted 并脱离子树(避免子节点被当成根节点重复显示)。
+        //   已软删的行被查询过滤器隐藏,用户视角与真删一致,
+        //   但数据仍在库里,可排查、可恢复。
+        var removed = existing.Where(x => !incoming.Contains(x.Id) && !x.IsDeleted).ToList();
+
+        // ★★ 第四十轮 数据安全熔断(Forrest 报"数据全丢失"):
+        //   即使前端改成了软删,仍要防"客户端把初始/残缺树整套写回"这类
+        //   覆盖事故 —— 它会一次性把大量真实节点标记删除。
+        //   启发式:本次要抹掉的节点占比很高(>80%)、且抹掉数达到一定规模(>=5)
+        //   时,先不动手,返回失败让客户端二次确认(除非显式 force)。
+        //   为什么用比例而非绝对数:个人素材库体量小,5 个节点已算“有东西了”;
+        //   单节点删除(改名/删一个)永远不会触发熔断,不影响正常使用。
+        var aliveCount = existing.Count(x => !x.IsDeleted);
+        if (!r.Force && removed.Count >= 5 && aliveCount > 0
+            && (double)removed.Count / aliveCount > 0.8)
+        {
+            return Result.Failure<int>(Error.Validation("materials.guard",
+                $"为防止误删,本次保存被拦下:它将删除 {removed.Count}/{aliveCount} 个素材"
+                + "(超过 80%)。如确需删除请在请求中显式带上 force=true。"));
+        }
+
+        if (removed.Count > 0)
+        {
+            foreach (var m in removed) m.MarkDeleted();
+        }
 
         await db.SaveChangesAsync(ct);
         return Result.Success(incoming.Count);
@@ -156,6 +188,28 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
 
 public sealed record ListRecordingsQuery(Guid UserId, Guid MaterialId)
     : MediatR.IRequest<IReadOnlyList<RecordingDto>>;
+
+/// <summary>
+/// ★ 第三十九轮:列出当前用户的**全部录音**(不按素材过滤)。
+/// 数据安全兼底 —— 素材被删/ID 变动也不会让录音在前端"消失"。
+/// </summary>
+public sealed record ListAllRecordingsQuery(Guid UserId)
+    : MediatR.IRequest<IReadOnlyList<RecordingDto>>;
+
+public sealed class ListAllRecordingsQueryHandler(AssessmentDbContext db)
+    : MediatR.IRequestHandler<ListAllRecordingsQuery, IReadOnlyList<RecordingDto>>
+{
+    public async Task<IReadOnlyList<RecordingDto>> Handle(ListAllRecordingsQuery r, CancellationToken ct)
+    {
+        var rows = await db.Recordings.AsNoTracking()
+            .Include(x => x.Score)
+            .Where(x => x.UserId == r.UserId && !x.IsDeleted)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(ct);
+
+        return rows.Select(ListRecordingsQueryHandler.ToDto).ToList();
+    }
+}
 
 public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
     : MediatR.IRequestHandler<ListRecordingsQuery, IReadOnlyList<RecordingDto>>
@@ -303,7 +357,7 @@ public sealed class GetRecordingAudioQueryHandler(AssessmentDbContext db, IAudio
 /// <summary>删除一条录音(软删元数据 + 尽力删文件)。</summary>
 public sealed record DeleteRecordingCommand(Guid UserId, Guid RecordingId) : MediatR.IRequest<Result>;
 
-public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudioStore store)
+public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db)
     : MediatR.IRequestHandler<DeleteRecordingCommand, Result>
 {
     public async Task<Result> Handle(DeleteRecordingCommand r, CancellationToken ct)
@@ -315,9 +369,17 @@ public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudio
         rec.MarkDeleted();
         await db.SaveChangesAsync(ct);
 
-        // 文件删不掉也不回滚 —— 元数据已隐藏,用户视角已删除;
-        // 残留文件由后台清理任务扫(比让删除请求失败更友好)。
-        await store.DeleteAsync(rec.StoragePath, ct);
+        // ★ 第三十九轮 数据安全修复:不再立即硬删磁盘文件。
+        //   原因:用户误删/前端异常触发的删除曾是**不可恢复**的 ——
+        //   元数据软删了(可恢复),但音频文件被 File.Delete 真删了,
+        //   就算把行恢复回来也放不出声音了。数据事故里这是最糟的组合。
+        //   现在:只软删元数据行;磁盘文件保留(孤儿文件由后续后台
+        //   清理任务扫)。用户视角"已删除"是成立的(查询过滤器已隐藏),
+        //   但真需要时数据还在,能救。
+        //
+        //   ⚠️ 诚实约束:这里**故意不删文件**是有代价的 ——
+        //   被删录音的音频会占盘直到后台清理上线。比起不可恢复的数据丢失,
+        //   这点磁盘占用完全可以接受。
         return Result.Success();
     }
 }

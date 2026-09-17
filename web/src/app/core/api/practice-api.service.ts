@@ -107,9 +107,14 @@ export class PracticeApi {
     return this.api.get<MaterialNodeDto[]>(`${PracticeApi.BASE}/materials`);
   }
 
-  /** 整树覆盖保存(新建/改名/改正文/排序/删除 全走这一个)。 */
-  saveMaterials(nodes: MaterialNodeIn[]): Observable<{ saved: number }> {
-    return this.api.put<{ saved: number }>(`${PracticeApi.BASE}/materials`, { nodes });
+  /**
+   * 整树覆盖保存(新建/改名/改正文/排序/删除 全走这一个)。
+   *
+   * ★ 第四十轮:force=true 仅在**用户显式删除**时传,用于越过服务端
+   *   "防误删熔断"(一次删掉 >80% 且 ≥5 个时会被拦)。
+   */
+  saveMaterials(nodes: MaterialNodeIn[], force = false): Observable<{ saved: number }> {
+    return this.api.put<{ saved: number }>(`${PracticeApi.BASE}/materials`, { nodes, force });
   }
 
   // ---------- 录音 ----------
@@ -117,6 +122,14 @@ export class PracticeApi {
   listRecordings(materialId: string): Observable<RecordingDto[]> {
     return this.api.get<RecordingDto[]>(
       `${PracticeApi.BASE}/materials/${materialId}/recordings`);
+  }
+
+  /**
+   * ★ 第三十九轮:列出当前用户的**全部录音**(不按素材过滤)。
+   * 数据安全兜底 —— 素材被删/ID 变动时,录音也不会在前端"消失"。
+   */
+  listAllRecordings(): Observable<RecordingDto[]> {
+    return this.api.get<RecordingDto[]>(`${PracticeApi.BASE}/recordings`);
   }
 
   /**

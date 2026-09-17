@@ -419,6 +419,38 @@ export class RecorderService {
     this.loadForMaterial(materialId);
   }
 
+  /**
+   * ★ 第三十九轮 数据安全兜底:拉取当前用户的**全部录音**,
+   * 把“本地未持有、且能按 materialId 对上当前树”的录音补回内存。
+   *
+   * 为何需要:loadForMaterial 按素材懒加载 + loadedMaterials 缓存。
+   * 一旦某素材在缓存建立后才产生录音(或多标签页/多设备写入),
+   * 或者素材 id 与录音的 materialId 一时对不上,录音就不显示 ——
+   * 用户看到的是“我的录音没了”。此方法把服务端真相拉回来补齐。
+   */
+  syncAllRecordings(knownMaterialIds?: Set<string>): void {
+    this.practiceApi.listAllRecordings().subscribe({
+      next: (dtos) => {
+        const fromServer = dtos
+          .filter((d) => !knownMaterialIds || knownMaterialIds.has(d.materialId))
+          .map((d) => RecorderService.fromDto(d));
+        const serverIds = new Set(fromServer.map((r) => r.id));
+        // 以服务端为真相:保留仍在“上传中”的本地条目,其余换成服务端集合
+        const uploading = this.recordings().filter((r) => !r.uploaded);
+        const merged = [
+          ...uploading,
+          ...fromServer,
+          // 保留本地已持有但服务端未返回的(极端情况下回读失败,不得凭空丢弃内存态)
+          ...this.recordings().filter((r) => r.uploaded && !serverIds.has(r.id))
+        ];
+        this.recordings.set(merged);
+        // 把所有已同步的素材标记为已加载,避免重复请求
+        for (const r of fromServer) this.loadedMaterials.add(r.materialId);
+      },
+      error: () => { /* 兼底性同步失败不影响主流程,不弹错 */ }
+    });
+  }
+
   /** 是否是后端可接受的素材 id(GUID)。非 GUID = 本地种子,没有服务端录音。 */
   static isGuid(v: string | null | undefined): boolean {
     return !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);

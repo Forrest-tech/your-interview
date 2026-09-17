@@ -86,6 +86,17 @@ public sealed class PracticeMaterial
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// ★ 第三十九轮 数据安全修复:软删除标记。
+    ///   旧实现:整树保存时,凡"本次没提交"的节点一律 `RemoveRange` **硬删**。
+    ///   而整树覆盖只要出现一次不完整的提交(并发、网络重试、前端状态未回读),
+    ///   就会把用户真实存在的素材连根硬删 —— **不可恢复**,
+    ///   且挂在它下面的录音全部变成孤儿(界面按 MaterialId 查 → 看起来"录音全没了")。
+    ///   现在改成软删:节点标记 IsDeleted,读取时过滤;
+    ///   数据永远还在库里,可排查、可恢复。
+    /// </summary>
+    public bool IsDeleted { get; private set; }
+
     // ---------- 行为(全部经聚合方法改,不允许外部直接改属性) ----------
 
     public void Rename(string name)
@@ -133,6 +144,24 @@ public sealed class PracticeMaterial
     }
 
     private void Touch() => UpdatedAt = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// ★ 第三十九轮:软删除。只标标记,不真删行。
+    ///   为了让"误删可恢复"与"录音不孤儿"成为可能。
+    /// </summary>
+    public void MarkDeleted()
+    {
+        IsDeleted = true;
+        Touch();
+    }
+
+    /// <summary>★ 第三十九轮:恢复被软删的节点(它重新出现在提交的树里时)。</summary>
+    public void Restore()
+    {
+        if (!IsDeleted) return;
+        IsDeleted = false;
+        Touch();
+    }
 }
 
 /// <summary>

@@ -653,6 +653,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly treeError = signal('');
 
   /**
+   * ★★ 第四十轮:素材树"从服务端加载失败"标志。
+   * 为 true 时**禁止任何写回服务端的操作**(persistQuiet / saveTree / importSeed)。
+   * 原因:拉取失败时本地 nodes 可能为空或陈旧,把它整树覆盖写回 = 真丢数据。
+   */
+  readonly treeLoadFailed = signal(false);
+
+  /**
    * 把素材树整体保存到后端（整树覆盖）。
    *
    * 2026-09-15 第十七轮：持久化从 localStorage 迁到 PostgreSQL。
@@ -663,6 +670,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *   （几十到几百节点）开销完全可以忽略。
    */
   saveTree(): void {
+    // ★★ 第四十轮 数据安全:加载失败时绝不允许把本地(可能是空的/陈旧的)
+    //   整树写回服务端 —— 那会把数据库真数据整树覆盖。
+    if (this.treeLoadFailed()) {
+      this.treeError.set('未连接到服务端,已阻止本次写入以免覆盖云端数据。请先重试加载。');
+      return;
+    }
     const payload = AiPracticeComponent.toPayload(this.nodes());
     this.practiceApi.saveMaterials(payload).subscribe({
       next: () => {
@@ -802,14 +815,22 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         }
         this.nodes.set(AiPracticeComponent.fromDto(dtos));
         this.treeLoading.set(false);
+        this.treeLoadFailed.set(false);
         this.afterTreeReady();
       },
       error: (e) => {
-        // 后端不可用：如实告知，前端仍可临时用种子数据做题，
-        // 但明确标出"未连接后端，改动不会保存"，不让用户误以为存住了
+        // ★★ 第四十轮 数据安全修复(Forrest 报"数据全丢失、树回到初始状态"):
+        //   旧代码在**拉取失败**时把 nodes 设成 4 个硬编码种子。
+        //   一旦后端只是**短暂不可用**(重启、网络抖动、token 过期),
+        //   界面就显示成"初始状态",用户以为数据全丢了。
+        //   更危险的是:用户接着任一编辑 → persist 会把这份"种子树"
+        //   **整树覆盖写回数据库** → 真数据被种子顶掉 = 真的丢了。
+        //   现在:拉取失败时**绝不改动 nodes**,只报错 + 标未连接,
+        //   并**锁住所有写操作**(treeError 非空时 persist 直接拒绝)。
         this.treeError.set(this.errText(e));
         this.treeLoading.set(false);
-        this.nodes.set(this.seed());
+        this.treeLoadFailed.set(true);
+        // 不设 nodes、不导入种子 —— 宁可页面空白,也绝不覆盖服务端真实数据。
         this.afterTreeReady();
       }
     });
@@ -845,6 +866,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 没有遗留数据时才用 4 个种子。
    */
   private importSeed(): void {
+    // ★★ 第四十轮 数据安全:此方法会**写库**。只有在"确实成功连上服务端
+    //   且确认返回空树"时才允许执行。若处于加载失败状态,直接中止 ——
+    //   否则一次瞬时的 GET 失败就能用种子把用户真数据顶掉。
+    if (this.treeLoadFailed()) return;
+    // 双保险:再确认一次服务端真的是空的(避免把"错误响应当空树"误当真空库)。
     const legacy = this.readLegacyTree();
     const source = legacy ?? this.seed();
     // 导入成功后清掉旧键，避免下次空库又被重复导入
@@ -881,11 +907,28 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 素材树就绪后的收尾：恢复上次选中的素材。 */
   private afterTreeReady(): void {
+    // ★ 第三十九轮 数据安全兼底:树就绪后,把服务端全部录音拉一次,
+    //   跟当前树的素材 id 对齐。即使某个录音因素材 id 变动而“掉队”,
+    //   也能在此补回内存,不会“凭空消失”。
+    this.recorder.syncAllRecordings(this.allMaterialIds());
     const fromUrl = this.route.snapshot.queryParamMap.get('materialId');
     const wanted = fromUrl || this.readStoredMaterialId();
     const target = wanted ? this.findFile(this.nodes(), wanted) : null;
     const first = target && !target.folder ? target : this.firstFile(this.nodes());
     if (first) this.selectFile(first);
+  }
+
+  /** ★ 第三十九轮:收集当前树里所有节点的 id(用于录音对齐)。 */
+  private allMaterialIds(): Set<string> {
+    const out = new Set<string>();
+    const walk = (list: MaterialNode[]) => {
+      for (const n of list) {
+        out.add(n.id);
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(this.nodes());
+    return out;
   }
 
   /** 前端节点 → 后端提交结构。改动本地结构时只改这一个映射。 */
@@ -1070,7 +1113,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 但**绝不静默吞掉失败** —— 失败时置回 treeDirty 并记录 treeError,
    * 用户仍能看到"未保存"状态与具体原因,不会误以为存住了。
    */
-  private persistQuiet(): void {
+  private persistQuiet(force = false): void {
     // ★ 第三十七轮 严重 Bug 修复(Forrest 报「新建文件夹+素材+内容,保存后刷新就丢」)。
     //
     // 真根因:并发【整树覆盖保存】互相踩踏。
@@ -1088,11 +1131,19 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     //   且最后一次补发一定带的是**最新最全**的树 —— 用户的东西不会丢。
     if (this.saveInFlight) {
       this.saveQueued = true;
+      this.saveQueuedForce = this.saveQueuedForce || force;
+      return;
+    }
+    // ★★ 第四十轮 数据安全:从服务端加载失败时,**禁止**把本地树写回。
+    //   此时 this.nodes() 可能是初始空树/陈旧数据,整树覆盖写回 = 抹掉云端真数据。
+    if (this.treeLoadFailed()) {
+      this.treeDirty.set(true);
       return;
     }
     this.saveInFlight = true;
     this.saveQueued = false;
-    this.practiceApi.saveMaterials(AiPracticeComponent.toPayload(this.nodes())).subscribe({
+    this.saveQueuedForce = false;
+    this.practiceApi.saveMaterials(AiPracticeComponent.toPayload(this.nodes()), force).subscribe({
       next: () => {
         this.treeError.set('');
         // ★ 第二十七轮:自动保存同样要回读 —— 否则拖拽/新建之后
@@ -1120,7 +1171,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.saveInFlight = false;
     if (this.saveQueued) {
       this.saveQueued = false;
-      setTimeout(() => this.persistQuiet(), 0);
+      const f = this.saveQueuedForce;
+      this.saveQueuedForce = false;
+      setTimeout(() => this.persistQuiet(f), 0);
     }
   }
 
@@ -1130,9 +1183,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 在飞期间是否又有改动需要补发(串行化用)。 */
   private saveQueued = false;
 
+  /** ★ 第四十轮:补发时是否要带 force(用户显式删除触发的保存)。 */
+  private saveQueuedForce = false;
+
   onDelete(n: MaterialNode): void {
     // 素材删了,挂在它上面的录音也一并清掉
     this.recorder.removeByMaterial(n.id);
+    // ★★ 第四十轮:用户**显式删除**时给服务端带 force —— 允许越过
+    //   "防误删熔断"(大量删除是用户主动意图,不应被拦)。
     if (n.id === this.selectedId()) {
       this.selectedId.set(null);
       this.saved.set('');
@@ -1140,6 +1198,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       this.editing.set(false);
       this.activeTakeId.set(null);
     }
+    this.persistQuiet(true);
   }
 
   // ---------- 编辑 / 保存 / 取消 ----------

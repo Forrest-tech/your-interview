@@ -13,7 +13,10 @@ set -uo pipefail
 DB="${DB:-yourinterview}"
 PGUSER="${PGUSER:-postgres}"
 PGHOST="${PGHOST:-127.0.0.1}"
-PGPORT="${PGPORT:-5433}"
+# 本机 PostgreSQL 端口(与 .env 里 ConnectionStrings__* 一致,默认 5432)
+PGPORT="${PGPORT:-5432}"
+# 口令:优先环境变量;未给则回退到本机开发默认 200808(与 .env 的 ConnectionStrings 一致)
+PGPASSWORD="${PGPASSWORD:-200808}"
 
 # psql 可执行文件:Mac 上一般在 PATH 里;沙箱里需显式指定。
 PSQL_BIN="${PSQL_BIN:-psql}"
@@ -23,7 +26,7 @@ if [[ -z "${LD_LIBRARY_PATH:-}" && -d /tmp/pgdebs/extract/usr/lib/x86_64-linux-g
 fi
 
 q() {  # q <SQL>  —— 只读执行
-  PGPASSWORD="${PGPASSWORD:-}" "$PSQL_BIN" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$DB" -v ON_ERROR_STOP=0 -P pager=off -c "$1"
+  PGPASSWORD="$PGPASSWORD" "$PSQL_BIN" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$DB" -v ON_ERROR_STOP=0 -P pager=off -c "$1"
 }
 
 hr() { printf '%s\n' "────────────────────────────────────────────────────────────────────────"; }

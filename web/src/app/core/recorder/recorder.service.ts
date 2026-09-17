@@ -259,7 +259,9 @@ export class RecorderService {
     const materialId = rec.materialId;
 
     // ★ 第二十七轮(Forrest 报"录音后数据全丢"的根治点):
-    //   非 GUID 素材(本地种子 'f_intro_edu' 等)无法上传 —— 后端路由要求 GUID。
+    //   非 GUID 素材无法上传 —— 后端路由要求 GUID。
+    //   (第四十一轮起已无本地种子树,这里是纵深防御:新建节点在拿到
+    //    服务端 GUID 之前,仍可能是前端临时 id。)
     //   旧实现只 patch 一条 error 就 return → 录音**永不上传** → 只存内存 → 刷新即丢。
     //   现在:① 明确告知用户数据【尚未保存,刷新会丢】;② 把这条录音挂进
     //   "待重传队列",等素材树拿到真 GUID 后自动补传(见 flushPendingUploads)。
@@ -374,11 +376,10 @@ export class RecorderService {
   loadForMaterial(materialId: string | null): void {
     if (!materialId || this.loadedMaterials.has(materialId)) return;
 
-    // ⚠️ 2026-09-16:后端路由是 materials/{materialId:guid}/recordings,
-    //    只接受 GUID。而前端在"后端不可用"时会回退到本地种子树,
-    //    其 id 是 'f_intro_edu' 这类非 GUID 串 → 直接撞路由 → 404
-    //    (Forrest 报的"点播放录音 404"就是这条)。
-    //    这里做防御:非 GUID 一律不发请求(本地种子素材本来也没有服务端录音)。
+    // ⚠ 后端路由是 materials/{materialId:guid}/recordings,
+    //   只接受 GUID。新建的素材在回读拿到服务端 GUID 前,
+    //   前端可能持有临时 id → 直接撞路由 → 404。
+    //   这里做防御:非 GUID 一律不发请求。
     if (!RecorderService.isGuid(materialId)) return;
 
     this.loadedMaterials.add(materialId);

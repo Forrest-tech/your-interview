@@ -654,10 +654,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /**
    * ★★ 第四十轮:素材树"从服务端加载失败"标志。
-   * 为 true 时**禁止任何写回服务端的操作**(persistQuiet / saveTree / importSeed)。
+   * 为 true 时**禁止任何写回服务端的操作**(persistQuiet / saveTree)。
    * 原因:拉取失败时本地 nodes 可能为空或陈旧,把它整树覆盖写回 = 真丢数据。
    */
   readonly treeLoadFailed = signal(false);
+
+  /**
+   * ★★ 第四十一轮:数据库为空标志。
+   * true → 界面显示"数据库暂无素材,请新建"提示,绝不自行填内容。
+   */
+  readonly treeEmpty = signal(false);
 
   /**
    * 把素材树整体保存到后端（整树覆盖）。
@@ -684,7 +690,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         // ★ 第二十七轮(Bug2 真根因修复):
         //   后端 PUT /materials 只返回 { saved: N } ——
         //   它给**新建**的素材生成了 GUID,却**不回传**。
-        //   若不回读,前端 nodes 里永远是 'f_intro_edu' 这类种子 id,
+        //   若不回读,前端 nodes 里可能留下非 GUID 的临时 id,
         //   于是 submitPending 的 isGuid(materialId) 判定为 false →
         //   录音**静默不上传** → 只存内存 → 刷新即丢(Forrest 报的数据丢失)。
         //   修法:保存成功后立刻回读后端树,用真实 GUID 替换本地节点。
@@ -753,7 +759,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /**
    * 用旧的(可能已失效的)id 或名字,在新树里找回对应节点。
-   * 场景:保存前 selectedId='f_intro_edu',保存后端换成 GUID;
+   * 场景:保存前 selectedId 是一个已失效的 id,保存后端换成 GUID;
    *       旧 id 已不存在 → 退化为按"内容/名字"匹配。
    */
   private findByLegacyIdOrName(oldId: string): MaterialNode | null {
@@ -801,112 +807,56 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /**
    * 启动时从后端加载素材树。
    *
-   * 首次使用（后端返回空树）时：把前端原有的 4 个种子素材**一次性导入后端**，
-   * 这样老用户升级后不会发现素材全没了。导入后立刻回读确认真的落库了。
+   * ★★ 第四十一轮(Forrest 明确要求):
+   *   ——**数据库是素材树的唯一数据源**。
+   *   前端**不再有任何硬编码种子**(原来的 4 个种子 = 12 个节点已彻底删除),
+   *   也不再从 localStorage 导入旧树。
+   *   数据库为空时,就**空着**,并在界面给出明确提示文字,
+   *   绝不自行脑补内容、绝不写回任何东西。
    */
   private restoreTree(): void {
     this.treeLoading.set(true);
     this.practiceApi.getMaterials().subscribe({
       next: (dtos) => {
-        if (!dtos.length) {
-          // 后端是空库 → 把种子导入，而不是只在前端显示（否则永远存不下来）
-          this.importSeed();
-          return;
-        }
-        this.nodes.set(AiPracticeComponent.fromDto(dtos));
+        this.nodes.set(AiPracticeComponent.fromDto(dtos ?? []));
+        this.treeEmpty.set(dtos.length === 0);
         this.treeLoading.set(false);
         this.treeLoadFailed.set(false);
+        this.treeError.set('');
         this.afterTreeReady();
       },
       error: (e) => {
         // ★★ 第四十轮 数据安全修复(Forrest 报"数据全丢失、树回到初始状态"):
-        //   旧代码在**拉取失败**时把 nodes 设成 4 个硬编码种子。
-        //   一旦后端只是**短暂不可用**(重启、网络抖动、token 过期),
-        //   界面就显示成"初始状态",用户以为数据全丢了。
-        //   更危险的是:用户接着任一编辑 → persist 会把这份"种子树"
-        //   **整树覆盖写回数据库** → 真数据被种子顶掉 = 真的丢了。
-        //   现在:拉取失败时**绝不改动 nodes**,只报错 + 标未连接,
-        //   并**锁住所有写操作**(treeError 非空时 persist 直接拒绝)。
+        //   拉取失败时**绝不改动 nodes**,只报错 + 标未连接,并锁住写操作。
+        //   宁可页面空白,也绝不把猜测状态覆盖到服务端。
         this.treeError.set(this.errText(e));
         this.treeLoading.set(false);
         this.treeLoadFailed.set(true);
-        // 不设 nodes、不导入种子 —— 宁可页面空白,也绝不覆盖服务端真实数据。
+        this.treeEmpty.set(false);
+        this.nodes.set([]);
         this.afterTreeReady();
       }
     });
   }
 
-  /**
-   * 旧版前端素材树的 localStorage 键。
-   *
-   * 第十七轮把持久化从 localStorage 迁到 PostgreSQL 时，设计上写了
-   * 「把 localStorage 里的数据一次性导入」，但实际漏掉了读取这一步 ——
-   * 结果老用户升级后只要后端是空库，就只剩 4 个硬编码种子，
-   * 自己存的素材看起来「全没了」（数据其实还在浏览器里）。
-   * 这里补上：空库时优先用 localStorage 的旧数据，没有才退回种子。
-   */
-  private static readonly LEGACY_TREE_KEY = 'practice.materials.v1';
-
-  /** 读旧版 localStorage 素材树；损坏或不存在返回 null。 */
-  private readLegacyTree(): MaterialNode[] | null {
-    try {
-      const raw = localStorage.getItem(AiPracticeComponent.LEGACY_TREE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as MaterialNode[];
-      return Array.isArray(parsed) && parsed.length ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
+  // ★★ 第四十一轮:LEGACY_TREE_KEY / readLegacyTree / importSeed 已**全部删除**。
+  //   原因(Forrest 明确要求):数据库是唯一数据源。
+  //   · 不再从 localStorage 导入旧素材树(那也是“非数据库来源”的数据)。
+  //   · 不再向数据库写入任何硬编码种子。
+  //   空库就空着,界面给提示文字,由用户自己新建。
 
   /**
-   * 空库时导入素材，并回读确认落库。
-   *
-   * 优先导入旧版 localStorage 里的真实素材（老用户升级不丢数据）；
-   * 没有遗留数据时才用 4 个种子。
+   * ★★ 第四十一轮:重试加载素材树。
+   * 加载失败后用户点「重试」时调用 —— 清掉失败标志,重新走一次
+   * "从数据库读取" 的完整流程。
    */
-  private importSeed(): void {
-    // ★★ 第四十轮 数据安全:此方法会**写库**。只有在"确实成功连上服务端
-    //   且确认返回空树"时才允许执行。若处于加载失败状态,直接中止 ——
-    //   否则一次瞬时的 GET 失败就能用种子把用户真数据顶掉。
-    if (this.treeLoadFailed()) return;
-    // 双保险:再确认一次服务端真的是空的(避免把"错误响应当空树"误当真空库)。
-    const legacy = this.readLegacyTree();
-    const source = legacy ?? this.seed();
-    // 导入成功后清掉旧键，避免下次空库又被重复导入
-    const isLegacy = legacy !== null;
-    const payload = AiPracticeComponent.toPayload(source);
-    this.practiceApi.saveMaterials(payload).subscribe({
-      next: () => {
-        // 旧数据已成功落库 → 清掉 localStorage 遗留键（幂等，不必再导）
-        if (isLegacy) {
-          try { localStorage.removeItem(AiPracticeComponent.LEGACY_TREE_KEY); } catch { /* 忽略 */ }
-        }
-        // 回读：不信任"保存返回成功"，直接问后端要一遍真实数据
-        this.practiceApi.getMaterials().subscribe({
-          next: (dtos) => {
-            this.nodes.set(AiPracticeComponent.fromDto(dtos));
-            this.treeLoading.set(false);
-            this.afterTreeReady();
-          },
-          error: (e) => {
-            this.treeError.set(this.errText(e));
-            this.treeLoading.set(false);
-            this.afterTreeReady();
-          }
-        });
-      },
-      error: (e) => {
-        this.treeError.set(this.errText(e));
-        this.treeLoading.set(false);
-        this.nodes.set(this.seed());
-        this.afterTreeReady();
-      }
-    });
+  reloadTree(): void {
+    this.treeLoadFailed.set(false);
+    this.treeError.set('');
+    this.restoreTree();
   }
 
-  /** 素材树就绪后的收尾：恢复上次选中的素材。 */
-  private afterTreeReady(): void {
+  /** 素材树就绪后的收尾：恢复上次选中的素材。 */  private afterTreeReady(): void {
     // ★ 第三十九轮 数据安全兼底:树就绪后,把服务端全部录音拉一次,
     //   跟当前树的素材 id 对齐。即使某个录音因素材 id 变动而“掉队”,
     //   也能在此补回内存,不会“凭空消失”。
@@ -2425,82 +2375,5 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       }
     }
     return null;
-  }
-
-  private seed(): MaterialNode[] {
-    return [
-      {
-        id: 'f_intro', name: '自我介绍', folder: true, expanded: true,
-        children: [
-          {
-            id: 'f_intro_edu', name: '学历', folder: false,
-            content:
-              'I hold a Master of Science in Computational Science from Laurentian University, ' +
-              'completed in 2025, and a Bachelor of Engineering from Chengdu University of ' +
-              'Information Technology.'
-          },
-          {
-            id: 'f_intro_wp', name: '工签状态', folder: false,
-            content:
-              'I am currently authorized to work in Canada and my status is valid through 2027. ' +
-              'I do not require sponsorship for this role.'
-          },
-          {
-            id: 'f_intro_pitch', name: '一分钟自我介绍', folder: false,
-            content:
-              'Hi, I am Forrest. I am a senior full-stack engineer with over ten years of ' +
-              'experience building high-concurrency financial and logistics platforms with ' +
-              'C#/.NET and Angular.'
-          }
-        ]
-      },
-      {
-        id: 'f_company', name: '目前的公司介绍', folder: true, expanded: true,
-        children: [
-          {
-            id: 'f_company_now', name: '公司业务', folder: false,
-            content:
-              'LaughTale builds a logistics and customs clearance platform serving cross-border ' +
-              'freight forwarders in North America.'
-          },
-          {
-            id: 'f_company_duty', name: '我的工作职责', folder: false,
-            content:
-              'I own the backend services for shipment tracking and customs document workflows, ' +
-              'and I lead the Angular front-end for the operations console.'
-          }
-        ]
-      },
-      {
-        id: 'f_tech', name: '技术介绍', folder: true, expanded: false,
-        children: [
-          {
-            id: 'f_tech_dotnet', name: '.NET 高并发', folder: false,
-            content:
-              'I design RESTful services on .NET 8 following Clean Architecture, with EF Core for ' +
-              'data access and Redis for caching hot paths.'
-          },
-          {
-            id: 'f_tech_arch', name: '架构演进', folder: false,
-            content:
-              'I have migrated a monolithic scheduling service into bounded contexts behind an ' +
-              'API gateway using the strangler-fig pattern.'
-          }
-        ]
-      },
-      {
-        id: 'f_bq', name: '常见追问', folder: true, expanded: false,
-        children: [
-          {
-            id: 'f_bq_why', name: '为什么换工作', folder: false,
-            content: 'I am looking for a team where I can own architecture decisions end to end.'
-          },
-          {
-            id: 'f_bq_gap', name: '职业空档说明', folder: false,
-            content: 'I used the period to complete my master degree in Canada.'
-          }
-        ]
-      }
-    ];
   }
 }

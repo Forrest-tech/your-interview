@@ -58,15 +58,24 @@
       </div>
 
       <div class="tree-body">
-        <app-material-tree
-          [nodes]="nodes()"
-          [selectedId]="selectedId()"
-          [title]="t('practice.materials')"
-          [emptyHint]="t('practice.emptyHint')"
-          (nodeSelect)="onSelect($event)"
-          (nodeChange)="onTreeChange($event)"
-          (nodeDelete)="onDelete($event)">
-        </app-material-tree>
+        @if (treeLoading()) {
+          <p class="tree-status">{{ t('practice.treeLoading') }}</p>
+        } @else if (treeLoadFailed()) {
+          <div class="tree-status is-error">
+            <p>{{ t('practice.treeUnavailable') }}</p>
+            <button mat-stroked-button (click)="reloadTree()">{{ t('practice.retryLoad') }}</button>
+          </div>
+        } @else {
+          <app-material-tree
+            [nodes]="nodes()"
+            [selectedId]="selectedId()"
+            [title]="t('practice.materials')"
+            [emptyHint]="t('practice.emptyHint')"
+            (nodeSelect)="onSelect($event)"
+            (nodeChange)="onTreeChange($event)"
+            (nodeDelete)="onDelete($event)">
+          </app-material-tree>
+        }
       </div>
     }
   </aside>

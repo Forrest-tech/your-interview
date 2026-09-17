@@ -145,6 +145,24 @@
   overflow-y: auto;
 }
 
+/* ★ 第四十一轮:数据库加载中 / 加载失败的状态提示。
+   加载失败时**只显示提示 + 重试**,绝不展示可编辑树 ——
+   因为本地树是空的,任何编辑都可能覆盖数据库真数据。 */
+.tree-status {
+  margin: 16px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.6);
+
+  &.is-error {
+    color: #b3261e;
+
+    button {
+      margin-top: 10px;
+    }
+  }
+}
+
 /* 折叠态侧栏头部已随 @if 整体不渲染(按钮移到导航栏了)*/
 
 /* 小屏侧栏打开时的遮罩。

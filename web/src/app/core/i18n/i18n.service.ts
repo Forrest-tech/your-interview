@@ -113,7 +113,10 @@ const DICT: Record<string, Record<Lang, string>> = {
   // ---------- AI 面试练习 ----------
   'nav.practice': { zh: 'AI 面试练习', en: 'AI Practice', fr: 'Pratique IA' },
   'practice.materials': { zh: '面试素材', en: 'Materials', fr: 'Documents' },
-  'practice.emptyHint': { zh: '还没有素材。用上方按钮新建文件夹与文件,例如在「自我介绍」下放学历、工签状态。', en: 'No materials yet. Use the buttons above to create folders and files, for example education and work permit under Self Introduction.', fr: 'Aucun document. Utilisez les boutons ci-dessus pour créer dossiers et fichiers.' },
+  'practice.emptyHint': { zh: '数据库里还没有素材。点上方按钮新建文件夹或文件，内容会直接存进数据库。', en: 'No materials in the database yet. Use the buttons above to create a folder or file; content is saved directly to the database.', fr: "Aucun document en base de données. Utilisez les boutons ci-dessus pour créer un dossier ou un fichier ; le contenu est enregistré directement dans la base." },
+  'practice.treeLoading': { zh: '正在从数据库加载素材…', en: 'Loading materials from the database…', fr: 'Chargement des documents depuis la base…' },
+  'practice.treeUnavailable': { zh: '无法连接服务端，素材未加载。为避免覆盖数据库里的真实数据，本次已禁止写入。请点击重试。', en: 'Cannot reach the server, materials were not loaded. To avoid overwriting real data in the database, writing is disabled. Please retry.', fr: "Serveur injoignable, documents non chargés. Pour éviter d'écraser les données réelles, l'écriture est désactivée. Veuillez réessayer." },
+  'practice.retryLoad': { zh: '重试', en: 'Retry', fr: 'Réessayer' },
   'practice.noSelection': { zh: '未选择素材', en: 'No material selected', fr: 'Aucun document sélectionné' },
   'practice.pickHint': { zh: '从左侧选一条素材,或自己新建文件夹与文件。', en: 'Pick a material on the left, or create your own folders and files.', fr: 'Choisissez un document à gauche, ou créez vos propres dossiers et fichiers.' },
   'practice.placeholder': { zh: '在这里写你的面试稿……', en: 'Write your interview script here...', fr: 'Rédigez votre script d entretien ici...' },

@@ -23,11 +23,43 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
-// ---------- 健康检查:网关同时盯着所有下游 ----------
+// ---------- 健康检查:网关盯着**已启用**的下游 ----------
+//
+// 为什么不是"盯着所有下游"(2026-09-15 踩坑):
+//   本地调试时只起部分服务(例如只起 identity + assessment),
+//   但 Clusters 里还留着 jobs/interviews/knowledge/analytics —— 它们没在跑,
+//   探活必然失败 ⇒ 整体 Unhealthy ⇒ /health/live 恒返 503。
+//   后果很隐蔽:网关自己其实完全健康,调用链也没问题,但任何依赖
+//   /health/live 的东西(启动脚本、编排健康检查)都会误判它"没起来"。
+//
+// 解法:配置项 ReverseProxy:HealthChecks:EnabledClusters 显式列出要探的集群。
+//   不配 = 保持旧行为(全探),所以全容器化场景不受影响;
+//   混合调试时在 compose/.env 里填 identity,assessment 即可。
 var health = builder.Services.AddHealthChecks();
-var clusterUrls = builder.Configuration
+var allClusters = builder.Configuration
     .GetSection("ReverseProxy:Clusters")
     .GetChildren()
+    .ToList();
+
+// 两种写法都支持,推荐逗号分隔(一个键、零索引歧义):
+//   ReverseProxy:HealthChecks:EnabledClusters = "identity,assessment"
+// 也兼容 JSON 数组写法 [ "identity", "assessment" ]。
+var enabledClustersRaw = builder.Configuration["ReverseProxy:HealthChecks:EnabledClusters"];
+var enabledClusters = string.IsNullOrWhiteSpace(enabledClustersRaw)
+    ? builder.Configuration
+        .GetSection("ReverseProxy:HealthChecks:EnabledClusters")
+        .Get<string[]>()
+    : enabledClustersRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+var enabledSet = enabledClusters?
+    .Where(n => !string.IsNullOrWhiteSpace(n))
+    .Select(n => n.Trim())
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+var clustersToProbe = enabledSet is { Count: > 0 }
+    ? allClusters.Where(c => enabledSet.Contains(c.Key))
+    : allClusters;
+
+var clusterUrls = clustersToProbe
     .SelectMany(c => c.GetSection("Destinations").GetChildren())
     .Select(d => d["Address"])
     .Where(a => !string.IsNullOrWhiteSpace(a))
@@ -41,6 +73,9 @@ foreach (var url in clusterUrls)
     var probe = url.TrimEnd('/') + "/health/live";
     health.AddUrlGroup(new Uri(probe), name: new Uri(url).Host + ":" + new Uri(url).Port);
 }
+
+Log.Information("网关探活下游 {Count} 个: {Urls}", clusterUrls.Count,
+    clusterUrls.Count == 0 ? "(无)" : string.Join(", ", clusterUrls));
 
 // ---------- CORS:前端 SPA 与网关不同源 ----------
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()

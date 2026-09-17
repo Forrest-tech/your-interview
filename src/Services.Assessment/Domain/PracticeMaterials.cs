@@ -234,6 +234,110 @@ public sealed class PracticeRecordingScore
 }
 
 /// <summary>
+/// 一次示范朗读的音频缓存(OFFLINE — 2026-09-16 第三十一轮)。
+///
+/// 解决什么(Forrest 需求第 3 条):
+///   先前每次点「示范朗读」都要**现调 Azure TTS 合成**,同一段文本读第二遍
+///   也照样再花一次额度。而示范朗读的文本极少变 —— 缓存命中率极高。
+///   所以:文本 + 音色 + 倍速一致时,直接回放上次合成的 MP3,零 Azure 调用。
+///
+/// ⚠️ 与 PracticeRecording 的区别 —— 两者绝不能混:
+///   · PracticeRecording        = **用户自己的录音**(麦克风采的语音);
+///   · PracticeTtsCache         = **机器合成的示范音**(Azure 神经语音吐的 MP3)。
+///   它们都落磁盘,但归属、生命周期、业务含义完全不同,所以分成两张表两个目录。
+///
+/// 缓存键 = SHA-256(文本 + 音色 + 倍速 + 语言)。
+///   为什么把音色与倍速也放进键里:换了音色/语速,出来的是**另一段音频**,
+///   拿旧缓存回放就是骗人。宁可多合成一次,也不能播错版本。
+/// </summary>
+public sealed class PracticeTtsCache
+{
+    private PracticeTtsCache() { }
+
+    public PracticeTtsCache(Guid userId, string cacheKey, string storagePath,
+        string contentType, long sizeBytes, string textHash, string voice, double speed,
+        string language)
+    {
+        if (string.IsNullOrWhiteSpace(cacheKey))
+            throw new ArgumentException("缓存键不能为空", nameof(cacheKey));
+        if (string.IsNullOrWhiteSpace(storagePath))
+            throw new ArgumentException("存储路径不能为空", nameof(storagePath));
+
+        UserId = userId;
+        CacheKey = cacheKey;
+        StoragePath = storagePath;
+        ContentType = contentType;
+        SizeBytes = sizeBytes;
+        TextHash = textHash;
+        Voice = voice;
+        Speed = speed;
+        Language = language;
+        CreatedAt = DateTimeOffset.UtcNow;
+        LastUsedAt = DateTimeOffset.UtcNow;
+        HitCount = 0;
+    }
+
+    /// <summary>合成这份音频的用户 —— 缓存也按用户隔离(不同用户用的 key 可能不同)。</summary>
+    public Guid UserId { get; private set; }
+
+    /// <summary>缓存键(= SHA-256 十六进制,文本+音色+倍速+语言的指纹)。也是主键。</summary>
+    public string CacheKey { get; private set; } = string.Empty;
+
+    /// <summary>MP3 相对路径(相对 Storage:RootDirectory),与 IAudioStore 同一套约定。</summary>
+    public string StoragePath { get; private set; } = string.Empty;
+
+    public string ContentType { get; private set; } = "audio/mpeg";
+    public long SizeBytes { get; private set; }
+
+    /// <summary>文本本身的 SHA-256(不含音色/倍速)—— 便于统计"同一段文本被合成过几次"。</summary>
+    public string TextHash { get; private set; } = string.Empty;
+    public string Voice { get; private set; } = string.Empty;
+    public double Speed { get; private set; } = 1.0;
+    public string Language { get; private set; } = "en-US";
+
+    public DateTimeOffset CreatedAt { get; private set; }
+    /// <summary>最后一次被回放的时间 —— 用于将来的 LRU 清理策略(先不做,只记账)。</summary>
+    public DateTimeOffset LastUsedAt { get; private set; }
+    /// <summary>被回放次数(纯统计,不改行为)。</summary>
+    public int HitCount { get; private set; }
+
+    /// <summary>记录一次命中(回放)。</summary>
+    public void MarkUsed()
+    {
+        LastUsedAt = DateTimeOffset.UtcNow;
+        HitCount++;
+    }
+
+    /// <summary>
+    /// 缓存键算法 —— 一处定义,读写两边共用,避免两边算法漂移导致永远不命中。
+    /// 归一化:文本去首尾空白与内部连续空白(换行/多空格都压成单空格),
+    /// 这样"文本末端多打一个回车"不会白白作废一份缓存。
+    /// </summary>
+    public static string ComputeKey(string text, string? voice, double speed, string language)
+    {
+        var normalized = System.Text.RegularExpressions.Regex
+            .Replace((text ?? string.Empty).Trim(), @"\s+", " ");
+        var v = string.IsNullOrWhiteSpace(voice) ? "(default)" : voice.Trim();
+        var sp = Math.Round(Math.Clamp(speed <= 0 ? 1.0 : speed, 0.5, 2.0), 4)
+            .ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+        var raw = normalized + "\u0000" + v + "\u0000" + sp + "\u0000" + (language ?? "en-US");
+        var bytes = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(raw));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    /// <summary>文本本身的指纹(不含音色/倍速),供统计使用。</summary>
+    public static string ComputeTextHash(string text)
+    {
+        var normalized = System.Text.RegularExpressions.Regex
+            .Replace((text ?? string.Empty).Trim(), @"\s+", " ");
+        var bytes = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(normalized));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+}
+
+/// <summary>
 /// Azure Speech 运行时设置(服务端托管)。
 ///
 /// ⚠️ 安全铁律:Key **永远不下发浏览器**。本表存的是加密/明文 key,

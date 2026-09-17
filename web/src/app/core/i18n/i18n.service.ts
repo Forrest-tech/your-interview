@@ -208,6 +208,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.azureFallbackNote': { zh: '后端合成接口未接入，选择 Azure 仍会回退到浏览器语音。', en: 'Backend synthesis is not wired up yet, so Azure falls back to browser speech.', fr: "La synthèse côté serveur n'est pas en place : Azure retombe sur la voix du navigateur." },
   'practice.needRecording': { zh: '请先录一段音频，再提交评分。', en: 'Record an audio take first, then submit for scoring.', fr: "Enregistrez d'abord un audio, puis soumettez pour évaluation." },
   'practice.needScoreRetry': { zh: '该录音已评分，重新作答后可再次提交。', en: 'This take is already scored. Re-record to submit again.', fr: "Cet enregistrement est déjà évalué. Réenregistrez pour soumettre à nouveau." },
+  'practice.audioWaveform': { zh: '音频波形', en: 'Audio Waveform', fr: 'Forme d onde audio' },
   'practice.recPlay': { zh: 'Play', en: 'Play', fr: 'Lire' },
   'practice.runAiScoring': { zh: '点击进行AI评分', en: 'Run AI Scoring', fr: 'Lancer l évaluation IA' },
   'practice.collapseReport': { zh: '收起报告', en: 'Collapse', fr: 'Réduire' },

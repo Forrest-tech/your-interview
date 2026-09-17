@@ -6,6 +6,40 @@
 
 @use '@angular/material' as mat;
 
+/* ----------------------------------------------------------------------------
+   Material Icons 字体(必须自托管,不能用 Google Fonts CDN)
+   坑(2026-09-15):index.html 里没引字体,<mat-icon> 的连字名会直接渲染成
+   原始文字 —— 界面上出现 "arrow_back 返回机经列表"、"repeat 第 1 轮"、侧栏
+   "in/as/m/sc" 这类乱码感文字。看着像布局坏了,其实是字体没加载。
+   自托管的好处:离线可用、无外网依赖、无闪字(FOUT)。
+   ---------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Material Icons';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/assets/fonts/material-icons.woff2') format('woff2');
+}
+
+.material-icons,
+mat-icon {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
 @include mat.core();
 
 /* 字体族抽成变量 —— 主题配置和 body 都要用同一份,硬编码两遍必然不同步 */

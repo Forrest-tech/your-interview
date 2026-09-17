@@ -477,11 +477,15 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     // ---------- 示范朗读(Azure 神经语音合成) ----------
 
     /// <summary>
-    /// 合成示范朗读音频。
+    /// 合成示范朗读音频(**带本地缓存** —— 2026-09-16 第三十一轮)。
     ///
-    /// Forrest 需求第 3 条:示范朗读可选择使用同一把 Azure key。
-    /// · 传 engine=browser → 前端自己用浏览器语音,不该调这里;
-    /// · 传 engine=azure   → 调这里拿 MP3 播。
+    /// Forrest 需求第 3 条:
+    ///   · 文本没改 → 直接回放上次合成的 MP3,**不再消耗 Azure TTS 额度**;
+    ///   · 文本(或音色/倍速)变了 → 重新合成,并把新音频存下来;
+    ///   · 需要强制重合成时传 force=true。
+    ///
+    /// 缓存键 = SHA-256(归一化文本 + 音色 + 倍速 + 语言),
+    /// 音频落文件系统,库里只存路径 —— 与录音同一套存储约定。
     ///
     /// ⚠️ 没配 key 时返回 503 并说明原因,前端据此**如实**回退到浏览器语音,
     ///    并告知用户"Azure 不可用",绝不静默冒充。
@@ -496,9 +500,25 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
         try
         {
-            var mp3 = await synthesizer.SynthesizeAsync(body.Text, body.Voice, body.Speed, Me, ct);
-            // 返回音频流而不是 base64 —— 前端直接 new Audio(objectURL) 播,省一次解码
-            return Results.File(mp3, "audio/mpeg", $"tts-{Guid.NewGuid():N}.mp3");
+            var r = await sender.Send(new GetOrCreateTtsCommand(
+                Me, body.Text, body.Voice, body.Speed, body.Language ?? "en-US", body.Force), ct);
+
+            if (!r.IsSuccess)
+            {
+                // "未配 key"是**环境尚未就绪**(503),不是上游拒绝凭据(502)
+                var code = r.Error?.Code ?? string.Empty;
+                if (code == "Tts.NotConfigured")
+                    return Results.Problem(title: "Azure 语音未配置",
+                        detail: r.Error?.Description, statusCode: StatusCodes.Status503ServiceUnavailable);
+                return r.ToProblemDetails();
+            }
+
+            var audio = r.Value;
+            // 返回音频流而不是 base64 —— 前端直接 new Audio(objectURL) 播,省一次解码。
+            // ⚠️ FromCache 通过响应头如实告知前端"这次是本地缓存,没花额度"。
+            Response.Headers["X-Tts-Cache"] = audio.FromCache ? "hit" : "miss";
+            Response.Headers["Access-Control-Expose-Headers"] = "X-Tts-Cache";
+            return Results.File(audio.Audio, audio.ContentType, $"tts-{Guid.NewGuid():N}.mp3");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("未配置"))
         {
@@ -586,6 +606,8 @@ public sealed record WordScoreIn(string Word, double Accuracy, string ErrorType)
 /// <summary>
 /// 示范朗读合成请求。
 /// voice 为空用默认音色(en-US-AriaNeural);speed 1.0 = 原速。
+/// force=true 时忽略本地缓存,强制重新合成(会消耗额度)。
 /// </summary>
-public sealed record TtsBody(string Text, string? Voice, double? Speed);
+public sealed record TtsBody(string Text, string? Voice, double? Speed, bool Force = false,
+    string? Language = null);
 

@@ -7,12 +7,12 @@
       </p>
     </div>
     <div class="head-actions">
-      <button mat-stroked-button (click)="load()">
-        <mat-icon>refresh</mat-icon> 刷新
+      <button mat-icon-button (click)="load()" matTooltip="刷新">
+        <mat-icon>refresh</mat-icon>
       </button>
       @if (auth.can('interviews.write')) {
-        <button mat-flat-button color="primary" (click)="openDialog()">
-          <mat-icon>add</mat-icon> 新建条目
+        <button mat-mini-fab color="primary" (click)="openDialog()" matTooltip="新建条目">
+          <mat-icon>add</mat-icon>
         </button>
       }
     </div>

@@ -36,6 +36,32 @@ builder.Services.AddMediatR(cfg =>
 // ---------- 当前用户(练习是纯私有数据,按 UserId 隔离) ----------
 builder.Services.AddCurrentUser();
 
+// ---------- Azure 发音评估(服务端持 key,浏览器只上传音频) ----------
+builder.Services.AddHttpClient("azure-speech", c =>
+{
+    c.Timeout = TimeSpan.FromMinutes(5);
+    c.DefaultRequestVersion = System.Net.HttpVersion.Version11;
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+    ConnectTimeout = TimeSpan.FromSeconds(30),
+});
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Application.PronunciationAssessor>();
+
+// ---------- 录音存储(2026-09-15 第十七轮) ----------
+// 音频落文件系统,元数据落库 —— 见 IAudioStore 注释里的取舍说明。
+// 换对象存储只需换这一个注册。
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Storage.IAudioStore,
+    YourInterview.Services.Assessment.Infrastructure.Storage.LocalAudioStore>();
+
+// 语音密钥解析(数据库 > 环境变量 > appsettings)。
+// 单例评估器靠它读 Scoped 的 DbContext —— 见 ISpeechKeyProvider 注释。
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Storage.ISpeechKeyProvider,
+    YourInterview.Services.Assessment.Infrastructure.Storage.SpeechKeyProvider>();
+
+// Azure 神经语音合成(示范朗读走 Azure 时用;key 与评分共用同一份)
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Application.SpeechSynthesizer>();
+
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 
 // ---------- 鉴权 ----------

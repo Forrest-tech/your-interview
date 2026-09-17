@@ -370,20 +370,6 @@
             }
           </div>
 
-          <!-- ★ 第三十轮:录完后的静态波形 + 回放进度。
-               纯展示用(不可拖动定位),与上方胶囊同宽。
-               未录音(无 activeTake 且无 pendingTake)时不显示。 -->
-          @if (showWaveform()) {
-            <div class="wave-strip" [class.wave-live]="activePlaying() || previewingPending()">
-              <div class="ws-bars" [matTooltip]="t('practice.recPlay')">
-                @for (b of waveBars(); track $index) {
-                  <span class="ws-bar"
-                        [style.height.%]="b"
-                        [class.played]="wavePlayed($index)"></span>
-                }
-              </div>
-            </div>
-          }
         </div>
         </div><!-- /.practice-box-border -->
 
@@ -551,6 +537,28 @@
           @if (activeTake()?.score; as sc) {
             @if (reportOpen()) {
               <div class="result-wrap">
+
+                <!-- ★ 第三十一轮(Forrest 指定):音频波形移入评分报告内部。
+                     位置 = 总分胶囊之后、Recognition 之前。
+                     数据源就是本报告的这条录音(activeTake 的 id),
+                     与录音条下方那块是同一份 waveBars/waveCache,零重复解码。 -->
+                @if (showWaveform()) {
+                  <section class="res-block">
+                    <div class="res-head">
+                      <h3>{{ t('practice.audioWaveform') }}</h3>
+                    </div>
+                    <div class="wave-strip"
+                         [class.wave-live]="activePlaying() || previewingPending()">
+                      <div class="ws-bars" [matTooltip]="t('practice.recPlay')">
+                        @for (b of waveBars(); track $index) {
+                          <span class="ws-bar"
+                                [style.height.%]="b"
+                                [class.played]="wavePlayed($index)"></span>
+                        }
+                      </div>
+                    </div>
+                  </section>
+                }
 
                 <!-- 总分 + 四维胶囊 -->
                 <section class="res-block">

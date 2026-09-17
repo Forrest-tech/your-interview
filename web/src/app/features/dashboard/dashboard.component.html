@@ -1,14 +1,14 @@
 <div class="page">
   <header class="page-head">
     <div>
-      <h2>总览</h2>
+      <h2>{{ t('dash.title') }}</h2>
       <p class="sub">
-        欢迎回来,{{ auth.displayName() }}。
+        {{ t('dash.welcome') }}, {{ auth.displayName() }}。
         @if (insight()) { <span class="insight">{{ insight() }}</span> }
       </p>
     </div>
-    <button mat-stroked-button (click)="load()">
-      <mat-icon>refresh</mat-icon> 刷新
+    <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
+      <mat-icon>refresh</mat-icon>
     </button>
   </header>
 
@@ -20,29 +20,29 @@
     <mat-card class="err-card">
       <mat-icon>error_outline</mat-icon>
       <div>
-        <strong>加载失败</strong>
+        <strong>{{ t('common.loadFailed') }}</strong>
         <p>{{ error() }}</p>
       </div>
     </mat-card>
   }
 
   <!-- 投递漏斗概览 -->
-  <section class="metrics">
+  <section id="overview" class="metrics">
     <mat-card class="metric">
       <div class="metric-val">{{ totalCount() }}</div>
-      <div class="metric-label">总投递</div>
+      <div class="metric-label">{{ t('dash.total') }}</div>
     </mat-card>
     <mat-card class="metric">
       <div class="metric-val">{{ activeCount() }}</div>
-      <div class="metric-label">进行中</div>
+      <div class="metric-label">{{ t('dash.inProgress') }}</div>
     </mat-card>
     <mat-card class="metric">
       <div class="metric-val">{{ interviewCount() }}</div>
-      <div class="metric-label">面试中</div>
+      <div class="metric-label">{{ t('dash.interviewing') }}</div>
     </mat-card>
     <mat-card class="metric highlight">
       <div class="metric-val">{{ offerCount() }}</div>
-      <div class="metric-label">Offer</div>
+      <div class="metric-label">{{ t('dash.offer') }}</div>
     </mat-card>
   </section>
 
@@ -50,17 +50,17 @@
     <!-- 六维能力 -->
     <mat-card class="panel">
       <mat-card-header>
-        <mat-card-title>能力雷达 · 最弱三项</mat-card-title>
-        <mat-card-subtitle>权重最高的是技术深度与结构,优先后两项</mat-card-subtitle>
+        <mat-card-title>{{ t('dash.radar') }}</mat-card-title>
+        <mat-card-subtitle>{{ t('dash.radarSub') }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         @if (weakest().length === 0) {
-          <p class="empty">还没有面试分析数据。去「实战机经」导入一场面试录音即可开始。</p>
+          <p class="empty">{{ t('dash.noAnalysis') }}</p>
         } @else {
           @for (r of weakest(); track r.dimension) {
             <div class="dim">
               <div class="dim-head">
-                <span class="dim-name">{{ r.nameZh }}</span>
+                <span class="dim-name">{{ dimLabel(r) }}</span>
                 <span class="dim-score" [class]="scoreClass(r.current)">
                   {{ r.current }}
                   @if (r.changeFromPrevious) {
@@ -72,33 +72,40 @@
                 </span>
               </div>
               <mat-progress-bar [value]="r.current" [class]="scoreClass(r.current)"></mat-progress-bar>
-              <div class="dim-foot">历史最佳 {{ r.best }}</div>
+              <div class="dim-foot">{{ t('dash.best') }} {{ r.best }}</div>
             </div>
           }
-          <a mat-button color="primary" routerLink="/analytics">查看完整分析 →</a>
+          <a mat-icon-button color="primary" routerLink="/analytics"
+             [matTooltip]="t('dash.viewFull')">
+            <mat-icon>arrow_forward</mat-icon>
+          </a>
         }
       </mat-card-content>
     </mat-card>
 
-    <!-- 快速入口 -->
+    <!-- 快速入口:纯图标,靠 tooltip 说明 -->
     <mat-card class="panel">
       <mat-card-header>
-        <mat-card-title>下一步</mat-card-title>
-        <mat-card-subtitle>按当前进度推荐的动作</mat-card-subtitle>
+        <mat-card-title>{{ t('dash.next') }}</mat-card-title>
+        <mat-card-subtitle>{{ t('dash.nextSub') }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="actions">
-          <a mat-flat-button color="primary" routerLink="/playbook">
-            <mat-icon>upload_file</mat-icon> 导入面试录音分析
+          <a mat-icon-button color="primary" routerLink="/playbook"
+             [matTooltip]="t('dash.importAudio')">
+            <mat-icon>upload_file</mat-icon>
           </a>
-          <a mat-stroked-button routerLink="/tech-stack">
-            <mat-icon>school</mat-icon> 复习技术栈
+          <a mat-icon-button routerLink="/tech-stack"
+             [matTooltip]="t('dash.reviewStack')">
+            <mat-icon>school</mat-icon>
           </a>
-          <a mat-stroked-button routerLink="/mock">
-            <mat-icon>record_voice_over</mat-icon> 开一场 AI 模拟
+          <a mat-icon-button routerLink="/mock"
+             [matTooltip]="t('dash.startMock')">
+            <mat-icon>record_voice_over</mat-icon>
           </a>
-          <a mat-stroked-button routerLink="/tracker">
-            <mat-icon>add_task</mat-icon> 记录新投递
+          <a mat-icon-button routerLink="/tracker"
+             [matTooltip]="t('dash.newApp')">
+            <mat-icon>add_task</mat-icon>
           </a>
         </div>
       </mat-card-content>

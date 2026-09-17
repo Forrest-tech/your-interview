@@ -2,75 +2,166 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* 内容超出时让 :host 自己滚,而不是把页脚顶出视口。
+     这样长页面滚动到底部时能看到页脚,短页面页脚也紧贴底部。 */
+  overflow-y: auto;
 }
 
+/* 顶栏与主体不参与收缩(页脚推开时它们不被压扁) */
+.topbar,
+.shell-body {
+  flex: 0 0 auto;
+}
+
+/* ---------------- 顶栏:横向主导航 ---------------- */
 .topbar {
   flex: 0 0 auto;
-  height: 56px;
-  padding: 0 12px;
-  gap: 4px;
+  height: 60px;
+  padding: 0 16px;
+  gap: 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
   z-index: 10;
 }
 
 .brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  margin-left: 8px;
+  margin-right: 12px;
   text-decoration: none;
   color: inherit;
+  white-space: nowrap;
 }
 
-.brand-mark {
-  font-size: 18px;
-  line-height: 1;
-  opacity: 0.85;
+.brand-logo {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  opacity: 0.95;
 }
 
 .brand-name {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.2px;
 }
 
-.brand-sub {
-  font-size: 12px;
-  opacity: 0.72;
+/* 横向主导航:模块全在顶部 */
+.mainnav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.88;
+  transition: background 130ms ease, opacity 130ms ease;
+  white-space: nowrap;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.14);
+  opacity: 1;
+}
+
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.22);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.nav-item mat-icon {
+  font-size: 19px;
+  width: 19px;
+  height: 19px;
 }
 
 .spacer { flex: 1 1 auto; }
 
+/* 账户区 */
+/* 账户:纯图标按钮,只显示头像圆标 */
 .account-btn {
+  padding: 0;
+  border-radius: 50%;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  transition: background 130ms ease;
+}
+
+.account-btn:hover .avatar {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* 菜单头部:头像 + 姓名 + 角色(角色文字只在菜单里出现) */
+.menu-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  text-transform: none;
+  gap: 10px;
+  padding: 12px 16px 10px;
+  min-width: 200px;
 }
 
-.account-name {
+.menu-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  background: rgba(63, 81, 181, 0.14);
+  color: #303f9f;
   font-size: 14px;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 700;
 }
 
-.caret { font-size: 18px; width: 18px; height: 18px; }
-
-.menu-head { padding: 10px 16px 8px; }
+.menu-id { min-width: 0; }
 .menu-name { font-weight: 600; font-size: 14px; }
-.menu-role { font-size: 12px; opacity: 0.65; margin-top: 2px; }
+.menu-role {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-top: 2px;
+  text-transform: capitalize;
+}
 
+/* ---------------- 主体:左侧页面级子导航 + 内容 ---------------- */
 .shell-body {
+  /* 主内容区吃掉剩余高度 → 页脚被顶到最底(任务书第一节要求 flex:1) */
   flex: 1 1 auto;
   display: flex;
   min-height: 0;
 }
 
 .sidebar {
-  flex: 0 0 210px;
-  width: 210px;
+  flex: 0 0 200px;
+  width: 200px;
   border-right: 1px solid rgba(0, 0, 0, 0.09);
   padding: 10px 8px;
   display: flex;
@@ -82,48 +173,61 @@
 }
 
 .sidebar.collapsed {
-  flex-basis: 60px;
-  width: 60px;
+  flex-basis: 56px;
+  width: 56px;
 }
 
-.nav-item {
+.side-toggle {
+  align-self: flex-end;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: #6b6f76;
+  border-radius: 6px;
+  padding: 4px;
+  margin-bottom: 6px;
+  display: inline-flex;
+}
+
+.side-toggle:hover { background: rgba(0, 0, 0, 0.06); }
+
+.side-item {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
+  border: 0;
+  background: transparent;
   border-radius: 8px;
-  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
   color: #33363d;
   font-size: 14px;
   line-height: 1.2;
   transition: background 120ms ease, color 120ms ease;
   white-space: nowrap;
+  width: 100%;
+  font-family: inherit;
 }
 
-.nav-item:hover { background: rgba(0, 0, 0, 0.05); }
+.side-item:hover { background: rgba(0, 0, 0, 0.05); }
 
-.nav-item.active {
+.side-item.active {
   background: rgba(63, 81, 181, 0.12);
   color: #303f9f;
   font-weight: 600;
 }
 
-.nav-item mat-icon {
+.side-item mat-icon {
   font-size: 20px;
   width: 20px;
   height: 20px;
   flex: 0 0 20px;
 }
 
-.nav-label { flex: 1 1 auto; }
+.side-label { flex: 1 1 auto; }
 
-.nav-en {
-  font-size: 11px;
-  opacity: 0.5;
-  letter-spacing: 0.3px;
-}
-
-.sidebar.collapsed .nav-item {
+.sidebar.collapsed .side-item {
   justify-content: center;
   padding: 10px 0;
 }
@@ -131,7 +235,145 @@
 .content {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;               /* 允许内部滚动区正确收缩 */
   overflow-y: auto;
+  /* ⚠️ 第十六轮:下内边距 48px 会额外把页面撑高,配合下面 .content:has()
+     的"零底部内边距"规则,让 /practice 这类满屏页不产生外层滚动。 */
   padding: 24px 28px 48px;
   background: #f7f7fa;
+}
+
+/* ------------------------------------------------------------
+   满屏页面(/practice 等)专用:不要外层滚动条,也不要底部留白。
+   /practice 自带内部滚动区,页脚紧贴视口底即可。
+   ------------------------------------------------------------ */
+.content:has(> app-ai-practice),
+.content:has(> .practice-page) {
+  padding: 0;
+  overflow: hidden;            /* 内部自己滚,外层不滚 */
+}
+
+/* ============================================================
+   全局页脚(2026-09-15 第七轮)
+   布局要点:
+     :host    = flex column + height:100vh + overflow-y:auto
+     .shell-body = flex:1 1 auto  → 页脚被顶到视口底部
+     .content    = overflow-y:auto → 长内容在内容区自己滚
+   三者配合 = 内容短时页脚贴底,内容长时页脚随滚动出现。
+   ============================================================ */
+.app-footer {
+  flex: 0 0 auto;
+  background-color: #111827;
+  color: #9ca3af;
+  /* Forrest 第十一轮:还是太高 → 再压。ynwac 实测约 90-110px 总高。 */
+  padding: 20px 24px;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;          /* 整体居中 */
+}
+
+/* 内容居中:max-width + auto 左右边距,内部全部居中对齐 */
+.f-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;      /* 改纵向堆叠 —— 居中布局更自然、更矮 */
+  align-items: center;
+  gap: 10px;
+}
+
+/* 品牌 */
+.f-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #f3f4f6;
+  font-size: 14px;
+  font-weight: 700;
+}
+.f-brand mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #6b7280;
+}
+
+/* 链接组 */
+.f-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.f-links a {
+  color: #d1d5db;
+  text-decoration: none;
+  transition: color .15s ease;
+}
+.f-links a:hover { color: #fff; }
+.f-dot { color: #4b5563; }
+
+/* 联系 + 地址:同一行居中的两个小块 */
+.f-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.f-contact {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #d1d5db;
+  text-decoration: none;
+  transition: color .15s ease;
+}
+.f-contact:hover { color: #fff; }
+.f-contact mat-icon,
+.f-addr mat-icon {
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  color: #6b7280;
+  flex: 0 0 auto;
+}
+.f-addr {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+}
+
+/* 法规声明 + 版权:居中一行(不再两端对齐) */
+.f-legal-row {
+  width: 100%;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.f-legal {
+  margin: 0;
+  color: #7b8494;
+  font-size: 12px;
+  max-width: 760px;
+}
+.f-copy {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .app-footer { padding: 18px 16px; }
+  .f-inner { gap: 8px; }
+  .f-meta { gap: 10px; }
 }

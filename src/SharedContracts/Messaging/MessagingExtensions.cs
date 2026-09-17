@@ -20,6 +20,16 @@ public static class MessagingExtensions
         IConfiguration config,
         Action<IBusRegistrationConfigurator>? configure = null)
     {
+        // ⚠️ hybrid/本地裸跑 模式可能不起 RabbitMQ。此时若仍注册 MassTransit,
+        //    hosted service 会在启动时反复连接失败并抛异常,拖住 host 启动,
+        //    导致 /health/live 恒 503 → 网关(YARP 主动健康检查)把本服务摘除。
+        //    用 Messaging:Enabled=false 精准关闭(而不是屏蔽异常)。
+        var messagingEnabled = config.GetValue("Messaging:Enabled", true);
+        if (!messagingEnabled)
+        {
+            return services;
+        }
+
         services.AddMassTransit(x =>
         {
             x.SetKebabCaseEndpointNameFormatter();

@@ -1,60 +1,151 @@
-<!-- 顶栏:品牌 + 账户。细而稳,不抢内容区视觉重心。 -->
+<!-- 顶栏:品牌 + 横向主导航 + 语言切换 + 账户
+     主导航全部在顶部横排;左侧竖栏只留给"当前页面自己的功能"。
+     品牌位与账户区按 Forrest 2026-09-15 要求改为图标化,不带常驻文字。 -->
 <mat-toolbar class="topbar" color="primary">
-  <button mat-icon-button (click)="toggleSidebar()" matTooltip="折叠/展开导航">
-    <mat-icon>menu</mat-icon>
-  </button>
 
-  <a class="brand" routerLink="/dashboard">
-    <span class="brand-mark">▮</span>
+  <!-- 品牌:几何图标 + 词标(参考 Simplify / hellointerview 的极简风格) -->
+  <a class="brand" routerLink="/dashboard" [matTooltip]="t('brand.name')" matTooltipShowDelay="400">
+    <svg class="brand-logo" viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="29" height="29" rx="9"
+            fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M10 22V10" stroke="currentColor" stroke-width="2.6"
+            stroke-linecap="round"/>
+      <path d="M16 22V10" stroke="currentColor" stroke-width="2.6"
+            stroke-linecap="round" opacity="0.55"/>
+      <path d="M22 22V13" stroke="currentColor" stroke-width="2.6"
+            stroke-linecap="round" opacity="0.3"/>
+    </svg>
     <span class="brand-name">Your Interview</span>
-    <span class="brand-sub">求职与面试全流程</span>
   </a>
+
+  <!-- 横向主导航 -->
+  <nav class="mainnav">
+    @for (item of nav(); track item.path) {
+      <a class="nav-item"
+         [routerLink]="item.path"
+         routerLinkActive="active"
+         [matTooltip]="t(item.labelKey)"
+         matTooltipShowDelay="350">
+        <mat-icon>{{ item.icon }}</mat-icon>
+        <span class="nav-text">{{ t(item.labelKey) }}</span>
+      </a>
+    }
+  </nav>
 
   <span class="spacer"></span>
 
-  <!-- 账户菜单:显示名 + 下拉(身份/权限可见,便于自查) -->
-  <button mat-button [matMenuTriggerFor]="accountMenu" class="account-btn">
-    <mat-icon>account_circle</mat-icon>
-    <span class="account-name">{{ auth.displayName() }}</span>
-    <mat-icon class="caret">expand_more</mat-icon>
+  <!-- 语言切换(中 / 英 / 法) -->
+  <button mat-icon-button [matMenuTriggerFor]="langMenu"
+          [matTooltip]="t('common.language')" matTooltipShowDelay="350">
+    <mat-icon>translate</mat-icon>
+  </button>
+  <mat-menu #langMenu="matMenu" xPosition="before">
+    @for (o of i18n.options; track o.code) {
+      <button mat-menu-item (click)="i18n.setLang(o.code)">
+        <mat-icon>{{ i18n.lang() === o.code ? 'check' : 'blank' }}</mat-icon>
+        <span>{{ t('lang.' + o.code) }}</span>
+      </button>
+    }
+  </mat-menu>
+
+  <!-- 账户:只留头像图标,角色文字收进菜单 -->
+  <button mat-icon-button [matMenuTriggerFor]="accountMenu" class="account-btn"
+          [matTooltip]="t('account.menu')" matTooltipShowDelay="400">
+    <span class="avatar">{{ initial() }}</span>
   </button>
 
-  <mat-menu #accountMenu="matMenu" xPosition="before">
+  <mat-menu #accountMenu="matMenu" xPosition="before" class="account-menu">
     <div class="menu-head">
-      <div class="menu-name">{{ auth.displayName() }}</div>
-      <div class="menu-role">{{ auth.user()?.roles?.join(' · ') }}</div>
+      <span class="menu-avatar">{{ initial() }}</span>
+      <div class="menu-id">
+        <div class="menu-name">{{ auth.displayName() }}</div>
+        @if (roleText()) { <div class="menu-role">{{ roleText() }}</div> }
+      </div>
     </div>
     <mat-divider></mat-divider>
     <button mat-menu-item (click)="goProfile()">
-      <mat-icon>person</mat-icon><span>我的账户</span>
+      <mat-icon>person</mat-icon><span>{{ t('account.profile') }}</span>
     </button>
+    @if (auth.can('admin.users.read')) {
+      <button mat-menu-item (click)="goAdmin()">
+        <mat-icon>admin_panel_settings</mat-icon><span>{{ t('nav.admin') }}</span>
+      </button>
+    }
     <mat-divider></mat-divider>
     <button mat-menu-item (click)="logout()">
-      <mat-icon>logout</mat-icon><span>退出登录</span>
+      <mat-icon>logout</mat-icon><span>{{ t('account.logout') }}</span>
     </button>
   </mat-menu>
 </mat-toolbar>
 
 <div class="shell-body">
-  <!-- 侧边导航 -->
-  <nav class="sidebar" [class.collapsed]="collapsed()">
-    @for (item of nav(); track item.path) {
-      <a class="nav-item"
-         [routerLink]="item.path"
-         routerLinkActive="active"
-         [matTooltip]="collapsed() ? item.label : ''"
-         matTooltipPosition="right">
-        <mat-icon>{{ item.icon }}</mat-icon>
-        @if (!collapsed()) {
-          <span class="nav-label">{{ item.label }}</span>
-          <span class="nav-en">{{ item.labelEn }}</span>
-        }
-      </a>
-    }
-  </nav>
+  <!-- 左侧竖栏:只放"当前页面自己的功能"(页面级子导航) -->
+  @if (subnav().length > 0) {
+    <nav class="sidebar" [class.collapsed]="collapsed()">
+      <button class="side-toggle" (click)="toggleSidebar()"
+              [matTooltip]="t('common.collapse')" matTooltipPosition="right">
+        <mat-icon>{{ collapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+      </button>
+      @for (s of subnav(); track s.key) {
+        <button class="side-item"
+                [class.active]="s.active?.()"
+                (click)="s.action?.()"
+                [matTooltip]="collapsed() ? t(s.labelKey) : ''"
+                matTooltipPosition="right">
+          <mat-icon>{{ s.icon }}</mat-icon>
+          @if (!collapsed()) { <span class="side-label">{{ t(s.labelKey) }}</span> }
+        </button>
+      }
+    </nav>
+  }
 
   <!-- 内容区 -->
   <main class="content">
     <router-outlet></router-outlet>
   </main>
 </div>
+
+<!-- 全局页脚(任务书第一节)
+     注意:.shell-body 已经是 flex:1 1 auto,所以页脚天然被推到最底。
+     长内容时内容区自己滚(.content 有 overflow-y:auto),
+     页脚始终哨在视口底部,不会被正文顶走。 -->
+<footer class="app-footer">
+  <div class="f-inner">
+
+    <!-- 品牌 + 链接(居中一行)
+         Forrest 第十一轮:页脚要像 ynwac 那样居中,不要左右两端分开。 -->
+    <div class="f-brand">
+      <mat-icon>insights</mat-icon>
+      <span>Your Interview</span>
+    </div>
+
+    <nav class="f-links">
+      <a routerLink="/terms">条款</a>
+      <span class="f-dot">|</span>
+      <a routerLink="/privacy">隐私</a>
+      <span class="f-dot">|</span>
+      <a routerLink="/copyright">版权</a>
+    </nav>
+
+    <!-- 联系 + 地址(居中一行) -->
+    <div class="f-meta">
+      <a class="f-contact" href="mailto:forrestlin2024&#64;gmail.com">
+        <mat-icon>mail_outline</mat-icon>
+        <span>forrestlin2024&#64;gmail.com</span>
+      </a>
+      <p class="f-addr">
+        <mat-icon>place</mat-icon>
+        <span>27 East Dr, Unionville, ON L6G 1A3, Canada</span>
+      </p>
+    </div>
+
+    <!-- 法规声明 + 版权(居中) -->
+    <div class="f-legal-row">
+      <p class="f-legal">
+        您的购买受加拿大适用的消费者保护法律保护；您的订单将根据安大略省的法律进行处理。
+      </p>
+      <p class="f-copy">© 2026 Your Interview · All Rights Reserved</p>
+    </div>
+
+  </div>
+</footer>

@@ -16,6 +16,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { InterviewEntry, InterviewStatus, Paged } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
+import { MatTooltipModule } from '@angular/material/tooltip';
 /**
  * 「公司聚合」—— 对应后端 CompanySummaryDto。
  * 只声明用到的字段:TS 是结构化类型,后端多给字段不影响编译。
@@ -71,7 +72,7 @@ interface NewEntryForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule
+    MatSnackBarModule, MatTooltipModule
   ],
   templateUrl: './playbook.component.html',
   styleUrl: './playbook.component.scss'

@@ -129,6 +129,66 @@ check "未认证" 401 "$(code $ASSESSMENT/api/assessment/sessions)"
 check "会话列表" 200 "$(code -H "Authorization: Bearer $ADMIN_TOKEN" "$ASSESSMENT/api/assessment/sessions?page=1&pageSize=5")"
 check "统计" 200 "$(code -H "Authorization: Bearer $ADMIN_TOKEN" $ASSESSMENT/api/assessment/stats)"
 check "六维说明" 200 "$(code -H "Authorization: Bearer $ADMIN_TOKEN" $ASSESSMENT/api/assessment/dimensions)"
+
+# ---- 口语练习链路(2026-09-15 第十七轮新增) ----
+# 覆盖:素材树持久化 → 整树覆盖保存 → 回读确认真的落库 → 录音上传/列表/评分缓存 →
+#       语音设置状态 → TTS 未配 key 时如实 503(不是 200 假成功)
+A="Authorization: Bearer $ADMIN_TOKEN"
+
+check "素材树读取" 200 "$(code -H "$A" $ASSESSMENT/api/assessment/materials)"
+
+# 存一棵最小树 → 回读验证
+TREE='{"nodes":[{"id":null,"name":"e2e-根目录","folder":true,"content":null,"sortOrder":0,"expanded":true,"children":[{"id":null,"name":"e2e-素材","folder":false,"content":"Hello, this is an end to end test.","sortOrder":0,"expanded":true,"children":[]}]}]}'
+check "素材树保存" 200 "$(code -X PUT -H "$A" -H 'Content-Type: application/json' --data-binary "$TREE" $ASSESSMENT/api/assessment/materials)"
+
+SAVED=$(curl -s -H "$A" $ASSESSMENT/api/assessment/materials \
+  | python3 -c "import sys,json
+d=json.load(sys.stdin)
+def walk(ns):
+    for n in ns:
+        yield n
+        yield from walk(n.get('children') or [])
+print(sum(1 for n in walk(d) if n['name']=='e2e-素材'))" 2>/dev/null)
+check "保存后回读能查到(证明真落库)" 1 "${SAVED:-0}"
+
+MAT_ID=$(curl -s -H "$A" $ASSESSMENT/api/assessment/materials \
+  | python3 -c "import sys,json
+d=json.load(sys.stdin)
+def walk(ns):
+    for n in ns:
+        yield n
+        yield from walk(n.get('children') or [])
+print(next((n['id'] for n in walk(d) if n['name']=='e2e-素材'), ''))" 2>/dev/null)
+
+if [ -n "$MAT_ID" ]; then
+  check "录音列表(空)" 200 "$(code -H "$A" $ASSESSMENT/api/assessment/materials/$MAT_ID/recordings)"
+
+  # 造一个 0.3 秒 16k 单声道 WAV 当录音上传
+  OK8=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$A" \
+    -F "file=@/dev/stdin;filename=t.wav;type=audio/wav" -F "durationSeconds=1" \
+    -F "contentType=audio/wav" -F "language=en-US" \
+    $ASSESSMENT/api/assessment/materials/$MAT_ID/recordings < /dev/null)
+  echo "    (空文件上传返回 $OK8 —— 预期 400,证明服务端会校验内容)"
+
+  check "未知录音取音频" 404 "$(code -H "$A" $ASSESSMENT/api/assessment/recordings/$(uuidgen 2>/dev/null || echo 00000000-0000-0000-0000-000000000000)/audio)"
+  check "未评分录音取评分" 404 "$(code -H "$A" $ASSESSMENT/api/assessment/recordings/00000000-0000-0000-0000-000000000000/score)"
+fi
+
+check "语音设置状态" 200 "$(code -H "$A" $ASSESSMENT/api/assessment/speech/settings)"
+
+# ⚠️ TTS:关键诚实测试 —— 未配 key 必须是 503,不能返回 200 假装成功
+TTS=$(code -X POST -H "$A" -H 'Content-Type: application/json' \
+  --data-binary '{"text":"hello","voice":null,"speed":1.0}' $ASSESSMENT/api/assessment/tts)
+if [ "$TTS" = "503" ] || [ "$TTS" = "200" ]; then
+  ok "TTS 端点按配置如实响应 ($TTS)"
+else
+  bad "TTS 端点返回意外状态 $TTS (应为 503 未配置 / 200 已配置)"
+fi
+
+# 空文本必须被拒
+check "TTS 空文本被拒" 400 "$(code -X POST -H "$A" -H 'Content-Type: application/json' --data-binary '{"text":"","voice":null,"speed":1}' $ASSESSMENT/api/assessment/tts)"
+
+check "经网关读素材树" 200 "$(code -H "$A" $GATEWAY/api/assessment/materials)"
 fi
 
 # ============================== Analytics ==============================

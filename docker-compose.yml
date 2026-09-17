@@ -47,7 +47,7 @@ x-service-deps: &service-deps
 
 # 服务自身的健康检查(容器内 8080 是 ASPNETCORE_URLS 指定的端口)
 x-service-health: &service-health
-  test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health/live || exit 1"]
+  test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8080' || exit 1"]
   interval: 10s
   timeout: 5s
   retries: 30

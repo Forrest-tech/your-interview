@@ -15,6 +15,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { MockSession, Paged } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
+import { MatTooltipModule } from '@angular/material/tooltip';
 /** 新建模拟表单。字段与后端 CreateSessionBody 对齐。 */
 interface NewSessionForm {
   title: string;
@@ -36,7 +37,7 @@ interface NewSessionForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule
+    MatSnackBarModule, MatTooltipModule
   ],
   templateUrl: './mock.component.html',
   styleUrl: './mock.component.scss'

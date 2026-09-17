@@ -11,6 +11,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { AuthService } from '../../core/auth/auth.service';
 import { AuthUser } from '../../core/models/api.models';
 
+import { MatTooltipModule } from '@angular/material/tooltip';
 /** 一个权限分组 —— 权限字符串本身形如 "admin.users.read",按前缀分组比平铺一长串更好读。 */
 interface PermissionGroup {
   prefix: string;
@@ -31,7 +32,7 @@ interface PermissionGroup {
   standalone: true,
   imports: [
     CommonModule, RouterLink, MatCardModule, MatIconModule,
-    MatButtonModule, MatChipsModule, MatProgressBarModule
+    MatButtonModule, MatChipsModule, MatProgressBarModule, MatTooltipModule
   ],
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.scss'

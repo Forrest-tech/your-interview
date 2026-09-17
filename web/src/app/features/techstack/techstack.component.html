@@ -5,11 +5,11 @@
       <p class="sub">每个概念九块拆解:从一句话直觉到面试话术</p>
     </div>
     <div class="head-actions">
-      <button mat-stroked-button (click)="reload()">
-        <mat-icon>refresh</mat-icon> 刷新
+      <button mat-icon-button (click)="reload()" matTooltip="刷新">
+        <mat-icon>refresh</mat-icon>
       </button>
-      <button mat-raised-button color="primary" (click)="openCreate()">
-        <mat-icon>add</mat-icon> 新增条目
+      <button mat-mini-fab color="primary" (click)="openCreate()" matTooltip="新增条目">
+        <mat-icon>add</mat-icon>
       </button>
     </div>
   </header>

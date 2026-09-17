@@ -5,11 +5,11 @@
       <p class="sub">按状态分列看清整个漏斗,卡住在哪一步一目了然</p>
     </div>
     <div class="head-actions">
-      <button mat-stroked-button (click)="reload()">
-        <mat-icon>refresh</mat-icon> 刷新
+      <button mat-icon-button (click)="reload()" matTooltip="刷新">
+        <mat-icon>refresh</mat-icon>
       </button>
-      <button mat-raised-button color="primary" (click)="openCreate()">
-        <mat-icon>add</mat-icon> 新建投递
+      <button mat-mini-fab color="primary" (click)="openCreate()" matTooltip="新建投递">
+        <mat-icon>add</mat-icon>
       </button>
     </div>
   </header>
@@ -99,10 +99,12 @@
       <mat-icon>inbox</mat-icon>
       <p>还没有投递记录。</p>
       @if (search() || statusFilter()) {
-        <button mat-stroked-button (click)="clearFilters()">清空筛选条件</button>
+        <button mat-icon-button (click)="clearFilters()" matTooltip="清空筛选条件">
+          <mat-icon>filter_alt_off</mat-icon>
+        </button>
       } @else {
-        <button mat-flat-button color="primary" (click)="openCreate()">
-          <mat-icon>add</mat-icon> 记录第一条投递
+        <button mat-mini-fab color="primary" (click)="openCreate()" matTooltip="记录第一条投递">
+          <mat-icon>add</mat-icon>
         </button>
       }
     </mat-card>
@@ -185,12 +187,14 @@
   <!-- 分页:数据量大时才有必要出现 -->
   @if (totalPages() > 1) {
     <div class="pager">
-      <button mat-stroked-button [disabled]="page() <= 1" (click)="goPage(page() - 1)">
-        <mat-icon>chevron_left</mat-icon> 上一页
+      <button mat-icon-button [disabled]="page() <= 1" (click)="goPage(page() - 1)"
+              matTooltip="上一页">
+        <mat-icon>chevron_left</mat-icon>
       </button>
       <span class="pager-info">第 {{ page() }} / {{ totalPages() }} 页 · 共 {{ total() }} 条</span>
-      <button mat-stroked-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)">
-        下一页 <mat-icon>chevron_right</mat-icon>
+      <button mat-icon-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)"
+              matTooltip="下一页">
+        <mat-icon>chevron_right</mat-icon>
       </button>
     </div>
   }

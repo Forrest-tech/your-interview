@@ -3345,12 +3345,17 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   transition: height 60ms linear, opacity 60ms linear;
 }
 
-/* ---------- ② 录完后的静态波形条 ---------- */
-.audio-stack .wave-strip {
+/* ---------- ② 录完后的静态波形(★ 第三十一轮起位于评分报告内部) ----------
+   位置变更:Forrest 指定"波形放在每个录音的评分里面显示,不要放在录音下面"。
+   现挂载点 = .result-wrap > .res-block > .wave-strip,
+   **不再是** .audio-stack 的直接子元素 —— 故选择器前缀也随之改为 .res-block,
+   否则旧前缀会因匹配不到元素而失效(第二十四轮血教训:改样式先确认选择器命中)。
+   同时把圆角收窄为 10px,与报告内其它 .res-block 卡片视觉一致。 */
+.result-wrap .res-block .wave-strip {
   width: 100%;
   height: 54px;
   padding: 6px 20px;
-  border-radius: 14px;
+  border-radius: 10px;
   border: 1px solid #d6f0e0;
   background: #f7fdf9;
   box-sizing: border-box;
@@ -3358,7 +3363,7 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   align-items: center;
   overflow: hidden;
 }
-.audio-stack .wave-strip .ws-bars {
+.result-wrap .res-block .wave-strip .ws-bars {
   flex: 1 1 auto;
   display: flex;
   align-items: center;      /* 波形以中线为轴对称 */
@@ -3367,7 +3372,7 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   height: 100%;
   cursor: default;
 }
-.audio-stack .wave-strip .ws-bar {
+.result-wrap .res-block .wave-strip .ws-bar {
   flex: 1 1 0;
   min-width: 1px;
   max-width: 4px;
@@ -3375,11 +3380,11 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   background: #a7d9be;      /* 未播放:浅绿 */
   transition: background 120ms linear, height 120ms ease-out;
 }
-.audio-stack .wave-strip .ws-bar.played {
+.result-wrap .res-block .wave-strip .ws-bar.played {
   background: #10b981;      /* 已播放:实绿 */
 }
 /* 播放中整条轻微提亮,提示"正在读这里" */
-.audio-stack .wave-strip.wave-live {
+.result-wrap .res-block .wave-strip.wave-live {
   border-color: #bbf7d0;
   background: #f0fdf6;
 }

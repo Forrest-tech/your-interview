@@ -45,6 +45,11 @@ export const routes: Routes = [
           import('./features/techstack/techstack.component').then((m) => m.TechStackComponent)
       },
       {
+        path: 'practice',
+        loadComponent: () =>
+          import('./features/ai-practice/ai-practice.component').then((m) => m.AiPracticeComponent)
+      },
+      {
         path: 'mock',
         loadComponent: () =>
           import('./features/mock/mock.component').then((m) => m.MockComponent)
@@ -69,6 +74,31 @@ export const routes: Routes = [
         path: 'profile',
         loadComponent: () =>
           import('./features/profile/profile.component').then((m) => m.ProfileComponent)
+      },
+      {
+        // AI / Azure 语音设置 —— /practice 的「TTS 引擎 → 前往配置 ↗」落点。
+        // 2026-09-15 第六轮新增:此前该路由不存在,点过去会 404。
+        path: 'account/ai-setting',
+        loadComponent: () =>
+          import('./features/ai-setting/ai-setting.component').then((m) => m.AiSettingComponent)
+      },
+      {
+        // 条款 / 隐私 / 版权 —— 页脚三个链接的落点。
+        // 2026-09-15 第七轮新增:此前三条都走 `**` 重定向回 dashboard(点不动)。
+        // 三个路径共用一个组件,靠 URL 分支内容。
+        path: 'terms',
+        loadComponent: () =>
+          import('./features/legal/legal.component').then((m) => m.LegalComponent)
+      },
+      {
+        path: 'privacy',
+        loadComponent: () =>
+          import('./features/legal/legal.component').then((m) => m.LegalComponent)
+      },
+      {
+        path: 'copyright',
+        loadComponent: () =>
+          import('./features/legal/legal.component').then((m) => m.LegalComponent)
       },
       {
         path: 'forbidden',

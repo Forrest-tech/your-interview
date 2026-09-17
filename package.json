@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "npm --prefix web start",
+    "start:host": "npm --prefix web run start:host",
+    "build": "npm --prefix web run build",
+    "watch": "npm --prefix web run watch",
+    "test": "npm --prefix web test",
+    "install:web": "npm --prefix web install"
   },
   "keywords": [],
   "author": "",

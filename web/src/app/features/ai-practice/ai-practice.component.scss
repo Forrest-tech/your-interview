@@ -181,7 +181,10 @@
      overflow:hidden 才能让子元素 calc(100vh - 64px) 的高度约束真正生效,
      否则子元素被撑开 → 滚动条永不出现(就是"下方内容被截断无法下滑"的根因)。 */
   overflow: hidden;
-  background: #f8fafc;
+  /* ★ 第三十一轮(Forrest):AI practice 页背景改为白色,与大卡片一致。
+     原来是 #f8fafc(浅灰)——与大卡片 #fff 形成色差,视觉上像"灰底白卡"。
+     现与大卡片同白,卡片改用细边 + 轻阴影与背景区分。 */
+  background: #fff;
 }
 
 .main-head {

@@ -75,6 +75,19 @@ export class ShellComponent {
   /** 左侧子导航:由当前路由决定,页面自己也可以注册。 */
   readonly subnav = computed<SubnavItem[]>(() => this.subnavSvc.resolve(this.url()));
 
+  /**
+   * ★ 第三十一轮(Forrest):/practice 页隐藏全局页脚。
+   *
+   * 为什么用路由判断而不是在组件里改 DOM:
+   *   页脚属于 shell 布局(App shell),页面组件无权也不应该去操控它。
+   *   由 shell 根据当前 URL 决定是否渲染,是唯一不会留下残余状态的正确做法
+   *   —— 组件里手动隐藏会在离开页面时忘记恢复(经典错误)。
+   *
+   * 用 startsWith 而不是 === :/practice 及其子路径(如 /practice?x=1 已由
+   * urlAfterRedirects 去掉 query)统一对待,避免日后加子路由时页脚又冒出来。
+   */
+  readonly showFooter = computed(() => !this.url().startsWith('/practice'));
+
   /** 头像占位字母。 */
   readonly initial = computed(() => {
     const n = this.auth.displayName() || '?';

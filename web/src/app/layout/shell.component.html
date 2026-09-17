@@ -106,9 +106,11 @@
 </div>
 
 <!-- 全局页脚(任务书第一节)
-     注意:.shell-body 已经是 flex:1 1 auto,所以页脚天然被推到最底。
-     长内容时内容区自己滚(.content 有 overflow-y:auto),
-     页脚始终哨在视口底部,不会被正文顶走。 -->
+     ★ 第三十一轮(Forrest):/practice 页隐藏页脚 —— AI 实战页应满屏,
+     底部不该被一大块深色页脚占位(见 shell.component.ts 的 showFooter)。
+     注意:.shell-body 已经是 flex:1 1 auto,隐藏页脚后内容区自然向上撑满,
+     无需另外调高度;且此处用 @if 整体不渲染,不会留下空白占位。 -->
+@if (showFooter()) {
 <footer class="app-footer">
   <div class="f-inner">
 
@@ -149,3 +151,4 @@
 
   </div>
 </footer>
+}

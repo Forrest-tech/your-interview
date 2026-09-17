@@ -335,10 +335,27 @@
 .node-row.selected .node-icon { color: #2563eb; }
 
 /* 一级标题 */
+/* ★ 第三十一轮(Forrest):树种一级标题字体与右侧正文区保持一致。
+   实测右侧正文(.text-box .read-text)用的是无衬线系统字体栈:
+   -apple-system / Segoe UI / Roboto / ... / PingFang SC / Microsoft YaHei, sans-serif。
+   原来树的 .node-name 没写 font-family → 落到浏览器默认字体,
+   与正文区肉眼可辨地不同(同一个词「学历」「自我介绍」两处长得不一样)。
+   处理:显式复制正文区那套字体栈,不靠 inherit
+   —— 树的宿主链太长,inherit 拿到的未必是正文区那套。 */
 .node-name {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+               'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 400;
+  line-height: 1.5;
   color: #1f2937;
+}
+
+/* 选中态仍要比未选中醒目,但**不靠改字重**
+   —— 字重一变又和正文拉开距离。改用颜色表达选中,字体形状保持一致。 */
+.node-row.selected .node-name {
+  color: #166534;
+  font-weight: 400;
 }
 
 /* 右侧折叠细箭头 */
@@ -375,14 +392,12 @@
   font-weight: 700;
 }
 
-/* 选中态:浅薄荷绿底 + 文字加粗高亮 */
+/* 选中态:浅薄荷绿底 + 文字高亮
+   ★ 第三十一轮:去掉 font-weight:700 —— 选中靠颜色.
+   字重变化会让树的字与正文区字形不一致(Forrest 反馈)。 */
 .node-row.selected {
   background: #f0fdf4;
   border-color: #d6f0e0;
-}
-.node-row.selected .node-name {
-  color: #166534;
-  font-weight: 700;
 }
 
 /* 二级缩进:用细灰对齐线代替虚线 */

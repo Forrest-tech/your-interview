@@ -18,8 +18,26 @@ PGPORT="${PGPORT:-5432}"
 # 口令:优先环境变量;未给则回退到本机开发默认 200808(与 .env 的 ConnectionStrings 一致)
 PGPASSWORD="${PGPASSWORD:-200808}"
 
-# psql 可执行文件:Mac 上一般在 PATH 里;沙箱里需显式指定。
-PSQL_BIN="${PSQL_BIN:-psql}"
+# psql 可执行文件:自动探测(Forrest 的 Mac 没把 psql 装进 PATH,
+# 但安装了 "PostgreSQL 13" 这个 Mac 应用,它自带 psql)。
+# 可用 PSQL_BIN=... 显式覆盖。
+_find_psql() {
+  if [[ -n "${PSQL_BIN:-}" ]]; then echo "$PSQL_BIN"; return; fi
+  if command -v psql >/dev/null 2>&1; then command -v psql; return; fi
+  # macOS "PostgreSQL N" 应用(在 /Applications 下,bin 里带 psql)
+  local c
+  for c in "/Applications/PostgreSQL "*/bin/psql \
+           /Library/PostgreSQL/*/bin/psql \
+           /Applications/Postgres.app/Contents/Versions/*/bin/psql \
+           /opt/homebrew/opt/postgresql*/bin/psql \
+           /usr/local/opt/postgresql*/bin/psql \
+           /tmp/pgdebs/extract/usr/lib/postgresql/*/bin/psql; do
+    if [[ -x "$c" ]]; then echo "$c"; return; fi
+  done
+  echo "psql"
+}
+PSQL_BIN="$(_find_psql)"
+
 # 沙箱内 libpq 不在系统路径 → 若存在解包目录则自动补 LD_LIBRARY_PATH。
 if [[ -z "${LD_LIBRARY_PATH:-}" && -d /tmp/pgdebs/extract/usr/lib/x86_64-linux-gnu ]]; then
   export LD_LIBRARY_PATH=/tmp/pgdebs/extract/usr/lib/x86_64-linux-gnu
@@ -39,7 +57,13 @@ hr
 
 echo
 echo "【1】素材树存储位置确认"
-q "select 1" >/dev/null 2>&1 || { echo "  ❌ 连不上数据库。请确认 PostgreSQL 在跑、端口/口令正确。"; exit 1; }
+q "select 1" >/dev/null 2>&1 || {
+  echo "  ❌ 连不上数据库。请确认 PostgreSQL 在跑、端口/口令正确。"
+  echo "     psql 实际使用: $PSQL_BIN"
+  echo "     可显式指定: PSQL_BIN='/Applications/PostgreSQL 13/bin/psql' bash tools/data-health.sh"
+  echo "     改口/端口: PGPASSWORD=你的口令 PGPORT=5432 bash tools/data-health.sh"
+  exit 1
+}
 echo "  · 素材树(文件夹/素材/正文) : PostgreSQL  assessment.practice_materials"
 echo "  · 录音元数据(路径/时长)   : PostgreSQL  assessment.practice_recordings"
 echo "  · 评分结果                 : PostgreSQL  assessment.practice_recording_scores"

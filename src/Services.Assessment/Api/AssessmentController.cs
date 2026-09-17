@@ -196,6 +196,13 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             var result = await assessor.AssessAsync(wav, body.ReferenceText ?? string.Empty,
                 body.Language ?? "en-US", ct, Me);
 
+            // ★ 第三十四轮(Forrest:"给我准确的消耗了多少"):
+            //   Azure 发音评估的真实计费单位是**音频时长**(按小时计价),不是 token。
+            //   这个秒数从我们自己装的 WAV 头精确算出(字节率 × data 长度),
+            //   不依赖 Azure 回报 —— 所以是精确值,不会因版本差异而缺失。
+            //   拿不到就返回 null,不编造。
+            var audioSeconds = PcmWav.DurationSeconds(wav);
+
             // 回传时把拿不到的维度如实置 null —— 不编造分数
             return Results.Ok(new
             {
@@ -211,6 +218,9 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                     accuracy = w.Accuracy,
                     errorType = w.ErrorType
                 }),
+                // 计费口径:本次送评的音频时长(秒)。精确值。
+                billedSeconds = audioSeconds,
+                billedBytes = wav.Length,
                 simulated = false
             });
         }
@@ -355,7 +365,11 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             userId, id, body.PronScore, body.AccuracyScore, body.FluencyScore,
             body.CompletenessScore, body.ProsodyScore, body.RecognizedText ?? string.Empty,
             body.Words is null ? null : System.Text.Json.JsonSerializer.Serialize(body.Words),
-            body.AzureRegion ?? "canadacentral", body.ReferenceText ?? string.Empty), ct);
+            body.AzureRegion ?? "canadacentral", body.ReferenceText ?? string.Empty,
+            // ★ 第三十四轮:计费口径由前端回传(它刚从 /pronunciation/assess
+            //   的响应里拿到 billedSeconds/billedBytes)——
+            //   这样读库路径也能显示"当时花了多少",信息不残缺。
+            body.BilledSeconds, body.BilledBytes), ct);
         return result.IsSuccess ? Results.Ok(result.Value) : result.ToProblemDetails();
     }
 
@@ -515,9 +529,26 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
             var audio = r.Value;
             // 返回音频流而不是 base64 —— 前端直接 new Audio(objectURL) 播,省一次解码。
-            // ⚠️ FromCache 通过响应头如实告知前端"这次是本地缓存,没花额度"。
+            //
+            // ★ 第三十四轮(Forrest:"给我准确的消耗了多少"):
+            //   额度信息通过响应头下发 —— 这是**精确可考**的数字,不是估算:
+            //     X-Tts-Cache       : hit | miss        来源(是否调了 Azure)
+            //     X-Tts-Chars       : 本次实际计费字符数(hit 时为 0)
+            //     X-Tts-Chars-Full  : 这段文本的完整字符数(即使命中也有值)
+            //     X-Tts-Voice       : 实际使用的音色(未指定则服务端默认)
+            //     X-Tts-Bytes       : 音频字节数(便于核对)
+            //   ⚠️ 别把它写成"token" —— Azure 语音不以 token 计费,
+            //      真实计费单位是合成字符数。报个假 token 数比不报更坏。
+            //   ⚠️ 新增的头**必须**加进 Access-Control-Expose-Headers,
+            //      否则前端跨域读不到且**不报错**(静默变 null)。
             Response.Headers["X-Tts-Cache"] = audio.FromCache ? "hit" : "miss";
-            Response.Headers["Access-Control-Expose-Headers"] = "X-Tts-Cache";
+            Response.Headers["X-Tts-Chars"] = audio.BilledChars.ToString();
+            Response.Headers["X-Tts-Chars-Full"] = GetOrCreateTtsCommandHandler
+                .BilledChars(body.Text).ToString();
+            Response.Headers["X-Tts-Voice"] = audio.Voice;
+            Response.Headers["X-Tts-Bytes"] = audio.AudioBytes.ToString();
+            Response.Headers["Access-Control-Expose-Headers"] =
+                "X-Tts-Cache, X-Tts-Chars, X-Tts-Chars-Full, X-Tts-Voice, X-Tts-Bytes";
             return Results.File(audio.Audio, audio.ContentType, $"tts-{Guid.NewGuid():N}.mp3");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("未配置"))
@@ -598,7 +629,11 @@ public sealed record RecordingScoreBody(
     string? RecognizedText,
     string? ReferenceText,
     string? AzureRegion,
-    List<WordScoreIn>? Words);
+    List<WordScoreIn>? Words,
+    // ★ 第三十四轮:评分时的音频时长(秒)/字节数 —— 由前端从
+    //   /pronunciation/assess 的响应回传,用于在读数路径重现"花了多少"。
+    double? BilledSeconds = null,
+    int? BilledBytes = null);
 
 /// <summary>逐词评分明细。</summary>
 public sealed record WordScoreIn(string Word, double Accuracy, string ErrorType);

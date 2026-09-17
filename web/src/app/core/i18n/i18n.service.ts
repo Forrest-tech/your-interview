@@ -216,6 +216,25 @@ const DICT: Record<string, Record<Lang, string>> = {
     zh: '消耗额度 · 本次调用 Azure 合成',
     en: 'Credits used · synthesized via Azure now',
     fr: 'Credits utilises · synthese Azure a l instant' },
+
+  // ★ 第三十四轮:带精确数字的版本 —— {n} = 本次实际计费字符数。
+  //   ⚠️ 用"字符"不用"token":Azure 语音 TTS 以合成字符数计费。
+  'practice.ttsCostFreshN': {
+    zh: '消耗额度 · 本次合成 {n} 字符',
+    en: 'Credits used · {n} characters synthesized',
+    fr: 'Credits utilises · {n} caracteres synthetises' },
+  'practice.ttsCostLocalN': {
+    zh: '未消耗额度(0 字符) · 播放本地存储的音频,本文本完整 {n} 字符',
+    en: 'No credits used (0 chars) · playing locally stored audio; full text is {n} characters',
+    fr: 'Aucun credit (0 caractere) · lecture du fichier local; texte complet: {n} caracteres' },
+  'practice.scoreCostFreshN': {
+    zh: '消耗额度 · 本次评估 {n} 秒音频',
+    en: 'Credits used · {n} seconds of audio assessed',
+    fr: 'Credits utilises · {n} secondes audio evaluees' },
+  'practice.scoreCostLocalN': {
+    zh: '未消耗额度 · 读取本地已存评分(当时评估 {n} 秒音频)',
+    en: 'No credits used · reading stored score (assessed {n} seconds of audio)',
+    fr: 'Aucun credit · score deja enregistre ({n} secondes audio evaluees)' },
   'practice.ttsCostFreshHint': {
     zh: '这段文本还没在本机合成过,本次调用 Azure 神经语音生成音频,会消耗额度。下次朗读同样内容会直接回放本地音频,不再消耗。',
     en: 'This text had no local audio yet, so Azure neural TTS generated it now and used credits. Replaying the same text later will serve the local file with no further usage.',

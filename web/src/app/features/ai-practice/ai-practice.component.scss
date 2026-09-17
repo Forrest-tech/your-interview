@@ -2549,16 +2549,15 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
-.card-head .ch-left { min-width: 0; }
-.card-head .ch-kicker {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: #94a3b8;
-  margin-bottom: 4px;
+.card-head .ch-left {
+  min-width: 0;
+  /* ★ 第三十五轮:导航文字改为单行 "文件夹 - 素材名",
+     这里给行内容器留足收缩空间,长名字允许换行不溢出。 */
+  flex: 0 1 auto;
 }
+
+/* ★ 第三十五轮(Forrest):导航文字 = 【父文件夹 - 素材名】,字体和颜色一致。
+   取消了旧的 ch-kicker(小号大写灰字),整行统一用一套样式。 */
 .card-head .ch-title {
   margin: 0;
   font-size: 22px;
@@ -2567,6 +2566,16 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   color: #0f172a;
   word-break: break-word;
 }
+.card-head .ch-title .ch-path {
+  /* 整行同一字体、同一颜色、同一字重 —— 分隔符不加特殊样式,
+     避免"文件夹一段浅一点、素材名一段深一点"的不一致观感。 */
+  font: inherit;
+  color: inherit;
+}
+
+/* ⚠️ 旧 .ch-kicker 已停用(第三十五轮)。
+   保留注释而非直接删除,便于日后回溯为何不再有这一行。
+   若确认无其它引用,可安全删除。 */
 .card-head .spacer { flex: 1 1 auto; }
 .card-head .ch-edit {
   flex: 0 0 auto;
@@ -3337,25 +3346,12 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   margin-right: 8px;
 }
 
-.hist-card .report-section .words-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
-  color: #334155;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-bottom: 10px;
-}
-.hist-card .report-section .words-toggle:hover { background: #f8fafc; }
-.hist-card .report-section .words-toggle mat-icon {
-  font-size: 17px; width: 17px; height: 17px; color: #64748b;
-}
+/* ★ 第三十五轮(Forrest):逐词分值区取消折叠后,不再有 .words-toggle 按钮。
+   标题改用与 Recognition / 其它 res-block 一致的 .res-head h3,
+   字体、字重、颜色完全一致 —— 不再是一个"按钮样式"的小立牌。 */
+/* ★ 第三十五轮(Forrest):逐词分值区取消折叠,内容常驻。
+   原 .words-toggle 已移除;标题使用统一的 .res-head h3(与 Recognition 一致)。
+   这里只保留网格本身的样式规则。 */
 
 /* ============================================================
    2026-09-16 第三十轮:音频波形

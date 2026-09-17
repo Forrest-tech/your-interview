@@ -29,7 +29,10 @@ public sealed record RecordingScoreDto(
     double? PronScore, double? AccuracyScore, double? FluencyScore,
     double? CompletenessScore, double? ProsodyScore,
     string Recognized, IReadOnlyList<WordScoreDto> Words,
-    string ReferenceText, DateTimeOffset AssessedAt);
+    string ReferenceText, DateTimeOffset AssessedAt,
+    // ★ 第三十四轮:计费口径(音频秒数),读库与新建都会带上。
+    //   拿不到为 null —— 不编造。
+    double? BilledSeconds = null, int? BilledBytes = null);
 
 public sealed record WordScoreDto(string Word, double Accuracy, string ErrorType);
 
@@ -318,7 +321,9 @@ public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudio
 public sealed record SaveRecordingScoreCommand(Guid UserId, Guid RecordingId,
     double? PronScore, double? AccuracyScore, double? FluencyScore,
     double? CompletenessScore, double? ProsodyScore,
-    string RecognizedText, string? WordsJson, string AzureRegion, string ReferenceText)
+    string RecognizedText, string? WordsJson, string AzureRegion, string ReferenceText,
+    // ★ 第三十四轮:评分计费口径(服务端精确算出的音频秒数)。
+    double? BilledSeconds = null, int? BilledBytes = null)
     : MediatR.IRequest<Result<RecordingScoreDto>>;
 
 public sealed class SaveRecordingScoreCommandHandler(AssessmentDbContext db)
@@ -334,6 +339,8 @@ public sealed class SaveRecordingScoreCommandHandler(AssessmentDbContext db)
         var score = new PracticeRecordingScore(r.RecordingId, r.PronScore, r.AccuracyScore,
             r.FluencyScore, r.CompletenessScore, r.ProsodyScore,
             r.RecognizedText ?? string.Empty, r.WordsJson, r.AzureRegion, r.ReferenceText ?? string.Empty);
+        // ★ 第三十四轮:把音频时长一并落库 —— 否则读库路径显示不出"花了多少"。
+        score.SetBilling(r.BilledSeconds, r.BilledBytes);
 
         if (rec.Score is null)
         {
@@ -357,7 +364,8 @@ public sealed class SaveRecordingScoreCommandHandler(AssessmentDbContext db)
             score.CompletenessScore, score.ProsodyScore,
             score.RecognizedText,
             ListRecordingsQueryHandler.DeserializeWords(score.WordsJson),
-            score.ReferenceText, score.AssessedAt));
+            score.ReferenceText, score.AssessedAt,
+            score.BilledSeconds, score.BilledBytes));
     }
 }
 
@@ -382,7 +390,8 @@ public sealed class GetRecordingScoreQueryHandler(AssessmentDbContext db)
             score.CompletenessScore, score.ProsodyScore,
             score.RecognizedText,
             ListRecordingsQueryHandler.DeserializeWords(score.WordsJson),
-            score.ReferenceText, score.AssessedAt));
+            score.ReferenceText, score.AssessedAt,
+            score.BilledSeconds, score.BilledBytes));
     }
 }
 
@@ -412,10 +421,29 @@ public sealed record GetOrCreateTtsCommand(Guid UserId, string Text, string? Voi
 
 /// <summary>
 /// 示范朗读音频结果。
+///
 /// <paramref name="FromCache"/> 是诚实的来源标记 —— 前端据此提示
 /// "已有本地缓存,未消耗额度",而不是含糊其辞。
+///
+/// ★ 第三十四轮(Forrest 要求"给我准确的消耗了多少"):
+///   新增 <paramref name="BilledChars"/> 与 <paramref name="Voice"/>。
+///
+///   ⚠️ **为什么不是"token 数":Azure 语音 TTS 根本不以 token 计费** ——
+///      它的真实计费单位是**合成字符数**(按每 1M 字符计价,
+///      神经语音与标准语音单价不同)。响应里也没有任何 token 字段。
+///      所以这里如实给出 ** billedChars = 本次送给 Azure 的字符数**,
+///      这是能 100% 精确算出、且与账单口径一致的数字;
+///      编一个假的"token 数"比不显示更坏。
+///   字符数按 PowerShell/.NET 的 UTF-16 代码单元计(与 Azure 口径一致),
+///   中文每个字算 1,emoji 算 2 —— 不做"看起来更少"的美化。
 /// </summary>
-public sealed record TtsAudioResult(byte[] Audio, string ContentType, bool FromCache);
+public sealed record TtsAudioResult(byte[] Audio, string ContentType, bool FromCache,
+    int BilledChars, string Voice = "", int AudioBytes = 0)
+{
+    /// <summary>兼容旧构造调用(第三十一轮的 3 参形式)。</summary>
+    public TtsAudioResult(byte[] audio, string contentType, bool fromCache)
+        : this(audio, contentType, fromCache, 0, string.Empty, audio.Length) { }
+}
 
 public sealed class GetOrCreateTtsCommandHandler(AssessmentDbContext db, SpeechSynthesizer synth,
     IAudioStore store, PronunciationAssessor assessor)
@@ -452,7 +480,12 @@ public sealed class GetOrCreateTtsCommandHandler(AssessmentDbContext db, SpeechS
                         hit.MarkUsed();
                         // 命中计数是统计信息,写失败不该让朗读报错 —— 尽力而为
                         try { await db.SaveChangesAsync(ct); } catch { /* 统计失败可忽略 */ }
-                        return Result.Success(new TtsAudioResult(ms.ToArray(), hit.ContentType, true));
+                        // ★ 缓存命中:真正应付费字符数 = 0(没调 Azure)。
+                        //   但也如实带上"这段文本本该花多少",让界面能说清楚
+                        //   "本次 0 字符 / 本可花费 N 字符 —— 因为命中了本地缓存"。
+                        var bytesHit = ms.ToArray();
+                        return Result.Success(new TtsAudioResult(bytesHit, hit.ContentType, true,
+                            0, hit.Voice, bytesHit.Length));
                     }
                 }
                 // 库里有记录但盘上文件没了(被清理/换机器)→ 清掉脏行,走重新合成
@@ -517,8 +550,21 @@ public sealed class GetOrCreateTtsCommandHandler(AssessmentDbContext db, SpeechS
             db.ChangeTracker.Clear();
         }
 
-        return Result.Success(new TtsAudioResult(mp3, "audio/mpeg", false));
+        return Result.Success(new TtsAudioResult(mp3, "audio/mpeg", false,
+            BilledChars(r.Text), voiceUsed, mp3.Length));
     }
+
+    /// <summary>
+    /// 本次送给 Azure 的**计费字符数**(= 文本的 UTF-16 代码单元数)。
+    ///
+    /// ⚠️ 为什么不是 r.Text.Length?
+    ///   其实 .NET 的 string.Length **就是** UTF-16 代码单元数,
+    ///   与 Azure 计费口径一致(BMP 内每字符 1,代理对如 emoji 算 2)。
+    ///   单独抽成方法是为了:① 把"这就是计费单位"这件事写在名字上;
+    ///   ② 日后若 Azure 改口径(如改按码点计)只改这一处。
+    /// 不做任何"看起来更少"的美化 —— 是多少就报多少。
+    /// </summary>
+    public static int BilledChars(string text) => text.Length;
 
     /// <summary>
     /// 从缓存键派生一个确定性 Guid(取 SHA-256 前 16 字节)。

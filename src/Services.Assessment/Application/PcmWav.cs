@@ -94,4 +94,26 @@ public static class PcmWav
         data.Length > 12
         && data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F'
         && data[8] == 'W' && data[9] == 'A' && data[10] == 'V' && data[11] == 'E';
+
+    /// <summary>
+    /// 从 WAV 头算出音频秒数。
+    ///
+    /// ★ 第三十四轮(Forrest:"给我准确的消耗了多少"):
+    ///   Azure 发音评估的**真实计费单位是音频时长**(按小时计价),
+    ///   不是 token。这个值可以从我们自己构造的 WAV 头 100% 精确算出 ——
+    ///   字节率(offset 28)与 data 块长度(offset 40)相除即可,无需调 Azure。
+    ///   所以它是**精确值**,不是估算。
+    ///
+    /// 解析失败(非标准头)返回 null —— 拿不到就如实为空,不编一个数。
+    /// </summary>
+    public static double? DurationSeconds(byte[] wav)
+    {
+        // 44 字节标准头:字节率 @28,data 长度 @40
+        if (wav.Length < 44 || !IsWav(wav)) return null;
+        var byteRate = BinaryPrimitives.ReadInt32LittleEndian(wav.AsSpan(28));
+        if (byteRate <= 0) return null;
+        var dataBytes = BinaryPrimitives.ReadInt32LittleEndian(wav.AsSpan(40));
+        if (dataBytes <= 0) return null;
+        return Math.Round((double)dataBytes / byteRate, 3);
+    }
 }

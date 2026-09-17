@@ -108,9 +108,16 @@
         <!-- ①-1 顶部标题栏:左 = 分类 + 题名(大号) / 右 = 编辑 ✏️ -->
         <header class="card-head">
           <div class="ch-left">
-            <!-- 第二十二轮:顶部路径改为【父文件夹名称】(不再是 QUESTION #n / 总题数) -->
-            <span class="ch-kicker">{{ parentFolderName() || t('practice.uncategorized') }}</span>
-            <h2 class="ch-title">{{ selectedNode()?.name || t('practice.noSelection') }}</h2>
+            <!-- ★ 第三十五轮(Forrest):导航文字改为【父文件夹 - 素材名】单行显示。
+                 原来分两行(ch-kicker 小号灰字 + ch-title 大号黑字),
+                 字体、字号、颜色都不一致 —— 现在合并为一行同款样式。 -->
+            <h2 class="ch-title">
+              @if (parentFolderName(); as folder) {
+                <span class="ch-path">{{ folder }} - {{ selectedNode()?.name || t('practice.noSelection') }}</span>
+              } @else {
+                <span class="ch-path">{{ selectedNode()?.name || t('practice.noSelection') }}</span>
+              }
+            </h2>
           </div>
 
           <span class="spacer"></span>
@@ -247,21 +254,23 @@
               <span class="tts-note" [title]="ttsNote()">{{ ttsNote() }}</span>
             }
 
-            <!-- ★ 第三十三轮(Forrest):示范朗读的额度消耗提示。
-                 有消耗 → 如实报"本次调用了 Azure,消耗额度";
-                 无消耗 → 明确说"这是本地存储的音频,未消耗额度"。
-                 两者都不掩盖 —— 用户有权知道什么在花钱。 -->
+            <!-- ★ 第三十三/三十四轮(Forrest):示范朗读的额度消耗提示 **+ 精确数字**。
+                 有消耗 → 报"本次调用了 Azure,消耗了 N 字符";
+                 无消耗 → 明确说"这是本地存储的音频,本次 0 字符"。
+                 ⚠️ 单位是**字符**不是 token —— Azure 语音 TTS 不以 token 计费。 -->
             @if (ttsCost() === 'fresh') {
               <span class="cost-chip fresh"
                     [title]="t('practice.ttsCostFreshHint')">
                 <mat-icon>cloud_upload</mat-icon>
-                <span>{{ t('practice.ttsCostFresh') }}</span>
+                <span>{{ t('practice.ttsCostFreshN')
+                          .replace('{n}', (ttsBilledChars() ?? 0).toString()) }}</span>
               </span>
             } @else if (ttsCost() === 'cache') {
               <span class="cost-chip local"
                     [title]="t('practice.ttsCostLocalHint')">
                 <mat-icon>sd_storage</mat-icon>
-                <span>{{ t('practice.ttsCostLocal') }}</span>
+                <span>{{ t('practice.ttsCostLocalN')
+                          .replace('{n}', (ttsFullChars() ?? 0).toString()) }}</span>
               </span>
             }
 
@@ -583,20 +592,23 @@
                   <div class="res-head">
                     <h3>{{ t('practice.scoreResults') }}</h3>
 
-                    <!-- ★ 第三十三轮(Forrest):评分额度消耗提示。
-                         有消耗 → 报"本次调用了 Azure,消耗额度";
-                         无消耗 → 报"读取本地点存评分,未消耗额度"。 -->
+                    <!-- ★ 第三十三/三十四轮(Forrest):评分额度消耗提示 **+ 精确数字**。
+                         有消耗 → 报"本次调用了 Azure,评估 N 秒音频";
+                         无消耗 → 报"读取本地点存评分,未消耗额度"。
+                         ⚠️ 单位是**音频秒数**不是 token —— 发音评估按时长计费。 -->
                     @if (scoreCost() === 'fresh') {
                       <span class="cost-chip fresh"
                             [title]="t('practice.scoreCostFreshHint')">
                         <mat-icon>cloud_upload</mat-icon>
-                        <span>{{ t('practice.scoreCostFresh') }}</span>
+                        <span>{{ t('practice.scoreCostFreshN')
+                                  .replace('{n}', scoreSecondsText()) }}</span>
                       </span>
                     } @else if (scoreCost() === 'cache') {
                       <span class="cost-chip local"
                             [title]="t('practice.scoreCostLocalHint')">
                         <mat-icon>sd_storage</mat-icon>
-                        <span>{{ t('practice.scoreCostLocal') }}</span>
+                        <span>{{ t('practice.scoreCostLocalN')
+                                  .replace('{n}', scoreSecondsText()) }}</span>
                       </span>
                     }
 
@@ -686,28 +698,30 @@
                   }
                 </section>
 
-                <!-- Word Scores:逐词分值网格 -->
+                <!-- Word Scores:逐词分值网格
+                     ★ 第三十五轮(Forrest):去掉折叠功能,一直展开。
+                       理由:这里只是纯文本展示,与 Recognition 同性质 ——
+                       没有任何理由要点一下才能看。折叠反而把最关键的
+                       逐词反馈藏起来,用户要额外点一次才能看到。
+                       现在改为常驻显示,不做任何 toggle。 -->
                 <section class="res-block">
-                  <button mat-button class="words-toggle" (click)="toggleWords('active')">
-                    <mat-icon>{{ isWordsOpen('active') ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    <span>{{ t('practice.wordScores') }}</span>
-                  </button>
+                  <div class="res-head">
+                    <h3>{{ t('practice.wordScores') }}</h3>
+                  </div>
 
-                  @if (isWordsOpen('active')) {
-                    <div class="word-grid">
-                      @for (w of sc.words; track $index) {
-                        <div class="wg-cell">
-                          <span class="wg-word">{{ w.word }}</span>
-                          <!-- 无词级数据就显示 "—",不显示误导性的 0.0 -->
-                          @if (hasWordScore(w)) {
-                            <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
-                          } @else {
-                            <span class="wg-score na">{{ t('common.na') }}</span>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
+                  <div class="word-grid">
+                    @for (w of sc.words; track $index) {
+                      <div class="wg-cell">
+                        <span class="wg-word">{{ w.word }}</span>
+                        <!-- 无词级数据就显示 "—",不显示误导性的 0.0 -->
+                        @if (hasWordScore(w)) {
+                          <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
+                        } @else {
+                          <span class="wg-score na">{{ t('common.na') }}</span>
+                        }
+                      </div>
+                    }
+                  </div>
                 </section>
               </div>
             }

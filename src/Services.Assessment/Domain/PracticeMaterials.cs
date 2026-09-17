@@ -228,6 +228,27 @@ public sealed class PracticeRecordingScore
     public string ReferenceText { get; private set; } = string.Empty;
     public DateTimeOffset AssessedAt { get; private set; }
 
+    /// <summary>
+    /// ★ 第三十四轮(Forrest:"给我准确的消耗了多少"):本次评分送评的音频秒数。
+    ///
+    /// ⚠️ Azure 发音评估按**音频时长**计费,不是 token。这个值由服务端
+    ///   从 WAV 头精确算出(字节率 × data 长度),可 100% 复现。
+    ///   落库是为了:再次打开评分报告(读库路径)也能显示同样的文案 ——
+    ///   否则"本地已存评分"那条会显示不出花了多少,信息就残缺了。
+    ///   拿不到为 null(不编造)。
+    /// </summary>
+    public double? BilledSeconds { get; private set; }
+
+    /// <summary>送评的 WAV 字节数(便于核对,非计费单位)。</summary>
+    public int? BilledBytes { get; private set; }
+
+    /// <summary>补充计费口径信息(重评分时由 SaveRecordingScoreCommand 传入)。</summary>
+    public void SetBilling(double? seconds, int? bytes)
+    {
+        BilledSeconds = seconds;
+        BilledBytes = bytes;
+    }
+
     /// <summary>缓存是否对本段参考文本仍然有效(文本没改就能复用,不用重调 Azure)。</summary>
     public bool IsValidFor(string referenceText) =>
         string.Equals(ReferenceText?.Trim(), referenceText?.Trim(), StringComparison.Ordinal);

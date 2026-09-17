@@ -49,6 +49,16 @@ export interface RecordingScore {
   words: { word: string; accuracy: number; errorType: string }[];
   /** 是否在模拟态(阶段一,未接后端)。界面需明示。 */
   simulated: boolean;
+  /**
+   * ★ 第三十四轮:本次评分的**真实计费量** —— 送评音频时长(秒)。
+   *
+   * ⚠️ Azure 发音评估按音频时长计费,不是 token。
+   *   这个值由服务端从 WAV 头精确算出(字节率 × data 长度)。
+   *   落库后即使刷新、重新打开也能显示。null = 未知,不显示数字。
+   */
+  billedSeconds?: number | null;
+  /** 送评的音频字节数(核对用,非计费单位)。 */
+  billedBytes?: number | null;
 }
 
 /**
@@ -442,7 +452,10 @@ export class RecorderService {
       prosodyScore: sc.prosodyScore,
       recognized: sc.recognized ?? '',
       words: sc.words ?? [],
-      simulated: false
+      simulated: false,
+      // ★ 第三十四轮:把库里的计费口径带上来 —— 刷新后也能显示花了多少
+      billedSeconds: sc.billedSeconds ?? null,
+      billedBytes: sc.billedBytes ?? null
     };
   }
 
@@ -613,6 +626,11 @@ export class RecorderService {
           fluencyScore: number | null; completenessScore: number | null;
           prosodyScore: number | null; recognized: string;
           words: { word: string; accuracy: number; errorType: string }[];
+          // ★ 第三十四轮:服务端精确算出的送评音频时长(秒)/字节数。
+          //   Azure 发音评估按音频时长计费 —— 这是真实计费口径,
+          //   不是 token。可能为 null(旧后端) → 界面不显示数字。
+          billedSeconds?: number | null;
+          billedBytes?: number | null;
         }>('/api/assessment/pronunciation/assess', {
           samples: samples.data,
           sampleRate: samples.rate,
@@ -621,6 +639,8 @@ export class RecorderService {
         })
       );
 
+      // ★ 第三十四轮:把计费口径也带上 —— 它跟着分数一起走,
+      //   落库后在"读本地已存评分"路径也能显示当时花了多少。
       const score: RecordingScore = {
         pronScore: Math.round(res.pronScore ?? res.accuracyScore ?? 0),
         accuracyScore: Math.round(res.accuracyScore ?? 0),
@@ -629,7 +649,9 @@ export class RecorderService {
         prosodyScore: res.prosodyScore,
         recognized: res.recognized ?? '',
         words: res.words ?? [],
-        simulated: false
+        simulated: false,
+        billedSeconds: res.billedSeconds ?? null,
+        billedBytes: res.billedBytes ?? null
       };
       this.patch(id, { grading: false, score });
 
@@ -795,7 +817,9 @@ export class RecorderService {
       prosodyScore: score.prosodyScore,
       recognized: score.recognized,
       words: score.words,
-      referenceText
+      referenceText,
+      billedSeconds: score.billedSeconds ?? null,
+      billedBytes: score.billedBytes ?? null
     }).subscribe({
       next: () => {
         // 落库成功 → 从待补队列移除
@@ -834,7 +858,9 @@ export class RecorderService {
       prosodyScore: sc.prosodyScore,
       recognized: sc.recognized,
       words: sc.words,
-      referenceText: item.referenceText
+      referenceText: item.referenceText,
+      billedSeconds: sc.billedSeconds ?? null,
+      billedBytes: sc.billedBytes ?? null
     }).subscribe({
       next: () => this.pendingScores.set(this.pendingScores().filter((x) => x.id !== localId)),
       error: (e) => this.persistError.set(

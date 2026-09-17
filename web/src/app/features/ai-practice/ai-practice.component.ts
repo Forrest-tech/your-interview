@@ -131,6 +131,17 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 例如:素材树里 自我介绍 / 学历  → 顶部显示「自我介绍」,大标题显示「学历」。
    * 找不到父文件夹(顶层文件)时回退为 null,模板层再用默认文案。
    */
+  /**
+   * 导航文字:【父文件夹 - 素材名】(★ 第三十五轮 Forrest 要求)。
+   *
+   * 原来是分两行、两种样式:
+   *   ch-kicker = 小号大写灰字(文件夹名)
+   *   ch-title  = 22px 黑体加粗(素材名)
+   * Forrest 要求改成一行 "自我介绍 - 工签状态",
+   * 且**字体和颜色一致** —— 不再一个大一个小、一灰一黑。
+   *
+   * 找不到父文件夹时只显示素材名(不留 "undefined -" 这种脏字符)。
+   */
   readonly parentFolderName = computed(() =>
     this.findParentFolderName(this.nodes(), this.selectedId(), null)
   );
@@ -528,6 +539,27 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly ttsCost = signal<'' | 'fresh' | 'cache'>('');
 
   /**
+   * ★ 第三十四轮(Forrest:"给我准确的消耗了多少"):本次示范朗读的精确计费量。
+   *
+   * ⚠️ 名字里不用 token —— Azure 语音 TTS **根本不以 token 计费**,
+   *   真实计费单位是**合成字符数**(神经语音按每 1M 字符计价)。
+   *   这里存的 billedChars 就是"本次送给 Azure 的字符数",
+   *   由服务端精确算出(UTF-16 代码单元数,与 Azure 口径一致)。
+   *   命中缓存时为 0。
+   *   null = 服务端未下发该头(旧后端)→ 界面不显示数字,不编造。
+   */
+  readonly ttsBilledChars = signal<number | null>(null);
+
+  /** 这段文本的完整字符数(命中缓存时用来对比"省了多少")。 */
+  readonly ttsFullChars = signal<number | null>(null);
+
+  /** 本次实际使用的音色(服务端默认也如实回报)。 */
+  readonly ttsVoice = signal('');
+
+  /** 本次返回的音频字节数(核对用,非计费单位)。 */
+  readonly ttsAudioBytes = signal<number | null>(null);
+
+  /**
    * ★ 第三十三轮(Forrest):AI 评分的**额度消耗**标记。
    *
    * 与示范朗读同理,必须告诉用户这次到底花没花 Azure 额度:
@@ -541,6 +573,31 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *   所以看到分数且本次未发评估请求 = 确实是读库的。
    */
   readonly scoreCost = signal<'' | 'fresh' | 'cache'>('');
+
+  /**
+   * ★ 第三十四轮(Forrest):本次 AI 评分的精确计费量。
+   *
+   * ⚠️ 评分这边同样不提 token —— Azure 发音评估按**音频时长**计费。
+   *   billedSeconds 由服务端从 WAV 头精确算出(字节率 × data 长度),
+   *   不是估算也不是从 Azure 请求返回物里猜的。
+   *   null = 服务端/旧后端未提供 → 不显示数字。
+   */
+  readonly scoreBilledSeconds = signal<number | null>(null);
+
+  /** 评分时送评的音频字节数(核对用)。 */
+  readonly scoreBilledBytes = signal<number | null>(null);
+
+  /**
+   * ★ 第三十四轮:把评分音频秒数格式化成界面文案用的字符串。
+   *
+   * 拿不到就返回 '—'(与四项分数的 "拿不到显示 —" 口径一致),
+   * **绝不编一个数**。保留 1 位小数(音频长度到 0.1 秒已足够精确)。
+   */
+  readonly scoreSecondsText = computed(() => {
+    const s = this.scoreBilledSeconds();
+    if (s === null || !Number.isFinite(s)) return '—';
+    return s.toFixed(1);
+  });
 
   /**
    * 示范朗读条上要不要显示引擎提示。
@@ -1103,13 +1160,22 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     //    这是正常路径不是警示,用户只想看进度条。回退/出错时才会写入 note。
     this.ttsNote.set('');
     this.ttsCost.set('');   // 新一次朗读:先清掉上次的额度提示,结果出来再如实标记
+    // 数字也一并清掉 —— 否则上一次的字符数会残留到新一次还没回来的时候
+    this.ttsBilledChars.set(null);
+    this.ttsFullChars.set(null);
+    this.ttsVoice.set('');
+    this.ttsAudioBytes.set(null);
 
     this.practiceApi.synthesize(text, undefined, this.rate()).subscribe({
       next: (res) => {
         const blob = res.blob;
-        // ★ 第三十三轮:如实标记本次到底花没花额度。
+        // ★ 第三十三/三十四轮:如实标记本次到底花没花额度、花了多少。
         //   来源是后端响应头,不是本地猜测。
         this.ttsCost.set(res.fromCache ? 'cache' : 'fresh');
+        this.ttsBilledChars.set(res.billedChars);
+        this.ttsFullChars.set(res.fullChars);
+        this.ttsVoice.set(res.voice);
+        this.ttsAudioBytes.set(res.audioBytes);
         const url = URL.createObjectURL(blob);
         // 上一次的 TTS objectURL 要先回收,否则连播多次会攒住内存
         if (this.ttsUrl) URL.revokeObjectURL(this.ttsUrl);
@@ -1153,7 +1219,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
             ? 'Azure 密钥/区域无效'
             : '语音合成失败';
         this.ttsNote.set(`${why},已回退浏览器语音`);
-        this.ttsCost.set('');   // 回退了就不是 Azure 合成,额度提示必须清掉
+        // 回退了就不是 Azure 合成:额度标记与数字都必须清掉,
+        // 否则会把浏览器语音算到 Azure 头上(诚实红线)。
+        this.ttsCost.set('');
+        this.ttsBilledChars.set(null);
+        this.ttsFullChars.set(null);
+        this.ttsVoice.set('');
+        this.ttsAudioBytes.set(null);
         this.speakAzureFallback(text);
       }
     });
@@ -1434,9 +1506,23 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     //   无分 → 本次会真调 Azure → 'fresh'(消耗额度)
     // ⚠️ 必须在 grade() **之前**就定下来,因为它可能直接把分数拿回来了,
     //    事后看 rec.score 已经判不出"本次到底发没发请求"。
-    this.scoreCost.set(t.score ? 'cache' : 'fresh');
+    const hadScore = !!t.score;
+    this.scoreCost.set(hadScore ? 'cache' : 'fresh');
+
+    // ★ 第三十四轮:计费数字也要先清 —— 命中缓存时没有新计费,
+    //   应回显库里存的旧值(下面根据录音最新状态同步)。
+    const before = t.score;
+    this.scoreBilledSeconds.set(before?.billedSeconds ?? null);
+    this.scoreBilledBytes.set(before?.billedBytes ?? null);
 
     await this.recorder.grade(t.id, this.currentText());
+
+    // grade() 完成后从录音最新状态里回读计费口径:
+    //   · 本次真调了 Azure → 新值(刚生成的 billedSeconds)
+    //   · 命中缓存 → 库里的旧值(刷新后仍能显示当时花了多少)
+    const after = this.myRecordings().find((x) => x.id === t.id) ?? null;
+    this.scoreBilledSeconds.set(after?.score?.billedSeconds ?? null);
+    this.scoreBilledBytes.set(after?.score?.billedBytes ?? null);
   }
 
   /**
@@ -1790,12 +1876,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /**
    * 逐词明细折叠状态。
    *
-   * ★ 第二十九轮(Forrest 按 ynwac 参考站提要求):
-   *   参考站的逐词分数网格【默认展开】,点完评分直接看到每个词多少分。
-   *   我们此前默认收起,把最关键的逐词反馈藏起来了 ——
-   *   这也让"评分没有单词打分"看起来像功能缺失。
-   *   现改为:评分产出的那一刻自动展开该录音的明细;
-   *   用户仍可点标题手动收起。
+   * ★ 第三十五轮(Forrest):逐词分值区已取消折叠,改为常驻展开。
+   *   保留该 signal 仅为兼容旧重置调用点(已经不需要跟踪状态)。
    */
   private readonly wordsOpen = signal<Set<string>>(new Set());
 
@@ -1827,14 +1909,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     //
     //   ⚠️ 记忆铁律:绝不在 effect 里写 signal(会触发 NG0600)。
     //   这里通过 queueMicrotask 把写操作推迟到 effect 之外执行。
-    effect(() => {
-      const withScore = this.recorder.recordings().filter((r) => !!r.score);
-      for (const r of withScore) {
-        if (!this.wordsOpen().has(r.id)) {
-          queueMicrotask(() => this.ensureWordsOpen(r.id));
-        }
-      }
-    });
+    // ★ 第三十五轮(Forrest):逐词分值区已取消折叠 —— 常驻展开。
+    //   原先"评分产出后自动展开"的 effect 已作废(ensureWordsOpen 现为空实现)。
+    //   这里整段移除,避免无意义的响应式开销。
 
     // ★ 第三十轮:静态波形 —— 当前作品/待提交录音变化时重算波形柱高。
     //   同一段音频只解码一次(结果进 waveCache);
@@ -2079,16 +2156,23 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.playPos.set(target);
   }
 
-  /** 逐词明细折叠。 */
-  isWordsOpen(id: string): boolean {
-    return this.wordsOpen().has(id);
+  /**
+   * ★ 第三十五轮(Forrest):逐词分值区**已取消折叠,改为常驻展开**。
+   *
+   * 它只是纯文本展示(与 Recognition 同性质),没有任何理由需要点一下展开。
+   * 这里保留方法签名并恒返回 true —— 这样旧调用点不会被破坏
+   * (但模板里已经不再用了);今后若有人重新引入折叠,也不至于拿到错的值。
+   */
+  isWordsOpen(_id: string): boolean {
+    return true;
   }
 
-  toggleWords(id: string): void {
-    const next = new Set(this.wordsOpen());
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    this.wordsOpen.set(next);
+  /**
+   * ★ 第三十五轮:折叠已取消,故本方法不再被模板调用。
+   * 保留为空实现,避免旧引用直接报错;行为上什么也不做。
+   */
+  toggleWords(_id: string): void {
+    // 第三十五轮:无操作 —— 逐词分值已改为常驻显示。
   }
 
   /**
@@ -2098,11 +2182,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 使用。用户在展开后手动收起,不应被下一次数据刷新重新弹开,
    * 所以只对"尚未展开过"的 id 生效(由调用方判断 has())。
    */
-  private ensureWordsOpen(id: string): void {
-    if (this.wordsOpen().has(id)) return;
-    const next = new Set(this.wordsOpen());
-    next.add(id);
-    this.wordsOpen.set(next);
+  /**
+   * ★ 第三十五轮:折叠已取消,自动展开逻辑也一并作废。
+   * 保留空实现,避免旧调用点报错。
+   */
+  private ensureWordsOpen(_id: string): void {
+    // 第三十五轮:无操作 —— 逐词分值始终可见,无需再维护展开状态。
   }
 
   /** 总分的中文口语化评价 —— 比裸数字直观。 */

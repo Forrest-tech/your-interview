@@ -63,6 +63,14 @@ export interface RecordingScoreDto {
   words: WordScoreDto[];
   referenceText: string;
   assessedAt: string;
+  /**
+   * ★ 第三十四轮:评分计费口径 —— 送评音频时长(秒)。
+   * ⚠️ Azure 发音评估按音频时长计费,不是 token。
+   *   服务端从 WAV 头精确算出,落库后可重现。null = 未知。
+   */
+  billedSeconds?: number | null;
+  /** 送评的音频字节数(核对用)。 */
+  billedBytes?: number | null;
 }
 
 export interface RecordingDto {
@@ -171,6 +179,10 @@ export class PracticeApi {
     fluencyScore: number | null; completenessScore: number | null;
     prosodyScore: number | null; recognized: string; referenceText: string;
     words: { word: string; accuracy: number; errorType: string }[];
+    // ★ 第三十四轮:计费口径一并入库 —— 否则刷新后"本地已存评分"
+    //   那条路径显示不出当时花了多少,信息残缺。
+    billedSeconds?: number | null;
+    billedBytes?: number | null;
   }): Observable<RecordingScoreDto> {
     return this.api.post<RecordingScoreDto>(
       `${PracticeApi.BASE}/recordings/${recordingId}/score`, {
@@ -181,7 +193,9 @@ export class PracticeApi {
         prosodyScore: score.prosodyScore,
         recognizedText: score.recognized,
         referenceText: score.referenceText,
-        words: score.words
+        words: score.words,
+        billedSeconds: score.billedSeconds ?? null,
+        billedBytes: score.billedBytes ?? null
       });
   }
 
@@ -232,10 +246,23 @@ export class PracticeApi {
              force = false): Observable<TtsSynthesisResult> {
     return this.api
       .postBlobWithHeaders(`${PracticeApi.BASE}/tts`, { text, voice, speed, force })
-      .pipe(map((res) => ({
-        blob: res.body as Blob,
-        fromCache: (res.headers.get('X-Tts-Cache') ?? '').toLowerCase() === 'hit'
-      })));
+      .pipe(map((res) => {
+        const num = (k: string): number | null => {
+          const v = res.headers.get(k);
+          if (v === null || v.trim() === '') return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        };
+        return {
+          blob: res.body as Blob,
+          fromCache: (res.headers.get('X-Tts-Cache') ?? '').toLowerCase() === 'hit',
+          // ★ 第三十四轮:精确计费字符数,由服务端下发(不是前端估算)
+          billedChars: num('X-Tts-Chars'),
+          fullChars: num('X-Tts-Chars-Full'),
+          voice: res.headers.get('X-Tts-Voice') ?? '',
+          audioBytes: num('X-Tts-Bytes')
+        };
+      }));
   }
 }
 
@@ -247,4 +274,18 @@ export interface TtsSynthesisResult {
    * false = 本次真调了 Azure 合成,**消耗了**额度。
    */
   fromCache: boolean;
+  /**
+   * ★ 第三十四轮:本次实际计费字符数。
+   *
+   * ⚠️ 叫"字符"而不是"token" —— Azure 语音 TTS **不以 token 计费**,
+   *   真实计费单位是合成字符数(按每 1M 字符计价)。
+   *   命中缓存时为 0。服务端精确计算,前端不估算。
+   */
+  billedChars: number | null;
+  /** 这段文本的完整字符数(即使命中缓存也有值,便于对比"省了多少")。 */
+  fullChars: number | null;
+  /** 实际使用的音色(服务端默认也会如实回报)。 */
+  voice: string;
+  /** 音频字节数(便于核对,非计费单位)。 */
+  audioBytes: number | null;
 }

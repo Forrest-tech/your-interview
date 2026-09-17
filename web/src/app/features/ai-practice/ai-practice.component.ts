@@ -890,12 +890,18 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 前端节点 → 后端提交结构。改动本地结构时只改这一个映射。 */
   private static toPayload(list: MaterialNode[]): MaterialNodeIn[] {
-    return list.map(n => ({
+    // ★ 第三十八轮修复(Forrest 报“拖拽排序不能保存”):
+    //   旧代码把 sortOrder 硬写成 0 —— 于是无论用户在界面上怎么拖拽,
+    //   落库同层全部是 0,回读时后端只能按 CreatedAt 排 →
+    //   拖完看着对了,一刷新就打回原样。
+    //   现在**用数组下标当 sortOrder**:数组顺序 = 用户看到的顺序,
+    //   下标即权威序号,拖拽后位置变了序号就跟着变,自然落库。
+    return list.map((n, i) => ({
       id: n.id,
       name: n.name,
       folder: n.folder,
       content: n.content ?? null,
-      sortOrder: 0,
+      sortOrder: i,
       expanded: n.folder ? !!n.expanded : true,
       children: AiPracticeComponent.toPayload(n.children ?? [])
     }));
@@ -903,14 +909,20 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 后端结构 → 前端节点。 */
   private static fromDto(list: MaterialNodeDto[]): MaterialNode[] {
-    return (list ?? []).map(d => ({
-      id: d.id,
-      name: d.name,
-      folder: d.folder,
-      content: d.content ?? '',
-      expanded: !!d.expanded,
-      children: AiPracticeComponent.fromDto(d.children ?? [])
-    }));
+    // ★ 第三十八轮:回读时**按 sortOrder 排序**,而不是听信传输顺序。
+    //   后端已按 SortOrder 排过,这里再排一次是纵深防御 ——
+    //   即使将来某个端点忘了排序,前端也不会把顺序打乱。
+    return [...(list ?? [])]
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+      .map(d => ({
+        id: d.id,
+        name: d.name,
+        folder: d.folder,
+        sortOrder: d.sortOrder ?? 0,
+        content: d.content ?? '',
+        expanded: !!d.expanded,
+        children: AiPracticeComponent.fromDto(d.children ?? [])
+      }));
   }
 
   private errText(e: unknown): string {

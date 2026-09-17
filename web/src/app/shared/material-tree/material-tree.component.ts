@@ -13,6 +13,10 @@ export interface MaterialNode {
   id: string;
   name: string;
   folder: boolean;
+  /** ★ 第三十八轮:同层排序号。数组下标即权威顺序,
+   *  拖拽后由 ai-practice 的 toPayload 按下标重写并落库。
+   *  这里让它可选,是为了兼容旧的就地构造点。 */
+  sortOrder?: number;
   children?: MaterialNode[];
   /** 文件正文(仅 folder=false 时有意义) */
   content?: string;

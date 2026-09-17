@@ -354,10 +354,35 @@ public sealed class GetRecordingAudioQueryHandler(AssessmentDbContext db, IAudio
     }
 }
 
-/// <summary>删除一条录音(软删元数据 + 尽力删文件)。</summary>
+/// <summary>
+/// 删除一条录音(**硬删数据库行 + 硬删磁盘音频文件**)。
+/// </summary>
+/// <remarks>
+/// ★ 第五十二轮(2026-09-17,Forrest 明确要求):
+///   "这个录音的数据库和本地录音都要一起被硬删除"。
+///
+///   与第三十九轮相比,语义**反转**:
+///     · 第三十九轮:软删元数据行 + 保留磁盘文件(防误删不可恢复)。
+///     · 现在      :彻底删除 —— 库里行消失 + 磁盘文件消失,不留痕。
+///
+///   为什么反转是安全的(第三十九轮担心的"可恢复"已不再需要):
+///     · 录音是**练习素材**,不是业务凭证,用户点删除就是真的不要了;
+///     · 保留孤儿文件反而让用户困惑(界面没了、磁盘还在占);
+///     · 这个项目是单用户自用,没有"误删要审计追回"的合规需求。
+///
+///   执行顺序(重要):**先删文件,后删行**。
+///     若反过来(先删行):行没了 → StoragePath 也没了 → 文件永远成孤儿,
+///     再没有任何线索能找到它。所以必须趁行还在时把路径取出来删文件,
+///     成功后再删行。
+///
+///   ⚠️ 文件删除失败怎么办:仍继续删行(用户意图是"删除"必须成立),
+///     但记 Warning 日志 —— 此时会留下一个孤儿文件,需要人工/后台清理。
+///     这是"宁可留孤儿文件,也不能让用户删不掉"的取舍。
+/// </remarks>
 public sealed record DeleteRecordingCommand(Guid UserId, Guid RecordingId) : MediatR.IRequest<Result>;
 
-public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db)
+public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudioStore store,
+    ILogger<DeleteRecordingCommandHandler> logger)
     : MediatR.IRequestHandler<DeleteRecordingCommand, Result>
 {
     public async Task<Result> Handle(DeleteRecordingCommand r, CancellationToken ct)
@@ -366,20 +391,24 @@ public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db)
             .FirstOrDefaultAsync(x => x.Id == r.RecordingId && x.UserId == r.UserId, ct);
         if (rec is null) return Result.Failure(Error.NotFound("录音"));
 
-        rec.MarkDeleted();
+        // ① 先删磁盘文件 —— 必须趁行还在(行一删,StoragePath 这条线索就断了)
+        var path = rec.StoragePath;
+        var fileGone = true;
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            fileGone = await store.DeleteAsync(path, ct);
+            if (!fileGone)
+                logger.LogWarning("录音 {RecordingId} 的音频文件删除失败,留下孤儿文件 {Path};数据库行仍将删除",
+                    rec.Id, path);
+        }
+
+        // ② 再硬删数据库行(不走 MarkDeleted,直接 Remove)
+        db.Recordings.Remove(rec);
         await db.SaveChangesAsync(ct);
 
-        // ★ 第三十九轮 数据安全修复:不再立即硬删磁盘文件。
-        //   原因:用户误删/前端异常触发的删除曾是**不可恢复**的 ——
-        //   元数据软删了(可恢复),但音频文件被 File.Delete 真删了,
-        //   就算把行恢复回来也放不出声音了。数据事故里这是最糟的组合。
-        //   现在:只软删元数据行;磁盘文件保留(孤儿文件由后续后台
-        //   清理任务扫)。用户视角"已删除"是成立的(查询过滤器已隐藏),
-        //   但真需要时数据还在,能救。
-        //
-        //   ⚠️ 诚实约束:这里**故意不删文件**是有代价的 ——
-        //   被删录音的音频会占盘直到后台清理上线。比起不可恢复的数据丢失,
-        //   这点磁盘占用完全可以接受。
+        logger.LogInformation("录音 {RecordingId} 已硬删除(文件={FileStatus})",
+            r.RecordingId, fileGone ? "已删" : "删除失败/孤儿");
+
         return Result.Success();
     }
 }

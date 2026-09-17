@@ -144,8 +144,10 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.Property(x => x.ContentType).HasMaxLength(100).IsRequired();
             e.Property(x => x.SourceLanguage).HasMaxLength(10).IsRequired();
 
-            // ⚠️ 只软删录音的元数据行;磁盘文件由后台清理(见 IAudioStore)。
-            // 硬删会让"删错了想找回"变成不可能。
+            // ★ 第五十二轮(2026-09-17,Forrest 明确要求):录音改为**硬删除** ——
+            //   删一条录音 = 数据库行消失 + 磁盘音频文件消失,不留痕。
+            //   见 DeleteRecordingCommandHandler(先删文件,后删行)。
+            //   录音是练习素材不是业务凭证;保留孤儿文件只会占盘并让用户困惑。
             e.HasIndex(x => new { x.UserId, x.MaterialId, x.CreatedAt });
             e.UseXminAsConcurrencyToken();
 

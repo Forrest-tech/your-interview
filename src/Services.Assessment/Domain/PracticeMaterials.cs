@@ -44,6 +44,32 @@ public sealed class PracticeMaterial
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
+    /// <summary>
+    /// ★ 第三十七轮新增:带**客户端指定 id** 的构造。
+    ///
+    /// 为什么要这个:整树覆盖保存时,若服务端无视前端传来的 id
+    /// 而每次都新发一个 GUID,会造成一个致命的丢数据循环 ——
+    ///   前端发 id=A → 服务端存成 B(丢了 A)→ 回读拿到 B
+    ///   → 若前端在竞态中又发了一次带 A 的树,
+    ///     服务端认不得 A → 当成**新节点** → 原行被当作"未提交"删除。
+    /// 旧实现就是这样:每次保存都把用户的节点删掉重建。
+    ///
+    /// 修法:接受前端在“新建”时给的 GUID。该 id 是前端生成的
+    /// (不依赖服务端回传),于是**每次保存 id 都稳定**,
+    /// 整树覆盖于是变成真正的幂等 upsert,不再删了重建。
+    ///
+    /// 安全:此 ctor 仅在“库里找不到该 id”时调用,且查询已按 UserId 隔离,
+    ///   所以客户端无法借 id 跨用户改写别人的节点(跨用户 id 会走到这里
+    ///   当作新节点建,而不是覆盖他人数据)。
+    /// </summary>
+    public PracticeMaterial(Guid id, Guid userId, Guid? parentId, MaterialKind kind,
+        string name, string? content, int sortOrder)
+        : this(userId, parentId, kind, name, content, sortOrder)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("id 不能为空", nameof(id));
+        Id = id;
+    }
+
     public Guid Id { get; private set; } = Guid.NewGuid();
     /// <summary>归属用户 —— 练习数据是纯私有数据,一律按 UserId 隔离。</summary>
     public Guid UserId { get; private set; }
@@ -71,7 +97,14 @@ public sealed class PracticeMaterial
 
     public void SetContent(string? content)
     {
-        if (Kind == MaterialKind.Folder)
+        // ★ 第三十七轮修复(严重 Bug:保存带文件夹的树一律 500)。
+        //   原实现在 Kind==Folder 时**无条件抛异常**,
+        //   但保存处理器对文件夹正是调 `SetContent(null)`(清空正文)。
+        //   于是:只要整树里含任何已有文件夹,保存就 500 →
+        //   用户看到"保存失败"、刷新后新东西全没了。
+        //   正确语义:文件夹**不允许持有正文**,但"把正文置空"本身完全合法。
+        //   只拦"给文件夹写入非空正文"这种真错误。
+        if (Kind == MaterialKind.Folder && !string.IsNullOrEmpty(content))
             throw new InvalidOperationException("文件夹不能设置正文");
         Content = content;
         Touch();

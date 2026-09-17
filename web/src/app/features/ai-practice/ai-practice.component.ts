@@ -719,6 +719,17 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
           const hit = this.findById(this.nodes(), oldId);
           return hit ? hit.id : null;
         });
+        // ★ 第三十七轮:回读后**重同步编辑缓冲**,否则用户的输入会被换成旧快照。
+        //   场景:用户正在编辑某素材,此时另一个自动保存的回包把 nodes
+        //   整体换新 —— selectedId 已按名对齐到新 GUID,但 saved/draft 还是旧值。
+        //   若不重同步,用户看到的正文会"退回"到保存前的样子(以为没存上)。
+        //   规则:未在编辑态时,把缓冲刷新为该节点在**新树里的真实内容**。
+        if (!this.editing()) {
+          const cur = this.findFile(this.nodes(), this.selectedId());
+          const text = cur?.content ?? '';
+          this.saved.set(text);
+          this.draft.set(text);
+        }
       },
       error: () => {
         // 回读失败不影响已成功的保存 —— 但要记住树脏了(下次再对齐)
@@ -1048,19 +1059,64 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 用户仍能看到"未保存"状态与具体原因,不会误以为存住了。
    */
   private persistQuiet(): void {
+    // ★ 第三十七轮 严重 Bug 修复(Forrest 报「新建文件夹+素材+内容,保存后刷新就丢」)。
+    //
+    // 真根因:并发【整树覆盖保存】互相踩踏。
+    //   · 每次树变更都发一个 PUT /materials,而后端是**整树覆盖**语义。
+    //   · 建成一个文件夹后立刻再建素材、再输内容 → 会连发多个 PUT。
+    //   · 每个 PUT 的成功回调都会 refreshTreeFromServer(),
+    //     用服务端快照**整体替换 this.nodes**。
+    //   · 于是「先发的 PUT」的回包,会把「后加的东西」直接从本地树上抹掉;
+    //     而后续 PUT 又是基于被抹过的树生成的 payload → 真丢数据。
+    //
+    // 修法:把保存**串行化**(单飞 + 合并排队):
+    //   · 有请求在飞时,只记一个 "dirty" 标记,不再并发发第二个;
+    //   · 在飞请求回来后,若期间又有改动(dirty),再补发一次最新整树。
+    //   这样任意时刻最多一个 PUT 在飞,回读永远不会晚于基于旧树的覆盖,
+    //   且最后一次补发一定带的是**最新最全**的树 —— 用户的东西不会丢。
+    if (this.saveInFlight) {
+      this.saveQueued = true;
+      return;
+    }
+    this.saveInFlight = true;
+    this.saveQueued = false;
     this.practiceApi.saveMaterials(AiPracticeComponent.toPayload(this.nodes())).subscribe({
       next: () => {
         this.treeError.set('');
         // ★ 第二十七轮:自动保存同样要回读 —— 否则拖拽/新建之后
         //   前端仍持种子 id,录音上传被 isGuid 挡住(同 saveTree 的坑)。
         this.refreshTreeFromServer();
+        this.finishSave();
       },
       error: (e) => {
         this.treeError.set(this.errText(e));
         this.treeDirty.set(true);
+        this.finishSave();
       }
     });
   }
+
+  /**
+   * 一次保存结束后的收尾。
+   *
+   * ★ 第三十七轮:若在飞期间又攒了改动(saveQueued),
+   *   立刻补发一次**最新整树**。用 setTimeout(0) 让当前
+   *   调用栈先跑完(refreshTreeFromServer 已把 nodes 更新好),
+   *   保证补发的是最终状态,而不是中途快照。
+   */
+  private finishSave(): void {
+    this.saveInFlight = false;
+    if (this.saveQueued) {
+      this.saveQueued = false;
+      setTimeout(() => this.persistQuiet(), 0);
+    }
+  }
+
+  /** 是否有整树保存请求在飞(串行化用)。 */
+  private saveInFlight = false;
+
+  /** 在飞期间是否又有改动需要补发(串行化用)。 */
+  private saveQueued = false;
 
   onDelete(n: MaterialNode): void {
     // 素材删了,挂在它上面的录音也一并清掉

@@ -101,20 +101,32 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
                 var n = nodes[i];
                 var kind = n.Folder ? MaterialKind.Folder : MaterialKind.File;
 
-                // 前端传来的 id 可能是 "f_intro" 这类非 GUID 种子串 → 一律当新建
+                // 前端传来的 id:
+                //   · 合法 GUID 且库里已存在(属当前用户) → 更新现有节点
+                //   · 合法 GUID 但库里没有 → **采纳它作为新节点的 id**(见下)
+                //   · "f_intro" 这类非 GUID 种子串 → 无法采纳,退化为服务端新发 GUID
                 PracticeMaterial? entity = null;
-                if (Guid.TryParse(n.Id, out var gid)) byId.TryGetValue(gid, out entity);
+                var hasClientId = Guid.TryParse(n.Id, out var gid);
+                if (hasClientId) byId.TryGetValue(gid, out entity);
 
                 if (entity is null)
                 {
-                    entity = new PracticeMaterial(r.UserId, parentId, kind, n.Name, n.Content, n.SortOrder);
+                    // ★ 第三十七轮 丢数据修复:采纳前端给的 GUID。
+                    //   旧代码这里永远 new 一个服务端 GUID,导致
+                    //   “前端发 A、服务端存 B” → 整树覆盖变成删了重建,
+                    //   一旦有并发/重试就丢数据。采纳前端 id 后,
+                    //   每次保存都是稳定的幂等 upsert。
+                    entity = hasClientId
+                        ? new PracticeMaterial(gid, r.UserId, parentId, kind, n.Name, n.Content, n.SortOrder)
+                        : new PracticeMaterial(r.UserId, parentId, kind, n.Name, n.Content, n.SortOrder);
                     db.Materials.Add(entity);
                 }
                 else
                 {
                     entity.Rename(n.Name);
-                    if (kind == MaterialKind.Folder) entity.SetContent(null);
-                    else entity.SetContent(n.Content);
+                    // 文件夹不持有正文 → 不去碰它的 Content(避免无意义的 Touch);
+                    // 文件才写正文。
+                    if (kind == MaterialKind.File) entity.SetContent(n.Content);
                     entity.MoveTo(parentId, n.SortOrder);
                     entity.SetExpanded(n.Expanded);
                     touched.Add(entity);

@@ -184,7 +184,7 @@ echo "【4】写库…"
 printf '%s\n' "$SQL" | "$PSQL" -U "$PGUSER" -d "$DB" -v ON_ERROR_STOP=1
 RC=$?
 if [ $RC -eq 0 ]; then
-  echo "  ✅ 完成。刷新界面 → 「$ARCHIVE_NAME」下即可看到抢救回来的录音。"
+  echo "  ✅ 完成。刷新界面 → 「录音归档(2026-09-16)」下即可看到抢救回来的录音。"
 else
   echo "  ❌ 失败(事务已回滚,未改动数据)。rc=$RC"
 fi

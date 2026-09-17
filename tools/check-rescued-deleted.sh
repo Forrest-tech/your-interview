@@ -18,8 +18,8 @@ DB="${DB:-yourinterview}"
 PGHOST="${PGHOST:-127.0.0.1}"
 PGPORT="${PGPORT:-5432}"
 PGUSER="${PGUSER:-postgres}"
-PGPASSWORD="${PGPASSWORD:-200808}"
-export PGPASSWORD PGHOST PGPORT PGUSER
+export PGHOST PGPORT PGUSER
+# 凭据走 PGPASSWORD / PGPASSFILE 环境变量,不硬编码在脚本里
 
 _find_psql() {
   [ -n "${PSQL_BIN:-}" ] && [ -x "$PSQL_BIN" ] && { echo "$PSQL_BIN"; return; }

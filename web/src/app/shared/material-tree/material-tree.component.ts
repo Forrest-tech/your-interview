@@ -170,9 +170,15 @@ export class MaterialTreeComponent {
 
   commitRename(node: MaterialNode, value: string): void {
     const v = (value ?? '').trim();
+    // ★ 第三十六轮:改名必须真的变了才提交。
+    //   为什么重要:输入框有 (blur)=commitRename,而回车/点空白都会先触发 blur。
+    //   若名字没变也一律 emit,就会对树发一次无意义的变更 →
+    //   触发一次多余的全树 PUT。加个相等判断,既省一次请求,也避免
+    //   在"只是点了一下又点回来"的情况下把 treeDirty 误置为 true。
+    const changed = !!v && v !== node.name;
     if (v) node.name = v;
     this.renamingId.set(null);
-    this.nodeChange.emit(this.nodes);
+    if (changed) this.nodeChange.emit(this.nodes);
   }
 
   cancelRename(): void {

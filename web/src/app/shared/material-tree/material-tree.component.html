@@ -85,7 +85,23 @@
         <!-- 任务书第十轮(Forrest):一级分类前不再挂任何图标 ——
              文件夹会很多,逐个配图标既费事又杂乱。
              展开箭头保留在最右侧。 -->
-        <span class="node-name is-folder">{{ n.name }}</span>
+        <!-- ★ 第三十六轮 修复(Forrest 报"文件夹不能重命名"):
+             此处原先只有一句死的 <span>,既没有 @if(renamingId()===n.id)
+             输入框分支,也没有 (dblclick)=startRename。
+             结果:菜单里点"重命名"确实把 renamingId 设上了,
+             但文件夹分支根本不读这个信号 → 界面毫无反应,
+             用户看到的就是"重命名对文件夹无效"。
+             现在与二级素材分支完全对齐(输入框 + 双击进入 + 回车/Esc/失焦)。 -->
+        @if (renamingId() === n.id) {
+          <input class="rename-input"
+                 [value]="n.name"
+                 (click)="$event.stopPropagation()"
+                 (keyup.enter)="commitRename(n, $any($event.target).value)"
+                 (keyup.escape)="cancelRename()"
+                 (blur)="commitRename(n, $any($event.target).value)">
+        } @else {
+          <span class="node-name is-folder" (dblclick)="startRename(n)">{{ n.name }}</span>
+        }
         @if (n.children?.length) {
           <span class="node-count">{{ n.children?.length }}</span>
         }

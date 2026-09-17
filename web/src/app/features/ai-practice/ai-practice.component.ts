@@ -1081,6 +1081,25 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.editing.set(true);
   }
 
+  /**
+   * 保存正文编辑。
+   *
+   * ★ 第三十六轮 严重 Bug 修复(Forrest 报「编辑文本、保存后刷新就消失」)。
+   *
+   * 原实现只改了内存:
+   *   target.content = text; this.nodes.set(...); this.saved.set(text);
+   * —— **从头到尾没有调用 saveMaterials()**,所以正文从未进过数据库,
+   *    刷新页面自然就回到旧内容。用户看到的就是"保存了但没保存"。
+   *
+   * 根本原因:树的其它变更(拖拽/改名/新建/删除)都走
+   *   material-tree 的 nodeChange → onTreeChange() → persistQuiet()
+   * 这条链路;而正文编辑是页面自己发的,绕过了 nodeChange,
+   * 于是也一起绕过了持久化。
+   *
+   * 修法:提交后**显式调用与树变更同一条持久化链路**(persistQuiet),
+   * 保证"编辑正文"与"拖动改名"的落库行为完全一致。
+   * 失败时绝不假装成功:treeError 会亮起、treeDirty 置回 true。
+   */
   saveEdit(): void {
     const id = this.selectedId();
     if (!id || !this.editing()) return;
@@ -1093,6 +1112,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // 内容变了,旧评分作废 —— 参考文本变了,旧分数不再对应这份文本
     const t = this.activeTake();
     if (t) this.recorder.clearScore(t.id);
+
+    // ★ 关键修复:真正落到数据库。
+    //   persistQuiet 内部会标记 treeDirty、失败回置并在成功后回读对齐 GUID,
+    //   与拖拽/改名走的是同一条路径 —— 不再有"只有正文不落库"的特例。
+    this.treeDirty.set(true);
+    this.persistQuiet();
   }
 
   cancelEdit(): void {

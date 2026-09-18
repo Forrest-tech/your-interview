@@ -701,15 +701,33 @@ export class RecorderService {
       this.persistScore(id, rec, score, referenceText);
     } catch (e) {
       // 后端没起 / 未配 key / Azure 报错 —— 全部如实告知,不造分。
-      const raw = String((e as { message?: string })?.message ?? e ?? '');
-      let msg = 'AI 评分失败:无法连接评测服务,请确认后端已启动并已配置 Azure Speech 密钥。';
-      if (/401|403|Unauthorized|Forbidden/i.test(raw)) {
-        msg = 'Azure 密钥无效或区域不匹配(401/403)。请前往 AI 语音设置核对。';
-      } else if (/key/i.test(raw)) {
+      //
+      // ★ 第四十九轮(Forrest 报"界面提示与日志对不上"):
+      //   旧实现顺序错了 —— 先拿正则去猜(raw 里含 "401" 就替换成固定文案),
+      //   把后端**已经给出**的真实 detail 丢掉。结果:界面上写着
+      //   "Azure 密钥无效或区域不匹配(401/403)",日志里却是别的真原因,
+      //   排障时两边永远对不上。
+      //
+      //   正确顺序:**后端 detail 优先原样透传**,正则只做"没有 detail 时"的兜底。
+      //   后端 ProblemDetails 的 detail 是可信的第一手信息,不该被前端二次改写。
+      const err = e as { message?: string; status?: number; code?: string };
+      const raw = String(err?.message ?? e ?? '').trim();
+
+      // rethrow 已把 detail/title 放进 message。只要它有内容就是可信原因,
+      // 直接透传,并保留后端 error code 便于进一步定位。
+      let msg: string;
+      if (raw) {
+        msg = /^AI 评分失败/.test(raw) ? raw : `AI 评分失败:${raw.slice(0, 240)}`;
+      } else if (err?.status === 0) {
+        // 网络层失败:请求压根没出去(后端未启动 / 跨域 / 断网)
+        msg = 'AI 评分失败:无法连接评测服务,请确认后端已启动。';
+      } else if (err?.status === 503) {
+        // 服务端明确说"未配置 key"(且没给 detail,极少见)
         msg = '服务端尚未配置 Azure Speech 密钥。请前往 AI 语音设置配置。';
-      } else if (raw) {
-        msg = `AI 评分失败:${raw.slice(0, 160)}`;
+      } else {
+        msg = 'AI 评分失败:评测服务未返回具体原因,请查看服务端日志。';
       }
+
       this.patch(id, { grading: false, error: msg });
     }
   }

@@ -39,9 +39,17 @@ public sealed class InterviewAnalysisRequestedConsumer(
             return;
         }
 
-        var workDir = Path.Combine(
-            config["Storage:WorkDirectory"] ?? Path.Combine(AppContext.BaseDirectory, "storage", "analysis"),
-            m.InterviewEntryId.ToString());
+        // 工作目录同样锚定到仓库根(RootDirectory 优先),避免相对路径随 CWD 漂移。
+        // 未配置时退回进程目录下的 storage/analysis,行为可预期。
+        var workRootCfg = config["Storage:WorkDirectory"];
+        var workRoot = !string.IsNullOrWhiteSpace(workRootCfg) && Path.IsPathRooted(workRootCfg)
+            ? workRootCfg!
+            : Path.Combine(
+                config["Storage:RootDirectory"] is { Length: > 0 } rootDir && Directory.Exists(rootDir)
+                    ? rootDir
+                    : AppContext.BaseDirectory,
+                string.IsNullOrWhiteSpace(workRootCfg) ? "storage/analysis" : workRootCfg!);
+        var workDir = Path.Combine(workRoot, m.InterviewEntryId.ToString());
 
         var ctx = new PipelineContext(m.InterviewEntryId, m.AssetId, m.UserId, sourcePath, workDir);
 

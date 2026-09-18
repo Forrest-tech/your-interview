@@ -19,11 +19,46 @@ public sealed class AudioPrepareStage(ILogger<AudioPrepareStage> logger) : IPipe
     public string Name => "Prepare";
 
     /// <summary>ffmpeg 的静态二进制(npm @ffmpeg-installer 提供,系统没有 ffmpeg)。</summary>
-    internal static readonly string[] FfmpegCandidates =
-    [
-        "/tmp/node_modules/@ffmpeg-installer/linux-x64/ffmpeg",
-        "/home/node/dev/your-interview/node_modules/@ffmpeg-installer/linux-x64/ffmpeg"
-    ];
+    /// 解析 ffmpeg 可执行文件:优先环境变量,其次 PATH,最后回落到
+    /// 仓库内 @ffmpeg-installer 的**当前平台**二进制。
+    /// 不硬编码任何平台路径 —— macOS / Linux / Windows 都能跑。
+    internal static string[] ResolveFfmpegCandidates()
+    {
+        var list = new List<string>();
+
+        // 1) 显式指定优先(部署/CI 最可控)
+        var fromEnv = Environment.GetEnvironmentVariable("FFMPEG_PATH");
+        if (!string.IsNullOrWhiteSpace(fromEnv)) list.Add(fromEnv);
+
+        // 2) 仓库内 npm 包:按当前运行时平台拼 RID,不再写死 linux-x64
+        //    @ffmpeg-installer 的平台包名 = 运行时 RID(darwin-x64 / linux-x64 / win32-x64)
+        var rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
+        var exe = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
+        var root = FindRepoRoot();
+        if (root is not null)
+        {
+            list.Add(Path.Combine(root, "node_modules", "@ffmpeg-installer", rid, exe));
+            list.Add(Path.Combine(root, "web", "node_modules", "@ffmpeg-installer", rid, exe));
+        }
+
+        // 3) 系统 PATH 里的 ffmpeg(最后兜底)
+        list.Add(exe);
+        return list.ToArray();
+    }
+
+    /// 从当前程序集位置向上找仓库根(含 .git 或 package.json 的目录)。
+    private static string? FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, ".git"))
+                || File.Exists(Path.Combine(dir.FullName, "package.json")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        return null;
+    }
 
     public bool CanRun(PipelineContext context, PipelineState state) =>
         File.Exists(context.SourceFilePath);
@@ -36,9 +71,10 @@ public sealed class AudioPrepareStage(ILogger<AudioPrepareStage> logger) : IPipe
 
         try
         {
-            var ffmpeg = AudioPrepareStage.FfmpegCandidates.FirstOrDefault(File.Exists)
+            var ffmpeg = ResolveFfmpegCandidates()
+                .FirstOrDefault(c => c == "ffmpeg" || c == "ffmpeg.exe" || File.Exists(c))
                 ?? throw new FileNotFoundException(
-                    "找不到 ffmpeg。请先运行:cd /tmp && npm install @ffmpeg-installer/ffmpeg");
+                    "找不到 ffmpeg。请设置环境变量 FFMPEG_PATH,或安装:@ffmpeg-installer/ffmpeg");
 
             // 已经是标准 WAV 就跳过转码(省时间,也避免二次编码损失)
             if (IsStandardWav(context.SourceFilePath))
@@ -252,7 +288,8 @@ public sealed class TranscribeStage(AzureSpeechClient speech,
             return chunks;
         }
 
-        var ffmpeg = AudioPrepareStage.FfmpegCandidates.FirstOrDefault(File.Exists)
+        var ffmpeg = AudioPrepareStage.ResolveFfmpegCandidates()
+            .FirstOrDefault(c => c == "ffmpeg" || c == "ffmpeg.exe" || File.Exists(c))
             ?? throw new FileNotFoundException("切片需要 ffmpeg,但没找到可执行文件");
 
         // 宁愿多切几片(片长宁短勿长)—— 单片超限会让整场分析失败,

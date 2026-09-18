@@ -175,15 +175,21 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                 detail: "服务端缺少可用的 AzureSpeech key,发音评估不可用。请先在 AI 语音设置里保存密钥。",
                 statusCode: StatusCodes.Status503ServiceUnavailable);
 
-        if (body.Samples is null || body.Samples.Length == 0)
+        // ★ 第四十九轮修复:此处原先只检查 Samples,导致 WavBase64 分支永远不可达
+        //   (走 WavBase64 时 Samples 必为 null → 直接 400「音频为空」)。
+        //   现在两种来源**任一有值**即可通过,与上面 DTO 注释里的「二选一」契约一致。
+        var hasSamples = body.Samples is { Length: > 0 };
+        var hasWavBase64 = !string.IsNullOrWhiteSpace(body.WavBase64);
+
+        if (!hasSamples && !hasWavBase64)
             return Results.Problem(title: "音频为空",
                 detail: "请先录音再提交评分。",
                 statusCode: StatusCodes.Status400BadRequest);
 
         // 前端已解码成 Float32 PCM,这里装成 16k 单声道 WAV
-        var wav = body.WavBase64 is { Length: > 0 }
-            ? Convert.FromBase64String(body.WavBase64)
-            : PcmWav.FromFloat32(body.Samples, body.SampleRate ?? 48000);
+        var wav = hasWavBase64
+            ? Convert.FromBase64String(body.WavBase64!)
+            : PcmWav.FromFloat32(body.Samples!, body.SampleRate ?? 48000);
 
         if (!PcmWav.IsWav(wav))
             return Results.Problem(title: "音频格式不支持",

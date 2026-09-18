@@ -15,9 +15,6 @@ npm-debug.log*
 # --- 本地基础设施数据(不入库) ---
 .run/
 .logs/
-tools/db/data/
-tools/db/postgres.log
-tools/db/node_modules/
 rabbitmq/
 *.pid
 *.log
@@ -59,9 +56,6 @@ artifacts/
 # ⚠️ 同样必须锚定路径 —— 不能只写 storage/(见上文教训)
 /src/Services.Assessment/storage/
 
-# 一次性调试脚本(已解决的问题留下的痕迹,保留在本地即可)
-/tools/fix-tts.sh
-/tools/fix-tts3.sh
-/tools/fix-tts4.sh
-/tools/fix-tts5.sh
-/tools/tts-diag.sh
+# 本地脚本/工具(仅 Forrest 本地开发用,不入库)
+# 整个 tools/ 只在 Mac 本地保留,不进 GitHub(含 dev.sh / hybrid.sh / db / rabbit 等)
+/tools/

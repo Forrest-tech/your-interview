@@ -203,14 +203,7 @@ Analysis.Worker 订阅分析请求 → 调 Azure Speech 转写 → 六维诊断 
 
 ## 九、开发与运行
 
-    tools/
-      dev.sh               容器内开发栈管理(Linux 容器版)
-      dev.docker.sh        全容器版管理(Mac 用这个)
-      contract-check.sh    逐端点契约联调(5xx/404 判失败,4xx 判通过)
-      e2e.sh               端到端自测
-      ef.sh                EF Core 迁移封装
-      db/                  embedded PostgreSQL 管理(容器内用)
-      rabbit/              RabbitMQ 运行器(容器内用)
+    tools/                 本地开发脚本(不进仓库;见 Mac ~/.openclaw/dev/your-interview/tools/)
 
     Dockerfile.service     8 个可执行项目共用的多阶段构建
     docker-compose.yml     9 容器编排(pg + rabbit + 7 服务 + 网关)

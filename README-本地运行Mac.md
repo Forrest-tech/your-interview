@@ -35,7 +35,7 @@ cd your-interview
 已被 gitignore,不会提交)。所以 clone 之后第一件事是配自己的密钥:
 
 ```bash
-bash tools/setup-secrets.sh
+bash tools/setup-secrets.sh   # 本地脚本,不进仓库(见 Mac ~/.openclaw/dev/your-interview/tools/)
 ```
 
 这个脚本会在仓库根创建 `.env`,并在 `src/Analysis.Worker/` 创建
@@ -118,7 +118,7 @@ docker compose logs -f identity  # 换服务名即可
 docker compose restart jobs      # 重启单个服务
 docker compose down              # 停全部(数据保留)
 docker compose down -v           # 停并清空数据(彻底重来)
-bash tools/setup-secrets.sh      # 生成/重建本地密钥文件
+bash tools/setup-secrets.sh      # 生成/重建本地密钥文件(本地脚本,不进仓库)
 ```
 
 改后端代码后要重新构建对应服务:

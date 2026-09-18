@@ -211,7 +211,6 @@ Analysis.Worker 订阅分析请求 → 调 Azure Speech 转写 → 六维诊断 
       ef.sh                EF Core 迁移封装
       db/                  embedded PostgreSQL 管理(容器内用)
       rabbit/              RabbitMQ 运行器(容器内用)
-      trigger-analysis.js  手动触发一次分析(排障用)
 
     Dockerfile.service     8 个可执行项目共用的多阶段构建
     docker-compose.yml     9 容器编排(pg + rabbit + 7 服务 + 网关)

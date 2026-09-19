@@ -67,3 +67,4 @@ artifacts/
 
 # go.sh 是本地快捷入口,依赖同为本地的 tools/stack.sh,不入库
 /go.sh
+*.log

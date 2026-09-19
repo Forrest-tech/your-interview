@@ -65,14 +65,43 @@ export interface Application {
   needsConnectFirst?: boolean;
   link?: string;
   jdSummary?: string;
+  /**
+   * JD 全文(2026-09-18)。与 jdSummary 并存:
+   * 摘要是给人看的速览,全文是匹配分析的原料。
+   * ⚠️ 后端上限 40000 字符,详情页按需折叠展示,不要直接铺满。
+   */
+  jdText?: string;
+  /** JD 出处 URL,便于复核原文。 */
+  jdSourceUrl?: string;
   resumeScore?: number;
   passRateEstimate?: number;
   notes?: string;
   outreachStatus?: string;
+  /** 命中 JD 要求的关键词(逗号分隔),由匹配分析写入。 */
+  matchKeywords?: string;
   history?: StatusChange[];
   rounds?: InterviewRound[];
   createdAt: string;
   updatedAt?: string;
+}
+
+/** 公司(2026-09-18:补 Profile 公司情报,面试前准备包的输入之一)。 */
+export interface Company {
+  id: string;
+  name: string;
+  website?: string;
+  industry?: string;
+  location?: string;
+  logoUrl?: string;
+  notes?: string;
+  isBlacklisted: boolean;
+  companyType: string;
+  applicationCount: number;
+  /** 公司情况长文本(规模/主营业务/技术栈/面试风格/文化/近期动态)。 */
+  profile?: string;
+  /** 公司情报来源 URL(JSON 数组字符串)。 */
+  profileSourcesJson?: string;
+  createdAt: string;
 }
 
 export interface StatusChange {

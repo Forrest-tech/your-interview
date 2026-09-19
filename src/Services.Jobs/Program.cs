@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
+using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Jobs.Infrastructure.Persistence;
 using YourInterview.Services.Jobs.Infrastructure.Services;
 using YourInterview.SharedContracts;
@@ -25,12 +26,32 @@ builder.AddServiceDefaults(ServiceName, services =>
         options.AddInterceptors(new DomainEventDispatchInterceptor(sp.GetRequiredService<MediatR.IPublisher>()));
     });
 
+    // ---------- AiGateway 内部客户端(2026-09-18) ----------
+    // 求职信生成等 AI 功能经此调 AiGateway —— 凭据只存网关一处,Jobs 不碰 key。
+    // 地址优先取配置 AiGateway:BaseUrl(容器内 http://aigateway:8080/),
+    // 宿主机直跑时回落到 5268。
+    services.AddHttpContextAccessor();
+    services.AddHttpClient<IAiGatewayClient, AiGatewayClient>(http =>
+    {
+        var baseUrl = builder.Configuration["AiGateway:BaseUrl"] ?? "http://127.0.0.1:5268/";
+        http.BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/");
+        // 生成是长请求:LLM 输出 300-400 词通常 20-60 秒。
+        // 给到 3 分钟 —— 短于上游真实耗时会让用户看到"超时"而其实已经成功了。
+        http.Timeout = TimeSpan.FromMinutes(3);
+    });
+
     services.AddSingleton(TimeProvider.System);
     services.AddHealthChecks().AddDbContextCheck<JobsDbContext>("postgres");
 
     // ---------- MassTransit:把领域事件转发成跨服务集成事件到 RabbitMQ ----------
     services.AddMassTransitWithRabbitMq(builder.Configuration);
 });
+
+// ---------- 当前用户(简历/求职信是用户级私有数据,按 UserId 隔离) ----------
+// ⚠️ AddCurrentUser 不在 AddServiceDefaults 里 —— 按需显式调用(见其注释)。
+//    JobsController 构造注入 ICurrentUser,不注册会让控制器激活直接抛
+//    "Unable to resolve service for type ICurrentUser" → 500。
+builder.Services.AddCurrentUser();
 
 // ---------- JWT 认证(校验 Identity 签发的令牌,只验签不查库) ----------
 var jwtSection = builder.Configuration.GetSection("Jwt");

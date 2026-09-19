@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
-import { PracticeApi } from '../../core/api/practice-api.service';
+import { PracticeApi, AiProviderPresetDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -150,6 +150,9 @@ export class AiSettingComponent {
 
     // 拉一次服务端的真实状态 —— 刷新后仍能看到"已配置的 key 是哪一把"
     this.loadRemoteStatus();
+
+    // 同样拉一次 LLM 配置状态与预设列表
+    this.loadAiStatus();
   }
 
     /** 区域变更同样落盘。 */
@@ -260,6 +263,210 @@ export class AiSettingComponent {
     try {
       localStorage.setItem('azure_speech_configured', '1');
     } catch { /* 存储不可用:仅本次会话 */ }
+  }
+
+  // ==================== LLM 设置(面试前准备包) ====================
+  // 与上面 Azure 那半页严格同构:先测后存、key 只入不出、掩码回填。
+  // 刻意复用同一套模式(而非另创一套交互)—— 用户在同一个页面里
+  // 学一次操作方式就够,两半页行为一致才不别扭。
+
+  /** 后端内置的 provider 预设(含 DeepSeek / Qwen 等),进入页面时拉一次。 */
+  readonly aiPresets = signal<AiProviderPresetDto[]>([]);
+
+  /** 当前选中的预设下标。-1 = 未选(首次加载前)。 */
+  readonly aiPresetIndex = signal(-1);
+
+  /** LLM API Key 输入框内容。⚠️ 只提交给后端,不落 localStorage。 */
+  readonly aiKey = signal('');
+
+  /** 模型名。选预设时自动填第一个,用户可改。 */
+  readonly aiModel = signal('');
+
+  /** 协议地址(openai-compatible / anthropic 用)。 */
+  readonly aiBaseUrl = signal('');
+
+  /** Azure OpenAI 的端点与版本(仅该协议用)。 */
+  readonly aiEndpoint = signal('');
+  readonly aiApiVersion = signal('');
+
+  /** 后端当前 LLM 配置状态。null = 还没查过。 */
+  readonly aiRemoteStatus = signal<{
+    hasKey: boolean; protocol: string | null; displayName: string | null;
+    baseUrl: string | null; model: string | null; maskedKey: string | null; source: string;
+  } | null>(null);
+
+  /** 测试态:null=未测,true=通过,false=失败。 */
+  readonly aiTested = signal<boolean | null>(null);
+  readonly aiTesting = signal(false);
+  readonly aiBusy = signal(false);
+
+  /** 测试返回的模型原样输出 —— 让用户直观看到"真的通了",而不是只信一句提示。 */
+  readonly aiSampleOutput = signal('');
+
+  /** 输入框里是否是掩码(掩码不可再提交,否则会把掩码写进库覆盖真 key)。 */
+  private readonly aiKeyIsMasked = computed(() => this.aiKey().includes('•'));
+
+  /** 输入框是否为一个可提交的真 key。 */
+  readonly aiKeyUsable = computed(
+    () => this.aiKey().trim().length > 0 && !this.aiKeyIsMasked());
+
+  /** 当前选中预设。 */
+  readonly aiCurrentPreset = computed(() => {
+    const i = this.aiPresetIndex();
+    const list = this.aiPresets();
+    return i >= 0 && i < list.length ? list[i] : null;
+  });
+
+  /** 是否需要 BaseUrl 输入框(openai-compatible 与 anthropic 需要)。 */
+  readonly aiNeedsBaseUrl = computed(() => {
+    const p = this.aiCurrentPreset();
+    return p ? p.protocol !== 'azure-openai' : false;
+  });
+
+  /** 是否是 Azure OpenAI(需要 Endpoint + ApiVersion)。 */
+  readonly aiIsAzure = computed(() => this.aiCurrentPreset()?.protocol === 'azure-openai');
+
+  /** 硬门禁:测试通过才允许保存(与 Azure 半页同规则)。 */
+  readonly aiCanSave = computed(
+    () => this.aiKeyUsable() && this.aiTested() === true && !this.aiBusy());
+
+  readonly aiRemoteMasked = computed(() => this.aiRemoteStatus()?.maskedKey ?? '');
+
+  /** 已配置厂商的展示名(优先用后端存的 displayName)。 */
+  readonly aiRemoteName = computed(
+    () => this.aiRemoteStatus()?.displayName ?? this.aiRemoteStatus()?.protocol ?? '');
+
+  /**
+   * 选择预设:自动填 BaseUrl 与第一个模型名,并作废之前的测试态
+   * (换了厂商,之前测通过的那把凭据不再代表当前选择)。
+   */
+  onAiPresetChange(index: number): void {
+    this.aiPresetIndex.set(index);
+    const p = this.aiPresets()[index];
+    if (!p) return;
+    this.aiBaseUrl.set(p.defaultBaseUrl ?? '');
+    this.aiModel.set(p.models.length > 0 ? p.models[0] : '');
+    this.aiTested.set(null);
+    this.aiSampleOutput.set('');
+  }
+
+  /** 改动任一连接参数都要作废测试态 —— 否则测了 A 改成 B 还能存。 */
+  onAiKeyInput(v: string): void {
+    this.aiKey.set(v);
+    this.aiTested.set(null);
+    this.aiSampleOutput.set('');
+  }
+
+  onAiModelInput(v: string): void {
+    this.aiModel.set(v);
+    this.aiTested.set(null);
+  }
+
+  onAiBaseUrlInput(v: string): void {
+    this.aiBaseUrl.set(v);
+    this.aiTested.set(null);
+  }
+
+  /** 测试当前输入框里的候选凭据(不落库)。 */
+  testAiKey(): void {
+    if (!this.aiKeyUsable() || this.aiTesting() || this.aiBusy()) return;
+    const p = this.aiCurrentPreset();
+    if (!p) { this.flash(this.t('ai.presetFirst'), 'err'); return; }
+
+    this.aiTesting.set(true);
+    this.aiTested.set(null);
+    this.aiSampleOutput.set('');
+
+    this.practiceApi.testAiCredential({
+      protocol: p.protocol,
+      apiKey: this.aiKey().trim(),
+      baseUrl: this.aiBaseUrl().trim() || null,
+      model: this.aiModel().trim(),
+      endpoint: this.aiEndpoint().trim() || null,
+      apiVersion: this.aiApiVersion().trim() || null
+    }).subscribe({
+      next: (r) => {
+        this.aiTested.set(true);
+        this.aiTesting.set(false);
+        this.aiSampleOutput.set(r.sampleOutput ?? '');
+        this.flash(r.message || this.t('ai.testOk'));
+      },
+      error: (e) => {
+        this.aiTested.set(false);
+        this.aiTesting.set(false);
+        this.flash(this.t('ai.testFail') + this.errText(e), 'err');
+      }
+    });
+  }
+
+  /** 保存 LLM 配置 —— 仅测试通过后允许(与 Azure 半页同门禁)。 */
+  saveAiKey(): void {
+    if (!this.aiCanSave()) {
+      if (!this.aiKeyUsable()) this.flash(this.t('setting.keyHint'), 'err');
+      else if (this.aiTested() !== true) this.flash(this.t('setting.testFirst'), 'err');
+      return;
+    }
+    const p = this.aiCurrentPreset();
+    if (!p) return;
+
+    this.aiBusy.set(true);
+    this.practiceApi.saveAiSettings({
+      protocol: p.protocol,
+      apiKey: this.aiKey().trim(),
+      baseUrl: this.aiBaseUrl().trim() || null,
+      model: this.aiModel().trim(),
+      endpoint: this.aiEndpoint().trim() || null,
+      apiVersion: this.aiApiVersion().trim() || null,
+      displayName: p.name
+    }).subscribe({
+      next: (status) => {
+        this.aiRemoteStatus.set(status);
+        // 保存后输入框回填服务端掩码(与 Azure 半页一致):
+        // 用户一眼确认"生效的是哪一把",同时掩码不可再提交。
+        this.aiKey.set(status.maskedKey ?? '');
+        this.aiTested.set(null);
+        this.aiSampleOutput.set('');
+        this.flash(this.t('ai.savedOk'));
+        this.aiBusy.set(false);
+      },
+      error: (e) => {
+        this.flash(this.t('setting.saveFail') + this.errText(e), 'err');
+        this.aiBusy.set(false);
+      }
+    });
+  }
+
+  /** 从后端拉 LLM 配置状态与预设列表(进入页面时调)。 */
+  loadAiStatus(): void {
+    this.practiceApi.listAiProviders().subscribe({
+      next: (list) => {
+        this.aiPresets.set(list);
+        // 默认选中第一个(DeepSeek)—— 用户最常用,少一次点击。
+        if (list.length > 0 && this.aiPresetIndex() < 0) {
+          this.onAiPresetChange(0);
+        }
+      },
+      error: () => { /* 后端没起:预设下拉为空,页面仍可用 */ }
+    });
+
+    this.practiceApi.getAiSettings().subscribe({
+      next: (st) => {
+        this.aiRemoteStatus.set(st);
+        if (st.hasKey) {
+          // 回填非敏感字段,让用户看到"当前配的是哪家哪个模型"。
+          if (st.model) this.aiModel.set(st.model);
+          if (st.baseUrl) this.aiBaseUrl.set(st.baseUrl);
+          if (st.endpoint) this.aiEndpoint.set(st.endpoint);
+          if (st.apiVersion) this.aiApiVersion.set(st.apiVersion);
+          const idx = this.aiPresets().findIndex(p =>
+            p.protocol === st.protocol && (p.name === st.displayName || !st.displayName));
+          if (idx >= 0) this.aiPresetIndex.set(idx);
+          // 输入框显示掩码(不是明文 key,也不是空 —— 让用户知道已配置)
+          this.aiKey.set(st.maskedKey ?? '');
+        }
+      },
+      error: () => { /* 同上 */ }
+    });
   }
 
   private errText(e: unknown): string {

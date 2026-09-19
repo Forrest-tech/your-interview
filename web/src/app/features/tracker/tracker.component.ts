@@ -16,7 +16,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatDividerModule } from '@angular/material/divider';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
-import { Application, ApplicationStatus, Paged, TrackerStats } from '../../core/models/api.models';
+import { Application, ApplicationStatus, Company, Paged, TrackerStats } from '../../core/models/api.models';
 
 /** 状态下拉的选项 —— 顺序即漏斗顺序,下拉里也按流程排,避免用户找"面试中"要找半天。 */
 const STATUS_ORDER: ApplicationStatus[] = [
@@ -507,7 +507,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
   standalone: true,
   imports: [
     CommonModule, MatDialogModule, MatButtonModule, MatIconModule,
-    MatChipsModule, MatDividerModule
+    MatChipsModule, MatDividerModule, FormsModule, MatProgressBarModule,
+    MatFormFieldModule, MatInputModule
   ],
   template: `
     <h2 mat-dialog-title>
@@ -547,6 +548,179 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         <section>
           <h4>JD 摘要</h4>
           <p class="pre">{{ app.jdSummary }}</p>
+        </section>
+      }
+
+      <!-- 匹配分析(纯关键词,不调 AI)-->
+      @if (match(); as m) {
+        <mat-divider></mat-divider>
+        <section>
+          <h4>简历匹配分析</h4>
+
+          <div class="match-head">
+            <div class="score" [class]="matchTier(m.score)">
+              <span class="score-num">{{ m.score }}</span>
+              <span class="score-unit">分</span>
+            </div>
+            <div class="score-note">
+              <strong [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</strong>
+              <span>命中 {{ m.hit.length }} / {{ m.total }} 个 JD 技术关键词</span>
+            </div>
+          </div>
+
+          @if (m.missing.length > 0) {
+            <div class="kw-group">
+              <span class="kw-title">缺少的关键词 ({{ m.missing.length }})</span>
+              <div class="kw-list">
+                @for (k of m.missing; track k) {
+                  <span class="kw miss">{{ k }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          @if (m.hit.length > 0) {
+            <div class="kw-group">
+              <span class="kw-title">已命中 ({{ m.hit.length }})</span>
+              <div class="kw-list">
+                @for (k of m.hit; track k) {
+                  <span class="kw ok">{{ k }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          @if (m.softSkills.length > 0) {
+            <p class="soft-note">
+              另提及软素质要求(不计入分数):{{ m.softSkills.join('、') }}
+            </p>
+          }
+        </section>
+      }
+
+      <!-- 求职信(Cover Letter)-->
+      <mat-divider></mat-divider>
+      <section class="cl-section">
+        <h4 class="fold-head">
+          <mat-icon>description</mat-icon>
+          <span>求职信</span>
+          @if (cl(); as c) {
+            <span class="cl-status" [class]="'cl-' + c.status.toLowerCase()">{{ clStatusLabel(c.status) }}</span>
+          }
+          <span class="fold-len">
+            @if (cl(); as c) { {{ c.content.length }} 字符 }
+          </span>
+        </h4>
+
+        <!-- 输入体检提示(缺简历/缺 JD/缺公司情报)-->
+        @if (clReadiness(); as rd) {
+          @if (rd.missingHint) {
+            <p class="cl-hint">
+              <mat-icon>info</mat-icon>
+              <span>{{ rd.missingHint }}</span>
+            </p>
+          }
+          @if (cl()?.isStale) {
+            <p class="cl-hint stale">
+              <mat-icon>history</mat-icon>
+              <span>这封信基于简历 v{{ cl()?.resumeVersion }} 生成,当前简历已是 v{{ rd.resumeVersion }} —— 建议重新生成。</span>
+            </p>
+          }
+        }
+
+        <!-- 生成参数 -->
+        @if (!clGenerating()) {
+          <mat-form-field appearance="outline" class="cl-extra">
+            <mat-label>额外要求(可选)</mat-label>
+            <textarea matInput rows="2" [(ngModel)]="clExtra"
+              placeholder="例:强调我在 Citigroup 的低延迟交易经验,语气务实一些"></textarea>
+            <mat-hint>AI 会读你的简历 + JD 全文 + 公司情报,再叠加这里的补充。</mat-hint>
+          </mat-form-field>
+        }
+
+        <!-- 生成按钮 / 生成中 -->
+        @if (clGenerating()) {
+          <div class="cl-generating">
+            <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+            <p>正在生成…通常 20-60 秒,请勿关闭窗口。</p>
+          </div>
+        } @else {
+          <div class="cl-actions">
+            <button mat-flat-button color="primary" (click)="generateCoverLetter()"
+              [disabled]="!!clReadiness()?.missingHint">
+              <mat-icon>auto_awesome</mat-icon>
+              {{ (cl()?.content ? '重新生成' : 'AI 生成') }}
+            </button>
+            @if (cl()?.content) {
+              <button mat-button (click)="clEditing.set(!clEditing())">
+                <mat-icon>{{ clEditing() ? 'visibility' : 'edit' }}</mat-icon>
+                {{ clEditing() ? '预览' : '手动编辑' }}
+              </button>
+              @if (cl()?.status !== 'Final') {
+                <button mat-button (click)="markCoverLetterFinal()">
+                  <mat-icon>check_circle</mat-icon>标记为已确认
+                </button>
+              }
+              <button mat-button (click)="deleteCoverLetter()">
+                <mat-icon>delete_outline</mat-icon>删除
+              </button>
+            }
+          </div>
+        }
+
+        <!-- 正文:编辑态 textarea / 预览态只读 -->
+        @if (cl()?.content; as content) {
+          @if (clEditing()) {
+            <textarea matInput class="cl-editor" rows="16" [(ngModel)]="clDraft"></textarea>
+            <div class="cl-actions save-row">
+              <button mat-flat-button color="primary" (click)="saveCoverLetter()">保存</button>
+              <button mat-button (click)="cancelEdit()">取消</button>
+            </div>
+          } @else {
+            <div class="cl-preview">{{ content }}</div>
+          }
+        } @else if (!clGenerating()) {
+          <p class="cl-empty">还没有求职信。点上面的按钮,基于你的简历与该岗位 JD 生成一封。</p>
+        }
+      </section>
+
+      <!-- JD 全文(默认折叠:可达 40000 字符)-->
+      @if (app.jdText) {
+        <mat-divider></mat-divider>
+        <section>
+          <h4 class="fold-head" (click)="jdExpanded.set(!jdExpanded())">
+            <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
+            <span>JD 全文</span>
+            <span class="fold-len">{{ app.jdText.length }} 字符</span>
+          </h4>
+
+          @if (app.jdSourceUrl) {
+            <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
+              <mat-icon>link</mat-icon>查看原始发布页
+            </a>
+          }
+
+          @if (jdExpanded()) {
+            <div class="jd-full">
+              <p class="pre">{{ app.jdText }}</p>
+            </div>
+          } @else {
+            <p class="pre jd-peek">{{ app.jdText.slice(0, 220) }}…</p>
+          }
+        </section>
+      }
+
+      <!-- 公司情报 -->
+      @if (company()?.profile) {
+        <mat-divider></mat-divider>
+        <section>
+          <h4>公司情报 · {{ company()?.name }}</h4>
+          <p class="pre">{{ company()?.profile }}</p>
+          @if (company()?.website) {
+            <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
+              <mat-icon>public</mat-icon>{{ company()!.website }}
+            </a>
+          }
         </section>
       }
 
@@ -639,10 +813,238 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       border-radius: 10px; background: rgba(0, 0, 0, 0.06); font-size: 11.5px;
     }
     .link { font-size: 13px; word-break: break-all; color: #303f9f; }
+    /* ---- 匹配分析 ---- */
+    .match-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+    .score {
+      display: flex; align-items: baseline; gap: 2px;
+      padding: 6px 14px; border-radius: 10px; font-weight: 600;
+    }
+    .score-num { font-size: 26px; line-height: 1; }
+    .score-unit { font-size: 12px; }
+    .score.good { background: #e8f5e9; color: #2e7d32; }
+    .score.fair { background: #fff8e1; color: #ef6c00; }
+    .score.poor { background: #ffebee; color: #c62828; }
+    .score-note { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+    .score-note strong.good { color: #2e7d32; }
+    .score-note strong.fair { color: #ef6c00; }
+    .score-note strong.poor { color: #c62828; }
+    .score-note span { opacity: 0.6; }
+    .kw-group { margin-bottom: 12px; }
+    .kw-title { display: block; font-size: 11.5px; opacity: 0.55; margin-bottom: 6px; }
+    .kw-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .kw {
+      padding: 2px 9px; border-radius: 11px; font-size: 12px;
+      border: 1px solid transparent;
+    }
+    .kw.miss { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
+    .kw.ok { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
+    .soft-note { margin: 8px 0 0; font-size: 12px; opacity: 0.55; line-height: 1.6; }
+    /* ---- JD 全文折叠 ---- */
+    .fold-head {
+      display: flex; align-items: center; gap: 6px;
+      cursor: pointer; user-select: none; margin-bottom: 8px;
+    }
+    .fold-head:hover { opacity: 0.75; }
+    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .fold-len { margin-left: auto; font-size: 11.5px; opacity: 0.45; font-weight: 400; }
+    .jd-full { max-height: 340px; overflow-y: auto; padding-right: 6px; }
+    .jd-peek { opacity: 0.65; }
+    .src-link {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12.5px; color: #303f9f; margin-bottom: 8px;
+    }
+    .src-link mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    /* ---- 求职信 ---- */
+    .cl-status {
+      margin-left: 6px; padding: 1px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 500;
+    }
+    .cl-status.cl-draft { background: rgba(0,0,0,0.07); }
+    .cl-status.cl-generated { background: #e3f2fd; color: #1565c0; }
+    .cl-status.cl-final { background: #e8f5e9; color: #2e7d32; }
+    .cl-hint {
+      display: flex; align-items: flex-start; gap: 6px;
+      margin: 0 0 10px; padding: 9px 11px; border-radius: 8px;
+      background: #fff8e1; font-size: 12.5px; line-height: 1.6;
+    }
+    .cl-hint.stale { background: #f3e5f5; }
+    .cl-hint mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
+    .cl-extra { width: 100%; margin-bottom: 4px; }
+    .cl-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+    .cl-actions.save-row { margin-top: 10px; }
+    .cl-generating { margin-top: 8px; }
+    .cl-generating p { margin: 10px 0 0; font-size: 12.5px; opacity: 0.65; }
+    .cl-editor {
+      width: 100%; margin-top: 10px; padding: 12px;
+      font-family: inherit; font-size: 13.5px; line-height: 1.7;
+      border: 1px solid rgba(0,0,0,0.18); border-radius: 8px;
+      resize: vertical; box-sizing: border-box;
+    }
+    .cl-preview {
+      margin-top: 10px; padding: 14px 16px; border-radius: 8px;
+      background: rgba(0,0,0,0.028); font-size: 13.5px; line-height: 1.75;
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 420px; overflow-y: auto;
+    }
+    .cl-empty { margin: 10px 0 0; font-size: 13px; opacity: 0.55; }
   `]
 })
 export class ApplicationDetailDialogComponent {
   readonly app = inject<Application>(MAT_DIALOG_DATA);
+  private readonly api = inject(ApiClient);
+
+  /** 公司情报(懒加载 —— 详情弹窗打开后才查一次)。 */
+  readonly company = signal<Company | null>(null);
+
+  /** JD 全文是否展开(默认折叠:40000 字符铺开会淹没弹窗)。 */
+  readonly jdExpanded = signal(false);
+
+  /** 匹配分析结果。null = 还没算(JD 或简历缺失时保持 null)。 */
+  readonly match = signal<MatchResult | null>(null);
+
+  /** 简历全文(匹配分析的比对基准)。null = 尚未拿到。 */
+  private readonly resumeText = signal<string | null>(null);
+
+  // ---------------------------- 求职信 ----------------------------
+
+  /** 当前投递的求职信。null = 尚未生成(不是加载失败)。 */
+  readonly cl = signal<CoverLetterDto | null>(null);
+
+  /** 生成前的输入体检结果 —— 缺简历时按钮直接禁用,不让用户白等。 */
+  readonly clReadiness = signal<CoverLetterReadinessDto | null>(null);
+
+  /** 生成中。LLM 要几十秒,必须有明确态,否则用户会重复点。 */
+  readonly clGenerating = signal(false);
+
+  /** 是否在手动编辑态(与预览态切换)。 */
+  readonly clEditing = signal(false);
+
+  /** 额外要求(双向绑定到 textarea)。 */
+  clExtra = '';
+
+  /** 编辑中的草稿(保存前不落库 —— 用户取消就丢弃)。 */
+  clDraft = '';
+
+  constructor() {
+    // 公司情报:Application 只带 companyId,要单独查
+    if (this.app.companyId) {
+      this.api.get<Company>(`/api/jobs/companies/${this.app.companyId}`).subscribe({
+        next: (c) => this.company.set(c),
+        error: () => { /* 拿不到公司情报不阻断详情展示 */ }
+      });
+    }
+
+    // 简历全文:从 Profile 服务取(与 AI 练习共用同一份)
+    this.api.get<{ resumeText: string | null }>('/api/jobs/resume-text').subscribe({
+      next: (r) => {
+        this.resumeText.set(r.resumeText);
+        this.recomputeMatch();
+      },
+      error: () => { this.recomputeMatch(); }
+    });
+
+    // 求职信 + 输入体检:详情弹窗打开时各查一次
+    this.loadCoverLetter();
+    this.loadReadiness();
+  }
+
+  // ---------------------------- 求职信方法 ----------------------------
+
+  private loadCoverLetter(): void {
+    this.api.get<CoverLetterDto | null>(`/api/jobs/applications/${this.app.id}/cover-letter`).subscribe({
+      next: (c) => {
+        this.cl.set(c);
+        this.clDraft = c?.content ?? '';
+      },
+      error: () => { /* 读不到不阻断详情展示 */ }
+    });
+  }
+
+  private loadReadiness(): void {
+    this.api.get<CoverLetterReadinessDto>(`/api/jobs/applications/${this.app.id}/cover-letter/readiness`)
+      .subscribe({
+        next: (r) => this.clReadiness.set(r),
+        error: () => { /* 体检失败不阻断 —— 生成时后端还会再校验一次 */ }
+      });
+  }
+
+  /**
+   * AI 生成求职信。
+   *
+   * ⚠️ 已有内容时必须确认覆盖 —— 后端默认 Overwrite=false 兜底,
+   *    前端这一层确认是为了让用户明确知道"手改的内容会被冲掉"。
+   */
+  generateCoverLetter(): void {
+    const hasContent = !!this.cl()?.content;
+    if (hasContent && !confirm('这会用新生成的内容覆盖当前求职信(包括你手改的部分)。继续?')) return;
+
+    this.clGenerating.set(true);
+    this.api.post<CoverLetterDto>(
+      `/api/jobs/applications/${this.app.id}/cover-letter/generate`,
+      { extraInstructions: this.clExtra.trim() || null, overwrite: hasContent }
+    ).subscribe({
+      next: (c) => {
+        this.cl.set(c);
+        this.clDraft = c.content;
+        this.clEditing.set(false);
+        this.clGenerating.set(false);
+      },
+      error: (err) => {
+        this.clGenerating.set(false);
+        // 后端的 ProblemDetails.description 已经是人话,直接透出
+        alert(readError(err));
+      }
+    });
+  }
+
+  saveCoverLetter(): void {
+    const text = this.clDraft.trim();
+    if (!text) { alert('求职信内容不能为空。'); return; }
+
+    this.api.put<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter`, { content: text })
+      .subscribe({
+        next: (c) => { this.cl.set(c); this.clEditing.set(false); },
+        error: (err) => alert(readError(err))
+      });
+  }
+
+  cancelEdit(): void {
+    this.clDraft = this.cl()?.content ?? '';
+    this.clEditing.set(false);
+  }
+
+  markCoverLetterFinal(): void {
+    this.api.post<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter/final`)
+      .subscribe({
+        next: (c) => this.cl.set(c),
+        error: (err) => alert(readError(err))
+      });
+  }
+
+  deleteCoverLetter(): void {
+    if (!confirm('删除这封求职信?此操作不可撤销。')) return;
+    this.api.delete<void>(`/api/jobs/applications/${this.app.id}/cover-letter`)
+      .subscribe({
+        next: () => { this.cl.set(null); this.clDraft = ''; this.clEditing.set(false); },
+        error: (err) => alert(readError(err))
+      });
+  }
+
+  clStatusLabel(s: string): string {
+    switch (s) {
+      case 'Generated': return 'AI 生成';
+      case 'Final': return '已确认';
+      default: return '草稿';
+    }
+  }
+
+  /** JD 全文到手或简历到手后重算 —— 两者缺一就不出分。 */
+  private recomputeMatch(): void {
+    const jd = this.app.jdText;
+    const resume = this.resumeText();
+    if (!jd || !resume) return;
+    this.match.set(computeMatch(resume, jd));
+  }
 
   statusLabel(s: string): string {
     return STATUS_LABELS[s as ApplicationStatus] ?? s;
@@ -651,4 +1053,196 @@ export class ApplicationDetailDialogComponent {
   statusClass(s: string): string {
     return `st-${(s || '').toLowerCase()}`;
   }
+
+  /** 匹配分对应的颜色档(与 Simplify 一致:>=70 好,50-69 中,<50 差)。 */
+  matchTier(score: number): string {
+    if (score >= 70) return 'good';
+    if (score >= 50) return 'fair';
+    return 'poor';
+  }
+
+  matchTierLabel(score: number): string {
+    if (score >= 70) return '强匹配';
+    if (score >= 50) return '一般匹配';
+    return '弱匹配';
+  }
+}
+
+// ============================================================================
+//  关键词匹配分析(纯算法,不调 AI)
+//  Forrest 2026-09-18:只算技术词;软素质词单列不计分。
+// ============================================================================
+
+/** 匹配分析结果。 */
+export interface MatchResult {
+  /** 0-100 的技术词命中率 —— 这是主分数。 */
+  score: number;
+  /** JD 里出现且简历也有的技术词。 */
+  hit: string[];
+  /** JD 里出现但简历没有的技术词 —— 即 Simplify 的 "Missing Keywords"。 */
+  missing: string[];
+  /** JD 里识别到的技术词总数(分数的分母)。 */
+  total: number;
+  /** 顺带识别出的软素质词 —— 单列展示,不进分数。 */
+  softSkills: string[];
+}
+
+/**
+ * 技术关键词词典。
+ * ⚠️ 只收"能在简历里当技能写"的词 —— 判断标准:
+ *    招聘方能拿它做筛选条件,候选人能拿它做技能声明。
+ *    收词原则:宁可少收,不可乱收(乱收会让分母虚高、分数虚低)。
+ */
+const TECH_TERMS: readonly string[] = [
+  // 语言
+  'C#', 'C\+\+', 'Java', 'Python', 'JavaScript', 'TypeScript', 'SQL', 'T-SQL', 'TSQL',
+  'Go', 'Rust', 'Ruby', 'PHP', 'Kotlin', 'Swift', 'Scala', 'Perl', 'Bash', 'PowerShell',
+  'HTML', 'CSS', 'SCSS', 'SASS', 'XAML', 'JSON', 'XML', 'YAML',
+  // 后端 / 框架
+  '.NET', '.NET Core', 'ASP.NET', 'Web API', 'EF Core', 'Entity Framework', 'WCF', 'WPF',
+  'Node.js', 'Express', 'Spring', 'Django', 'Flask', 'FastAPI', 'gRPC', 'REST', 'RESTful',
+  'GraphQL', 'WebSockets', 'SignalR', 'Prism', 'MVVM', 'MVC',
+  // 前端
+  'Angular', 'React', 'Vue', 'Redux', 'RxJS', 'NgRx', 'jQuery', 'Tailwind', 'Bootstrap',
+  'Material', 'Webpack', 'Vite', 'ES6', 'SASS',
+  // 数据库 / 缓存
+  'SQL Server', 'PostgreSQL', 'MySQL', 'Oracle', 'MongoDB', 'DynamoDB', 'Redis', 'Memcached',
+  'Elasticsearch', 'Cassandra', 'SQLite', 'Cosmos DB', 'BigQuery', 'Snowflake', 'Redshift',
+  // 云 / 基础设施
+  'Azure', 'AWS', 'GCP', 'Google Cloud', 'Compute Engine', 'App Services', 'Service Bus',
+  'S3', 'EC2', 'ECS', 'Fargate', 'Lambda', 'Kubernetes', 'Docker', 'Terraform', 'Helm',
+  'PaaS', 'IaaS', 'SaaS', 'Serverless',
+  // 架构 / 方法
+  'Microservices', 'Clean Architecture', 'DDD', 'Domain-Driven Design', 'SOLID', 'CQRS',
+  'Event Sourcing', 'Strangler', 'Design Patterns', 'Distributed', 'High Availability',
+  'Scalability', 'Load Balancing', 'Caching', 'Message Queue', 'Kafka', 'RabbitMQ',
+  // 测试 / 质量
+  'Unit Testing', 'TDD', 'xUnit', 'NUnit', 'MSTest', 'Jest', 'Jasmine', 'Karma', 'Cypress',
+  'Playwright', 'Selenium', 'SonarQube', 'Code Review', 'Integration Testing',
+  // DevOps
+  'CI/CD', 'GitHub Actions', 'Jenkins', 'TeamCity', 'Azure DevOps', 'GitLab', 'Git',
+  'Observability', 'Prometheus', 'Grafana', 'Datadog', 'New Relic', 'Splunk',
+  // 安全 / 合规
+  'OWASP', 'Security', 'OAuth', 'JWT', 'SSO', 'SAML', 'FedRAMP', 'FIPS',
+  // 其他
+  'Linux', 'Unix', 'Multithreading', 'Asynchronous', 'Object-Oriented', 'OOP',
+  'Agile', 'Scrum', 'Kanban', 'Jira', 'Confluence', 'AI', 'Machine Learning', 'LLM',
+  'Web Application', 'Web Services', 'Full-Stack', 'Full Stack', 'Front-End', 'Back-End'
+];
+
+/**
+ * 软素质词 —— 单独识别、单独展示,但**不进分数**。
+ * 理由:简历里不会把"团队合作"当技能写,算进分母会让所有人得分虚低。
+ */
+const SOFT_TERMS: readonly string[] = [
+  'team player', 'employee engagement', 'communication skills', 'self-starter',
+  'problem-solving', 'analytical', 'attention to detail', 'collaboration',
+  'fast-paced', 'entrepreneurial', 'work well under pressure', 'written and verbal',
+  'interpersonal', 'time management', 'adaptable', 'proactive', 'mentoring',
+  'stakeholder', 'leadership',
+  '团队合作', '沟通能力', '抗压', '责任心', '学习能力'
+];
+
+/** 归一化:小写 + 折叠空白,用于跨大小写、跨连字符比对。 */
+function norm(t: string): string {
+  return t.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * 常见别名归一 —— 让 "ASP.NET" 和 "ASP .NET"、"C Sharp" 与 "C#"
+ * 这类写法差异不会把命中判成未命中。
+ */
+function aliasesOf(term: string): string[] {
+  const n = norm(term);
+  const out = [n];
+  if (n === 'c#') out.push('c sharp', 'csharp');
+  if (n === '.net' || n === '.net core') out.push('.net', '.net core', 'dotnet', 'asp.net');
+  if (n === 'asp.net') out.push('asp.net', 'aspnet', 'asp .net');
+  if (n === 'rest' || n === 'restful') out.push('rest', 'restful');
+  if (n === 'ci/cd') out.push('ci/cd', 'ci cd', 'continuous integration');
+  if (n === 'full-stack' || n === 'full stack') out.push('full-stack', 'full stack', 'fullstack');
+  if (n === 'gcp' || n === 'google cloud') out.push('gcp', 'google cloud');
+  if (n === 'dd' + 'd') out.push('ddd', 'domain-driven design', 'domain driven design');
+  if (n === 'unit testing') out.push('unit test', 'unit testing', 'unit tests');
+  if (n === 't-sql' || n === 'tsql') out.push('t-sql', 'tsql', 't sql');
+  return Array.from(new Set(out));
+}
+
+/** 该词是否在文本里出现(大小写不敏感 + 别名)。 */
+function occursIn(text: string, term: string): boolean {
+  const hay = norm(text);
+  return aliasesOf(term).some((a) => hay.includes(a));
+}
+
+/**
+ * 计算简历与 JD 的匹配度。
+ *
+ * @param resume 简历全文
+ * @param jd     JD 全文
+ */
+export function computeMatch(resume: string, jd: string): MatchResult {
+  // 只把"JD 里真的出现过"的技术词算进分母 ——
+  // 词典有几百个词,全算分母会变成"词典命中率",毫无意义。
+  const jdTech = TECH_TERMS.filter((t) => occursIn(jd, t));
+
+  const hit: string[] = [];
+  const missing: string[] = [];
+  for (const t of jdTech) {
+    if (occursIn(resume, t)) hit.push(t);
+    else missing.push(t);
+  }
+
+  const total = jdTech.length;
+  const score = total === 0 ? 0 : Math.round((hit.length / total) * 100);
+
+  const softSkills = SOFT_TERMS.filter((t) => occursIn(jd, t));
+
+  return { score, hit, missing, total, softSkills };
+}
+
+// ============================================================================
+//  求职信 DTO(与后端 CoverLetterDto / CoverLetterReadinessDto 同字段)
+//
+//  ⚠️ 字段名必须逐字对齐后端的 JSON 输出(ASP.NET 默认 camelCase)。
+//     这里手写而不生成,是因为接口很少变;若要改后端字段,记得同步这里。
+// ============================================================================
+
+/** 求职信。 */
+export interface CoverLetterDto {
+  id: string;
+  applicationId: string;
+  content: string;
+  /** Draft | Generated | Final */
+  status: string;
+  generatedByModel: string | null;
+  /** 生成时所用简历版本。 */
+  resumeVersion: number | null;
+  lastPromptHint: string | null;
+  generatedAt: string | null;
+  updatedAt: string | null;
+  /** 简历已更新到更新版本 → 这封信可能已过期。 */
+  isStale: boolean;
+  currentResumeVersion: number;
+}
+
+/** 生成前的输入体检。 */
+export interface CoverLetterReadinessDto {
+  hasResume: boolean;
+  resumeVersion: number;
+  hasJdText: boolean;
+  hasCompanyProfile: boolean;
+  companyName: string;
+  role: string;
+  /** 有值时说明输入不全(简历缺失是硬阻断,JD/公司情报是建议补)。 */
+  missingHint: string | null;
+}
+
+/**
+ * 从 HttpErrorResponse 里抠出人话错误。
+ * 后端的 ProblemDetails 把说明放在 description(我们的 Error 记录映射过去的)。
+ */
+function readError(err: unknown): string {
+  const e = err as { error?: { description?: string; detail?: string; title?: string }; message?: string };
+  return e?.error?.description ?? e?.error?.detail ?? e?.error?.title
+    ?? e?.message ?? '操作失败,请重试。';
 }

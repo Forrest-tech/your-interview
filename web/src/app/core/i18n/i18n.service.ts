@@ -337,6 +337,70 @@ const DICT: Record<string, Record<Lang, string>> = {
   // ---------- AI 语音设置页(/account/ai-setting) ----------
   // 2026-09-16(Forrest 第 6 条):该页原写死中文,与网站语言脱节。
   // 现全部接入 i18n,顶栏切语言时本页同步变化。
+  // ---------- LLM 设置(面试前准备包,2026-09-18) ----------
+  'ai.credTitle': { zh: '大模型 (LLM) 凭据', en: 'LLM Credentials', fr: 'Identifiants LLM' },
+  'ai.credDesc': {
+    zh: '面试前准备包用这里配置的模型生成预测问题、关注点与反问建议。Key 只存服务端,绝不下发浏览器。',
+    en: 'The interview prep pack uses this model to generate predicted questions, focus areas and reverse questions. The key stays server-side only.',
+    fr: 'Le modèle configuré ici génère les questions prévues, points d’attention et questions inverses. La clé reste côté serveur.'
+  },
+  'ai.providerLabel': { zh: '模型厂商', en: 'Provider', fr: 'Fournisseur' },
+  'ai.providerHint': {
+    zh: '选预设会自动填好端点与常用模型,可直接用。',
+    en: 'Picking a preset fills in the endpoint and common models automatically.',
+    fr: 'Choisir un préréglage remplit l’URL et les modèles courants.'
+  },
+  'ai.keyLabel': { zh: 'API Key', en: 'API Key', fr: 'Clé API' },
+  'ai.keyPlaceholder': {
+    zh: '粘贴该厂商控制台里的密钥',
+    en: 'Paste the key from your provider console',
+    fr: 'Collez la clé de la console du fournisseur'
+  },
+  'ai.modelLabel': { zh: '模型名', en: 'Model', fr: 'Modèle' },
+  'ai.modelPlaceholder': { zh: '如 deepseek-chat / qwen-plus', en: 'e.g. deepseek-chat / qwen-plus', fr: 'ex. deepseek-chat / qwen-plus' },
+  'ai.modelHint': {
+    zh: '要调用哪个模型。可手改,不限于下拉里列出的。',
+    en: 'Which model to call. Editable — not limited to the list.',
+    fr: 'Le modèle à appeler. Modifiable, pas limité à la liste.'
+  },
+  'ai.baseUrlLabel': { zh: '端点地址 (BaseUrl)', en: 'Base URL', fr: 'URL de base' },
+  'ai.baseUrlPlaceholder': { zh: 'https://api.deepseek.com/v1', en: 'https://api.deepseek.com/v1', fr: 'https://api.deepseek.com/v1' },
+  'ai.baseUrlHint': {
+    zh: '协议根地址,不含 /chat/completions —— 客户端会自己拼。',
+    en: 'Protocol root, without /chat/completions — the client appends it.',
+    fr: 'Racine du protocole, sans /chat/completions — le client l’ajoute.'
+  },
+  'ai.endpointLabel': { zh: 'Azure 资源端点', en: 'Azure Endpoint', fr: 'Point de terminaison Azure' },
+  'ai.endpointPlaceholder': { zh: 'https://my-resource.openai.azure.com', en: 'https://my-resource.openai.azure.com', fr: 'https://my-resource.openai.azure.com' },
+  'ai.apiVersionLabel': { zh: 'API 版本', en: 'API Version', fr: 'Version d’API' },
+  'ai.apiVersionPlaceholder': { zh: '如 2024-10-21', en: 'e.g. 2024-10-21', fr: 'ex. 2024-10-21' },
+  'ai.presetFirst': { zh: '请先选择模型厂商。', en: 'Pick a provider first.', fr: 'Choisissez d’abord un fournisseur.' },
+  'ai.testOk': { zh: '连接正常,模型可用。', en: 'Connection OK — the model works.', fr: 'Connexion OK — le modèle fonctionne.' },
+  'ai.testFail': { zh: '测试未通过:', en: 'Test failed: ', fr: 'Échec du test : ' },
+  'ai.savedOk': { zh: '已保存并通过连通性测试', en: 'Saved and connectivity verified', fr: 'Enregistrée et connexion vérifiée' },
+  'ai.samplePrefix': { zh: '模型回复:', en: 'Model replied: ', fr: 'Réponse du modèle : ' },
+  'ai.validPrefix': { zh: '你有有效的 key:', en: 'You have a valid key:', fr: 'Vous disposez d’une clé valide :' },
+  'ai.validSuffix': { zh: ',面试前准备包已可用。', en: ' — the prep pack is ready.', fr: ' — le pack de préparation est prêt.' },
+  'ai.noKey': {
+    zh: '尚未配置大模型。配置后即可生成面试前准备包。',
+    en: 'No LLM configured yet. Configure one to generate prep packs.',
+    fr: 'Aucun LLM configuré. Configurez-en un pour générer les packs.'
+  },
+  'ai.note1': {
+    zh: '兼容 OpenAI 协议的厂商(DeepSeek、Qwen、Ollama 等)都用同一个客户端,换模型不改代码。',
+    en: 'OpenAI-compatible providers (DeepSeek, Qwen, Ollama…) share one client — switching models needs no code change.',
+    fr: 'Les fournisseurs compatibles OpenAI partagent un client — changer de modèle ne change pas le code.'
+  },
+  'ai.note2': {
+    zh: '保存前必须测试通过 —— 后端也会独立再测一次,不通不入库。',
+    en: 'A passing test is required before saving — the server re-tests independently and refuses to store a bad key.',
+    fr: 'Un test réussi est requis avant l’enregistrement — le serveur reteste et refuse une clé invalide.'
+  },
+  'ai.note3': {
+    zh: '生效优先级:本页保存的(数据库) > 环境变量 > 配置文件。本页保存后立即生效,无需重启服务。',
+    en: 'Priority: saved here (database) > environment variables > config file. Effective immediately, no restart needed.',
+    fr: 'Priorité : enregistré ici (base) > variables d’env. > fichier de config. Effet immédiat, sans redémarrage.'
+  },
   'setting.back': { zh: '返回 AI 面试练习', en: 'Back to AI Practice', fr: 'Retour à la pratique IA' },
   'setting.title': { zh: 'AI 语音设置', en: 'AI Voice Settings', fr: 'Paramètres vocaux IA' },
   // 2026-09-16(Forrest 本轮第 6 条):设置页不再负责"选朗读引擎" ——

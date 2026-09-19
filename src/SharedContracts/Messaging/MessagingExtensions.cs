@@ -1,6 +1,7 @@
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using YourInterview.SharedContracts.Messaging;
 
 namespace YourInterview.SharedContracts;
@@ -27,6 +28,17 @@ public static class MessagingExtensions
         var messagingEnabled = config.GetValue("Messaging:Enabled", true);
         if (!messagingEnabled)
         {
+            // ⚠️ 2026-09-18 修复(真实踩坑):旧实现只是"不注册 MassTransit",
+            //    但依赖 IPublishEndpoint 的发布器(如 KnowledgeMasteryChangedPublisher、
+            //    JobStatusChangedPublisher、InterviewsIntegrationEventPublisher)仍在 DI 图里。
+            //    容器校验服务描述符时找不到 IPublishEndpoint → 直接抛
+            //    InvalidOperationException → 整个服务启动失败。
+            //    Knowledge 服务就是这样起不来的(不是配置写错,是开关本身有缺陷)。
+            //
+            //    正确做法:关掉消息总线时,同时注册一个空实现的 IPublishEndpoint ——
+            //    依赖它的类仍能正常构造,只是发消息时静默丢弃并记一条 Debug 日志。
+            //    这样"无 RabbitMQ 也能跑"才是真的成立。
+            services.AddSingleton<MassTransit.IPublishEndpoint, NoOpPublishEndpoint>();
             return services;
         }
 
@@ -65,5 +77,73 @@ public static class MessagingExtensions
         });
 
         return services;
+    }
+}
+
+/// <summary>
+/// Messaging:Enabled=false 时的空发布器。
+///
+/// 存在的唯一理由:让依赖 IPublishEndpoint 的发布器类仍能被 DI 构造出来。
+/// 若不注册它,容器校验会失败、服务起不来 —— 见 AddMassTransitWithRabbitMq 里的注释。
+///
+/// 行为:不发任何消息,只记 Debug 日志。调用方(领域事件发布器)无需感知差异。
+/// </summary>
+internal sealed class NoOpPublishEndpoint(
+    ILogger<NoOpPublishEndpoint> logger) : MassTransit.IPublishEndpoint
+{
+    // ---------- IPublishEndpoint:10 个 Publish 重载 ----------
+    // 签名逐一对照反射导出,不要凭记忆改 —— 少一个就 CS0535 编译不过。
+
+    public Task Publish<T>(T message, CancellationToken cancellationToken = default) where T : class
+        => Log(typeof(T));
+
+    public Task Publish<T>(T message, MassTransit.IPipe<MassTransit.PublishContext<T>> publishPipe,
+        CancellationToken cancellationToken = default) where T : class
+        => Log(typeof(T));
+
+    public Task Publish<T>(T message, MassTransit.IPipe<MassTransit.PublishContext> publishPipe,
+        CancellationToken cancellationToken = default) where T : class
+        => Log(typeof(T));
+
+    public Task Publish(object message, CancellationToken cancellationToken = default)
+        => Log(message?.GetType());
+
+    public Task Publish(object message, MassTransit.IPipe<MassTransit.PublishContext> publishPipe,
+        CancellationToken cancellationToken = default)
+        => Log(message?.GetType());
+
+    public Task Publish(object message, Type messageType, CancellationToken cancellationToken = default)
+        => Log(messageType);
+
+    public Task Publish(object message, Type messageType,
+        MassTransit.IPipe<MassTransit.PublishContext> publishPipe,
+        CancellationToken cancellationToken = default)
+        => Log(messageType);
+
+    public Task Publish<T>(object values, CancellationToken cancellationToken = default) where T : class
+        => Log(typeof(T));
+
+    public Task Publish<T>(object values, MassTransit.IPipe<MassTransit.PublishContext<T>> publishPipe,
+        CancellationToken cancellationToken = default) where T : class
+        => Log(typeof(T));
+
+    public Task Publish<T>(object values, MassTransit.IPipe<MassTransit.PublishContext> publishPipe,
+        CancellationToken cancellationToken = default) where T : class
+        => Log(typeof(T));
+
+    // ---------- IPublishObserverConnector ----------
+    // 没有总线就没有消息流,观察者无实际意义。
+    // 返回 null 而非抛异常:注册观察者通常是启动期基础设置,抛异常会导致服务起不来。
+    // 调用方若对返回值调用 .Disconnect() 会 NRE —— 但那种代码在无总线环境下本就无意义,
+    // 且远比"服务启动失败"可控。
+
+    public MassTransit.ConnectHandle ConnectPublishObserver(MassTransit.IPublishObserver observer)
+        => null!;
+
+    private Task Log(Type? type)
+    {
+        logger.LogDebug("消息总线已关闭(Messaging:Enabled=false),丢弃发布的消息 {Type}",
+            type?.Name ?? "null");
+        return Task.CompletedTask;
     }
 }

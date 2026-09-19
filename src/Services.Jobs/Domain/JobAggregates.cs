@@ -34,6 +34,17 @@ public sealed class Company : AuditableAggregateRoot
     /// <summary>公司类型:DirectEmployer / Agency / Staffing / Unknown</summary>
     public string CompanyType { get; private set; } = "Unknown";
 
+    /// <summary>
+    /// 公司情况长文本(规模/主营业务/技术栈/面试风格/文化/近期动态)。
+    /// 面试前准备包的输入之一 —— 与 JD 全文配合,让 AI 生成有针对性的预测问题。
+    /// 为什么放在 Company 而不是 JobApplication:同一家公司的多个岗位共享同一份公司情报,
+    /// 存一份避免重复;JD 才是个岗位独有的。
+    /// </summary>
+    public string? Profile { get; private set; }
+
+    /// <summary>公司情报的来源 URL(JSON 数组字符串),便于追溯与复核。</summary>
+    public string? ProfileSourcesJson { get; private set; }
+
     public void Update(string name, string? website, string? industry, string? location,
         string? logoUrl, string? notes, string companyType, int? employeeCount)
     {
@@ -45,6 +56,17 @@ public sealed class Company : AuditableAggregateRoot
         Notes = notes;
         CompanyType = companyType;
         EmployeeCount = employeeCount;
+        Touch();
+    }
+
+    /// <summary>
+    /// 单独更新公司情报。与 Update 分开:编辑基本资料时不该要求把长文本一起传,
+    /// 从外部粘贴公司情报时也不该覆盖已经填好的基本资料 —— 两个高频动作互不干扰。
+    /// </summary>
+    public void UpdateProfile(string? profile, string? profileSourcesJson)
+    {
+        Profile = profile;
+        ProfileSourcesJson = profileSourcesJson;
         Touch();
     }
 
@@ -91,6 +113,17 @@ public sealed class JobApplication : AuditableAggregateRoot
     public string? WorkMode { get; private set; }
     public string? Source { get; private set; }
     public string? JdSummary { get; private set; }
+
+    /// <summary>
+    /// JD 全文(逐字)。与 JdSummary 并存而不是取代它:
+    ///   全文 = AI 生成预测问题的原始输入,要保留招聘方的原文措辞;
+    ///   摘要 = 列表页与速览用,由人提炼。
+    /// 两者用途不同,合并会丢信息。
+    /// </summary>
+    public string? JdText { get; private set; }
+
+    /// <summary>JD 原始链接(可选)。JD 全文可能来自上传文件,留下出处便于复核。</summary>
+    public string? JdSourceUrl { get; private set; }
 
     public ApplicationStatus Status { get; private set; }
     public Priority Priority { get; private set; }
@@ -175,6 +208,18 @@ public sealed class JobApplication : AuditableAggregateRoot
         ResumeScore = resumeScore;
         PassRateEstimate = passRate;
         MatchKeywords = matchKeywords;
+        Touch();
+    }
+
+    /// <summary>
+    /// 更新 JD 全文与出处。独立方法,理由同 Company.UpdateProfile:
+    /// 粘贴 JD 是高频动作,不该逼迫调用方传齐所有投递字段。
+    /// 空串一律归一为 null —— 避免"存了个空字符串"和"没存"在查询里表现不同。
+    /// </summary>
+    public void SetJdContent(string? jdText, string? jdSourceUrl)
+    {
+        JdText = string.IsNullOrWhiteSpace(jdText) ? null : jdText;
+        JdSourceUrl = string.IsNullOrWhiteSpace(jdSourceUrl) ? null : jdSourceUrl;
         Touch();
     }
 
@@ -292,3 +337,53 @@ public enum RoundOutcome { Pending = 0, Passed = 1, Failed = 2, Cancelled = 3, N
 
 public sealed record JobApplicationStatusChangedDomainEvent(Guid ApplicationId, Guid CompanyId, string ToStatus)
     : DomainEventBase;
+
+/// <summary>
+/// 用户简历正文(2026-09-18:简历匹配分析 + 面试前准备包的输入)。
+///
+/// 为什么放 Jobs 域:
+///   简历是求职资产 —— 与 JD/公司/投递同属求职域,主要消费者是简历匹配分析。
+///   放在求职域让"简历 vs JD 关键词比对"成为同库同服务的操作,零跨服务调用。
+///
+/// 为什么是用户级(主键 UserId)而不是挂在某条投递上:
+///   简历是长期资产,内容稳定,按岗微调不改主版本。
+///   一份简历要跟所有岗位比对,挂在某条投递上会让其他岗位读不到。
+///
+/// ⚠️ 隐私:简历含姓名/电话/邮箱。本表只服务端存储,
+///    任何对外调用(如送给 LLM)前都必须先脱敏。
+/// </summary>
+public sealed class UserResume : AuditableAggregateRoot
+{
+    private UserResume() { }
+
+    public UserResume(Guid userId, string content)
+    {
+        UserId = userId;
+        Content = content;
+        Version = 1;
+    }
+
+    /// <summary>一人一份主版本简历。</summary>
+    public Guid UserId { get; private set; }
+
+    /// <summary>
+    /// 简历全文。
+    /// 用 text 不设长度上限:简历形态差异大(纯文本/Markdown/从 PDF 提的),
+    /// 限长了只会造成"保存失败但不知道为什么"。
+    /// </summary>
+    public string Content { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// 版本号 —— 每次覆盖内容递增。
+    /// 用途:匹配分析结果可标注"基于简历 v3 计算",
+    /// 简历更新后旧的分析结果能被识别为过期,而不是静默失效。
+    /// </summary>
+    public int Version { get; private set; }
+
+    /// <summary>覆盖简历内容,版本号自增。</summary>
+    public void Update(string content)
+    {
+        Content = content;
+        Version++;
+    }
+}

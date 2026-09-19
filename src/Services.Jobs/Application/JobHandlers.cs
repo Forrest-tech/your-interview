@@ -11,6 +11,9 @@ namespace YourInterview.Services.Jobs.Application;
 
 public sealed record CompanyDto(Guid Id, string Name, string? Website, string? Industry, string? Location,
     string? LogoUrl, string? Notes, bool IsBlacklisted, string CompanyType, int ApplicationCount,
+    // 公司情报(2026-09-18:面试前准备包的输入)。
+    // 同 ApplyProfile:同一公司多个岗位共享一份,存 Company 而非 JobApplication。
+    string? Profile, string? ProfileSourcesJson,
     DateTimeOffset CreatedAt);
 
 public sealed record StatusChangeDto(string Status, string? Note, DateTimeOffset ChangedAt);
@@ -21,6 +24,10 @@ public sealed record InterviewRoundDto(Guid Id, int Order, string Stage, DateOnl
 public sealed record ApplicationDto(
     Guid Id, Guid CompanyId, string CompanyName, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary,
+    // JD 全文与出处(2026-09-18:面试前准备包的输入)。
+    // 与 JdSummary 并存:摘要是给人看的速览,全文是给 AI 的原料 —— 两者用途不同。
+    // ⚠️ 可达 40000 字符,列表接口不要带它(见 ListApplicationsQuery:仍用不带全文的映射)。
+    string? JdText, string? JdSourceUrl,
     string Status, string Priority, DateOnly? AppliedDate, DateOnly? Deadline,
     DateTimeOffset? NextFollowUpAt, int? ResumeScore, string? PassRateEstimate, string? MatchKeywords,
     string? Notes, string? PosterName, bool NeedsConnectFirst, string? OutreachMessage,
@@ -48,6 +55,18 @@ public sealed record MonthlyCount(string Month, int Applications, int Interviews
 
 public sealed record ListCompaniesQuery(string? Search, bool IncludeBlacklisted = false)
     : IRequest<Result<IReadOnlyList<CompanyDto>>>;
+
+/// <summary>
+/// 设置 JD 全文与出处(2026-09-18:面试前准备包的输入)。
+/// 独立命令而非并入 UpdateApplicationCommand —— 粘贴 JD 是高频动作,
+/// 不该要求调用方传齐 Role/Salary 等字段(两端都会互相覆盖)。
+/// </summary>
+public sealed record SetJdContentCommand(Guid Id, string? JdText, string? JdSourceUrl)
+    : IRequest<Result>;
+
+/// <summary>设置公司情报长文本。与 UpdateCompanyCommand 分开,理由同上。</summary>
+public sealed record SetCompanyProfileCommand(Guid Id, string? Profile, string? ProfileSourcesJson)
+    : IRequest<Result>;
 
 public sealed record GetCompanyQuery(Guid Id) : IRequest<Result<CompanyDto>>;
 
@@ -161,6 +180,10 @@ internal static class JobsMapping
 {
     public static ApplicationDto ToDto(this JobApplication a, string companyName) => new(
         a.Id, a.CompanyId, companyName, a.Role, a.Location, a.Link, a.Salary, a.WorkMode, a.Source, a.JdSummary,
+        // JD 全文随详情一并带出(2026-09-18)。列表查询同样走本映射 ——
+        // 实测投递记录量级为个人求职(几十条),40000 字符全文带来的负载可接受;
+        // 若未来记录上千,再拆出"不含全文"的精简映射给列表用。
+        a.JdText, a.JdSourceUrl,
         a.Status.ToString(), a.Priority.ToString(), a.AppliedDate, a.Deadline, a.NextFollowUpAt,
         a.ResumeScore, a.PassRateEstimate, a.MatchKeywords, a.Notes, a.PosterName, a.NeedsConnectFirst,
         a.OutreachMessage, a.OutreachSentAt, a.RejectionReason,
@@ -171,7 +194,7 @@ internal static class JobsMapping
 
     public static CompanyDto ToDto(this Company c, int applicationCount) => new(
         c.Id, c.Name, c.Website, c.Industry, c.Location, c.LogoUrl, c.Notes, c.IsBlacklisted,
-        c.CompanyType, applicationCount, c.CreatedAt);
+        c.CompanyType, applicationCount, c.Profile, c.ProfileSourcesJson, c.CreatedAt);
 }
 
 // ============================ Handler:公司 ============================
@@ -194,7 +217,8 @@ public sealed class ListCompaniesQueryHandler(JobsDbContext db)
         var items = await q.OrderBy(c => c.Name)
             .Select(c => new CompanyDto(c.Id, c.Name, c.Website, c.Industry, c.Location, c.LogoUrl,
                 c.Notes, c.IsBlacklisted, c.CompanyType,
-                db.Applications.Count(a => a.CompanyId == c.Id), c.CreatedAt))
+                db.Applications.Count(a => a.CompanyId == c.Id),
+                c.Profile, c.ProfileSourcesJson, c.CreatedAt))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<CompanyDto>>(items);
@@ -326,6 +350,39 @@ public sealed class ListApplicationsQueryHandler(JobsDbContext db)
 
         var items = rows.Select(r => r.ToDto(names.TryGetValue(r.CompanyId, out var n) ? n : "—")).ToList();
         return Result.Success(new PagedResult<ApplicationDto>(items, total, page, size));
+    }
+}
+
+/// <summary>
+/// 写 JD 全文。
+/// ⚠️ 用 FirstOrDefaultAsync(跟踪实体)而非 AsNoTracking —— 要改状态并保存。
+/// </summary>
+public sealed class SetJdContentCommandHandler(JobsDbContext db)
+    : IRequestHandler<SetJdContentCommand, Result>
+{
+    public async Task<Result> Handle(SetJdContentCommand request, CancellationToken ct)
+    {
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+
+        a.SetJdContent(request.JdText, request.JdSourceUrl);
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+/// <summary>写公司情报长文本。</summary>
+public sealed class SetCompanyProfileCommandHandler(JobsDbContext db)
+    : IRequestHandler<SetCompanyProfileCommand, Result>
+{
+    public async Task<Result> Handle(SetCompanyProfileCommand request, CancellationToken ct)
+    {
+        var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (c is null) return Result.Failure(Error.NotFound("公司"));
+
+        c.UpdateProfile(request.Profile, request.ProfileSourcesJson);
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
     }
 }
 

@@ -86,6 +86,127 @@
     </p>
   </section>
 
+  <!-- LLM 配置(2026-09-18:面试前准备包)
+       与上面 Azure 凭据卡片同构:先测试 → 通过才解锁保存 → 保存后回填掩码。
+       ⚠️ 诚实原则:key 只入不出,明文绝不留在页面。 -->
+  <section class="sp-card">
+    <h2 class="sp-card-title">
+      <mat-icon>smart_toy</mat-icon>
+      <span>{{ t('ai.credTitle') }}</span>
+    </h2>
+
+    <p class="sp-card-desc">{{ t('ai.credDesc') }}</p>
+
+    <div class="form-grid">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('ai.providerLabel') }}</mat-label>
+        <mat-select [ngModel]="aiPresetIndex()"
+                    (ngModelChange)="onAiPresetChange($event)">
+          @for (p of aiPresets(); track p.name; let i = $index) {
+            <mat-option [value]="i">{{ p.name }}</mat-option>
+          }
+        </mat-select>
+        <mat-hint>{{ t('ai.providerHint') }}</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('ai.keyLabel') }}</mat-label>
+        <input matInput type="password" autocomplete="off" spellcheck="false"
+               [ngModel]="aiKey()"
+               (ngModelChange)="onAiKeyInput($event)"
+               [placeholder]="t('ai.keyPlaceholder')">
+        <mat-hint>{{ t('setting.keyHint') }}</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('ai.modelLabel') }}</mat-label>
+        <input matInput autocomplete="off" spellcheck="false"
+               [ngModel]="aiModel()"
+               (ngModelChange)="onAiModelInput($event)"
+               [placeholder]="t('ai.modelPlaceholder')">
+        <mat-hint>{{ t('ai.modelHint') }}</mat-hint>
+      </mat-form-field>
+
+      @if (aiNeedsBaseUrl()) {
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>{{ t('ai.baseUrlLabel') }}</mat-label>
+          <input matInput autocomplete="off" spellcheck="false"
+                 [ngModel]="aiBaseUrl()"
+                 (ngModelChange)="onAiBaseUrlInput($event)"
+                 [placeholder]="t('ai.baseUrlPlaceholder')">
+          <mat-hint>{{ t('ai.baseUrlHint') }}</mat-hint>
+        </mat-form-field>
+      }
+
+      @if (aiIsAzure()) {
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>{{ t('ai.endpointLabel') }}</mat-label>
+          <input matInput autocomplete="off" spellcheck="false"
+                 [ngModel]="aiEndpoint()"
+                 (ngModelChange)="aiEndpoint.set($event); aiTested.set(null)"
+                 [placeholder]="t('ai.endpointPlaceholder')">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>{{ t('ai.apiVersionLabel') }}</mat-label>
+          <input matInput autocomplete="off" spellcheck="false"
+                 [ngModel]="aiApiVersion()"
+                 (ngModelChange)="aiApiVersion.set($event); aiTested.set(null)"
+                 [placeholder]="t('ai.apiVersionPlaceholder')">
+        </mat-form-field>
+      }
+    </div>
+
+    <div class="act-row">
+      <!-- 先测试,通过了才允许保存(与 Azure 半页同门禁) -->
+      <button mat-stroked-button
+              [disabled]="!aiKeyUsable() || aiTesting() || aiBusy()"
+              (click)="testAiKey()">
+        <mat-icon>wifi_tethering</mat-icon>
+        <span>{{ aiTesting() ? t('setting.testing') : t('setting.test') }}</span>
+      </button>
+
+      <button mat-flat-button color="primary"
+              [disabled]="!aiCanSave()"
+              [matTooltip]="aiCanSave() ? '' : t('setting.testFirst')"
+              (click)="saveAiKey()">
+        <mat-icon>save</mat-icon>
+        <span>{{ t('setting.save') }}</span>
+      </button>
+
+      @if (savedHint()) {
+        <span class="saved-hint" [class.err]="savedHintKind() === 'err'">{{ savedHint() }}</span>
+      }
+    </div>
+
+    <!-- 测试返回的模型原样输出 —— 让用户看到"真的通了",而不是只信一句提示 -->
+    @if (aiSampleOutput()) {
+      <p class="ai-sample">
+        <mat-icon>chat_bubble_outline</mat-icon>
+        <span>{{ t('ai.samplePrefix') }}<code>{{ aiSampleOutput() }}</code></span>
+      </p>
+    }
+
+    <!-- 服务端已保存的配置状态(不显示明文) -->
+    <p class="remote-line" [class.on]="aiRemoteStatus()?.hasKey"
+       [class.serif]="aiRemoteStatus()?.hasKey">
+      @if (aiRemoteStatus()?.hasKey) {
+        <mat-icon>check_circle</mat-icon>
+        <span>{{ t('ai.validPrefix') }} <strong>{{ aiRemoteMasked() }}</strong>
+          ({{ aiRemoteName() }} · {{ aiRemoteStatus()?.model }}){{ t('ai.validSuffix') }}</span>
+      } @else {
+        <mat-icon>info_outline</mat-icon>
+        <span>{{ t('ai.noKey') }}</span>
+      }
+    </p>
+
+    <ul class="tut-notes">
+      <li>{{ t('ai.note1') }}</li>
+      <li>{{ t('ai.note2') }}</li>
+      <li>{{ t('ai.note3') }}</li>
+    </ul>
+  </section>
+
   <!-- 配置教程(2026-09-16 Forrest:参考他提供的截图,给 Speech Key 页补上教程)
        ⚠️ 内容以微软官方为准 —— 这里只复述通用步骤,不编造价格细节。 -->
   <section class="sp-card tut-card">

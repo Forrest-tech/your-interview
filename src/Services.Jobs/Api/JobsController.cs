@@ -13,8 +13,11 @@ namespace YourInterview.Services.Jobs.Api;
 [Route("api/jobs")]
 [Authorize]
 [Produces("application/json")]
-public sealed class JobsController(ISender sender) : ControllerBase
+public sealed class JobsController(ISender sender, ICurrentUser currentUser) : ControllerBase
 {
+    /// <summary>当前用户。简历是用户级资产(有 UserId),公司/投递是单租户空间(无 UserId)。</summary>
+    private Guid Me => currentUser.UserId ?? Guid.Empty;
+
     // ---------- 公司 ----------
 
     [HttpGet("companies")]
@@ -49,6 +52,18 @@ public sealed class JobsController(ISender sender) : ControllerBase
     {
         var r = await sender.Send(new UpdateCompanyCommand(id, body.Name, body.Website, body.Industry,
             body.Location, body.LogoUrl, body.Notes, body.CompanyType, body.EmployeeCount, body.IsBlacklisted), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 设置公司情报长文本(2026-09-18:面试前准备包的输入)。
+    /// 与 PUT companies/{id} 分开 —— 编辑基本资料不该覆盖已填好的长文本。
+    /// </summary>
+    [HttpPut("companies/{id:guid}/profile")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> SetCompanyProfile(Guid id, [FromBody] CompanyProfileBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SetCompanyProfileCommand(id, body.Profile, body.ProfileSourcesJson), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -96,6 +111,19 @@ public sealed class JobsController(ISender sender) : ControllerBase
     {
         var r = await sender.Send(new UpdateApplicationCommand(id, body.Role, body.Location, body.Link,
             body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 设置 JD 全文与出处(2026-09-18:面试前准备包的输入)。
+    /// 独立端点而非并入 PUT applications/{id} —— 粘贴 JD 是高频动作,
+    /// 不该要求把 Role/Salary 等字段一起传(会互相覆盖)。
+    /// </summary>
+    [HttpPut("applications/{id:guid}/jd")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> SetJdContent(Guid id, [FromBody] JdContentBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SetJdContentCommand(id, body.JdText, body.JdSourceUrl), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -212,10 +240,131 @@ public sealed class JobsController(ISender sender) : ControllerBase
     public sealed record UpdateApplicationBody(string Role, string? Location, string? Link, string? Salary,
         string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority, DateOnly? Deadline);
     public sealed record ChangeStatusBody(string Status, string? Note, string? RejectionReason);
+    /// <summary>JD 全文提交。空串由领域方法归一为 null。</summary>
+    public sealed record JdContentBody(string? JdText, string? JdSourceUrl);
+
+    /// <summary>公司情报提交。ProfileSourcesJson 是来源 URL 的 JSON 数组字符串。</summary>
+    public sealed record CompanyProfileBody(string? Profile, string? ProfileSourcesJson);
     public sealed record AnalysisBody(int? ResumeScore, string? PassRateEstimate, string? MatchKeywords);
     public sealed record OutreachBody(string? PosterName, bool NeedsConnectFirst, string? Message);
     public sealed record FollowUpBody(DateTimeOffset? At);
     public sealed record AddRoundBody(string Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format, string? Notes);
     public sealed record UpdateRoundBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
         string? Format, string Outcome, string? Notes);
+
+    // ======================= 简历正文(2026-09-18)=======================
+    // 用途:简历匹配分析(简历 vs JD 关键词比对)+ 面试前准备包的输入。
+    //
+    // 为什么放 Jobs 而不是 Assessment:简历是求职资产 ——
+    // 与 JD/公司/投递同属求职域,主要消费者是匹配分析。放这里让比对成为同库操作。
+
+    /// <summary>
+    /// 读当前用户的简历正文。
+    /// 未设置时返回 resumeText = null(前端据此提示"先录入简历"),
+    /// 而不是 404 —— 404 会被前端当成错误弹出提示条。
+    /// </summary>
+    [HttpGet("resume-text")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> GetResumeText(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetResumeQuery(Me), ct);
+        return r.IsSuccess
+            ? Microsoft.AspNetCore.Http.Results.Ok(new
+              {
+                  resumeText = string.IsNullOrEmpty(r.Value.Content) ? null : r.Value.Content,
+                  version = r.Value.Version,
+                  updatedAt = r.Value.UpdatedAt
+              })
+            : r.ToProblemDetails();
+    }
+
+    /// <summary>存/覆盖当前用户的简历正文(版本号自增)。</summary>
+    [HttpPut("resume-text")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> SaveResumeText([FromBody] ResumeTextBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SaveResumeCommand(Me, body.ResumeText ?? string.Empty), ct);
+        return r.IsSuccess
+            ? Microsoft.AspNetCore.Http.Results.Ok(new { version = r.Value.Version, updatedAt = r.Value.UpdatedAt })
+            : r.ToProblemDetails();
+    }
+
+    /// <summary>清空简历(回到未设置状态)。</summary>
+    [HttpDelete("resume-text")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    public async Task<IResult> DeleteResumeText(CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteResumeCommand(Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    // ---------- 求职信(Cover Letter,2026-09-18) ----------
+
+    /// <summary>读某条投递的求职信。未撰写时返回 200 + null(前端据此显示空编辑器)。</summary>
+    [HttpGet("applications/{applicationId:guid}/cover-letter")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> GetCoverLetter(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetCoverLetterQuery(applicationId, Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>生成前的输入体检 —— 缺简历/JD/公司情报会明确指出,而不是等生成失败。</summary>
+    [HttpGet("applications/{applicationId:guid}/cover-letter/readiness")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> GetCoverLetterReadiness(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetCoverLetterReadinessQuery(applicationId, Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>人工保存/覆盖求职信内容(不存在则创建)。</summary>
+    [HttpPut("applications/{applicationId:guid}/cover-letter")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> SaveCoverLetter(Guid applicationId, [FromBody] CoverLetterBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SaveCoverLetterCommand(applicationId, Me, body.Content ?? string.Empty), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// AI 生成求职信。输入 = 简历 + JD 全文 + 公司情报 + 可选额外要求。
+    /// ⚠️ 长请求(几十秒)—— 前端需给足超时。
+    /// </summary>
+    [HttpPost("applications/{applicationId:guid}/cover-letter/generate")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> GenerateCoverLetter(Guid applicationId, [FromBody] GenerateCoverLetterBody? body, CancellationToken ct)
+    {
+        var r = await sender.Send(new GenerateCoverLetterCommand(
+            applicationId, Me, body?.ExtraInstructions, body?.Overwrite ?? false), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>标记为已确认(可发出)。</summary>
+    [HttpPost("applications/{applicationId:guid}/cover-letter/final")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> MarkCoverLetterFinal(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new MarkCoverLetterFinalCommand(applicationId, Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>删除求职信(幂等)。</summary>
+    [HttpDelete("applications/{applicationId:guid}/cover-letter")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> DeleteCoverLetter(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteCoverLetterCommand(applicationId), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
 }
+
+/// <summary>简历正文提交。空串由 Handler 归一为"清空"。</summary>
+public sealed record ResumeTextBody(string? ResumeText);
+
+/// <summary>求职信人工保存体。</summary>
+public sealed record CoverLetterBody(string? Content);
+
+/// <summary>求职信生成体。Overwrite=false 时已有内容不会被覆盖。</summary>
+public sealed record GenerateCoverLetterBody(string? ExtraInstructions, bool Overwrite = false);

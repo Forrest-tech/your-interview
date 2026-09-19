@@ -71,12 +71,16 @@ services:
       # 🔑 只探实际在跑的两个下游 —— 否则未启动的 jobs/interviews/knowledge/analytics
       #    会让 /health/live 恒返 503(gateway 明明健康却被判"没起来")。
       # 逗号分隔单键 —— 不走数组索引,零歧义
-      ReverseProxy__HealthChecks__EnabledClusters: "identity,assessment"
+      # 只探实际在跑的下游。jobs/analytics 未起时不列进来,
+      # 否则网关会因下游不健康而把自身判为 503。
+      ReverseProxy__HealthChecks__EnabledClusters: "identity,assessment,interviews,knowledge"
       # gateway 在容器里,下游地址要重写:
       #   identity  → 容器间走 Docker DNS(服务名)
       #   assessment→ 在宿主机,必须走 host.docker.internal
       ReverseProxy__Clusters__identity__Destinations__d1__Address: "http://identity:8080/"
       ReverseProxy__Clusters__assessment__Destinations__d1__Address: "http://host.docker.internal:5266/"
+      ReverseProxy__Clusters__interviews__Destinations__d1__Address: "http://host.docker.internal:5264/"
+      ReverseProxy__Clusters__knowledge__Destinations__d1__Address: "http://host.docker.internal:5265/"
     ports:
       - "5200:8080"          # 唯一对外暴露的端口,前端连它
     depends_on:

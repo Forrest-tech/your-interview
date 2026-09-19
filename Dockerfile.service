@@ -24,6 +24,7 @@ COPY src/Services.Interviews/*.csproj ./src/Services.Interviews/
 COPY src/Services.Knowledge/*.csproj ./src/Services.Knowledge/
 COPY src/Services.Assessment/*.csproj ./src/Services.Assessment/
 COPY src/Services.Analytics/*.csproj ./src/Services.Analytics/
+COPY src/Services.AiGateway/*.csproj ./src/Services.AiGateway/
 COPY src/Services.Gateway/*.csproj ./src/Services.Gateway/
 COPY src/Analysis.Worker/*.csproj ./src/Analysis.Worker/
 RUN dotnet restore "src/$SERVICE/"

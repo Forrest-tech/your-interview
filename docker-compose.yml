@@ -21,12 +21,12 @@ x-service-env: &service-env
   ASPNETCORE_ENVIRONMENT: Development
   DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
   # 容器内没有 ICU,关掉 globalization；连库走 docker DNS（主机名 postgres）
-  ConnectionStrings__Identity: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=identity"
-  ConnectionStrings__Jobs: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=jobs"
-  ConnectionStrings__InterviewsDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=interviews"
-  ConnectionStrings__KnowledgeDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=knowledge"
-  ConnectionStrings__AssessmentDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=assessment"
-  ConnectionStrings__AnalyticsDb: "Host=postgres;Port=5432;Database=yourinterview;Username=postgres;Password=postgres;Search Path=analytics"
+  ConnectionStrings__Identity: "Host=host.docker.internal;Port=5432;Database=yourinterview;Username=postgres;Password=${PGPASSWORD_LOCAL};Search Path=identity"
+  ConnectionStrings__Jobs: "Host=host.docker.internal;Port=5432;Database=yourinterview;Username=postgres;Password=${PGPASSWORD_LOCAL};Search Path=jobs"
+  ConnectionStrings__InterviewsDb: "Host=host.docker.internal;Port=5432;Database=yourinterview;Username=postgres;Password=${PGPASSWORD_LOCAL};Search Path=interviews"
+  ConnectionStrings__KnowledgeDb: "Host=host.docker.internal;Port=5432;Database=yourinterview;Username=postgres;Password=${PGPASSWORD_LOCAL};Search Path=knowledge"
+  ConnectionStrings__AssessmentDb: "Host=host.docker.internal;Port=5432;Database=yourinterview;Username=postgres;Password=${PGPASSWORD_LOCAL};Search Path=assessment"
+  ConnectionStrings__AnalyticsDb: "Host=host.docker.internal;Port=5432;Database=yourinterview;Username=postgres;Password=${PGPASSWORD_LOCAL};Search Path=analytics"
   RabbitMq__Host: rabbitmq
   RabbitMq__Port: "5672"
   RabbitMq__Username: guest
@@ -40,8 +40,6 @@ x-service-build: &service-build
   dockerfile: Dockerfile.service
 
 x-service-deps: &service-deps
-  postgres:
-    condition: service_healthy
   rabbitmq:
     condition: service_healthy
 
@@ -54,25 +52,6 @@ x-service-health: &service-health
   start_period: 60s
 
 services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: yourinterview-pg
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: yourinterview
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    ports:
-      - "5433:5432"          # 映射出来便于用本机 psql/客户端连进去看
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d yourinterview"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: yourinterview-rabbit
@@ -107,6 +86,8 @@ services:
     depends_on: *service-deps
     healthcheck: *service-health
 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   jobs:
     build:
       <<: *service-build
@@ -116,9 +97,13 @@ services:
     environment:
       <<: *service-env
       ASPNETCORE_URLS: "http://+:8080"
+      # AiGateway 走 Docker 内部 DNS(jobs 容器内 127.0.0.1 不是宿主机)
+      AiGateway__BaseUrl: "http://aigateway:8080/"
     depends_on: *service-deps
     healthcheck: *service-health
 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   interviews:
     build:
       <<: *service-build
@@ -131,6 +116,8 @@ services:
     depends_on: *service-deps
     healthcheck: *service-health
 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   knowledge:
     build:
       <<: *service-build
@@ -143,6 +130,8 @@ services:
     depends_on: *service-deps
     healthcheck: *service-health
 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   assessment:
     build:
       <<: *service-build
@@ -155,6 +144,8 @@ services:
     depends_on: *service-deps
     healthcheck: *service-health
 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   analytics:
     build:
       <<: *service-build
@@ -167,6 +158,28 @@ services:
     depends_on: *service-deps
     healthcheck: *service-health
 
+  # AI 网关(2026-09-18):LLM 凭据保管 + 通用补全转发。
+  # 独立成服务让凭据只存一处 —— Jobs(Cover Letter)/Interviews(准备包)/
+  # Knowledge 都通过它调 LLM,不再各自解析凭据。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  aigateway:
+    build:
+      <<: *service-build
+      args: { SERVICE: Services.AiGateway }
+    container_name: yourinterview-aigateway
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      ASPNETCORE_URLS: "http://+:8080"
+      # schema 是 aigateway,与宿主机进程共用同一库
+      ConnectionStrings__AiGatewayDb: "Host=host.docker.internal;Port=5432;Database=yourinterview;Username=postgres;Password=${PGPASSWORD_LOCAL};Search Path=aigateway"
+    depends_on: *service-deps
+    healthcheck: *service-health
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   gateway:
     build:
       <<: *service-build
@@ -184,6 +197,7 @@ services:
       ReverseProxy__Clusters__knowledge__Destinations__d1__Address: "http://knowledge:8080/"
       ReverseProxy__Clusters__assessment__Destinations__d1__Address: "http://assessment:8080/"
       ReverseProxy__Clusters__analytics__Destinations__d1__Address: "http://analytics:8080/"
+      ReverseProxy__Clusters__aigateway__Destinations__d1__Address: "http://aigateway:8080/"
     ports:
       - "5200:8080"          # 唯一对外暴露的端口,前端连它
     depends_on:
@@ -207,6 +221,9 @@ services:
   # 密钥来源(按优先级): 环境变量 > .env 文件 > appsettings.Development.json(本地)。
   # compose 会读仓库根的 .env(已在 .gitignore 里), 所以真实 key 不落库。
   # 首次使用: cp .env.example .env, 再把 AZURE_SPEECH_KEY 等换成真值。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   analysis-worker:
     build:
       <<: *service-build
@@ -240,7 +257,8 @@ services:
       identity:
         condition: service_healthy
 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 volumes:
-  pgdata:
   rabbitdata:
   analysis-work:

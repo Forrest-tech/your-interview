@@ -424,6 +424,30 @@ public sealed class SpeechSynthesizer(
     private const string DefaultVoice = "en-US-AriaNeural";
 
     /// <summary>
+    /// 法语默认音色 —— 2026-09-19(Forrest 报"Azure key 不支持法语")。
+    ///
+    /// ⚠️ 真因不是 Azure 不支持法语,而是本服务把音色与 SSML 的 xml:lang
+    ///    双双写死成 en-US:用英语音色去念法语文本,读出来是"法文乱念",
+    ///    听起来就像不支持。修法是**按语言选音色 + 按语言写 xml:lang**,
+    ///    两者必须同源(同一个 language 值),否则仍会错配。
+    /// </summary>
+    private const string DefaultVoiceFr = "fr-FR-DeniseNeural";
+
+    /// <summary>
+    /// 按语言代码选默认音色 —— 单一出口,避免各处各写一份语言判断而分叉。
+    /// 目前只分"法语 / 其它(回落英语)";将来加语言只改这一个方法。
+    /// </summary>
+    private static string DefaultVoiceFor(string? language)
+    {
+        var lang = string.IsNullOrWhiteSpace(language) ? "en-US" : language.Trim();
+        // 只要以 fr 开头(fr / fr-FR / fr-CA)就用法语音色 ——
+        // 法语各区域变体都能被 fr-FR 音色正确朗读,无需逐区域建表。
+        return lang.StartsWith("fr", StringComparison.OrdinalIgnoreCase)
+            ? DefaultVoiceFr
+            : DefaultVoice;
+    }
+
+    /// <summary>
     /// 调用 Azure Speech 时带的 User-Agent。
     ///
     /// ⚠️ 2026-09-16 血泪教训:**Azure 语音的接入层(istio-envoy)会拒收不带
@@ -440,11 +464,17 @@ public sealed class SpeechSynthesizer(
     /// <summary>
     /// 合成一段语音,返回 MP3 字节。
     /// </summary>
-    /// <param name="voice">音色名(如 en-US-AriaNeural)。为空则用默认。</param>
+    /// <param name="voice">音色名(如 en-US-AriaNeural)。为空则按 language 选默认。</param>
     /// <param name="speed">语速倍率(0.5-2.0)。1.0 = 原速。</param>
+    /// <param name="language">
+    /// 语言代码(如 en-US / fr-FR)。★ 2026-09-19 新增 —— 此前该方法**根本没有
+    /// 语言参数**,语言信息在进入合成前就被丢掉,SSML 的 xml:lang 只能写死 en-US。
+    /// 这是"法语不支持"的根因之一。
+    /// </param>
     public async Task<byte[]> SynthesizeAsync(string text, string? voice, double? speed,
-        Guid userId, CancellationToken ct)
+        Guid userId, CancellationToken ct, string? language = null)
     {
+        var lang = string.IsNullOrWhiteSpace(language) ? "en-US" : language.Trim();
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("要合成的文本不能为空", nameof(text));
         if (text.Length > MaxTextLength)
@@ -460,7 +490,9 @@ public sealed class SpeechSynthesizer(
         //    若沿用配置值会打到 api.cognitive.microsoft.com 导致 Azure 返回 404。
         var endpoint = $"https://{snapshot.Region}.tts.speech.microsoft.com";
 
-        var v = string.IsNullOrWhiteSpace(voice) ? DefaultVoice : voice.Trim();
+        // ⚠️ 音色必须与 language 匹配:法语文本配英语音色 = 英语发音规则念法文,
+        //    听起来就是"乱念"。语音色显式指定则尊重用户选择。
+        var v = string.IsNullOrWhiteSpace(voice) ? DefaultVoiceFor(lang) : voice.Trim();
         var rate = Math.Clamp(speed ?? 1.0, 0.5, 2.0);
         // SSML 里的 rate 是相对百分比:1.0 → "+0%",1.2 → "+20%"
         var ratePercent = (int)Math.Round((rate - 1.0) * 100);
@@ -472,8 +504,10 @@ public sealed class SpeechSynthesizer(
         //    ("SSML is invalid")。这是最容易漏、最难猜的一处 —— 缺 xmlns 时
         //    报错体还常是空的,只看到 400,极难定位。
         //    rate 也必须是带符号百分比(+0%/-10%),故用 :+#;-#;0 格式串。
+        //    ⚠️ xml:lang 必须与音色同源(同一个 lang 值)。
+        //       写死 en-US 时,Azure 会用英语的韵律规则处理法语文本。
         var ssml = $"""
-            <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
+            <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{lang}'>
               <voice name='{v}'>
                 <prosody rate='{ratePercent:+#;-#;0}%'>{safe}</prosody>
               </voice>

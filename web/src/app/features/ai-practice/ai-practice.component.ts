@@ -501,6 +501,37 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 当前素材下的录音序号(第几次录音)。 */
   readonly recOrder = computed(() => this.myRecordings().length);
 
+  /**
+   * 当前练习/朗读语言(BCP-47,如 en-US / fr-FR)。
+   *
+   * ★ 2026-09-19(Forrest 报"Azure key 不支持法语"):
+   *   真因是本页把语言写死为英语 —— 朗读用英语音色念法文、
+   *   评分也用 en-US 去识别法语。此 signal 是**唯一语言出口**:
+   *   朗读(TTS)与评分(assess)都从这里取值,保证两者永远同源。
+   *   持久化到 localStorage,切一次以后都记得。
+   */
+  readonly practiceLang = signal<'en-US' | 'fr-FR' | 'zh-CN'>(
+    (() => {
+      try {
+        const v = localStorage.getItem('practice.lang');
+        return v === 'fr-FR' || v === 'zh-CN' || v === 'en-US' ? v : 'en-US';
+      } catch { return 'en-US' as const; }
+    })()
+  );
+
+  /** 切换练习语言 —— 写 localStorage,下次打开仍是这个语言。 */
+  setPracticeLang(lang: 'en-US' | 'fr-FR' | 'zh-CN'): void {
+    this.practiceLang.set(lang);
+    try { localStorage.setItem('practice.lang', lang); } catch { /* 隐私模式写不了,不影响本次会话 */ }
+  }
+
+  /** 语言选项表 —— 加语言只改这一处(弹单里遍历它渲染)。 */
+  readonly langOptions = [
+    { code: 'en-US' as const, label: 'English (US)', note: 'en-US · Aria' },
+    { code: 'fr-FR' as const, label: 'Français', note: 'fr-FR · Denise' },
+    { code: 'zh-CN' as const, label: '中文', note: 'zh-CN' },
+  ];
+
   // ---------- 示范朗读 ----------
   readonly speaking = signal(false);
   readonly rate = signal(1);
@@ -1233,8 +1264,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
     const u = new SpeechSynthesisUtterance(text);
     u.rate = this.rate();
-    u.lang = this.config().lang === 'zh' ? 'zh-CN'
-      : this.config().lang === 'fr' ? 'fr-FR' : 'en-US';
+    // ★ 2026-09-19:统一用 practiceLang —— 此前这里读的是 config().lang,
+    //   而 config().lang 固定为 'en',所以浏览器回退朗读永远是英语。
+    u.lang = this.practiceLang();
     u.onend = () => { this.speakDone.set(true); this.stopSpeak(); };
     u.onerror = () => this.stopSpeak();
     this.utterance = u;
@@ -1268,7 +1300,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.ttsVoice.set('');
     this.ttsAudioBytes.set(null);
 
-    this.practiceApi.synthesize(text, undefined, this.rate()).subscribe({
+    this.practiceApi.synthesize(text, undefined, this.rate(), false, this.practiceLang()).subscribe({
       next: (res) => {
         const blob = res.blob;
         // ★ 第三十三/三十四轮:如实标记本次到底花没花额度、花了多少。
@@ -1343,7 +1375,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (typeof speechSynthesis === 'undefined') return;
     const u = new SpeechSynthesisUtterance(text);
     u.rate = this.rate();
-    u.lang = 'en-US';
+    // ★ 2026-09-19:回退分支也必须跟 practiceLang —— 否则法语素材回退后
+    //   仍用英语发音朗读,和"支持法语"自相矛盾。
+    u.lang = this.practiceLang();
     u.onend = () => { this.speakDone.set(true); this.stopSpeak(); };
     u.onerror = () => this.stopSpeak();
     this.utterance = u;
@@ -1559,7 +1593,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 对某条录音做发音评分(以当前素材文本为参考文本)。 */
   async gradeRecording(id: string): Promise<void> {
-    await this.recorder.grade(id, this.currentText());
+    await this.recorder.grade(id, this.currentText(), this.practiceLang());
   }
 
   // ---------- 当前作品(参考站的"录 → 回听 → 评分"流程) ----------
@@ -1617,7 +1651,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.scoreBilledSeconds.set(before?.billedSeconds ?? null);
     this.scoreBilledBytes.set(before?.billedBytes ?? null);
 
-    await this.recorder.grade(t.id, this.currentText());
+    await this.recorder.grade(t.id, this.currentText(), this.practiceLang());
 
     // grade() 完成后从录音最新状态里回读计费口径:
     //   · 本次真调了 Azure → 新值(刚生成的 billedSeconds)

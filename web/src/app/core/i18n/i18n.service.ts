@@ -272,6 +272,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.collapseReport': { zh: '收起报告', en: 'Collapse', fr: 'Réduire' },
   'practice.viewReportDetail': { zh: '查看详情', en: 'View Report', fr: 'Voir le rapport' },
   'practice.gotoConfig': { zh: '前往配置 ↗', en: 'Configure ↗', fr: 'Configurer ↗' },
+  // ★ 2026-09-19:朗读/评分语言(法语支持)。朗读与评分同源用同一个值。
+  'practice.langTitle': { zh: '语语言', en: 'Reading language', fr: 'Langue de lecture' },
+  'practice.langHint': { zh: '朗读与发音评分都按此语言。法语需 Azure 法语神经音色(fr-FR-DeniseNeural)。', en: 'Used for both read-aloud and pronunciation scoring. French needs a French neural voice (fr-FR-DeniseNeural).', fr: 'Utilisée pour la lecture et la notation. Le français exige une voix neuronale française (fr-FR-DeniseNeural).' },
   'practice.reportEmpty': { zh: '还没有评测结果。录一段朗读并点击「AI 评分」后,这里会显示发音准确度、流利度、逐词对比与错误统计。', en: 'No assessment yet. Record a take and click "AI Scoring" to see pronunciation accuracy, fluency, word-by-word diff and error stats here.', fr: 'Aucune évaluation. Enregistrez puis lancez l evaluation.' },
 
   // ---------- 2026-09-16 第十九轮:骨架重构新增 ----------

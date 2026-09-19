@@ -328,6 +328,22 @@
                 </p>
               }
 
+              <!-- ★ 2026-09-19:朗读/评分语言。朗读与评分必须同源,
+                   否则会出现"法语音色朗读、英语规则评分"的错误组合。 -->
+              <div class="em-sep"></div>
+              <div class="em-head">{{ t('practice.langTitle') }}</div>
+              <p class="em-sub">{{ t('practice.langHint') }}</p>
+              @for (l of langOptions; track l.code) {
+                <button mat-menu-item class="em-card" [class.on]="practiceLang() === l.code"
+                        (click)="setPracticeLang(l.code)">
+                  <span class="em-radio" [class.checked]="practiceLang() === l.code"></span>
+                  <span class="em-item">
+                    <span class="em-name">{{ l.label }}</span>
+                    <span class="em-note">{{ l.note }}</span>
+                  </span>
+                </button>
+              }
+
               <div class="em-sep"></div>
               <button mat-menu-item class="em-goto" (click)="goAiSetting()">
                 <mat-icon>open_in_new</mat-icon>

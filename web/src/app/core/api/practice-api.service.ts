@@ -334,9 +334,9 @@ export class PracticeApi {
    * 未配 key 时后端返回 503,调用方据此**如实**回退浏览器语音。
    */
   synthesize(text: string, voice?: string, speed?: number,
-             force = false): Observable<TtsSynthesisResult> {
+             force = false, language?: string): Observable<TtsSynthesisResult> {
     return this.api
-      .postBlobWithHeaders(`${PracticeApi.BASE}/tts`, { text, voice, speed, force })
+      .postBlobWithHeaders(`${PracticeApi.BASE}/tts`, { text, voice, speed, force, language })
       .pipe(map((res) => {
         const num = (k: string): number | null => {
           const v = res.headers.get(k);

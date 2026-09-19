@@ -575,7 +575,7 @@ export class RecorderService {
    *
    * ⚠️ 诚实约束:Free F0 层不返回 Fluency/Prosody,所以这两项一律 null,不用 0 充数。
    */
-  async grade(id: string, referenceText: string): Promise<void> {
+  async grade(id: string, referenceText: string, language = 'en-US'): Promise<void> {
     const rec = this.recordings().find((r) => r.id === id);
     if (!rec || rec.grading) return;
 
@@ -668,7 +668,10 @@ export class RecorderService {
           samples: samples.data,
           sampleRate: samples.rate,
           referenceText,
-          language: 'en-US'
+          // ★ 2026-09-19:不再写死 en-US —— 法语素材被当英语评分,
+          //   Azure 会用英语解码法语音频,结果就是识别乱码或评不出分,
+          //   表面看像"不支持法语"。语言由调用方按当前素材传入。
+          language
         })
       );
 

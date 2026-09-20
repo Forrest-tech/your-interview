@@ -1088,6 +1088,22 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * 文件夹展开/收起 —— ★ 2026-09-19 修复(Forrest 报"点任何树节点
+   * Save Changes 都被激活"):
+   *
+   *   展开/收起是**纯 UI 状态**,不是内容变更。旧链路里它走 nodeChange,
+   *   而 onTreeChange 会无条件 treeDirty.set(true) 并触发 persistQuiet() ——
+   *   于是用户每点一下文件夹,侧栏就亮起"保存修改",还多发一次保存请求。
+   *
+   *   现在单独处理:只把节点状态映回本地数组,**不置脏、不落盘**。
+   *   expanded 仍会在下次真实变更时随整树一起保存(见 toPayload)。
+   */
+  onFolderToggle(node: MaterialNode): void {
+    // 组件内已就地改了 expanded,这里只需把数组引用换新,触发变更检测。
+    this.nodes.set([...this.nodes()]);
+  }
+
+  /**
    * 静默保存到后端(自动持久化用)。
    *
    * 为什么要静默:拖动排序会连发多次变更事件,每次都弹错会刷屏。

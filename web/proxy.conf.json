@@ -1,4 +1,10 @@
 {
+  "/api/assessment": {
+    "target": "http://127.0.0.1:5266",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "warn"
+  },
   "/api": {
     "target": "http://127.0.0.1:5200",
     "secure": false,

@@ -64,6 +64,11 @@ export class MaterialTreeComponent {
   @Input() emptyHint = '还没有素材。用上方 + 号新建文件夹与文件。';
 
   @Output() nodeSelect = new EventEmitter<MaterialNode>();
+  /**
+   * 文件夹展开/收起 —— ★ 2026-09-19 新增。
+   * 与 nodeChange 分开:展开是纯 UI 状态,不该把树标脏、也不该触发落盘。
+   */
+  @Output() folderToggle = new EventEmitter<MaterialNode>();
   @Output() nodeChange = new EventEmitter<MaterialNode[]>();
   @Output() nodeDelete = new EventEmitter<MaterialNode>();
 
@@ -126,9 +131,20 @@ export class MaterialTreeComponent {
     this.nodeSelect.emit(node);
   }
 
+  /**
+   * 展开/收起文件夹。
+   *
+   * ★ 2026-09-19 修复(Forrest 报"点任何树节点 Save Changes 都被激活"):
+   *   展开/收起是**纯 UI 状态**,不是内容变更。
+   *   旧实现在这里 emit nodeChange → 父组件无条件置脏(并触发一次落盘),
+   *   于是用户每点一下文件夹,侧栏就亮起"保存修改"—— 不符合 UX。
+   *   现在改为只 emit 专门的 folderToggle 事件,父组件只更新本地展开状态,
+   *   **不置脏、不落盘**。expanded 仍会随整树保存一起写库,
+   *   但"仅仅展开"本身不再把树标成脏的。
+   */
   toggle(node: MaterialNode): void {
     node.expanded = !node.expanded;
-    this.nodeChange.emit(this.nodes);
+    this.folderToggle.emit(node);
   }
 
   // ---------- 新建 ----------

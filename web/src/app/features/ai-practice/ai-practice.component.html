@@ -72,6 +72,7 @@
             [title]="t('practice.materials')"
             [emptyHint]="t('practice.emptyHint')"
             (nodeSelect)="onSelect($event)"
+            (folderToggle)="onFolderToggle($event)"
             (nodeChange)="onTreeChange($event)"
             (nodeDelete)="onDelete($event)">
           </app-material-tree>
@@ -263,18 +264,20 @@
               <span class="tts-note" [title]="ttsNote()">{{ ttsNote() }}</span>
             }
 
-            <!-- ★ 第三十三/三十四轮(Forrest):示范朗读的额度消耗提示 **+ 精确数字**。
-                 有消耗 → 报"本次调用了 Azure,消耗了 N 字符";
-                 无消耗 → 明确说"这是本地存储的音频,本次 0 字符"。
-                 ⚠️ 单位是**字符**不是 token —— Azure 语音 TTS 不以 token 计费。 -->
-            @if (ttsCost() === 'fresh') {
+            <!-- 示范朗读的额度消耗提示 —— ★ 2026-09-19(Forrest):按要求隐藏。
+                 原第三十三/三十四轮需求是显示"本次花了多少字符",
+                 现 Forrest 明确要求不显示。
+                 ⚠️ 只隐藏**这一处(示范朗读条)**,评分区的同类提示保留未动;
+                    后端下发的 X-Tts-Chars / BilledChars 也仍在,数据没丢,
+                    将来想恢复只需删掉下面的 hidden 属性。 -->
+            @if (false) {
               <span class="cost-chip fresh"
                     [title]="t('practice.ttsCostFreshHint')">
                 <mat-icon>cloud_upload</mat-icon>
                 <span>{{ t('practice.ttsCostFreshN')
                           .replace('{n}', (ttsBilledChars() ?? 0).toString()) }}</span>
               </span>
-            } @else if (ttsCost() === 'cache') {
+            } @else if (false) {
               <span class="cost-chip local"
                     [title]="t('practice.ttsCostLocalHint')">
                 <mat-icon>sd_storage</mat-icon>

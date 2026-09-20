@@ -256,8 +256,11 @@
               <div class="sample-fill" [style.width.%]="speakProgress()"></div>
             </div>
 
-            <!-- speakDone 时直接展示总时长,避免定格在中途秒数 -->
-            <span class="sample-time">{{ fmtDuration(speakDone() ? estimateSeconds() : speakElapsed()) }} / {{ fmtDuration(estimateSeconds()) }}</span>
+            <!-- ★ 2026-09-20(Forrest):时间全部来自 Howler 真实 API。
+                 · 未配 Key          → "--:-- / --:--"
+                 · 音频未就绪        → "0s / --s"(中性占位,不是坏了)
+                 · 就绪              → 真实 seek() / duration() -->
+            <span class="sample-time">{{ speakTimeText() }}</span>
 
             <!-- 只在"回退/失败"性质时才渲染引擎提示(诚实红线) -->
             @if (showTtsNote()) {
@@ -289,10 +292,14 @@
             <button class="speed-badge" [matMenuTriggerFor]="rateMenu">
               x{{ rate() }}
             </button>
-            <mat-menu #rateMenu="matMenu">
+            <mat-menu #rateMenu="matMenu" panelClass="rate-menu-panel">
               @for (r of rates; track r) {
-                <button mat-menu-item (click)="setRate(r)">
-                  <mat-icon>{{ rate() === r ? 'check' : 'blank' }}</mat-icon>
+                <!-- ★ 2026-09-20(Forrest):**去掉对勾**。
+                     选中态改用淡蓝色背景(.selected),与其他项只差底色,
+                     不再有勾选符号。 -->
+                <button mat-menu-item class="rate-item"
+                        [class.selected]="rate() === r"
+                        (click)="setRate(r)">
                   <span>{{ r }}x</span>
                 </button>
               }

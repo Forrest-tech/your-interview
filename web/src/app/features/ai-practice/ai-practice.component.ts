@@ -1,6 +1,7 @@
 import {
-  Component, OnDestroy, OnInit, computed, effect, inject, signal
+  ChangeDetectorRef, Component, OnDestroy, OnInit, computed, effect, inject, signal
 } from '@angular/core';
+import { Howl } from 'howler';
 import { firstValueFrom } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,6 +20,9 @@ import { MaterialNode, MaterialTreeComponent } from '../../shared/material-tree/
 import { MaterialNodeDto, MaterialNodeIn, PracticeApi } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
+import {
+  getCachedAudio, getCachedAudioByMaterial, putCachedAudio, ttsKey,
+} from './tts-audio-cache';
 
 /**
  * 从 localStorage 恢复字号缩放百分比。
@@ -99,6 +103,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly recorder = inject(RecorderService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  // ★ 2026-09-20(Forrest):Howler 的事件回调在 Angular 之外触发,
+  //   必须手动 detectChanges 才能让模板看到最新的位置/状态。
+  private readonly cdr = inject(ChangeDetectorRef);
 
   /** 录音失败提示(麦克风权限等)。 */
   readonly recError = signal<string | null>(null);
@@ -385,10 +392,42 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   // ============================================================
 
   /**
-   * Azure 是否就绪(声明级)。
-   * 优先看本地标记;默认 **false** —— 未配置就不允许提交,这是任务书要求。
+   * Azure 是否就绪。
+   *
+   * ★ 2026-09-20(Forrest BUG1 真因修复):以**服务端**为准。
+   *
+   * 旧实现只读 localStorage['azure_speech_configured'] —— 该标记只有用户
+   * 手动去 AI 设置页保存过才会写入。本机从未写过,于是 azureReady 恒为 false,
+   * speak() 第一行就被门禁挡住 → 点播放毫无反应、时间永远 --:-- / --:--
+   * (这正是 Forrest 报的"默认时间是空的")。
+   *
+   * 现在:localStorage 标记为 true 时立即就绪(快速路径);
+   *       否则向 GET /speech/settings 查 hasKey,以服务端为准。
    */
   readonly azureReady = signal(readAzureReadyFlag());
+
+  /**
+   * ★ 2026-09-20(Forrest BUG1 修复):向服务端核对 Azure 是否真的配好。
+   *   服务端持 key(不进浏览器),GET speech/settings 只回 hasKey 布尔值。
+   *   本地标记已是 true 就不必再问;否则以服务端回答为准。
+   */
+  private syncAzureReadyFromServer(): void {
+    if (this.azureReady()) return;   // 本地已声明配置过 → 不必等网络
+    this.practiceApi.getSpeechSettings().subscribe({
+      next: (s) => {
+        if (s?.hasKey) {
+          this.azureReady.set(true);
+          try { localStorage.setItem(AZURE_READY_KEY, '1'); } catch { /* 隐私模式忽略 */ }
+          this.cdr.detectChanges();
+          // ★ 2026-09-20(Forrest):若首次进入时该状态尚未就绪、导致
+          //   本地音频时长没装载,这里补跑一次,保证与响应时序无关。
+          this.retryCachedDuration();
+        }
+      },
+      // 服务端不可用时不误判为"未配置",保持原值,让用户点播放时拿到真实错误
+      error: () => { /* noop */ }
+    });
+  }
 
   /** 能否提交评分:三个条件全满足。 */
   readonly canSubmitScoring = computed(() => {
@@ -534,15 +573,29 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   // ---------- 示范朗读 ----------
   readonly speaking = signal(false);
+
+  // ══ ★ 2026-09-20(Forrest):**全用 Howler** ══
+  //   音源由 Howler 在创建时给定;换素材 = unload() 旧的、按新音频新建。
+  //   时长 duration()、位置 seek()、播放/暂停 play()/pause()、
+  //   结束 on('end')、倍速 rate() —— 全部是 Howler 自己的 API 与事件。
+  private ttsHowl: Howl | null = null;
+  /** 当前播放位置(秒) —— 值来自 howl.seek()。 */
+  readonly speakPos = signal(0);
+  /** 音频真实总时长(秒) —— 来自 howl.duration(),倍速不影响它。 */
+  readonly speakDur = signal(0);
+  /**
+   * ★ 2026-09-20(Forrest):进度刷新 —— 每 200ms 读一次 howl.seek()。
+   * 值完全来自 Howler(不是我估算);Howler 的 seek 事件只在程序主动
+   * 调 seek() 时触发,播放中不触发,所以这里按方案二用定时器搬运真实值。
+   */
+  private posTimer: ReturnType<typeof setInterval> | null = null;
+  /** 当前播放器装载的音频指纹键(文本+音色+语言)。 */
+  private ttsPlayingKey: string | null = null;
   readonly rate = signal(1);
   readonly rates = [0.5, 0.75, 1, 1.25, 1.5, 2];
-  private utterance: SpeechSynthesisUtterance | null = null;
-
-  /**
-   * 当前正在播的 Azure TTS 音频（服务端合成的 MP3）。
-   * 与 utterance 并存是因为两个引擎的停止方式不同:一个 cancel(),一个 pause()。
-   */
-  private ttsAudio: HTMLAudioElement | null = null;
+  // ★ 2026-09-20(Forrest):utterance / ttsAudio 已删除 ——
+  //   两者都是 Web Speech / HTMLAudioElement 时代的产物,
+  //   现在统一由 this.ttsHowl(Howl 实例)承载。
 
   /** Azure TTS 的 objectURL —— 必须回收,否则每次合成都会攒住一份 MP3。 */
   private ttsUrl: string | null = null;
@@ -567,7 +620,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *    所以绝不能根据"这段文本我播过没"在本地猜,
    *    猜错就是骗用户(比如另一个标签页/另一台设备已经合成过)。
    */
-  readonly ttsCost = signal<'' | 'fresh' | 'cache'>('');
+  readonly ttsCost = signal<'' | 'fresh' | 'cache' | 'local'>('');
 
   /**
    * ★ 第三十四轮(Forrest:"给我准确的消耗了多少"):本次示范朗读的精确计费量。
@@ -1003,6 +1056,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    // ★ 2026-09-20(Forrest BUG1 修复):进页面即校准"Azure 是否就绪"。
+    //   本地标记为 false 时以服务端 speech/settings 的 hasKey 为准 ——
+    //   否则播放功能会被一个从未写入的 localStorage 标记永久挡死。
+    this.syncAzureReadyFromServer();
     // 素材树改为从后端加载(2026-09-15 第十七轮)。
     // 2026-09-15 第十七轮:持久化迁到后端 —— 必须先等数据回来再选素材,
     // 否则 findFile 在空树上永远找不到,会错误地跳到第一个素材。
@@ -1037,6 +1094,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopSpeak();
+    this.stopPosTimer();
     // TTS 的 objectURL 不回收就是内存泄漏(每次合成一份 MP3 攒在内存里)
     if (this.ttsUrl) {
       URL.revokeObjectURL(this.ttsUrl);
@@ -1076,6 +1134,86 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // 换素材后当前作品作废,必须重新点评分
     this.activeTakeId.set(null);
     this.stopSpeak();
+    // ★ 2026-09-20(Forrest):换素材 → unload 旧实例(Howler 原生)。
+    this.ttsHowl?.unload();
+    this.ttsHowl = null;
+    if (this.ttsUrl) { URL.revokeObjectURL(this.ttsUrl); this.ttsUrl = null; }
+    this.ttsPlayingKey = null;
+    this.speakPos.set(0);
+    this.speakDur.set(0);
+    void this.showCachedDuration(n.id, text);
+  }
+
+  /**
+   * ★ 2026-09-20(Forrest):刷新/新进页面时,若本地已有该文本的音频,
+   * 就地建一个 Howler 实例(不播放)让它的 on('load') 报出真实时长 ——
+   * 这样进度条一开始就显示正确总时长,而不是等用户点播放。
+   * 本地没有则什么都不做(时长显示 --,符合选项 1)。
+   */
+  /** ★ 2026-09-20:Azure 就绪后,若当前素材还没装载本地音频时长,补跑一次。 */
+  private retryCachedDuration(): void {
+    if (this.ttsHowl) return;             // 已经装载过了
+    const id = this.selectedId();
+    if (!id) return;
+    const node = this.findFile(this.nodes(), id);
+    if (node) void this.showCachedDuration(id, node.content ?? '');
+  }
+
+  private async showCachedDuration(materialId: string, text: string): Promise<void> {
+    // ⚠️ 不要在这里判 azureReady:读**本地已缓存**的音频根本不需要 Azure,
+    //    而且 azureReady 是异步校准的,早于它就绪会被误挡(2026-09-20 真因)。
+    const clean = (text || '').trim();
+    // 优先按文本指纹查;正文还没回填时,退回到按素材 id 查(Forrest 2026-09-20)。
+    const key = clean ? ttsKey(clean, '', this.practiceLang()) : '';
+    const cached = key ? await getCachedAudio(key) : await getCachedAudioByMaterial(materialId);
+    if (!cached) return;
+    // 期间用户可能已切走 —— 只在仍是同一素材时装载。
+    if (this.selectedId() !== materialId) return;
+    // 若正文已回填且与缓存那段不一致,说明文本改过,这份时长不再作数。
+    const nowText = (this.saved() || '').trim();
+    if (nowText && cached.text && nowText !== cached.text) return;
+
+    const url = URL.createObjectURL(cached.blob);
+    if (this.ttsUrl) URL.revokeObjectURL(this.ttsUrl);
+    this.ttsUrl = url;
+    this.ttsHowl?.unload();
+    const h = new Howl({
+      src: [url],
+      // ★ 2026-09-20(Forrest 选项 1):预载时长用 Howler 的 Web Audio 模式 ——
+      //   html5:true 是流式的,onload 时浏览器还没解析出媒体时长(duration()=0);
+      //   html5:false 会完整解码,onload 时 duration() 立即可用。
+      //   这是 Howler 原生行为,不做任何自写重试。
+      html5: false,
+      rate: this.rate(),
+      onload: () => {
+        this.speakDur.set(h.duration());   // Howler 的真实时长(此刻已可用)
+        this.speakPos.set(0);
+        this.cdr.detectChanges();
+      },
+      onplay: () => {
+        this.speaking.set(true);
+        this.startPosTimer();
+        this.cdr.detectChanges();
+      },
+      onpause: () => {
+        this.speaking.set(false);
+        this.stopPosTimer();
+        this.speakPos.set(h.seek() || 0);
+        this.cdr.detectChanges();
+      },
+      onend: () => {
+        this.speaking.set(false);
+        this.stopPosTimer();
+        this.speakPos.set(0);
+        this.cdr.detectChanges();
+      },
+      onplayerror: () => {
+        h.once('unlock', () => h.play());
+      },
+    });
+    this.ttsHowl = h;
+    // 预载的就是这份 → 点播放时文本指纹若与之一致就直接播,不再请求。
+    this.ttsPlayingKey = cached.key;
   }
 
   onTreeChange(next: MaterialNode[]): void {
@@ -1262,211 +1400,182 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   // ---------- 示范朗读 ----------
   speak(): void {
-    if (this.speaking()) {
-      this.stopSpeak();
+    // ══ ★ 2026-09-20(Forrest):全用 Howler ══
+    //     播放 → play() · 暂停 → pause() · 播完再点 → 从头 play()
+    const h = this.ttsHowl;
+    if (h && this.speaking()) {
+      h.pause();                 // Howler 的 onpause 会把 speaking 置 false
       return;
     }
     const text = this.editing() ? this.draft() : this.saved();
-    if (!text.trim()) return;
-
-    if (this.engine() === 'azure') {
-      this.speakAzure(text);
+    const clean = (text || '').trim();
+    if (!clean) return;
+    if (!this.azureReady()) {
+      this.ttsNote.set(this.t('practice.needAzureKey'));
       return;
     }
 
-    // ---- 浏览器默认 TTS(Web Speech API) ----
-    if (typeof speechSynthesis === 'undefined') return;
-    this.speakDone.set(false);   // 点"朗读"即清除上一次的已读完定格
+    // ★ Forrest 逻辑:文本没改 → 直接播本地/已装载的那份。
+    const key = ttsKey(clean, '', this.practiceLang());
+    if (h && h.state() === 'loaded') {
+      if (this.ttsPlayingKey === key) {
+        h.play();                // 文本未变:播当前这份(本地/内存)
+        return;
+      }
+      // 文本变了 → 下面重新合成
+    }
 
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = this.rate();
-    // ★ 2026-09-19:统一用 practiceLang —— 此前这里读的是 config().lang,
-    //   而 config().lang 固定为 'en',所以浏览器回退朗读永远是英语。
-    u.lang = this.practiceLang();
-    u.onend = () => { this.speakDone.set(true); this.stopSpeak(); };
-    u.onerror = () => this.stopSpeak();
-    this.utterance = u;
-    this.speaking.set(true);
-    speechSynthesis.speak(u);
-
-    this.startSpeakTimer();
+    this.synthesizeAndPlay(clean, key);
   }
 
   /**
-   * Azure Neural TTS 示范朗读（2026-09-15 第十七轮：后端接口已就绪，改为真调用）。
-   *
-   * 链路：前端 POST /api/assessment/tts → 服务端持 key 调 Azure 神经语音 →
-   *       回 MP3 流 → 前端 objectURL 播放。key 全程不进浏览器。
-   *
-   * ⚠️ 诚实回退规则（绝不含糊）：
-   *   · 后端 503（未配 key / 服务未起）→ 回退浏览器 TTS，并**明确告知**
-   *     "Azure 未配置，已用浏览器语音"，不让用户以为听到的是 Azure 人声。
-   *   · 其他失败（401/403/502）→ 同样回退，但把真实原因说出来。
-   *   · 回退绝不修改 azureReady：该 signal 第七轮起还兼管"AI 评分门禁",
-   *     在此重置会把评分按钮连带锁死。
+   * ★ 2026-09-20(Forrest):按 Forrest 的逻辑取音频并播放 ——
+   *   1. 先查**本地缓存**(IndexedDB):有就直接播,一个请求都不发;
+   *   2. 本地没有 → 调 Azure 合成,拿到后**存本地**再播;
+   *   3. 文本/语言变了 → key 变 → 自然走"重新合成"。
    */
-  private speakAzure(text: string): void {
-    // ⚠️ 2026-09-16(Forrest 本轮):开播时**不显示**"正在用 Azure 神经语音合成…" ——
-    //    这是正常路径不是警示,用户只想看进度条。回退/出错时才会写入 note。
+  private async synthesizeAndPlay(text: string, key: string): Promise<void> {
     this.ttsNote.set('');
-    this.ttsCost.set('');   // 新一次朗读:先清掉上次的额度提示,结果出来再如实标记
-    // 数字也一并清掉 —— 否则上一次的字符数会残留到新一次还没回来的时候
+    this.ttsCost.set('');
     this.ttsBilledChars.set(null);
     this.ttsFullChars.set(null);
     this.ttsVoice.set('');
     this.ttsAudioBytes.set(null);
 
-    this.practiceApi.synthesize(text, undefined, this.rate(), false, this.practiceLang()).subscribe({
+    // ── 1. 本地缓存优先 ──
+    const cached = await getCachedAudio(key);
+    if (cached) {
+      this.ttsCost.set('local');      // 如实标记:这次用的是本地那份
+      this.ttsVoice.set(cached.voice);
+      const url = URL.createObjectURL(cached.blob);
+      if (this.ttsUrl) URL.revokeObjectURL(this.ttsUrl);
+      this.ttsUrl = url;
+      this.ttsPlayingKey = key;
+      this.createHowl(url);
+      return;
+    }
+
+    // ── 2. 本地没有 → Azure 合成(speed 恒为 1.0;倍速是播放行为) ──
+    this.practiceApi.synthesize(text, undefined, 1, false, this.practiceLang()).subscribe({
       next: (res) => {
-        const blob = res.blob;
-        // ★ 第三十三/三十四轮:如实标记本次到底花没花额度、花了多少。
-        //   来源是后端响应头,不是本地猜测。
         this.ttsCost.set(res.fromCache ? 'cache' : 'fresh');
         this.ttsBilledChars.set(res.billedChars);
         this.ttsFullChars.set(res.fullChars);
         this.ttsVoice.set(res.voice);
         this.ttsAudioBytes.set(res.audioBytes);
-        const url = URL.createObjectURL(blob);
-        // 上一次的 TTS objectURL 要先回收,否则连播多次会攒住内存
+
+        // ── 3. 存本地,下次(含刷新)直接用,不再请求 ──
+        // ★ 2026-09-20(Forrest 真因):Angular responseType:'blob' 拿到的
+        //   Blob 常常**没有 MIME type**;<audio> 能嗅探播放,但 Howler 解码
+        //   时拿不到时长(duration()=0)→ 刷新后显示 "--s"。
+        //   这里显式补上类型,本地取回的 Blob 才有类型可用。
+        const typedBlob = res.blob.type
+          ? res.blob
+          : new Blob([res.blob], { type: 'audio/mpeg' });
+        void putCachedAudio({
+          key,
+          blob: typedBlob,
+          voice: res.voice,
+          lang: this.practiceLang(),
+          savedAt: Date.now(),
+          materialId: this.selectedId() ?? undefined,
+          text,
+        });
+
+        const url = URL.createObjectURL(res.blob);
         if (this.ttsUrl) URL.revokeObjectURL(this.ttsUrl);
         this.ttsUrl = url;
-
-        this.stopSpeakTimerOnly();
-        this.speakElapsed.set(0);
-        this.speakDone.set(false);   // 新一次播放:清除上一次的"已读完"定格
-        this.speaking.set(true);
-        // ⚠️ 2026-09-16(Forrest 本轮):这里**不再**设置
-        //    "Azure 神经语音(服务端合成)" 这类正常标记 —— 样板朗读条上不显示引擎.
-        //    回退/失败时下面的 error 分支会设入警示文案,那种才会显示(见 showTtsNote)。
-        this.ttsNote.set('');
-        this.ttsAudio = new Audio(url);
-        // ⚠️ 2026-09-16:onended = **自然读完** → 先置 speakDone(进度条定格 100%),再 stopSpeak。
-        //    顺序要紧:stopSpeak 会清零 elapsed,若后置 speakDone 会被看成一瞬间的 0%。
-        this.ttsAudio.onended = () => {
-          this.speakDone.set(true);
-          this.stopSpeak();
-        };
-        this.ttsAudio.onerror = () => {
-          // 合成成功但浏览器放不出来(极罕见)→ 如实回退,不装无声
-          this.ttsNote.set('音频无法播放,已回退浏览器语音');
-          this.speakAzureFallback(text);
-        };
-        void this.ttsAudio.play().catch(() => {
-          this.ttsNote.set('浏览器拦截了自动播放,已回退浏览器语音');
-          this.speakAzureFallback(text);
-        });
-        this.startSpeakTimer();
+        this.ttsPlayingKey = key;
+        this.createHowl(url);
       },
       error: (e) => {
         const status = (e as { status?: number } | null)?.status;
-        // ⚠️ 2026-09-16:后端已不再用 401 表示"Azure 密钥错误"(那会与"会话过期"
-        // 混淆,导致点示范朗读被弹回登录页)。现在:
-        //   503 = 未配置 / 502 = Azure 拒绝凭据或合成失败
-        // 这里保留对 401/403 的识别仅作防御(旧版本后端可能仍返回)。
-        const why = status === 503
-          ? 'Azure 语音未配置'
-          : status === 401 || status === 403 || status === 502
-            ? 'Azure 密钥/区域无效'
-            : '语音合成失败';
-        this.ttsNote.set(`${why},已回退浏览器语音`);
-        // 回退了就不是 Azure 合成:额度标记与数字都必须清掉,
-        // 否则会把浏览器语音算到 Azure 头上(诚实红线)。
+        this.ttsNote.set(
+          status === 503 ? 'Azure 语音未配置'
+            : status === 401 || status === 403 || status === 502
+              ? 'Azure 密钥/区域无效'
+              : '语音合成失败');
         this.ttsCost.set('');
         this.ttsBilledChars.set(null);
         this.ttsFullChars.set(null);
         this.ttsVoice.set('');
         this.ttsAudioBytes.set(null);
-        this.speakAzureFallback(text);
       }
     });
   }
 
-  /** 清掉计时器但不改 speaking —— Azure 播放接管前用,避免状态抖动。 */
-  private stopSpeakTimerOnly(): void {
-    this.clearSpeakTimer();
-  }
+  /**
+   * ★ 2026-09-20(Forrest):按音源**新建** Howl 并播放。
+   * Howler 用法:src 创建时给定;换音频就 unload 旧的、重建。
+   * 时长/位置/结束/暂停全部由 Howler 自己的事件回调驱动。
+   */
+  private createHowl(url: string): void {
+    this.ttsHowl?.unload();          // Howler 原生:释放旧实例
+    this.speakPos.set(0);
+    this.speakDur.set(0);
 
-  /** Azure 未就绪时的回退：仍用浏览器 TTS，保证可听。 */
-  private speakAzureFallback(text: string): void {
-    if (typeof speechSynthesis === 'undefined') return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = this.rate();
-    // ★ 2026-09-19:回退分支也必须跟 practiceLang —— 否则法语素材回退后
-    //   仍用英语发音朗读,和"支持法语"自相矛盾。
-    u.lang = this.practiceLang();
-    u.onend = () => { this.speakDone.set(true); this.stopSpeak(); };
-    u.onerror = () => this.stopSpeak();
-    this.utterance = u;
-    this.speaking.set(true);
-    speechSynthesis.speak(u);
-    this.startSpeakTimer();
+    const h = new Howl({
+      src: [url],                    // ★ 音源在创建时给定(Howler 就是这样用)
+      html5: true,                   // 流式播放,MP3 不必整段进内存
+      rate: this.rate(),             // 当前倍速(Howler 原生变速,位置保留)
+      onload: () => {
+        this.speakDur.set(h.duration());   // Howler 的真实总时长
+        this.cdr.detectChanges();
+      },
+      onplay: () => {
+        this.speaking.set(true);
+        this.startPosTimer();
+        this.cdr.detectChanges();
+      },
+      onpause: () => {
+        this.speaking.set(false);
+        this.stopPosTimer();
+        this.speakPos.set(h.seek() || 0);
+        this.cdr.detectChanges();
+      },
+      onend: () => {
+        this.speaking.set(false);
+        this.stopPosTimer();
+        this.speakPos.set(0);
+        this.cdr.detectChanges();
+      },
+      // 位置读的是 Howler 的 seek();Howler 的 seek 事件只在程序调 seek() 时
+      // 触发,播放中的推进靠下面 startPosTimer 定时搬运(方案 2)。
+      onseek: () => {
+        this.speakPos.set(h.seek() || 0);
+        this.cdr.detectChanges();
+      },
+      onplayerror: () => {
+        // 浏览器自动播放策略:解锁后重播(Howler 自带 unlock)
+        h.once('unlock', () => h.play());
+      }
+    });
+
+    this.ttsHowl = h;
+    this.stopPosTimer();
+    h.play();
   }
 
   /**
-   * speechSynthesis 没有进度回调 —— 只能自己定时走秒，仅供进度条展示。
-   * 抽出来是因为两个引擎（browser / azure 回退）都得用。
+   * ★ 2026-09-20(Forrest 方案 2):每 200ms 读一次 howl.seek() 搬进视图。
+   * 只做"搬运真实值",不做任何估算;停止/暂停/结束即停表。
    */
-  private startSpeakTimer(): void {
-    this.speakElapsed.set(0);
-    this.speakDone.set(false);   // 开播即清除"已读完"定格,进度条重新从 0 走
-    this.clearSpeakTimer();
-    // ⚠️ 2026-09-16(第 2 条 bug B):总量在**开播那一刻锁死**。
-    //    旧实现每秒钟重新调 estimateSeconds(),而它可能因实测值写入而变小,
-    //    导致"已过秒数不变、总量变小"→ 进度条百分比反而往回退。
-    //    现在把开播时的总量快照入变量,全程不变 —— 进度条只前进不后退。
-    this.speakTotalSnapshot = this.estimateSeconds();
-    this.speakTimer = setInterval(() => {
-      this.speakElapsed.update((s) => {
-        const next = s + 1;
-        // 超出锁定的总时长就停在总量上,不让进度条冲过 100%。
-        // ⚠️ 这**不会**截断音频 —— 朗读照样继续到 onend,
-        //    只是秒表停在估算刻度(估算本身就偏保守)。
-        return next > this.speakTotalSnapshot ? this.speakTotalSnapshot : next;
-      });
-    }, 1000);
+  private startPosTimer(): void {
+    this.stopPosTimer();
+    this.posTimer = setInterval(() => {
+      const h = this.ttsHowl;
+      if (!h || !h.playing()) { this.stopPosTimer(); return; }
+      this.speakPos.set(h.seek() || 0);
+      const d = h.duration();
+      if (d && isFinite(d) && d > 0) this.speakDur.set(d);
+      this.cdr.detectChanges();
+    }, 200);
   }
 
-  stopSpeak(): void {
-    // ⚠️ 顺序要紧:只有"自然读完"才算实测时长。
-    //    用户在播放中途手动停止时不能把它当成总时长 —— 否则下次显示就偏短。
-    //    所以下面记录实测前,先判断本次是否已经走到 onend(onend 会先置 speaking=false)。
-    //
-    // ⚠️ 2026-09-16(第 2 条 bug B):写入实测值必须同时写 measuredKey ——
-    //    否则这个时长会被误用到下一段不同的文本上,导致 "0s / Ns" 显示错误。
-    if (this.speaking() && this.speakElapsed() > 0) {
-      this.measuredSpeakSeconds.set(this.speakElapsed());
-      this.measuredKey.set(this.textKey(this.readonlyText() || ''));
-    }
-    if (typeof speechSynthesis !== 'undefined') {
-      speechSynthesis.cancel();
-    }
-    // Azure TTS 音频也要停 —— 否则切素材后上一段人声还在念
-    if (this.ttsAudio) {
-      this.ttsAudio.pause();
-      this.ttsAudio = null;
-    }
-    this.clearSpeakTimer();
-    // ⚠️ 2026-09-16(Forrest 本轮):这里**故意不再清零 speakElapsed**。
-    //    因为清零会让 speakProgress() 瞬间返回 0 → 进度条读完后又回跑。
-    //    进度条改由 speakProgress() 用 speakDone 定格 100%(见其注释);
-    //    elapsed 的清零统一在"下一次开播"(startSpeakTimer / speakAzure)做。
-    this.speaking.set(false);
-    this.utterance = null;
-  }
-
-  private clearSpeakTimer(): void {
-    if (this.speakTimer) {
-      clearInterval(this.speakTimer);
-      this.speakTimer = null;
-    }
-  }
-
-  setRate(r: number): void {
-    this.rate.set(r);
-    // 正在播就按新倍速重来,否则用户改了没感觉
-    if (this.speaking()) {
-      this.stopSpeak();
-      this.speak();
+  private stopPosTimer(): void {
+    if (this.posTimer !== null) {
+      clearInterval(this.posTimer);
+      this.posTimer = null;
     }
   }
 
@@ -1747,105 +1856,50 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * speechSynthesis 没有可靠的进度回调,所以用词数估算 —— 只用于展示进度条,
    * 不用它做任何逻辑判断(估算不准不影响功能)。
    */
-  /**
-   * 示范朗读的显示总时长。
-   *
-   * ⚠️ 重要澄清(2026-09-15 核查):这里**没有**任何 10 秒硬编码,
-   *    也没有 `setTimeout(…, 10000)` 截断定时器 —— 全文件 setTimeout 计数 = 0。
-   *    speechSynthesis 是浏览器把文本**整段**读完才触发 onend,不存在截断。
-   *    之前看到的固定值是因为它是**词数估算**(非固定 10s),而估算值在
-   *    文本不变时恒定,看起来像"写死"。
-   *
-   * 这里改为:ll浏览器 TTS 且已经实测过真实音频时长时,优先用实测值。
-   *    实测来源 = 录音回放(HTMLAudioElement.duration),或 speak() 完成后的计量。
-   *    拿不到实测才回落词数估算——估算只用于进度条,不参与任何逻辑判断。
-   */
-  /**
-   * 示范朗读总时长(秒),用于进度条与 "0s / Ns" 显示。
-   *
-   * ⚠️ 2026-09-16(Forrest 第 2 条)修两个真 bug:
-   *
-   *   bug A — 切换素材后时长显示错:
-   *     旧实现只存一个全局 measuredSpeakSeconds。读完文本 A(比如 8s)
-   *     再切到文本 B(比如长句),measured 仍是 A 的 8s → 界面显示
-   *     "0s / 8s",与实际不符。
-   *     → 现在把实测值**绑定到它对应的文本哈希**。文本一变,实测值立即失效,
-   *       回落词数估算。这样"切换一下时间就错了"不会再发生。
-   *
-   *   bug B — 读完后进度条往回跑:
-   *     秒表在跑的时候用的是**估算值**(比如 12s);读完后 stopSpeak 写回
-   *     实测值(比如 9s)。总量突然从 12 变 9,而滑块位置 = 已过/总量,
-   *     于是进度条会从 75% 猛地跳回 100% 再回落 —— 视觉上就是"往回跑"。
-   *     → 现在实测值只在**同一文本、且未在播放中**时接管;
-   *       播放期间总量恒定不变,进度条只前进不后退。
-   */
-  readonly estimateSeconds = computed(() => {
-    const text = this.readonlyText() || '';
 
-    // 只有"实测值属于当前这段文本"时才采用实测 —— 切文本即失效
-    if (this.measuredKey() === this.textKey(text)) {
-      const measured = this.measuredSpeakSeconds();
-      if (measured > 0) return measured;
-    }
-
-    const words = text.trim().split(/\s+/).filter(Boolean).length;
-    // 英语朗读大约 150 词/分钟 ≈ 2.5 词/秒,除以倍速
-    return Math.max(1, Math.round(words / 2.5 / this.rate()));
-  });
-
-  /**
-   * 实测的示范朗读时长(秒)。0 = 尚未测得。
-   * ⚠️ 必须与 measuredKey 配套使用 —— 单看它无法判断这个时长属于哪段文本。
-   */
-  readonly measuredSpeakSeconds = signal(0);
-
-  /** 上面那个实测值对应的文本指纹(空 = 无实测值可用)。 */
-  private readonly measuredKey = signal('');
-
-  /** 文本指纹:用长度 + 首尾片段做轻量标识,足够区分"换没换素材"。 */
-  private textKey(text: string): string {
-    const t = (text || '').trim();
-    if (!t) return '';
-    return t.length + ':' + t.slice(0, 24) + ':' + t.slice(-24);
-  }
-
-  readonly speakElapsed = signal(0);
-  private speakTimer: ReturnType<typeof setInterval> | null = null;
-
-  /**
-   * 开播那一刻锁定的总时长(秒)。
-   * ⚠️ 2026-09-16(第 2 条 bug B):进度条必须用**锁定的快照**而不是实时
-   *    estimateSeconds();否则实测值写入使总量变小时,百分比会往回退。
-   */
-  private speakTotalSnapshot = 0;
-
-  /** 示范朗读进度百分比。
-   *
-   * ⚠️ 2026-09-16(Forrest 本轮):**读完了进度条就停在 100%,不要再动**。
-   *    旧实现在播放结束时 stopSpeak() 会把 speakElapsed 清零 + speaking=false,
-   *    于是 speakProgress() 立刻返回 0 → 进度条唰地**倒回去**,
-   *    正是 Forrest 反映的"读完了进度条又自己往回跑"。
-   *
-   *    现在改成三态:
-   *      · 播放中 → 按已过/锁定总量的真实百分比;)
-   *      · 已读完(见 speakDone)→ 恒定 100%,停在满格不动;
-   *      · 从未播放 → 0%。
-   *    speakDone 只在**自然读完**时置位,手动停播不会置位(避免假装读完)。
-   */
+  /** 示范朗读进度百分比 —— 数据源与时间文本完全一致(Howler 真实值)。 */
   speakProgress(): number {
-    if (this.speakDone()) return 100;   // 读完了:定格满格,不再回跑
-    if (!this.speaking()) return 0;     // 从未播放/已重置
-    const total = this.speakTotalSnapshot || this.estimateSeconds();
-    if (!total) return 0;
-    return Math.min(100, (this.speakElapsed() / total) * 100);
+    const total = this.speakDur();
+    if (!(total > 0)) return 0;              // 时长未知 → 0
+    const raw = Math.min(this.speakPos(), total);
+    return Math.min(100, Math.max(0, (raw / total) * 100));
   }
 
   /**
-   * 本次示范朗读是否已**自然读完**(读到结尾)。
-   * ⚠️ 只有 onend 才算;用户中途按停**不算**(否则会伪装成"读完了")。
-   * 切素材 / 重新开播 / 手动停播都会清除它。
+   * ★ 2026-09-20(Forrest):停止播放 —— Howler 原生 stop() 归零。
+   * 实例保留,下次换素材/重播时再按需重建(unload + new Howl)。
    */
-  readonly speakDone = signal(false);
+  stopSpeak(): void {
+    this.ttsHowl?.stop();       // Howler 原生 stop:回到开头
+    this.speaking.set(false);
+    this.speakPos.set(0);
+  }
+
+  /**
+   * ★ 2026-09-20(Forrest):切换倍速。
+   *
+   * 直接调 Howler 原生 rate() —— 成熟控件已完成原地变速(位置保留、不重播)。
+   * 音频本身永远是 1.0 合成的那一份,所以**总时长恒定不变**。
+   */
+  setRate(r: number): void {
+    this.rate.set(r);
+    this.ttsHowl?.rate(r);    // 原生原地变速:位置保留、总时长不变
+  }
+
+  speakTimeText(): string {
+    // ★ 2026-09-20(Forrest):**不再用 azureReady 遮蔽真实时长**。
+    //   本地已有音频时,duration 是 Howler 给出的真实值,必须显示出来;
+    //   配置标志位只用于"点播放前"的引导,不该隐藏已经拿到的数据。
+    const total = this.speakDur();
+    if (!(total > 0)) {
+      // 音频尚未就绪:中性占位(与"未配 Key"区分开)
+      return this.azureReady()
+        ? this.fmtDuration(this.speakPos()) + ' / --s'
+        : '--:-- / --:--';
+    }
+    return this.fmtDuration(this.speakPos()) + ' / ' + this.fmtDuration(total);
+  }
+
 
   /**
    * 评分后的识别率 = 被正确识别的词占比。拿不到就返回 0。
@@ -1925,10 +1979,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     return !!w.errorType && typeof w.accuracy === 'number';
   }
 
-  /** 录音时长格式化。 */
+  /** 时长格式化 —— ★ 2026-09-20(Forrest):秒一律取整,不显示小数。 */
   fmtDuration(sec: number): string {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
+    const t = Math.max(0, Math.floor(sec || 0));   // 抹掉小数(seek() 返回浮点)
+    const m = Math.floor(t / 60);
+    const s = t % 60;
     return m > 0
       ? m + ':' + String(s).padStart(2, '0')
       : s + 's';

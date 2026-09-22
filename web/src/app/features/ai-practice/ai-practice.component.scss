@@ -2866,6 +2866,18 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .audio-stack .sample-pill .play-round:hover { background: #1d4ed8; }
 .audio-stack .sample-pill .play-round mat-icon { font-size: 20px; width: 20px; height: 20px; }
 
+/* ★ 2026-09-20 第三十六轮:未配置 Azure Key 时的禁用态。
+   置灰 + opacity .5 + 禁止播放;点击不会发声,
+   而是由 speak() 展开右上角的配置浮层(所以这里不能 pointer-events:none)。 */
+.audio-stack .sample-pill .play-round.is-off {
+  background: #cbd5e1;
+  color: #f8fafc;
+  opacity: .5;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.audio-stack .sample-pill .play-round.is-off:hover { background: #cbd5e1; }
+
 /* 录音交互条(浅绿胶囊) */
 .audio-stack .rec-pill {
   /* ★ 第二十三轮:与上方 Sample Reading 条高度【完全一致】(同为 52px),

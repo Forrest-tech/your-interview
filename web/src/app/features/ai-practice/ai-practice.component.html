@@ -199,47 +199,31 @@
               </button>
             </mat-menu>
 
-            <!-- ★ 2026-09-20 第三十六轮:TTS 引擎/语言设置入口从播放条移到顶栏。
+            <!-- ★ 2026-09-20 第三十六轮:朗读设置入口(TTS Engine 切换已彻底移除)。
                  位置:Mark 与铅笔编辑之间;样式复用 .ch-edit,与铅笔按钮
-                 完全一致(36x36 圆角边框 + 同款悬浮效果)。 -->
+                 完全一致(36x36 圆角边框 + 同款悬浮效果)。
+                 浮层里只剩【朗读语言】和【Azure 配置】两项。 -->
             <button class="ch-edit" type="button"
+                    #engineTrigger="matMenuTrigger"
                     [matMenuTriggerFor]="engineMenu"
-                    [matTooltip]="t('practice.ttsEngine')"
-                    aria-label="tts engine settings">
+                    [matTooltip]="t('practice.ttsSettings')"
+                    aria-label="reading settings">
               <mat-icon>settings</mat-icon>
             </button>
 
             <mat-menu #engineMenu="matMenu" xPosition="before" class="engine-menu">
-              <div class="em-head">{{ t('practice.ttsEngine') }}</div>
-              <p class="em-sub">{{ t('practice.ttsEngineHint') }}</p>
+              <div class="em-head">{{ t('practice.ttsSettings') }}</div>
+              <p class="em-sub">{{ t('practice.ttsSettingsHint') }}</p>
 
-              <button mat-menu-item class="em-card" [class.on]="engine() === 'browser'"
-                      (click)="setEngine('browser')">
-                <span class="em-radio" [class.checked]="engine() === 'browser'"></span>
-                <span class="em-item">
-                  <span class="em-name">{{ t('practice.ttsBrowser') }}</span>
-                  <span class="em-note">{{ t('practice.ttsBrowserNote') }}</span>
-                </span>
-              </button>
-
-              <button mat-menu-item class="em-card" [class.on]="engine() === 'azure'"
-                      (click)="setEngine('azure')">
-                <span class="em-radio" [class.checked]="engine() === 'azure'"></span>
-                <span class="em-item">
-                  <span class="em-name">{{ t('practice.ttsAzure') }}</span>
-                  <span class="em-note">{{ t('practice.ttsAzureNote') }}</span>
-                </span>
-              </button>
-
-              @if (engine() === 'azure' && !azureReady()) {
+              <!-- 未填 Azure Key:明确标记未配置,并保留直达配置页的入口。
+                   ⚠️ 此时播放键同步置灰、时间显示 --:-- / --:--,不伪装能播。 -->
+              @if (!azureReady()) {
                 <p class="em-warn">
-                  <mat-icon>info_outline</mat-icon>
-                  <span>{{ t('practice.azureFallbackNote') }}</span>
+                  <mat-icon>warning_amber</mat-icon>
+                  <span>{{ t('practice.azureNotReady') }}</span>
                 </p>
               }
 
-              <!-- ★ 2026-09-19:朗读/评分语言。朗读与评分必须同源,
-                   否则会出现"法语音色朗读、英语规则评分"的错误组合。 -->
               <div class="em-sep"></div>
               <div class="em-head">{{ t('practice.langTitle') }}</div>
               <p class="em-sub">{{ t('practice.langHint') }}</p>
@@ -367,8 +351,13 @@
               }
             </mat-menu>
 
-            <button class="play-round" (click)="speak()"
-                    [matTooltip]="speaking() ? t('practice.stop') : t('practice.demoRead')">
+            <!-- 未配 Azure Key → 置灰不可播;点它会直接展开上面的配置浮层
+                 (见 speak():没配 Key 时先展开设置,再 return)。 -->
+            <button class="play-round" [class.is-off]="!azureReady()"
+                    (click)="speak()"
+                    [matTooltip]="azureReady()
+                                   ? (speaking() ? t('practice.stop') : t('practice.demoRead'))
+                                   : t('practice.azureNotReady')">
               <mat-icon>{{ speaking() ? 'stop' : 'play_arrow' }}</mat-icon>
             </button>
           </div>

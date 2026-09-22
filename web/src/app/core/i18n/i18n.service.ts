@@ -193,6 +193,24 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.ttsBrowserNote': { zh: '免费 · 本地合成 · 即时可用', en: 'Free · on-device · instant', fr: 'Gratuit · local · instantané' },
   'practice.ttsAzure': { zh: 'Azure 语音', en: 'Azure Voice', fr: 'Voix Azure' },
   'practice.ttsAzureNote': { zh: '高质量音色 · 消耗额度', en: 'High quality · uses quota', fr: 'Haute qualité · consomme du quota' },
+  // 2026-09-20(Forrest 第三十六轮):TTS Engine 二选一已下线 ——
+  // 示范朗读全局只用 Azure 语音合成。浮层里只留语言与 Azure 配置。
+  'practice.ttsSettings': { zh: '朗读设置', en: 'Reading settings', fr: 'Paramètres de lecture' },
+  'practice.ttsSettingsHint': {
+    zh: '示范朗读由 Azure 语音合成,需先配置密钥',
+    en: 'Sample readings are synthesized by Azure Speech and need a configured key',
+    fr: 'Les lectures sont synthétisées par Azure Speech et nécessitent une clé configurée'
+  },
+  'practice.azureNotReady': {
+    zh: '尚未配置 Azure Speech 密钥,示范朗读暂不可用',
+    en: 'Azure Speech key is missing, so read-aloud is unavailable',
+    fr: 'Clé Azure Speech absente : la lecture est indisponible'
+  },
+  'practice.azurePlayBlocked': {
+    zh: '请先配置 Azure Speech 密钥,再进行示范朗读',
+    en: 'Configure the Azure Speech key before using read-aloud',
+    fr: 'Configurez la clé Azure Speech avant la lecture'
+  },
   'practice.recHistory': { zh: '历史录音', en: 'Recordings', fr: 'Enregistrements' },
   'practice.viewReport': { zh: '查看报告', en: 'View Report', fr: 'Voir le rapport' },
   'practice.points': { zh: '分', en: 'pts', fr: 'pts' },

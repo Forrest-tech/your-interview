@@ -221,3 +221,19 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------------- 练习页倍速菜单(全局) ----------------
+   ★ 2026-09-20(Forrest):去掉对勾,选中项只用淡蓝底色区分。
+   菜单面板挂在全局 overlay 容器里,所以这条必须写在全局样式里才能生效
+   (写进组件 .scss 会被组件样式作用域挡住)。 */
+.rate-menu-panel .mat-mdc-menu-item.rate-item { min-width: 76px; }
+
+.rate-menu-panel .mat-mdc-menu-item.rate-item.selected {
+  background: #e8f1ff;
+  color: #2f6fed;
+  font-weight: 600;
+}
+
+.rate-menu-panel .mat-mdc-menu-item.rate-item.selected:hover {
+  background: #dbe9ff;
+}

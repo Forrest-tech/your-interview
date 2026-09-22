@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild,
+  ChangeDetectorRef, Component, HostListener, OnDestroy, OnInit, ViewChild,
   computed, effect, inject, signal
 } from '@angular/core';
 import { Howl, Howler } from 'howler';
@@ -1188,8 +1188,20 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     lang: 'en'
   });
 
-  ngOnInit(): void {
-    // ★ 2026-09-20(Forrest BUG1 修复):进页面即校准"Azure 是否就绪"。
+  /**
+   * ★ 2026-09-20(Forrest):编辑中还有未保存改动时,刷新/关闭浏览器要拦一下。
+   * 浏览器的 beforeunload 只允许"重新加载 / 取消"两个按钮(全站通用规范,
+   * 不允许自定义文案 —— 这是浏览器安全限制),语义上等价于 discard / stay。
+   */
+  @HostListener('window:beforeunload', ['$event'])
+  guardUnsavedTree(ev: BeforeUnloadEvent): void {
+    if (this.treeEditing() && this.treeDirty()) {
+      ev.preventDefault();
+      ev.returnValue = '';   // Chrome/Edge/Safari 都需要这个才弹确认
+    }
+  }
+
+  ngOnInit(): void {    // ★ 2026-09-20(Forrest BUG1 修复):进页面即校准"Azure 是否就绪"。
     //   本地标记为 false 时以服务端 speech/settings 的 hasKey 为准 ——
     //   否则播放功能会被一个从未写入的 localStorage 标记永久挡死。
     this.syncAzureReadyFromServer();

@@ -138,15 +138,42 @@
   color: #2f6fed !important;
   background: #eef4ff !important;
 }
-/* ★ 2026-09-20(Forrest):编辑模式下的主操作「保存修改」。
-   蓝字浅蓝底,与全站主操作一致;未改动时置灰不可点。 */
-.save-tree.is-primary:not([disabled]) {
-  color: #2f6fed !important;
-  background: #eef4ff !important;
-  font-weight: 600;
+
+/* ★ 2026-09-20(Forrest):树编辑模式的按钮组 —— 行业规范的成对图标按钮。
+   · 编辑:蓝字浅蓝底常亮(灰按钮会被当成禁用);
+   · 取消 ✕:描边灰;
+   · 确认 ✓:有改动才亮(蓝底白字),没改动置灰。
+   统一 28x28、间距 6px、靠右对齐,与站点其它图标按钮同款。 */
+.tree-act {
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 !important;
+  margin-left: 6px;
+  border-radius: 8px;
+  color: #7a8393 !important;
+  border: 1px solid #e3e8ef;
+  background: #fff;
 }
-.save-tree.is-primary:not([disabled]):hover {
-  background: #e0ecff !important;
+.tree-act mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.tree-act:hover { color: #2f6fed !important; border-color: #c3d6f7; background: #f8fbff; }
+
+.tree-act.is-edit {
+  color: #2f6fed !important;
+  border-color: #c3d6f7;
+  background: #eef4ff;
+}
+.tree-act.is-edit:hover { background: #e0ecff; }
+
+.tree-act.is-save:not([disabled]) {
+  color: #fff !important;
+  border-color: #2f6fed;
+  background: #2f6fed;
+}
+.tree-act.is-save:not([disabled]):hover { background: #2862d4; }
+.tree-act.is-save[disabled] {
+  opacity: .45;
+  cursor: not-allowed;
 }
 
 .tree-body {

@@ -73,9 +73,20 @@ export class MaterialTreeComponent {
   @Output() folderToggle = new EventEmitter<MaterialNode>();
   @Output() nodeChange = new EventEmitter<MaterialNode[]>();
   @Output() nodeDelete = new EventEmitter<MaterialNode>();
+  /**
+   * ★ 2026-09-20(Forrest):新建不再要求先点「编辑」——
+   * 只读状态下点新建,先让父级进入编辑模式(弹出保存/取消),再落节点。
+   */
+  @Output() editRequest = new EventEmitter<void>();
 
   /** 正在重命名的节点 id。 */
   readonly renamingId = signal<string | null>(null);
+
+  /**
+   * ★ 2026-09-20(Forrest):刚新建、还在等改名的节点 id。
+   * 改名提交(或失焦)后自动选中它 —— 焦点直接落到新建的内容上。
+   */
+  private pendingSelectId: string | null = null;
 
   /** 拖拽中的节点 id。 */
   /**
@@ -147,6 +158,9 @@ export class MaterialTreeComponent {
   }
 
   // ---------- 新建 ----------
+  // ★ 2026-09-20(Forrest):新建文件夹/素材**不需要先点编辑**。
+  //   只读时点新建 → 发 editRequest 让父级进入编辑模式(保存/取消出现),
+  //   随即落节点并进入改名;不点保存,这些内容不会写数据库。
   addFolder(parent: MaterialNode | null): void {
     const node: MaterialNode = {
       id: this.newId(),
@@ -155,8 +169,10 @@ export class MaterialTreeComponent {
       expanded: true,
       children: []
     };
+    if (!this.editable) this.editRequest.emit();
     this.attach(node, parent);
-    this.startRename(node);
+    this.pendingSelectId = node.id;
+    this.renamingId.set(node.id);      // 不走 startRename(那里会挡只读态)
   }
 
   addFile(parent: MaterialNode | null): void {
@@ -166,8 +182,10 @@ export class MaterialTreeComponent {
       folder: false,
       content: ''
     };
+    if (!this.editable) this.editRequest.emit();
     this.attach(node, parent);
-    this.startRename(node);
+    this.pendingSelectId = node.id;
+    this.renamingId.set(node.id);
   }
 
   private attach(node: MaterialNode, parent: MaterialNode | null): void {
@@ -179,6 +197,42 @@ export class MaterialTreeComponent {
       this.nodes.push(node);
     }
     this.nodeChange.emit(this.nodes);
+  }
+
+  // ---------- 一键展开 / 收起(2026-09-20,Forrest) ----------
+  /** 是否存在折叠着的文件夹(决定展开/收起按钮显示哪个图标)。 */
+  hasCollapsed(): boolean {
+    let found = false;
+    const walk = (list: MaterialNode[]): void => {
+      for (const n of list ?? []) {
+        if (n.folder && !n.expanded) { found = true; return; }
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(this.nodes);
+    return found;
+  }
+
+  expandAll(): void {
+    const walk = (list: MaterialNode[]): void => {
+      for (const n of list ?? []) {
+        if (n.folder) n.expanded = true;
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(this.nodes);
+    this.folderToggle.emit(this.nodes[0]);   // 只为让父级刷新引用,不置脏
+  }
+
+  collapseAll(): void {
+    const walk = (list: MaterialNode[]): void => {
+      for (const n of list ?? []) {
+        if (n.folder) n.expanded = false;
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(this.nodes);
+    this.folderToggle.emit(this.nodes[0]);
   }
 
   // ---------- 重命名 ----------
@@ -197,6 +251,12 @@ export class MaterialTreeComponent {
     const changed = !!v && v !== node.name;
     if (v) node.name = v;
     this.renamingId.set(null);
+    // ★ 2026-09-20(Forrest):新建的节点改完名 → 焦点直接落到它上面
+    //   (选中 + 右侧显示它的内容)。
+    if (this.pendingSelectId === node.id) {
+      this.pendingSelectId = null;
+      this.nodeSelect.emit(node);
+    }
     if (changed) this.nodeChange.emit(this.nodes);
   }
 

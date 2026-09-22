@@ -48,27 +48,25 @@
         <span class="spacer"></span>
 
         <!-- ★ 2026-09-20(Forrest):树的编辑模式。
-             平时只读;点「编辑」才能新建/重命名/拖拽/删除;
-             点「保存修改」→ 确认弹窗 → 写数据库;取消则恢复到编辑前。
-             没点保存,数据不进数据库。 -->
+             · 「编辑」常亮高亮(灰按钮会被当成禁用),tooltip 只说点击可编辑;
+             · 编辑中是行业规范的「取消 ✕ / 确认 ✓」成对图标按钮 ——
+               取消放弃改动,✓ 走确认弹窗后入库;
+             · 新建不需要先点编辑(树头部按钮始终可用)。 -->
         @if (!treeEditing()) {
-          <button mat-button class="save-tree" (click)="startTreeEdit()"
+          <button mat-icon-button class="tree-act is-edit" (click)="startTreeEdit()"
                   [matTooltip]="t('practice.editTreeHint')">
             <mat-icon>edit</mat-icon>
-            <span>{{ t('practice.editTree') }}</span>
           </button>
         } @else {
-          <button mat-button class="save-tree" (click)="cancelTreeEdit()">
+          <button mat-icon-button class="tree-act" (click)="cancelTreeEdit()"
+                  [matTooltip]="t('dialog.cancel')">
             <mat-icon>close</mat-icon>
-            <span>{{ t('dialog.cancel') }}</span>
           </button>
-          <button mat-button class="save-tree is-primary"
-                  [class.dirty]="treeDirty()"
+          <button mat-icon-button class="tree-act is-save"
                   [disabled]="!treeDirty()"
-                  [matTooltip]="treeDirty() ? t('practice.unsavedHint') : t('practice.savedHint')"
+                  [matTooltip]="t('practice.saveChanges')"
                   (click)="saveTree()">
-            <mat-icon>save</mat-icon>
-            <span>{{ t('practice.saveChanges') }}</span>
+            <mat-icon>check</mat-icon>
           </button>
         }
       </div>
@@ -91,7 +89,8 @@
             (nodeSelect)="onSelect($event)"
             (folderToggle)="onFolderToggle($event)"
             (nodeChange)="onTreeChange($event)"
-            (nodeDelete)="onDelete($event)">
+            (nodeDelete)="onDelete($event)"
+            (editRequest)="startTreeEdit()">
           </app-material-tree>
         }
       </div>

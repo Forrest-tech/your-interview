@@ -223,10 +223,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   //   点「保存修改」确认后才写数据库;取消则放弃未保存的改动。
   'practice.editTree': { zh: '编辑', en: 'Edit', fr: 'Modifier' },
   'practice.editTreeHint': {
-    zh: '开启编辑:可新建、重命名、拖拽排序与删除;点保存才写入数据库',
-    en: 'Enable editing: create, rename, drag to reorder, delete. Nothing is saved until you click Save',
-    fr: "Activer l'édition : créer, renommer, glisser, supprimer. Rien n'est enregistré avant la sauvegarde"
+    zh: '点击编辑素材内容',
+    en: 'Click to edit content',
+    fr: 'Cliquez pour modifier le contenu'
   },
+  'practice.expandAll': { zh: '展开全部', en: 'Expand all', fr: 'Tout déplier' },
+  'practice.collapseAll': { zh: '收起全部', en: 'Collapse all', fr: 'Tout replier' },
   // ---------- 统一确认弹窗(2026-09-20:全站弹窗同一种样式) ----------
   'dialog.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
   'dialog.deleteConfirm': { zh: '删除', en: 'Delete', fr: 'Supprimer' },

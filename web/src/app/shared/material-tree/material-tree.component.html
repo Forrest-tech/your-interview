@@ -8,15 +8,20 @@
   <header class="tree-head">
     <mat-icon class="head-icon">folder_copy</mat-icon>
     <span class="head-title">{{ title }}</span>
-    @if (editable) {
-      <span class="spacer"></span>
-      <button mat-icon-button matTooltip="新建文件夹" (click)="addFolder(null)">
-        <mat-icon>create_new_folder</mat-icon>
-      </button>
-      <button mat-icon-button matTooltip="新建素材" (click)="addFile(null)">
-        <mat-icon>note_add</mat-icon>
-      </button>
-    }
+    <span class="spacer"></span>
+    <!-- ★ 2026-09-20(Forrest):一键展开/收起整棵树;新建不再要求先点编辑。
+         工具按钮统一 26x26 紧凑排列,靠右对齐。 -->
+    <button mat-icon-button class="head-tool"
+            [matTooltip]="hasCollapsed() ? '展开全部' : '收起全部'"
+            (click)="hasCollapsed() ? expandAll() : collapseAll()">
+      <mat-icon>{{ hasCollapsed() ? 'unfold_more' : 'unfold_less' }}</mat-icon>
+    </button>
+    <button mat-icon-button class="head-tool" matTooltip="新建文件夹" (click)="addFolder(null)">
+      <mat-icon>create_new_folder</mat-icon>
+    </button>
+    <button mat-icon-button class="head-tool" matTooltip="新建素材" (click)="addFile(null)">
+      <mat-icon>note_add</mat-icon>
+    </button>
   </header>
 
   <!-- 空白落点:拖到这里 = 移到最外层 -->

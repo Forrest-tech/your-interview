@@ -38,6 +38,29 @@
 
 .spacer { flex: 1 1 auto; }
 
+/* ---------- 头部工具按钮(展开收起 / 新建) ----------
+   ★ 2026-09-20(Forrest 报"两个按钮间隔太大"):
+   mat-icon-button 默认 40x40,并排显得很散。统一压到 26x26、
+   间距 2px、靠右对齐,与节点行的 ⋮ 尺寸呼应。 */
+.head-tool {
+  width: 26px !important;
+  height: 26px !important;
+  line-height: 26px !important;
+  padding: 0 !important;
+  margin-left: 2px;
+  color: #7a8393 !important;
+  border-radius: 6px;
+}
+.head-tool mat-icon {
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+}
+.head-tool:hover {
+  color: #2f6fed !important;
+  background: #eef4ff;
+}
+
 .tree-body {
   flex: 1 1 auto;
   min-height: 0;

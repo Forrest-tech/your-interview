@@ -1188,6 +1188,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.ttsHowl?.unload();
     const h = new Howl({
       src: [url],
+      format: this.howlFormat(cached.blob.type),   // blob URL 无扩展名 → 必须显式给
       // ★ 2026-09-20(Forrest 选项 1):预载时长用 Howler 的 Web Audio 模式 ——
       //   html5:true 是流式的,onload 时浏览器还没解析出媒体时长(duration()=0);
       //   html5:false 会完整解码,onload 时 duration() 立即可用。
@@ -1479,7 +1480,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       if (this.ttsUrl) URL.revokeObjectURL(this.ttsUrl);
       this.ttsUrl = url;
       this.ttsPlayingKey = key;
-      this.createHowl(url, autoplay);
+      this.createHowl(url, autoplay, this.howlFormat(cached.blob.type));
       return;
     }
 
@@ -1514,7 +1515,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         if (this.ttsUrl) URL.revokeObjectURL(this.ttsUrl);
         this.ttsUrl = url;
         this.ttsPlayingKey = key;
-        this.createHowl(url, autoplay);
+        this.createHowl(url, autoplay, this.howlFormat(typedBlob.type));
       },
       error: (e) => {
         const status = (e as { status?: number } | null)?.status;
@@ -1552,7 +1553,28 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *    这里统一 html5:false(Web Audio 全解码):onload 时 duration() 就是
    *    真实秒数。数值全部取自 Howler 自身,不做任何自写估算。
    */
-  private createHowl(url: string, autoplay = true): void {
+  /**
+   * ★ 2026-09-20(Forrest 报"点了没反应"的**真因**):
+   * Howler 靠 src 的**扩展名**猜音频格式。我们给它的是 `blob:http://.../uuid`,
+   * 没有扩展名 → Howler 判定"无可用解码器",直接抛
+   * `No codec support for selected audio sources.` → onloaderror
+   * → 旧代码没有 onloaderror 处理 → **点了完全没反应**。
+   *
+   * 修法:显式传 `format`。按 Blob 的真实 MIME 推导(后端换成 wav/ogg 也不会错),
+   * Angular 的 blob 没有 MIME 时退回 mp3(Azure 的默认输出格式)。
+   */
+  private howlFormat(mime: string): string[] {
+    const t = (mime || '').toLowerCase();
+    if (t.includes('mpeg') || t.includes('mp3')) return ['mp3'];
+    if (t.includes('wav') || t.includes('wave')) return ['wav'];
+    if (t.includes('ogg') || t.includes('opus')) return ['oga', 'ogg'];
+    if (t.includes('m4a') || t.includes('mp4') || t.includes('aac')) return ['m4a', 'aac'];
+    if (t.includes('flac')) return ['flac'];
+    if (t.includes('webm')) return ['webm'];
+    return ['mp3'];   // 没有 MIME → 按 Azure 默认输出兜底
+  }
+
+  private createHowl(url: string, autoplay = true, format?: string[]): void {
     this.ttsHowl?.unload();          // Howler 原生:释放旧实例
     this.ttsHowl = null;
     this.stopPosTimer();
@@ -1562,6 +1584,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
     const h = new Howl({
       src: [url],                    // ★ 音源在创建时给定(Howler 就是这样用)
+      // ★ 必须显式给 format:blob: URL 没有扩展名,Howler 猜不出解码器
+      //   → 直接 onloaderror("No codec support") → 这就是"点了没反应"的真因。
+      format: format ?? ['mp3'],
       html5: false,                  // ★ 必须 false —— 否则拿不到真实时长
       rate: this.rate(),             // 当前倍速(只改播放速度,不动总时长)
       onload: () => {
@@ -1596,7 +1621,21 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         this.speakPos.set(h.seek() || 0);
         this.cdr.detectChanges();
       },
-      onplayerror: () => {
+      // ★ 2026-09-20(Forrest 报"点了没反应"):装载/播放失败也必须出声,
+      //   否则用户面对一个毫无反馈的按钮(真因排查时的最后一块拼图)。
+      onloaderror: (_id: number, err?: unknown) => {
+        console.warn('[tts] loaderror:', err);       // 保留一条线索,便于远程排障
+        this.speaking.set(false);
+        this.ttsNote.set('音频加载失败');
+        this.toast('音频加载失败,请重试;若反复出现请重新合成。');
+        this.cdr.detectChanges();
+      },
+      onplayerror: (_id: number, err?: unknown) => {
+        console.warn('[tts] playerror:', err);
+        this.speaking.set(false);
+        this.ttsNote.set('音频播放失败');
+        this.toast('音频播放失败,请再点一次播放。');
+        this.cdr.detectChanges();
         // 浏览器自动播放策略:解锁后重播(Howler 自带 unlock)
         h.once('unlock', () => h.play());
       }

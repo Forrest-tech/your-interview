@@ -22,7 +22,7 @@
        • Angular 控制流块 @if/@else 的开闭标签必须落在**同一个** Angular 块作用域内,
          否则报 NG5002。所以每张卡片只包一层最外层 @if。
        • 左侧素材树仍是一级侧栏(不在卡片内),页面背景统一浅灰。
-       • Azure Free F0 只返回 AccuracyScore;Fluency/Prosody 拿不到 → null → 显示"—"。
+       • Azure Free F0 只返回 AccuracyScore;Fluency/Prosody 拿不到 → null → 显示“—”。
        • 逐词 ErrorType: Mispronunciation / Omission / Insertion /
          UnexpectedBreak / MissingBreak(另有 None)。
      ============================================================ -->
@@ -198,6 +198,68 @@
                 <span>{{ t('practice.markClear') }}</span>
               </button>
             </mat-menu>
+
+            <!-- ★ 2026-09-20 第三十六轮:TTS 引擎/语言设置入口从播放条移到顶栏。
+                 位置:Mark 与铅笔编辑之间;样式复用 .ch-edit,与铅笔按钮
+                 完全一致(36x36 圆角边框 + 同款悬浮效果)。 -->
+            <button class="ch-edit" type="button"
+                    [matMenuTriggerFor]="engineMenu"
+                    [matTooltip]="t('practice.ttsEngine')"
+                    aria-label="tts engine settings">
+              <mat-icon>settings</mat-icon>
+            </button>
+
+            <mat-menu #engineMenu="matMenu" xPosition="before" class="engine-menu">
+              <div class="em-head">{{ t('practice.ttsEngine') }}</div>
+              <p class="em-sub">{{ t('practice.ttsEngineHint') }}</p>
+
+              <button mat-menu-item class="em-card" [class.on]="engine() === 'browser'"
+                      (click)="setEngine('browser')">
+                <span class="em-radio" [class.checked]="engine() === 'browser'"></span>
+                <span class="em-item">
+                  <span class="em-name">{{ t('practice.ttsBrowser') }}</span>
+                  <span class="em-note">{{ t('practice.ttsBrowserNote') }}</span>
+                </span>
+              </button>
+
+              <button mat-menu-item class="em-card" [class.on]="engine() === 'azure'"
+                      (click)="setEngine('azure')">
+                <span class="em-radio" [class.checked]="engine() === 'azure'"></span>
+                <span class="em-item">
+                  <span class="em-name">{{ t('practice.ttsAzure') }}</span>
+                  <span class="em-note">{{ t('practice.ttsAzureNote') }}</span>
+                </span>
+              </button>
+
+              @if (engine() === 'azure' && !azureReady()) {
+                <p class="em-warn">
+                  <mat-icon>info_outline</mat-icon>
+                  <span>{{ t('practice.azureFallbackNote') }}</span>
+                </p>
+              }
+
+              <!-- ★ 2026-09-19:朗读/评分语言。朗读与评分必须同源,
+                   否则会出现“法语音色朗读、英语规则评分”的错误组合。 -->
+              <div class="em-sep"></div>
+              <div class="em-head">{{ t('practice.langTitle') }}</div>
+              <p class="em-sub">{{ t('practice.langHint') }}</p>
+              @for (l of langOptions; track l.code) {
+                <button mat-menu-item class="em-card" [class.on]="practiceLang() === l.code"
+                        (click)="setPracticeLang(l.code)">
+                  <span class="em-radio" [class.checked]="practiceLang() === l.code"></span>
+                  <span class="em-item">
+                    <span class="em-name">{{ l.label }}</span>
+                    <span class="em-note">{{ l.note }}</span>
+                  </span>
+                </button>
+              }
+
+              <div class="em-sep"></div>
+              <button mat-menu-item class="em-goto" (click)="goAiSetting()">
+                <mat-icon>open_in_new</mat-icon>
+                <span>{{ t('practice.gotoConfig') }}</span>
+              </button>
+            </mat-menu>
           </div>
 
           @if (!editing()) {
@@ -256,19 +318,16 @@
               <div class="sample-fill" [style.width.%]="speakProgress()"></div>
             </div>
 
-            <!-- ★ 2026-09-20(Forrest):时间全部来自 Howler 真实 API。
-                 · 未配 Key          → "--:-- / --:--"
-                 · 音频未就绪        → "0s / --s"(中性占位,不是坏了)
-                 · 就绪              → 真实 seek() / duration() -->
-            <span class="sample-time">{{ speakTimeText() }}</span>
+            <!-- speakDone 时直接展示总时长,避免定格在中途秒数 -->
+            <span class="sample-time">{{ fmtDuration(speakDone() ? estimateSeconds() : speakElapsed()) }} / {{ fmtDuration(estimateSeconds()) }}</span>
 
-            <!-- 只在"回退/失败"性质时才渲染引擎提示(诚实红线) -->
+            <!-- 只在“回退/失败”性质时才渲染引擎提示(诚实红线) -->
             @if (showTtsNote()) {
               <span class="tts-note" [title]="ttsNote()">{{ ttsNote() }}</span>
             }
 
             <!-- 示范朗读的额度消耗提示 —— ★ 2026-09-19(Forrest):按要求隐藏。
-                 原第三十三/三十四轮需求是显示"本次花了多少字符",
+                 原第三十三/三十四轮需求是显示“本次花了多少字符”,
                  现 Forrest 明确要求不显示。
                  ⚠️ 只隐藏**这一处(示范朗读条)**,评分区的同类提示保留未动;
                     后端下发的 X-Tts-Chars / BilledChars 也仍在,数据没丢,
@@ -292,73 +351,13 @@
             <button class="speed-badge" [matMenuTriggerFor]="rateMenu">
               x{{ rate() }}
             </button>
-            <mat-menu #rateMenu="matMenu" panelClass="rate-menu-panel">
+            <mat-menu #rateMenu="matMenu">
               @for (r of rates; track r) {
-                <!-- ★ 2026-09-20(Forrest):**去掉对勾**。
-                     选中态改用淡蓝色背景(.selected),与其他项只差底色,
-                     不再有勾选符号。 -->
-                <button mat-menu-item class="rate-item"
-                        [class.selected]="rate() === r"
-                        (click)="setRate(r)">
+                <button mat-menu-item (click)="setRate(r)">
+                  <mat-icon>{{ rate() === r ? 'check' : 'blank' }}</mat-icon>
                   <span>{{ r }}x</span>
                 </button>
               }
-            </mat-menu>
-
-            <button class="engine-btn" [matMenuTriggerFor]="engineMenu"
-                    [matTooltip]="t('practice.ttsEngine')">
-              <mat-icon>settings</mat-icon>
-            </button>
-            <mat-menu #engineMenu="matMenu" xPosition="before" class="engine-menu">
-              <div class="em-head">{{ t('practice.ttsEngine') }}</div>
-              <p class="em-sub">{{ t('practice.ttsEngineHint') }}</p>
-
-              <button mat-menu-item class="em-card" [class.on]="engine() === 'browser'"
-                      (click)="setEngine('browser')">
-                <span class="em-radio" [class.checked]="engine() === 'browser'"></span>
-                <span class="em-item">
-                  <span class="em-name">{{ t('practice.ttsBrowser') }}</span>
-                  <span class="em-note">{{ t('practice.ttsBrowserNote') }}</span>
-                </span>
-              </button>
-
-              <button mat-menu-item class="em-card" [class.on]="engine() === 'azure'"
-                      (click)="setEngine('azure')">
-                <span class="em-radio" [class.checked]="engine() === 'azure'"></span>
-                <span class="em-item">
-                  <span class="em-name">{{ t('practice.ttsAzure') }}</span>
-                  <span class="em-note">{{ t('practice.ttsAzureNote') }}</span>
-                </span>
-              </button>
-
-              @if (engine() === 'azure' && !azureReady()) {
-                <p class="em-warn">
-                  <mat-icon>info_outline</mat-icon>
-                  <span>{{ t('practice.azureFallbackNote') }}</span>
-                </p>
-              }
-
-              <!-- ★ 2026-09-19:朗读/评分语言。朗读与评分必须同源,
-                   否则会出现"法语音色朗读、英语规则评分"的错误组合。 -->
-              <div class="em-sep"></div>
-              <div class="em-head">{{ t('practice.langTitle') }}</div>
-              <p class="em-sub">{{ t('practice.langHint') }}</p>
-              @for (l of langOptions; track l.code) {
-                <button mat-menu-item class="em-card" [class.on]="practiceLang() === l.code"
-                        (click)="setPracticeLang(l.code)">
-                  <span class="em-radio" [class.checked]="practiceLang() === l.code"></span>
-                  <span class="em-item">
-                    <span class="em-name">{{ l.label }}</span>
-                    <span class="em-note">{{ l.note }}</span>
-                  </span>
-                </button>
-              }
-
-              <div class="em-sep"></div>
-              <button mat-menu-item class="em-goto" (click)="goAiSetting()">
-                <mat-icon>open_in_new</mat-icon>
-                <span>{{ t('practice.gotoConfig') }}</span>
-              </button>
             </mat-menu>
 
             <button class="play-round" (click)="speak()"
@@ -628,8 +627,8 @@
                     <h3>{{ t('practice.scoreResults') }}</h3>
 
                     <!-- ★ 第三十三/三十四轮(Forrest):评分额度消耗提示 **+ 精确数字**。
-                         有消耗 → 报"本次调用了 Azure,评估 N 秒音频";
-                         无消耗 → 报"读取本地点存评分,未消耗额度"。
+                         有消耗 → 报“本次调用了 Azure,评估 N 秒音频”;
+                         无消耗 → 报“读取本地点存评分,未消耗额度”。
                          ⚠️ 单位是**音频秒数**不是 token —— 发音评估按时长计费。 -->
                     @if (scoreCost() === 'fresh') {
                       <span class="cost-chip fresh"
@@ -748,7 +747,7 @@
                     @for (w of sc.words; track $index) {
                       <div class="wg-cell">
                         <span class="wg-word">{{ w.word }}</span>
-                        <!-- 无词级数据就显示 "—",不显示误导性的 0.0 -->
+                        <!-- 无词级数据就显示 “—”,不显示误导性的 0.0 -->
                         @if (hasWordScore(w)) {
                           <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
                         } @else {

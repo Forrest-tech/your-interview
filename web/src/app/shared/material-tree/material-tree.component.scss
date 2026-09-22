@@ -15,9 +15,11 @@
 
 .tree-head {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 6px 8px 14px;
+  /* ★ 第四十四轮:两行布局(标题行 + 工具行),具体在下方覆盖 */
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 8px 8px 6px 14px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.07);
   flex: 0 0 auto;
 }
@@ -43,11 +45,19 @@
    编辑(编辑中变 保存/取消 成对按钮)在同一行最右。
    ★ 行高/间距恒定:按钮样式与右侧内容区 .ch-edit 同一套设计
    (白底、细边框 #e2e8f0、中性字色、悬停浅灰),默认不带选中高亮。 */
+/* ---------- 头部两行(2026-09-23 Forrest 第四十四轮) ----------
+   第一行:标题"材料"(随语言设置),右侧留白(页面的折叠按钮浮在最右);
+   第二行:新建文件夹 / 新建素材 / 展开·收起 靠左,
+   编辑(编辑中变 保存/取消 成对按钮)在同一行最右。
+   ★ 行高/间距恒定:按钮样式与右侧内容区 .ch-edit 同一套设计
+   (白底、细边框 #e2e8f0、中性字色、悬停浅灰),默认不带选中高亮。 */
 .th-row {
   display: flex;
   align-items: center;
   gap: 2px;
 }
+/* 第二行工具行:与标题行之间留一点呼吸感 */
+.th-row.th-tools { margin-top: 2px; }
 /* 编辑 / 保存·取消 与左侧工具同一行,靠最右;
    与前面按钮之间由 .spacer 撑开,不再需要额外间距。 */
 .th-row .head-act { margin-left: 2px; }

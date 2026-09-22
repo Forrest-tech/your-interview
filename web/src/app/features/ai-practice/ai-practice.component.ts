@@ -939,6 +939,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         this.nodes.set(fresh);
         // 新树的 id→名字 进缓存(id 换成 GUID 后仍能按名回找)
         this.cacheNames(fresh);
+        // ★ 第四十四轮:回读会带来数据库里旧的 expanded 值,
+        //   这里按本地记录重新覆盖一次,展开状态不被保存回读冲掉。
+        this.restoreExpandedState();
         // 选中项也要按"名字"对齐到新 GUID —— 否则 selectedId 悬空,
         // 界面看起来"没选中任何素材",录音无处可挂。
         if (prevSelected) {
@@ -1084,7 +1087,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (first) {
       // ★ 2026-09-20(Forrest 第一条):刷新后左树要**自动展开**到当前素材 ——
       //   否则右侧显示的是它,左边却是一排折叠的文件夹,看起来像丢了。
-      this.expandPathTo(first);
+      // ★ 第四十四轮(Forrest):但优先恢复用户自己展开/收起的状态 ——
+      //   本地有记录就原样还原(哪怕选中素材的父级是收起的,也尊重用户);
+      //   没有记录(首次使用)才走"自动展开到当前素材"。
+      if (!this.restoreExpandedState()) {
+        this.expandPathTo(first);
+      }
       this.selectFile(first);
     }
   }
@@ -1456,6 +1464,65 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   onFolderToggle(node: MaterialNode): void {
     // 组件内已就地改了 expanded,这里只需把数组引用换新,触发变更检测。
     this.nodes.set([...this.nodes()]);
+    // ★ 第四十四轮(Forrest):展开/收起状态立即记入本地 ——
+    //   刷新页面后原样恢复,不用再依赖"整树保存"才落库。
+    this.saveExpandedState();
+  }
+
+  // ---------- 展开/收起状态持久化(★ 第四十四轮,Forrest) ----------
+  /**
+   * 需求:树上文件夹展开/收起是纯 UI 状态,但刷新后要**维持原样**。
+   * 方案:每次展开/收起(含一键展开/收起)把"当前展开的文件夹 id 集合"
+   *   写进 localStorage;加载树(以及保存后回读)时优先按它恢复。
+   * 为什么不直接依赖数据库的 expanded 字段:展开不置脏、不触发保存,
+   *   只有用户点保存才会写库 —— 单靠它刷新后会回到上次保存时的样子。
+   * localStorage 只存 id 列表,树本身仍以数据库为唯一数据源,互不冲突。
+   */
+  private static readonly TREE_EXPANDED_KEY = 'practice.tree.expanded';
+
+  /** 把当前"展开着的文件夹 id 集合"写入 localStorage。 */
+  private saveExpandedState(): void {
+    const ids: string[] = [];
+    const walk = (list: MaterialNode[]): void => {
+      for (const n of list ?? []) {
+        if (n.folder && n.expanded) ids.push(n.id);
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(this.nodes());
+    try {
+      localStorage.setItem(AiPracticeComponent.TREE_EXPANDED_KEY, JSON.stringify(ids));
+    } catch { /* 隐私模式写不了就算了,不影响本次会话 */ }
+  }
+
+  /**
+   * 按本地记录恢复展开/收起状态。
+   * @returns true = 本地有记录并已应用;false = 没有记录(首次使用/存储被清)。
+   * 恢复是"权威覆盖":数据库里 expanded 是上次保存时的旧值,以本地为准。
+   */
+  private restoreExpandedState(): boolean {
+    try {
+      const raw = localStorage.getItem(AiPracticeComponent.TREE_EXPANDED_KEY);
+      if (raw === null) return false;
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return false;
+      const ids = new Set<string>(arr.filter((x): x is string => typeof x === 'string'));
+      let changed = false;
+      const walk = (list: MaterialNode[]): void => {
+        for (const n of list ?? []) {
+          if (n.folder) {
+            const want = ids.has(n.id);
+            if (!!n.expanded !== want) { n.expanded = want; changed = true; }
+          }
+          if (n.children?.length) walk(n.children);
+        }
+      };
+      walk(this.nodes());
+      if (changed) this.nodes.set([...this.nodes()]);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

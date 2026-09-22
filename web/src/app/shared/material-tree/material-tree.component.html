@@ -5,14 +5,17 @@
        拖到列表空白处 = 移到最外层。之前只能进不能出,现已补全。
      另有「移动到…」菜单作为不依赖拖拽的兜底路径。 -->
 <div class="tree-wrap">
-  <!-- ★ 2026-09-23(Forrest 第十/十一轮)头部合并为一行:
-       标题"材料"(随语言设置) + 新建文件夹 / 新建素材 / 展开·收起 在左,
+  <!-- ★ 2026-09-23(Forrest 第四十四轮)头部改回两行:
+       第一行:只有标题"材料"(随语言设置),右侧留给页面自己的折叠按钮;
+       第二行:新建文件夹 / 新建素材 / 展开·收起 靠左,
        编辑(编辑中变 保存/取消 成对按钮)在同一行最右。
        按钮样式与右侧内容区的 edit/save 完全一致 —— 白底、细边框、中性色,
        默认状态不带"选中"高亮。 -->
   <header class="tree-head">
-    <div class="th-row">
+    <div class="th-row th-top">
       <span class="th-title">{{ t('tree.title') }}</span>
+    </div>
+    <div class="th-row th-tools">
       <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" (click)="addFolder(null)">
         <mat-icon>create_new_folder</mat-icon>
       </button>

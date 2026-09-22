@@ -963,7 +963,35 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     const wanted = fromUrl || this.readStoredMaterialId();
     const target = wanted ? this.findFile(this.nodes(), wanted) : null;
     const first = target && !target.folder ? target : this.firstFile(this.nodes());
-    if (first) this.selectFile(first);
+    if (first) {
+      // ★ 2026-09-20(Forrest 第一条):刷新后左树要**自动展开**到当前素材 ——
+      //   否则右侧显示的是它,左边却是一排折叠的文件夹,看起来像丢了。
+      this.expandPathTo(first);
+      this.selectFile(first);
+    }
+  }
+
+  /**
+   * ★ 2026-09-20(Forrest 第一条):把树里通向 target 的每一层文件夹展开。
+   * 只改内存态(不标脏、不落盘),展开状态本来就会随整树保存写库;
+   * 这里解决的是"回读时库里 expanded=false → 刷新后父级全折叠"的情况。
+   */
+  private expandPathTo(target: MaterialNode): void {
+    const path: MaterialNode[] = [];
+    const walk = (list: MaterialNode[], stack: MaterialNode[]): boolean => {
+      for (const n of list ?? []) {
+        if (n.id === target.id) { path.push(...stack); return true; }
+        if (n.folder && n.children?.length && walk(n.children, [...stack, n])) return true;
+      }
+      return false;
+    };
+    if (!walk(this.nodes(), [])) return;      // 没找到就什么都不动
+    let changed = false;
+    for (const folder of path) {
+      if (folder.folder && !folder.expanded) { folder.expanded = true; changed = true; }
+    }
+    // 换一个数组引用,保证树组件一定重渲(选中高亮 + 展开箭头同步)
+    if (changed) this.nodes.set([...this.nodes()]);
   }
 
   /** ★ 第三十九轮:收集当前树里所有节点的 id(用于录音对齐)。 */

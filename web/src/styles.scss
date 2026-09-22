@@ -223,17 +223,6 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ---------------- 练习页倍速菜单(全局) ----------------
-   ★ 2026-09-20(Forrest):去掉对勾,选中项只用淡蓝底色区分。
-   菜单面板挂在全局 overlay 容器里,所以这条必须写在全局样式里才能生效
-   (写进组件 .scss 会被组件样式作用域挡住)。 */
-.rate-menu-panel .mat-mdc-menu-item.rate-item { min-width: 76px; }
-
-.rate-menu-panel .mat-mdc-menu-item.rate-item.selected {
-  background: #e8f1ff;
-  color: #2f6fed;
-  font-weight: 600;
-}
-
-.rate-menu-panel .mat-mdc-menu-item.rate-item.selected:hover {
-  background: #dbe9ff;
-}
+   ★ 2026-09-20(Forrest 第二条):倍速菜单已并入字号菜单同一套风格
+   (panelClass="zoom-menu" + zm-item/on,样式在 ai-practice.component.scss)。
+   这里不再需要单独的 .rate-menu-panel 规则 —— 全站弹层只有一种风格。 */

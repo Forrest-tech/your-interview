@@ -337,13 +337,14 @@
             <button class="speed-badge" [matMenuTriggerFor]="rateMenu">
               x{{ rate() }}
             </button>
-            <mat-menu #rateMenu="matMenu" panelClass="rate-menu-panel">
+            <!-- ★ 2026-09-20(Forrest 第二条):倍速菜单与字号菜单(100%/130%…)
+                 用**同一套样式**(panelClass="zoom-menu" + zm-item/on)。
+                 这就是"整个网站共同的弹层风格":白卡片、同样宽度、
+                 当前项蓝字+浅蓝底,不打勾。 -->
+            <mat-menu #rateMenu="matMenu" class="zoom-menu" xPosition="before">
               @for (r of rates; track r) {
-                <!-- ★ 2026-09-20(Forrest):**去掉对勾**。
-                     选中态改用淡蓝色背景(.selected),与其他项只差底色,
-                     不再有勾选符号。 -->
-                <button mat-menu-item class="rate-item"
-                        [class.selected]="rate() === r"
+                <button mat-menu-item class="zm-item rate-item"
+                        [class.on]="rate() === r"
                         (click)="setRate(r)">
                   <span>{{ r }}x</span>
                 </button>

@@ -138,6 +138,16 @@
   color: #2f6fed !important;
   background: #eef4ff !important;
 }
+/* ★ 2026-09-20(Forrest):编辑模式下的主操作「保存修改」。
+   蓝字浅蓝底,与全站主操作一致;未改动时置灰不可点。 */
+.save-tree.is-primary:not([disabled]) {
+  color: #2f6fed !important;
+  background: #eef4ff !important;
+  font-weight: 600;
+}
+.save-tree.is-primary:not([disabled]):hover {
+  background: #e0ecff !important;
+}
 
 .tree-body {
   flex: 1 1 auto;

@@ -226,3 +226,15 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
    ★ 2026-09-20(Forrest 第二条):倍速菜单已并入字号菜单同一套风格
    (panelClass="zoom-menu" + zm-item/on,样式在 ai-practice.component.scss)。
    这里不再需要单独的 .rate-menu-panel 规则 —— 全站弹层只有一种风格。 */
+
+/* ---------------- 全站统一确认弹窗(app-confirm) ----------------
+   ★ 2026-09-20(Forrest):所有确认弹窗(保存素材树 / 删除素材 /
+   删除录音)都用同一个组件(shared/confirm-dialog),面板挂在全局
+   overlay 容器里,表面样式必须写在全局才能生效。
+   基准:白卡片、圆角 12、无 MDC 默认内边距(组件自控 22px)。 */
+.app-confirm .mat-mdc-dialog-container { padding: 0; }
+.app-confirm .mat-mdc-dialog-surface {
+  border-radius: 12px !important;
+  padding: 0 !important;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
+}

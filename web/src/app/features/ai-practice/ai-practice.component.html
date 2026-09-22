@@ -47,14 +47,30 @@
 
         <span class="spacer"></span>
 
-        <button mat-button class="save-tree"
-                [class.dirty]="treeDirty()"
-                [disabled]="!treeDirty()"
-                [matTooltip]="treeDirty() ? t('practice.unsavedHint') : t('practice.savedHint')"
-                (click)="saveTree()">
-          <mat-icon>{{ treeDirty() ? 'save' : 'cloud_done' }}</mat-icon>
-          <span>{{ treeDirty() ? t('practice.saveChanges') : t('practice.saved') }}</span>
-        </button>
+        <!-- ★ 2026-09-20(Forrest):树的编辑模式。
+             平时只读;点「编辑」才能新建/重命名/拖拽/删除;
+             点「保存修改」→ 确认弹窗 → 写数据库;取消则恢复到编辑前。
+             没点保存,数据不进数据库。 -->
+        @if (!treeEditing()) {
+          <button mat-button class="save-tree" (click)="startTreeEdit()"
+                  [matTooltip]="t('practice.editTreeHint')">
+            <mat-icon>edit</mat-icon>
+            <span>{{ t('practice.editTree') }}</span>
+          </button>
+        } @else {
+          <button mat-button class="save-tree" (click)="cancelTreeEdit()">
+            <mat-icon>close</mat-icon>
+            <span>{{ t('dialog.cancel') }}</span>
+          </button>
+          <button mat-button class="save-tree is-primary"
+                  [class.dirty]="treeDirty()"
+                  [disabled]="!treeDirty()"
+                  [matTooltip]="treeDirty() ? t('practice.unsavedHint') : t('practice.savedHint')"
+                  (click)="saveTree()">
+            <mat-icon>save</mat-icon>
+            <span>{{ t('practice.saveChanges') }}</span>
+          </button>
+        }
       </div>
 
       <div class="tree-body">
@@ -69,6 +85,7 @@
           <app-material-tree
             [nodes]="nodes()"
             [selectedId]="selectedId()"
+            [editable]="treeEditing()"
             [title]="t('practice.materials')"
             [emptyHint]="t('practice.emptyHint')"
             (nodeSelect)="onSelect($event)"

@@ -16,8 +16,10 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatSliderModule } from '@angular/material/slider';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
+import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MaterialNode, MaterialTreeComponent } from '../../shared/material-tree/material-tree.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MaterialNodeDto, MaterialNodeIn, PracticeApi } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
@@ -744,6 +746,22 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 后端访问层（素材树 / 录音 / 语音设置 / TTS）。 */
   private readonly practiceApi = inject(PracticeApi);
 
+  /** 统一确认弹窗(保存/删除都要先过这一关,Forrest 2026-09-20)。 */
+  private readonly dialog = inject(MatDialog);
+
+  /**
+   * ★ 2026-09-20(Forrest):树的"编辑模式"开关。
+   * 默认只读 —— 新建/重命名/拖拽/删除都要先点「编辑」;
+   * 点「保存修改」并确认后才写数据库,没保存就不入库。
+   */
+  readonly treeEditing = signal(false);
+
+  /** 进入编辑模式时的整树快照(取消编辑时恢复用)。 */
+  private treeSnapshot: MaterialNode[] | null = null;
+
+  /** 本次编辑期间是否发生过删除(保存时要带 force,越过防误删熔断)。 */
+  private treeDeletedSinceSave = false;
+
   /** 素材树是否已从后端加载完成（加载中不显示"空树"误导用户）。 */
   readonly treeLoading = signal(false);
 
@@ -780,10 +798,26 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       this.treeError.set('未连接到服务端,已阻止本次写入以免覆盖云端数据。请先重试加载。');
       return;
     }
+    // ★ 2026-09-20(Forrest):保存是"写入数据库"的决定性动作,先弹确认。
+    void this.confirmDialog({
+      title: this.t('dialog.saveTitle'),
+      body: this.t('dialog.saveBody'),
+      confirmText: this.t('dialog.saveConfirm'),
+    }).then((ok) => {
+      if (!ok) return;
+      this.doSaveTree();
+    });
+  }
+
+  /** 确认后的真正保存(整树覆盖 + 回读对齐 GUID)。 */
+  private doSaveTree(): void {
     const payload = AiPracticeComponent.toPayload(this.nodes());
-    this.practiceApi.saveMaterials(payload).subscribe({
+    // ★ 本次编辑期间删过东西 → 带 force 越过服务端"防误删熔断"
+    //   (用户已经在弹窗里确认过删除,不应被拦)。
+    this.practiceApi.saveMaterials(payload, this.treeDeletedSinceSave).subscribe({
       next: () => {
         this.treeDirty.set(false);
+        this.treeDeletedSinceSave = false;
         this.treeError.set('');
         // ★ 第二十七轮(Bug2 真根因修复):
         //   后端 PUT /materials 只返回 { saved: N } ——
@@ -793,6 +827,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         //   录音**静默不上传** → 只存内存 → 刷新即丢(Forrest 报的数据丢失)。
         //   修法:保存成功后立刻回读后端树,用真实 GUID 替换本地节点。
         this.refreshTreeFromServer();
+        // 保存成功 = 退出编辑模式,回到只读
+        this.treeEditing.set(false);
+        this.treeSnapshot = null;
+        this.toast(this.t('dialog.saveDone'));
       },
       error: (e) => {
         // 绝不假装保存成功 —— 把后端给的真实原因显示出来
@@ -800,6 +838,59 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         this.treeDirty.set(true);
       }
     });
+  }
+
+  // ---------- 树编辑模式(2026-09-20,Forrest) ----------
+
+  /** 进入编辑模式:先拍快照,取消时可完整恢复。 */
+  startTreeEdit(): void {
+    if (this.treeLoadFailed()) return;
+    this.treeSnapshot = JSON.parse(JSON.stringify(this.nodes())) as MaterialNode[];
+    this.treeDeletedSinceSave = false;
+    this.treeEditing.set(true);
+  }
+
+  /** 取消编辑:放弃未保存的改动,恢复到进入编辑时的样子。 */
+  cancelTreeEdit(): void {
+    if (!this.treeEditing()) return;
+    if (this.treeDirty()) {
+      if (this.treeSnapshot) this.nodes.set(this.treeSnapshot);
+      this.treeDirty.set(false);
+      this.toast(this.t('dialog.discardToast'));
+    }
+    this.treeSnapshot = null;
+    this.treeDeletedSinceSave = false;
+    this.treeEditing.set(false);
+    // 恢复快照后,原选中的素材可能已经不在了 → 重新对齐右侧内容
+    const id = this.selectedId();
+    const target = id ? this.findFile(this.nodes(), id) : null;
+    if (target && !target.folder) {
+      this.selectFile(target);
+    } else {
+      const first = this.firstFile(this.nodes());
+      if (first) this.selectFile(first);
+      else {
+        this.selectedId.set(null);
+        this.saved.set('');
+        this.draft.set('');
+        this.editing.set(false);
+      }
+    }
+  }
+
+  /**
+   * 统一确认弹窗。
+   * 返回 Promise<boolean>:true = 用户点了确认按钮。
+   * 全站弹窗风格一致 —— 保存/删除都走这一个组件。
+   */
+  private confirmDialog(opts: Omit<ConfirmDialogData, 'cancelText'>): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px',
+      panelClass: 'app-confirm',
+      autoFocus: false,
+      data: { ...opts, cancelText: this.t('dialog.cancel') } as ConfirmDialogData
+    });
+    return firstValueFrom(ref.afterClosed()).then((v) => v === true);
   }
 
   /**
@@ -1262,9 +1353,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.nodes.set([...next]);
     // 树变了 → 标记未保存,驱动侧栏「保存修改」按钮亮起
     this.treeDirty.set(true);
-    // 自动落盘一份:拖拽/重命名后自动持久化,不打断交互。
-    // 显式「保存修改」按钮仍保留 —— 自动保存是兜底,按钮给用户掌控感。
-    this.persistQuiet();
+    // ★ 2026-09-20(Forrest):不再自动落盘 —— 只有点「保存修改」并确认
+    //   才写数据库。没保存就不入库,这是本轮明确的行为约定。
   }
 
   /**
@@ -1364,20 +1454,49 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   private saveQueuedForce = false;
 
   onDelete(n: MaterialNode): void {
-    // 素材删了,挂在它上面的录音也一并清掉
-    this.recorder.removeByMaterial(n.id);
-    // ★★ 第四十轮:用户**显式删除**时给服务端带 force —— 允许越过
-    //   "防误删熔断"(大量删除是用户主动意图,不应被拦)。
-    if (n.id === this.selectedId()) {
-      this.selectedId.set(null);
-      this.saved.set('');
-      this.draft.set('');
-      this.editing.set(false);
-      this.activeTakeId.set(null);
-    }
-    this.persistQuiet(true);
+    // ★ 2026-09-20(Forrest):删除必须先确认;确认后才真正摘除,
+    //   而且只标脏 —— 和新建/拖拽一样,点「保存修改」才写数据库。
+    void this.confirmDialog({
+      title: this.t('dialog.deleteNodeTitle').replace('{name}', n.name),
+      body: this.t('dialog.deleteNodeBody'),
+      confirmText: this.t('dialog.deleteConfirm'),
+      danger: true
+    }).then((ok) => {
+      if (!ok) return;
+      // 连同子树里的所有素材:挂在它们上面的录音也一并清掉
+      const collect = (node: MaterialNode): void => {
+        this.recorder.removeByMaterial(node.id);
+        node.children?.forEach(collect);
+      };
+      collect(n);
+      this.removeNodeById(n.id);
+      // 选中项被删 → 清空右侧
+      const stillThere = this.selectedId()
+        ? this.findFile(this.nodes(), this.selectedId() ?? '') : null;
+      if (this.selectedId() && !stillThere) {
+        this.selectedId.set(null);
+        this.saved.set('');
+        this.draft.set('');
+        this.editing.set(false);
+        this.activeTakeId.set(null);
+      }
+      this.treeDeletedSinceSave = true;
+      this.treeDirty.set(true);
+    });
   }
 
+  /** 按 id 从树上摘除节点(就地修改 + 换引用触发重渲)。 */
+  private removeNodeById(id: string): void {
+    const pull = (list: MaterialNode[]): boolean => {
+      const i = list.findIndex((x) => x.id === id);
+      if (i >= 0) { list.splice(i, 1); return true; }
+      for (const n of list) {
+        if (n.children?.length && pull(n.children)) return true;
+      }
+      return false;
+    };
+    if (pull(this.nodes())) this.nodes.set([...this.nodes()]);
+  }
   // ---------- 编辑 / 保存 / 取消 ----------
   startEdit(): void {
     if (!this.selectedId()) return;
@@ -1897,8 +2016,17 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   removeRecording(id: string): void {
-    this.recorder.remove(id);
-    if (this.activeTakeId() === id) this.activeTakeId.set(null);
+    // ★ 2026-09-20(Forrest):删除录音必须先经确认弹窗,确认了才真删。
+    void this.confirmDialog({
+      title: this.t('dialog.deleteRecTitle'),
+      body: this.t('dialog.deleteRecBody'),
+      confirmText: this.t('dialog.deleteConfirm'),
+      danger: true
+    }).then((ok) => {
+      if (!ok) return;
+      this.recorder.remove(id);
+      if (this.activeTakeId() === id) this.activeTakeId.set(null);
+    });
   }
 
   /** 对某条录音做发音评分(以当前素材文本为参考文本)。 */

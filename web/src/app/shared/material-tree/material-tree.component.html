@@ -32,32 +32,6 @@
       [ngTemplateOutletContext]="{ items: nodes, depth: 0, parent: null }">
     </ng-container>
   </div>
-
-  <!-- 回收站 -->
-  @if (editable && trash().length > 0) {
-    <footer class="tree-trash">
-      <div class="trash-head">
-        <mat-icon>delete_outline</mat-icon>
-        <span>回收站 {{ trash().length }}</span>
-        <span class="spacer"></span>
-        <button mat-icon-button matTooltip="清空回收站" (click)="emptyTrash()">
-          <mat-icon>delete_forever</mat-icon>
-        </button>
-      </div>
-      @for (t of trash(); track t.id) {
-        <div class="trash-row">
-          <mat-icon class="trash-icon">{{ t.folder ? 'folder' : 'description' }}</mat-icon>
-          <span class="trash-name">{{ t.name }}</span>
-          <button mat-icon-button matTooltip="恢复" (click)="restore(t)">
-            <mat-icon>restore_from_trash</mat-icon>
-          </button>
-          <button mat-icon-button matTooltip="彻底删除" (click)="purge(t)">
-            <mat-icon>close</mat-icon>
-          </button>
-        </div>
-      }
-    </footer>
-  }
 </div>
 
 <!-- ---------- 递归模板 ---------- -->
@@ -93,7 +67,7 @@
              用户看到的就是"重命名对文件夹无效"。
              现在与二级素材分支完全对齐(输入框 + 双击进入 + 回车/Esc/失焦)。 -->
         @if (renamingId() === n.id) {
-          <input class="rename-input"
+          <input class="rename-input" appAutoFocus
                  [value]="n.name"
                  (click)="$event.stopPropagation()"
                  (keyup.enter)="commitRename(n, $any($event.target).value)"
@@ -113,7 +87,7 @@
         <!-- 任务书第十轮(Forrest):二级项前的圆圈一律去掉 ——
              素材会很多,每个前面挂个圈显得杂乱。 -->
         @if (renamingId() === n.id) {
-          <input class="rename-input"
+          <input class="rename-input" appAutoFocus
                  [value]="n.name"
                  (click)="$event.stopPropagation()"
                  (keyup.enter)="commitRename(n, $any($event.target).value)"
@@ -145,7 +119,9 @@
           <button mat-menu-item (click)="startRename(n)">
             <mat-icon>edit</mat-icon><span>重命名</span>
           </button>
-          <button mat-menu-item (click)="remove(n, parent)">
+          <!-- ★ 2026-09-20(Forrest):删除只发请求,真正摘除由父级在
+               确认弹窗之后执行 —— 手一抖也能反悔。 -->
+          <button mat-menu-item (click)="nodeDelete.emit(n)">
             <mat-icon>delete_outline</mat-icon><span>删除</span>
           </button>
         </mat-menu>

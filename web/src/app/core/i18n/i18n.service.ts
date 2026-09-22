@@ -219,6 +219,38 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.saved': { zh: '已保存', en: 'Saved', fr: 'Enregistré' },
   'practice.unsavedHint': { zh: '有未保存的修改', en: 'You have unsaved changes', fr: 'Modifications non enregistrées' },
   'practice.savedHint': { zh: '素材已保存到本地', en: 'Materials saved locally', fr: 'Supports enregistrés localement' },
+  // ★ 2026-09-20(Forrest):素材树的编辑模式 —— 只有点「编辑」才能改,
+  //   点「保存修改」确认后才写数据库;取消则放弃未保存的改动。
+  'practice.editTree': { zh: '编辑', en: 'Edit', fr: 'Modifier' },
+  'practice.editTreeHint': {
+    zh: '开启编辑:可新建、重命名、拖拽排序与删除;点保存才写入数据库',
+    en: 'Enable editing: create, rename, drag to reorder, delete. Nothing is saved until you click Save',
+    fr: "Activer l'édition : créer, renommer, glisser, supprimer. Rien n'est enregistré avant la sauvegarde"
+  },
+  // ---------- 统一确认弹窗(2026-09-20:全站弹窗同一种样式) ----------
+  'dialog.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
+  'dialog.deleteConfirm': { zh: '删除', en: 'Delete', fr: 'Supprimer' },
+  'dialog.saveConfirm': { zh: '保存', en: 'Save', fr: 'Enregistrer' },
+  'dialog.saveTitle': { zh: '保存修改到数据库？', en: 'Save changes to the database?', fr: 'Enregistrer dans la base ?' },
+  'dialog.saveBody': {
+    zh: '保存后立即生效并写入数据库;未保存的改动不会入库。',
+    en: 'Saving takes effect immediately and writes to the database. Unsaved changes will not be stored.',
+    fr: "La sauvegarde prend effet immédiatement. Les modifications non enregistrées ne seront pas stockées."
+  },
+  'dialog.saveDone': { zh: '已保存到数据库', en: 'Saved to the database', fr: 'Enregistré dans la base' },
+  'dialog.discardToast': { zh: '已放弃未保存的修改', en: 'Unsaved changes discarded', fr: 'Modifications abandonnées' },
+  'dialog.deleteNodeTitle': { zh: '删除「{name}」？', en: 'Delete "{name}"?', fr: 'Supprimer « {name} » ?' },
+  'dialog.deleteNodeBody': {
+    zh: '该条目及其子素材会一并删除,其上的录音也会被清掉;点「保存修改」后才写入数据库。',
+    en: 'The item and its children will be removed along with their recordings. The deletion reaches the database only after you click Save.',
+    fr: "L'élément et ses enfants seront supprimés avec leurs enregistrements. La suppression n'atteint la base qu'après la sauvegarde."
+  },
+  'dialog.deleteRecTitle': { zh: '删除这条录音？', en: 'Delete this recording?', fr: 'Supprimer cet enregistrement ?' },
+  'dialog.deleteRecBody': {
+    zh: '删除后无法恢复,包括已保存到服务端的音频与评分结果。',
+    en: 'This cannot be undone, including the uploaded audio and its scores.',
+    fr: "Impossible d'annuler, y compris l'audio et les scores."
+  },
   'practice.zoomIn': { zh: '放大字号', en: 'Increase font size', fr: 'Agrandir le texte' },
   'practice.zoomOut': { zh: '缩小字号', en: 'Decrease font size', fr: 'Réduire le texte' },
   // 2026-09-16(Forrest 本轮第 2 条):中间的百分比数字可点击 → 输入精确值。

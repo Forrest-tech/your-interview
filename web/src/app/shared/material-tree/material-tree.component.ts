@@ -6,6 +6,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
+import { AutoFocusDirective } from './auto-focus.directive';
+
 /**
  * 素材节点。folder=true 可嵌套 children;文件承载正文。
  */
@@ -43,7 +45,7 @@ export interface MaterialNode {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatIconModule, MatButtonModule,
-    MatMenuModule, MatTooltipModule
+    MatMenuModule, MatTooltipModule, AutoFocusDirective
   ],
   templateUrl: './material-tree.component.html',
   styleUrl: './material-tree.component.scss'
@@ -93,9 +95,6 @@ export class MaterialTreeComponent {
 
   /** 「移动到…」弹层当前展开的节点 id。 */
   readonly moveMenuId = signal<string | null>(null);
-
-  /** 回收站(仅演示态,阶段一放内存)。 */
-  readonly trash = signal<MaterialNode[]>([]);
 
   /** 当前选中节点所在层级的选择器数据。 */
   readonly folderOptions = signal<{ id: string; name: string; depth: number }[]>([]);
@@ -205,34 +204,10 @@ export class MaterialTreeComponent {
     this.renamingId.set(null);
   }
 
-  // ---------- 删除(进回收站,可恢复) ----------
-  remove(node: MaterialNode, parent: MaterialNode[] | null): void {
-    if (!this.editable) return;
-    const list = parent ?? this.nodes;
-    const i = list.findIndex((n) => n.id === node.id);
-    if (i >= 0) {
-      this.trash.update((t) => [...t, list[i]]);
-      list.splice(i, 1);
-    }
-    this.nodeDelete.emit(node);
-    this.nodeChange.emit(this.nodes);
-  }
-
-  /** 从回收站恢复(放到最外层)。 */
-  restore(node: MaterialNode): void {
-    this.trash.update((t) => t.filter((x) => x.id !== node.id));
-    this.nodes.push(node);
-    this.nodeChange.emit(this.nodes);
-  }
-
-  /** 彻底删除。 */
-  purge(node: MaterialNode): void {
-    this.trash.update((t) => t.filter((x) => x.id !== node.id));
-  }
-
-  emptyTrash(): void {
-    this.trash.set([]);
-  }
+  // ---------- 删除 ----------
+  // ★ 2026-09-20(Forrest):删除必须先经确认弹窗。树组件不再自己动手删 ——
+  //   只把"用户想删谁"抛给父级,由父级弹确认框、确认后才真正从树上摘除。
+  //   (旧实现直接删了再通知,用户手一抖节点就没了。)
 
   // ---------- 拖拽:移入文件夹 / 同级排序 / 移出到根层 ----------
   onDragStart(node: MaterialNode, ev: DragEvent): void {
@@ -244,9 +219,7 @@ export class MaterialTreeComponent {
   }
 
   onDragEnd(): void {
-    this.draggingId = null;
-    this.dropTargetId.set(null);
-    this.dropMode.set(null);
+    this.resetDrag();
   }
 
   onDragOver(ev: DragEvent): void {
@@ -273,8 +246,11 @@ export class MaterialTreeComponent {
 
     let mode: 'into' | 'before' | 'after';
     if (node.folder) {
-      if (ratio < 0.25) mode = 'before';
-      else if (ratio > 0.75) mode = 'after';
+      // ★ 2026-09-20(Forrest 报"拖进文件夹容易发生偏差"):
+      //   文件夹的"移入"区从中间 50%(0.25~0.75)收窄到 40%(0.3~0.7) ——
+      //   想插到它前面/后面时更容易命中,不会动不动变成"移入"。
+      if (ratio < 0.3) mode = 'before';
+      else if (ratio > 0.7) mode = 'after';
       else mode = 'into';
     } else {
       mode = ratio < 0.5 ? 'before' : 'after';
@@ -298,8 +274,7 @@ export class MaterialTreeComponent {
     ev.stopPropagation();
     const mode = this.dropMode();
     const id = this.draggingId;
-    this.dropTargetId.set(null);
-    this.dropMode.set(null);
+    this.resetDrag();
     if (!id) return;
 
     if (mode === 'into') this.moveInto(id, node);
@@ -321,8 +296,7 @@ export class MaterialTreeComponent {
     if (!this.editable) return;
     ev.preventDefault();
     const id = this.draggingId;
-    this.draggingId = null;
-    this.dropMode.set(null);
+    this.resetDrag();
     if (!id) return;
     const src = this.locate(id, this.nodes, null);
     if (!src) return;
@@ -331,6 +305,20 @@ export class MaterialTreeComponent {
     from.splice(from.findIndex((n) => n.id === src.node.id), 1);
     this.nodes.push(src.node);
     this.nodeChange.emit(this.nodes);
+  }
+
+  /**
+   * ★ 2026-09-20(Forrest 报"拖进文件夹后节点变灰"):
+   * 灰色的来源 —— 行上的 `[class.dragging]`(opacity 0.45)卡死不掉。
+   * 真根因:drop 把节点从原列表摘除后,Angular 重渲染会**先拆掉正在拖的
+   * 那个 DOM 元素**,浏览器就不会再对它派发 dragend → draggingId 永远
+   * 不被清掉,新位置上的同一节点一直顶着 .dragging 类。
+   * 修法:所有落点处理完立刻统一清状态,不再依赖 dragend。
+   */
+  private resetDrag(): void {
+    this.draggingId = null;
+    this.dropTargetId.set(null);
+    this.dropMode.set(null);
   }
 
   /** 移入某文件夹。 */

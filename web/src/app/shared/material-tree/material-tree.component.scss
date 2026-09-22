@@ -38,27 +38,19 @@
 
 .spacer { flex: 1 1 auto; }
 
-/* ---------- 头部两行(2026-09-23 Forrest 第九轮) ----------
-   第一行:新建文件夹 / 新建素材 / 展开·收起,靠左;
-   第二行:编辑(靠右),编辑中是 保存/取消 成对按钮(靠右)。
+/* ---------- 头部单行(2026-09-23 Forrest 第十一/十轮) ----------
+   标题"材料"(随语言设置) + 新建文件夹 / 新建素材 / 展开·收起 在左,
+   编辑(编辑中变 保存/取消 成对按钮)在同一行最右。
    ★ 行高/间距恒定:按钮样式与右侧内容区 .ch-edit 同一套设计
    (白底、细边框 #e2e8f0、中性字色、悬停浅灰),默认不带选中高亮。 */
-.tree-head {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  padding: 8px 8px 7px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
-  flex: 0 0 auto;
-}
-
 .th-row {
   display: flex;
   align-items: center;
   gap: 2px;
 }
-.th-row + .th-row { margin-top: 6px; }
-.th-actions { justify-content: flex-end; }
+/* 编辑 / 保存·取消 与左侧工具同一行,靠最右;
+   与前面按钮之间由 .spacer 撑开,不再需要额外间距。 */
+.th-row .head-act { margin-left: 2px; }
 
 /* ★ 2026-09-23(Forrest 第十轮):树头标题"材料" ——
    13px 加粗、深灰,与右侧内容区标题同一色系;

@@ -5,14 +5,12 @@
        拖到列表空白处 = 移到最外层。之前只能进不能出,现已补全。
      另有「移动到…」菜单作为不依赖拖拽的兜底路径。 -->
 <div class="tree-wrap">
-  <!-- ★ 2026-09-23(Forrest 第九轮)头部两行:
-       第一行:新建文件夹 / 新建素材 / 展开·收起(靠左,展开收起在新建右边)
-       第二行:编辑(靠右);编辑中变 保存/取消 成对按钮(靠右)。
+  <!-- ★ 2026-09-23(Forrest 第十/十一轮)头部合并为一行:
+       标题"材料"(随语言设置) + 新建文件夹 / 新建素材 / 展开·收起 在左,
+       编辑(编辑中变 保存/取消 成对按钮)在同一行最右。
        按钮样式与右侧内容区的 edit/save 完全一致 —— 白底、细边框、中性色,
        默认状态不带"选中"高亮。 -->
   <header class="tree-head">
-    <!-- ★ 2026-09-23(Forrest 第十轮):标题恢复 —— "材料"在最左,
-         随语言设置显示;工具按钮仍留在左侧(标题右边)。 -->
     <div class="th-row">
       <span class="th-title">{{ t('tree.title') }}</span>
       <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" (click)="addFolder(null)">
@@ -26,8 +24,7 @@
               (click)="hasCollapsed() ? expandAll() : collapseAll()">
         <mat-icon>{{ hasCollapsed() ? 'unfold_more' : 'unfold_less' }}</mat-icon>
       </button>
-    </div>
-    <div class="th-row th-actions">
+      <span class="spacer"></span>
       @if (!editable) {
         <button class="head-act" [matTooltip]="t('practice.editTreeHint')" (click)="editRequest.emit()">
           <mat-icon>edit</mat-icon>

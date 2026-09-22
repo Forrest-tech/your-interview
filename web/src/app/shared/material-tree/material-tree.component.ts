@@ -28,6 +28,12 @@ export interface MaterialNode {
   expanded?: boolean;
   /** 是否已完成(仅文件;任务书第四节:已完成显示绿勾) */
   completed?: boolean;
+  /**
+   * ★ 第四十三轮(Forrest):标记色 —— 标记属于素材条目本身(不是给正文涂色)。
+   * 'none'/undefined = 无标记;'orange' | 'red' | 'green'。
+   * 树上以彩色圆点显示,之后可按颜色筛选(如"列出所有红色")。
+   */
+  markColor?: string | null;
 }
 
 /**
@@ -135,8 +141,7 @@ export class MaterialTreeComponent {
    * 一级分类的单色线性图标。按名称关键词匹配,匹配不上给通用 "notes"。
    * 目的是去掉黄文件夹图标,换成极简现代风。
    */
-  nodeIcon(node: MaterialNode): string {
-    const n = (node.name || '').toLowerCase();
+  nodeIcon(node: MaterialNode): string {    const n = (node.name || '').toLowerCase();
     if (/自我介绍|self|intro|pitch/.test(n)) return 'record_voice_over';
     if (/公司|company|work|job|经验|experience/.test(n)) return 'business_center';
     if (/技术|tech|skill|栈|stack|coding|code/.test(n)) return 'code';
@@ -150,6 +155,17 @@ export class MaterialTreeComponent {
   /** 该素材是否已完成(驱动绿勾 / 灰圆点)。目前读节点上的 completed 标记。 */
   isDone(node: MaterialNode): boolean {
     return node.completed === true;
+  }
+
+  /**
+   * ★ 第四十三轮(Forrest):标记色圆点。无标记返回 null(模板里不渲染)。
+   * 色值与右侧 Mark 按钮同一套(Notion 浅色图标色)。
+   */
+  private static readonly MARK_DOTS: Record<string, string> = {
+    orange: '#d9730d', red: '#d44c47', green: '#448361'
+  };
+  markDot(color?: string | null): string | null {
+    return (color && MaterialTreeComponent.MARK_DOTS[color]) || null;
   }
 
   // ---------- 选中 ----------

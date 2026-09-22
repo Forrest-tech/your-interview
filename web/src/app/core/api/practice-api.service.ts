@@ -27,6 +27,8 @@ export interface MaterialNodeDto {
   sortOrder: number;
   expanded: boolean;
   content: string | null;
+  /** ★ 第四十三轮:标记色(null/none/orange/red/green) —— 属于素材本身,可按颜色筛选。 */
+  markColor: string | null;
   children: MaterialNodeDto[];
 }
 
@@ -38,6 +40,8 @@ export interface MaterialNodeIn {
   content: string | null;
   sortOrder: number;
   expanded: boolean;
+  /** ★ 第四十三轮:标记色随整树保存一起提交。 */
+  markColor?: string | null;
   children: MaterialNodeIn[];
 }
 
@@ -160,6 +164,16 @@ export class PracticeApi {
    */
   saveMaterials(nodes: MaterialNodeIn[], force = false): Observable<{ saved: number }> {
     return this.api.put<{ saved: number }>(`${PracticeApi.BASE}/materials`, { nodes, force });
+  }
+
+  /**
+   * ★ 第四十三轮(Forrest):单独设置某素材的标记色 —— 点一下颜色立即落库。
+   *   不走整树 PUT:标记是单字段属性,一个 PATCH 就够,又快又安全。
+   *   color: 'none' | 'orange' | 'red' | 'green'(none = 清除)。
+   */
+  setMaterialMark(materialId: string, color: string): Observable<{ saved: boolean }> {
+    return this.api.patch<{ saved: boolean }>(
+      `${PracticeApi.BASE}/materials/${materialId}/mark`, { color });
   }
 
   // ---------- 录音 ----------

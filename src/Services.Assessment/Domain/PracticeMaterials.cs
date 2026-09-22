@@ -97,6 +97,16 @@ public sealed class PracticeMaterial
     /// </summary>
     public bool IsDeleted { get; private set; }
 
+    /// <summary>
+    /// ★ 第四十三轮(Forrest):素材标记色。
+    ///   语义:标记属于**素材条目本身**(如"公司业务"),不是给正文涂色 ——
+    ///   相当于 Notion 的页面颜色属性,用来分类/打优先级,
+    ///   之后前端可以直接按颜色筛选(如"把红色标的都列出来")。
+    ///   取值:null = 无标记;否则 'orange' / 'red' / 'green'。
+    ///   存字符串而不是枚举:前端是离散色键,直存直取,新增颜色不用改库。
+    /// </summary>
+    public string? MarkColor { get; private set; }
+
     // ---------- 行为(全部经聚合方法改,不允许外部直接改属性) ----------
 
     public void Rename(string name)
@@ -140,6 +150,19 @@ public sealed class PracticeMaterial
     {
         if (Kind != MaterialKind.Folder) return;
         IsExpanded = expanded;
+        Touch();
+    }
+
+    /// <summary>
+    /// ★ 第四十三轮:设置/清除标记色。null 或 "none" 都视为清除。
+    ///   不认识的值直接拒绝 —— 脏数据进库比报错更难收拾。
+    /// </summary>
+    public void SetMarkColor(string? color)
+    {
+        var v = string.IsNullOrWhiteSpace(color) || color == "none" ? null : color.Trim().ToLowerInvariant();
+        if (v is not (null or "orange" or "red" or "green"))
+            throw new ArgumentException($"未知的标记颜色: {color}", nameof(color));
+        MarkColor = v;
         Touch();
     }
 

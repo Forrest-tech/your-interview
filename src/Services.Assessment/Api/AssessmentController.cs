@@ -281,6 +281,23 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                                 : result.ToProblemDetails();
     }
 
+    /// <summary>
+    /// ★ 第四十三轮(Forrest):单独设置某素材的标记色 —— 点一下颜色立即落库,
+    ///   不走整树 PUT(避免连带触发防误删熔断/软删对比)。
+    ///   color: none/orange/red/green;none = 清除标记。
+    /// </summary>
+    public sealed record SetMarkBody(string? Color);
+
+    [HttpPatch("materials/{materialId:guid}/mark")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> SetMaterialMark(Guid materialId, [FromBody] SetMarkBody body, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new SetMaterialMarkCommand(userId, materialId, body.Color), ct);
+        return result.IsSuccess ? Results.Ok(new { saved = true })
+                                : result.ToProblemDetails();
+    }
+
     // ---------- 录音 ----------
 
     /// <summary>某素材下的录音列表(含已缓存的评分)。</summary>

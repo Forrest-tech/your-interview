@@ -1140,6 +1140,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       content: n.content ?? null,
       sortOrder: i,
       expanded: n.folder ? !!n.expanded : true,
+      markColor: n.markColor ?? null,        // ★ 第十三轮:标记色随整树保存
       children: AiPracticeComponent.toPayload(n.children ?? [])
     }));
   }
@@ -1158,6 +1159,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         sortOrder: d.sortOrder ?? 0,
         content: d.content ?? '',
         expanded: !!d.expanded,
+        markColor: d.markColor ?? null,      // ★ 第十三轮:标记色从库回读
         children: AiPracticeComponent.fromDto(d.children ?? [])
       }));
   }
@@ -1182,10 +1184,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly pickedWord = signal<number | null>(null);
 
   // ---------- 2026-09-16 第十九轮:朗读文本「标记」开关 ----------
-  // ★ 2026-09-23(Forrest 第九轮):标记从"开关"升级为 Notion 同款的颜色状态 ——
-  //   无标记 / 橙色 / 红色 / 绿色。颜色按素材存 localStorage,刷新不丢;
-  //   以后可以直接拿颜色当筛选条件(数据形态已经是一枚离散的枚举值)。
-  /** 颜色选项:圆点用 Notion 浅色模式图标色,正文高亮用同系浅色(见 SCSS)。 */
+  // ★ 2026-09-23(Forrest 第十三轮,严重 Bug 修复):标记语义纠正 ——
+  //   标记属于**素材条目本身**(如"公司业务"这一条),**不是给正文涂色**。
+  //   旧实现有两个错:
+  //     1) 选中颜色后把整段正文涂上荧光色 —— 看起来像"对每句话都标了";
+  //     2) 只存 localStorage —— 换浏览器/清缓存就丢,更没法后续筛选。
+  //   现在:标记是节点上的一个字段(markColor),选完立即 PATCH 到数据库,
+  //   树上显示彩色圆点,之后可以直接按颜色筛选(如"把红色标的都列出来")。
+  /** 颜色选项:圆点用 Notion 浅色模式图标色。 */
   readonly markColorOptions: { key: MarkColor; label: string; dot: string }[] = [
     { key: 'none', label: 'practice.markNone', dot: '#c8cdd6' },
     { key: 'orange', label: 'practice.markOrange', dot: '#d9730d' },
@@ -1193,38 +1199,45 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     { key: 'green', label: 'practice.markGreen', dot: '#448361' },
   ];
 
-  private static readonly MARK_KEY = 'user_practice_mark';
+  /**
+   * 标记变更计数器 —— Angular 的 computed 只追踪 signal 本身,
+   * 直接改节点对象上的 markColor 字段不会触发重算,必须"敲一下钟"。
+   */
+  private readonly markTick = signal(0);
 
-  /** 当前素材的标记颜色(none = 未标记)。 */
-  readonly markColor = signal<MarkColor>('none');
+  /** 当前素材的标记颜色 —— 直接读节点字段(单一事实来源,不再另存一份)。 */
+  readonly markColor = computed<MarkColor>(() => {
+    this.markTick();                                   // 依赖计数器:标记一变立即重算
+    const id = this.selectedId();
+    const node = id ? this.findById(this.nodes(), id) : null;
+    const c = node?.markColor;
+    return c === 'orange' || c === 'red' || c === 'green' ? c : 'none';
+  });
 
   /** 当前颜色对应的圆点色(给 Mark 按钮的旗子图标着色)。 */
   markDot(): string {
     return this.markColorOptions.find((c) => c.key === this.markColor())?.dot ?? '#c8cdd6';
   }
 
-  /** 选择标记颜色(none = 清除),并按素材持久化。 */
+  /**
+   * 选择标记颜色(none = 清除):更新节点字段 + 立即 PATCH 落库。
+   * 乐观更新 —— 先改界面再发请求;失败则回滚并 toast,不让用户以为存上了。
+   */
   setMarkColor(c: MarkColor): void {
-    this.markColor.set(c);
-    try {
-      const raw = localStorage.getItem(AiPracticeComponent.MARK_KEY);
-      const map = raw ? (JSON.parse(raw) as Record<string, MarkColor>) : {};
-      if (c === 'none') delete map[this.selectedId() ?? ''];
-      else map[this.selectedId() ?? ''] = c;
-      localStorage.setItem(AiPracticeComponent.MARK_KEY, JSON.stringify(map));
-    } catch { /* 隐私模式写不了就算了,本次会话仍然生效 */ }
-  }
-
-  /** 切换素材时回读该素材的标记颜色。 */
-  private loadMarkColor(): void {
-    let c: MarkColor = 'none';
-    try {
-      const raw = localStorage.getItem(AiPracticeComponent.MARK_KEY);
-      const map = raw ? (JSON.parse(raw) as Record<string, MarkColor>) : {};
-      const v = map[this.selectedId() ?? ''];
-      if (v === 'orange' || v === 'red' || v === 'green') c = v;
-    } catch { /* ignore */ }
-    this.markColor.set(c);
+    const id = this.selectedId();
+    if (!id) return;
+    const node = this.findById(this.nodes(), id);
+    if (!node) return;
+    const prev = node.markColor ?? null;
+    node.markColor = c === 'none' ? null : c;          // 乐观更新(树是受控可变数据)
+    this.markTick.update(v => v + 1);                  // 通知 computed 重算
+    this.practiceApi.setMaterialMark(id, c).subscribe({
+      error: () => {
+        node.markColor = prev;                         // 失败回滚
+        this.markTick.update(v => v + 1);
+        this.toast(this.t('practice.retryLater'));
+      }
+    });
   }
 
   /** 点词展开音标与得分；再点同一个则收起。 */
@@ -1337,8 +1350,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.editing.set(false);
     // 换素材后当前作品作废,必须重新点评分
     this.activeTakeId.set(null);
-    // ★ 2026-09-23(Forrest 第九轮):换素材 → 回读这条素材自己的标记颜色
-    this.loadMarkColor();
+    // ★ 第十三轮:标记颜色现在直接读节点字段(markColor),换素材自动跟随,无需回读
     // ★ 2026-09-20(Forrest):换素材 → 销毁旧音频(stop + unload + 释放 URL),
     //   由统一的 destroyTtsAudio() 处理,避免各调用点漏掉某一项。
     this.destroyTtsAudio();

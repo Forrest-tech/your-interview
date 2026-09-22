@@ -275,9 +275,8 @@
                       [placeholder]="t('practice.placeholder')"></textarea>
           } @else {
             @if (readonlyText()) {
-              <p class="read-text"
-                 [class.marked]="markColor() !== 'none'"
-                 [attr.data-mark]="markColor()">{{ readonlyText() }}</p>
+              <!-- ★ 第十三轮(Forrest):标记属于素材本身,不再给正文涂色 -->
+              <p class="read-text">{{ readonlyText() }}</p>
             } @else {
               <p class="readonly-empty">{{ t('practice.emptyContent') }}</p>
             }

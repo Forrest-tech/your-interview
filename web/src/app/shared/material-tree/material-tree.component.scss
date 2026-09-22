@@ -211,6 +211,17 @@
 .node-icon.folder { color: #d9a326; }
 .node-icon.file { color: #6d7787; }
 
+/* ★ 第四十三轮(Forrest):标记色圆点 —— 标记属于素材条目本身,
+   有标记的素材在树上直接可见,之后可按颜色筛选(如"只看红色")。 */
+.node-row .mk-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 7px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+}
+
 .node-name {
   flex: 1 1 auto;
   overflow: hidden;

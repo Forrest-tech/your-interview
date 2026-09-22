@@ -2703,20 +2703,8 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   white-space: pre-wrap;
   word-break: break-word;
 }
-/* 「标记」= 颜色高亮(2026-09-23 第九轮:Notion 同款颜色状态)。
-   底色取 Notion 浅色模式背景色的加强版,同系四色:橙/红/绿。 */
-.text-box .read-text.marked {
-  border-radius: 3px;
-}
-.text-box .read-text[data-mark='orange'] {
-  background: linear-gradient(transparent 62%, #ffd8a8 62%);
-}
-.text-box .read-text[data-mark='red'] {
-  background: linear-gradient(transparent 62%, #ffc9c9 62%);
-}
-.text-box .read-text[data-mark='green'] {
-  background: linear-gradient(transparent 62%, #b2f2bb 62%);
-}
+/* ★ 第十三轮(Forrest):标记不再给正文涂色 —— 标记属于素材条目本身,
+   在树上以彩色圆点显示(见 material-tree),数据库存 markColor 字段。 */
 .text-box .readonly-empty {
   margin: 0;
   font-size: 14px;

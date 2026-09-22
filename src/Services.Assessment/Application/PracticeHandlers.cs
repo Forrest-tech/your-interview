@@ -11,10 +11,10 @@ namespace YourInterview.Services.Assessment.Application;
 // DTO —— 与前端 MaterialNode / Recording 形状对齐,序列化零转换
 // ============================================================
 
-/// <summary>素材节点(树形,children 递归)。</summary>
+/// <summary>素材节点(树形,children 递归)。MarkColor:null/none/orange/red/green(第四十三轮)。</summary>
 public sealed record MaterialNodeDto(
     Guid Id, string Name, bool Folder, int SortOrder, bool Expanded,
-    string? Content, IReadOnlyList<MaterialNodeDto> Children);
+    string? Content, IReadOnlyList<MaterialNodeDto> Children, string? MarkColor = null);
 
 /// <summary>一条录音 + 可选评分。</summary>
 public sealed record RecordingDto(
@@ -61,7 +61,7 @@ public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
         all.Where(x => x.ParentId == parentId)
             .Select(x => new MaterialNodeDto(
                 x.Id, x.Name, x.Kind == MaterialKind.Folder, x.SortOrder, x.IsExpanded,
-                x.Content, Build(all, x.Id)))
+                x.Content, Build(all, x.Id), x.MarkColor))
             .ToList();
 }
 
@@ -76,10 +76,10 @@ public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
 public sealed record SaveMaterialTreeCommand(Guid UserId, IReadOnlyList<MaterialNodeIn> Nodes, bool Force = false)
     : MediatR.IRequest<Result<int>>;
 
-/// <summary>前端提交的节点(Id 为 null = 新建)。</summary>
+/// <summary>前端提交的节点(Id 为 null = 新建)。MarkColor 可选 —— 旧客户端不传也能存。</summary>
 public sealed record MaterialNodeIn(
     string? Id, string Name, bool Folder, string? Content, int SortOrder, bool Expanded,
-    IReadOnlyList<MaterialNodeIn>? Children);
+    IReadOnlyList<MaterialNodeIn>? Children, string? MarkColor = null);
 
 public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
     : MediatR.IRequestHandler<SaveMaterialTreeCommand, Result<int>>
@@ -120,6 +120,7 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
                     entity = hasClientId
                         ? new PracticeMaterial(gid, r.UserId, parentId, kind, n.Name, n.Content, n.SortOrder)
                         : new PracticeMaterial(r.UserId, parentId, kind, n.Name, n.Content, n.SortOrder);
+                    TryApplyMark(entity, n.MarkColor);   // ★ 第四十三轮:整树保存也带上标记色
                     db.Materials.Add(entity);
                 }
                 else
@@ -132,6 +133,7 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
                     if (kind == MaterialKind.File) entity.SetContent(n.Content);
                     entity.MoveTo(parentId, n.SortOrder);
                     entity.SetExpanded(n.Expanded);
+                    TryApplyMark(entity, n.MarkColor);      // ★ 第四十三轮:整树保存也带上标记色
                     touched.Add(entity);
                 }
 
@@ -179,6 +181,50 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
 
         await db.SaveChangesAsync(ct);
         return Result.Success(incoming.Count);
+    }
+
+    /// <summary>
+    /// ★ 第四十三轮:整树保存时应用标记色。
+    ///   与单独的 PATCH 端点不同 —— 整树保存是"客户端眼里的全量快照",
+    ///   这里若遇到非法颜色值**静默忽略**而不是抛异常:
+    ///   一个坏颜色值不应该让用户整棵树的保存全部失败。
+    /// </summary>
+    private static void TryApplyMark(PracticeMaterial entity, string? markColor)
+    {
+        try { entity.SetMarkColor(markColor); }
+        catch (ArgumentException) { /* 未知颜色值 → 保持原样 */ }
+    }
+}
+
+// ============================================================
+// ★ 第四十三轮(Forrest):单独设置标记色 —— 轻量端点
+// ============================================================
+
+/// <summary>
+/// 为什么不直接复用整树 PUT:用户点一下颜色就该立即生效,
+///   若为此发整树 PUT,会连带触发"防误删熔断/软删对比"整套逻辑,
+///   又重又危险。标记是节点的单字段属性,一个 PATCH 足矣。
+/// </summary>
+public sealed record SetMaterialMarkCommand(Guid UserId, Guid MaterialId, string? MarkColor)
+    : MediatR.IRequest<Result<bool>>;
+
+public sealed class SetMaterialMarkCommandHandler(AssessmentDbContext db)
+    : MediatR.IRequestHandler<SetMaterialMarkCommand, Result<bool>>
+{
+    public async Task<Result<bool>> Handle(SetMaterialMarkCommand r, CancellationToken ct)
+    {
+        var entity = await db.Materials
+            .FirstOrDefaultAsync(x => x.UserId == r.UserId && x.Id == r.MaterialId, ct);
+        if (entity is null) return Result.Failure<bool>(Error.NotFound("material"));
+
+        try { entity.SetMarkColor(r.MarkColor); }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure<bool>(Error.Validation("materials.markColor", ex.Message));
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Result.Success(true);
     }
 }
 

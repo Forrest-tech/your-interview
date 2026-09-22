@@ -106,6 +106,10 @@
                  (keyup.escape)="cancelRename()"
                  (blur)="commitRename(n, $any($event.target).value)">
         } @else {
+          <!-- ★ 第四十三轮(Forrest):标记色圆点 —— 标记属于素材本身,树上直接可见 -->
+          @if (markDot(n.markColor); as dot) {
+            <span class="mk-dot" [style.background]="dot" [title]="n.name"></span>
+          }
           <span class="node-name is-folder" (dblclick)="startRename(n)">{{ n.name }}</span>
         }
         @if (n.children?.length) {
@@ -126,6 +130,10 @@
                  (keyup.escape)="cancelRename()"
                  (blur)="commitRename(n, $any($event.target).value)">
         } @else {
+          <!-- ★ 第四十三轮(Forrest):标记色圆点 —— 标记属于素材本身,树上直接可见 -->
+          @if (markDot(n.markColor); as dot) {
+            <span class="mk-dot" [style.background]="dot" [title]="n.name"></span>
+          }
           <span class="node-name is-leaf" (dblclick)="startRename(n)">{{ n.name }}</span>
         }
       }

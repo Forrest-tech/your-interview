@@ -56,8 +56,13 @@
   align-items: center;
   gap: 2px;
 }
-/* 第二行工具行:与标题行之间留一点呼吸感 */
-.th-row.th-tools { margin-top: 2px; }
+/* ★ 第四十五轮:消除两行重叠 ——
+   右侧的悬浮收起按钮(<)有 28px 高、定位在 top:9px,
+   标题行必须给它留够高度(≥30px),否则第二行的「编辑」
+   会顶到悬浮按钮正下方,视觉上叠在一起。 */
+.th-row.th-top { min-height: 30px; }
+/* 第二行工具行:与标题行之间留出明显呼吸感,不再贴死 */
+.th-row.th-tools { margin-top: 6px; }
 /* 编辑 / 保存·取消 与左侧工具同一行,靠最右;
    与前面按钮之间由 .spacer 撑开,不再需要额外间距。 */
 .th-row .head-act { margin-left: 2px; }

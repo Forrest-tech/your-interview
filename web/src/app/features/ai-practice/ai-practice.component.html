@@ -228,13 +228,12 @@
               <div class="em-head">{{ t('practice.langTitle') }}</div>
               <p class="em-sub">{{ t('practice.langHint') }}</p>
               @for (l of langOptions; track l.code) {
-                <button mat-menu-item class="em-card" [class.on]="practiceLang() === l.code"
+                <!-- ★ 2026-09-20 第三十六轮:语言选项只保留名字 ——
+                     去掉圆点图标和第二行小字说明,选中态用颜色区分(蓝字+浅蓝底)。 -->
+                <button mat-menu-item class="lang-item"
+                        [class.on]="practiceLang() === l.code"
                         (click)="setPracticeLang(l.code)">
-                  <span class="em-radio" [class.checked]="practiceLang() === l.code"></span>
-                  <span class="em-item">
-                    <span class="em-name">{{ l.label }}</span>
-                    <span class="em-note">{{ l.note }}</span>
-                  </span>
+                  <span>{{ l.label }}</span>
                 </button>
               }
 

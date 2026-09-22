@@ -233,33 +233,29 @@ const DICT: Record<string, Record<Lang, string>> = {
   'dialog.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
   'dialog.deleteConfirm': { zh: '删除', en: 'Delete', fr: 'Supprimer' },
   'dialog.saveConfirm': { zh: '保存', en: 'Save', fr: 'Enregistrer' },
-  'dialog.saveTitle': { zh: '保存修改到数据库？', en: 'Save changes to the database?', fr: 'Enregistrer dans la base ?' },
-  'dialog.saveBody': {
-    zh: '保存后立即生效并写入数据库;未保存的改动不会入库。',
-    en: 'Saving takes effect immediately and writes to the database. Unsaved changes will not be stored.',
-    fr: "La sauvegarde prend effet immédiatement. Les modifications non enregistrées ne seront pas stockées."
-  },
-  'dialog.saveDone': { zh: '已保存到数据库', en: 'Saved to the database', fr: 'Enregistré dans la base' },
+  // ★ 2026-09-23(Forrest 第九轮):弹窗只负责"确认/取消",不再解释存储机制 ——
+  //   "会保存到数据库"是默认行为,不需要专门写出来。
+  'dialog.saveTitle': { zh: '保存修改？', en: 'Save changes?', fr: 'Enregistrer les modifications ?' },
+  'dialog.saveDone': { zh: '已保存', en: 'Saved', fr: 'Enregistré' },
   'dialog.discardToast': { zh: '已放弃未保存的修改', en: 'Unsaved changes discarded', fr: 'Modifications abandonnées' },
   'dialog.deleteNodeTitle': { zh: '删除「{name}」？', en: 'Delete "{name}"?', fr: 'Supprimer « {name} » ?' },
   'dialog.deleteNodeBody': {
-    zh: '该条目及其子素材会一并删除,其上的录音也会被清掉;点「保存修改」后才写入数据库。',
-    en: 'The item and its children will be removed along with their recordings. The deletion reaches the database only after you click Save.',
-    fr: "L'élément et ses enfants seront supprimés avec leurs enregistrements. La suppression n'atteint la base qu'après la sauvegarde."
+    zh: '该条目及其子素材会一并删除，其上的录音也会被清掉。',
+    en: 'The item and its children will be removed along with their recordings.',
+    fr: "L'élément et ses enfants seront supprimés avec leurs enregistrements."
   },
   'dialog.deleteRecTitle': { zh: '删除这条录音？', en: 'Delete this recording?', fr: 'Supprimer cet enregistrement ?' },
   'dialog.deleteRecBody': {
-    zh: '删除后无法恢复,包括已保存到服务端的音频与评分结果。',
-    en: 'This cannot be undone, including the uploaded audio and its scores.',
-    fr: "Impossible d'annuler, y compris l'audio et les scores."
+    zh: '删除后无法恢复。',
+    en: 'This cannot be undone.',
+    fr: "Impossible d'annuler."
   },
-  // ★ 2026-09-23(Forrest):刷新/离开前的未保存拦截弹窗 —— 走站内弹窗,
-  //   不用浏览器的原生弹窗(原生文案由浏览器语言决定,与站点语言不一致)。
+  // ★ 2026-09-23(Forrest 第九轮):刷新拦截弹窗同样只说"保存还是放弃"。
   'dialog.unsavedTitle': { zh: '有未保存的修改', en: 'You have unsaved changes', fr: 'Modifications non enregistrées' },
   'dialog.unsavedBody': {
-    zh: '刷新会丢失这些修改。要先保存到数据库吗？',
-    en: 'Reloading will discard them. Save to the database first?',
-    fr: 'Le rechargement les perdra. Enregistrer dans la base d’abord ?'
+    zh: '刷新会丢失这些修改。要先保存吗？',
+    en: 'Reloading will discard them. Save first?',
+    fr: 'Le rechargement les perdra. Enregistrer d’abord ?'
   },
   'dialog.saveAndReload': { zh: '保存并刷新', en: 'Save & reload', fr: 'Enregistrer et recharger' },
   'dialog.discardAndReload': { zh: '放弃并刷新', en: 'Discard & reload', fr: 'Abandonner et recharger' },
@@ -432,8 +428,12 @@ const DICT: Record<string, Record<Lang, string>> = {
 
   // ---------- 2026-09-16 第十九轮:骨架重构新增 ----------
   'practice.mark': { zh: '标记', en: 'Mark', fr: 'Marquer' },
-  'practice.markWord': { zh: '标记当前词', en: 'Mark this word', fr: 'Marquer ce mot' },
-  'practice.markClear': { zh: '清除标记', en: 'Clear mark', fr: 'Effacer la marque' },
+  // ★ 2026-09-23(Forrest 第九轮):标记改为 Notion 同款的颜色状态 ——
+  //   无标记/橙色/红色/绿色;后续可以用颜色做筛选条件。
+  'practice.markNone': { zh: '无标记', en: 'No mark', fr: 'Aucune marque' },
+  'practice.markOrange': { zh: '橙色', en: 'Orange', fr: 'Orange' },
+  'practice.markRed': { zh: '红色', en: 'Red', fr: 'Rouge' },
+  'practice.markGreen': { zh: '绿色', en: 'Green', fr: 'Vert' },
   'practice.jumpTo': { zh: '跳转', en: 'Go', fr: 'Aller' },
   'practice.jumpLabel': { zh: '跳转到第几题', en: 'Jump to question number', fr: 'Aller à la question' },
   'practice.jumpInvalid': { zh: '请输入有效的题号。', en: 'Enter a valid question number.', fr: 'Entrez un numéro valide.' },

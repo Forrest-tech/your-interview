@@ -177,7 +177,7 @@
               <mat-icon>check_circle_outline</mat-icon> 记录复习
               <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
             </button>
-            <mat-menu #reviewMenu="matMenu">
+            <mat-menu #reviewMenu="matMenu" class="app-menu">
               <!-- 四档直接对应 SM-2 的 Again/Hard/Good/Easy:
                    档位决定下次间隔怎么算,所以必须让用户选,不能写死。 -->
               @for (r of reviewChoices; track r.value) {

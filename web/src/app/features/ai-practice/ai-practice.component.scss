@@ -78,33 +78,9 @@
   top: 8px;
 }
 
-/* 侧栏头部:折叠按钮 + 标题 + 保存修改 */
-.tree-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  /* 右内边距留出 40px 给常驻折叠按钮(它绝对定位在右上角) */
-  padding: 9px 40px 9px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
-  background: #fff;
-  min-height: 44px;
-}
-.th-icon {
-  font-size: 17px;
-  width: 17px;
-  height: 17px;
-  color: #2f6fed;
-  flex: 0 0 auto;
-}
-.th-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #34383f;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* 侧栏头部已收进素材树控件(material-tree)—— 2026-09-23 第九轮:
+   两行头部(新建/展开 + 编辑/保存)整体由树控件自绘,
+   这里不再有 .tree-head / .tree-act。 */
 
 /* ◀ / ▶ 折叠按钮 */
 .side-toggle {
@@ -139,42 +115,7 @@
   background: #eef4ff !important;
 }
 
-/* ★ 2026-09-20(Forrest):树编辑模式的按钮组 —— 行业规范的成对图标按钮。
-   · 编辑:蓝字浅蓝底常亮(灰按钮会被当成禁用);
-   · 取消 ✕:描边灰;
-   · 确认 ✓:有改动才亮(蓝底白字),没改动置灰。
-   统一 28x28、间距 6px、靠右对齐,与站点其它图标按钮同款。 */
-.tree-act {
-  width: 28px !important;
-  height: 28px !important;
-  line-height: 28px !important;
-  padding: 0 !important;
-  margin-left: 6px;
-  border-radius: 8px;
-  color: #7a8393 !important;
-  border: 1px solid #e3e8ef;
-  background: #fff;
-}
-.tree-act mat-icon { font-size: 16px; width: 16px; height: 16px; }
-.tree-act:hover { color: #2f6fed !important; border-color: #c3d6f7; background: #f8fbff; }
-
-.tree-act.is-edit {
-  color: #2f6fed !important;
-  border-color: #c3d6f7;
-  background: #eef4ff;
-}
-.tree-act.is-edit:hover { background: #e0ecff; }
-
-.tree-act.is-save:not([disabled]) {
-  color: #fff !important;
-  border-color: #2f6fed;
-  background: #2f6fed;
-}
-.tree-act.is-save:not([disabled]):hover { background: #2862d4; }
-.tree-act.is-save[disabled] {
-  opacity: .45;
-  cursor: not-allowed;
-}
+/* 树编辑模式按钮样式已移到 material-tree 组件(.head-act)—— 2026-09-23 第九轮。 */
 
 .tree-body {
   flex: 1 1 auto;
@@ -1939,46 +1880,11 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   user-select: none;
 }
 
-/* ---------- 字号档位下拉(Forrest 2026-09-16:点数字 → 选具体档位)----------
-   档位为等差数列 100/140/180/…/380;另有"手动输入…"入口。 */
-::ng-deep .zoom-menu.mat-mdc-menu-panel {
-  min-width: 132px !important;
-  max-width: 132px !important;
-  border-radius: 10px !important;
-  padding: 4px 0;
-}
-::ng-deep .zoom-menu .mat-mdc-menu-content { padding: 0; }
-
-::ng-deep .zoom-menu .zm-item {
-  height: 34px;
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-}
-/* 当前档位:蓝色标记(不再打勾 —— Forrest 本轮:选中不要有对勾,直接蓝色标记) */
-::ng-deep .zoom-menu .zm-item.on {
-  font-weight: 700;
-  color: #2f6fed;
-  background: #f2f7ff !important;
-}
-::ng-deep .zoom-menu .zm-item .mat-mdc-menu-item-text {
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-/* 分隔线 + 手动输入项 */
-::ng-deep .zoom-menu .zm-sep {
-  height: 1px;
-  background: #e8ecf2;
-  margin: 4px 0;
-}
-::ng-deep .zoom-menu .zm-edit mat-icon {
-  font-size: 15px;
-  width: 15px;
-  height: 15px;
-  margin-right: 6px;
-  color: #7a8393;
-}
+/* ---------- 字号档位下拉 ----------
+   ★ 2026-09-23(Forrest 第九轮):样式统一收进全局 .app-menu(styles.scss)——
+   此前写在组件 ::ng-deep 里,一旦没生效就回落 MDC 默认(48px/14px),
+   就会出现"字号菜单字特别大、Custom value… 被截断"的问题。
+   这里只保留引擎弹窗的卡片式差异样式。 */
 
 /* ---------- TTS 引擎弹窗:卡片式,对标 /account/ai-setting 的 .eng-row ---------- */
 ::ng-deep .engine-menu.mat-mdc-menu-panel {
@@ -2797,10 +2703,19 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   white-space: pre-wrap;
   word-break: break-word;
 }
-/* 「标记」= 高亮正文 */
+/* 「标记」= 颜色高亮(2026-09-23 第九轮:Notion 同款颜色状态)。
+   底色取 Notion 浅色模式背景色的加强版,同系四色:橙/红/绿。 */
 .text-box .read-text.marked {
-  background: linear-gradient(transparent 62%, #fde68a 62%);
   border-radius: 3px;
+}
+.text-box .read-text[data-mark='orange'] {
+  background: linear-gradient(transparent 62%, #ffd8a8 62%);
+}
+.text-box .read-text[data-mark='red'] {
+  background: linear-gradient(transparent 62%, #ffc9c9 62%);
+}
+.text-box .read-text[data-mark='green'] {
+  background: linear-gradient(transparent 62%, #b2f2bb 62%);
 }
 .text-box .readonly-empty {
   margin: 0;
@@ -3428,21 +3343,7 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 }
 
 /* ---------- 第十九轮补充:标记菜单 + 逐词分值折叠钮 ---------- */
-::ng-deep .mark-menu.mat-mdc-menu-panel {
-  border-radius: 10px;
-  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, .22);
-}
-::ng-deep .mark-menu .mat-mdc-menu-content { padding: 4px; }
-::ng-deep .mark-menu .mat-mdc-menu-item {
-  min-height: 40px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-::ng-deep .mark-menu .mat-mdc-menu-item mat-icon {
-  font-size: 18px; width: 18px; height: 18px;
-  color: #64748b;
-  margin-right: 8px;
-}
+/* 标记菜单样式已并入全局 .app-menu + .mk-dot(styles.scss)—— 2026-09-23 第九轮。 */
 
 /* ★ 第三十五轮(Forrest):逐词分值区取消折叠后,不再有 .words-toggle 按钮。
    标题改用与 Recognition / 其它 res-block 一致的 .res-head h3,

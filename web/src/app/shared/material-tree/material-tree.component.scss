@@ -38,16 +38,35 @@
 
 .spacer { flex: 1 1 auto; }
 
-/* ---------- 头部工具按钮(展开收起 / 新建) ----------
-   ★ 2026-09-20(Forrest 报"两个按钮间隔太大"):
-   mat-icon-button 默认 40x40,并排显得很散。统一压到 26x26、
-   间距 2px、靠右对齐,与节点行的 ⋮ 尺寸呼应。 */
+/* ---------- 头部两行(2026-09-23 Forrest 第九轮) ----------
+   第一行:新建文件夹 / 新建素材 / 展开·收起,靠左;
+   第二行:编辑(靠右),编辑中是 保存/取消 成对按钮(靠右)。
+   ★ 行高/间距恒定:按钮样式与右侧内容区 .ch-edit 同一套设计
+   (白底、细边框 #e2e8f0、中性字色、悬停浅灰),默认不带选中高亮。 */
+.tree-head {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px 8px 7px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  flex: 0 0 auto;
+}
+
+.th-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.th-row + .th-row { margin-top: 6px; }
+.th-actions { justify-content: flex-end; }
+
+/* ---------- 第一行工具按钮(新建×2 + 展开/收起) ----------
+   mat-icon-button 默认 40x40,压到 26x26、间距 2px,紧凑不散。 */
 .head-tool {
   width: 26px !important;
   height: 26px !important;
   line-height: 26px !important;
   padding: 0 !important;
-  margin-left: 2px;
   color: #7a8393 !important;
   border-radius: 6px;
 }
@@ -61,10 +80,56 @@
   background: #eef4ff;
 }
 
+/* ---------- 第二行动作按钮(编辑 / 保存 / 取消) ----------
+   与右侧内容区 edit/save 完全同款:白底细边框中性按钮,
+   默认不带任何"选中"高亮;保存无改动时置灰。 */
+/* ★ 2026-09-23(Forrest 第九轮):树头的「编辑 / 保存 / 取消」
+   与右侧内容区的 .ch-edit 完全同一套视觉语言 ——
+   白底 + 1px #e2e8f0 边框 + 中性字色,默认状态**不带选中高亮**;
+   只是尺寸按侧栏宽度收到 30px(右侧内容区是 36px),
+   圆角、边框色、悬浮/置灰反馈逐项对齐。 */
+.head-act {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.head-act:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+.head-act[disabled] {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.head-act:focus-visible {
+  outline: 2px solid #2f6fed;
+  outline-offset: 1px;
+}
+.head-act + .head-act { margin-left: 6px; }
+.head-act mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
 .tree-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* ★ 2026-09-23(Forrest 第九轮):去掉常驻的横向滚动条 ——
+     名字超长一律省略号,树内永远不需要横向滚动;
+     纵向只在内容超出时出现(auto)。 */
+  overflow-x: hidden;
   padding: 6px 0 24px;
 }
 
@@ -75,12 +140,16 @@
   color: #8a9099;
 }
 
-/* ---------- 节点行 ---------- */
+/* ---------- 节点行 ----------
+   ★ 2026-09-23(Forrest 第九轮):行高恒定 32px ——
+   只读态与编辑态(行尾多一个 ⋮)完全一致,点"编辑"瞬间
+   行高不再跳变。靠 min-height + ⋮ 缩到 24px 实现。 */
 .node-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 6px 5px 0;
+  min-height: 32px;
+  padding: 4px 6px 4px 0;
   cursor: pointer;
   font-size: 13.5px;
   color: #363a41;
@@ -152,12 +221,13 @@
   max-width: 100%;
 }
 
-/* 行尾三点菜单:平时淡出,hover 才明显 */
+/* 行尾三点菜单:平时淡出,hover 才明显。
+   ★ 24x24 + 行高 32:编辑态行高与只读态完全一致(见 .node-row 注释)。 */
 .row-more {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  line-height: 28px;
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
   padding: 0;
   opacity: 0.35;
   transition: opacity 120ms ease;

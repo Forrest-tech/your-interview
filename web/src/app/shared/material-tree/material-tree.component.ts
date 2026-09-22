@@ -69,6 +69,12 @@ export class MaterialTreeComponent {
   /** 是否可编辑(只读展示时传 false)。 */
   @Input() editable = true;
 
+  /**
+   * ★ 2026-09-23(Forrest 第九轮):编辑模式下"保存"是否可点(树有没有改动)。
+   * 父级绑 treeDirty();干净时保存按钮置灰,与右侧内容区 save 的口径一致。
+   */
+  @Input() canSave = true;
+
   // ★ 2026-09-23(Forrest):面板标题字段(materials)已删除 —— 头部只留工具按钮。
   @Input() emptyHint = '';
 
@@ -85,6 +91,13 @@ export class MaterialTreeComponent {
    * 只读状态下点新建,先让父级进入编辑模式(弹出保存/取消),再落节点。
    */
   @Output() editRequest = new EventEmitter<void>();
+
+  /**
+   * ★ 2026-09-23(Forrest 第九轮):编辑/保存动作收进树控件头部第二行 ——
+   * 确认/取消由父级处理(确认弹窗、快照恢复都在父级)。
+   */
+  @Output() saveRequest = new EventEmitter<void>();
+  @Output() cancelRequest = new EventEmitter<void>();
 
   /** 正在重命名的节点 id。 */
   readonly renamingId = signal<string | null>(null);

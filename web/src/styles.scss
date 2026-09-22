@@ -222,10 +222,84 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* ---------------- 练习页倍速菜单(全局) ----------------
-   ★ 2026-09-20(Forrest 第二条):倍速菜单已并入字号菜单同一套风格
-   (panelClass="zoom-menu" + zm-item/on,样式在 ai-practice.component.scss)。
-   这里不再需要单独的 .rate-menu-panel 规则 —— 全站弹层只有一种风格。 */
+/* ---------------- 全站统一弹层(app-menu) ----------------
+   ★ 2026-09-23(Forrest 第九轮):所有下拉/菜单用同一套设计令牌 ——
+   此前字号菜单的样式写在组件的 ::ng-deep 里,一旦失效就回落到
+   MDC 默认(48px 高、14px 字),显得又大又散,"Custom value…" 还被截断。
+   现在统一定义在全局,面板必须挂 class="app-menu" 才生效。
+   设计基准:Notion / Linear / Material 2 菜单 ——
+   白卡片 · 圆角 10 · 细边框 #e9edf3 · 柔和双层阴影 ·
+   条目高 34px · 字号 13px/500 · 悬停 #f3f6fa · 选中蓝字浅蓝底。
+   面板样式永远不继承页面字号,弹层在 180% 正文缩放下也保持恒定大小。 */
+.app-menu.mat-mdc-menu-panel {
+  min-width: 148px;
+  max-width: 320px;
+  border-radius: 10px !important;
+  border: 1px solid #e9edf3;
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .18),
+              0 4px 10px -6px rgba(15, 23, 42, .08) !important;
+  padding: 5px !important;
+  overflow: hidden;
+}
+.app-menu .mat-mdc-menu-content { padding: 0 !important; }
+.app-menu .mat-mdc-menu-item {
+  height: 34px !important;
+  min-height: 34px !important;
+  line-height: 34px !important;
+  border-radius: 7px !important;
+  font-size: 13px !important;
+  font-weight: 500;
+  color: #2b3340 !important;
+  padding: 0 10px !important;
+  white-space: nowrap !important;
+}
+.app-menu .mat-mdc-menu-item .mat-mdc-menu-item-text,
+.app-menu .mat-mdc-menu-item .mdc-list-item__primary-text {
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-menu .mat-mdc-menu-item:hover { background: #f3f6fa !important; }
+.app-menu .mat-mdc-menu-item.on {
+  color: #2f6fed !important;
+  background: #eef4ff !important;
+  font-weight: 600;
+}
+.app-menu .mat-mdc-menu-item mat-icon {
+  font-size: 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin-right: 8px;
+  color: #6b7480;
+}
+.app-menu .mat-mdc-menu-item.on mat-icon { color: #2f6fed; }
+.app-menu .menu-sep { height: 1px; background: #eceff4; margin: 5px 6px; }
+
+/* 标记颜色菜单:Notion 同款的圆点色块 */
+.app-menu .mk-item .mat-mdc-menu-item-text { display: flex; align-items: center; }
+.app-menu .mk-dot {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin-right: 10px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+.app-menu .mk-item .mk-label { flex: 1 1 auto; }
+
+/* 字号/倍速菜单:按内容自适应(不再写死宽度 ——
+   写死会让「Custom value…」这类较长的条目被截掉尾巴)。
+   下限 148px 保证短条目也有统一观感,上限用 .app-menu 的 320px。 */
+.app-menu.zoom-menu { min-width: 148px; }
+.app-menu .zm-item { font-variant-numeric: tabular-nums; }
+.app-menu .zm-sep { height: 1px; background: #eceff4; margin: 5px 6px; }
+.app-menu .zm-edit mat-icon { color: #7a8393; }
+/* 菜单文本容器:占据除图标外的全部宽度,不给内部再压一次
+   (否则带图标的条目文字会被无端截断)。 */
+.app-menu .mat-mdc-menu-item .mat-mdc-menu-item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 
 /* ---------------- 全站统一确认弹窗(app-confirm) ----------------
    ★ 2026-09-20(Forrest):所有确认弹窗(保存素材树 / 删除素材 /

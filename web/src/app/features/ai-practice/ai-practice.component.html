@@ -41,35 +41,10 @@
     </button>
 
     @if (treeOpen()) {
-      <div class="tree-head">
-        <!-- ★ 2026-09-23(Forrest):去掉 "面试素材 / Materials" 这个字段,
-             头部只保留右侧工具按钮 —— 面板内容本身已经说明这是什么。 -->
-        <span class="spacer"></span>
-
-        <!-- ★ 2026-09-20(Forrest):树的编辑模式。
-             · 「编辑」常亮高亮(灰按钮会被当成禁用),tooltip 只说点击可编辑;
-             · 编辑中是行业规范的「取消 ✕ / 确认 ✓」成对图标按钮 ——
-               取消放弃改动,✓ 走确认弹窗后入库;
-             · 新建不需要先点编辑(树头部按钮始终可用)。 -->
-        @if (!treeEditing()) {
-          <button mat-icon-button class="tree-act is-edit" (click)="startTreeEdit()"
-                  [matTooltip]="t('practice.editTreeHint')">
-            <mat-icon>edit</mat-icon>
-          </button>
-        } @else {
-          <button mat-icon-button class="tree-act" (click)="cancelTreeEdit()"
-                  [matTooltip]="t('dialog.cancel')">
-            <mat-icon>close</mat-icon>
-          </button>
-          <button mat-icon-button class="tree-act is-save"
-                  [disabled]="!treeDirty()"
-                  [matTooltip]="t('practice.saveChanges')"
-                  (click)="saveTree()">
-            <mat-icon>check</mat-icon>
-          </button>
-        }
-      </div>
-
+      <!-- ★ 2026-09-23(Forrest 第九轮):头部两行布局整体收进树控件 ——
+           第一行:新建文件夹 / 新建素材 / 展开·收起(靠左);
+           第二行:编辑(靠右),编辑中变 保存/取消 成对按钮,
+           样式与右侧内容区的 edit/save 完全一致(白底细边框中性样式)。 -->
       <div class="tree-body">
         @if (treeLoading()) {
           <p class="tree-status">{{ t('practice.treeLoading') }}</p>
@@ -83,12 +58,15 @@
             [nodes]="nodes()"
             [selectedId]="selectedId()"
             [editable]="treeEditing()"
+            [canSave]="treeDirty()"
             [emptyHint]="t('practice.emptyHint')"
             (nodeSelect)="onSelect($event)"
             (folderToggle)="onFolderToggle($event)"
             (nodeChange)="onTreeChange($event)"
             (nodeDelete)="onDelete($event)"
-            (editRequest)="startTreeEdit()">
+            (editRequest)="startTreeEdit()"
+            (saveRequest)="saveTree()"
+            (cancelRequest)="cancelTreeEdit()">
           </app-material-tree>
         }
       </div>
@@ -162,7 +140,7 @@
                       [matTooltip]="t('practice.zoomEditHint')"
                       aria-label="set font size">{{ fontZoomLevel() }}%</button>
 
-              <mat-menu #zoomMenu="matMenu" class="zoom-menu" xPosition="before">
+              <mat-menu #zoomMenu="matMenu" class="app-menu zoom-menu" xPosition="before">
                 @for (p of zoomPresets(); track p) {
                   <button mat-menu-item class="zm-item"
                           [class.on]="p === fontZoomLevel()"
@@ -195,22 +173,26 @@
                       aria-label="increase font size">+</button>
             </div>
 
-            <!-- 标记下拉:对当前朗读文本做标记(高亮当前词) -->
-            <button class="mark-btn" type="button" [matMenuTriggerFor]="markMenu">
-              <mat-icon>flag</mat-icon>
+            <!-- 标记下拉:对当前朗读文本做颜色标记(Notion 同款颜色状态) -->
+            <button class="mark-btn" type="button" [matMenuTriggerFor]="markMenu"
+                    [class.has-color]="markColor() !== 'none'">
+              <mat-icon class="flag" [style.color]="markColor() !== 'none' ? markDot() : null">flag</mat-icon>
               <span>{{ t('practice.mark') }}</span>
               <mat-icon class="caret">expand_more</mat-icon>
             </button>
 
-            <mat-menu #markMenu="matMenu" class="mark-menu" xPosition="before">
-              <button mat-menu-item (click)="markAllText()">
-                <mat-icon>highlight</mat-icon>
-                <span>{{ t('practice.markWord') }}</span>
-              </button>
-              <button mat-menu-item (click)="clearMark()">
-                <mat-icon>remove_done</mat-icon>
-                <span>{{ t('practice.markClear') }}</span>
-              </button>
+            <!-- ★ 2026-09-23(Forrest 第九轮):标记 = Notion 同款的颜色状态。
+                 无标记/橙/红/绿四个圆点选项,选中的颜色高亮正文;
+                 颜色按素材记在本地,刷新不丢,后续可用颜色做筛选。 -->
+            <mat-menu #markMenu="matMenu" class="app-menu mark-menu" xPosition="before">
+              @for (c of markColorOptions; track c.key) {
+                <button mat-menu-item class="mk-item"
+                        [class.on]="markColor() === c.key"
+                        (click)="setMarkColor(c.key)">
+                  <span class="mk-dot" [style.background]="c.dot"></span>
+                  <span class="mk-label">{{ t(c.label) }}</span>
+                </button>
+              }
             </mat-menu>
 
             <!-- ★ 2026-09-20 第三十六轮:朗读设置入口(TTS Engine 切换已彻底移除)。
@@ -225,7 +207,7 @@
               <mat-icon>settings</mat-icon>
             </button>
 
-            <mat-menu #engineMenu="matMenu" xPosition="before" class="engine-menu">
+            <mat-menu #engineMenu="matMenu" xPosition="before" class="app-menu engine-menu">
               <div class="em-head">{{ t('practice.ttsSettings') }}</div>
               <p class="em-sub">{{ t('practice.ttsSettingsHint') }}</p>
 
@@ -293,7 +275,9 @@
                       [placeholder]="t('practice.placeholder')"></textarea>
           } @else {
             @if (readonlyText()) {
-              <p class="read-text" [class.marked]="marked()">{{ readonlyText() }}</p>
+              <p class="read-text"
+                 [class.marked]="markColor() !== 'none'"
+                 [attr.data-mark]="markColor()">{{ readonlyText() }}</p>
             } @else {
               <p class="readonly-empty">{{ t('practice.emptyContent') }}</p>
             }
@@ -355,7 +339,7 @@
                  用**同一套样式**(panelClass="zoom-menu" + zm-item/on)。
                  这就是"整个网站共同的弹层风格":白卡片、同样宽度、
                  当前项蓝字+浅蓝底,不打勾。 -->
-            <mat-menu #rateMenu="matMenu" class="zoom-menu" xPosition="before">
+            <mat-menu #rateMenu="matMenu" class="app-menu zoom-menu" xPosition="before">
               @for (r of rates; track r) {
                 <button mat-menu-item class="zm-item rate-item"
                         [class.on]="rate() === r"

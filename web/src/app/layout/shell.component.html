@@ -39,7 +39,7 @@
           [matTooltip]="t('common.language')" matTooltipShowDelay="350">
     <mat-icon>translate</mat-icon>
   </button>
-  <mat-menu #langMenu="matMenu" xPosition="before">
+  <mat-menu #langMenu="matMenu" class="app-menu" xPosition="before">
     @for (o of i18n.options; track o.code) {
       <button mat-menu-item (click)="i18n.setLang(o.code)">
         <mat-icon>{{ i18n.lang() === o.code ? 'check' : 'blank' }}</mat-icon>
@@ -54,7 +54,7 @@
     <span class="avatar">{{ initial() }}</span>
   </button>
 
-  <mat-menu #accountMenu="matMenu" xPosition="before" class="account-menu">
+  <mat-menu #accountMenu="matMenu" xPosition="before" class="app-menu account-menu">
     <div class="menu-head">
       <span class="menu-avatar">{{ initial() }}</span>
       <div class="menu-id">

@@ -2,7 +2,7 @@ import {
   ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild,
   computed, effect, inject, signal
 } from '@angular/core';
-import { Howl } from 'howler';
+import { Howl, Howler } from 'howler';
 import { firstValueFrom } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -1448,6 +1448,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
           this.speakPos.set(0);
           this.ttsEnded = false;
         }
+        this.unlockAudio();      // ★ 先唤醒 AudioContext,再 play
         h.play();                // 文本未变:续播/重播当前这份
         return;
       }
@@ -1563,6 +1564,19 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 修法:显式传 `format`。按 Blob 的真实 MIME 推导(后端换成 wav/ogg 也不会错),
    * Angular 的 blob 没有 MIME 时退回 mp3(Azure 的默认输出格式)。
    */
+  /**
+   * ★ 2026-09-20(Forrest 报"蓝色按钮点了没声音"):浏览器的自动播放策略会把
+   *   Howler 的 Web Audio 上下文停在 suspended。此时 play() 既不报错也不出声,
+   *   speaking 永远不会变 true —— 用户看到的就是"点了没反应"。
+   *   点击本身就是合法的用户手势,这里主动把上下文唤醒。
+   */
+  private unlockAudio(): void {
+    try {
+      const ctx = (Howler as unknown as { ctx?: AudioContext }).ctx;
+      if (ctx && ctx.state !== 'running') void ctx.resume();
+    } catch { /* 拿不到上下文就算了,不影响主流程 */ }
+  }
+
   private howlFormat(mime: string): string[] {
     const t = (mime || '').toLowerCase();
     if (t.includes('mpeg') || t.includes('mp3')) return ['mp3'];
@@ -1643,7 +1657,18 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
     this.ttsHowl = h;
     this.ttsEnded = false;
-    if (autoplay) h.play();
+    if (autoplay) {
+      this.unlockAudio();                 // ★ 先唤醒 AudioContext,再 play
+      h.play();
+      // ★ 看门狗:1.2s 后仍没真正出声 → 明确说出来,绝不让人对着静音发愣
+      setTimeout(() => {
+        if (this.ttsHowl === h && h.state() === 'loaded' && !h.playing()) {
+          this.ttsNote.set('音频未能启动');
+          this.toast('浏览器没有允许播放音频,请再点一次播放键。');
+          this.cdr.detectChanges();
+        }
+      }, 1200);
+    }
     this.cdr.detectChanges();
   }
 
@@ -2356,11 +2381,18 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 绑定 src 并起播(播放/暂停本地共用的收尾逻辑)。 */
   private startAudio(r: Recording, src: string): void {
     this.audio.src = src;
+    this.audio.volume = 1;
     this.audio.currentTime = 0;
     this.playPos.set(0);
     void this.audio.play().then(
       () => this.playingId.set(r.id),
-      () => this.playingId.set(null)  // 浏览器拦自动播放时如实置回
+      // ★ 2026-09-20(Forrest 报"点了没声音"):浏览器拦截自动播放时
+      //   play() 的 Promise 会 reject,旧代码只是把状态置回 null —— 用户
+      //   看到的又是"点了没反应"。现在如实说一句。
+      () => {
+        this.playingId.set(null);
+        this.toast('浏览器阻止了录音播放,请再点一次播放键。');
+      }
     );
   }
 

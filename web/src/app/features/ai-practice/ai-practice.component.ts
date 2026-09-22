@@ -708,8 +708,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // ⚠️ 2026-09-20 修复(Forrest 报"点播放毫无反应"):
     //   旧实现把所有含"合成"二字的提示一律藏起来(初衷是隐藏"合成中"的进度),
     //   结果把 **"语音合成失败"** 也吞了 —— 用户点了播放,界面一点反馈都没有。
-    //   现在:只隐藏纯进度提示,失败/未配置类一律如实显示。
-    if (n.includes('正在合成')) return false;
+    //   现在:纯进度提示不再写入 ttsNote(本组件已无"正在合成"分支),
+    //   因此这里只判断"有没有提示" —— 失败/未配置类一律如实显示。
     return true;
   });
 
@@ -795,7 +795,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // ★★ 第四十轮 数据安全:加载失败时绝不允许把本地(可能是空的/陈旧的)
     //   整树写回服务端 —— 那会把数据库真数据整树覆盖。
     if (this.treeLoadFailed()) {
-      this.treeError.set('未连接到服务端,已阻止本次写入以免覆盖云端数据。请先重试加载。');
+      this.treeError.set(this.t('practice.treeBlocked'));
       return;
     }
     // ★ 2026-09-20(Forrest):保存是"写入数据库"的决定性动作,先弹确认。
@@ -809,8 +809,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** 确认后的真正保存(整树覆盖 + 回读对齐 GUID)。 */
-  private doSaveTree(): void {
+  /** 确认后的真正保存(整树覆盖 + 回读对齐 GUID)。after 可选:保存成功后执行。 */
+  private doSaveTree(after?: () => void): void {
     const payload = AiPracticeComponent.toPayload(this.nodes());
     // ★ 本次编辑期间删过东西 → 带 force 越过服务端"防误删熔断"
     //   (用户已经在弹窗里确认过删除,不应被拦)。
@@ -831,6 +831,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         this.treeEditing.set(false);
         this.treeSnapshot = null;
         this.toast(this.t('dialog.saveDone'));
+        after?.();
       },
       error: (e) => {
         // 绝不假装保存成功 —— 把后端给的真实原因显示出来
@@ -880,17 +881,66 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /**
    * 统一确认弹窗。
-   * 返回 Promise<boolean>:true = 用户点了确认按钮。
-   * 全站弹窗风格一致 —— 保存/删除都走这一个组件。
+   * 返回值:true = 确认按钮;'discard' = 第三个按钮(放弃);其它 = 取消。
+   * 全站弹窗风格一致 —— 保存/删除/刷新拦截都走这一个组件。
    */
-  private confirmDialog(opts: Omit<ConfirmDialogData, 'cancelText'>): Promise<boolean> {
+  private confirmDialog(
+    opts: Omit<ConfirmDialogData, 'cancelText'> & { cancelText?: string },
+    width = '360px'
+  ): Promise<boolean | 'discard'> {
     const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '360px',
+      width,
       panelClass: 'app-confirm',
       autoFocus: false,
-      data: { ...opts, cancelText: this.t('dialog.cancel') } as ConfirmDialogData
+      data: {
+        ...opts,
+        cancelText: opts.cancelText ?? this.t('dialog.cancel')
+      } as ConfirmDialogData
     });
-    return firstValueFrom(ref.afterClosed()).then((v) => v === true);
+    return firstValueFrom(ref.afterClosed()).then((v) =>
+      v === true ? true : v === 'discard' ? 'discard' : false
+    );
+  }
+
+  /**
+   * ★ 2026-09-23(Forrest):刷新前的未保存拦截 —— 走**站内弹窗**。
+   *
+   * 为什么不用浏览器原生 beforeunload 弹窗:那段文案由浏览器自己的语言决定,
+   * 站点切到英文/法文时它仍旧是中文 → 语言混乱(Forrest 报的问题)。
+   * 浏览器只允许"重新加载/取消"两个原生按钮,无法改文案、无法加第三个选项,
+   * 所以在 F5 / Ctrl+R / Cmd+R 这一层拦下来,给用户一个跟语言设置一致的弹窗:
+   *   保存并刷新 / 放弃并刷新 / 留在本页。
+   * 关闭标签页等无法拦截的场景仍由 beforeunload 兜底(浏览器文案,无法干预)。
+   */
+  @HostListener('window:keydown', ['$event'])
+  guardReload(ev: KeyboardEvent): void {
+    if (!(this.treeEditing() && this.treeDirty())) return;
+    const k = ev.key;
+    const mod = ev.ctrlKey || ev.metaKey;
+    const isReload =
+      k === 'F5' || (mod && !ev.shiftKey && (k === 'r' || k === 'R')) ||
+      (mod && ev.shiftKey && (k === 'r' || k === 'R'));
+    if (!isReload) return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
+    void this.confirmDialog({
+      title: this.t('dialog.unsavedTitle'),
+      body: this.t('dialog.unsavedBody'),
+      confirmText: this.t('dialog.saveAndReload'),
+      cancelText: this.t('dialog.stay'),
+      discardText: this.t('dialog.discardAndReload'),
+      discardDanger: true
+    }, '400px').then((res) => {
+      if (res === true) {
+        // 保存完再刷新 —— 否则写库请求会被刷新打断
+        this.doSaveTree(() => window.location.reload());
+      } else if (res === 'discard') {
+        this.cancelTreeEdit();
+        window.location.reload();
+      }
+      // 'stay' → 什么都不做
+    });
   }
 
   /**
@@ -1136,7 +1186,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   private errText(e: unknown): string {
-    return String((e as { message?: string } | null)?.message ?? e ?? '未知错误').slice(0, 200);
+    return String((e as { message?: string } | null)?.message ?? e ?? this.t('practice.errUnknown')).slice(0, 200);
   }
 
   // ---------- 发音音标 ----------
@@ -1683,15 +1733,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       },
       error: (e) => {
         const status = (e as { status?: number } | null)?.status;
+        // ★ 2026-09-23(Forrest):三种失败原因此前写死中文 → 接语言设置。
         const note =
-          status === 503 ? 'Azure 语音未配置'
+          status === 503 ? this.t('practice.ttsNotConfigured')
             : status === 401 || status === 403 || status === 502
-              ? 'Azure 密钥/区域无效'
-              : '语音合成失败';
+              ? this.t('practice.ttsKeyInvalid')
+              : this.t('practice.ttsSynthFailed');
         this.ttsNote.set(note);
         // ★ 2026-09-20(Forrest 报"没反应"):失败必须**弹出来**,
         //   只靠播放条那一行小字容易看不到。
-        this.toast(note + (status ? `（HTTP ${status}）` : ''));
+        this.toast(note + (status ? ' · ' + this.t('common.httpStatus').replace('{n}', String(status)) : ''));
         this.speaking.set(false);
         this.ttsBilledChars.set(null);
         this.ttsFullChars.set(null);
@@ -1836,15 +1887,15 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       onloaderror: (_id: number, err?: unknown) => {
         console.warn('[tts] loaderror:', err);       // 保留一条线索,便于远程排障
         this.speaking.set(false);
-        this.ttsNote.set('音频加载失败');
-        this.toast('音频加载失败,请重试;若反复出现请重新合成。');
+        this.ttsNote.set(this.t('practice.noteLoadFail'));
+        this.toast(this.t('practice.audioLoadFailToast'));
         this.cdr.detectChanges();
       },
       onplayerror: (_id: number, err?: unknown) => {
         console.warn('[tts] playerror:', err);
         this.speaking.set(false);
-        this.ttsNote.set('音频播放失败');
-        this.toast('音频播放失败,请再点一次播放。');
+        this.ttsNote.set(this.t('practice.notePlayFail'));
+        this.toast(this.t('practice.audioPlayFailToast'));
         this.cdr.detectChanges();
         // 浏览器自动播放策略:解锁后重播(Howler 自带 unlock)
         h.once('unlock', () => h.play());
@@ -1860,8 +1911,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       // ★ 看门狗:1.2s 后仍没真正出声 → 明确说出来,绝不让人对着静音发愣
       setTimeout(() => {
         if (this.ttsHowl === h && h.state() === 'loaded' && !h.playing()) {
-          this.ttsNote.set('音频未能启动');
-          this.toast('浏览器没有允许播放音频,请再点一次播放键。');
+          this.ttsNote.set(this.t('practice.noteNotStarted'));
+          this.toast(this.t('practice.audioBlockedToast'));
           this.cdr.detectChanges();
         }
       }, 1200);
@@ -2577,8 +2628,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         //   —— 服务端容器重建/清理时,容器内 storage/recordings 会被重置,
         //   而 PostgreSQL 里的录音行还在,于是列表还在、却取不到音频。
         const msg = status === 404
-          ? '这条录音的音频文件已不存在(服务重建或清理时被删了)。请删掉这条记录后重录。'
-          : '录音回放加载失败:' + (raw || '请稍后重试。');
+          ? this.t('practice.recGone')
+          : this.t('practice.recLoadFail') + (raw || this.t('practice.retryLater'));
         this.audioError.set(msg);
         this.toast(msg);
       }
@@ -2600,7 +2651,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       //   看到的又是"点了没反应"。现在如实说一句。
       () => {
         this.playingId.set(null);
-        this.toast('浏览器阻止了录音播放,请再点一次播放键。');
+        this.toast(this.t('practice.audioBlockedToast'));
       }
     );
   }

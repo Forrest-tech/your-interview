@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, signal } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -7,6 +7,8 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { AutoFocusDirective } from './auto-focus.directive';
+
+import { I18nService } from '../../core/i18n/i18n.service';
 
 /**
  * 素材节点。folder=true 可嵌套 children;文件承载正文。
@@ -51,6 +53,13 @@ export interface MaterialNode {
   styleUrl: './material-tree.component.scss'
 })
 export class MaterialTreeComponent {
+  /**
+   * ★ 2026-09-23(Forrest):树上的 tooltip / 菜单文案接入全站语言设置。
+   * 模板里统一用 t('tree.xxx') 取词,顶栏切语言即刻生效。
+   */
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+
   /** 树数据(受控)。 */
   @Input() nodes: MaterialNode[] = [];
 
@@ -60,10 +69,8 @@ export class MaterialTreeComponent {
   /** 是否可编辑(只读展示时传 false)。 */
   @Input() editable = true;
 
-  /** 面板标题。 */
-  @Input() title = '素材库';
-
-  @Input() emptyHint = '还没有素材。用上方 + 号新建文件夹与文件。';
+  // ★ 2026-09-23(Forrest):面板标题字段(materials)已删除 —— 头部只留工具按钮。
+  @Input() emptyHint = '';
 
   @Output() nodeSelect = new EventEmitter<MaterialNode>();
   /**
@@ -164,7 +171,7 @@ export class MaterialTreeComponent {
   addFolder(parent: MaterialNode | null): void {
     const node: MaterialNode = {
       id: this.newId(),
-      name: '新建文件夹',
+      name: this.t('tree.newFolderName'),
       folder: true,
       expanded: true,
       children: []
@@ -178,7 +185,7 @@ export class MaterialTreeComponent {
   addFile(parent: MaterialNode | null): void {
     const node: MaterialNode = {
       id: this.newId(),
-      name: '新建素材',
+      name: this.t('tree.newFileName'),
       folder: false,
       content: ''
     };

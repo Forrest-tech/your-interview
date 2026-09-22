@@ -13,6 +13,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -79,6 +80,10 @@ interface NewEntryForm {
 })
 export class PlaybookComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+
   private readonly router = inject(Router);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);

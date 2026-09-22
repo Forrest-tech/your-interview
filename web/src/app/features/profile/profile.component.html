@@ -4,7 +4,7 @@
       <h2>个人资料</h2>
       <p class="sub">这里展示的是后端当前认可的账号信息与权限</p>
     </div>
-    <button mat-icon-button (click)="load()" matTooltip="刷新">
+    <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
       <mat-icon>refresh</mat-icon>
     </button>
   </header>
@@ -33,10 +33,10 @@
         <p>{{ error() }}</p>
       </div>
       <div class="err-actions">
-        <button mat-icon-button (click)="load()" matTooltip="重试">
+        <button mat-icon-button (click)="load()" [matTooltip]="t('common.retry')">
           <mat-icon>refresh</mat-icon>
         </button>
-        <a mat-mini-fab color="primary" routerLink="/login" matTooltip="重新登录">
+        <a mat-mini-fab color="primary" routerLink="/login" [matTooltip]="t('common.relogin')">
           <mat-icon>login</mat-icon>
         </a>
       </div>

@@ -7,11 +7,11 @@
       </p>
     </div>
     <div class="head-actions">
-      <button mat-icon-button (click)="load()" matTooltip="刷新">
+      <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
       @if (auth.can('mock.manage')) {
-        <button mat-mini-fab color="primary" (click)="openDialog()" matTooltip="新建模拟">
+        <button mat-mini-fab color="primary" (click)="openDialog()" [matTooltip]="t('mock.newSession')">
           <mat-icon>play_circle</mat-icon>
         </button>
       }
@@ -58,7 +58,7 @@
               </button>
               <span class="spacer"></span>
               @if (auth.can('mock.manage')) {
-                <button mat-icon-button (click)="remove(s, $event)" title="删除">
+                <button mat-icon-button (click)="remove(s, $event)" [title]="t('common.delete')">
                   <mat-icon>delete_outline</mat-icon>
                 </button>
               }
@@ -129,7 +129,7 @@
             </a>
             <span class="spacer"></span>
             @if (auth.can('mock.manage')) {
-              <button mat-icon-button color="warn" (click)="remove(s, $event)" title="删除">
+              <button mat-icon-button color="warn" (click)="remove(s, $event)" [title]="t('common.delete')">
                 <mat-icon>delete_outline</mat-icon>
               </button>
             }

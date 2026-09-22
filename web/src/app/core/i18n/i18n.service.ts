@@ -112,7 +112,8 @@ const DICT: Record<string, Record<Lang, string>> = {
 
   // ---------- AI 面试练习 ----------
   'nav.practice': { zh: 'AI 面试练习', en: 'AI Practice', fr: 'Pratique IA' },
-  'practice.materials': { zh: '面试素材', en: 'Materials', fr: 'Documents' },
+  // ★ 2026-09-23(Forrest):素材树头部不再显示 "Materials / 面试素材" 字段,
+  //   该词条随之删除(面板靠工具按钮与树本身已足够表意)。
   'practice.emptyHint': { zh: '数据库里还没有素材。点上方按钮新建文件夹或文件，内容会直接存进数据库。', en: 'No materials in the database yet. Use the buttons above to create a folder or file; content is saved directly to the database.', fr: "Aucun document en base de données. Utilisez les boutons ci-dessus pour créer un dossier ou un fichier ; le contenu est enregistré directement dans la base." },
   'practice.treeLoading': { zh: '正在从数据库加载素材…', en: 'Loading materials from the database…', fr: 'Chargement des documents depuis la base…' },
   'practice.treeUnavailable': { zh: '无法连接服务端，素材未加载。为避免覆盖数据库里的真实数据，本次已禁止写入。请点击重试。', en: 'Cannot reach the server, materials were not loaded. To avoid overwriting real data in the database, writing is disabled. Please retry.', fr: "Serveur injoignable, documents non chargés. Pour éviter d'écraser les données réelles, l'écriture est désactivée. Veuillez réessayer." },
@@ -227,8 +228,7 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'Click to edit content',
     fr: 'Cliquez pour modifier le contenu'
   },
-  'practice.expandAll': { zh: '展开全部', en: 'Expand all', fr: 'Tout déplier' },
-  'practice.collapseAll': { zh: '收起全部', en: 'Collapse all', fr: 'Tout replier' },
+  // 一键展开/收起整棵树用的是共享控件自己的词条(tree.expandAll / tree.collapseAll)。
   // ---------- 统一确认弹窗(2026-09-20:全站弹窗同一种样式) ----------
   'dialog.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
   'dialog.deleteConfirm': { zh: '删除', en: 'Delete', fr: 'Supprimer' },
@@ -253,6 +253,107 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'This cannot be undone, including the uploaded audio and its scores.',
     fr: "Impossible d'annuler, y compris l'audio et les scores."
   },
+  // ★ 2026-09-23(Forrest):刷新/离开前的未保存拦截弹窗 —— 走站内弹窗,
+  //   不用浏览器的原生弹窗(原生文案由浏览器语言决定,与站点语言不一致)。
+  'dialog.unsavedTitle': { zh: '有未保存的修改', en: 'You have unsaved changes', fr: 'Modifications non enregistrées' },
+  'dialog.unsavedBody': {
+    zh: '刷新会丢失这些修改。要先保存到数据库吗？',
+    en: 'Reloading will discard them. Save to the database first?',
+    fr: 'Le rechargement les perdra. Enregistrer dans la base d’abord ?'
+  },
+  'dialog.saveAndReload': { zh: '保存并刷新', en: 'Save & reload', fr: 'Enregistrer et recharger' },
+  'dialog.discardAndReload': { zh: '放弃并刷新', en: 'Discard & reload', fr: 'Abandonner et recharger' },
+  'dialog.stay': { zh: '留在本页', en: 'Stay on page', fr: 'Rester sur la page' },
+
+  // ---------- 素材树控件(共享组件) ----------
+  // ★ 2026-09-23(Forrest):树上的 tooltip / 菜单全部接入语言设置。
+  'tree.expandAll': { zh: '展开全部', en: 'Expand all', fr: 'Tout déplier' },
+  'tree.collapseAll': { zh: '收起全部', en: 'Collapse all', fr: 'Tout replier' },
+  'tree.newFolder': { zh: '新建文件夹', en: 'New folder', fr: 'Nouveau dossier' },
+  'tree.newSubFolder': { zh: '新建子文件夹', en: 'New subfolder', fr: 'Nouveau sous-dossier' },
+  'tree.newFile': { zh: '新建素材', en: 'New material', fr: 'Nouveau document' },
+  'tree.moveTo': { zh: '移动到…', en: 'Move to…', fr: 'Déplacer vers…' },
+  'tree.rename': { zh: '重命名', en: 'Rename', fr: 'Renommer' },
+  'tree.delete': { zh: '删除', en: 'Delete', fr: 'Supprimer' },
+  'tree.rootLevel': { zh: '最外层', en: 'Top level', fr: 'Premier niveau' },
+  'tree.noFolder': { zh: '没有其它可选文件夹', en: 'No other folder available', fr: 'Aucun autre dossier' },
+  'tree.newFolderName': { zh: '新建文件夹', en: 'New folder', fr: 'Nouveau dossier' },
+  'tree.newFileName': { zh: '新建素材', en: 'New material', fr: 'Nouveau document' },
+  'tree.emptyHint': {
+    zh: '还没有素材。用上方按钮新建文件夹与文件。',
+    en: 'No materials yet. Use the buttons above to create folders and files.',
+    fr: 'Aucun document. Utilisez les boutons ci-dessus pour créer dossiers et fichiers.'
+  },
+
+  // ---------- 分页 / 筛选 / 重试(全站 tooltip 通用) ----------
+  'common.prevPage': { zh: '上一页', en: 'Previous page', fr: 'Page précédente' },
+  'common.nextPage': { zh: '下一页', en: 'Next page', fr: 'Page suivante' },
+  'common.clearFilter': { zh: '清空筛选', en: 'Clear filters', fr: 'Effacer les filtres' },
+  'common.retry': { zh: '重试', en: 'Retry', fr: 'Réessayer' },
+  'common.relogin': { zh: '重新登录', en: 'Sign in again', fr: 'Se reconnecter' },
+  'common.httpStatus': { zh: 'HTTP {n}', en: 'HTTP {n}', fr: 'HTTP {n}' },
+  'admin.refreshStats': { zh: '刷新统计', en: 'Refresh stats', fr: 'Actualiser les stats' },
+  'admin.activate': { zh: '启用', en: 'Activate', fr: 'Activer' },
+  'admin.deactivate': { zh: '停用', en: 'Deactivate', fr: 'Désactiver' },
+  'admin.resetPwd': { zh: '重置密码', en: 'Reset password', fr: 'Réinitialiser le mot de passe' },
+  'mock.newSession': { zh: '新建模拟', en: 'New mock', fr: 'Nouvelle simulation' },
+  'playbook.newEntry': { zh: '新建条目', en: 'New entry', fr: 'Nouvelle entrée' },
+  'playbook.qaCount': { zh: '问答数', en: 'Q&A count', fr: 'Nombre de questions' },
+  'playbook.weakCount': { zh: '短板数', en: 'Weak points', fr: 'Points faibles' },
+  'playbook.assetCount': { zh: '材料数', en: 'Assets', fr: 'Documents' },
+  'techstack.newEntry': { zh: '新增条目', en: 'Add entry', fr: 'Ajouter une entrée' },
+  'techstack.topicDerived': {
+    zh: '主题来自当前结果推导，后端主题接口不可用',
+    en: 'Topics are derived from current results — the backend topic API is unavailable',
+    fr: 'Thèmes déduits des résultats — l’API thèmes du serveur est indisponible'
+  },
+  'techstack.fromPlaybook': {
+    zh: '来自实战机经复盘',
+    en: 'From playbook reviews',
+    fr: 'Depuis les revues du journal'
+  },
+  'tracker.newApp': { zh: '新建投递', en: 'New application', fr: 'Nouvelle candidature' },
+  'tracker.openLink': { zh: '打开岗位链接', en: 'Open job link', fr: 'Ouvrir le lien de l’offre' },
+  'tracker.priority': { zh: '优先级 {n}', en: 'Priority {n}', fr: 'Priorité {n}' },
+  'tracker.firstApp': { zh: '记录第一条投递', en: 'Log your first application', fr: 'Ajoutez votre première candidature' },
+  'analytics.nEntries': { zh: '{n} 个条目', en: '{n} entries', fr: '{n} entrées' },
+
+  // ---------- 播放 / 合成失败提示(2026-09-23:此前写死中文) ----------
+  'practice.errUnknown': { zh: '未知错误', en: 'Unknown error', fr: 'Erreur inconnue' },
+  'practice.treeBlocked': {
+    zh: '未连接到服务端，已阻止本次写入以免覆盖云端数据。请先重试加载。',
+    en: 'Not connected to the server — write blocked to avoid overwriting cloud data. Retry loading first.',
+    fr: 'Serveur injoignable — écriture bloquée pour éviter d’écraser les données. Réessayez le chargement.'
+  },
+  'practice.noteLoadFail': { zh: '音频加载失败', en: 'Audio failed to load', fr: 'Échec du chargement audio' },
+  'practice.notePlayFail': { zh: '音频播放失败', en: 'Audio failed to play', fr: 'Échec de lecture audio' },
+  'practice.noteNotStarted': { zh: '音频未能启动', en: 'Audio did not start', fr: 'Audio non démarré' },
+  'practice.audioLoadFailToast': {
+    zh: '音频加载失败，请重试；若反复出现请重新合成。',
+    en: 'Audio failed to load — retry; if it keeps happening, synthesize it again.',
+    fr: 'Échec du chargement audio — réessayez ; si cela persiste, resynthétisez.'
+  },
+  'practice.audioPlayFailToast': {
+    zh: '音频播放失败，请再点一次播放。',
+    en: 'Audio failed to play — click play again.',
+    fr: 'Échec de lecture — recliquez sur lecture.'
+  },
+  'practice.audioBlockedToast': {
+    zh: '浏览器没有允许播放音频，请再点一次播放键。',
+    en: 'The browser blocked audio playback — click play again.',
+    fr: 'Le navigateur a bloqué la lecture — recliquez sur lecture.'
+  },
+  'practice.ttsNotConfigured': { zh: 'Azure 语音未配置', en: 'Azure voice not configured', fr: 'Voix Azure non configurée' },
+  'practice.ttsKeyInvalid': { zh: 'Azure 密钥/区域无效', en: 'Invalid Azure key or region', fr: 'Clé ou région Azure invalide' },
+  'practice.ttsSynthFailed': { zh: '语音合成失败', en: 'Synthesis failed', fr: 'Échec de la synthèse' },
+  'practice.recGone': {
+    zh: '这条录音的音频文件已不存在（服务重建或清理时被删了）。请删掉这条记录后重录。',
+    en: 'The audio for this recording is gone (removed when the service was rebuilt or cleaned). Delete this entry and re-record.',
+    fr: 'L’audio de cet enregistrement a disparu. Supprimez la ligne et réenregistrez.'
+  },
+  'practice.recLoadFail': { zh: '录音回放加载失败：', en: 'Failed to load recording: ', fr: 'Échec du chargement : ' },
+  'practice.retryLater': { zh: '请稍后重试。', en: 'Please try again later.', fr: 'Veuillez réessayer plus tard.' },
+
   'practice.zoomIn': { zh: '放大字号', en: 'Increase font size', fr: 'Agrandir le texte' },
   'practice.zoomOut': { zh: '缩小字号', en: 'Decrease font size', fr: 'Réduire le texte' },
   // 2026-09-16(Forrest 本轮第 2 条):中间的百分比数字可点击 → 输入精确值。
@@ -627,6 +728,15 @@ export class I18nService {
     const entry = DICT[key];
     if (!entry) return key;
     return entry[this._lang()] ?? entry.zh ?? key;
+  }
+
+  /**
+   * 带一个占位符的文案:'{n}' 会被替换成传入的值。
+   * 模板里不能直接用 String()(Angular 模板表达式不暴露全局对象),
+   * 所以计数类文案统一走这个方法。
+   */
+  tn(key: string, n: string | number): string {
+    return this.t(key).replace('{n}', String(n));
   }
 
   /** 用于数字/日期本地化。 */

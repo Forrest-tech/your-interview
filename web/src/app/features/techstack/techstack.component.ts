@@ -16,6 +16,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeItem, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged } from '../../core/models/api.models';
 import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
 
@@ -112,6 +113,10 @@ const DETAIL_BLOCKS: DetailBlock[] = [
 })
 export class TechStackComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
 

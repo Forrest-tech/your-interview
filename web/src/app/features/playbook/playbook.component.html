@@ -7,11 +7,11 @@
       </p>
     </div>
     <div class="head-actions">
-      <button mat-icon-button (click)="load()" matTooltip="刷新">
+      <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
       @if (auth.can('interviews.write')) {
-        <button mat-mini-fab color="primary" (click)="openDialog()" matTooltip="新建条目">
+        <button mat-mini-fab color="primary" (click)="openDialog()" [matTooltip]="t('playbook.newEntry')">
           <mat-icon>add</mat-icon>
         </button>
       }
@@ -145,9 +145,9 @@
           </div>
 
           <div class="counts">
-            <span title="问答数"><mat-icon inline>help_outline</mat-icon> {{ e.questionCount ?? 0 }}</span>
-            <span title="短板数"><mat-icon inline>report_problem</mat-icon> {{ e.weaknessCount ?? 0 }}</span>
-            <span title="材料数"><mat-icon inline>attach_file</mat-icon> {{ e.assetCount ?? 0 }}</span>
+            <span [title]="t('playbook.qaCount')"><mat-icon inline>help_outline</mat-icon> {{ e.questionCount ?? 0 }}</span>
+            <span [title]="t('playbook.weakCount')"><mat-icon inline>report_problem</mat-icon> {{ e.weaknessCount ?? 0 }}</span>
+            <span [title]="t('playbook.assetCount')"><mat-icon inline>attach_file</mat-icon> {{ e.assetCount ?? 0 }}</span>
             @if (e.hasTranscript) {
               <span class="has-transcript"><mat-icon inline>check_circle</mat-icon> 已转写</span>
             }
@@ -160,7 +160,7 @@
           </a>
           <span class="spacer"></span>
           @if (auth.can('interviews.delete')) {
-            <button mat-icon-button color="warn" (click)="remove(e, $event)" title="删除">
+            <button mat-icon-button color="warn" (click)="remove(e, $event)" [title]="t('common.delete')">
               <mat-icon>delete_outline</mat-icon>
             </button>
           }

@@ -27,6 +27,14 @@ export interface ConfirmDialogData {
   danger?: boolean;
   /** 标题图标(默认 help_outline;danger 时 delete_outline)。 */
   icon?: string;
+  /**
+   * 可选的第三个按钮 —— 关闭值为 'discard'。
+   * 用于"保存并刷新 / 放弃并刷新 / 留在本页"这种三选一场景
+   * (2026-09-23 Forrest:刷新前的未保存拦截)。
+   */
+  discardText?: string;
+  /** discard 按钮是否按危险色显示(放弃改动 = 会丢东西)。 */
+  discardDanger?: boolean;
 }
 
 @Component({
@@ -47,6 +55,14 @@ export interface ConfirmDialogData {
       }
 
       <div class="cf-actions">
+        @if (data.discardText) {
+          <button mat-button class="cf-discard"
+                  [class.is-danger]="data.discardDanger"
+                  [mat-dialog-close]="'discard'">
+            {{ data.discardText }}
+          </button>
+        }
+        <span class="cf-spacer"></span>
         <button mat-stroked-button class="cf-cancel" mat-dialog-close>
           {{ data.cancelText }}
         </button>
@@ -70,7 +86,15 @@ export interface ConfirmDialogData {
     }
     .cf-actions {
       margin-top: 20px;
-      display: flex; justify-content: flex-end; gap: 10px;
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    }
+    .cf-spacer { flex: 1 1 auto; }
+    .cf-discard {
+      --mdc-text-button-label-text-color: #5a6472;
+      border-radius: 8px;
+    }
+    .cf-discard.is-danger {
+      --mdc-text-button-label-text-color: #e5484d;
     }
     .cf-cancel {
       --mdc-outlined-button-label-text-color: #5a6472;

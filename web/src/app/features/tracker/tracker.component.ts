@@ -16,6 +16,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatDividerModule } from '@angular/material/divider';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { Application, ApplicationStatus, Company, Paged, TrackerStats } from '../../core/models/api.models';
 
 /** 状态下拉的选项 —— 顺序即漏斗顺序,下拉里也按流程排,避免用户找"面试中"要找半天。 */
@@ -235,6 +236,11 @@ export class ApplicationDialogComponent {
 })
 export class TrackerComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
+
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
 

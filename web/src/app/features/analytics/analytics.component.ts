@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import * as echarts from 'echarts';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { AbilityTrend, Dashboard } from '../../core/models/api.models';
 
 /** 漏斗阶段的颜色档:越靠后越"贵",用同一色系由浅到深表示推进。 */
@@ -39,6 +40,11 @@ const FUNNEL_COLORS = ['#9fa8da', '#7986cb', '#5c6bc0', '#3f51b5', '#303f9f'];
 })
 export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly api = inject(ApiClient);
+  /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
+
   private readonly zone = inject(NgZone);
 
   readonly loading = signal(true);

@@ -5,10 +5,10 @@
       <p class="sub">每个概念九块拆解:从一句话直觉到面试话术</p>
     </div>
     <div class="head-actions">
-      <button mat-icon-button (click)="reload()" matTooltip="刷新">
+      <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
-      <button mat-mini-fab color="primary" (click)="openCreate()" matTooltip="新增条目">
+      <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('techstack.newEntry')">
         <mat-icon>add</mat-icon>
       </button>
     </div>
@@ -49,7 +49,7 @@
           <mat-icon matPrefix>search</mat-icon>
           @if (search()) {
             <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
-                    matTooltip="清空筛选">
+                    [matTooltip]="t('common.clearFilter')">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -69,7 +69,7 @@
           }
         </mat-chip-set>
         @if (topicSource() === 'derived' && topics().length > 0) {
-          <span class="chip-note" matTooltip="主题来自当前结果推导,后端主题接口不可用">推导</span>
+          <span class="chip-note" [matTooltip]="t('techstack.topicDerived')">推导</span>
         }
       </div>
 
@@ -129,7 +129,7 @@
             <div class="li-foot">
               <span class="li-topic">{{ it.topic }}</span>
               @if (it.source === 'FromInterview') {
-                <span class="li-src" matTooltip="来自实战机经复盘">机经</span>
+                <span class="li-src" [matTooltip]="t('techstack.fromPlaybook')">机经</span>
               }
               <span class="li-review">复习 {{ it.reviewCount }} 次</span>
             </div>
@@ -140,12 +140,12 @@
       @if (totalPages() > 1) {
         <div class="list-pager">
           <button mat-icon-button [disabled]="page() <= 1" (click)="goPage(page() - 1)"
-                  matTooltip="上一页">
+                  [matTooltip]="t('common.prevPage')">
             <mat-icon>chevron_left</mat-icon>
           </button>
           <span>{{ page() }} / {{ totalPages() }}</span>
           <button mat-icon-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)"
-                  matTooltip="下一页">
+                  [matTooltip]="t('common.nextPage')">
             <mat-icon>chevron_right</mat-icon>
           </button>
         </div>

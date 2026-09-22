@@ -5,10 +5,10 @@
       <p class="sub">按状态分列看清整个漏斗,卡住在哪一步一目了然</p>
     </div>
     <div class="head-actions">
-      <button mat-icon-button (click)="reload()" matTooltip="刷新">
+      <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
-      <button mat-mini-fab color="primary" (click)="openCreate()" matTooltip="新建投递">
+      <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.newApp')">
         <mat-icon>add</mat-icon>
       </button>
     </div>
@@ -45,7 +45,7 @@
           <mat-icon matPrefix>search</mat-icon>
           @if (search()) {
             <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
-                    matTooltip="清空筛选">
+                    [matTooltip]="t('common.clearFilter')">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -99,11 +99,11 @@
       <mat-icon>inbox</mat-icon>
       <p>还没有投递记录。</p>
       @if (search() || statusFilter()) {
-        <button mat-icon-button (click)="clearFilters()" matTooltip="清空筛选条件">
+        <button mat-icon-button (click)="clearFilters()" [matTooltip]="t('common.clearFilter')">
           <mat-icon>filter_alt_off</mat-icon>
         </button>
       } @else {
-        <button mat-mini-fab color="primary" (click)="openCreate()" matTooltip="记录第一条投递">
+        <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.firstApp')">
           <mat-icon>add</mat-icon>
         </button>
       }
@@ -126,7 +126,7 @@
                 <span class="company">{{ a.companyName }}</span>
                 @if (a.priority) {
                   <span class="pri" [class]="priorityClass(a.priority)"
-                        matTooltip="优先级 {{ a.priority }}">
+                        [matTooltip]="tn('tracker.priority', a.priority)">
                     {{ a.priority }}
                   </span>
                 }
@@ -159,16 +159,16 @@
               </div>
 
               <div class="app-actions">
-                <button mat-icon-button matTooltip="编辑" (click)="openEdit(a, $event)">
+                <button mat-icon-button [matTooltip]="t('common.edit')" (click)="openEdit(a, $event)">
                   <mat-icon>edit</mat-icon>
                 </button>
                 @if (a.link) {
-                  <a mat-icon-button matTooltip="打开岗位链接" [href]="a.link"
+                  <a mat-icon-button [matTooltip]="t('tracker.openLink')" [href]="a.link"
                      target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">
                     <mat-icon>open_in_new</mat-icon>
                   </a>
                 }
-                <button mat-icon-button matTooltip="删除" class="danger"
+                <button mat-icon-button [matTooltip]="t('common.delete')" class="danger"
                         (click)="remove(a, $event)">
                   <mat-icon>delete_outline</mat-icon>
                 </button>
@@ -188,12 +188,12 @@
   @if (totalPages() > 1) {
     <div class="pager">
       <button mat-icon-button [disabled]="page() <= 1" (click)="goPage(page() - 1)"
-              matTooltip="上一页">
+              [matTooltip]="t('common.prevPage')">
         <mat-icon>chevron_left</mat-icon>
       </button>
       <span class="pager-info">第 {{ page() }} / {{ totalPages() }} 页 · 共 {{ total() }} 条</span>
       <button mat-icon-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)"
-              matTooltip="下一页">
+              [matTooltip]="t('common.nextPage')">
         <mat-icon>chevron_right</mat-icon>
       </button>
     </div>

@@ -4,7 +4,7 @@
       <h2>数据分析</h2>
       <p class="sub">六维能力、投递漏斗与知识补齐情况</p>
     </div>
-    <button mat-icon-button (click)="load()" matTooltip="刷新">
+    <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
       <mat-icon>refresh</mat-icon>
     </button>
   </header>
@@ -123,7 +123,7 @@
 
             @for (m of masteryRows(); track m.topic) {
               <div class="m-row">
-                <span class="m-topic" [matTooltip]="m.total + ' 个条目'">{{ m.topic }}</span>
+                <span class="m-topic" [matTooltip]="tn('analytics.nEntries', m.total)">{{ m.topic }}</span>
                 <div class="m-bar">
                   <div class="m-seg mastered" [style.width.%]="m.masteredPct"></div>
                   <div class="m-seg familiar" [style.width.%]="m.familiarPct"></div>

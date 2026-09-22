@@ -167,7 +167,7 @@
                       }
                       <span class="spacer"></span>
                       @if (auth.can('interviews.delete')) {
-                        <button mat-icon-button (click)="removeWeakness(w)" title="删除">
+                        <button mat-icon-button (click)="removeWeakness(w)" [title]="t('common.delete')">
                           <mat-icon>close</mat-icon>
                         </button>
                       }
@@ -267,7 +267,7 @@
                 }
                 <span class="spacer"></span>
                 @if (auth.can('interviews.write')) {
-                  <button mat-icon-button (click)="removeQuestion(q)" title="删除">
+                  <button mat-icon-button (click)="removeQuestion(q)" [title]="t('common.delete')">
                     <mat-icon>delete_outline</mat-icon>
                   </button>
                 }

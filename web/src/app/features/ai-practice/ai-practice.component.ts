@@ -703,9 +703,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly showTtsNote = computed(() => {
     const n = this.ttsNote();
     if (!n) return false;
-    // 合成中的进度提示也不显示(用户看进度条就够)
-    if (n.includes('合成')) return false;
-    return /回退|未配置|失败|无法|拦截|invalid|failed/i.test(n);
+    // ⚠️ 2026-09-20 修复(Forrest 报"点播放毫无反应"):
+    //   旧实现把所有含"合成"二字的提示一律藏起来(初衷是隐藏"合成中"的进度),
+    //   结果把 **"语音合成失败"** 也吞了 —— 用户点了播放,界面一点反馈都没有。
+    //   现在:只隐藏纯进度提示,失败/未配置类一律如实显示。
+    if (n.includes('正在合成')) return false;
+    return true;
   });
 
   /**
@@ -1419,6 +1422,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     //    所以这里顺手把右上角的配置浮层展开。
     if (!this.azureReady()) {
       this.ttsNote.set(this.t('practice.azurePlayBlocked'));
+      this.toast(this.t('practice.azurePlayBlocked'));
       this.openTtsSettings();
       this.cdr.detectChanges();
       return;
@@ -1514,12 +1518,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       },
       error: (e) => {
         const status = (e as { status?: number } | null)?.status;
-        this.ttsNote.set(
+        const note =
           status === 503 ? 'Azure 语音未配置'
             : status === 401 || status === 403 || status === 502
               ? 'Azure 密钥/区域无效'
-              : '语音合成失败');
-        this.ttsCost.set('');
+              : '语音合成失败';
+        this.ttsNote.set(note);
+        // ★ 2026-09-20(Forrest 报"没反应"):失败必须**弹出来**,
+        //   只靠播放条那一行小字容易看不到。
+        this.toast(note + (status ? `（HTTP ${status}）` : ''));
+        this.speaking.set(false);
         this.ttsBilledChars.set(null);
         this.ttsFullChars.set(null);
         this.ttsVoice.set('');
@@ -2291,9 +2299,17 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       error: (e) => {
         this.audioLoadingId.set(null);
         // 如实报错,绝不静默。401 已被拦截器处理;其余错误给出可读原因。
-        const msg = String((e as { message?: string } | null)?.message ?? e ?? '');
-        this.audioError.set(msg || '录音回放加载失败,请稍后重试。');
-        this.toast(this.audioError()!);
+        const status = (e as { status?: number } | null)?.status;
+        const raw = String((e as { message?: string } | null)?.message ?? e ?? '');
+        // ★ 2026-09-20(Forrest 报 "take #1 点播报 数据不存在"):
+        //   404 的真实含义不是"系统故障",而是**库里这条记录还在、音频文件没了**
+        //   —— 服务端容器重建/清理时,容器内 storage/recordings 会被重置,
+        //   而 PostgreSQL 里的录音行还在,于是列表还在、却取不到音频。
+        const msg = status === 404
+          ? '这条录音的音频文件已不存在(服务重建或清理时被删了)。请删掉这条记录后重录。'
+          : '录音回放加载失败:' + (raw || '请稍后重试。');
+        this.audioError.set(msg);
+        this.toast(msg);
       }
     });
   }

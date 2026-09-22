@@ -141,6 +141,13 @@ services:
     environment:
       <<: *service-env
       ASPNETCORE_URLS: "http://+:8080"
+      # ★ 2026-09-20:录音音频的落盘目录。容器里默认是工作目录下的
+      #   storage/recordings —— 不挂卷的话,done 重建/重新创建容器时
+      #   这些音频会被清掉,而 PostgreSQL 里的录音行还在,
+      #   于是列表里还能看到 Take #x,点播放却 404 "数据不存在"。
+      PRACTICE_STORAGE_DIR: /app/storage/recordings
+    volumes:
+      - assessment-recordings:/app/storage/recordings
     depends_on: *service-deps
     healthcheck: *service-health
 
@@ -262,3 +269,5 @@ services:
 volumes:
   rabbitdata:
   analysis-work:
+  # ★ 录音音频持久化:不留在此处的容器 storage 会随容器重建被清掉
+  assessment-recordings:

@@ -1193,7 +1193,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       //   html5:true 是流式的,onload 时浏览器还没解析出媒体时长(duration()=0);
       //   html5:false 会完整解码,onload 时 duration() 立即可用。
       //   这是 Howler 原生行为,不做任何自写重试。
-      html5: false,
+      // ★ 2026-09-20(Forrest 报"倍速声音扭曲"):改用 html5 —— 只有浏览器
+      //   原生 <audio> 的 preservesPitch 能在变速时**保住音高**。
+      //   (Web Audio 的 playbackRate 会连音高一起拉,人声就变味了。)
+      html5: true,
       rate: this.rate(),
       onload: () => {
         this.speakDur.set(Math.round(h.duration()));   // Howler 的真实时长(此刻已可用)
@@ -1222,6 +1225,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       },
     });
     this.ttsHowl = h;
+    this.keepPitch(h);
     // 预载的就是这份 → 点播放时文本指纹若与之一致就直接播,不再请求。
     this.ttsPlayingKey = cached.key;
   }
@@ -1588,6 +1592,36 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     return ['mp3'];   // 没有 MIME → 按 Azure 默认输出兜底
   }
 
+  /**
+   * ★ 2026-09-20(Forrest 报"选了倍速声音扭曲"):
+   * Howler 的 `html5:false` 走 Web Audio 的 `playbackRate`,那是**硬拉采样率**,
+   * 速度变的同时音高也跟着变 → 人声变成"花栗鼠"。
+   *
+   * `html5:true` 走浏览器原生 <audio>,它的 `preservesPitch`(Chrome/Safari/
+   * Firefox 都有,默认就是 true)会在变速时**保住音高** —— 只是说得快一点,
+   * 嗓音还是原来那个人。这才是"倍速只改变播放速度"。
+   *
+   * 注意:html5 模式下时长同样可靠 —— Howler 在 canplaythrough 里把
+   * `_duration` 设成媒体时长(见 howler.js 的 _loadListener),所以
+   * duration() 照样拿得到,不会再退回 "0s / 0s"(之前那个 0s 的真因
+   * 是 blob URL 没扩展名导致解码失败,已经由 format 修掉)。
+   */
+  private keepPitch(h: Howl): void {
+    try {
+      type PitchNode = HTMLAudioElement & {
+        preservesPitch?: boolean;
+        mozPreservesPitch?: boolean;
+        webkitPreservesPitch?: boolean;
+      };
+      const node = (h as unknown as { _sounds?: { _node?: PitchNode }[] })
+        ._sounds?.[0]?._node;
+      if (!node) return;
+      node.preservesPitch = true;
+      node.mozPreservesPitch = true;
+      node.webkitPreservesPitch = true;
+    } catch { /* 老浏览器没有这个属性就不勉强,退化成普通变速 */ }
+  }
+
   private createHowl(url: string, autoplay = true, format?: string[]): void {
     this.ttsHowl?.unload();          // Howler 原生:释放旧实例
     this.ttsHowl = null;
@@ -1601,7 +1635,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       // ★ 必须显式给 format:blob: URL 没有扩展名,Howler 猜不出解码器
       //   → 直接 onloaderror("No codec support") → 这就是"点了没反应"的真因。
       format: format ?? ['mp3'],
-      html5: false,                  // ★ 必须 false —— 否则拿不到真实时长
+      // ★ 2026-09-20(Forrest 报"倍速声音扭曲"):改用 html5 —— 只有浏览器
+      //   原生 <audio> 的 preservesPitch 能在变速时**保住音高**。
+      //   (Web Audio 的 playbackRate 会连音高一起拉,人声就变味了。)
+      html5: true,                  // ★ 必须 false —— 否则拿不到真实时长
       rate: this.rate(),             // 当前倍速(只改播放速度,不动总时长)
       onload: () => {
         // ★ 总时长只在 load 回调里读,且只认 Howler 的返回值
@@ -1656,6 +1693,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     });
 
     this.ttsHowl = h;
+    this.keepPitch(h);               // ★ 变速不变声(见 keepPitch 的说明)
     this.ttsEnded = false;
     if (autoplay) {
       this.unlockAudio();                 // ★ 先唤醒 AudioContext,再 play
@@ -2042,6 +2080,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   setRate(r: number): void {
     this.rate.set(r);
     this.ttsHowl?.rate(r);    // 原生原地变速:位置保留、总时长不变
+    if (this.ttsHowl) this.keepPitch(this.ttsHowl);   // ★ 每次变速都重申一次"保音高"
   }
 
   speakTimeText(): string {
@@ -2382,6 +2421,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   private startAudio(r: Recording, src: string): void {
     this.audio.src = src;
     this.audio.volume = 1;
+    // ★ 与示范朗读同一口径:变速只改速度,不改嗓音
+    (this.audio as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
     this.audio.currentTime = 0;
     this.playPos.set(0);
     void this.audio.play().then(

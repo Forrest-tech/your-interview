@@ -510,31 +510,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.goRelative(1);
   }
 
-  // ---------- 2026-09-16 第十九轮:题号跳转(底部操作栏右侧) ----------
-  /** 跳转输入框的当前值。 */
-  readonly jumpDraft = signal('');
-
-  /** 输入框变化(只允许数字)。 */
-  onJumpDraftChange(v: string): void {
-    this.jumpDraft.set(v.replace(/[^0-9]/g, ''));
-  }
-
-  /** 执行跳转:输入题号 → 选中对应素材。越界则 toast 提示,不静默失败。 */
-  jumpToItem(): void {
-    if (this.editing()) return; // 编辑中先保存或取消
-    const n = Number(this.jumpDraft());
-    const total = this.flatItems().length;
-    if (!n || n < 1 || n > total) {
-      this.toast(this.t('practice.jumpInvalid'));
-      return;
-    }
-    const target = this.flatItems()[n - 1];
-    if (target) {
-      this.selectFile(target);
-      this.jumpDraft.set('');
-    }
-  }
-
   private goRelative(step: number): void {
     if (this.editing()) return; // 编辑中先保存或取消
     const i = this.qIndex();

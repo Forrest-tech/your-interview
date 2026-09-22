@@ -3060,39 +3060,6 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .card-foot .btn-ghost mat-icon,
 .card-foot .btn-mini mat-icon { font-size: 17px; width: 17px; height: 17px; }
 
-/* 题号跳转 */
-.card-foot .jump-box {
-  display: inline-flex;
-  align-items: center;
-  height: 36px;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  overflow: hidden;
-  background: #fff;
-}
-.card-foot .jump-input {
-  width: 46px;
-  height: 100%;
-  border: 0;
-  outline: none;
-  padding: 0 8px;
-  font-size: 13px;
-  text-align: center;
-  color: #1e293b;
-}
-.card-foot .jump-go {
-  height: 100%;
-  padding: 0 12px;
-  border: 0;
-  border-left: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #334155;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.card-foot .jump-go:hover { background: #eef2f7; }
-
 .card-foot .nav-btn {
   display: inline-flex;
   align-items: center;

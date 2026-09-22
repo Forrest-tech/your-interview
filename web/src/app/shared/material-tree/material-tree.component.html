@@ -11,7 +11,10 @@
        按钮样式与右侧内容区的 edit/save 完全一致 —— 白底、细边框、中性色,
        默认状态不带"选中"高亮。 -->
   <header class="tree-head">
+    <!-- ★ 2026-09-23(Forrest 第十轮):标题恢复 —— "材料"在最左,
+         随语言设置显示;工具按钮仍留在左侧(标题右边)。 -->
     <div class="th-row">
+      <span class="th-title">{{ t('tree.title') }}</span>
       <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" (click)="addFolder(null)">
         <mat-icon>create_new_folder</mat-icon>
       </button>

@@ -463,17 +463,6 @@
           </div>
 
           <div class="cf-right">
-            <!-- 题号跳转:# 输入框 + 跳转按钮 -->
-            <div class="jump-box">
-              <input class="jump-input" type="text" inputmode="numeric"
-                     [ngModel]="jumpDraft()"
-                     (ngModelChange)="onJumpDraftChange($event)"
-                     (keydown.enter)="jumpToItem()"
-                     [placeholder]="'#'"
-                     [attr.aria-label]="t('practice.jumpLabel')">
-              <button class="jump-go" (click)="jumpToItem()">{{ t('practice.jumpTo') }}</button>
-            </div>
-
             <button class="nav-btn" [disabled]="!hasPrev()" (click)="prevItem()">
               <mat-icon>arrow_back</mat-icon>
               <span>{{ t('practice.prev') }}</span>

@@ -60,6 +60,17 @@
 .th-row + .th-row { margin-top: 6px; }
 .th-actions { justify-content: flex-end; }
 
+/* ★ 2026-09-23(Forrest 第十轮):树头标题"材料" ——
+   13px 加粗、深灰,与右侧内容区标题同一色系;
+   与后面的工具按钮之间留 8px 呼吸感。 */
+.th-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #3a3f47;
+  margin-right: 8px;
+}
+
 /* ---------- 第一行工具按钮(新建×2 + 展开/收起) ----------
    mat-icon-button 默认 40x40,压到 26x26、间距 2px,紧凑不散。 */
 .head-tool {

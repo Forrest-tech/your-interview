@@ -263,6 +263,8 @@ const DICT: Record<string, Record<Lang, string>> = {
 
   // ---------- 素材树控件(共享组件) ----------
   // ★ 2026-09-23(Forrest):树上的 tooltip / 菜单全部接入语言设置。
+  // ★ 2026-09-23(Forrest 第十轮):树头标题恢复 —— "材料",随语言设置显示。
+  'tree.title': { zh: '材料', en: 'Materials', fr: 'Documents' },
   'tree.expandAll': { zh: '展开全部', en: 'Expand all', fr: 'Tout déplier' },
   'tree.collapseAll': { zh: '收起全部', en: 'Collapse all', fr: 'Tout replier' },
   'tree.newFolder': { zh: '新建文件夹', en: 'New folder', fr: 'Nouveau dossier' },
@@ -434,9 +436,6 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.markOrange': { zh: '橙色', en: 'Orange', fr: 'Orange' },
   'practice.markRed': { zh: '红色', en: 'Red', fr: 'Rouge' },
   'practice.markGreen': { zh: '绿色', en: 'Green', fr: 'Vert' },
-  'practice.jumpTo': { zh: '跳转', en: 'Go', fr: 'Aller' },
-  'practice.jumpLabel': { zh: '跳转到第几题', en: 'Jump to question number', fr: 'Aller à la question' },
-  'practice.jumpInvalid': { zh: '请输入有效的题号。', en: 'Enter a valid question number.', fr: 'Entrez un numéro valide.' },
   'practice.recordingHistoryCount': { zh: '录音记录', en: 'Recordings', fr: 'Enregistrements' },
   'practice.saveFailed': { zh: '保存失败,请检查浏览器存储权限', en: 'Save failed — check browser storage permissions', fr: 'Échec de l enregistrement' },
   'practice.sampleReading': { zh: '示范朗读', en: 'Sample Reading', fr: 'Lecture exemple' },

@@ -42,8 +42,14 @@ mat-icon {
 
 @include mat.core();
 
-/* 字体族抽成变量 —— 主题配置和 body 都要用同一份,硬编码两遍必然不同步 */
-$app-font: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif';
+/* 字体族抽成变量 —— 主题配置和 body 都要用同一份,硬编码两遍必然不同步。
+   ★ 2026-09-23(Forrest 第十二轮)修复:必须写成 Sass 逗号列表,不能包成一整个
+   带引号的字符串 —— 之前 '"Inter", ..., "Microsoft YaHei"' 被原样输出成单个
+   font-family 值,浏览器视为一个不存在的字体,回落到浏览器默认字体;
+   而 Chrome 对 lang=en / lang=zh 页面选的默认中文字体不同(宋体衬线 vs 雅黑),
+   导致切换语言时整个页面字体族和视觉大小都变。改成逗号列表后,
+   Latin 走 Inter/Segoe,CJK 恒定走 苹方/思源/雅黑,与语言无关。 */
+$app-font: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', Roboto, Helvetica, Arial, sans-serif;
 
 /* 主题:靛蓝主色 + 琥珀强调。偏冷静专业,不抢数据本身的注意力。 */
 $primary: mat.define-palette(mat.$indigo-palette, 600);

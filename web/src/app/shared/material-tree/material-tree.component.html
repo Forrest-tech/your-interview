@@ -19,10 +19,19 @@
       <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFile')" (click)="addFile(null)">
         <mat-icon>note_add</mat-icon>
       </button>
-      <button mat-icon-button class="head-tool"
+      <!-- ★ 2026-09-23(Forrest 第十二轮):展开/收起改为行业通用的
+           "全部折叠/全部展开"双箭头(VS Code / GitHub / Obsidian 文件树同款形态)。
+           内联 SVG 不依赖图标字体连字,保证在任何环境都渲染成图标;
+           箭头方向随状态翻转:全部展开时朝上(收起),有收起项时朝下(展开)。 -->
+      <button mat-icon-button class="head-tool head-fold"
               [matTooltip]="hasCollapsed() ? t('tree.expandAll') : t('tree.collapseAll')"
+              [attr.aria-label]="hasCollapsed() ? t('tree.expandAll') : t('tree.collapseAll')"
               (click)="hasCollapsed() ? expandAll() : collapseAll()">
-        <mat-icon>{{ hasCollapsed() ? 'unfold_more' : 'unfold_less' }}</mat-icon>
+        <svg class="fold-ico" viewBox="0 0 24 24" aria-hidden="true"
+             [attr.data-dir]="hasCollapsed() ? 'expand' : 'collapse'">
+          <path d="M7 10.4 L12 5.8 L17 10.4" />
+          <path d="M7 17.6 L12 13 L17 17.6" />
+        </svg>
       </button>
       <span class="spacer"></span>
       @if (!editable) {

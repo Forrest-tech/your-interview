@@ -83,6 +83,24 @@
   background: #eef4ff;
 }
 
+/* ---------- 展开/收起双箭头(2026-09-23 第十二轮) ----------
+   内联 SVG,不依赖图标字体;描边风格与 mat-icon 线性图标一致。
+   默认(全部展开)两枚箭头朝上 = "收起全部";
+   有收起项时旋转 180° 朝下 = "展开全部"。 */
+.head-fold .fold-ico {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.18s ease;
+}
+.head-fold .fold-ico[data-dir='expand'] {
+  transform: rotate(180deg);
+}
+
 /* ---------- 第二行动作按钮(编辑 / 保存 / 取消) ----------
    与右侧内容区 edit/save 完全同款:白底细边框中性按钮,
    默认不带任何"选中"高亮;保存无改动时置灰。 */

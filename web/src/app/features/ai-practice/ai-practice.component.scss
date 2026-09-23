@@ -918,32 +918,6 @@
 .run-score mat-icon { font-size: 17px; width: 17px; height: 17px; }
 .run-score[disabled] { background: #b9c6da !important; color: #fff !important; }
 
-/* 参考站原文 "Reset before scoring again" */
-.reset-hint {
-  font-size: 11.5px;
-  color: #6b7280;
-  max-width: 150px;
-  line-height: 1.4;
-}
-
-.reset-round {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  border: 1px solid #f0a83c;
-  border-radius: 50%;
-  background: #fff;
-  color: #e8952f;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background .15s ease;
-}
-.reset-round:hover:not([disabled]) { background: #fff8ec; }
-.reset-round[disabled] { opacity: .4; cursor: not-allowed; }
-.reset-round mat-icon { font-size: 18px; width: 18px; height: 18px; }
-
 .rec-err {
   display: inline-flex;
   align-items: center;
@@ -2434,7 +2408,7 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
    2026-09-15 第十轮:Forrest 截图反馈 6 项修复
    ============================================================ */
 
-/* ② retry 无效的根因不在 CSS,已在 TS 修(见 retryTake);
+/* ★ 第五十轮:Retry 按钮已移除(未提交的录音由 Preview/Discard 负责);
    这里保证绝对居中的 rec-center 不被左右元素遮挡点击 */
 /* ★ 第二十四轮:录音按钮组 —— 严格包裹在胶囊内 + 垂直居中 + 水平严格居中。
    严禁任何 position:absolute(Forrest 本轮明令)。 */
@@ -2960,21 +2934,6 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .audio-stack .rec-pill .side-score:hover:not([disabled]) { background: #bbf7d0; }
 .audio-stack .rec-pill .side-score[disabled] { opacity: .5; cursor: not-allowed; }
 .audio-stack .rec-pill .side-score mat-icon { font-size: 16px; width: 16px; height: 16px; }
-.audio-stack .rec-pill .reset-round {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px; height: 32px;
-  border: 1px solid #d1fae5;
-  border-radius: 50%;
-  background: #fff;
-  color: #15803d;
-  cursor: pointer;
-}
-.audio-stack .rec-pill .reset-round:hover:not([disabled]) { background: #ecfdf5; }
-.audio-stack .rec-pill .reset-round[disabled] { opacity: .45; cursor: not-allowed; }
-.audio-stack .rec-pill .reset-round mat-icon { font-size: 18px; width: 18px; height: 18px; }
-
 /* 录音错误提示(宁可显式报错,不静默失败) */
 .audio-stack .rec-pill .rec-err {
   flex: 0 0 auto;

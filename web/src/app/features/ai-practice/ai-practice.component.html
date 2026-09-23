@@ -403,22 +403,15 @@
               </div>
             }
 
-            <!-- 右侧:AI 评分胶囊 + 重置刷新(与左侧占位等宽,保证中间真居中)
-                 ★ 第四十八轮:置灰时给出"为什么不可用"的提示(先提交) -->
+            <!-- 右侧:AI 评分胶囊(与左侧占位等宽,保证中间真居中)
+                 ★ 第五十轮(Forrest):重置按钮已移除 —— 重新评分直接再点评分即可,
+                 一个只服务单一场景的按钮没有存在价值。 -->
             <div class="rec-side rec-hold">
               <button class="side-score" [disabled]="!activeTake() || activeTake()?.grading"
                       [matTooltip]="scoreTip()"
                       (click)="scoreActiveTake()">
                 <mat-icon>{{ activeTake()?.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
                 <span>{{ t('practice.runAiScoring') }}</span>
-              </button>
-
-              <!-- ★ 第四十七轮:提示从单词"Reset"改为按状态说明 ——
-                   可用 = 它的用途(重置后才能重新评分);
-                   待提交置灰 = 先提交才可用,不再让按钮看起来像坏的。 -->
-              <button class="reset-round" [matTooltip]="resetTip()"
-                      [disabled]="!activeTake()" (click)="resetTake()">
-                <mat-icon>refresh</mat-icon>
               </button>
             </div>
 
@@ -433,20 +426,14 @@
         <!-- ①-5 卡片底部导航控制栏:两端对齐 -->
         <footer class="card-foot">
           <div class="cf-left">
+            <!-- ★ 第五十轮(Forrest):Retry 按钮已移除 ——
+                 未提交的录音有 Preview/Discard 两个明确动作,重录 = Discard 后再按麦克风。 -->
             <button class="btn-primary"
                     [disabled]="!canSubmitTake()"
                     (click)="submitPending()"
                     [matTooltip]="canSubmitTake() ? t('practice.submitTakeTip') : t('practice.submitNeedsRecording')">
               <mat-icon>{{ uploadingPending() ? 'cloud_upload' : 'check' }}</mat-icon>
               <span>{{ t('practice.submitTake') }}</span>
-            </button>
-
-            <button class="btn-ghost"
-                    [disabled]="!recorder.pendingTake() && !activeTake()"
-                    (click)="retryTake()"
-                    [matTooltip]="t('practice.retryTip')">
-              <mat-icon>restart_alt</mat-icon>
-              <span>{{ t('practice.retry') }}</span>
             </button>
 
             <!-- 待提交时的次要动作:试听 + 丢弃 -->

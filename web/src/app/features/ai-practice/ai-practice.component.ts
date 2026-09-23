@@ -2281,95 +2281,20 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * 重置当前作品。
-   * 参考站原文 "Reset before scoring again" —— 重录前先清掉旧的评分痕迹,
-   * 否则屏幕上的分数会让人分不清是哪一次的。
-   */
-  /**
-   * 重置当前 take 的评分(只清分,保留录音)。
-   * 这是给"评分结果不满意、想重评"用的。
-   */
-  resetTake(): void {
-    const t = this.activeTake();
-    if (!t) return;
-    this.stopPlayback();
-    this.recorder.clearScore(t.id);
-    this.wordsOpen.set(new Set());
-    // ★ 第四十七轮:计费口径一并复位,避免报告区残留上一次的数字
-    this.scoreBilledSeconds.set(null);
-    this.scoreBilledBytes.set(null);
-  }
-
-  /**
-   * ★ 第四十八轮(Forrest):禁用状态的评分/重置按钮给出原因。
+   * ★ 第四十八轮(Forrest):置灰的评分按钮给出原因。
    * 行业惯例(Nielsen):控件不可用时要解释"为什么/怎样才可用",
    * 否则用户会把置灰按钮当成"坏了"。
    * · 评分按钮:可用时不需要提示;
-   * · 重置按钮:可用时提示它的用途("重置后才能重新评分")。
-   * · 待提交状态(录完还没 Submit):两者统一提示"先提交"。
+   * · 待提交状态(录完还没 Submit):提示"先提交"。
+   *
+   * ★ 第五十轮(Forrest):Reset 按钮连同 resetTake()/resetTip 一并移除 ——
+   *   重新评分直接再点 Run AI Scoring 即可,不需要先手动清分。
    */
   readonly scoreTip = computed(() => {
     if (this.activeTake()) return '';
     if (this.recorder.pendingTake()) return this.t('practice.scoreNeedsSubmit');
     return '';
   });
-
-  readonly resetTip = computed(() => {
-    if (this.activeTake()) return this.t('practice.resetHint');
-    if (this.recorder.pendingTake()) return this.t('practice.scoreNeedsSubmit');
-    return '';
-  });
-
-  /**
-   * 「Retry」按钮的真实语义(2026-09-15 第十轮修)。
-   *
-   * ⚠️ 之前 Retry 直接绑 resetTake(),只会把分数抹掉:
-   *   录音还在 → activeTake() 仍非 null → 中间按钮仍是"回听",
-   *   用户点完看到的界面几乎没变化,自然觉得"retry 没有用"。
-   *
-   * ★ 第四十七轮(Forrest 报"Retry 不能用")再修一处逻辑盲区:
-   *   旧实现只认 activeTake(),**完全不看 pendingTake()** ——
-   *   录完还没点 Submit 时(界面上 Submit/Retry/Preview/Discard 那一排),
-   *   Retry 是亮着的,点了却落进"没选中"分支 → 只弹"已刷新录音列表",
-   *   手上这条待提交录音纹丝不动;更糟的是若此时还选中了一条已提交录音,
-   *   它会把那条**已提交**的误删。现在优先级明确:
-   *     ① 正在录音 → 取消本次(cancel 不产生待提交录音);
-   *     ② 有待提交录音 → 丢弃它,立即重录(提示语说的"这条"就是它);
-   *     ③ 有选中的已提交录音 → 服务端删掉它,重录;
-   *     ④ 什么都没有 → 仅刷新列表。
-   */
-  retryTake(): void {
-    this.stopPlayback();
-    if (this.recorder.recording()) this.recorder.cancel();
-
-    const pending = this.recorder.pendingTake();
-    const t = this.activeTake();
-
-    if (pending) {
-      this.discardPending();
-      this.wordsOpen.set(new Set());
-      void this.startRecording();
-    } else if (t) {
-      // 有当前作品:这条不要了,删掉重录
-      this.recorder.remove(t.id);
-      this.wordsOpen.set(new Set());
-      this.activeTakeId.set(null);
-      void this.startRecording();
-    } else {
-      // 没选中:当作"刷新下方列表"按钮
-      this.toast(this.t('practice.retryRefreshed'));
-    }
-
-    // 强制重新拉取当前素材的录音列表 —— 这就是 Forrest 要的"刷新下面的内容"。
-    this.refreshRecordings();
-  }
-
-  /** 强制重新拉取当前素材的录音列表(忽略已加载缓存)。 */
-  refreshRecordings(): void {
-    const id = this.selectedId();
-    if (!id) return;
-    this.recorder.reloadForMaterial(id);
-  }
 
   /** 停掉当前回放。 */
   private stopPlayback(): void {
@@ -2648,14 +2573,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   isTakeReportOpen(id: string): boolean {
     return this.activeTakeId() === id && this.reportOpen();
   }
-
-  /**
-   * 逐词明细折叠状态。
-   *
-   * ★ 第三十五轮(Forrest):逐词分值区已取消折叠,改为常驻展开。
-   *   保留该 signal 仅为兼容旧重置调用点(已经不需要跟踪状态)。
-   */
-  private readonly wordsOpen = signal<Set<string>>(new Set());
 
   constructor() {
     this.audio.addEventListener('timeupdate', () => {

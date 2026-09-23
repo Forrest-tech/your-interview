@@ -155,15 +155,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.prev': { zh: '上一题', en: 'Previous', fr: 'Précédent' },
   'practice.next': { zh: '下一题', en: 'Next', fr: 'Suivant' },
   'practice.submitScoring': { zh: '提交 AI 评分', en: 'Submit AI Scoring', fr: 'Lancer le score IA' },
-  'practice.retryTip': { zh: '删掉这条录音并立刻重新录一遍', en: 'Delete this take and record again', fr: 'Supprimer et réenregistrer' },
-  'practice.retryPickFirst': { zh: '先在上方录音列表点选一条录音', en: 'Select a recording in the list first', fr: 'Sélectionnez un enregistrement' },
   'practice.dragResize': { zh: '拖动调整宽度', en: 'Drag to resize', fr: 'Glisser pour redimensionner' },
-  'practice.retry': { zh: '重新作答', en: 'Retry', fr: 'Recommencer' },
   // 2026-09-16(Forrest 本轮):Retry 未选中录音时当"刷新列表"用。
-  'practice.retryRefreshed': { zh: '已刷新录音列表', en: 'Recording list refreshed', fr: 'Liste actualisée' },
   // ★ 第四十八轮(Forrest):禁用的评分/重置按钮要说明原因(行业惯例) ——
   //   待提交状态下这两个按钮置灰,没有解释会让人以为是坏的。
-  'practice.scoreNeedsSubmit': { zh: '请先点「Submit」提交这条录音,评分/重置才可用', en: 'Submit this take first — scoring and reset work on saved takes', fr: 'Soumettez d abord cette prise, puis évaluez' },
+  // ★ 第五十轮:Reset 已移除,提示里不再提"重置"。
+  'practice.scoreNeedsSubmit': { zh: '请先点「Submit」提交这条录音,评分才可用', en: 'Submit this take first — scoring works on saved takes', fr: 'Soumettez d abord cette prise, puis évaluez' },
   // 2026-09-16(Forrest 本轮):录音结束后出现的"提交"按钮。
   'practice.submitTake': { zh: '提交', en: 'Submit', fr: 'Soumettre' },
   /** 第四十九轮:上一条没提交就重录时的告知(诚实说明它已被丢弃)。 */
@@ -240,8 +237,14 @@ const DICT: Record<string, Record<Lang, string>> = {
   // 一键展开/收起整棵树用的是共享控件自己的词条(tree.expandAll / tree.collapseAll)。
   // ---------- 统一确认弹窗(2026-09-20:全站弹窗同一种样式) ----------
   'dialog.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
-  'dialog.deleteConfirm': { zh: '删除', en: 'Delete', fr: 'Supprimer' },
-  'dialog.saveConfirm': { zh: '保存', en: 'Save', fr: 'Enregistrer' },
+  // ★ 第五十轮(Forrest):删除类确认弹窗的按钮统一为「确认」——
+  //   弹窗标题已经说明要做什么,按钮再写一遍"删除"是重复;
+  //   确认弹窗只负责"确认/取消"这一件事。
+  'dialog.deleteConfirm': { zh: '确认', en: 'Confirm', fr: 'Confirmer' },
+  // ★ 第五十轮(Forrest):确认弹窗的按钮统一为「确认」——
+  //   弹窗标题已经说明要做什么(保存/删除),按钮只负责"确认/取消"。
+  //   (三选一的刷新拦截弹窗除外:每个按钮各代表一个动作,必须写明动作。)
+  'dialog.saveConfirm': { zh: '确认', en: 'Confirm', fr: 'Confirmer' },
   // ★ 2026-09-23(Forrest 第九轮):弹窗只负责"确认/取消",不再解释存储机制 ——
   //   "会保存到数据库"是默认行为,不需要专门写出来。
   'dialog.saveTitle': { zh: '保存修改？', en: 'Save changes?', fr: 'Enregistrer les modifications ?' },
@@ -450,7 +453,6 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.sampleReading': { zh: '示范朗读', en: 'Sample Reading', fr: 'Lecture exemple' },
   'practice.runScoring': { zh: 'AI 评分', en: 'Run AI Scoring', fr: 'Lancer le score IA' },
   'practice.reset': { zh: '重置', en: 'Reset', fr: 'Réinitialiser' },
-  'practice.resetHint': { zh: '重置后才能重新评分', en: 'Reset before scoring again', fr: 'Réinitialisez avant de rescorer' },
   'practice.scoreResults': { zh: '评分结果', en: 'Score Results', fr: 'Résultats' },
   'practice.recognition': { zh: '识别结果', en: 'Recognition', fr: 'Reconnaissance' },
   'practice.recognitionNote': { zh: '按参考原文显示发音、遗漏、插入和停顿问题。悬停单词可查看该词的错误类型与得分。', en: 'Shows pronunciation, omission, insertion and pause issues against the reference text. Hover a word for its error type and score.', fr: 'Affiche les problèmes de prononciation, omissions, insertions et pauses.' },

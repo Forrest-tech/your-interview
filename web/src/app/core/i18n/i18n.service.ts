@@ -166,6 +166,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.scoreNeedsSubmit': { zh: '请先点「Submit」提交这条录音,评分/重置才可用', en: 'Submit this take first — scoring and reset work on saved takes', fr: 'Soumettez d abord cette prise, puis évaluez' },
   // 2026-09-16(Forrest 本轮):录音结束后出现的"提交"按钮。
   'practice.submitTake': { zh: '提交', en: 'Submit', fr: 'Soumettre' },
+  /** 第四十九轮:上一条没提交就重录时的告知(诚实说明它已被丢弃)。 */
+  'practice.prevTakeDiscarded': {
+    zh: '上一条录音还没提交,已丢弃 —— 现在开始新的录音。',
+    en: 'The previous take was not submitted, so it was discarded — now recording a new one.',
+    fr: 'La prise précédente n a pas été soumise, elle a été supprimée — nouvel enregistrement.'
+  },
   'practice.submitTakeTip': { zh: '把这条录音保存到列表', en: 'Save this take to the list', fr: 'Enregistrer cette prise dans la liste' },
   'practice.pendingTake': { zh: '待提交录音', en: 'Take ready', fr: 'Prise prête' },
   'practice.pendingHint': { zh: '点"提交"保存到下方列表', en: 'Click Submit to add it to the list below', fr: 'Cliquez sur Soumettre pour l’ajouter à la liste' },

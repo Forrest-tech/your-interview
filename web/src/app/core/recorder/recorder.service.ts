@@ -1,4 +1,4 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { inject, Injectable, NgZone, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../api/api-client';
@@ -77,6 +77,28 @@ export class RecorderService {
   private readonly practiceApi = inject(PracticeApi);
   // ★ 第四十六轮(Forrest):评分链路的错误提示改走 i18n,随系统语言显示。
   private readonly i18n = inject(I18nService);
+
+  /**
+   * ★ 第四十九轮(Forrest 报"录完一次后就只会显示 Take #1 / 第二条录完没反应")
+   * —— 本轮最严重的根因。
+   *
+   * 现象:第一次录完能出现"提交";**第二次录完界面像死了一样** ——
+   *       提交/丢弃/试听按钮全不出来,列表也不增加,看起来就是"录不进去"。
+   *
+   * 真因:**MediaRecorder 的回调是 `onstop = …` 属性式挂载的,Zone.js 不修补属性式回调**
+   * (它只修补 addEventListener / Promise / setTimeout 这类 API)。
+   * 于是 finalize() 跑在 Angular Zone **之外**:
+   *   · pendingTake.set(...) 确实把视图标成脏了;
+   *   · 但本项目用的是 zoneChangeDetection —— 真正驱动 ApplicationRef.tick()
+   *     的是 NgZone 的 onMicrotaskEmpty;脱离 Zone 的写入**不会通知它**;
+   *   · 于是没有任何变更检测发生,界面停在旧状态。
+   * 第一次"看起来没事",只是碰巧有别的事务(列表请求/上传回调)顺带把 Zone 唤醒;
+   * 第二次没有别的活动 → 界面彻底冻住。
+   *
+   * 修法:把回调拉回 Zone 里执行,让"写 signal"必然跟着一次刷新。
+   * 这是 Angular 里处理"外部回调更新界面"的标准做法,不是靠界面层手动 detectChanges 打补丁。
+   */
+  private readonly zone = inject(NgZone);
 
   /**
    * 是否正在从后端载入历史录音(2026-09-15 第十七轮)。
@@ -169,7 +191,8 @@ export class RecorderService {
     this.mediaRecorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) this.chunks.push(e.data);
     };
-    this.mediaRecorder.onstop = () => this.finalize();
+    // ⚠️ 必须经 NgZone.run —— 见 zone 字段处的根因说明(脱离 Zone = 界面不刷新)。
+    this.mediaRecorder.onstop = () => this.zone.run(() => this.finalize());
 
     this.mediaRecorder.start();
     this.startLiveWave();          // ★ 第三十轮:启动实时波形采样

@@ -121,6 +121,25 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.recorder.forMaterial(this.selectedId())
   );
 
+  /**
+   * ★ 第四十九轮(Forrest 报"新录音显示 Take #1"):Take 序号按时间先后。
+   * 列表显示顺序是"最新在上"(后端 CreatedAt DESC),旧实现直接用显示序号
+   * ($index+1)当 Take 号 → 每录一条新录音,旧的号全被顶下去。
+   * 现在:按 createdAt 升序编号,最早 = #1,新录音永远是最大号;
+   * 显示顺序保持不变,只有号码与时间轴对齐。
+   */
+  readonly takeNumbers = computed(() => {
+    const sorted = [...this.myRecordings()].sort((a, b) => a.createdAt - b.createdAt);
+    const map = new Map<string, number>();
+    sorted.forEach((r, i) => map.set(r.id, i + 1));
+    return map;
+  });
+
+  /** 某条录音的 Take 序号(时间先后,最早=1)。 */
+  takeNo(id: string): number {
+    return this.takeNumbers().get(id) ?? 1;
+  }
+
   // ---------- 素材树 ----------
   readonly nodes = signal<MaterialNode[]>([]);
   readonly selectedId = signal<string | null>(null);
@@ -2046,8 +2065,21 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.recError.set(null);
     const id = this.selectedId();
     if (!id) return;
-    // 录音前先停掉示范朗读,否则录进去的是机器音
+    // ★ 第四十九轮:录音前停掉页面上所有在响的声音 ——
+    //   示范朗读 / 历史录音回放 / 待提交试听。否则两路声音叠播,
+    //   麦克风还会把正在放的内容录进去。
     this.stopSpeak();
+    this.stopPlayback();
+    this.pausePendingPreview();
+
+    // ★ 第四十九轮:上一条录完还没提交,用户又按了麦克风 ——
+    //   明确丢弃并告知。旧实现是等新录音录完由 finalize() 把它无声顶掉,
+    //   那条已经录好的音频就【凭空消失】了,用户却以为它还在。
+    if (this.recorder.pendingTake()) {
+      this.recorder.discardPending();
+      this.toast(this.t('practice.prevTakeDiscarded'));
+    }
+
     const err = await this.recorder.start(id);
     if (err) this.recError.set(err);
   }
@@ -2075,9 +2107,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (!pt) return;
 
     if (this.previewingPending()) {
-      this.pendingAudio?.pause();
-      this.pendingAudio = null;
-      this.previewingPending.set(false);
+      this.pausePendingPreview();
       return;
     }
 
@@ -2086,10 +2116,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.stopPlayback();
 
     this.pendingAudio = new Audio(pt.url);
-    this.pendingAudio.onended = () => {
+    // ⚠️ 用 addEventListener 而不是 `onended = …`:Zone.js 【不修补】属性式回调,
+    //    那样写会让这个回调跑在 Angular Zone 之外,写 signal 也不触发刷新
+    //    (第四十九轮"第二次录完没反应"就是同一类根因,详见 RecorderService.zone)。
+    this.pendingAudio.addEventListener('ended', () => {
       this.previewingPending.set(false);
       this.pendingAudio = null;
-    };
+    }, { once: true });
     void this.pendingAudio.play().catch(() => {
       this.previewingPending.set(false);
       this.pendingAudio = null;
@@ -2099,16 +2132,21 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   private pendingAudio: HTMLAudioElement | null = null;
 
-  /** 提交待提交录音 → 进列表。 */
-  submitPending(): void {
-    const pt = this.recorder.pendingTake();
-    if (!pt) return;
-    // 停掉试听
+  /** ★ 第四十九轮:停掉待提交录音的试听(统一的收口,防两路声音叠播)。 */
+  pausePendingPreview(): void {
     if (this.pendingAudio) {
       this.pendingAudio.pause();
       this.pendingAudio = null;
     }
     this.previewingPending.set(false);
+  }
+
+  /** 提交待提交录音 → 进列表。 */
+  submitPending(): void {
+    const pt = this.recorder.pendingTake();
+    if (!pt) return;
+    // 停掉试听
+    this.pausePendingPreview();
 
     this.recorder.submitPending();
     // 提交后把它设为当前作品 —— 用户下一步大概率就是回听/评分它。
@@ -2160,11 +2198,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 丢弃待提交录音。 */
   discardPending(): void {
-    if (this.pendingAudio) {
-      this.pendingAudio.pause();
-      this.pendingAudio = null;
-    }
-    this.previewingPending.set(false);
+    this.pausePendingPreview();
     this.recorder.discardPending();
   }
 
@@ -2205,17 +2239,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     return this.myRecordings().find((r) => r.id === id) ?? null;
   });
 
-  /** 当前作品是否正在播放。 */
+  /** 当前作品是否正在播放(波形"跳动"高亮用;回放入口在列表每行的播放键)。 */
   readonly activePlaying = computed(() => {
     const t = this.activeTake();
     return !!t && this.playingId() === t.id;
   });
-
-  /** 回放当前作品 / 暂停。 */
-  togglePlayActive(): void {
-    const t = this.activeTake();
-    if (t) this.togglePlay(t);
-  }
 
   /** 对当前作品跑评分。用当前素材文本作参考文本(scripted 模式)。 */
   async runActiveScoring(): Promise<void> {
@@ -2711,6 +2739,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   togglePlay(r: Recording): void {
     // 播放期间先把示范朗读停掉,避免两种声音叠在一起
     this.stopSpeak();
+    // ★ 第四十九轮:待提交录音的试听也一并停掉 —— 全页只允许一路声音
+    this.pausePendingPreview();
 
     if (this.playingId() === r.id) {
       this.audio.pause();

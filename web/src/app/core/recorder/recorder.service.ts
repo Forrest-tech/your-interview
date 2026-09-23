@@ -3,6 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../api/api-client';
 import { PracticeApi, RecordingDto, RecordingScoreDto } from '../api/practice-api.service';
+import { I18nService } from '../i18n/i18n.service';
 
 /** 一条录音。阶段一存内存;阶段二换成向后端提交并落库。 */
 export interface Recording {
@@ -74,6 +75,8 @@ export interface RecordingScore {
 export class RecorderService {
   private readonly api = inject(ApiClient);
   private readonly practiceApi = inject(PracticeApi);
+  // ★ 第四十六轮(Forrest):评分链路的错误提示改走 i18n,随系统语言显示。
+  private readonly i18n = inject(I18nService);
 
   /**
    * 是否正在从后端载入历史录音(2026-09-15 第十七轮)。
@@ -587,8 +590,7 @@ export class RecorderService {
     if (!rec.uploaded) {
       this.patch(id, {
         grading: false,
-        error: '这条录音还没保存到服务端(或保存失败),无法评分。'
-          + '请等上传完成后再点,或重录一次。'
+        error: this.i18n.t('rec.notSaved')
       });
       return;
     }
@@ -627,8 +629,8 @@ export class RecorderService {
         } catch (e) {
           this.patch(id, {
             grading: false,
-            error: '取回录音音频失败,无法评分:'
-              + String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 120)
+            // ★ 第四十六轮:提示语随系统语言;后端原因(如 404"数据不存在")也本地化。
+            error: this.i18n.t('rec.fetchFail') + ': ' + this.localizedHttpError(e)
           });
           return;
         }
@@ -636,7 +638,7 @@ export class RecorderService {
       if (!source || source.size === 0) {
         this.patch(id, {
           grading: false,
-          error: '这条录音没有可用的音频数据,无法评分。请重新录制。'
+          error: this.i18n.t('rec.noAudio')
         });
         return;
       }
@@ -648,7 +650,7 @@ export class RecorderService {
         //   (Safari 的 decodeAudioData 兼容问题与录制格式无关,
         //    笼统说"需 webm/opus 或 wav"会把人往错误方向引)。
         const why = this.decodeError()
-          || '无法解析该录音格式。请重新录制,或改用 Chrome 打开本页。';
+          || this.i18n.t('rec.decodeFail');
         this.patch(id, { grading: false, error: why });
         return;
       }
@@ -732,6 +734,24 @@ export class RecorderService {
       }
 
       this.patch(id, { grading: false, error: msg });
+    }
+  }
+
+  /**
+   * ★ 第四十六轮:把 HTTP 错误翻译成当前语言的可读文案。
+   * api-client 的 rethrow 会在错误对象上带 status;常见状态码给本地化兜底,
+   * 其余(后端 ProblemDetails 自带 detail)原样透传 —— 后端的第一手原因最准。
+   */
+  private localizedHttpError(e: unknown): string {
+    const status = (e as { status?: number } | null)?.status;
+    switch (status) {
+      case 0:   return this.i18n.t('err.noBackend');
+      case 401: return this.i18n.t('err.expired');
+      case 403: return this.i18n.t('err.forbidden');
+      case 404: return this.i18n.t('err.notFound');
+      case 500: return this.i18n.t('err.server');
+      default:
+        return String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 120);
     }
   }
 

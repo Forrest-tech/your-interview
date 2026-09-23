@@ -455,6 +455,18 @@ const DICT: Record<string, Record<Lang, string>> = {
   // 2026-09-16:无词级评估数据(Azure 未返回该词的 PronunciationAssessment)
   'err.noData': { zh: '无词级数据', en: 'No word data', fr: 'Aucune donnée' },
   'err.ok': { zh: '正常', en: 'OK', fr: 'Correct' },
+  // ★ 第四十六轮(Forrest):评分链路的错误提示随系统语言 ——
+  //   之前这些文案写死在录音服务里(中文),英文/法语界面也只会显示中文。
+  'rec.fetchFail': { zh: '取回录音音频失败,无法评分', en: 'Failed to fetch recording audio — cannot score', fr: 'Échec de récupération de l audio, score impossible' },
+  'rec.notSaved': { zh: '这条录音还没保存到服务端(或保存失败),无法评分。请等上传完成后再点,或重录一次。', en: 'This take is not saved on the server yet (or saving failed), so it cannot be scored. Wait for the upload to finish, or record again.', fr: 'Cet enregistrement n est pas encore sauvegardé, score impossible. Attendez la fin de l envoi ou réenregistrez.' },
+  'rec.noAudio': { zh: '这条录音没有可用的音频数据,无法评分。请重新录制。', en: 'This take has no usable audio data and cannot be scored. Please record again.', fr: 'Cet enregistrement n a pas de données audio utilisables. Veuillez réenregistrer.' },
+  'rec.decodeFail': { zh: '无法解析该录音格式。请重新录制,或改用 Chrome 打开本页。', en: 'Cannot decode this recording format. Please record again, or open this page in Chrome.', fr: 'Impossible de décoder ce format audio. Réenregistrez ou ouvrez la page dans Chrome.' },
+  // 服务端状态码的本地化兜底(与 api-client 的中文兜底一一对应)
+  'err.noBackend': { zh: '无法连接后端服务,请确认服务已启动', en: 'Cannot reach the backend service — make sure it is running', fr: 'Impossible de joindre le service backend' },
+  'err.expired': { zh: '登录已过期,请重新登录', en: 'Session expired — please sign in again', fr: 'Session expirée, veuillez vous reconnecter' },
+  'err.forbidden': { zh: '没有权限执行此操作', en: 'You do not have permission to do this', fr: 'Vous n avez pas la permission' },
+  'err.notFound': { zh: '数据不存在', en: 'Data not found', fr: 'Données introuvables' },
+  'err.server': { zh: '服务端内部错误,请查看服务端日志', en: 'Internal server error — check the server logs', fr: 'Erreur interne du serveur' },
   'common.na': { zh: '—', en: '—', fr: '—' },
   'verdict.excellent': { zh: '优秀', en: 'Excellent', fr: 'Excellent' },
   'verdict.good': { zh: '良好', en: 'Good', fr: 'Bien' },

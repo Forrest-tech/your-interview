@@ -2153,7 +2153,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // ⚠️ 2026-09-16:这里是**本地临时 id**;上传成功后后端会换成正式 GUID,
     //    下面的 effect 会跟着把 activeTakeId 改过去,否则 activeTake() 会找不到人。
     this.activeTakeId.set(pt.id);
-    this.toast(this.t('practice.submitTake'));
+    // ★ 第五十轮(Forrest):提交成功不再弹提示条 ——
+    //   录音已经出现在下方列表里,结果本身就是反馈;
+    //   再弹一条带警示图标的"Submit"反而像出了问题(第五十轮截图反馈)。
 
     // 上传完成前先记住"待接替的本地 id"。
     this.pendingIdRemap = pt.id;
@@ -2204,9 +2206,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   removeRecording(id: string): void {
     // ★ 2026-09-20(Forrest):删除录音必须先经确认弹窗,确认了才真删。
+    // ★ 第五十轮(Forrest 截图反馈):标题已经问清"删除这条录音?",
+    //   不再附加"删除后无法恢复"的说明行 —— 确认弹窗保持最简:
+    //   一句问话 + 取消/确认(行业通行的轻量确认样式)。
     void this.confirmDialog({
       title: this.t('dialog.deleteRecTitle'),
-      body: this.t('dialog.deleteRecBody'),
       confirmText: this.t('dialog.deleteConfirm'),
       danger: true
     }).then((ok) => {

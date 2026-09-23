@@ -257,11 +257,8 @@ const DICT: Record<string, Record<Lang, string>> = {
     fr: "L'élément et ses enfants seront supprimés avec leurs enregistrements."
   },
   'dialog.deleteRecTitle': { zh: '删除这条录音？', en: 'Delete this recording?', fr: 'Supprimer cet enregistrement ?' },
-  'dialog.deleteRecBody': {
-    zh: '删除后无法恢复。',
-    en: 'This cannot be undone.',
-    fr: "Impossible d'annuler."
-  },
+  // ★ 第五十轮:录音删除弹窗不再附"无法恢复"说明行(第五十轮截图反馈:
+  //   确认弹窗保持最简 —— 一句问话 + 取消/确认)。
   // ★ 2026-09-23(Forrest 第九轮):刷新拦截弹窗同样只说"保存还是放弃"。
   'dialog.unsavedTitle': { zh: '有未保存的修改', en: 'You have unsaved changes', fr: 'Modifications non enregistrées' },
   'dialog.unsavedBody': {

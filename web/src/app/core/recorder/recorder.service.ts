@@ -528,6 +528,13 @@ export class RecorderService {
     const snapshot = this.recordings();
     this.recordings.update((list) => list.filter((r) => r.id !== id));
     this.practiceApi.deleteRecording(id).subscribe({
+      // ★ 第四十七轮:删除成功后再过滤一次 ——
+      //   Retry 在 remove 后会立刻 reloadForMaterial 重拉列表,
+      //   GET 可能赶在 DELETE 落库前返回,把刚删的条目又带回来
+      //   (用户看到的就是"Retry 删不掉")。这里兜底,保证最终一致。
+      next: () => {
+        this.recordings.update((list) => list.filter((r) => r.id !== id));
+      },
       error: (e) => {
         // 删失败 → 放回原位置,并如实报错
         this.recordings.set(snapshot);

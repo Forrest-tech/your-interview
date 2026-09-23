@@ -2267,6 +2267,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.stopPlayback();
     this.recorder.clearScore(t.id);
     this.wordsOpen.set(new Set());
+    // ★ 第四十七轮:计费口径一并复位,避免报告区残留上一次的数字
+    this.scoreBilledSeconds.set(null);
+    this.scoreBilledBytes.set(null);
   }
 
   /**
@@ -2276,17 +2279,29 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *   录音还在 → activeTake() 仍非 null → 中间按钮仍是"回听",
    *   用户点完看到的界面几乎没变化,自然觉得"retry 没有用"。
    *
-   * 现在改成真的"重录一遍" + **刷新下方列表**:
-   *   2026-09-16(Forrest 本轮):
-   *     · Retry 不再要求先选中某条 —— 没选中时也能用(只刷新列表);
-   *     · 有选中时:删掉这条、重录;
-   *     · 无论哪种,最后都重新拉一次录音列表("刷新下面的内容")。
+   * ★ 第四十七轮(Forrest 报"Retry 不能用")再修一处逻辑盲区:
+   *   旧实现只认 activeTake(),**完全不看 pendingTake()** ——
+   *   录完还没点 Submit 时(界面上 Submit/Retry/Preview/Discard 那一排),
+   *   Retry 是亮着的,点了却落进"没选中"分支 → 只弹"已刷新录音列表",
+   *   手上这条待提交录音纹丝不动;更糟的是若此时还选中了一条已提交录音,
+   *   它会把那条**已提交**的误删。现在优先级明确:
+   *     ① 正在录音 → 取消本次(cancel 不产生待提交录音);
+   *     ② 有待提交录音 → 丢弃它,立即重录(提示语说的"这条"就是它);
+   *     ③ 有选中的已提交录音 → 服务端删掉它,重录;
+   *     ④ 什么都没有 → 仅刷新列表。
    */
   retryTake(): void {
-    const t = this.activeTake();
     this.stopPlayback();
+    if (this.recorder.recording()) this.recorder.cancel();
 
-    if (t) {
+    const pending = this.recorder.pendingTake();
+    const t = this.activeTake();
+
+    if (pending) {
+      this.discardPending();
+      this.wordsOpen.set(new Set());
+      void this.startRecording();
+    } else if (t) {
       // 有当前作品:这条不要了,删掉重录
       this.recorder.remove(t.id);
       this.wordsOpen.set(new Set());

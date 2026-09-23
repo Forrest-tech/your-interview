@@ -413,7 +413,10 @@
                 <span>{{ t('practice.runAiScoring') }}</span>
               </button>
 
-              <button class="reset-round" [matTooltip]="t('practice.reset')"
+              <!-- ★ 第四十七轮:提示从单词"Reset"改为说明用途 ——
+                   Reset 的语义是"清掉当前 take 的分数以便重新评分",
+                   单写 Reset 用户不知道它能干什么(Forrest 本轮反馈)。 -->
+              <button class="reset-round" [matTooltip]="t('practice.resetHint')"
                       [disabled]="!activeTake()" (click)="resetTake()">
                 <mat-icon>refresh</mat-icon>
               </button>

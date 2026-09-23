@@ -161,6 +161,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.retry': { zh: '重新作答', en: 'Retry', fr: 'Recommencer' },
   // 2026-09-16(Forrest 本轮):Retry 未选中录音时当"刷新列表"用。
   'practice.retryRefreshed': { zh: '已刷新录音列表', en: 'Recording list refreshed', fr: 'Liste actualisée' },
+  // ★ 第四十八轮(Forrest):禁用的评分/重置按钮要说明原因(行业惯例) ——
+  //   待提交状态下这两个按钮置灰,没有解释会让人以为是坏的。
+  'practice.scoreNeedsSubmit': { zh: '请先点「Submit」提交这条录音,评分/重置才可用', en: 'Submit this take first — scoring and reset work on saved takes', fr: 'Soumettez d abord cette prise, puis évaluez' },
   // 2026-09-16(Forrest 本轮):录音结束后出现的"提交"按钮。
   'practice.submitTake': { zh: '提交', en: 'Submit', fr: 'Soumettre' },
   'practice.submitTakeTip': { zh: '把这条录音保存到列表', en: 'Save this take to the list', fr: 'Enregistrer cette prise dans la liste' },

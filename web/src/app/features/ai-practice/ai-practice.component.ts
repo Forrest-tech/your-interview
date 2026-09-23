@@ -2273,6 +2273,26 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * ★ 第四十八轮(Forrest):禁用状态的评分/重置按钮给出原因。
+   * 行业惯例(Nielsen):控件不可用时要解释"为什么/怎样才可用",
+   * 否则用户会把置灰按钮当成"坏了"。
+   * · 评分按钮:可用时不需要提示;
+   * · 重置按钮:可用时提示它的用途("重置后才能重新评分")。
+   * · 待提交状态(录完还没 Submit):两者统一提示"先提交"。
+   */
+  readonly scoreTip = computed(() => {
+    if (this.activeTake()) return '';
+    if (this.recorder.pendingTake()) return this.t('practice.scoreNeedsSubmit');
+    return '';
+  });
+
+  readonly resetTip = computed(() => {
+    if (this.activeTake()) return this.t('practice.resetHint');
+    if (this.recorder.pendingTake()) return this.t('practice.scoreNeedsSubmit');
+    return '';
+  });
+
+  /**
    * 「Retry」按钮的真实语义(2026-09-15 第十轮修)。
    *
    * ⚠️ 之前 Retry 直接绑 resetTake(),只会把分数抹掉:

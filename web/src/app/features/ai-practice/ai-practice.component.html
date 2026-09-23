@@ -405,18 +405,20 @@
               </div>
             }
 
-            <!-- 右侧:AI 评分胶囊 + 重置刷新(与左侧占位等宽,保证中间真居中) -->
+            <!-- 右侧:AI 评分胶囊 + 重置刷新(与左侧占位等宽,保证中间真居中)
+                 ★ 第四十八轮:置灰时给出"为什么不可用"的提示(先提交) -->
             <div class="rec-side rec-hold">
               <button class="side-score" [disabled]="!activeTake() || activeTake()?.grading"
+                      [matTooltip]="scoreTip()"
                       (click)="scoreActiveTake()">
                 <mat-icon>{{ activeTake()?.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
                 <span>{{ t('practice.runAiScoring') }}</span>
               </button>
 
-              <!-- ★ 第四十七轮:提示从单词"Reset"改为说明用途 ——
-                   Reset 的语义是"清掉当前 take 的分数以便重新评分",
-                   单写 Reset 用户不知道它能干什么(Forrest 本轮反馈)。 -->
-              <button class="reset-round" [matTooltip]="t('practice.resetHint')"
+              <!-- ★ 第四十七轮:提示从单词"Reset"改为按状态说明 ——
+                   可用 = 它的用途(重置后才能重新评分);
+                   待提交置灰 = 先提交才可用,不再让按钮看起来像坏的。 -->
+              <button class="reset-round" [matTooltip]="resetTip()"
                       [disabled]="!activeTake()" (click)="resetTake()">
                 <mat-icon>refresh</mat-icon>
               </button>

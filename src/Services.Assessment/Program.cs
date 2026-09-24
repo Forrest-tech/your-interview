@@ -7,7 +7,7 @@ using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Assessment.Infrastructure.Persistence;
-using YourInterview.SharedContracts;
+using YourInterview.SharedContracts;   // AddMassTransitWithRabbitMq 扩展所在命名空间
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,29 +52,8 @@ builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.S
 // Azure 神经语音合成(示范朗读走 Azure 时用;key 与评分共用同一份)
 builder.Services.AddSingleton<YourInterview.Services.Assessment.Application.SpeechSynthesizer>();
 
-// ---------- LLM 接入(2026-09-18:面试前准备包) ----------
-// 独立的 http client:LLM 与语音服务的超时/连接策略不同 ——
-// 生成预测问题可能要跑几十秒(取决于模型),给 3 分钟。
-// 不共用 azure-speech 那个(它的 5 分钟与 v1.1 强制是为语音流式场景定的)。
-builder.Services.AddHttpClient("llm", c =>
-{
-    c.Timeout = TimeSpan.FromMinutes(3);
-}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-{
-    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-    ConnectTimeout = TimeSpan.FromSeconds(20),
-});
-
-// 客户端工厂:按协议(openai-compatible / azure-openai / anthropic)派发。
-// 单例安全 —— 它只持有 IHttpClientFactory 与 ILoggerFactory,都是单例安全的。
-builder.Services.AddSingleton<YourInterview.SharedContracts.Ai.ILlmClientFactory,
-    YourInterview.SharedContracts.Ai.LlmClientFactory>();
-
-// LLM 凭据解析(数据库 > 环境变量 > appsettings)。
-// 与 ISpeechKeyProvider 严格同构,同样用 IServiceScopeFactory 读 Scoped 的 DbContext。
-builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Storage.IAiKeyProvider,
-    YourInterview.Services.Assessment.Infrastructure.Storage.AiKeyProvider>();
-
+// M2.3:LLM 凭据与补全已收敛到 AiGateway(前端统一走 /api/ai/*),
+// Assessment 不再持有 LLM 客户端/凭据栈;历史数据由 RemoveAiSettings 迁移搬走后删表。
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 
 // ---------- 鉴权 ----------

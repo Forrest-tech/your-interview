@@ -188,9 +188,9 @@
     }
 
     <!-- 服务端已保存的配置状态(不显示明文) -->
-    <p class="remote-line" [class.on]="aiRemoteStatus()?.hasKey"
-       [class.serif]="aiRemoteStatus()?.hasKey">
-      @if (aiRemoteStatus()?.hasKey) {
+    <p class="remote-line" [class.on]="aiRemoteStatus()?.configured"
+       [class.serif]="aiRemoteStatus()?.configured">
+      @if (aiRemoteStatus()?.configured) {
         <mat-icon>check_circle</mat-icon>
         <span>{{ t('ai.validPrefix') }} <strong>{{ aiRemoteMasked() }}</strong>
           ({{ aiRemoteName() }} · {{ aiRemoteStatus()?.model }}){{ t('ai.validSuffix') }}</span>

@@ -34,9 +34,28 @@ public sealed record AiSettingStatusDto(
 public sealed record AiCompletionResultDto(
     string Text, string Model, int? PromptTokens, int? CompletionTokens, int? LatencyMs);
 
+/// <summary>供前端下拉用的 provider 预设(静态,不含任何密钥)。</summary>
+public sealed record AiProviderPresetDto(
+    string Protocol, string Name, string DefaultBaseUrl, IReadOnlyList<string> Models);
+
 // ---------------------------- 凭据:读 ----------------------------
 
 public sealed record GetAiSettingQuery(Guid UserId) : IRequest<Result<AiSettingStatusDto>>;
+
+public sealed record ListAiProvidersQuery : IRequest<IReadOnlyList<AiProviderPresetDto>>;
+
+/// <summary>内置 provider 预设(DeepSeek / Qwen / Azure OpenAI / Anthropic…)。
+/// M2.3 前这个端点只在 Assessment 有 —— 前端下拉数据随本次收敛一并改由网关提供。</summary>
+public sealed class ListAiProvidersQueryHandler : IRequestHandler<ListAiProvidersQuery, IReadOnlyList<AiProviderPresetDto>>
+{
+    public Task<IReadOnlyList<AiProviderPresetDto>> Handle(ListAiProvidersQuery request, CancellationToken ct)
+    {
+        IReadOnlyList<AiProviderPresetDto> list = LlmProviders.Presets
+            .Select(p => new AiProviderPresetDto(p.Protocol, p.Name, p.DefaultBaseUrl, p.Models))
+            .ToList();
+        return Task.FromResult(list);
+    }
+}
 
 public sealed class GetAiSettingQueryHandler(AiGatewayDbContext db)
     : IRequestHandler<GetAiSettingQuery, Result<AiSettingStatusDto>>

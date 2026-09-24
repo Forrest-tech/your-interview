@@ -87,19 +87,17 @@ export interface RecordingDto {
   score: RecordingScoreDto | null;
 }
 
-// ---------- LLM 设置(面试前准备包,2026-09-18) ----------
+// ---------- LLM 设置(2026-09-18 新增;M2.3 起收敛到 AiGateway:/api/ai/*) ----------
 
 /**
- * LLM 配置状态。⚠️ 与 SpeechSettingStatusDto 同理:
+ * LLM 配置状态(AiGateway 返回)。⚠️ 同 SpeechSettingStatusDto 的原则:
  * 只有掩码,没有明文 key —— 任何接口都不下发 key 本身。
  *
- * source: 'database' | 'none'
- *   'database' = 用户在本页保存过(界面显示"已配置")
- *   'none'     = 没保存过。配置文件里的 key 只作服务端兜底,不影响界面判定 ——
- *                否则会出现"我从没填过却显示已配置"。
+ * configured = 用户在设置页保存过凭据;updatedAt = 最近一次保存时间。
+ * (M2.3 前 Assessment 侧的 hasKey/source 字段已随收敛移除,统一为 configured)
  */
 export interface AiSettingStatusDto {
-  hasKey: boolean;
+  configured: boolean;
   protocol: string | null;
   displayName: string | null;
   baseUrl: string | null;
@@ -107,7 +105,7 @@ export interface AiSettingStatusDto {
   endpoint: string | null;
   apiVersion: string | null;
   maskedKey: string | null;
-  source: string;
+  updatedAt: string | null;
 }
 
 /** 一个 provider 预设(静态数据,无密钥)。 */
@@ -301,17 +299,20 @@ export class PracticeApi {
       `${PracticeApi.BASE}/speech/test-credential`, { key, region });
   }
 
-  // ---------- LLM 设置(面试前准备包,2026-09-18) ----------
+  // ---------- LLM 设置(M2.3:凭据统一存 AiGateway,走 /api/ai/*) ----------
   // 与 speech/* 严格同构:先测后存、key 只入不出。
+  // ⚠️ 2026-09-24 M2.3 收敛:此前这组方法打 /api/assessment/ai/*(Assessment 自己
+  //    的凭据栈),而 Jobs 的 Cover Letter 生成读的是 AiGateway —— 存的 key 永远
+  //    不生效(脑裂)。现在唯一入口是 AiGateway:凭据一份、补全一份。
 
   /** 查 LLM 配置状态。只返回掩码,永远不下发明文 key。 */
   getAiSettings(): Observable<AiSettingStatusDto> {
-    return this.api.get<AiSettingStatusDto>(`${PracticeApi.BASE}/ai/settings`);
+    return this.api.get<AiSettingStatusDto>('/api/ai/settings');
   }
 
   /** 列出内置 provider 预设与常用模型(供下拉)。无密钥,可安全下发。 */
   listAiProviders(): Observable<AiProviderPresetDto[]> {
-    return this.api.get<AiProviderPresetDto[]>(`${PracticeApi.BASE}/ai/providers`);
+    return this.api.get<AiProviderPresetDto[]>('/api/ai/providers');
   }
 
   /**
@@ -319,19 +320,19 @@ export class PracticeApi {
    * 失败时后端返回 502(凭据错)或 400(没填全),绝不用 401/403。
    */
   testAiCredential(body: AiCredentialIn):
-    Observable<{ ok: boolean; message: string; sampleOutput?: string }> {
-    return this.api.post<{ ok: boolean; message: string; sampleOutput?: string }>(
-      `${PracticeApi.BASE}/ai/test-credential`, body);
+    Observable<{ ok: boolean; message: string; sample?: string }> {
+    return this.api.post<{ ok: boolean; message: string; sample?: string }>(
+      '/api/ai/test-credential', body);
   }
 
   /** 保存 LLM 配置。后端会在保存前真测一次,不通不入库。 */
   saveAiSettings(body: AiCredentialIn): Observable<AiSettingStatusDto> {
-    return this.api.put<AiSettingStatusDto>(`${PracticeApi.BASE}/ai/settings`, body);
+    return this.api.put<AiSettingStatusDto>('/api/ai/settings', body);
   }
 
   /** 删除 LLM 配置(回到未配置状态)。 */
   deleteAiSettings(): Observable<void> {
-    return this.api.delete<void>(`${PracticeApi.BASE}/ai/settings`);
+    return this.api.delete<void>('/api/ai/settings');
   }
 
   // ---------- 示范朗读(TTS) ----------

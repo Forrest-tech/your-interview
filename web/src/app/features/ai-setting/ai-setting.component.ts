@@ -289,10 +289,11 @@ export class AiSettingComponent {
   readonly aiEndpoint = signal('');
   readonly aiApiVersion = signal('');
 
-  /** 后端当前 LLM 配置状态。null = 还没查过。 */
+  /** 后端(AiGateway)当前 LLM 配置状态。null = 还没查过。
+   *  M2.3:字段随收敛改为 configured/updatedAt(原 Assessment 是 hasKey/source)。 */
   readonly aiRemoteStatus = signal<{
-    hasKey: boolean; protocol: string | null; displayName: string | null;
-    baseUrl: string | null; model: string | null; maskedKey: string | null; source: string;
+    configured: boolean; protocol: string | null; displayName: string | null;
+    baseUrl: string | null; model: string | null; maskedKey: string | null; updatedAt: string | null;
   } | null>(null);
 
   /** 测试态:null=未测,true=通过,false=失败。 */
@@ -388,7 +389,7 @@ export class AiSettingComponent {
       next: (r) => {
         this.aiTested.set(true);
         this.aiTesting.set(false);
-        this.aiSampleOutput.set(r.sampleOutput ?? '');
+        this.aiSampleOutput.set(r.sample ?? '');
         this.flash(r.message || this.t('ai.testOk'));
       },
       error: (e) => {
@@ -452,7 +453,7 @@ export class AiSettingComponent {
     this.practiceApi.getAiSettings().subscribe({
       next: (st) => {
         this.aiRemoteStatus.set(st);
-        if (st.hasKey) {
+        if (st.configured) {
           // 回填非敏感字段,让用户看到"当前配的是哪家哪个模型"。
           if (st.model) this.aiModel.set(st.model);
           if (st.baseUrl) this.aiBaseUrl.set(st.baseUrl);

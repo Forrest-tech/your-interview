@@ -25,13 +25,9 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
     public DbSet<PracticeRecordingScore> RecordingScores => Set<PracticeRecordingScore>();
     public DbSet<SpeechSetting> SpeechSettings => Set<SpeechSetting>();
 
-    // ---- 用户级 LLM 配置(2026-09-18:面试前准备包)----
-    // 与 SpeechSetting 并列但独立建表,理由见 AiSetting 领域注释。
-    public DbSet<AiSetting> AiSettings => Set<AiSetting>();
-
     // ---- 用户简历正文(2026-09-18:简历匹配分析 + 准备包输入)----
-    // 与 AiSetting 分开:凭据表有掩码/优先级回退等特殊逻辑,简历是长文本内容,
-    // 混一张表会让凭据的查询跟着简历体量一起变重。
+    // 简历是长文本内容,独立成表,不让内容查询跟着其他配置变重。
+    // (M2.3:原用户级 LLM 凭据表 ai_settings 已收敛到 AiGateway,历史行由迁移搬走后删表)
     public DbSet<UserResume> Resumes => Set<UserResume>();
 
     // ---- 示范朗读音频缓存(2026-09-16 第三十一轮)----
@@ -192,23 +188,6 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.Property(x => x.Key).HasColumnType("text").IsRequired();
             e.Property(x => x.Region).HasMaxLength(50).IsRequired();
             e.Property(x => x.Endpoint).HasMaxLength(500);
-        });
-
-        // 用户级 LLM 配置(2026-09-18:面试前准备包)
-        b.Entity<AiSetting>(e =>
-        {
-            e.ToTable("ai_settings");
-            // 一人一条 —— 与 speech_settings 同策略
-            e.HasKey(x => x.UserId);
-            // Key 用 text:不同厂商长度差异大(有的 51 字符,有的带长前缀),
-            // 限制长度只会造成"保存失败但不知道为什么"。
-            e.Property(x => x.ApiKey).HasColumnType("text").IsRequired();
-            e.Property(x => x.Protocol).HasMaxLength(50).IsRequired();
-            e.Property(x => x.BaseUrl).HasMaxLength(500);
-            e.Property(x => x.Model).HasMaxLength(200).IsRequired();
-            e.Property(x => x.Endpoint).HasMaxLength(500);
-            e.Property(x => x.ApiVersion).HasMaxLength(50);
-            e.Property(x => x.DisplayName).HasMaxLength(100);
         });
 
         // 用户简历正文(2026-09-18)

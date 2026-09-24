@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using YourInterview.Services.Assessment.Infrastructure.Persistence;
@@ -11,9 +12,10 @@ using YourInterview.Services.Assessment.Infrastructure.Persistence;
 namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AssessmentDbContext))]
-    partial class AssessmentDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260924120000_RemoveAiSettings")]
+    partial class RemoveAiSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

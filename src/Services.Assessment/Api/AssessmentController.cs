@@ -608,22 +608,14 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                 statusCode: StatusCodes.Status502BadGateway);
         }
     }
-    // ==================== LLM 设置(面试前准备包) ====================
-    // 与 speech/* 严格同构:key 只入不出、保存前真测、凭据拒收映射 502。
+    // ==================== LLM 设置:已于 M2.3 收敛到 AiGateway ====================
+    // api/assessment/ai/* 五个端点连同处理器/实体/KeyProvider 一并移除:
+    //   凭据只存一处(aigateway.ai_settings),换 key 只改一个地方;
+    //   用户在设置页保存的 key 与 Jobs 求职信生成(AiGatewayClient)读的是同一份 ——
+    //   收敛之前是"界面存 Assessment、生成走 AiGateway"的割裂态,存了也不生效。
+    // 历史数据(assessment.ai_settings)由 RemoveAiSettings 迁移自动搬走后删表。
+    // 前端已改调 /api/ai/*(网关 YARP 直通 aigateway 集群)。
 
-    /// <summary>
-    /// 查询 LLM 配置状态。
-    /// ⚠️ **只返回** hasKey / 协议 / 模型 / 掩码,永远不下发 key 本身。
-    /// </summary>
-    [HttpGet("ai/settings")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
-    public async Task<IResult> GetAiSetting(CancellationToken ct)
-    {
-        var status = await sender.Send(new GetAiSettingQuery(Me), ct);
-        return Results.Ok(status);
-    }
-
-    /// <summary>列出内置 provider 预设与常用模型(供设置页下拉)。无密钥,可安全下发。</summary>
     // ======================= 简历正文(2026-09-18)=======================
     // 用途:简历匹配分析(简历 vs JD 关键词比对)+ 面试前准备包的输入。
     //
@@ -663,73 +655,6 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> DeleteResumeText(CancellationToken ct)
     {
         var r = await sender.Send(new DeleteResumeCommand(Me), ct);
-        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
-    }
-
-    [HttpGet("ai/providers")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
-    public async Task<IResult> ListAiProviders(CancellationToken ct)
-    {
-        var list = await sender.Send(new ListAiProvidersQuery(), ct);
-        return Results.Ok(list);
-    }
-
-    /// <summary>
-    /// 测试一把**尚未保存**的候选凭据。不读库、不写库。
-    /// 前端流程:填 key → 调本端点 → 通过才调 PUT /ai/settings 保存。
-    /// 失败一律映射 502(上游拒收凭据),绝不用 401/403(前端会当会话失效而登出)。
-    /// </summary>
-    [HttpPost("ai/test-credential")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> TestAiCredential([FromBody] AiCredentialBody body, CancellationToken ct)
-    {
-        var r = await sender.Send(new TestAiCredentialCommand(body.Protocol, body.ApiKey ?? string.Empty,
-            body.BaseUrl, body.Model ?? string.Empty, body.Endpoint, body.ApiVersion), ct);
-
-        if (r.IsSuccess)
-            return Results.Ok(new { ok = true, message = r.Value.Message, sampleOutput = r.Value.SampleOutput });
-
-        var code = r.Error?.Code ?? string.Empty;
-        var isValidation = code is "Ai.KeyEmpty" or "Ai.ModelEmpty" or "Ai.BaseUrlEmpty" or "Ai.EndpointEmpty";
-        return Results.Problem(
-            title: isValidation ? "填写不完整" : "凭据无效",
-            detail: r.Error?.Description ?? "凭据验证失败。",
-            statusCode: isValidation
-                ? StatusCodes.Status400BadRequest
-                : StatusCodes.Status502BadGateway,
-            extensions: new Dictionary<string, object?> { ["code"] = code });
-    }
-
-    /// <summary>保存 LLM 配置(服务端保管)。保存前会真测一次,不通不入库。</summary>
-    [HttpPut("ai/settings")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> SaveAiSetting([FromBody] AiSettingsBody body, CancellationToken ct)
-    {
-        var r = await sender.Send(new SaveAiSettingCommand(Me, body.Protocol, body.ApiKey ?? string.Empty,
-            body.BaseUrl, body.Model ?? string.Empty, body.Endpoint, body.ApiVersion, body.DisplayName), ct);
-
-        if (r.IsSuccess) return Results.Ok(r.Value);
-
-        // 凭据被上游拒收 → 502,不能落到默认分支变 500,更不能是 401/403。
-        var code = r.Error?.Code ?? string.Empty;
-        if (code is "Ai.CredentialRejected" or "Ai.ProbeUnexpected")
-        {
-            return Results.Problem(
-                title: "凭据验证失败",
-                detail: r.Error?.Description ?? "凭据验证失败,未保存。",
-                statusCode: StatusCodes.Status502BadGateway,
-                extensions: new Dictionary<string, object?> { ["code"] = code });
-        }
-
-        return r.ToProblemDetails();
-    }
-
-    /// <summary>删除 LLM 配置(回到未配置状态)。</summary>
-    [HttpDelete("ai/settings")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> DeleteAiSetting(CancellationToken ct)
-    {
-        var r = await sender.Send(new DeleteAiSettingCommand(Me), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -811,14 +736,3 @@ public sealed record WordScoreIn(string Word, double Accuracy, string ErrorType)
 /// </summary>
 public sealed record TtsBody(string Text, string? Voice, double? Speed, bool Force = false,
     string? Language = null);
-
-/// <summary>LLM 设置提交。⚠️ 只入不出 —— 保存后绝不回传 key。</summary>
-public sealed record AiSettingsBody(string Protocol, string? ApiKey, string? BaseUrl, string? Model,
-    string? Endpoint, string? ApiVersion, string? DisplayName);
-
-/// <summary>
-/// 测试一把尚未保存的候选凭据(先测后存)。
-/// 与 AiSettingsBody 同形,但语义完全不同:这里只验证,不写库。
-/// </summary>
-public sealed record AiCredentialBody(string Protocol, string? ApiKey, string? BaseUrl, string? Model,
-    string? Endpoint, string? ApiVersion);

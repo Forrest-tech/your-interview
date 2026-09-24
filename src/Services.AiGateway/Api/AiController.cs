@@ -35,6 +35,16 @@ public sealed class AiController(ISender sender, ICurrentUser currentUser) : Con
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>列出内置 provider 预设与常用模型(供设置页下拉)。无密钥,可安全下发。
+    /// M2.3:从前端改调本端点(原 Assessment 的 ai/providers 已随收敛移除)。</summary>
+    [HttpGet("providers")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    public async Task<IResult> ListProviders(CancellationToken ct)
+    {
+        var list = await sender.Send(new ListAiProvidersQuery(), ct);
+        return Microsoft.AspNetCore.Http.Results.Ok(list);
+    }
+
     /// <summary>保存配置(保存前真测凭据,不通不入库)。</summary>
     [HttpPut("settings")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]

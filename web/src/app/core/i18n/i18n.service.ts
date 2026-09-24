@@ -144,7 +144,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.deleteRec': { zh: '删除这条录音', en: 'Delete this recording', fr: 'Supprimer cet enregistrement' },
   'practice.gradeRec': { zh: 'AI 发音评分', en: 'Score pronunciation', fr: 'Noter la prononciation' },
   'practice.recUnsupported': { zh: '当前浏览器不支持录音,请改用 Chrome / Edge / Safari。', en: 'This browser cannot record audio. Please use Chrome, Edge, or Safari.', fr: 'Ce navigateur ne peut pas enregistrer. Utilisez Chrome, Edge ou Safari.' },
-  'practice.noRecordings': { zh: '还没有录音。点上方「开始录音」录一遍,录音会保存在这里。', en: 'No recordings yet. Hit Record above to capture a take.', fr: 'Aucun enregistrement. Cliquez sur Enregistrer.' },
+  // ★ 第五十一轮:胶囊上不再有文字标签,空态文案改为指向"麦克风按钮"。
+  'practice.noRecordings': { zh: '还没有录音。点上方绿色麦克风按钮录一遍,录音会保存在这里。', en: 'No recordings yet. Hit the green mic button above to capture a take.', fr: 'Aucun enregistrement. Cliquez sur le bouton micro ci-dessus.' },
   'practice.wordDetail': { zh: '逐词明细', en: 'Word-by-word detail', fr: 'Détail par mot' },
   'practice.question': { zh: '题目', en: 'Question', fr: 'Question' },
   // 第二十二轮:顶部路径改用父文件夹名;顶层文件无文件夹时用此兜底
@@ -154,11 +155,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.collapseTree': { zh: '收起素材', en: 'Hide materials', fr: 'Masquer les supports' },
   'practice.prev': { zh: '上一题', en: 'Previous', fr: 'Précédent' },
   'practice.next': { zh: '下一题', en: 'Next', fr: 'Suivant' },
-  'practice.submitScoring': { zh: '提交 AI 评分', en: 'Submit AI Scoring', fr: 'Lancer le score IA' },
+  // ★ 第五十一轮:practice.submitScoring 删除 —— 底部"提交 AI 评分"与胶囊上的
+  //   Run AI Scoring 都已消失,评分只剩列表行内 ✦ 按钮(用 practice.runAiScoring)。
   'practice.dragResize': { zh: '拖动调整宽度', en: 'Drag to resize', fr: 'Glisser pour redimensionner' },
   // 2026-09-16(Forrest 本轮):Retry 未选中录音时当"刷新列表"用。
-  // ★ 第四十八轮(Forrest):禁用的评分/重置按钮要说明原因(行业惯例) ——
-  //   待提交状态下这两个按钮置灰,没有解释会让人以为是坏的。
+  // ★ 第五十轮:Retry / 重置按钮已全部移除,第 48 轮那段"禁用原因"也随之作废。
+  // ★ 第五十一轮:评分按钮(列表行 ✦)仍会在加载期间置灰。
   // ★ 第五十轮:Reset 已移除,提示里不再提"重置"。
   'practice.scoreNeedsSubmit': { zh: '请先点「Submit」提交这条录音,评分才可用', en: 'Submit this take first — scoring works on saved takes', fr: 'Soumettez d abord cette prise, puis évaluez' },
   // 2026-09-16(Forrest 本轮):录音结束后出现的"提交"按钮。
@@ -435,7 +437,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   // ★ 2026-09-19:朗读/评分语言(法语支持)。朗读与评分同源用同一个值。
   'practice.langTitle': { zh: '语语言', en: 'Reading language', fr: 'Langue de lecture' },
   'practice.langHint': { zh: '朗读与发音评分都按此语言。法语需 Azure 法语神经音色(fr-FR-DeniseNeural)。', en: 'Used for both read-aloud and pronunciation scoring. French needs a French neural voice (fr-FR-DeniseNeural).', fr: 'Utilisée pour la lecture et la notation. Le français exige une voix neuronale française (fr-FR-DeniseNeural).' },
-  'practice.reportEmpty': { zh: '还没有评测结果。录一段朗读并点击「AI 评分」后,这里会显示发音准确度、流利度、逐词对比与错误统计。', en: 'No assessment yet. Record a take and click "AI Scoring" to see pronunciation accuracy, fluency, word-by-word diff and error stats here.', fr: 'Aucune évaluation. Enregistrez puis lancez l evaluation.' },
+  // ★ 第五十一轮:评分入口改为录音列表每行的「点击进行AI评分」按钮。
+  'practice.reportEmpty': { zh: '还没有评测结果。录一段朗读并在下方录音条目上点击「点击进行AI评分」后,这里会显示发音准确度、流利度、逐词对比与错误统计。', en: 'No assessment yet. Record a take and click "Run AI Scoring" on it in the list below to see pronunciation accuracy, fluency, word-by-word diff and error stats here.', fr: 'Aucune évaluation. Enregistrez puis lancez l évaluation depuis la liste.' },
 
   // ---------- 2026-09-16 第十九轮:骨架重构新增 ----------
   'practice.mark': { zh: '标记', en: 'Mark', fr: 'Marquer' },
@@ -448,8 +451,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.recordingHistoryCount': { zh: '录音记录', en: 'Recordings', fr: 'Enregistrements' },
   'practice.saveFailed': { zh: '保存失败,请检查浏览器存储权限', en: 'Save failed — check browser storage permissions', fr: 'Échec de l enregistrement' },
   'practice.sampleReading': { zh: '示范朗读', en: 'Sample Reading', fr: 'Lecture exemple' },
-  'practice.runScoring': { zh: 'AI 评分', en: 'Run AI Scoring', fr: 'Lancer le score IA' },
-  'practice.reset': { zh: '重置', en: 'Reset', fr: 'Réinitialiser' },
+  // ★ 第五十一轮:practice.runScoring(胶囊 Run AI Scoring)、practice.reset
+  //   (重置)两条已删除 —— 对应按钮都已按 Forrest 指令移除,留着只是死词条。
   'practice.scoreResults': { zh: '评分结果', en: 'Score Results', fr: 'Résultats' },
   'practice.recognition': { zh: '识别结果', en: 'Recognition', fr: 'Reconnaissance' },
   'practice.recognitionNote': { zh: '按参考原文显示发音、遗漏、插入和停顿问题。悬停单词可查看该词的错误类型与得分。', en: 'Shows pronunciation, omission, insertion and pause issues against the reference text. Hover a word for its error type and score.', fr: 'Affiche les problèmes de prononciation, omissions, insertions et pauses.' },

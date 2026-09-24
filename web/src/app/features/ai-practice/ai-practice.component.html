@@ -362,11 +362,9 @@
           <!-- 录音交互区(浅绿底):2026-09-16 第二十轮 —— 彻底去掉横向
                「麦克风 + Start recording」胶囊条,改为上下垂直居中:
                上方 = 圆形绿色大麦克风(直径 46px),下方 = 灰色小字「录音」。
-               右侧保留「Run AI Scoring」胶囊 + 重置刷新按钮。 -->
-          <div class="rec-pill" [class.has-take]="!!activeTake()">
-
-            <!-- 左侧占位留白:保证中间麦克风组真正居中(与右侧操作组等宽) -->
-            <span class="rec-hold"></span>
+               ★ 第五十一轮:右侧「Run AI Scoring」胶囊已删除(Forrest 指令),
+               胶囊内只剩居中的麦克风;评分请在下方每条录音行上点 ✦ 按钮。 -->
+            <div class="rec-pill" [class.has-take]="!!activeTake()">
 
             <!-- 居中:圆形绿麦 + 紧贴右侧的绿色小字(第二十三轮:横向排布,
                  文字样式沿用原左侧标签 13px/500/#047857)。 -->
@@ -402,18 +400,6 @@
                 }
               </div>
             }
-
-            <!-- 右侧:AI 评分胶囊(与左侧占位等宽,保证中间真居中)
-                 ★ 第五十轮(Forrest):重置按钮已移除 —— 重新评分直接再点评分即可,
-                 一个只服务单一场景的按钮没有存在价值。 -->
-            <div class="rec-side rec-hold">
-              <button class="side-score" [disabled]="!activeTake() || activeTake()?.grading"
-                      [matTooltip]="scoreTip()"
-                      (click)="scoreActiveTake()">
-                <mat-icon>{{ activeTake()?.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
-                <span>{{ t('practice.runAiScoring') }}</span>
-              </button>
-            </div>
 
             @if (recError()) {
               <span class="rec-err"><mat-icon>error_outline</mat-icon>{{ recError() }}</span>
@@ -525,8 +511,7 @@
 
               <span class="spacer"></span>
 
-              <!-- ★ 第二十六轮:图标由 add(+)统一为 auto_awesome(✦ 星芒),
-                   与上方录音条 .side-score 完全一致。 -->
+              <!-- ★ 第五十轮:胶囊上的 Run AI Scoring 已移除,这里是唯一评分入口。 -->
               <button class="hi-score" [disabled]="r.grading" (click)="$event.stopPropagation(); gradeRecording(r.id)">
                 <mat-icon>{{ r.grading ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
                 <span>{{ r.grading ? t('practice.grading') : t('practice.runAiScoring') }}</span>

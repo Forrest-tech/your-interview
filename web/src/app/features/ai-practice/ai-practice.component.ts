@@ -454,15 +454,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** 能否提交评分:三个条件全满足。 */
-  readonly canSubmitScoring = computed(() => {
-    const t = this.activeTake();
-    // ⚠️ 2026-09-16(真机 404 根因):必须同时满足
-    //   · 已上传到服务端(t.uploaded)—— 否则 recordings/{id:guid}/score 直接 404
-    //   · 还没评过分、也不在评分中
-    return this.azureReady() && !!t && t.uploaded && !t.score && !t.grading;
-  });
-
   /**
    * 待提交的录音是否可以提交。
    * 2026-09-16(Forrest 本轮):提交按钮的行为定义 ——
@@ -491,7 +482,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   // ⚠️ 2026-09-16(Forrest 第 4 条):底部"提交 AI 评分"按钮已删除 ——
   //    它与录音区右侧的 run ai scoring 胶囊是同一动作,重复只会让人困惑。
   //    onSubmitScoringClick() 随之移除(仅有的调用点就是那个被删的按钮)。
-  //    现在唯一的评分入口是 scoreActiveTake(),它内部自行处理未就绪分支。
+  // ★ 第五十一轮(Forrest):胶囊上的 Run AI Scoring 也一并移除,
+  //    全站唯一评分入口 = 列表每行的 ✦ 按钮 → gradeRecording(),别无分支。
 
   /** 轻量 toast(不引入 MatSnackBar,避免多一个依赖)。 */
   readonly toastMsg = signal('');
@@ -2220,9 +2212,34 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** 对某条录音做发音评分(以当前素材文本为参考文本)。 */
+  /**
+   * 对某条录音做发音评分(以当前素材文本为参考文本)。
+   *
+   * ★ 第五十轮(Forrest):胶囊上的「Run AI Scoring」已移除,这里是唯一评分入口
+   *   (列表每行的 ✦ 按钮)。评分即把它设为当前作品 —— 报告区跟随被评的那条。
+   *
+   * ★ 第三十三/三十四轮(Forrest):如实标记本次评分花没花 Azure 额度与计费量
+   *   判定依据是 grade() 里那条硬规则 `if (rec.score) return;`:
+   *   有分 → 读库不调 Azure → 'cache';无分 → 真调 → 'fresh'。
+   */
   async gradeRecording(id: string): Promise<void> {
+    const t = this.myRecordings().find((r) => r.id === id);
+    if (!t || t.grading) return;
+    this.stopPlayback();
+    this.activeTakeId.set(id);
+
+    // ⚠️ 必须在 grade() 之前定下来:它可能直接把已有分数拿回来,
+    //    事后看 rec.score 已经判不出"本次到底发没发请求"。
+    this.scoreCost.set(t.score ? 'cache' : 'fresh');
+    this.scoreBilledSeconds.set(t.score?.billedSeconds ?? null);
+    this.scoreBilledBytes.set(t.score?.billedBytes ?? null);
+
     await this.recorder.grade(id, this.currentText(), this.practiceLang());
+
+    // grade() 完成后回读计费口径:真调 → 新值;命中缓存 → 库里的旧值。
+    const after = this.myRecordings().find((x) => x.id === id) ?? null;
+    this.scoreBilledSeconds.set(after?.score?.billedSeconds ?? null);
+    this.scoreBilledBytes.set(after?.score?.billedBytes ?? null);
   }
 
   // ---------- 当前作品(参考站的"录 → 回听 → 评分"流程) ----------
@@ -2247,57 +2264,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly activePlaying = computed(() => {
     const t = this.activeTake();
     return !!t && this.playingId() === t.id;
-  });
-
-  /** 对当前作品跑评分。用当前素材文本作参考文本(scripted 模式)。 */
-  async runActiveScoring(): Promise<void> {
-    const t = this.activeTake();
-    if (!t) return;
-    this.stopPlayback();
-
-    // ★ 第三十三轮(Forrest):如实标记本次评分花没花 Azure 额度。
-    //
-    // 判定依据不是"猜",而是 grade() 里那条硬规则:
-    //   `if (rec.score) return;` —— 列表接口已把历史分带回,
-    //   有分就直接返回、**不发任何评估请求**。
-    // 所以:
-    //   有分 → 本次不会调 Azure → 'cache'(读取本地已存评分)
-    //   无分 → 本次会真调 Azure → 'fresh'(消耗额度)
-    // ⚠️ 必须在 grade() **之前**就定下来,因为它可能直接把分数拿回来了,
-    //    事后看 rec.score 已经判不出"本次到底发没发请求"。
-    const hadScore = !!t.score;
-    this.scoreCost.set(hadScore ? 'cache' : 'fresh');
-
-    // ★ 第三十四轮:计费数字也要先清 —— 命中缓存时没有新计费,
-    //   应回显库里存的旧值(下面根据录音最新状态同步)。
-    const before = t.score;
-    this.scoreBilledSeconds.set(before?.billedSeconds ?? null);
-    this.scoreBilledBytes.set(before?.billedBytes ?? null);
-
-    await this.recorder.grade(t.id, this.currentText(), this.practiceLang());
-
-    // grade() 完成后从录音最新状态里回读计费口径:
-    //   · 本次真调了 Azure → 新值(刚生成的 billedSeconds)
-    //   · 命中缓存 → 库里的旧值(刷新后仍能显示当时花了多少)
-    const after = this.myRecordings().find((x) => x.id === t.id) ?? null;
-    this.scoreBilledSeconds.set(after?.score?.billedSeconds ?? null);
-    this.scoreBilledBytes.set(after?.score?.billedBytes ?? null);
-  }
-
-  /**
-   * ★ 第四十八轮(Forrest):置灰的评分按钮给出原因。
-   * 行业惯例(Nielsen):控件不可用时要解释"为什么/怎样才可用",
-   * 否则用户会把置灰按钮当成"坏了"。
-   * · 评分按钮:可用时不需要提示;
-   * · 待提交状态(录完还没 Submit):提示"先提交"。
-   *
-   * ★ 第五十轮(Forrest):Reset 按钮连同 resetTake()/resetTip 一并移除 ——
-   *   重新评分直接再点 Run AI Scoring 即可,不需要先手动清分。
-   */
-  readonly scoreTip = computed(() => {
-    if (this.activeTake()) return '';
-    if (this.recorder.pendingTake()) return this.t('practice.scoreNeedsSubmit');
-    return '';
   });
 
   /** 停掉当前回放。 */
@@ -2561,16 +2527,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     }
     this.activeTakeId.set(id);
     this.reportOpen.set(true);
-  }
-
-  /**
-   * 绿色胶囊右侧的「点击进行AI评分」(任务书第二节)。
-   * 对当前选中的那条录音发起真实评分;没有选中就不做任何事。
-   */
-  scoreActiveTake(): void {
-    const t = this.activeTake();
-    if (!t || t.grading) return;
-    void this.gradeRecording(t.id);
   }
 
   /** 当前展开报告的 take 是否为这条录音(驱动按钮文案)。 */

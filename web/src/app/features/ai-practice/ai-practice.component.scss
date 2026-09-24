@@ -900,23 +900,9 @@
 }
 .big-round.recording .cap { color: #e53935; }
 
-/* ★ 2026-09-16 第二十轮:旧 .zone-side { position:absolute; right:20px;
-   top:50% } 已【删除】—— 模板已不再使用 .zone-side(.rec-side 取代),
-   且它正是"右侧按钮飘出容器"的同类元凶。 */
-.rec-side {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.run-score {
-  font-size: 12.5px !important;
-  height: 36px !important;
-  background: #2f6fed !important;
-  color: #fff !important;
-}
-.run-score mat-icon { font-size: 17px; width: 17px; height: 17px; }
-.run-score[disabled] { background: #b9c6da !important; color: #fff !important; }
+/* ★ 第五十一轮(Forrest 指令):Run AI Scoring 胶囊按钮已从录音条移除,
+   评分只在下方每条录音行内的 .hi-score 上进行 —— 故 .rec-side(右侧操作组)
+   与 .run-score 全部作废删除,避免留下永不命中的死样式。 */
 
 .rec-err {
   display: inline-flex;
@@ -2240,26 +2226,8 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   line-height: 1.2;
 }
 
-/* 「点击进行AI评分」白底圆角轻量胶囊 */
-.side-score {
-  height: 32px;
-  padding: 0 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid #d6f0e0;
-  border-radius: 16px;
-  background: #fff;
-  color: #1d8f50;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background .15s ease, border-color .15s ease;
-}
-.side-score:hover:not(:disabled) { background: #f4fdf8; border-color: #b6e5cb; }
-.side-score:disabled { opacity: .5; cursor: not-allowed; }
-.side-score mat-icon { font-size: 17px; width: 17px; height: 17px; }
+/* ★ 第五十一轮:原「点击进行AI评分」白底胶囊 .side-score 已随船票作废删除
+   (Run AI Scoring 移出录音条,评分入口统一为列表行内 .hi-score)。 */
 
 /* 圆按钮:与上方蓝色 play-round 统一为 38px(Forrest 2026-09-15 第十一轮)。
    ⚠️ 之前是 44px,溢出的原因:
@@ -2421,20 +2389,8 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
   flex: 0 0 auto;
   height: 100%;             /* 撑满 48px 胶囊,子元素垂直居中不溢出 */
 }
-/* 左右等宽占位:保证中间麦克风组相对右侧操作组【绝对居中】。
-   (对应 Forrest 示意里的 <div class="w-36"></div> 占位思想) */
-.rec-hold {
-  flex: 1 1 0;
-  min-width: 0;
-}
-.audio-stack .rec-pill .rec-side.rec-hold {
-  display: flex;
-  align-items: center;      /* 垂直居中 */
-  justify-content: flex-end;
-  gap: 8px;
-  flex: 1 1 0;
-  min-width: 0;
-}
+/* ★ 第五十一轮:左右等宽占位 .rec-hold 已删除 —— 它只为平衡右侧被移除的
+   评分按钮而存在;现在靠 .rec-pill 自身的 justify-content:center 居中。 */
 .zone-side { z-index: 2; }
 
 
@@ -2827,11 +2783,14 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .audio-stack .rec-pill {
   /* ★ 第二十三轮:与上方 Sample Reading 条高度【完全一致】(同为 52px),
      圆角恢复胶囊;内部一律 align-items:center 垂直居中。 */
-  /* ★ 第二十四轮:与 Sample Reading 完全一致 48px;
-     用 3 段等宽(占位 / 居中组 / 操作组)保证中间绝对居中;
-     overflow:hidden 兜底,麦克风与文字绝不溢出胶囊。 */
+  /* ★ 第二十四轮:与 Sample Reading 完全一致 48px;overflow:hidden 兜底,
+     麦克风与文字绝不溢出胶囊。
+     ★ 第五十一轮:右侧 Run AI Scoring 移除后左右占位一并取消,
+     改由 justify-content:center 让麦克风真正居中。 */
   display: flex;
   align-items: center;
+  justify-content: center;  /* 第五十一轮:占位删除后的居中保障 */
+  gap: 10px;                /* 录音波形与麦克风之间留一点呼吸 */
   /* ★ 第二十五轮:三高同时锁定,麦克风严密包裹,上下不溢出。 */
   height: 48px;
   min-height: 48px;
@@ -2909,31 +2868,9 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 @keyframes recPulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 /* ★ 第二十五轮:录制条内文字已删,此规则作废。 */
 
-/* 右侧:AI 评分胶囊 + 重置刷新 */
-.audio-stack .rec-pill .rec-side {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.audio-stack .rec-pill .side-score {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid #bbf7d0;
-  border-radius: 9999px;
-  background: #dcfce7;
-  color: #15803d;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.audio-stack .rec-pill .side-score:hover:not([disabled]) { background: #bbf7d0; }
-.audio-stack .rec-pill .side-score[disabled] { opacity: .5; cursor: not-allowed; }
-.audio-stack .rec-pill .side-score mat-icon { font-size: 16px; width: 16px; height: 16px; }
+/* ★ 第五十一轮:右侧评分胶囊已移除,下面的 .side-score / .rec-side 规则
+   全部删空(新评分入口是列表行内 .hi-score,见文件末尾同名区块)。
+   录音中出现的实时波形与错误提示跟随其后。 */
 /* 录音错误提示(宁可显式报错,不静默失败) */
 .audio-stack .rec-pill .rec-err {
   flex: 0 0 auto;

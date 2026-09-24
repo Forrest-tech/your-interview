@@ -490,6 +490,85 @@ const DICT: Record<string, Record<Lang, string>> = {
   'brand.name': { zh: 'AI 面试教练', en: 'AI Interview Coach', fr: 'Coach d entretien IA' },
   'account.menu': { zh: '账户', en: 'Account', fr: 'Compte' },
 
+  // ---------- 个人中心(M2.2) ----------
+  'profile.sub': {
+    zh: '管理你的资料、偏好与密码',
+    en: 'Manage your profile, preferences and password',
+    fr: 'Gérez votre profil, vos préférences et votre mot de passe'
+  },
+  'profile.nameLabel': { zh: '显示名称', en: 'Display name', fr: 'Nom affiché' },
+  'profile.nameHint': {
+    zh: '这个名字会显示在顶栏和菜单里',
+    en: 'Shown in the top bar and menus',
+    fr: 'Affiché dans la barre supérieure et les menus'
+  },
+  'profile.editName': { zh: '修改名称', en: 'Rename', fr: 'Renommer' },
+  'profile.saving': { zh: '保存中…', en: 'Saving…', fr: 'Enregistrement…' },
+  'profile.rolesLabel': { zh: '角色', en: 'Roles', fr: 'Rôles' },
+  'profile.noRoles': { zh: '未分配角色', en: 'No roles assigned', fr: 'Aucun rôle' },
+  'profile.createdAt': { zh: '注册于', en: 'Member since', fr: 'Membre depuis' },
+  'profile.lastLogin': { zh: '最近登录', en: 'Last sign-in', fr: 'Dernière connexion' },
+  'profile.prefs': { zh: '偏好设置', en: 'Preferences', fr: 'Préférences' },
+  'profile.prefsHint': {
+    zh: '保存在你的账号里,换设备登录也生效',
+    en: 'Saved to your account — applies on any device',
+    fr: 'Enregistrées dans votre compte — valables partout'
+  },
+  'profile.timezone': { zh: '时区', en: 'Time zone', fr: 'Fuseau horaire' },
+  'profile.tzHint': {
+    zh: '注册与登录时间按此时区显示',
+    en: 'Dates are shown in this zone',
+    fr: 'Les dates suivent ce fuseau'
+  },
+  'profile.security': { zh: '密码', en: 'Password', fr: 'Mot de passe' },
+  'profile.pwdHint': {
+    zh: '至少 12 位,需含大小写字母、数字和特殊字符;修改后所有设备需重新登录',
+    en: 'At least 12 characters with upper and lower case, a digit and a symbol; all devices must sign in again',
+    fr: 'Au moins 12 caractères avec majuscules, minuscules, chiffre et symbole ; reconnexion requise sur tous les appareils'
+  },
+  'profile.currentPwd': { zh: '当前密码', en: 'Current password', fr: 'Mot de passe actuel' },
+  'profile.newPwd': { zh: '新密码', en: 'New password', fr: 'Nouveau mot de passe' },
+  'profile.confirmPwd': { zh: '确认新密码', en: 'Confirm new password', fr: 'Confirmer le mot de passe' },
+  'profile.changePwd': { zh: '修改密码', en: 'Change password', fr: 'Changer le mot de passe' },
+  'profile.pwdWeak': {
+    zh: '新密码不满足强度要求(至少 12 位,含大小写字母、数字与特殊字符)',
+    en: 'The new password is not strong enough (12+ chars with upper/lower case, a digit and a symbol)',
+    fr: 'Mot de passe insuffisant (12 caractères min., majuscules, minuscules, chiffre et symbole)'
+  },
+  'profile.pwdSame': {
+    zh: '新密码不能与当前密码相同',
+    en: 'The new password must differ from the current one',
+    fr: 'Le nouveau mot de passe doit différer de l’actuel'
+  },
+  'profile.pwdMismatch': {
+    zh: '两次输入的新密码不一致',
+    en: 'The two new passwords differ',
+    fr: 'Les mots de passe ne correspondent pas'
+  },
+  'profile.pwdChanged': {
+    zh: '密码已修改,请重新登录',
+    en: 'Password changed — please sign in again',
+    fr: 'Mot de passe modifié — reconnectez-vous'
+  },
+  'profile.mustChange': {
+    zh: '管理员要求你修改密码,请在下方完成',
+    en: 'An administrator requires a password change — do it below',
+    fr: 'Un administrateur exige un changement de mot de passe — effectuez-le ci-dessous'
+  },
+  'profile.perms': { zh: '权限清单', en: 'Permissions', fr: 'Autorisations' },
+  'profile.permsSub': { zh: '共 {n} 项,按模块分组', en: '{n} in total, grouped by module', fr: '{n} au total, par module' },
+  'profile.noPerms': {
+    zh: '当前账号没有任何细粒度权限,仅能访问基础页面。',
+    en: 'This account has no fine-grained permissions — basic pages only.',
+    fr: 'Ce compte n’a aucune permission fine — pages de base uniquement.'
+  },
+  'profile.fetchFail': { zh: '未能获取最新资料', en: 'Could not fetch the latest profile', fr: 'Impossible de récupérer le profil' },
+  'profile.notLatest': {
+    zh: '以下内容来自本地缓存,可能不是最新的。',
+    en: 'Below is a cached copy and may be out of date.',
+    fr: 'Ci-dessous une copie en cache, potentiellement obsolète.'
+  },
+
   'practice.edit': { zh: '编辑', en: 'Edit', fr: 'Modifier' },
   'practice.cancel': { zh: '取消编辑', en: 'Cancel', fr: 'Annuler' },
   'practice.modeEditing': { zh: '编辑中', en: 'Editing', fr: 'Édition' },

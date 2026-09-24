@@ -19,7 +19,8 @@ public sealed record AuthTokens(string AccessToken, DateTimeOffset AccessTokenEx
 public sealed record UserProfile(
     Guid Id, string Email, string DisplayName, string? AvatarUrl,
     bool MustChangePassword, string[] Roles, string[] Permissions,
-    DateTimeOffset? LastLoginAt, string? PreferredLanguage, string? TimeZone);
+    DateTimeOffset? LastLoginAt, string? PreferredLanguage, string? TimeZone,
+    DateTimeOffset CreatedAt);
 
 public sealed record AuthResult(AuthTokens Tokens, UserProfile Profile);
 
@@ -83,6 +84,26 @@ public sealed class ChangePasswordCommandValidator : AbstractValidator<ChangePas
     }
 }
 
+/// <summary>
+/// 改资料入参校验(M2.2)。此前 UpdateProfileCommand 没有校验器,
+/// 传空 DisplayName 会直接把名字改成空串。
+/// 语言只认 zh/en/fr(前端 i18n 字典就这三种,存别的值等于脏数据);
+/// 头像只存 URL(≤2048),时区只存 IANA 名(≤64)。
+/// </summary>
+public sealed class UpdateProfileCommandValidator : AbstractValidator<UpdateProfileCommand>
+{
+    public UpdateProfileCommandValidator()
+    {
+        RuleFor(x => x.DisplayName).NotEmpty().MaximumLength(200)
+            .WithMessage("显示名称不能为空");
+        RuleFor(x => x.PreferredLanguage)
+            .Must(l => l is null || l is "zh" or "en" or "fr")
+            .WithMessage("语言仅支持 zh/en/fr");
+        RuleFor(x => x.TimeZone).MaximumLength(64);
+        RuleFor(x => x.AvatarUrl).MaximumLength(2048);
+    }
+}
+
 // ============================ 共享逻辑 ============================
 
 /// <summary>
@@ -127,7 +148,8 @@ public sealed class AuthResponseBuilder(
         await db.SaveChangesAsync(ct);
 
         var profile = new UserProfile(user.Id, user.Email, user.DisplayName, user.AvatarUrl,
-            user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage, user.TimeZone);
+            user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage,
+            user.TimeZone, user.CreatedAt);
 
         return new AuthResult(
             new AuthTokens(access, accessExp, rawRefresh, refreshExpires),
@@ -304,13 +326,17 @@ public sealed class UpdateProfileCommandHandler(IdentityDbContext db, UserPermis
         if (user is null) return Result.Failure<UserProfile>(Error.NotFound("用户"));
 
         user.Rename(request.DisplayName);
-        user.SetAvatar(request.AvatarUrl);
+        // ⚠️ null = 不修改(保留现值);空串 = 显式清除。
+        // 之前无条件 SetAvatar(request.AvatarUrl),而 JSON 里缺省就是 null ——
+        // 用户只是改个显示名,Google 头像就被抹掉了(M2.2 修复)。
+        if (request.AvatarUrl is not null) user.SetAvatar(request.AvatarUrl);
         user.SetPreferences(request.PreferredLanguage, request.TimeZone);
         await db.SaveChangesAsync(ct);
 
         var (roles, permissions) = await resolver.ResolveAsync(user.Id, ct);
         return Result.Success(new UserProfile(user.Id, user.Email, user.DisplayName, user.AvatarUrl,
-            user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage, user.TimeZone));
+            user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage,
+            user.TimeZone, user.CreatedAt));
     }
 }
 
@@ -324,6 +350,7 @@ public sealed class GetCurrentUserQueryHandler(IdentityDbContext db, UserPermiss
 
         var (roles, permissions) = await resolver.ResolveAsync(user.Id, ct);
         return Result.Success(new UserProfile(user.Id, user.Email, user.DisplayName, user.AvatarUrl,
-            user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage, user.TimeZone));
+            user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage,
+            user.TimeZone, user.CreatedAt));
     }
 }

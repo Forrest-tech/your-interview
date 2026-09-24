@@ -41,22 +41,30 @@
   </button>
   <mat-menu #langMenu="matMenu" class="app-menu" xPosition="before">
     @for (o of i18n.options; track o.code) {
-      <button mat-menu-item (click)="i18n.setLang(o.code)">
+      <button mat-menu-item (click)="switchLang(o.code)">
         <mat-icon>{{ i18n.lang() === o.code ? 'check' : 'blank' }}</mat-icon>
         <span>{{ t('lang.' + o.code) }}</span>
       </button>
     }
   </mat-menu>
 
-  <!-- 账户:只留头像图标,角色文字收进菜单 -->
+  <!-- 账户:有头像(Google 登录)显示图片,否则首字母;角色文字收进菜单 -->
   <button mat-icon-button [matMenuTriggerFor]="accountMenu" class="account-btn"
           [matTooltip]="t('account.menu')" matTooltipShowDelay="400">
-    <span class="avatar">{{ initial() }}</span>
+    @if (avatarUrl()) {
+      <img class="avatar-img" [src]="avatarUrl()" alt="" referrerpolicy="no-referrer" />
+    } @else {
+      <span class="avatar">{{ initial() }}</span>
+    }
   </button>
 
   <mat-menu #accountMenu="matMenu" xPosition="before" class="app-menu account-menu">
     <div class="menu-head">
-      <span class="menu-avatar">{{ initial() }}</span>
+      @if (avatarUrl()) {
+        <img class="menu-avatar-img" [src]="avatarUrl()" alt="" referrerpolicy="no-referrer" />
+      } @else {
+        <span class="menu-avatar">{{ initial() }}</span>
+      }
       <div class="menu-id">
         <div class="menu-name">{{ auth.displayName() }}</div>
         @if (roleText()) { <div class="menu-role">{{ roleText() }}</div> }

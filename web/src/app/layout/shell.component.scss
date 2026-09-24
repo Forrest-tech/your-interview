@@ -119,6 +119,27 @@
   background: rgba(255, 255, 255, 0.45);
 }
 
+/* 头像图片(M2.2):Google 登录用户顶栏直接显示其头像。
+   object-fit 保证非正方形图片也不变形;背景与首字母版一致,加载间隙不闪白。 */
+.avatar-img {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.menu-avatar-img {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: rgba(63, 81, 181, 0.14);
+}
+
 /* 菜单头部:头像 + 姓名 + 角色(角色文字只在菜单里出现) */
 .menu-head {
   display: flex;

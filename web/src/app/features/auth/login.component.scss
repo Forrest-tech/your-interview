@@ -65,6 +65,21 @@ mat-card-content { padding-top: 18px; }
 
 .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
+/* 中性提示(M2.2):改密成功被引导回来时用,绿色系,区别于红色报错 */
+.info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  background: #e6f4ea;
+  color: #1e7e34;
+  font-size: 13px;
+}
+
+.info mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
 /* ---- Google 登录(M2.1) ---- */
 .divider {
   display: flex;

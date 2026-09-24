@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, tap, map, catchError, throwError, of, shareReplay, finalize } from 'rxjs';
 import { ApiClient } from '../api/api-client';
+import { I18nService, Lang } from '../i18n/i18n.service';
 import { AuthResult, AuthUser, Tokens } from '../models/api.models';
 
 const TOKEN_KEY = 'yi.accessToken';
@@ -23,6 +24,7 @@ const USER_KEY = 'yi.user';
 export class AuthService {
   private readonly api = inject(ApiClient);
   private readonly router = inject(Router);
+  private readonly i18n = inject(I18nService);
 
   private readonly _user = signal<AuthUser | null>(readUser());
   readonly user = this._user.asReadonly();
@@ -82,6 +84,45 @@ export class AuthService {
     return this.api.get<{ enabled: boolean }>('/api/auth/google/status');
   }
 
+  /**
+   * 用服务端返回的最新资料覆盖本地缓存(M2.2)。
+   * 个人中心保存、/me 刷新都走这里 —— 顶栏名字/头像跟着 signal 立即更新,
+   * 不需要重新登录。preferredLanguage 非法值(脏数据)时不动当前语言。
+   */
+  applyProfile(u: AuthUser): void {
+    this._user.set(u);
+    localStorage.setItem(USER_KEY, JSON.stringify(u));
+    this.applyLanguage(u);
+  }
+
+  /**
+   * 保存资料/偏好到账号(PUT /api/auth/me),成功后同步本地缓存。
+   * 语义与后端对齐:不传的字段沿用当前值;avatarUrl 传 null = 保留,
+   * 传空串 = 清除(这是后端区分"不改"与"清空"的唯一方式)。
+   */
+  saveProfile(patch: {
+    displayName?: string;
+    avatarUrl?: string | null;
+    preferredLanguage?: string;
+    timeZone?: string;
+  }): Observable<AuthUser> {
+    const u = this._user();
+    if (!u) return throwError(() => new Error('尚未登录'));
+    const body = {
+      displayName: patch.displayName ?? u.displayName,
+      avatarUrl: patch.avatarUrl !== undefined ? patch.avatarUrl : (u.avatarUrl ?? null),
+      preferredLanguage: patch.preferredLanguage ?? u.preferredLanguage ?? null,
+      timeZone: patch.timeZone ?? u.timeZone ?? null
+    };
+    return this.api.put<AuthUser>('/api/auth/me', body).pipe(tap((nu) => this.applyProfile(nu)));
+  }
+
+  /** 账号里保存的界面语言若有效则全站切换(登录/刷新会话时调用)。 */
+  private applyLanguage(u: AuthUser): void {
+    const l = u.preferredLanguage;
+    if (l === 'zh' || l === 'en' || l === 'fr') this.i18n.setLang(l as Lang);
+  }
+
   register(email: string, displayName: string, password: string): Observable<AuthResult> {
     return this.api.post<AuthResult>('/api/auth/register', { email, displayName, password }).pipe(
       tap((r) => this.persist(r))
@@ -132,10 +173,7 @@ export class AuthService {
     }
 
     return this.api.get<AuthUser>('/api/auth/me').pipe(
-      tap((u) => {
-        this._user.set(u);
-        localStorage.setItem(USER_KEY, JSON.stringify(u));
-      }),
+      tap((u) => this.applyProfile(u)),
       catchError(() => {
         // /me 失败(令牌过期且刷新也救不回来)才清会话。
         this.clear();
@@ -192,6 +230,8 @@ export class AuthService {
     localStorage.setItem(REFRESH_KEY, r.tokens.refreshToken);
     localStorage.setItem(USER_KEY, JSON.stringify(r.profile));
     this._user.set(r.profile);
+    // 登录即采用账号里保存的语言偏好(个人中心"记住"的效果)
+    this.applyLanguage(r.profile);
   }
 
   private clear(): void {

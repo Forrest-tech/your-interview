@@ -1,8 +1,8 @@
 <div class="page">
   <header class="page-head">
     <div>
-      <h2>个人资料</h2>
-      <p class="sub">这里展示的是后端当前认可的账号信息与权限</p>
+      <h2>{{ t('account.profile') }}</h2>
+      <p class="sub">{{ t('profile.sub') }}</p>
     </div>
     <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
       <mat-icon>refresh</mat-icon>
@@ -13,13 +13,23 @@
     <mat-progress-bar mode="indeterminate"></mat-progress-bar>
   }
 
+  <!-- 管理员强制改密:顶部醒目警示(M2.2) -->
+  @if (hasUser() && mustChange()) {
+    <mat-card class="warn-card must-change">
+      <mat-icon>warning_amber</mat-icon>
+      <div>
+        <strong>{{ t('profile.mustChange') }}</strong>
+      </div>
+    </mat-card>
+  }
+
   <!-- 失败 + 有缓存:降级展示,明确告知不是最新 -->
   @if (usedFallback()) {
     <mat-card class="warn-card">
       <mat-icon>cloud_off</mat-icon>
       <div>
-        <strong>未能获取最新资料</strong>
-        <p>{{ error() }} —— 以下内容来自本地缓存,可能不是最新的。</p>
+        <strong>{{ t('profile.fetchFail') }}</strong>
+        <p>{{ error() }} —— {{ t('profile.notLatest') }}</p>
       </div>
     </mat-card>
   }
@@ -29,7 +39,7 @@
     <mat-card class="err-card">
       <mat-icon>error_outline</mat-icon>
       <div>
-        <strong>加载失败</strong>
+        <strong>{{ t('common.loadFailed') }}</strong>
         <p>{{ error() }}</p>
       </div>
       <div class="err-actions">
@@ -45,20 +55,63 @@
 
   @if (hasUser()) {
   <div class="cols">
-    <!-- 身份卡 -->
+    <!-- 身份卡:头像/名称(可编辑)/邮箱/角色/关键时间 -->
     <mat-card class="identity">
       <mat-card-content>
-        <div class="avatar">{{ initials() }}</div>
-        <h3>{{ displayName() }}</h3>
+        @if (avatarUrl()) {
+          <img class="avatar-img" [src]="avatarUrl()" alt="" referrerpolicy="no-referrer" />
+        } @else {
+          <div class="avatar">{{ initials() }}</div>
+        }
+
+        @if (!editingName()) {
+          <div class="name-row">
+            <h3>{{ displayName() }}</h3>
+            <button mat-icon-button class="name-edit-btn" (click)="startEditName()"
+                    [matTooltip]="t('profile.editName')" matTooltipShowDelay="300">
+              <mat-icon>edit</mat-icon>
+            </button>
+          </div>
+        } @else {
+          <div class="name-edit">
+            <mat-form-field appearance="outline" class="full name-field">
+              <mat-label>{{ t('profile.nameLabel') }}</mat-label>
+              <input matInput name="nameDraft" [(ngModel)]="nameDraft" maxlength="200">
+            </mat-form-field>
+            <div class="name-actions">
+              <button mat-raised-button color="primary"
+                      [disabled]="savingName() || !nameDraft.trim()"
+                      (click)="saveName()">
+                {{ savingName() ? t('profile.saving') : t('common.save') }}
+              </button>
+              <button mat-stroked-button [disabled]="savingName()" (click)="cancelEditName()">
+                {{ t('common.cancel') }}
+              </button>
+            </div>
+            <p class="hint">{{ t('profile.nameHint') }}</p>
+          </div>
+        }
+
         <p class="email">
           <mat-icon>mail_outline</mat-icon>
           <span>{{ user()?.email ?? '—' }}</span>
         </p>
 
+        <div class="meta">
+          <div class="meta-row">
+            <span class="section-label">{{ t('profile.createdAt') }}</span>
+            <span class="meta-val">{{ formatInZone(user()?.createdAt) }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="section-label">{{ t('profile.lastLogin') }}</span>
+            <span class="meta-val" data-testid="last-login">{{ formatInZone(user()?.lastLoginAt) }}</span>
+          </div>
+        </div>
+
         <div class="roles">
-          <span class="section-label">角色</span>
+          <span class="section-label">{{ t('profile.rolesLabel') }}</span>
           @if ((user()?.roles?.length ?? 0) === 0) {
-            <span class="muted">未分配角色</span>
+            <span class="muted">{{ t('profile.noRoles') }}</span>
           } @else {
             <mat-chip-set>
               @for (r of user()?.roles ?? []; track r) {
@@ -69,38 +122,114 @@
         </div>
 
         <a mat-stroked-button routerLink="/dashboard" class="back">
-          <mat-icon>arrow_back</mat-icon> 返回总览
+          <mat-icon>arrow_back</mat-icon> {{ t('common.backToMain') }}
         </a>
       </mat-card-content>
     </mat-card>
 
-    <!-- 权限清单 -->
-    <mat-card class="perms">
-      <mat-card-header>
-        <mat-card-title>权限清单</mat-card-title>
-        <mat-card-subtitle>共 {{ permissionCount() }} 项,按模块分组</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content>
-        @if (isEmptyPermissions()) {
-          <p class="empty">当前账号没有任何细粒度权限,仅能访问基础页面。</p>
-        } @else {
-          @for (g of permissionGroups(); track g.prefix) {
-            <section class="group">
-              <div class="group-head">
-                <span class="group-name">{{ g.label }}</span>
-                <span class="group-code">{{ g.prefix }}</span>
-                <span class="group-count">{{ g.permissions.length }}</span>
-              </div>
-              <mat-chip-set>
-                @for (p of g.permissions; track p) {
-                  <mat-chip class="perm-chip">{{ p }}</mat-chip>
-                }
-              </mat-chip-set>
-            </section>
+    <!-- 右列:偏好 + 安全 -->
+    <div class="stack">
+      <mat-card class="prefs">
+        <mat-card-header>
+          <mat-card-title>{{ t('profile.prefs') }}</mat-card-title>
+          <mat-card-subtitle>{{ t('profile.prefsHint') }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('common.language') }}</mat-label>
+            <mat-select name="langDraft" [(ngModel)]="langDraft" data-testid="lang-select">
+              @for (o of langOptions; track o.code) {
+                <mat-option [value]="o.code">{{ t('lang.' + o.code) }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('profile.timezone') }}</mat-label>
+            <mat-select name="tzDraft" [(ngModel)]="tzDraft" data-testid="tz-select">
+              @for (tz of tzOptions(); track tz.id) {
+                <mat-option [value]="tz.id">{{ tz.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <p class="hint">{{ t('profile.tzHint') }}</p>
+
+          <button mat-raised-button color="primary" class="full"
+                  [disabled]="savingPrefs()" (click)="savePrefs()">
+            {{ savingPrefs() ? t('profile.saving') : t('common.save') }}
+          </button>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="security">
+        <mat-card-header>
+          <mat-card-title>{{ t('profile.security') }}</mat-card-title>
+          <mat-card-subtitle>{{ t('profile.pwdHint') }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('profile.currentPwd') }}</mat-label>
+            <input matInput type="password" name="currentPwd" [(ngModel)]="currentPwd"
+                   autocomplete="current-password">
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('profile.newPwd') }}</mat-label>
+            <input matInput type="password" name="newPwd" [(ngModel)]="newPwd"
+                   autocomplete="new-password">
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('profile.confirmPwd') }}</mat-label>
+            <input matInput type="password" name="confirmPwd" [(ngModel)]="confirmPwd"
+                   autocomplete="new-password">
+          </mat-form-field>
+
+          @if (pwdError()) {
+            <p class="pwd-err">
+              <mat-icon>error_outline</mat-icon>
+              <span>{{ pwdError() }}</span>
+            </p>
           }
-        }
-      </mat-card-content>
-    </mat-card>
+
+          <button mat-raised-button color="warn" class="full"
+                  [disabled]="pwdBusy()" (click)="changePassword()">
+            {{ pwdBusy() ? t('profile.saving') : t('profile.changePwd') }}
+          </button>
+        </mat-card-content>
+      </mat-card>
+    </div>
   </div>
+
+  <!-- 权限清单 -->
+  @if (hasUser()) {
+  <mat-card class="perms">
+    <mat-card-header>
+      <mat-card-title>{{ t('profile.perms') }}</mat-card-title>
+      <mat-card-subtitle>{{ tn('profile.permsSub', permissionCount()) }}</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      @if (isEmptyPermissions()) {
+        <p class="empty">{{ t('profile.noPerms') }}</p>
+      } @else {
+        @for (g of permissionGroups(); track g.prefix) {
+          <section class="group">
+            <div class="group-head">
+              <span class="group-name">{{ g.label }}</span>
+              <span class="group-code">{{ g.prefix }}</span>
+              <span class="group-count">{{ g.permissions.length }}</span>
+            </div>
+            <mat-chip-set>
+              @for (p of g.permissions; track p) {
+                <mat-chip class="perm-chip">{{ p }}</mat-chip>
+              }
+            </mat-chip-set>
+          </section>
+        }
+      }
+    </mat-card-content>
+  </mat-card>
+  }
   }
 </div>

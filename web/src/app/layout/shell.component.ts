@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLinkActive, RouterLink, RouterOutlet } from '@angular/router';
+import { catchError, of } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,7 +12,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
 import { AuthService } from '../core/auth/auth.service';
-import { I18nService } from '../core/i18n/i18n.service';
+import { I18nService, Lang } from '../core/i18n/i18n.service';
 import { SubnavItem, SubnavService } from './subnav.service';
 
 export interface NavItem {
@@ -94,6 +95,9 @@ export class ShellComponent {
     return n.trim().charAt(0).toUpperCase();
   });
 
+  /** 头像图片地址(Google 登录用户);空则顶栏继续用首字母。 */
+  readonly avatarUrl = computed(() => this.auth.user()?.avatarUrl || '');
+
   /** 账户菜单里的角色文案(替代原来常驻顶栏的 "System Administrator")。 */
   readonly roleText = computed(() => {
     const roles = this.auth.user()?.roles ?? [];
@@ -105,6 +109,18 @@ export class ShellComponent {
 
   t(key: string): string {
     return this.i18n.t(key);
+  }
+
+  /**
+   * 切语言(M2.2):本地立即生效,同时把选择记到账号 ——
+   * 下次登录(包括换设备/换浏览器)自动恢复。保存失败不打扰用户:
+   * 语言切换本身已经成功了,只是"记住"这一步没成,静默即可。
+   */
+  switchLang(code: Lang): void {
+    this.i18n.setLang(code);
+    this.auth.saveProfile({ preferredLanguage: code })
+      .pipe(catchError(() => of(null)))
+      .subscribe();
   }
 
   toggleSidebar(): void {

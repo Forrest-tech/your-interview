@@ -33,6 +33,13 @@
           </button>
         </mat-form-field>
 
+        @if (notice()) {
+          <div class="info">
+            <mat-icon>info_outline</mat-icon>
+            <span>{{ notice() }}</span>
+          </div>
+        }
+
         @if (error()) {
           <div class="err">
             <mat-icon>error_outline</mat-icon>

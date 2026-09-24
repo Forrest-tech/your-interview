@@ -111,6 +111,17 @@ public sealed class AppUser : AuditableAggregateRoot
         Touch();
     }
 
+    /// <summary>
+    /// 解除强制改密(M2.2)。管理员把开关关掉时调用 ——
+    /// 之前处理器只会置位、不会复位,标记一旦设上就永远消不掉
+    /// (AdminResetPassword 顺手置位后,没有任何途径关掉)。
+    /// </summary>
+    public void ClearPasswordChangeRequirement()
+    {
+        MustChangePassword = false;
+        Touch();
+    }
+
     // ---------- 角色管理 ----------
 
     public void AssignRole(Guid roleId, Guid? assignedBy = null)

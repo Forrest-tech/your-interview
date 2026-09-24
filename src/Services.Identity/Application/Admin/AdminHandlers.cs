@@ -164,7 +164,12 @@ public sealed class AdminUpdateUserCommandHandler(IdentityDbContext db)
 {
     public async Task<Result> Handle(AdminUpdateUserCommand request, CancellationToken ct)
     {
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
+        // ⚠️ 必须带 Roles:ReplaceRoles 的幂等判断(Any(RoleId==))读的是聚合内的
+        // _roles 集合 —— 不 Include 就是空集,已有角色关系会被当新关系重复 INSERT,
+        // 撞 user_roles 主键 500(M2.2 修复;与 M1.5 Jobs/Interviews 的子实体问题同类,
+        // 但方向相反:那边是"该 Added 被当 Modified",这边是"该跳过被当新增")。
+        var user = await db.Users.Include(u => u.Roles)
+            .FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
         if (user is null) return Result.Failure(Error.NotFound("用户"));
 
         user.Rename(request.DisplayName);
@@ -173,6 +178,7 @@ public sealed class AdminUpdateUserCommandHandler(IdentityDbContext db)
         if (!request.IsActive && user.IsActive) user.Deactivate();
 
         if (request.RequirePasswordChange) user.RequirePasswordChange();
+        else user.ClearPasswordChangeRequirement();   // 开关语义:关掉=解除(M2.2)
 
         var roles = await db.Roles.Where(r => request.Roles.Contains(r.Name)).ToListAsync(ct);
         user.ReplaceRoles(roles.Select(r => r.Id));

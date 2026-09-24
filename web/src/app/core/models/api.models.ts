@@ -34,6 +34,17 @@ export interface AuthUser {
   displayName: string;
   roles: string[];
   permissions: string[];
+  /** 头像 URL(Google 登录用户 = Google 头像);无则用首字母占位。 */
+  avatarUrl?: string | null;
+  /** 管理员强制改密标记 —— 个人中心顶部据此显示警示条。 */
+  mustChangePassword?: boolean;
+  /** 最近一次成功登录(UTC ISO);个人中心按所选时区展示。 */
+  lastLoginAt?: string | null;
+  /** 账号偏好:界面语言(zh/en/fr)与 IANA 时区(默认 America/Toronto)。 */
+  preferredLanguage?: string | null;
+  timeZone?: string | null;
+  /** 账号创建时间。 */
+  createdAt?: string;
 }
 
 export interface AuthResult {

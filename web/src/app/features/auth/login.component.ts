@@ -34,6 +34,8 @@ export class LoginComponent implements OnInit {
   password = '';
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+  /** 中性提示(区别于红色报错):如改密成功后"请重新登录"。 */
+  readonly notice = signal<string | null>(null);
   readonly hidePassword = signal(true);
 
   /** Google 登录按钮是否展示(后端配置了凭据才展示)。 */
@@ -52,6 +54,10 @@ export class LoginComponent implements OnInit {
     // Google 流程失败时后端重定向回来带 googleError
     const gErr = q.get('googleError');
     if (gErr) this.error.set(gErr);
+
+    // 中性提示(如修改密码成功后被引导回来:"密码已修改,请重新登录")
+    const n = q.get('notice');
+    if (n) this.notice.set(n);
 
     // Google 回调把 token 放在 URL fragment(#access_token=…)带回来
     this.consumeGoogleHash();

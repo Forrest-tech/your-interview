@@ -54,11 +54,108 @@ mat-card { border-radius: 8px; }
   justify-content: center;
 }
 
+/* 头像图片(Google 登录用户),与首字母版同尺寸同占位 */
+.avatar-img {
+  width: 64px;
+  height: 64px;
+  margin: 6px auto 10px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: rgba(63, 81, 181, 0.12);
+}
+
 .identity h3 {
   margin: 0;
   font-size: 17px;
   font-weight: 600;
 }
+
+/* 名称 + 行内编辑按钮 */
+.name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.name-edit-btn {
+  --mdc-icon-button-size: 30px;
+  opacity: 0.55;
+
+  &:hover { opacity: 1; }
+}
+
+.name-edit { margin-top: 4px; text-align: left; }
+
+.name-field { margin-bottom: 4px; }
+
+.name-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  opacity: 0.55;
+  text-align: center;
+}
+
+/* 注册/最近登录 */
+.meta {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  text-align: left;
+}
+
+.meta-row { margin-bottom: 8px; }
+
+.meta-row:last-child { margin-bottom: 0; }
+
+.meta-val {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+/* ---------- 右列(偏好 + 安全两卡纵排) ---------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.stack mat-form-field.full { margin-bottom: 6px; }
+
+/* 修改密码的表单级错误行 */
+.pwd-err {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: #b3261e;
+}
+
+.pwd-err mat-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+/* 强制改密警示条(比降级提示更醒目一点) */
+.must-change {
+  border-left-color: #c62828;
+
+  mat-icon { color: #c62828; }
+}
+
+/* 权限清单整卡放下两列之下,占满宽度 */
+.perms { margin-top: 16px; }
 
 .email {
   display: flex;

@@ -8,11 +8,21 @@ using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
 using YourInterview.Services.Interviews.Infrastructure.Services;
+using YourInterview.Services.Interviews.Infrastructure.Storage;
 using YourInterview.SharedContracts;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults("interviews-api");
+
+// ---------- 录音文件存储(本地卷,数据库只存相对路径 + SHA-256) ----------
+builder.Services.AddSingleton<IInterviewAudioStore, LocalInterviewAudioStore>();
+
+// ---------- 当前用户(集成事件要带 UserId 给下游 Worker/Analytics) ----------
+// ⚠️ AddCurrentUser 不在 AddServiceDefaults 里 —— 按需显式调用(见其注释)。
+//    事件发布器 InterviewsIntegrationEventPublisher 构造注入 ICurrentUser,
+//    不注册会让 DI 校验直接失败 → 服务起不来。
+builder.Services.AddCurrentUser();
 
 // ---------- 数据库:独占 schema "interviews" ----------
 builder.Services.AddDbContext<InterviewsDbContext>((sp, options) =>
@@ -23,16 +33,6 @@ builder.Services.AddDbContext<InterviewsDbContext>((sp, options) =>
 });
 
 builder.Services.AddHealthChecks().AddDbContextCheck<InterviewsDbContext>("postgres");
-
-// ---------- CQRS 管道 ----------
-builder.Services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssembly(System.Reflection.Assembly.GetExecutingAssembly());
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.LoggingBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.ValidationBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.PerformanceBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.UnhandledExceptionBehavior<,>));
-});
 
 // ---------- 消息总线:转写完成 → 触发分析流水线 ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);

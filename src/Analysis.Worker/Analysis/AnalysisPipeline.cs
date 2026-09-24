@@ -51,6 +51,11 @@ public sealed class AnalysisPipeline(IEnumerable<IPipelineStage> stages,
 {
     public async Task<AnalysisArtifact> RunAsync(PipelineContext context, CancellationToken ct)
     {
+        // 工作目录由管线自己负责创建 —— Prepare 阶段要往里写 normalized.wav,
+        // 调用方(Consumer)只传路径不建目录。之前没人建它,Prepare 第一步就
+        // DirectoryNotFoundException(整条链路从未跑通过,所以没暴露)。
+        Directory.CreateDirectory(context.WorkingDirectory);
+
         // 按 Name 显式排序,不依赖 DI 注入顺序 —— 阶段顺序是业务约束,不能碰运气
         var ordered = new[] { "Prepare", "Transcribe", "Measure", "Diagnose" }
             .Select(name => stages.FirstOrDefault(s => s.Name == name))

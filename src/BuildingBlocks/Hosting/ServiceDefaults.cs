@@ -68,6 +68,12 @@ public static class ServiceDefaults
         RegisterValidators(builder.Services, System.Reflection.Assembly.GetEntryAssembly()!);
 
         // ---------- MediatR(扫描各服务自己的程序集) ----------
+        // ★ 2026-09-24(M1):这里是 MediatR 的**唯一**注册点。
+        //   之前 5 个服务在各自 Program.cs 里又 AddMediatR 一遍 ——
+        //   同一程序集扫两次 = 每个通知处理器注册两份 = 每条领域事件派发两次。
+        //   表现:Interviews 的分析事件双发、Worker 跑两遍(烧双倍 Azure 转写额度),
+        //   请求管道的 Logging/Validation 行为也都套了两层。
+        //   若某服务需要额外行为,在这里加,不要再在自己的 Program.cs 里 AddMediatR。
         builder.Services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(System.Reflection.Assembly.GetEntryAssembly()!);
@@ -75,6 +81,7 @@ public static class ServiceDefaults
             cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
             cfg.AddOpenBehavior(typeof(PerformanceBehavior<,>));
+            cfg.AddOpenBehavior(typeof(UnhandledExceptionBehavior<,>));
         });
 
         // ---------- CORS(本地 Angular dev server + Azure 前端) ----------

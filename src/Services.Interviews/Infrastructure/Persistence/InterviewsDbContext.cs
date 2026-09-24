@@ -160,11 +160,13 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.ContentType).HasMaxLength(200);
             e.Property(x => x.StoragePath).HasMaxLength(2048);
             e.Property(x => x.BlobUrl).HasMaxLength(2048);
+            e.Property(x => x.Sha256).HasMaxLength(64);          // 十六进制 SHA-256 正好 64 字符
             e.Property(x => x.SourceLanguage).HasMaxLength(20);
             e.Property(x => x.TranscriptText).HasMaxLength(500000);
             e.Property(x => x.TranscriptSegmentsJson).HasColumnType("text");
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.InterviewEntryId);
+            e.HasIndex(x => x.StoragePath);                       // 巡检按路径反查;软删条目清理孤儿文件也走它
         });
 
         b.Entity<InterviewQuestion>(e =>

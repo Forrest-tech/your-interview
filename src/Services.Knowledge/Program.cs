@@ -26,16 +26,6 @@ builder.Services.AddDbContext<KnowledgeDbContext>((sp, options) =>
 
 builder.Services.AddHealthChecks().AddDbContextCheck<KnowledgeDbContext>("postgres");
 
-// ---------- CQRS / 领域事件 ----------
-builder.Services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssembly(System.Reflection.Assembly.GetExecutingAssembly());
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.LoggingBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.ValidationBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.PerformanceBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.UnhandledExceptionBehavior<,>));
-});
-
 
 // ---------- 消息总线(掌握度变化 → Analytics) ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);

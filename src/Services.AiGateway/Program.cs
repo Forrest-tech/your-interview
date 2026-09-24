@@ -23,16 +23,6 @@ builder.Services.AddDbContext<AiGatewayDbContext>((sp, options) =>
 
 builder.Services.AddHealthChecks().AddDbContextCheck<AiGatewayDbContext>("postgres");
 
-// ---------- CQRS 管道 ----------
-builder.Services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssembly(System.Reflection.Assembly.GetExecutingAssembly());
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.LoggingBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.ValidationBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.PerformanceBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.UnhandledExceptionBehavior<,>));
-});
-
 // ---------- 当前用户(凭据是用户级数据,按 UserId 隔离) ----------
 builder.Services.AddCurrentUser();
 

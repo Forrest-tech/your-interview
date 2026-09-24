@@ -161,11 +161,17 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public IReadOnlyCollection<InterviewQuestion> Questions => _questions.AsReadOnly();
     public IReadOnlyCollection<InterviewWeakness> Weaknesses => _weaknesses.AsReadOnly();
 
-    /// <summary>合法流转表。集中定义,避免散落在各处 if-else。</summary>
+    /// <summary>
+    /// 合法流转表。集中定义,避免散落在各处 if-else。
+    ///
+    /// ★ 2026-09-24(M1):AssetsUploaded 允许直达 Transcribed ——
+    ///   "先传录音、再补一段现成转写文本/纪要"是真实用法,
+    ///   文本材料挂入即视为已转写(AttachAsset 里就是这么推进的)。
+    /// </summary>
     private static readonly Dictionary<InterviewStatus, InterviewStatus[]> AllowedTransitions = new()
     {
         [InterviewStatus.Draft] = [InterviewStatus.AssetsUploaded, InterviewStatus.Transcribing],
-        [InterviewStatus.AssetsUploaded] = [InterviewStatus.Transcribing, InterviewStatus.Draft],
+        [InterviewStatus.AssetsUploaded] = [InterviewStatus.Transcribing, InterviewStatus.Transcribed, InterviewStatus.Draft],
         [InterviewStatus.Transcribing] = [InterviewStatus.Transcribed, InterviewStatus.Failed],
         [InterviewStatus.Transcribed] = [InterviewStatus.Analyzing, InterviewStatus.Transcribing],
         [InterviewStatus.Analyzing] = [InterviewStatus.Analyzed, InterviewStatus.Failed],
@@ -201,13 +207,13 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public InterviewAsset AttachAsset(AssetKind kind, string fileName, string? contentType,
         long sizeBytes, string? storagePath, string? blobUrl, string? transcriptText = null,
         string? transcriptSegmentsJson = null, double? durationSeconds = null,
-        string sourceLanguage = "en")
+        string sourceLanguage = "en", string? sha256 = null)
     {
         if (Status == InterviewStatus.Analyzing || Status == InterviewStatus.Transcribing)
             throw new InvalidOperationException($"当前状态 {Status} 不允许变更材料,请等待流程结束");
 
         var asset = new InterviewAsset(Id, kind, fileName, contentType, sizeBytes, storagePath,
-            blobUrl, durationSeconds, sourceLanguage);
+            blobUrl, durationSeconds, sourceLanguage, sha256);
 
         // 文本类材料直接就是"已转写"状态,不需要走 STT
         if (kind is AssetKind.Transcript or AssetKind.Notes)
@@ -231,15 +237,27 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         return asset;
     }
 
-    /// <summary>开始转写(由分析 Worker 调用)。</summary>
+    /// <summary>开始转写(用户点「开始转写」,或 Worker 状态推进时调用)。</summary>
     public void StartTranscription()
     {
-        if (Status == InterviewStatus.Transcribed || Status == InterviewStatus.Analyzed)
-            return; // 幂等:重复消息不报错
+        // 幂等:流程中/已完成的不重复触发 ——
+        // 尤其 Transcribing:Worker 回写时也会调它,不挡住会重复发事件 → 重复跑管线。
+        // 注意 Transcribed **不在**守卫里:从"已转写"重新点开始 = 用户要求重跑
+        // (比如补传了更好的录音),这是状态机里 Transcribed → Transcribing 的合法流转。
+        if (Status is InterviewStatus.Transcribing or InterviewStatus.Analyzing
+            or InterviewStatus.Analyzed) return;
         if (!_assets.Any())
             throw new InvalidOperationException("还没有上传任何材料,无法开始转写");
+
         TransitionTo(InterviewStatus.Transcribing);
         Touch();
+
+        // 只在"真正开始"时发事件(带着录音的真实路径)→ 触发 Analysis.Worker。
+        // 之前这一步只改状态不发事件,点完按钮就石沉大海 —— M1 修复的核心断点。
+        var audio = _assets.FirstOrDefault(a =>
+            a.Kind == AssetKind.Audio && !string.IsNullOrWhiteSpace(a.StoragePath));
+        RaiseDomainEvent(new InterviewTranscriptionStartedDomainEvent(
+            Id, audio?.Id ?? Guid.Empty, audio?.StoragePath));
     }
 
     /// <summary>转写完成,回写全文 + 分段(分段 JSON 含说话人标签与时间戳)。</summary>
@@ -250,9 +268,15 @@ public sealed class InterviewEntry : AuditableAggregateRoot
 
         asset.SetTranscript(fullText, segmentsJson);
         TranscribedAt = DateTimeOffset.UtcNow;
+
+        // 只有状态**真正变为** Transcribed 才发事件。
+        // 之前无条件发 → Worker 每回写一次转写稿就再触发一轮分析,
+        // 分析又回写转写稿……事件风暴(重复烧 Azure 转写额度)。
+        var changed = Status != InterviewStatus.Transcribed;
         TransitionTo(InterviewStatus.Transcribed);
         Touch();
-        RaiseDomainEvent(new InterviewTranscribedDomainEvent(Id, assetId, fullText.Length));
+        if (changed)
+            RaiseDomainEvent(new InterviewTranscribedDomainEvent(Id, assetId, fullText.Length));
     }
 
     /// <summary>开始六维分析。</summary>
@@ -392,7 +416,7 @@ public sealed class InterviewAsset : Entity
 
     internal InterviewAsset(Guid interviewEntryId, AssetKind kind, string fileName,
         string? contentType, long sizeBytes, string? storagePath, string? blobUrl,
-        double? durationSeconds, string sourceLanguage)
+        double? durationSeconds, string sourceLanguage, string? sha256 = null)
     {
         InterviewEntryId = interviewEntryId;
         Kind = kind;
@@ -403,6 +427,8 @@ public sealed class InterviewAsset : Entity
         BlobUrl = blobUrl;
         DurationSeconds = durationSeconds;
         SourceLanguage = sourceLanguage;
+        Sha256 = sha256;
+        FileExists = storagePath is not null;   // 刚落盘的文件默认在;巡检会持续维护
         UploadedAt = DateTimeOffset.UtcNow;
     }
 
@@ -417,6 +443,15 @@ public sealed class InterviewAsset : Entity
 
     /// <summary>生产环境用 Azure Blob 的 URL。</summary>
     public string? BlobUrl { get; private set; }
+
+    /// <summary>内容摘要(上传时算好)。完整性巡检重算比对,不一致 = 文件被换过/损坏。</summary>
+    public string? Sha256 { get; private set; }
+
+    /// <summary>最近一次巡检确认文件还在。false 时前端应提示"录音丢失"。</summary>
+    public bool FileExists { get; private set; }
+
+    /// <summary>最近一次完整性巡检时间。</summary>
+    public DateTimeOffset? LastVerifiedAt { get; private set; }
 
     public double? DurationSeconds { get; private set; }
     public string SourceLanguage { get; private set; } = "en";
@@ -434,6 +469,13 @@ public sealed class InterviewAsset : Entity
     {
         TranscriptText = fullText;
         TranscriptSegmentsJson = segmentsJson;
+    }
+
+    /// <summary>完整性巡检回写:文件是否还在(及最近校验时间)。</summary>
+    internal void MarkVerified(bool exists)
+    {
+        FileExists = exists;
+        LastVerifiedAt = DateTimeOffset.UtcNow;
     }
 }
 
@@ -566,6 +608,13 @@ public sealed class InterviewWeakness : Entity
 
 public sealed record InterviewEntryCreatedDomainEvent(Guid EntryId, Guid CompanyId,
     string CompanyName, string Role) : DomainEventBase;
+
+/// <summary>
+/// 转写**真正开始**(用户点了「开始转写」,状态从 AssetsUploaded/Failed 进入 Transcribing)。
+/// 带着录音的真实存储路径 → Analysis.Worker 拿到就能直接跑,不用再猜文件在哪。
+/// </summary>
+public sealed record InterviewTranscriptionStartedDomainEvent(
+    Guid EntryId, Guid AssetId, string? StoragePath) : DomainEventBase;
 
 public sealed record InterviewTranscribedDomainEvent(Guid EntryId, Guid AssetId, int TextLength)
     : DomainEventBase;

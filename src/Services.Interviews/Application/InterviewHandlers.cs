@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.Services.Interviews.Domain;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
+using YourInterview.Services.Interviews.Infrastructure.Storage;
 
 namespace YourInterview.Services.Interviews.Application;
 
@@ -13,7 +14,8 @@ namespace YourInterview.Services.Interviews.Application;
 public sealed record AssetDto(
     Guid Id, string Kind, string FileName, string? ContentType, long SizeBytes,
     string? BlobUrl, double? DurationSeconds, string SourceLanguage, bool HasTranscript,
-    int TranscriptLength, DateTimeOffset UploadedAt);
+    int TranscriptLength, DateTimeOffset UploadedAt,
+    string? StoragePath = null, string? Sha256 = null, bool FileExists = true);
 
 public sealed record QuestionDto(
     Guid Id, int Sequence, string QuestionText, string? MyAnswerText, string Category,
@@ -105,7 +107,20 @@ public sealed record DeleteEntryCommand(Guid Id) : IRequest<Result>;
 public sealed record AttachAssetCommand(
     Guid EntryId, string Kind, string FileName, string? ContentType, long SizeBytes,
     string? StoragePath, string? BlobUrl, string? TranscriptText, string? TranscriptSegmentsJson,
-    double? DurationSeconds, string SourceLanguage = "en") : IRequest<Result<Guid>>;
+    double? DurationSeconds, string SourceLanguage = "en", string? Sha256 = null) : IRequest<Result<Guid>>;
+
+/// <summary>
+/// 真正的录音文件上传(multipart):字节流经 IInterviewAudioStore 原子落盘,
+/// 数据库只登记相对路径 + SHA-256 + 实际大小。之前 /assets 只收 JSON 元信息,
+/// 文件本体从来没存过 —— Worker 永远找不到文件,这是 M1 修复的第一断点。
+/// </summary>
+public sealed record UploadAssetFileCommand(
+    Guid EntryId, string FileName, string? ContentType, double? DurationSeconds,
+    string? SourceLanguage, Stream Content) : IRequest<Result<Guid>>;
+
+/// <summary>回放:取某条材料的音频流(前端 &lt;audio&gt; 直接指向这里)。</summary>
+public sealed record GetAssetAudioQuery(Guid EntryId, Guid AssetId)
+    : IRequest<Result<(Stream Stream, string ContentType, string FileName)>>;
 
 public sealed record SaveTranscriptCommand(Guid EntryId, Guid AssetId, string FullText,
     string? SegmentsJson) : IRequest<Result>;
@@ -204,6 +219,21 @@ public sealed class AttachAssetCommandValidator : AbstractValidator<AttachAssetC
     }
 }
 
+public sealed class UploadAssetFileCommandValidator : AbstractValidator<UploadAssetFileCommand>
+{
+    public UploadAssetFileCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.FileName).NotEmpty().MaximumLength(500)
+            .WithMessage("请选择要上传的录音文件");
+        // 大小上限在 Handler 里对着真实流校验(信 Form 长度不如信实读字节数),
+        // 这里只挡明显非法的值,避免双重报错口径。
+        RuleFor(x => x.DurationSeconds).InclusiveBetween(0, 24 * 3600)
+            .When(x => x.DurationSeconds.HasValue)
+            .WithMessage("录音时长不能超过 24 小时");
+    }
+}
+
 public sealed class AddQuestionCommandValidator : AbstractValidator<AddQuestionCommand>
 {
     public AddQuestionCommandValidator()
@@ -231,7 +261,8 @@ public static class InterviewMappingExtensions
     public static AssetDto ToDto(this InterviewAsset a) => new(
         a.Id, a.Kind.ToString(), a.FileName, a.ContentType, a.SizeBytes, a.BlobUrl,
         a.DurationSeconds, a.SourceLanguage, a.HasTranscript,
-        a.TranscriptText?.Length ?? 0, a.UploadedAt);
+        a.TranscriptText?.Length ?? 0, a.UploadedAt,
+        a.StoragePath, a.Sha256, a.FileExists);
 
     public static QuestionDto ToDto(this InterviewQuestion q) => new(
         q.Id, q.Sequence, q.QuestionText, q.MyAnswerText, q.Category.ToString(), q.Difficulty,
@@ -505,7 +536,8 @@ public sealed class AttachAssetCommandHandler(InterviewsDbContext db)
         {
             var asset = e.AttachAsset(kind, request.FileName, request.ContentType, request.SizeBytes,
                 request.StoragePath, request.BlobUrl, request.TranscriptText,
-                request.TranscriptSegmentsJson, request.DurationSeconds, request.SourceLanguage);
+                request.TranscriptSegmentsJson, request.DurationSeconds, request.SourceLanguage,
+                request.Sha256);
             await db.SaveChangesAsync(ct);
             return Result.Success(asset.Id);
         }
@@ -513,6 +545,93 @@ public sealed class AttachAssetCommandHandler(InterviewsDbContext db)
         {
             return Result.Failure<Guid>(Error.Conflict("Asset.InvalidState", ex.Message));
         }
+    }
+}
+
+public sealed class UploadAssetFileCommandHandler(
+    InterviewsDbContext db,
+    IInterviewAudioStore store,
+    ILogger<UploadAssetFileCommandHandler> logger)
+    : IRequestHandler<UploadAssetFileCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(UploadAssetFileCommand request, CancellationToken ct)
+    {
+        if (request.Content is null || request.Content.CanRead == false)
+            return Result.Failure<Guid>(Error.Validation("Asset.EmptyFile", "没有收到音频内容"));
+
+        if (request.Content.Length > LocalInterviewAudioStore.MaxFileBytes)
+            return Result.Failure<Guid>(Error.Validation("Asset.TooLarge",
+                $"录音超过上限 {LocalInterviewAudioStore.MaxFileBytes / 1024 / 1024}MB"));
+
+        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
+            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
+
+        // 1) 先落盘(文件名由存储层生成,天然唯一;tmp+原子改名,崩溃不留半截文件)
+        StoredAudioFile stored;
+        try
+        {
+            stored = await store.SaveAsync(request.EntryId, request.FileName, request.Content, ct);
+        }
+        catch (InvalidOperationException ex)   // 扩展名白名单拒绝
+        {
+            return Result.Failure<Guid>(Error.Validation("Asset.BadFormat", ex.Message));
+        }
+
+        // 2) 再登记元数据。落盘成功但入库失败时,尽力清掉孤儿文件 ——
+        //    留着它,巡检永远报"数据库里没有这条资产"。
+        try
+        {
+            var asset = e.AttachAsset(AssetKind.Audio, request.FileName, request.ContentType,
+                stored.SizeBytes, stored.RelativePath, null, null, null,
+                request.DurationSeconds, request.SourceLanguage ?? "en", stored.Sha256);
+            await db.SaveChangesAsync(ct);
+            return Result.Success(asset.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            await TryDeleteQuietly(stored.RelativePath, ct);
+            return Result.Failure<Guid>(Error.Conflict("Asset.InvalidState", ex.Message));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "登记录音元数据失败,清理已落盘文件 {Path}", stored.RelativePath);
+            await TryDeleteQuietly(stored.RelativePath, ct);
+            throw;
+        }
+    }
+
+    private async Task TryDeleteQuietly(string relativePath, CancellationToken ct)
+    {
+        try { await store.DeleteAsync(relativePath, ct); }
+        catch (Exception ex) { logger.LogWarning(ex, "清理孤儿录音文件失败 {Path}", relativePath); }
+    }
+}
+
+public sealed class GetAssetAudioQueryHandler(
+    InterviewsDbContext db,
+    IInterviewAudioStore store)
+    : IRequestHandler<GetAssetAudioQuery, Result<(Stream, string, string)>>
+{
+    public async Task<Result<(Stream, string, string)>> Handle(GetAssetAudioQuery request,
+        CancellationToken ct)
+    {
+        var a = await db.Assets.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == request.AssetId
+                && x.InterviewEntryId == request.EntryId, ct);
+        if (a is null) return Result.Failure<(Stream, string, string)>(Error.NotFound("材料"));
+
+        if (string.IsNullOrWhiteSpace(a.StoragePath))
+            return Result.Failure<(Stream, string, string)>(new Error("AssetAudio.NotFound",
+                "该材料没有本地文件(可能是外部链接或纯文本)", ErrorType.NotFound));
+
+        var stream = await store.OpenReadAsync(a.StoragePath, ct);
+        if (stream is null)
+            return Result.Failure<(Stream, string, string)>(new Error("AssetAudio.NotFound",
+                "录音文件已丢失,可重新上传;系统巡检会标记此类资产", ErrorType.NotFound));
+
+        return Result.Success((stream,
+            a.ContentType ?? "application/octet-stream", a.FileName));
     }
 }
 

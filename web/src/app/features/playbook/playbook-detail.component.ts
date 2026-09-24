@@ -184,6 +184,41 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopPolling();
+    // 释放试听用的 Object URL —— 泄漏会让已卸载的音频 blob 无法被 GC
+    for (const url of this.assetAudioUrls.values()) URL.revokeObjectURL(url);
+    this.assetAudioUrls.clear();
+  }
+
+  // ---------------------------------------------------------------- 试听
+
+  /**
+   * 已上传录音的试听缓存(assetId → objectURL)。
+   *
+   * ★ 2026-09-24(M1):录音现在真正落盘了,支持回放。
+   * 不能把后端端点直接塞给 `<audio src>` —— 浏览器发那个请求不带
+   * Authorization 头,而端点带鉴权 → 必然 401(ai-practice 踩过的坑)。
+   * 所以走 ApiClient(带 Bearer)拉 blob,再 createObjectURL。
+   * 缓存后同一条重复试听不再重复下载。
+   */
+  readonly assetAudioUrls = new Map<string, string>();
+  readonly audioLoadingId = signal<string | null>(null);
+
+  /** 拉取并缓存某条录音的音频流,失败如实提示。 */
+  playAsset(a: InterviewAsset): void {
+    if (this.assetAudioUrls.has(a.id)) return;   // 已缓存(模板直接渲染 <audio>)
+
+    this.audioLoadingId.set(a.id);
+    this.api.getBlob(`/api/interviews/${this.id()}/assets/${a.id}/audio`)
+      .subscribe({
+        next: (blob) => {
+          this.assetAudioUrls.set(a.id, URL.createObjectURL(blob));
+          this.audioLoadingId.set(null);
+        },
+        error: (e: Error) => {
+          this.audioLoadingId.set(null);
+          this.snack.open(e.message || '音频加载失败', '关闭', { duration: 5000 });
+        }
+      });
   }
 
   // ---------------------------------------------------------------- 加载
@@ -263,10 +298,11 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------- 材料
 
   /**
-   * 上传录音。
+   * 上传录音(multipart)。
    *
-   * 后端 /assets 接受 JSON,但文件本体走 IFormFile 之外的存储路径,
-   * 所以这里用 ApiClient.upload(FormData)—— 由它统一带 boundary 和 kind 字段。
+   * ★ 2026-09-24(M1 修复):后端 /assets 现在按 Content-Type 分流 ——
+   * FormData 走真正的文件落盘(原子写 + SHA-256),数据库登记相对路径;
+   * 之前这里发 FormData、后端却只收 JSON,类型不匹配,录音从未存上过。
    */
   onFileSelected(ev: Event, assetId?: string): void {
     const input = ev.target as HTMLInputElement;
@@ -275,8 +311,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
     this.busy.set('upload');
     this.api.upload<{ id: string }>(
-      `/api/interviews/${this.id()}/assets`, file,
-      { kind: 'Audio', assetId: assetId ?? '' })
+      `/api/interviews/${this.id()}/assets`, file)
       .subscribe({
         next: () => {
           input.value = '';   // 清空,否则同名文件第二次选不会触发 change

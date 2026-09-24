@@ -22,15 +22,6 @@ builder.Services.AddDbContext<AnalyticsDbContext>(options =>
 
 builder.Services.AddHealthChecks().AddDbContextCheck<AnalyticsDbContext>("postgres");
 
-builder.Services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssembly(System.Reflection.Assembly.GetExecutingAssembly());
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.LoggingBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.ValidationBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.PerformanceBehavior<,>));
-    cfg.AddOpenBehavior(typeof(YourInterview.BuildingBlocks.Behaviors.UnhandledExceptionBehavior<,>));
-});
-
 builder.Services.AddCurrentUser();
 
 // ---------- 消息总线:Analytics 是纯消费者(读模型由事件驱动) ----------

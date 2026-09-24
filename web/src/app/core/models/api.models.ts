@@ -213,6 +213,10 @@ export interface InterviewAsset {
   sourceLanguage?: string;
   uploadedAt: string;
   hasTranscript?: boolean;
+  /** 内容摘要(上传时服务端计算)。完整性巡检比对这个值。 */
+  sha256?: string;
+  /** 最近一次巡检确认文件还在;false = 录音文件已丢失,前端要给出警示。 */
+  fileExists?: boolean;
 }
 
 export interface InterviewDetail extends InterviewEntry {

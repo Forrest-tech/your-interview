@@ -402,7 +402,7 @@
             <mat-card class="panel upload-card">
               <mat-card-header>
                 <mat-card-title>上传录音</mat-card-title>
-                <mat-card-subtitle>支持 mp3 / m4a / wav;上传后点「开始转写」</mat-card-subtitle>
+                <mat-card-subtitle>支持 mp3 / m4a / wav / webm / ogg;上传后点「开始转写」自动跑分析</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
                 <input type="file" accept="audio/*"
@@ -434,7 +434,9 @@
                     @if (a.sourceLanguage) { · {{ a.sourceLanguage }} }
                   </span>
                 </div>
-                @if (a.hasTranscript) {
+                @if (a.kind === 'Audio' && a.fileExists === false) {
+                  <span class="chip warn">文件丢失</span>
+                } @else if (a.hasTranscript) {
                   <span class="chip ok">已转写</span>
                 } @else {
                   <span class="chip idle">未转写</span>
@@ -443,6 +445,17 @@
 
               @if (a.blobUrl) {
                 <audio controls [src]="a.blobUrl" class="player"></audio>
+              } @else if (a.kind === 'Audio' && a.fileExists !== false) {
+                <!-- M1:录音已真正落盘,支持回放。经鉴权拉 blob(直接 src 会 401) -->
+                @if (assetAudioUrls.has(a.id)) {
+                  <audio controls [src]="assetAudioUrls.get(a.id)" class="player"></audio>
+                } @else {
+                  <button mat-stroked-button (click)="playAsset(a)"
+                          [disabled]="audioLoadingId() !== null">
+                    <mat-icon>{{ audioLoadingId() === a.id ? 'hourglass_top' : 'play_arrow' }}</mat-icon>
+                    {{ audioLoadingId() === a.id ? '加载中…' : '试听' }}
+                  </button>
+                }
               }
 
               <!-- 转写文本回填。音频材料没有文本时这就是主入口 -->

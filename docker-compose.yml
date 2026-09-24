@@ -113,6 +113,12 @@ services:
     environment:
       <<: *service-env
       ASPNETCORE_URLS: "http://+:8080"
+      # ★ 2026-09-24(M1):面试录音落盘目录。与 analysis-worker 挂同一个卷 ——
+      #   interviews 上传写盘,Worker 从同一位置读文件跑转写/分析。
+      #   数据库只存相对路径,两个服务各自锚定自己的根(容器内路径一致即可)。
+      INTERVIEW_STORAGE_DIR: /app/storage/interviews
+    volumes:
+      - interview-recordings:/app/storage/interviews
     depends_on: *service-deps
     healthcheck: *service-health
 
@@ -254,8 +260,12 @@ services:
       ServiceAccount__Email: "${SERVICE_ACCOUNT_EMAIL:-service.analysis@your-interview.local}"
       ServiceAccount__Password: "${SERVICE_ACCOUNT_PASSWORD:-}"
       Storage__WorkDirectory: "/app/.analysis"
+      # ★ 2026-09-24(M1):面试录音的读取位置 —— 与 interviews 服务共享同一个卷。
+      #   事件里带的是相对路径,Worker 用这个根把它拼成容器内绝对路径。
+      INTERVIEW_STORAGE_DIR: /app/storage/interviews
     volumes:
       - analysis-work:/app/.analysis
+      - interview-recordings:/app/storage/interviews
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -271,3 +281,5 @@ volumes:
   analysis-work:
   # ★ 录音音频持久化:不留在此处的容器 storage 会随容器重建被清掉
   assessment-recordings:
+  # ★ 2026-09-24(M1):面试录音 —— interviews 写 / analysis-worker 读,同一份数据
+  interview-recordings:

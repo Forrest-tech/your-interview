@@ -88,6 +88,8 @@
   &.busy { background: #e3f2fd; color: #1565c0; }
   &.ready { background: #fff8e1; color: #f57f17; }
   &.idle { background: #eeeeee; color: #616161; }
+  /* 录音文件丢失(M1 完整性巡检标记):红色系但比 bad 柔和,提示而非报错 */
+  &.warn { background: #fff3e0; color: #e65100; }
 }
 
 /* 六维徽章:总分单独高亮,是唯一有底色的一块 */

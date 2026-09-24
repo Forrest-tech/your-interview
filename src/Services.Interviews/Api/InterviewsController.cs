@@ -92,24 +92,76 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     // ---------------- 材料(录音 / 文本) ----------------
 
     /// <summary>
-    /// 新增材料。
-    /// 传 Audio 时只登记元信息(文件本身走 Blob/本地存储),之后由分析流水线转写;
-    /// 传 Transcript/Notes 时直接带文本内容,聚合会立刻推进到"已转写"。
+    /// 新增材料 —— 双形态端点:
+    ///   · multipart/form-data(带 file):**真正的录音上传**,字节落盘到共享存储卷,
+    ///     数据库登记相对路径 + SHA-256 + 实际大小(前端 ApiClient.upload 走这条);
+    ///   · application/json:登记元信息/直接带文本(Worker、脚本、粘贴转写稿走这条)。
+    ///
+    /// 之前这个端点只收 JSON,而前端一直发 FormData —— 类型不匹配导致录音上传从未成功,
+    /// 这是 M1 地基修复的第一断点。
     /// </summary>
     [HttpPost("{id:guid}/assets")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
-    public async Task<IResult> AttachAsset(Guid id, [FromBody] AttachAssetBody body, CancellationToken ct)
+    [RequestSizeLimit(210 * 1024 * 1024)]   // 200MB 文件 + 表单余量
+    public async Task<IResult> AttachAsset(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new AttachAssetCommand(id, body.Kind, body.FileName,
+        // ---- 形态一:multipart 文件上传 ----
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync(ct);
+            var file = form.Files.FirstOrDefault(f => f.Name == "file" || f.Name == "File");
+            if (file is null || file.Length == 0)
+                return Results.Problem(title: "没有收到音频文件",
+                    detail: "请在表单里带上 file 字段。",
+                    statusCode: StatusCodes.Status400BadRequest);
+
+            double? duration = null;
+            if (form.TryGetValue("durationSeconds", out var dRaw)
+                && double.TryParse(dRaw, out var d) && d >= 0)
+                duration = d;
+
+            var cmd = new UploadAssetFileCommand(id, file.FileName,
+                string.IsNullOrWhiteSpace(file.ContentType) ? null : file.ContentType,
+                duration, form["sourceLanguage"].FirstOrDefault(), file.OpenReadStream());
+
+            var r = await sender.Send(cmd, ct);
+            return r.IsSuccess
+                ? Results.Created($"/api/interviews/{id}", new { id = r.Value })
+                : r.ToProblemDetails();
+        }
+
+        // ---- 形态二:JSON(保持原有契约) ----
+        var body = await Request.ReadFromJsonAsync<AttachAssetBody>(ct);
+        if (body is null)
+            return Results.Problem(title: "请求体为空", statusCode: StatusCodes.Status400BadRequest);
+
+        var jr = await sender.Send(new AttachAssetCommand(id, body.Kind, body.FileName,
             body.ContentType, body.SizeBytes, body.StoragePath, body.BlobUrl, body.TranscriptText,
-            body.TranscriptSegmentsJson, body.DurationSeconds, body.SourceLanguage ?? "en"), ct);
-        return r.IsSuccess
-            ? Results.Created($"/api/interviews/{id}", new { id = r.Value })
-            : r.ToProblemDetails();
+            body.TranscriptSegmentsJson, body.DurationSeconds, body.SourceLanguage ?? "en",
+            body.Sha256), ct);
+        return jr.IsSuccess
+            ? Results.Created($"/api/interviews/{id}", new { id = jr.Value })
+            : jr.ToProblemDetails();
     }
 
-    /// <summary>回写转写文本(分析 Worker 或人工校对后调用)。</summary>
-    /// <summary>开始转写(分析 Worker 调用的第一步:AssetsUploaded → Transcribing)。</summary>
+    /// <summary>回放:取某条录音材料的音频流。前端 &lt;audio src&gt; 直接指向这里。</summary>
+    [HttpGet("{id:guid}/assets/{assetId:guid}/audio")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> GetAssetAudio(Guid id, Guid assetId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetAssetAudioQuery(id, assetId), ct);
+        if (!r.IsSuccess) return r.ToProblemDetails();
+
+        var (stream, contentType, fileName) = r.Value;
+        // enableRangeProcessing:浏览器音频控件才能拖动进度条
+        return Results.File(stream, contentType, fileName, enableRangeProcessing: true);
+    }
+
+    /// <summary>
+    /// 开始转写 —— 这是分析流水线的**触发器**:
+    /// 状态进入 Transcribing 时发出领域事件(带录音真实路径)→ Analysis.Worker 消费,
+    /// 跑 STT → 回写转写稿 → 自动推进六维分析。用户点「开始转写」后无需再手动操作。
+    /// </summary>
     [HttpPost("{id:guid}/transcription/start")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> StartTranscription(Guid id, CancellationToken ct)
@@ -264,7 +316,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return from switch
         {
             InterviewStatus.Draft => [nameof(InterviewStatus.AssetsUploaded), nameof(InterviewStatus.Transcribing)],
-            InterviewStatus.AssetsUploaded => [nameof(InterviewStatus.Transcribing), nameof(InterviewStatus.Draft)],
+            InterviewStatus.AssetsUploaded => [nameof(InterviewStatus.Transcribing), nameof(InterviewStatus.Transcribed), nameof(InterviewStatus.Draft)],
             InterviewStatus.Transcribing => [nameof(InterviewStatus.Transcribed), nameof(InterviewStatus.Failed)],
             InterviewStatus.Transcribed => [nameof(InterviewStatus.Analyzing), nameof(InterviewStatus.Transcribing)],
             InterviewStatus.Analyzing => [nameof(InterviewStatus.Analyzed), nameof(InterviewStatus.Failed)],
@@ -286,7 +338,7 @@ public sealed record AttachAssetBody(
     string Kind, string FileName, string? ContentType = null, long SizeBytes = 0,
     string? StoragePath = null, string? BlobUrl = null, string? TranscriptText = null,
     string? TranscriptSegmentsJson = null, double? DurationSeconds = null,
-    string? SourceLanguage = null);
+    string? SourceLanguage = null, string? Sha256 = null);
 
 public sealed record TranscriptBody(string FullText, string? SegmentsJson = null);
 

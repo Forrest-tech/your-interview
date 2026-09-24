@@ -29,9 +29,10 @@ public sealed class InterviewAnalysisRequestedConsumer(
 
         logger.LogInformation("开始分析面试条目 {EntryId}(材料 {AssetId})", m.InterviewEntryId, m.AssetId);
 
-        // 源文件路径:事件里没有就按约定推导(./storage/interviews/{entryId}/audio.*)
-        var sourcePath = m.StoragePath ?? ResolveDefaultPath(m.InterviewEntryId,
-            config["Storage:RootDirectory"]);
+        // 源文件路径:事件里带真实路径(M1 修复后 Interviews 落盘时写入)。
+        // 路径是**相对**存储根的(interviews 与本 Worker 挂同一个卷);
+        // 没带的老消息/纯文本条目才走兜底推导 —— 那条链路本来就是坏的,别再依赖。
+        var sourcePath = ResolveSourcePath(m.StoragePath, m.InterviewEntryId, config);
         if (!File.Exists(sourcePath))
         {
             logger.LogWarning("找不到源文件 {Path},报告失败", sourcePath);
@@ -77,6 +78,75 @@ public sealed class InterviewAnalysisRequestedConsumer(
             // 让消息进重试,最终进死信队列;_error 队列里的消息可以人工重投
             throw;
         }
+    }
+
+    /// <summary>
+    /// 解析录音源文件路径。
+    ///
+    /// 规则:
+    ///   1. 事件里的 StoragePath 是 Interviews 落盘时写入的**相对路径**(如
+    ///      "{entryId}/{uuid}.m4a")—— 锚定到本服务配置的面试存储根;
+    ///   2. 绝对路径(遗留/手工触发)原样使用;
+    ///   3. 没有路径才走旧约定推导(storage/interviews/{entryId}/audio.*)。
+    ///
+    /// 根目录解析与 Interviews 的 LocalInterviewAudioStore 保持同一优先级:
+    /// Storage:InterviewsRoot 配置 > INTERVIEW_STORAGE_DIR 环境变量 >
+    /// Storage:RootDirectory 下的 storage/interviews > 当前目录约定。
+    /// docker-compose 里两个服务挂**同一个卷**,所以路径天然一致。
+    /// </summary>
+    private static string ResolveSourcePath(string? storagePath, Guid entryId, IConfiguration config)
+    {
+        if (!string.IsNullOrWhiteSpace(storagePath))
+        {
+            var normalized = storagePath.Replace('\\', '/');
+            if (Path.IsPathRooted(normalized) || normalized.Contains(".."))
+                return storagePath;   // 绝对路径:信发送方(服务内部事件,非用户输入)
+
+            return Path.Combine(InterviewsRoot(config),
+                normalized.Replace('/', Path.DirectorySeparatorChar));
+        }
+
+        return ResolveDefaultPath(entryId, config["Storage:RootDirectory"]);
+    }
+
+    /// <summary>
+    /// 面试录音存储根 —— 解析链与 Interviews 的 LocalInterviewAudioStore **完全一致**:
+    ///   1. Storage:InterviewsRoot 配置;
+    ///   2. INTERVIEW_STORAGE_DIR 环境变量(docker-compose 里与 interviews 共卷,两边同值);
+    ///   3. {Storage:RootDirectory}/interviews(沙盒统一存储根派生);
+    ///   4. 仓库根下 storage/interviews(本地裸跑,锚定解决方案目录而非各自 cwd);
+    ///   5. cwd/storage/interviews(最后兜底)。
+    /// 两边同一条链,相对路径拼出来才是同一个文件。
+    /// </summary>
+    private static string InterviewsRoot(IConfiguration config)
+    {
+        var dedicated = config["Storage:InterviewsRoot"];
+        if (!string.IsNullOrWhiteSpace(dedicated)) return dedicated;
+
+        var env = Environment.GetEnvironmentVariable("INTERVIEW_STORAGE_DIR");
+        if (!string.IsNullOrWhiteSpace(env)) return env;
+
+        var rootDir = config["Storage:RootDirectory"];
+        if (!string.IsNullOrWhiteSpace(rootDir)) return Path.Combine(rootDir, "interviews");
+
+        var solutionRoot = FindSolutionRoot();
+        if (solutionRoot is not null) return Path.Combine(solutionRoot, "storage", "interviews");
+
+        return Path.Combine(Directory.GetCurrentDirectory(), "storage", "interviews");
+    }
+
+    private static string? FindSolutionRoot()
+    {
+        // 与 Interviews 的 LocalInterviewAudioStore.FindSolutionRoot 同一逻辑:
+        // 优先 docker-compose.yml 所在的仓库根(.sln 在 src/ 下,只认它会锚错一层)。
+        DirectoryInfo? withCompose = null, withSln = null;
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
+        {
+            if (dir.GetFiles("docker-compose.yml").Length > 0) withCompose = dir;
+            if (dir.GetFiles("*.sln").Length > 0) withSln = dir;
+        }
+        return (withCompose ?? withSln)?.FullName;
     }
 
     private static string ResolveDefaultPath(Guid entryId, string? configRoot)

@@ -516,6 +516,28 @@ mat-progress-bar {
   }
 }
 
+/* 流水线记录(任务台账):紧凑行式布局,排障信息一眼可扫 */
+.jobs-panel {
+  .job-row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 13px;
+
+    & + .job-row { border-top: 1px dashed rgba(0, 0, 0, 0.08); }
+  }
+
+  .job-meta { color: rgba(0, 0, 0, 0.6); }
+
+  .job-reason {
+    flex-basis: 100%;
+    color: #c62828;
+    font-size: 12.5px;
+  }
+}
+
 .asset {
   padding: 14px 18px;
 

@@ -89,6 +89,16 @@ public sealed record GetInterviewStatsQuery : IRequest<Result<InterviewStatsDto>
 public sealed record ListWeaknessesQuery(Guid EntryId, string? Category = null)
     : IRequest<Result<IReadOnlyList<WeaknessDto>>>;
 
+/// <summary>任务台账:该条目的分析任务历史(含投递尝试与失败原因)。</summary>
+public sealed record ListAnalysisJobsQuery(Guid EntryId)
+    : IRequest<Result<IReadOnlyList<AnalysisJobDto>>>;
+
+/// <summary>任务台账行 DTO —— 给前端"流水线记录"区直出。</summary>
+public sealed record AnalysisJobDto(
+    Guid Id, string JobType, string Status, int Attempts, int MaxAttempts,
+    string? FailureReason, string? LastError,
+    DateTimeOffset CreatedAt, DateTimeOffset? DispatchedAt, DateTimeOffset? CompletedAt);
+
 // ============================ 命令 ============================
 
 public sealed record CreateEntryCommand(
@@ -401,6 +411,23 @@ public sealed class ListWeaknessesQueryHandler(InterviewsDbContext db)
     }
 }
 
+public sealed class ListAnalysisJobsQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<ListAnalysisJobsQuery, Result<IReadOnlyList<AnalysisJobDto>>>
+{
+    public async Task<Result<IReadOnlyList<AnalysisJobDto>>> Handle(
+        ListAnalysisJobsQuery request, CancellationToken ct)
+    {
+        var jobs = await db.AnalysisJobs.AsNoTracking()
+            .Where(j => j.InterviewEntryId == request.EntryId)
+            .OrderByDescending(j => j.CreatedAt)
+            .ToListAsync(ct);
+
+        return Result.Success<IReadOnlyList<AnalysisJobDto>>(jobs.Select(j => new AnalysisJobDto(
+            j.Id, j.JobType.ToString(), j.Status.ToString(), j.Attempts, j.MaxAttempts,
+            j.FailureReason, j.LastError, j.CreatedAt, j.DispatchedAt, j.CompletedAt)).ToList());
+    }
+}
+
 public sealed class GetInterviewStatsQueryHandler(InterviewsDbContext db)
     : IRequestHandler<GetInterviewStatsQuery, Result<InterviewStatsDto>>
 {
@@ -647,6 +674,8 @@ public sealed class SaveTranscriptCommandHandler(InterviewsDbContext db)
         try
         {
             e.CompleteTranscription(request.AssetId, request.FullText, request.SegmentsJson);
+            // 转写稿落库 = 管线走完了前半程:同事务关单(Succeeded)
+            await db.StageCloseOpenJobsAsync(request.EntryId, AnalysisJobStatus.Succeeded, null, ct);
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }
@@ -693,6 +722,8 @@ public sealed class ApplyAnalysisCommandHandler(InterviewsDbContext db)
             e.ApplyAnalysis(request.Overall, request.Pronunciation, request.Fluency,
                 request.Structure, request.TechnicalDepth, request.Relevance, request.Summary,
                 request.Questions, request.Weaknesses);
+            // 分析结果回写 = 流水线终点:同事务关单
+            await db.StageCloseOpenJobsAsync(request.EntryId, AnalysisJobStatus.Succeeded, null, ct);
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }
@@ -713,6 +744,9 @@ public sealed class MarkEntryFailedCommandHandler(InterviewsDbContext db)
         try
         {
             e.MarkFailed(request.Reason);
+            // 失败上报:同事务把任务关成 Failed,原因留档可查
+            await db.StageCloseOpenJobsAsync(request.EntryId, AnalysisJobStatus.Failed,
+                request.Reason, ct);
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }

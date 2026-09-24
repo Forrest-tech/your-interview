@@ -18,6 +18,11 @@ public static class ResultExtensions
             statusCode: GetStatusCode(result.Error.Type),
             title: GetTitle(result.Error.Type),
             type: GetTypeUri(result.Error.Type),
+            // 域层写的都是用户可读的中文消息(如"当前状态 X 不允许…"),
+            // 透出成 RFC 9457 的 detail —— 前端能直接展示原因,
+            // 排障时也不至于只看到 code 猜半天(M1.2 联调教训)
+            detail: string.IsNullOrWhiteSpace(result.Error.Description)
+                ? null : result.Error.Description,
             extensions: new Dictionary<string, object?>
             {
                 ["code"] = result.Error.Code,

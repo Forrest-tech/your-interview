@@ -19,6 +19,27 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
     public DbSet<InterviewQuestion> Questions => Set<InterviewQuestion>();
     public DbSet<InterviewWeakness> Weaknesses => Set<InterviewWeakness>();
 
+    /// <summary>分析任务台账(发件箱)。派发器与回写端点共用。</summary>
+    public DbSet<AnalysisJob> AnalysisJobs => Set<AnalysisJob>();
+
+    /// <summary>
+    /// 给该条目所有未关单的任务排定终态(只改跟踪状态,不落库 ——
+    /// 由调用方随后的 SaveChangesAsync 与业务变更**同一事务**提交)。
+    ///
+    /// 调用点:转写稿回写/分析结果回写(→ Succeeded)、失败上报(→ Failed)。
+    /// 已关单的任务不动(幂等):首次结论不被重复回写覆盖。
+    /// </summary>
+    public async Task StageCloseOpenJobsAsync(Guid entryId, AnalysisJobStatus status,
+        string? reason, CancellationToken ct = default)
+    {
+        var open = await AnalysisJobs
+            .Where(j => j.InterviewEntryId == entryId)
+            .Where(AnalysisJob.IsOpenFilter)   // ⚠️ 计算属性 IsOpen 进不了查询
+            .ToListAsync(ct);
+        foreach (var job in open)
+            job.Close(status, reason);
+    }
+
     /// <summary>
     /// 把"新加进聚合子集合、但 Id 由 C# 端生成"的子实体显式标成 Added。
     ///
@@ -198,6 +219,27 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.SourceType).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => x.Category);
+        });
+
+        b.Entity<AnalysisJob>(e =>
+        {
+            e.ToTable("analysis_jobs");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.IdempotencyKey).HasMaxLength(100).IsRequired();
+            e.Property(x => x.PayloadJson).HasMaxLength(4000).IsRequired();
+            e.Property(x => x.FailureReason).HasMaxLength(4000);
+            e.Property(x => x.LastError).HasMaxLength(4000);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.JobType).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => x.InterviewEntryId);
+            e.HasIndex(x => x.Status);
+
+            // ★ 单飞约束:同一幂等键最多一个未关单任务(Pending/Dispatched)。
+            // 部分唯一索引:关单(Succeeded/Failed/Dead)的历史行不占坑,
+            // 重跑转写会新建任务行,历史与单飞两全。
+            e.HasIndex(x => x.IdempotencyKey)
+                .IsUnique()
+                .HasFilter("\"Status\" IN ('Pending', 'Dispatched')");
         });
     }
 }

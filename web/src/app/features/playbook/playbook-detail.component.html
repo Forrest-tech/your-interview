@@ -419,6 +419,39 @@
             </mat-card>
           }
 
+          <!-- 流水线记录:任务台账直出(投递尝试/失败原因留痕,排障第一入口) -->
+          @if (jobs().length > 0) {
+            <mat-card class="panel jobs-panel">
+              <mat-card-header>
+                <mat-card-title>流水线记录</mat-card-title>
+                <mat-card-subtitle>每次「开始转写」一行;失败原因与投递尝试留档可查</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                @for (j of jobs(); track j.id) {
+                  <div class="job-row">
+                    <span class="chip"
+                          [class.ok]="j.status === 'Succeeded'"
+                          [class.bad]="j.status === 'Failed' || j.status === 'Dead'"
+                          [class.busy]="j.status === 'Pending' || j.status === 'Dispatched'"
+                          [class.idle]="j.status !== 'Succeeded' && j.status !== 'Failed' && j.status !== 'Dead' && j.status !== 'Pending' && j.status !== 'Dispatched'">
+                      {{ jobStatusLabel[j.status] || j.status }}
+                    </span>
+                    <span class="job-meta">
+                      {{ j.jobType === 'Transcription' ? '转写分析' : '分析' }}
+                      · 尝试 {{ j.attempts }}/{{ j.maxAttempts }}
+                      · {{ j.createdAt | date: 'MM-dd HH:mm' }}
+                    </span>
+                    @if (j.failureReason) {
+                      <span class="job-reason">{{ j.failureReason }}</span>
+                    } @else if (j.lastError) {
+                      <span class="job-reason">投递错误:{{ j.lastError }}</span>
+                    }
+                  </div>
+                }
+              </mat-card-content>
+            </mat-card>
+          }
+
           @for (a of assets(); track a.id) {
             <mat-card class="asset">
               <div class="asset-head">

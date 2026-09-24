@@ -245,6 +245,15 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>任务台账:该条目的分析任务历史(投递尝试/失败原因,排障第一入口)。</summary>
+    [HttpGet("{id:guid}/jobs")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> Jobs(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListAnalysisJobsQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     // ---------------- 短板 ----------------
 
     /// <summary>短板清单(可按 category 过滤),复盘的第一入口。</summary>

@@ -29,13 +29,21 @@ builder.Services.AddDbContext<InterviewsDbContext>((sp, options) =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("InterviewsDb"),
         npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history", InterviewsDbContext.Schema));
-    options.AddInterceptors(new DomainEventDispatchInterceptor(sp.GetRequiredService<MediatR.IPublisher>()));
+    // 拦截器顺序无所谓(职责正交):
+    //   AnalysisJobOutboxInterceptor —— SavingChanges:领域事件 → 任务行(同事务);
+    //   DomainEventDispatchInterceptor —— SavedChanges:领域事件 → 应用内通知。
+    options.AddInterceptors(
+        new AnalysisJobOutboxInterceptor(sp.GetRequiredService<ICurrentUser>()),
+        new DomainEventDispatchInterceptor(sp.GetRequiredService<MediatR.IPublisher>()));
 });
 
 builder.Services.AddHealthChecks().AddDbContextCheck<InterviewsDbContext>("postgres");
 
 // ---------- 消息总线:转写完成 → 触发分析流水线 ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
+
+// ---------- 分析任务派发器:台账(Pending)→ RabbitMQ,至少一次投递 + 卡单补发 ----------
+builder.Services.AddHostedService<AnalysisJobDispatcher>();
 
 // ---------- 鉴权 ----------
 var jwtSection = builder.Configuration.GetSection("Jwt");

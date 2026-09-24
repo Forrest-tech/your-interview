@@ -225,6 +225,20 @@ export interface InterviewDetail extends InterviewEntry {
   weaknesses?: InterviewWeakness[];
 }
 
+/** 分析任务台账行 —— 「流水线记录」区直出(投递尝试与失败原因留痕)。 */
+export interface AnalysisJob {
+  id: string;
+  jobType: 'Transcription' | 'Analysis' | string;
+  status: 'Pending' | 'Dispatched' | 'Succeeded' | 'Failed' | 'Dead' | string;
+  attempts: number;
+  maxAttempts: number;
+  failureReason?: string;
+  lastError?: string;
+  createdAt: string;
+  dispatchedAt?: string;
+  completedAt?: string;
+}
+
 // ============================ 技术栈(Knowledge) ============================
 
 export type MasteryLevel = 'New' | 'Learning' | 'Familiar' | 'Proficient' | 'Mastered';

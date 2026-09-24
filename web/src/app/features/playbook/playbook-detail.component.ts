@@ -20,7 +20,7 @@ import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  InterviewAsset, InterviewDetail, InterviewQuestion, InterviewStatus, InterviewWeakness
+  AnalysisJob, InterviewAsset, InterviewDetail, InterviewQuestion, InterviewStatus, InterviewWeakness
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -153,6 +153,26 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly assets = computed(() => this.entry()?.assets ?? []);
   readonly audioAssets = computed(() =>
     this.assets().filter((a) => (a.kind ?? '').toLowerCase() === 'audio'));
+
+  /**
+   * 分析任务台账(流水线记录)。
+   * 与详情分开拉:详情 15s 轮询时任务列表也该跟着刷新(投递中 → 已回写)。
+   */
+  readonly jobs = signal<AnalysisJob[]>([]);
+
+  /** 台账状态 → 中文标签(与后端状态机一一对应,直出不下拉)。 */
+  readonly jobStatusLabel: Record<string, string> = {
+    Pending: '待投递',
+    Dispatched: '已投递',
+    Succeeded: '已完成',
+    Failed: '失败',
+    Dead: '投递终止'
+  };
+
+  private loadJobs(): void {
+    this.api.get<AnalysisJob[]>(`/api/interviews/${this.id()}/jobs`)
+      .subscribe({ next: (j) => this.jobs.set(j ?? []), error: () => this.jobs.set([]) });
+  }
   readonly isPolling = computed(() =>
     PlaybookDetailComponent.POLLING_STATES.includes(this.entry()?.status ?? ''));
 
@@ -226,6 +246,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   load(showSpinner = true): void {
     if (showSpinner) this.loading.set(true);
     this.error.set(null);
+    this.loadJobs();
 
     this.api.get<InterviewDetail>(`/api/interviews/${this.id()}`).subscribe({
       next: (d) => {

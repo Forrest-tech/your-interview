@@ -465,10 +465,17 @@
                     · {{ humanSize(a.sizeBytes) }}
                     @if (a.durationSeconds) { · {{ humanDuration(a.durationSeconds) }} }
                     @if (a.sourceLanguage) { · {{ a.sourceLanguage }} }
+                    @if (a.kind === 'Audio' && a.integrityStatus === 'Ok' && a.lastVerifiedAt) {
+                      · 已校验 {{ a.lastVerifiedAt | date: 'MM-dd HH:mm' }}
+                    }
                   </span>
                 </div>
                 @if (a.kind === 'Audio' && a.fileExists === false) {
                   <span class="chip warn">文件丢失</span>
+                } @else if (a.kind === 'Audio'
+                    && (a.integrityStatus === 'SizeMismatch' || a.integrityStatus === 'HashMismatch')) {
+                  <!-- M1.3 巡检:文件在但内容对不上(截断/被换过)—— 录音同样不可信 -->
+                  <span class="chip warn">文件损坏</span>
                 } @else if (a.hasTranscript) {
                   <span class="chip ok">已转写</span>
                 } @else {

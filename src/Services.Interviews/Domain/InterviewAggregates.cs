@@ -409,6 +409,19 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     }
 }
 
+/// <summary>文件完整性巡检结论(M1.3)。null = 从未巡检过(新上传的文件视为 Ok)。</summary>
+public enum AssetIntegrity
+{
+    /// <summary>文件在,大小与 SHA-256 都与上传时一致。</summary>
+    Ok,
+    /// <summary>文件不在了(被误删 / 卷被卸载 / 误清理)。</summary>
+    Missing,
+    /// <summary>文件在但字节数对不上 —— 大概率被截断或换成了别的文件。</summary>
+    SizeMismatch,
+    /// <summary>大小一致但摘要变了 —— 内容被改写(同名不同文件)。</summary>
+    HashMismatch
+}
+
 /// <summary>面试材料(录音 / 转写文本 / 手写纪要)。</summary>
 public sealed class InterviewAsset : Entity
 {
@@ -428,7 +441,10 @@ public sealed class InterviewAsset : Entity
         DurationSeconds = durationSeconds;
         SourceLanguage = sourceLanguage;
         Sha256 = sha256;
-        FileExists = storagePath is not null;   // 刚落盘的文件默认在;巡检会持续维护
+        // 刚落盘的文件必然完整(写入即校验);巡检会持续维护这个结论
+        FileExists = storagePath is not null;
+        IntegrityStatus = storagePath is not null ? AssetIntegrity.Ok : null;
+        LastVerifiedAt = storagePath is not null ? DateTimeOffset.UtcNow : null;
         UploadedAt = DateTimeOffset.UtcNow;
     }
 
@@ -450,8 +466,11 @@ public sealed class InterviewAsset : Entity
     /// <summary>最近一次巡检确认文件还在。false 时前端应提示"录音丢失"。</summary>
     public bool FileExists { get; private set; }
 
-    /// <summary>最近一次完整性巡检时间。</summary>
+    /// <summary>最近一次完整性巡检时间(上传即首次校验)。</summary>
     public DateTimeOffset? LastVerifiedAt { get; private set; }
+
+    /// <summary>最近一次巡检的完整性结论。null = 从未校验(仅无文件的资产)。</summary>
+    public AssetIntegrity? IntegrityStatus { get; private set; }
 
     public double? DurationSeconds { get; private set; }
     public string SourceLanguage { get; private set; } = "en";
@@ -471,10 +490,15 @@ public sealed class InterviewAsset : Entity
         TranscriptSegmentsJson = segmentsJson;
     }
 
-    /// <summary>完整性巡检回写:文件是否还在(及最近校验时间)。</summary>
-    internal void MarkVerified(bool exists)
+    /// <summary>
+    /// 完整性巡检回写(M1.3):结论与时间戳一并落。
+    /// Missing 之外 FileExists 保持 true —— 文件在,只是内容不对,
+    /// 前端对 Missing 显示「文件丢失」、对两种 Mismatch 显示「文件损坏」。
+    /// </summary>
+    internal void RecordIntegrity(AssetIntegrity integrity)
     {
-        FileExists = exists;
+        IntegrityStatus = integrity;
+        FileExists = integrity != AssetIntegrity.Missing;
         LastVerifiedAt = DateTimeOffset.UtcNow;
     }
 }

@@ -217,6 +217,10 @@ export interface InterviewAsset {
   sha256?: string;
   /** 最近一次巡检确认文件还在;false = 录音文件已丢失,前端要给出警示。 */
   fileExists?: boolean;
+  /** 完整性巡检结论:'Ok' | 'Missing' | 'SizeMismatch' | 'HashMismatch'。 */
+  integrityStatus?: string | null;
+  /** 最近一次巡检时间(上传即首次校验)。 */
+  lastVerifiedAt?: string | null;
 }
 
 export interface InterviewDetail extends InterviewEntry {

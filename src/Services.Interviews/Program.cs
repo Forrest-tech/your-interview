@@ -45,6 +45,9 @@ builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 // ---------- 分析任务派发器:台账(Pending)→ RabbitMQ,至少一次投递 + 卡单补发 ----------
 builder.Services.AddHostedService<AnalysisJobDispatcher>();
 
+// ---------- 录音完整性巡检:文件在不在/大小/摘要,结论回写供前端警示 ----------
+builder.Services.AddHostedService<AudioIntegritySweepService>();
+
 // ---------- 鉴权 ----------
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("缺少 Jwt:SigningKey");

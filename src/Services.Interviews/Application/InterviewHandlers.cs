@@ -15,7 +15,8 @@ public sealed record AssetDto(
     Guid Id, string Kind, string FileName, string? ContentType, long SizeBytes,
     string? BlobUrl, double? DurationSeconds, string SourceLanguage, bool HasTranscript,
     int TranscriptLength, DateTimeOffset UploadedAt,
-    string? StoragePath = null, string? Sha256 = null, bool FileExists = true);
+    string? StoragePath = null, string? Sha256 = null, bool FileExists = true,
+    string? IntegrityStatus = null, DateTimeOffset? LastVerifiedAt = null);
 
 public sealed record QuestionDto(
     Guid Id, int Sequence, string QuestionText, string? MyAnswerText, string Category,
@@ -272,7 +273,8 @@ public static class InterviewMappingExtensions
         a.Id, a.Kind.ToString(), a.FileName, a.ContentType, a.SizeBytes, a.BlobUrl,
         a.DurationSeconds, a.SourceLanguage, a.HasTranscript,
         a.TranscriptText?.Length ?? 0, a.UploadedAt,
-        a.StoragePath, a.Sha256, a.FileExists);
+        a.StoragePath, a.Sha256, a.FileExists,
+        a.IntegrityStatus?.ToString(), a.LastVerifiedAt);
 
     public static QuestionDto ToDto(this InterviewQuestion q) => new(
         q.Id, q.Sequence, q.QuestionText, q.MyAnswerText, q.Category.ToString(), q.Difficulty,

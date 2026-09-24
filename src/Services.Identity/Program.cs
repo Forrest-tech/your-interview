@@ -12,7 +12,6 @@ using YourInterview.Services.Identity.Infrastructure.Persistence;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Identity.Infrastructure.Services;
 using YourInterview.Services.Identity.Infrastructure.Security;
-
 var builder = WebApplication.CreateBuilder(args);
 const string ServiceName = "identity-api";
 
@@ -53,6 +52,11 @@ builder.AddServiceDefaults(ServiceName, services =>
     services.AddScoped<IJwtTokenService, JwtTokenService>();
     services.AddScoped<UserPermissionResolver>();
     services.AddScoped<AuthResponseBuilder>();
+
+    // ---------- Google 登录(M2.1):凭据在 Google Auth Platform,回调走 /api/auth/google/callback ----------
+    services.Configure<GoogleOAuthOptions>(builder.Configuration.GetSection(GoogleOAuthOptions.SectionName));
+    services.AddScoped<GoogleOAuthService>();
+    services.AddHttpClient(GoogleOAuthService.HttpClientName);
 
     // ---------- JWT 认证 ----------
     var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();

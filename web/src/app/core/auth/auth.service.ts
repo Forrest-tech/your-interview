@@ -67,6 +67,21 @@ export class AuthService {
     );
   }
 
+  /**
+   * Google 登录收尾(M2.1):后端回调把 token 放在 URL fragment 里带回,
+   * 这里落库并拉取 /me 建立会话。失败(令牌无效)会清掉残留并返回 null。
+   */
+  completeExternalLogin(accessToken: string, refreshToken: string): Observable<AuthUser | null> {
+    localStorage.setItem(TOKEN_KEY, accessToken);
+    localStorage.setItem(REFRESH_KEY, refreshToken);
+    return this.restoreSession();
+  }
+
+  /** Google 登录是否可用(后端配置了 OAuth 凭据)。匿名端点。 */
+  googleLoginStatus(): Observable<{ enabled: boolean }> {
+    return this.api.get<{ enabled: boolean }>('/api/auth/google/status');
+  }
+
   register(email: string, displayName: string, password: string): Observable<AuthResult> {
     return this.api.post<AuthResult>('/api/auth/register', { email, displayName, password }).pipe(
       tap((r) => this.persist(r))

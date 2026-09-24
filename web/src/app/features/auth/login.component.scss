@@ -65,6 +65,36 @@ mat-card-content { padding-top: 18px; }
 
 .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
+/* ---- Google 登录(M2.1) ---- */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 12px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12.5px;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.google-btn {
+  height: 42px;
+  font-size: 14.5px;
+  justify-content: center;
+  border-color: rgba(0, 0, 0, 0.18);
+  background: #fff;
+}
+.g-mark {
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+}
+
 .foot {
   font-size: 12px;
   opacity: 0.5;

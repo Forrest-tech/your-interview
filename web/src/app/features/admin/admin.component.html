@@ -1,8 +1,8 @@
 <div class="page">
   <header class="page-head">
     <div>
-      <h2>管理后台</h2>
-      <p class="sub">用户、角色与操作审计</p>
+      <h2>{{ t('admin.title') }}</h2>
+      <p class="sub">{{ t('admin.sub') }}</p>
     </div>
     <button mat-icon-button (click)="loadStats()" [matTooltip]="t('admin.refreshStats')">
       <mat-icon>refresh</mat-icon>
@@ -28,20 +28,47 @@
                  animationDuration="120ms">
 
     <!-- ============================ 用户 ============================ -->
-    <mat-tab label="用户">
+    <mat-tab [label]="t('admin.tabUsers')">
       <div class="tab-body">
         <div class="tab-toolbar">
           <mat-form-field appearance="outline" class="search">
-            <mat-label>搜索邮箱 / 显示名</mat-label>
+            <mat-label>{{ t('admin.searchUser') }}</mat-label>
             <input matInput [value]="userSearch()"
                    (input)="onUserSearchInput($any($event.target).value)"
                    (keyup.enter)="onUserSearchEnter()">
             <mat-icon matPrefix>search</mat-icon>
           </mat-form-field>
-          <span class="count-note">共 {{ userTotal() }} 个用户</span>
+
+          <mat-form-field appearance="outline" class="filter">
+            <mat-label>{{ t('admin.colRoles') }}</mat-label>
+            <mat-select [value]="userRoleFilter()" (selectionChange)="userRoleFilter.set($any($event).value); onUserFilterChange()">
+              <mat-option value="">{{ t('common.all') }}</mat-option>
+              @for (r of roles(); track r.id) {
+                <mat-option [value]="r.name">{{ r.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter">
+            <mat-label>{{ t('admin.colStatus') }}</mat-label>
+            <mat-select [value]="userStatusFilter()" (selectionChange)="userStatusFilter.set($any($event).value); onUserFilterChange()">
+              <mat-option value="">{{ t('common.all') }}</mat-option>
+              <mat-option value="true">{{ t('admin.activate') }}</mat-option>
+              <mat-option value="false">{{ t('admin.deactivate') }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <span class="count-note">{{ tn('admin.totalUsers', userTotal()) }}</span>
+
           <button mat-stroked-button (click)="loadUsers()">
-            <mat-icon>refresh</mat-icon> 刷新
+            <mat-icon>refresh</mat-icon> {{ t('common.refresh') }}
           </button>
+
+          @if (canWriteUsers()) {
+            <button mat-raised-button color="primary" (click)="openCreateUser()">
+              <mat-icon>person_add</mat-icon> {{ t('admin.newUser') }}
+            </button>
+          }
         </div>
 
         @if (usersLoading()) {
@@ -52,30 +79,35 @@
           <mat-card class="err-card">
             <mat-icon>error_outline</mat-icon>
             <div>
-              <strong>加载失败</strong>
+              <strong>{{ t('common.loadFailed') }}</strong>
               <p>{{ usersError() }}</p>
             </div>
           </mat-card>
         }
 
         @if (!usersLoading() && users().length === 0 && !usersError()) {
-          <p class="empty">没有匹配的用户。</p>
+          <p class="empty">{{ t('admin.noUser') }}</p>
         }
 
         @if (users().length > 0) {
           <table mat-table [dataSource]="users()" class="data-table">
             <ng-container matColumnDef="email">
-              <th mat-header-cell *matHeaderCellDef>邮箱</th>
-              <td mat-cell *matCellDef="let u" class="mono">{{ u.email }}</td>
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colEmail') }}</th>
+              <td mat-cell *matCellDef="let u" class="mono">
+                {{ u.email }}
+                @if (isSelf(u)) {
+                  <span class="self-tag">{{ t('admin.yourAccount') }}</span>
+                }
+              </td>
             </ng-container>
 
             <ng-container matColumnDef="displayName">
-              <th mat-header-cell *matHeaderCellDef>显示名</th>
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colName') }}</th>
               <td mat-cell *matCellDef="let u">{{ u.displayName }}</td>
             </ng-container>
 
             <ng-container matColumnDef="roles">
-              <th mat-header-cell *matHeaderCellDef>角色</th>
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colRoles') }}</th>
               <td mat-cell *matCellDef="let u">
                 @if ((u.roles?.length ?? 0) === 0) {
                   <span class="muted">—</span>
@@ -90,39 +122,55 @@
             </ng-container>
 
             <ng-container matColumnDef="isActive">
-              <th mat-header-cell *matHeaderCellDef>状态</th>
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colStatus') }}</th>
               <td mat-cell *matCellDef="let u">
                 <span class="status-pill" [class.on]="u.isActive" [class.off]="!u.isActive">
                   {{ u.isActive ? t('admin.activate') : t('admin.deactivate') }}
                 </span>
+                @if (u.mustChangePassword) {
+                  <span class="flag-pill warn">{{ t('admin.badgePwd') }}</span>
+                }
+                @if (isLocked(u)) {
+                  <span class="flag-pill danger">{{ t('admin.badgeLocked') }}</span>
+                }
               </td>
             </ng-container>
 
             <ng-container matColumnDef="lastLoginAt">
-              <th mat-header-cell *matHeaderCellDef>最近登录</th>
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colLastLogin') }}</th>
               <td mat-cell *matCellDef="let u">
                 {{ u.lastLoginAt ? (u.lastLoginAt | date: 'yyyy-MM-dd HH:mm') : '—' }}
               </td>
             </ng-container>
 
             <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef class="col-actions">操作</th>
+              <th mat-header-cell *matHeaderCellDef class="col-actions">{{ t('admin.colActions') }}</th>
               <td mat-cell *matCellDef="let u" class="col-actions">
-                <button mat-icon-button [matTooltip]="t('common.edit')" (click)="openEditUser(u)">
-                  <mat-icon>edit</mat-icon>
-                </button>
-                <button mat-icon-button
-                        [matTooltip]="u.isActive ? t('admin.deactivate') : t('admin.activate')"
-                        (click)="toggleActive(u, $event)">
-                  <mat-icon>{{ u.isActive ? 'block' : 'check_circle_outline' }}</mat-icon>
-                </button>
-                <button mat-icon-button [matTooltip]="t('admin.resetPwd')" (click)="resetPassword(u, $event)">
-                  <mat-icon>lock_reset</mat-icon>
-                </button>
-                <button mat-icon-button [matTooltip]="t('common.delete')" class="danger"
-                        (click)="deleteUser(u, $event)">
-                  <mat-icon>delete_outline</mat-icon>
-                </button>
+                @if (!canWriteUsers()) {
+                  <span class="muted">—</span>
+                } @else {
+                  <button mat-icon-button [matTooltip]="t('common.edit')" (click)="openEditUser(u)">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button [disabled]="isSelf(u)"
+                          [matTooltip]="u.isActive ? t('admin.deactivate') : t('admin.activate')"
+                          (click)="toggleActive(u, $event)">
+                    <mat-icon>{{ u.isActive ? 'block' : 'check_circle_outline' }}</mat-icon>
+                  </button>
+                  <button mat-icon-button [matTooltip]="t('admin.resetPwd')" (click)="resetPassword(u, $event)">
+                    <mat-icon>lock_reset</mat-icon>
+                  </button>
+                  @if (isLocked(u)) {
+                    <button mat-icon-button [matTooltip]="t('admin.unlock')" class="ok"
+                            (click)="unlock(u, $event)">
+                      <mat-icon>lock_open</mat-icon>
+                    </button>
+                  }
+                  <button mat-icon-button [matTooltip]="t('common.delete')" class="danger"
+                          [disabled]="isSelf(u)" (click)="deleteUser(u, $event)">
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                }
               </td>
             </ng-container>
 
@@ -135,12 +183,12 @@
           <div class="pager">
             <button mat-stroked-button [disabled]="userPage() <= 1"
                     (click)="userGoPage(userPage() - 1)">
-              <mat-icon>chevron_left</mat-icon> 上一页
+              <mat-icon>chevron_left</mat-icon> {{ t('common.prevPage') }}
             </button>
-            <span class="pager-info">第 {{ userPage() }} / {{ userTotalPages() }} 页</span>
+            <span class="pager-info">{{ pageInfo(userPage(), userTotalPages()) }}</span>
             <button mat-stroked-button [disabled]="userPage() >= userTotalPages()"
                     (click)="userGoPage(userPage() + 1)">
-              下一页 <mat-icon>chevron_right</mat-icon>
+              {{ t('common.nextPage') }} <mat-icon>chevron_right</mat-icon>
             </button>
           </div>
         }
@@ -148,8 +196,20 @@
     </mat-tab>
 
     <!-- ============================ 角色 ============================ -->
-    <mat-tab label="角色">
+    <mat-tab [label]="t('admin.tabRoles')">
       <div class="tab-body">
+        <div class="tab-toolbar">
+          <span class="count-note">{{ tn('admin.permCount', permissions().length) }}</span>
+          <button mat-stroked-button (click)="loadRoles(); loadPermissions()">
+            <mat-icon>refresh</mat-icon> {{ t('common.refresh') }}
+          </button>
+          @if (canWriteRoles()) {
+            <button mat-raised-button color="primary" (click)="openCreateRole()">
+              <mat-icon>add</mat-icon> {{ t('admin.newRole') }}
+            </button>
+          }
+        </div>
+
         @if (rolesLoading()) {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
         }
@@ -158,14 +218,14 @@
           <mat-card class="err-card">
             <mat-icon>error_outline</mat-icon>
             <div>
-              <strong>加载失败</strong>
+              <strong>{{ t('common.loadFailed') }}</strong>
               <p>{{ rolesError() }}</p>
             </div>
           </mat-card>
         }
 
         @if (!rolesLoading() && roles().length === 0 && !rolesError()) {
-          <p class="empty">还没有定义任何角色。</p>
+          <p class="empty">{{ t('admin.noRole') }}</p>
         }
 
         @for (r of roles(); track r.id) {
@@ -175,19 +235,35 @@
                 {{ isRoleExpanded(r.id) ? 'expand_less' : 'expand_more' }}
               </mat-icon>
               <span class="role-name">{{ r.name }}</span>
+              @if (r.isSystemRole) {
+                <span class="sys-tag"><mat-icon>lock</mat-icon> {{ t('admin.systemRole') }}</span>
+              }
               @if (r.description) {
                 <span class="role-desc">{{ r.description }}</span>
               }
               <span class="role-meta">
-                {{ r.permissions.length }} 项权限
-                @if (r.userCount != null) { · {{ r.userCount }} 个用户 }
+                {{ tn('admin.permCount', r.permissions.length) }}
+                · {{ tn('admin.userCount', r.userCount) }}
               </span>
+
+              @if (canWriteRoles()) {
+                <span class="role-actions">
+                  <button mat-icon-button [matTooltip]="t('common.edit')"
+                          (click)="openEditRole(r, $event)">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button class="danger" [disabled]="r.isSystemRole"
+                          [matTooltip]="t('common.delete')" (click)="deleteRole(r, $event)">
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                </span>
+              }
             </div>
 
             @if (isRoleExpanded(r.id)) {
               <div class="role-perms">
                 @if (r.permissions.length === 0) {
-                  <span class="muted">该角色没有任何权限</span>
+                  <span class="muted">{{ t('admin.noPerm') }}</span>
                 } @else {
                   <mat-chip-set>
                     @for (p of r.permissions; track p) {
@@ -203,12 +279,46 @@
     </mat-tab>
 
     <!-- ============================ 审计日志 ============================ -->
-    <mat-tab label="审计日志">
+    <mat-tab [label]="t('admin.tabAudit')">
       <div class="tab-body">
         <div class="tab-toolbar">
-          <span class="count-note">共 {{ logTotal() }} 条记录</span>
+          <mat-form-field appearance="outline" class="filter">
+            <mat-label>{{ t('admin.filterAction') }}</mat-label>
+            <input matInput [value]="logAction()"
+                   (input)="logAction.set($any($event.target).value)"
+                   (keyup.enter)="applyLogFilters()" placeholder="admin.user.updated">
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter">
+            <mat-label>{{ t('admin.filterActor') }}</mat-label>
+            <mat-select [value]="logActor()" (selectionChange)="logActor.set($any($event).value); applyLogFilters()">
+              <mat-option value="">{{ t('common.all') }}</mat-option>
+              @for (u of actorOptions(); track u.id) {
+                <mat-option [value]="u.id">{{ u.email }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter narrow">
+            <mat-label>{{ t('admin.filterFrom') }}</mat-label>
+            <input matInput type="date" [value]="logFrom()"
+                   (change)="logFrom.set($any($event.target).value); applyLogFilters()">
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter narrow">
+            <mat-label>{{ t('admin.filterTo') }}</mat-label>
+            <input matInput type="date" [value]="logTo()"
+                   (change)="logTo.set($any($event.target).value); applyLogFilters()">
+          </mat-form-field>
+
+          <button mat-stroked-button (click)="clearLogFilters()">
+            {{ t('common.clearFilter') }}
+          </button>
+
+          <span class="count-note">{{ tn('admin.totalLogs', logTotal()) }}</span>
+
           <button mat-stroked-button (click)="loadLogs()">
-            <mat-icon>refresh</mat-icon> 刷新
+            <mat-icon>refresh</mat-icon> {{ t('common.refresh') }}
           </button>
         </div>
 
@@ -220,54 +330,56 @@
           <mat-card class="err-card">
             <mat-icon>error_outline</mat-icon>
             <div>
-              <strong>加载失败</strong>
+              <strong>{{ t('common.loadFailed') }}</strong>
               <p>{{ logsError() }}</p>
             </div>
           </mat-card>
         }
 
         @if (!logsLoading() && logs().length === 0 && !logsError()) {
-          <p class="empty">暂无审计记录。</p>
+          <p class="empty">{{ t('admin.noLog') }}</p>
         }
 
         @if (logs().length > 0) {
           <table mat-table [dataSource]="logs()" class="data-table">
             <ng-container matColumnDef="occurredAt">
-              <th mat-header-cell *matHeaderCellDef>时间</th>
-              <td mat-cell *matCellDef="let l">
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colTime') }}</th>
+              <td mat-cell *matCellDef="let l" class="mono">
                 {{ l.occurredAt | date: 'yyyy-MM-dd HH:mm:ss' }}
               </td>
             </ng-container>
 
             <ng-container matColumnDef="action">
-              <th mat-header-cell *matHeaderCellDef>动作</th>
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colAction') }}</th>
               <td mat-cell *matCellDef="let l">
                 <span class="act-pill" [class]="actionClass(l.action)">{{ l.action }}</span>
+                <span class="res-dot" [class]="resultClass(l.success)"
+                      [matTooltip]="l.success ? t('admin.success') : t('admin.failed')"></span>
               </td>
             </ng-container>
 
-            <ng-container matColumnDef="entityType">
-              <th mat-header-cell *matHeaderCellDef>对象</th>
+            <ng-container matColumnDef="resource">
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colTarget') }}</th>
               <td mat-cell *matCellDef="let l">
-                {{ l.entityType ?? '—' }}
-                @if (l.entityId) {
-                  <span class="muted mono"> {{ l.entityId }}</span>
+                {{ l.resource ?? '—' }}
+                @if (l.resourceId) {
+                  <span class="muted mono"> {{ l.resourceId }}</span>
                 }
               </td>
             </ng-container>
 
             <ng-container matColumnDef="userEmail">
-              <th mat-header-cell *matHeaderCellDef>操作人</th>
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colActor') }}</th>
               <td mat-cell *matCellDef="let l">{{ l.userEmail ?? '—' }}</td>
             </ng-container>
 
-            <ng-container matColumnDef="ip">
-              <th mat-header-cell *matHeaderCellDef>IP</th>
-              <td mat-cell *matCellDef="let l" class="mono">{{ l.ip ?? '—' }}</td>
+            <ng-container matColumnDef="ipAddress">
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colIp') }}</th>
+              <td mat-cell *matCellDef="let l" class="mono">{{ l.ipAddress ?? '—' }}</td>
             </ng-container>
 
             <ng-container matColumnDef="detail">
-              <th mat-header-cell *matHeaderCellDef>详情</th>
+              <th mat-header-cell *matHeaderCellDef>{{ t('admin.colDetail') }}</th>
               <td mat-cell *matCellDef="let l" class="detail-cell">{{ l.detail ?? '—' }}</td>
             </ng-container>
 
@@ -280,12 +392,12 @@
           <div class="pager">
             <button mat-stroked-button [disabled]="logPage() <= 1"
                     (click)="logGoPage(logPage() - 1)">
-              <mat-icon>chevron_left</mat-icon> 上一页
+              <mat-icon>chevron_left</mat-icon> {{ t('common.prevPage') }}
             </button>
-            <span class="pager-info">第 {{ logPage() }} / {{ logTotalPages() }} 页</span>
+            <span class="pager-info">{{ pageInfo(logPage(), logTotalPages()) }}</span>
             <button mat-stroked-button [disabled]="logPage() >= logTotalPages()"
                     (click)="logGoPage(logPage() + 1)">
-              下一页 <mat-icon>chevron_right</mat-icon>
+              {{ t('common.nextPage') }} <mat-icon>chevron_right</mat-icon>
             </button>
           </div>
         }

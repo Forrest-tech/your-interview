@@ -92,6 +92,18 @@ public sealed class AppUser : AuditableAggregateRoot
 
     public bool IsLockedOut() => LockedUntil.HasValue && LockedUntil > DateTimeOffset.UtcNow;
 
+    /// <summary>
+    /// 管理员人工解锁(M2.4)。
+    /// 连续登录失败会锁 15 分钟,但真实用户可能就在外地等着用 ——
+    /// 没有管理员解锁通道,只能干等,这是运维上不可接受的。
+    /// </summary>
+    public void Unlock()
+    {
+        FailedLoginAttempts = 0;
+        LockedUntil = null;
+        Touch();
+    }
+
     public void Deactivate()
     {
         IsActive = false;
@@ -217,6 +229,18 @@ public sealed class AppRole : AuditableAggregateRoot
     {
         if (IsSystemRole) throw new InvalidOperationException("系统内置角色不允许重命名");
         Name = name;
+        Description = description;
+        Touch();
+    }
+
+    /// <summary>
+    /// 只改说明文字(M2.4)。
+    /// 系统内置角色的名字锁死,但说明文案会随功能迭代过时 ——
+    /// 之前处理器里那段"通过 SetPermissions 之外的途径更新描述"是空的,
+    /// 等于系统角色的描述永远改不掉,只能改数据库。
+    /// </summary>
+    public void SetDescription(string? description)
+    {
         Description = description;
         Touch();
     }

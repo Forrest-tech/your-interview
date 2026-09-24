@@ -169,6 +169,18 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// M2.4:解锁因连续登录失败被临时锁定的账号。
+    /// 锁是自动的(8 次失败锁 15 分钟),但真实用户可能就在外地等着 —— 没有人工解锁只能干等。
+    /// </summary>
+    [HttpPost("users/{id:guid}/unlock")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminUsersWrite)]
+    public async Task<IResult> UnlockUser(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new AdminUnlockUserCommand(id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
     [HttpDelete("users/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminUsersWrite)]
     public async Task<IResult> DeleteUser(Guid id, CancellationToken ct)

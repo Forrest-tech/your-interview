@@ -480,13 +480,26 @@ export interface AbilityTrend {
   series: TrendSeries[];
 }
 
+/**
+ * ★ M2.4:下面这几个管理后台类型之前的字段名是**凭空写的**,跟后端对不上 ——
+ * 页面上统计卡显示 undefined、审计日志的"对象/IP"两列永远是 —。
+ * 现在全部按后端实际返回的 JSON 改回真实字段名(小驼峰)。
+ * 规则:这里的字段名严格跟着后端,不要自造。
+ */
 export interface AdminStats {
-  userCount: number;
-  activeUserCount: number;
-  roleCount: number;
-  permissionCount: number;
-  auditEventCount: number;
-  recentLogins?: number;
+  totalUsers: number;
+  activeUsers: number;
+  newUsersLast7Days: number;
+  totalRoles: number;
+  totalAuditEvents: number;
+  failedLoginsLast24h: number;
+  lockedAccounts: number;
+  signupsTrend: DailyCount[];
+}
+
+export interface DailyCount {
+  date: string;
+  count: number;
 }
 
 export interface AdminUser {
@@ -494,27 +507,41 @@ export interface AdminUser {
   email: string;
   displayName: string;
   isActive: boolean;
-  roles: string[];
-  createdAt: string;
+  mustChangePassword: boolean;
   lastLoginAt?: string;
+  createdAt: string;
+  roles: string[];
+  avatarUrl?: string;
+  /** 锁定到期时间;大于当前时间即处于锁定状态。 */
+  lockedUntil?: string;
 }
 
 export interface AdminRole {
   id: string;
   name: string;
   description?: string;
+  isSystemRole: boolean;
   permissions: string[];
-  userCount?: number;
+  userCount: number;
+}
+
+/** GET /api/admin/permissions —— 权限点目录(按资源分组渲染勾选框)。 */
+export interface AdminPermission {
+  key: string;
+  resource: string;
+  action: string;
+  description: string;
 }
 
 export interface AuditLog {
   id: string;
-  action: string;
-  entityType?: string;
-  entityId?: string;
   userId?: string;
   userEmail?: string;
-  ip?: string;
-  occurredAt: string;
+  action: string;
+  resource: string;
+  resourceId?: string;
   detail?: string;
+  ipAddress?: string;
+  success: boolean;
+  occurredAt: string;
 }

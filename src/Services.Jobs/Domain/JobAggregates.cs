@@ -162,11 +162,20 @@ public sealed class JobApplication : AuditableAggregateRoot
         => AllowedTransitions.TryGetValue(Status, out var allowed) && allowed.Contains(target);
 
     public void ChangeStatus(ApplicationStatus target, string? note = null, string? rejectionReason = null)
+        => ChangeStatusCore(target, note, rejectionReason, fromAddRound: false);
+
+    /// <summary>
+    /// 状态流转核心。fromAddRound:AddRound 内部带进来的 Interview 状态变更 ——
+    /// 那条路的邀请事件由 AddRound 自己发(带着轮次细节),这里不再重复发裸事件。
+    /// </summary>
+    private void ChangeStatusCore(ApplicationStatus target, string? note, string? rejectionReason,
+        bool fromAddRound)
     {
         if (target == Status) return;
         if (!CanTransitionTo(target))
             throw new InvalidOperationException($"不允许从 {Status} 直接流转到 {target}");
         RecordStatusChange(target, note);
+        var from = Status;
         Status = target;
 
         if (target == ApplicationStatus.Applied && AppliedDate is null)
@@ -174,7 +183,13 @@ public sealed class JobApplication : AuditableAggregateRoot
         if (target is ApplicationStatus.Rejected or ApplicationStatus.Ghosted)
             RejectionReason = rejectionReason;
 
-        RaiseDomainEvent(new JobApplicationStatusChangedDomainEvent(Id, CompanyId, target.ToString()));
+        RaiseDomainEvent(new JobApplicationStatusChangedDomainEvent(
+            Id, CompanyId, from.ToString(), target.ToString()));
+
+        // 邀请登记(直接切状态,还没登记具体轮次):视为"下一轮"的邀请。
+        // Rounds 里已有 2 轮却直接切 Interview → 第 3 轮草稿。
+        if (target == ApplicationStatus.Interview && !fromAddRound)
+            RaiseInvitation(_rounds.Count + 1, null, null, null, null);
         Touch();
     }
 
@@ -245,11 +260,19 @@ public sealed class JobApplication : AuditableAggregateRoot
         var round = new InterviewRound(Id, _rounds.Count + 1, stage, scheduledDate, interviewer, format, notes);
         _rounds.Add(round);
         if (Status is ApplicationStatus.Applied or ApplicationStatus.Screen)
-            ChangeStatus(ApplicationStatus.Interview, $"新增面试轮次:{stage}");
+            ChangeStatusCore(ApplicationStatus.Interview, $"新增面试轮次:{stage}", null, fromAddRound: true);
         else
             Touch();
+
+        // 每登记一轮 = 一次"要面试了"—— 带着轮次细节发给 Interviews 建草稿(M1.4)
+        RaiseInvitation(round.Order, round.Stage, round.ScheduledDate, round.Interviewer, round.Format);
         return round;
     }
+
+    private void RaiseInvitation(int roundNo, string? stage, DateOnly? scheduledDate,
+        string? interviewer, string? format)
+        => RaiseDomainEvent(new InterviewInvitationRecordedDomainEvent(
+            Id, CompanyId, Role, roundNo, stage, scheduledDate, interviewer, format));
 
     public void UpdateRound(Guid roundId, string? stage, DateOnly? date, string? interviewer,
         string? format, RoundOutcome outcome, string? notes)
@@ -335,7 +358,17 @@ public enum Priority { Low = 0, Medium = 1, High = 2, Critical = 3 }
 
 public enum RoundOutcome { Pending = 0, Passed = 1, Failed = 2, Cancelled = 3, NoShow = 4 }
 
-public sealed record JobApplicationStatusChangedDomainEvent(Guid ApplicationId, Guid CompanyId, string ToStatus)
+public sealed record JobApplicationStatusChangedDomainEvent(
+    Guid ApplicationId, Guid CompanyId, string FromStatus, string ToStatus)
+    : DomainEventBase;
+
+/// <summary>
+/// 邀请登记(进入面试状态或新增轮次)→ Interviews 自动建 Playbook 草稿(M1.4)。
+/// 公司名/JD 摘要聚合不认识 —— 由发布器查库补全后发集成事件。
+/// </summary>
+public sealed record InterviewInvitationRecordedDomainEvent(
+    Guid ApplicationId, Guid CompanyId, string Role, int RoundNo,
+    string? Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format)
     : DomainEventBase;
 
 /// <summary>

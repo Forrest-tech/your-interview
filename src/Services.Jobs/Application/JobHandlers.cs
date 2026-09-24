@@ -451,7 +451,10 @@ public sealed class ChangeApplicationStatusCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(ChangeApplicationStatusCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        // Include Rounds:切到 Interview 时的"第几轮邀请"按已有轮次计数,
+        // 不带 Rounds 进来会永远算成第 1 轮(与 AddRound 同源的加载缺陷)
+        var a = await db.Applications.Include(x => x.Rounds)
+            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
 
         if (!Enum.TryParse<ApplicationStatus>(request.Status, true, out var target))
@@ -548,7 +551,10 @@ public sealed class AddInterviewRoundCommandHandler(JobsDbContext db)
 {
     public async Task<Result<Guid>> Handle(AddInterviewRoundCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+        // ⚠️ 必须 Include Rounds:轮次号 = 已有轮数 + 1,
+        // 不带进来 _rounds 恒为空 → 每一轮都算第 1 轮(既有 bug,本轮修复)
+        var a = await db.Applications.Include(x => x.Rounds)
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
         if (a is null) return Result.Failure<Guid>(Error.NotFound("投递记录"));
 
         var round = a.AddRound(request.Stage, request.ScheduledDate, request.Interviewer,
@@ -563,7 +569,10 @@ public sealed class UpdateInterviewRoundCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(UpdateInterviewRoundCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+        // ⚠️ 必须 Include Rounds:UpdateRound 在聚合里按 Id 找轮次,
+        // 不带进来永远抛"面试轮次不存在"(既有 bug,本轮修复)
+        var a = await db.Applications.Include(x => x.Rounds)
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
 
         if (!Enum.TryParse<RoundOutcome>(request.Outcome, true, out var outcome))

@@ -52,6 +52,25 @@ public sealed record JobApplicationStatusChanged(
     string ToStatus
 ) : IntegrationEvent;
 
+/// <summary>
+/// JobTracker:邀请登记(状态进入面试 / 新增面试轮次)→
+/// Interviews 收到后自动创建 Playbook 条目草稿(M1.4)。
+/// 面试一确认,用户在实战机经里就有现成的条目等着挂录音,不用再手填公司岗位。
+/// </summary>
+public sealed record InterviewInviteRecorded(
+    Guid ApplicationId,
+    Guid UserId,
+    Guid CompanyId,
+    string CompanyName,
+    string Role,
+    string? JdSummary,
+    int RoundNo,
+    string? Stage,
+    DateOnly? InterviewDate,
+    string? Format,
+    string? Interviewers
+) : IntegrationEvent;
+
 /// <summary>Knowledge:某技术条目掌握度变化 → Analytics 刷新能力雷达。</summary>
 public sealed record KnowledgeMasteryChanged(
     Guid KnowledgeItemId,

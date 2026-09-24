@@ -6,6 +6,7 @@ using Serilog;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
+using YourInterview.Services.Interviews.Application;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
 using YourInterview.Services.Interviews.Infrastructure.Services;
 using YourInterview.Services.Interviews.Infrastructure.Storage;
@@ -40,7 +41,11 @@ builder.Services.AddDbContext<InterviewsDbContext>((sp, options) =>
 builder.Services.AddHealthChecks().AddDbContextCheck<InterviewsDbContext>("postgres");
 
 // ---------- 消息总线:转写完成 → 触发分析流水线 ----------
-builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
+builder.Services.AddMassTransitWithRabbitMq(builder.Configuration, x =>
+{
+    // 邀请登记 → 自动建 Playbook 草稿(M1.4);消费幂等,总线重试/重投安全
+    x.AddConsumer<InterviewInviteRecordedConsumer>();
+});
 
 // ---------- 分析任务派发器:台账(Pending)→ RabbitMQ,至少一次投递 + 卡单补发 ----------
 builder.Services.AddHostedService<AnalysisJobDispatcher>();

@@ -47,7 +47,7 @@ public sealed record InterviewEntryListItemDto(
     int? OverallScore, int? PronunciationScore, int? FluencyScore, int? StructureScore,
     int? TechnicalDepthScore, int? RelevanceScore,
     int AssetCount, int QuestionCount, int WeaknessCount, bool HasTranscript,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt, Guid? JobApplicationId = null);
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
 {
@@ -306,7 +306,9 @@ public static class InterviewMappingExtensions
         e.TechnicalDepthScore, e.RelevanceScore,
         e.Assets.Count, e.Questions.Count, e.Weaknesses.Count,
         e.Assets.Any(a => a.TranscriptText != null),
-        e.CreatedAt);
+        e.CreatedAt,
+        // Tracker 联动(M1.4):邀请登记自动建的草稿带申请 Id,前端可回链
+        e.JobApplicationId);
 }
 
 // ============================ Handler:查询 ============================

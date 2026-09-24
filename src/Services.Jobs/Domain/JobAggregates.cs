@@ -282,6 +282,26 @@ public sealed class JobApplication : AuditableAggregateRoot
         round.Update(stage, date, interviewer, format, outcome, notes);
         Touch();
     }
+
+    /// <summary>
+    /// 面试结果回写(M1.5):把实战机经里登记的结果落到对应轮次。
+    /// 轮次按 Order 匹配(M1.4 自动建的草稿 RoundNo = 轮次号,天然对齐)。
+    /// 被拒时申请整体转 Rejected —— 用户写下"被拒"就是明确判断,不该再靠手工切状态。
+    /// </summary>
+    public void RecordRoundOutcome(int roundOrder, RoundOutcome outcome, string? note)
+    {
+        var round = _rounds.FirstOrDefault(r => r.Order == roundOrder)
+            ?? throw new KeyNotFoundException($"第 {roundOrder} 轮不存在,无法回写结果");
+
+        round.RecordOutcome(outcome);
+
+        if (outcome == RoundOutcome.Failed && Status == ApplicationStatus.Interview)
+            // note 进流转历史,rejectionReason 进拒因字段 —— 两者都要,别只留一半
+            ChangeStatus(ApplicationStatus.Rejected, note ?? $"第 {roundOrder} 轮面试未通过",
+                rejectionReason: note ?? $"第 {roundOrder} 轮面试未通过");
+        else
+            Touch();
+    }
 }
 
 public sealed class ApplicationStatusChange : Entity
@@ -337,6 +357,12 @@ public sealed class InterviewRound : Entity
         Outcome = outcome;
         Notes = notes;
     }
+
+    /// <summary>
+    /// 只记结果、不动其它字段(M1.5)—— Update 会把没传的字段抹成 null,
+    /// 结果回写不该清掉用户已填的时间/面试官/形式。
+    /// </summary>
+    internal void RecordOutcome(RoundOutcome outcome) => Outcome = outcome;
 
     public void SetFeedback(string? feedback) => Feedback = feedback;
 }

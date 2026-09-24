@@ -472,6 +472,12 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   Withdrawn: '已撤回'
 };
 
+/** 轮次结果中文映射(M1.5)。Pending 不展示 —— 没结果就别制造噪音。 */
+const OUTCOME_LABELS: Record<string, string> = {
+  Passed: '通过',
+  Failed: '未通过'
+};
+
 /** Application → 表单形状。缺省值就地补,让编辑弹窗不出现 undefined。 */
 function fromApplication(a: Application): ApplicationForm {
   return {
@@ -525,14 +531,17 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     <mat-dialog-content class="detail-body">
       <div class="top">
         <mat-chip-set>
-          <mat-chip [class]="'chip ' + statusClass(app.status)">{{ statusLabel(app.status) }}</mat-chip>
-          @if (app.priority) {
-            <mat-chip>{{ app.priority }} 优先级</mat-chip>
+          <mat-chip [class]="'chip ' + statusClass(detail.status)">{{ statusLabel(detail.status) }}</mat-chip>
+          @if (detail.priority) {
+            <mat-chip>{{ detail.priority }} 优先级</mat-chip>
           }
-          @if (app.needsConnectFirst) {
+          @if (detail.needsConnectFirst) {
             <mat-chip highlighted>需先建立人脉</mat-chip>
           }
         </mat-chip-set>
+        @if (detail.rejectionReason) {
+          <p class="rejection">拒因:{{ detail.rejectionReason }}</p>
+        }
       </div>
 
       <dl class="fields">
@@ -738,17 +747,15 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </section>
       }
 
-      @if ((app.history?.length ?? 0) > 0) {
+      @if ((detail.history?.length ?? 0) > 0) {
         <mat-divider></mat-divider>
         <section>
           <h4>状态流转</h4>
           <ol class="history">
-            @for (h of app.history ?? []; track h.at + h.to) {
+            @for (h of detail.history ?? []; track h.changedAt + h.status) {
               <li>
-                <span class="from">{{ statusLabel(h.from) }}</span>
-                <mat-icon>arrow_forward</mat-icon>
-                <span class="to">{{ statusLabel(h.to) }}</span>
-                <time>{{ h.at | date: 'yyyy-MM-dd HH:mm' }}</time>
+                <span class="to">{{ statusLabel(h.status) }}</span>
+                <time>{{ h.changedAt | date: 'yyyy-MM-dd HH:mm' }}</time>
                 @if (h.note) { <em class="note">{{ h.note }}</em> }
               </li>
             }
@@ -756,17 +763,22 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </section>
       }
 
-      @if ((app.rounds?.length ?? 0) > 0) {
+      @if ((detail.rounds?.length ?? 0) > 0) {
         <mat-divider></mat-divider>
         <section>
           <h4>面试轮次</h4>
           <ul class="rounds">
-            @for (r of app.rounds ?? []; track r.id) {
+            @for (r of detail.rounds ?? []; track r.id) {
               <li>
-                <strong>第 {{ r.roundNo }} 轮</strong>
-                @if (r.scheduledAt) { <span>{{ r.scheduledAt | date: 'yyyy-MM-dd HH:mm' }}</span> }
+                <strong>第 {{ r.order }} 轮</strong>
+                @if (r.stage) { <span class="tag">{{ r.stage }}</span> }
+                @if (r.scheduledDate) { <span>{{ r.scheduledDate | date: 'yyyy-MM-dd' }}</span> }
                 @if (r.format) { <span class="tag">{{ r.format }}</span> }
-                @if (r.outcome) { <span class="tag">{{ r.outcome }}</span> }
+                @if (r.interviewer) { <span class="tag">{{ r.interviewer }}</span> }
+                @if (r.outcome && r.outcome !== 'Pending') {
+                  <span class="tag" [class.outcome-pass]="r.outcome === 'Passed'"
+                        [class.outcome-fail]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
+                }
                 @if (r.notes) { <p class="pre">{{ r.notes }}</p> }
               </li>
             }
@@ -796,6 +808,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     @media (max-width: 620px) { .detail-body { min-width: auto; } }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
+    .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
     .fields {
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px;
       margin: 0 0 16px;
@@ -818,6 +831,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       display: inline-block; margin-left: 6px; padding: 1px 7px;
       border-radius: 10px; background: rgba(0, 0, 0, 0.06); font-size: 11.5px;
     }
+    .tag.outcome-pass { background: #e8f5e9; color: #2e7d32; }
+    .tag.outcome-fail { background: #ffebee; color: #c62828; }
     .link { font-size: 13px; word-break: break-all; color: #303f9f; }
     /* ---- 匹配分析 ---- */
     .match-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
@@ -899,6 +914,20 @@ export class ApplicationDetailDialogComponent {
   readonly app = inject<Application>(MAT_DIALOG_DATA);
   private readonly api = inject(ApiClient);
 
+  /**
+   * 服务端全量详情(M1.5)。列表项不带轮次/历史/拒因 —— 之前弹窗直接渲染
+   * 列表项,这些区块其实从未显示过。打开后拉一次详情替换数据源。
+   */
+  readonly full = signal<Application | null>(null);
+
+  /** 模板统一读这里:详情没回来前用列表项兜底。 */
+  get detail(): Application { return this.full() ?? this.app; }
+
+  /** 轮次结果中文标签(M1.5 回写后展示)。 */
+  outcomeLabel(o: string): string {
+    return OUTCOME_LABELS[o] ?? o;
+  }
+
   /** 公司情报(懒加载 —— 详情弹窗打开后才查一次)。 */
   readonly company = signal<Company | null>(null);
 
@@ -932,6 +961,12 @@ export class ApplicationDetailDialogComponent {
   clDraft = '';
 
   constructor() {
+    // 全量详情:列表项不带轮次/历史/拒因,打开后以服务端为准替换(M1.5)
+    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
+      next: (a) => this.full.set(a),
+      error: () => { /* 拉不到就用列表项兜底 */ }
+    });
+
     // 公司情报:Application 只带 companyId,要单独查
     if (this.app.companyId) {
       this.api.get<Company>(`/api/jobs/companies/${this.app.companyId}`).subscribe({

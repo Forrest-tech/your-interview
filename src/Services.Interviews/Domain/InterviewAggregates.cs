@@ -188,6 +188,12 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         string? jdText, string? jdSummary, int roundNo, DateOnly? interviewDate,
         string? interviewFormat, string? interviewers, string? location, string? result, string? notes)
     {
+        // 面试结果首次填写或变更(M1.5):关联了 Tracker 申请才发回写事件。
+        // 空值/没变化/没关联都不发 —— 别让每次编辑都触发下游同步。
+        var outcomeRecorded = JobApplicationId is not null
+            && !string.IsNullOrWhiteSpace(result)
+            && !string.Equals(Result, result, StringComparison.Ordinal);
+
         CompanyName = companyName;
         Role = role;
         CompanyProfile = companyProfile;
@@ -201,6 +207,10 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Result = result;
         Notes = notes;
         Touch();
+
+        if (outcomeRecorded)
+            RaiseDomainEvent(new InterviewOutcomeRecordedDomainEvent(
+                Id, JobApplicationId!.Value, RoundNo, result!));
     }
 
     /// <summary>挂上一份材料(录音或文本)。会自动把 Draft 推进到 AssetsUploaded。</summary>
@@ -647,6 +657,14 @@ public sealed record InterviewAnalysisAppliedDomainEvent(Guid EntryId, Guid Comp
     : DomainEventBase;
 
 public sealed record InterviewAnalysisFailedDomainEvent(Guid EntryId, string Reason) : DomainEventBase;
+
+/// <summary>
+/// 面试结果登记(M1.5):用户在条目上填了"结果"(通过/被拒/待定)。
+/// 只有关联了 Tracker 申请(JobApplicationId)的条目才会发 ——
+/// Jobs 消费后回写对应轮次的 Outcome,被拒时申请自动转 Rejected。
+/// </summary>
+public sealed record InterviewOutcomeRecordedDomainEvent(
+    Guid EntryId, Guid ApplicationId, int RoundNo, string Result) : DomainEventBase;
 
 // ============================ 分析回写用的 DTO(领域层不依赖 Application) ============================
 

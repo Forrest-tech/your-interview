@@ -71,6 +71,19 @@ public sealed record InterviewInviteRecorded(
     string? Interviewers
 ) : IntegrationEvent;
 
+/// <summary>
+/// Interviews:用户在条目上登记了面试结果(通过/被拒/…)→
+/// Jobs 回写对应轮次的 Outcome;被拒时申请自动转 Rejected(M1.5)。
+/// Result 是用户原话(自由文本),关键词→Outcome 的映射在消费端。
+/// </summary>
+public sealed record InterviewOutcomeRecorded(
+    Guid ApplicationId,
+    Guid EntryId,
+    Guid UserId,
+    int RoundNo,
+    string Result
+) : IntegrationEvent;
+
 /// <summary>Knowledge:某技术条目掌握度变化 → Analytics 刷新能力雷达。</summary>
 public sealed record KnowledgeMasteryChanged(
     Guid KnowledgeItemId,

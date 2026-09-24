@@ -79,6 +79,8 @@ export interface Application {
   outreachStatus?: string;
   /** 命中 JD 要求的关键词(逗号分隔),由匹配分析写入。 */
   matchKeywords?: string;
+  /** 拒因(状态 Rejected 时展示;M1.5 起实战机经回写也写这里)。 */
+  rejectionReason?: string;
   history?: StatusChange[];
   rounds?: InterviewRound[];
   createdAt: string;
@@ -104,21 +106,24 @@ export interface Company {
   createdAt: string;
 }
 
+/** 状态变更记录(与后端 StatusChangeDto 对齐:status/note/changedAt)。 */
 export interface StatusChange {
-  from: string;
-  to: string;
-  at: string;
+  status: string;
   note?: string;
+  changedAt: string;
 }
 
+/** 面试轮次(与后端 InterviewRoundDto 对齐:order/scheduledDate/interviewer)。 */
 export interface InterviewRound {
   id: string;
-  roundNo: number;
-  scheduledAt?: string;
+  order: number;
+  stage?: string;
+  scheduledDate?: string;
+  interviewer?: string;
   format?: string;
-  interviewers?: string;
   outcome?: string;
   notes?: string;
+  feedback?: string;
 }
 
 export interface TrackerStats {

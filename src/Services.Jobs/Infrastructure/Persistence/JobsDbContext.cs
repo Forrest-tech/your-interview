@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.Services.Jobs.Domain;
 
 namespace YourInterview.Services.Jobs.Infrastructure.Persistence;
@@ -18,38 +19,19 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
     public DbSet<CoverLetter> CoverLetters => Set<CoverLetter>();
 
     /// <summary>
-    /// 把"新加进聚合子集合、但 Id 由 C# 端生成"的子实体显式标成 Added。
-    ///
-    /// 踩过的坑:EF 对「已跟踪父聚合上新增的子实体」会按主键是否已赋值来判断状态。
-    /// 我们的 Guid 主键在 C# 构造函数里就赋值了 → EF 误判为 Modified → 生成 UPDATE,
-    /// 而该行其实不存在 → 影响 0 行 → DbUpdateConcurrencyException。
-    ///
-    /// 判定依据:实体在数据库里"是否存在过"。
-    ///   - 有主键但从未写入过(状态 Detached 或 被我方标记过) → Added
-    ///   - 已从数据库加载过 → Unchanged/Modified,不能动
-    /// 用 EF 的临时值机制最稳:子实体构造时把 Id 标成临时值,EF 就会按"新增"处理。
+    /// 修正「新增子实体被 EF 误判为 Modified」。共享实现见 NewChildEntityFixer ——
+    /// 之前这里的私有版本是"状态 Modified 一律转 Added",把「修改既有轮次」也
+    /// 误变成了 INSERT → 主键冲突(2026-09-24 M1.5 修复,详见共享类注释)。
     /// </summary>
-    private void MarkNewChildrenAsAdded()
-    {
-        foreach (var entry in ChangeTracker.Entries<ApplicationStatusChange>().ToList())
-        {
-            if (entry.State == EntityState.Modified) entry.State = EntityState.Added;
-        }
-        foreach (var entry in ChangeTracker.Entries<InterviewRound>().ToList())
-        {
-            if (entry.State == EntityState.Modified) entry.State = EntityState.Added;
-        }
-    }
-
     public override int SaveChanges()
     {
-        MarkNewChildrenAsAdded();
+        this.MarkNewChildrenAsAdded(Schema);
         return base.SaveChanges();
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        MarkNewChildrenAsAdded();
+        this.MarkNewChildrenAsAdded(Schema);
         return base.SaveChangesAsync(cancellationToken);
     }
 

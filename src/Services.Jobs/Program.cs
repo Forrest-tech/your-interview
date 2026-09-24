@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
+using YourInterview.Services.Jobs.Application;
 using YourInterview.Services.Jobs.Infrastructure.Persistence;
 using YourInterview.Services.Jobs.Infrastructure.Services;
 using YourInterview.SharedContracts;
@@ -44,7 +45,11 @@ builder.AddServiceDefaults(ServiceName, services =>
     services.AddHealthChecks().AddDbContextCheck<JobsDbContext>("postgres");
 
     // ---------- MassTransit:把领域事件转发成跨服务集成事件到 RabbitMQ ----------
-    services.AddMassTransitWithRabbitMq(builder.Configuration);
+    services.AddMassTransitWithRabbitMq(builder.Configuration, x =>
+    {
+        // M1.5:实战机经条目上填了结果 → 回写 Tracker 轮次 Outcome(被拒自动转 Rejected)
+        x.AddConsumer<InterviewOutcomeRecordedConsumer>();
+    });
 });
 
 // ---------- 当前用户(简历/求职信是用户级私有数据,按 UserId 隔离) ----------

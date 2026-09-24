@@ -25,11 +25,13 @@ namespace YourInterview.Services.Interviews.Infrastructure.Services;
 /// </summary>
 public sealed class InterviewsIntegrationEventPublisher(
     IPublishEndpoint publish,
+    ICurrentUser currentUser,
     ILogger<InterviewsIntegrationEventPublisher> logger)
     : INotificationHandler<DomainEventNotification<InterviewTranscriptionStartedDomainEvent>>,
       INotificationHandler<DomainEventNotification<InterviewTranscribedDomainEvent>>,
       INotificationHandler<DomainEventNotification<InterviewAnalysisAppliedDomainEvent>>,
-      INotificationHandler<DomainEventNotification<InterviewAnalysisFailedDomainEvent>>
+      INotificationHandler<DomainEventNotification<InterviewAnalysisFailedDomainEvent>>,
+      INotificationHandler<DomainEventNotification<InterviewOutcomeRecordedDomainEvent>>
 {
     /// <summary>转写开始 —— 任务行已随业务变更同事务落库,由派发器投递,这里只记审计日志。</summary>
     public Task Handle(DomainEventNotification<InterviewTranscriptionStartedDomainEvent> n,
@@ -71,5 +73,20 @@ public sealed class InterviewsIntegrationEventPublisher(
     {
         logger.LogWarning("分析失败 EntryId={Id} 原因={Reason}", n.DomainEvent.EntryId, n.DomainEvent.Reason);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 面试结果登记(M1.5)→ 回写 Tracker:对应轮次 Outcome 更新,被拒时申请转 Rejected。
+    /// UserId 取当前 JWT(转发在请求管线内,上下文还在)。
+    /// </summary>
+    public async Task Handle(DomainEventNotification<InterviewOutcomeRecordedDomainEvent> n,
+        CancellationToken ct)
+    {
+        var e = n.DomainEvent;
+        logger.LogInformation("面试结果登记 EntryId={Id} 第 {Round} 轮 = {Result} → 回写 Tracker(申请 {AppId})",
+            e.EntryId, e.RoundNo, e.Result, e.ApplicationId);
+
+        await publish.Publish(new SharedContracts.Events.InterviewOutcomeRecorded(
+            e.ApplicationId, e.EntryId, currentUser.UserId ?? Guid.Empty, e.RoundNo, e.Result), ct);
     }
 }

@@ -352,6 +352,26 @@ export class MaterialTransferDialogComponent implements OnInit {
     this.selectedIds.set(set);
   }
 
+  /**
+   * ★ 第十二轮:一键展开 / 收起全部文件夹(放在 Select all 左边)。
+   * 只动文件夹的展开状态,不影响勾选;收起 = 清空展开集合。
+   */
+  setAllExpanded(on: boolean): void {
+    const set = new Set<string>();
+    if (on) {
+      const walk = (list: MaterialNode[]): void => {
+        for (const n of list) {
+          if (n.folder) {
+            set.add(n.id);
+            walk(n.children ?? []);
+          }
+        }
+      };
+      walk(this.exportRoots());
+    }
+    this.expandedIds.set(set);
+  }
+
   onSourceChange(value: string): void {
     this.exportSource.set(value);
     this.selectAll(true);      // 换了类别就重选一次,避免勾着上个类别的旧 id

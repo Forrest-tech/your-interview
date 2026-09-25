@@ -337,6 +337,8 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'Only checked items are exported; checking a folder also checks everything inside it.',
     fr: 'Seuls les éléments cochés sont exportés ; cocher un dossier coche aussi son contenu.'
   },
+  'transfer.expandAll': { zh: '全部展开', en: 'Expand all', fr: 'Tout déplier' },
+  'transfer.collapseAll': { zh: '全部收起', en: 'Collapse all', fr: 'Tout replier' },
   'transfer.selectAll': { zh: '全选', en: 'Select all', fr: 'Tout sélectionner' },
   'transfer.clearAll': { zh: '清空', en: 'Clear', fr: 'Effacer' },
   'transfer.format': { zh: '导出格式', en: 'Format', fr: 'Format' },

@@ -67,6 +67,10 @@
         <div class="tf-row-between tf-scope-head">
           <label class="tf-label">{{ t('transfer.pickFolders') }}</label>
           <span class="tf-mini">
+            <button type="button" class="link" (click)="setAllExpanded(true)">{{ t('transfer.expandAll') }}</button>
+            <span class="dot">·</span>
+            <button type="button" class="link" (click)="setAllExpanded(false)">{{ t('transfer.collapseAll') }}</button>
+            <span class="dot">·</span>
             <button type="button" class="link" (click)="selectAll(true)">{{ t('transfer.selectAll') }}</button>
             <span class="dot">·</span>
             <button type="button" class="link" (click)="selectAll(false)">{{ t('transfer.clearAll') }}</button>

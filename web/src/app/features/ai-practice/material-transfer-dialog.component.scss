@@ -1,0 +1,180 @@
+/* 素材「导入 / 导出」弹窗样式。
+   与全站一致的浅色卡片语言:细边框、中性灰、蓝色主操作。
+   范围树刻意保持单行高度 + 缩进,避免多级内容把弹窗撑成滚动迷宫。 */
+
+.tf-body {
+  min-width: 460px;
+  max-width: 560px;
+}
+
+.tf-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+}
+
+.tf-label {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7484;
+}
+
+.tf-select {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #333a44;
+  border: 1px solid #d7dce4;
+  border-radius: 6px;
+  outline: none;
+  background: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.tf-select:focus { border-color: #2f6fed; box-shadow: 0 0 0 2px rgba(47, 111, 237, .14); }
+
+.tf-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tf-mini { font-size: 12px; color: #9aa3b0; }
+
+.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  font-family: inherit;
+  color: #2f6fed;
+  cursor: pointer;
+}
+
+.link:hover { text-decoration: underline; }
+.dot { margin: 0 4px; color: #c8ced8; }
+
+/* ---------- 勾选范围树 ---------- */
+.tf-tree {
+  max-height: 210px;
+  overflow: auto;
+  padding: 6px 4px;
+  border: 1px solid #e6eaf0;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.tf-empty { margin: 8px 6px; font-size: 12.5px; color: #9aa3b0; }
+
+.pk-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+}
+
+.pk-caret {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: #a2abb9;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pk-caret mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.pk-caret.pk-none { pointer-events: none; }
+
+.pk-check { flex: 1; min-width: 0; }
+
+.pk-check ::ng-deep .mdc-label { font-size: 13px; color: #333a44; }
+
+.pk-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pk-badge {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  font-size: 11px;
+  color: #9aa3b0;
+}
+
+/* ---------- 格式选择 ---------- */
+.tf-formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 2px 0 4px;
+}
+
+.tf-fmt { font-size: 13px; }
+
+.tf-file {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #8a93a2;
+}
+
+.tf-file b { color: #333a44; font-weight: 600; word-break: break-all; }
+
+.tf-hint { margin: 2px 0 0; font-size: 12px; color: #9aa3b0; }
+
+.tf-file-input { font-size: 12.5px; max-width: 62%; }
+
+/* ---------- 预览 ---------- */
+.tf-preview {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e6eaf0;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.tf-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #55606f;
+}
+
+.tf-preview-head mat-icon { font-size: 16px; width: 16px; height: 16px; color: #8a93a2; }
+.spacer { flex: 1; }
+
+.tf-preview-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  max-height: 120px;
+  overflow: auto;
+  font-size: 12.5px;
+  color: #6b7484;
+}
+
+.tf-preview-list li { margin: 1px 0; }
+
+.tf-warn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #c0392b;
+}
+
+.tf-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}

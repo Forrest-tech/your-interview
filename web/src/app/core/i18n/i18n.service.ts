@@ -322,6 +322,55 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.ti.practiceLog': { zh: '练习打卡记录', en: 'Practice log', fr: 'Journal de pratique' },
   'practice.ti.notes': { zh: '复习笔记', en: 'Review notes', fr: 'Notes de révision' },
   'practice.ti.mistakeBook': { zh: '错题本', en: 'Mistake notebook', fr: 'Cahier d\u2019erreurs' },
+  // ---------- 素材导入 / 导出(★ 2026-09-25 Forrest 第四轮) ----------
+  'transfer.open': { zh: '导入 / 导出素材', en: 'Import / export materials', fr: 'Importer / exporter les supports' },
+  'transfer.title': { zh: '导入 / 导出', en: 'Import / Export', fr: 'Importer / Exporter' },
+  'transfer.exportTab': { zh: '导出', en: 'Export', fr: 'Exporter' },
+  'transfer.importTab': { zh: '导入', en: 'Import', fr: 'Importer' },
+  'transfer.sourceCategory': { zh: '导出来源', en: 'Export from', fr: 'Exporter depuis' },
+  'transfer.pickFolders': { zh: '选择要导出的内容', en: 'Choose what to export', fr: 'Choisir quoi exporter' },
+  'transfer.selectAll': { zh: '全选', en: 'Select all', fr: 'Tout sélectionner' },
+  'transfer.clearAll': { zh: '清空', en: 'Clear', fr: 'Effacer' },
+  'transfer.format': { zh: '导出格式', en: 'Format', fr: 'Format' },
+  'transfer.fmt.markdown': { zh: 'Markdown（带层级编号）', en: 'Markdown (numbered)', fr: 'Markdown (numéroté)' },
+  'transfer.fmt.txt': { zh: '纯文本 TXT', en: 'Plain text (.txt)', fr: 'Texte brut (.txt)' },
+  'transfer.fmt.pdf': { zh: 'PDF（打印 / 另存为）', en: 'PDF (print)', fr: 'PDF (impression)' },
+  'transfer.fmt.json': { zh: 'JSON（可再导入）', en: 'JSON (re-importable)', fr: 'JSON (réimportable)' },
+  'transfer.fmt.xml': { zh: 'XML（可再导入）', en: 'XML (re-importable)', fr: 'XML (réimportable)' },
+  'transfer.fileName': { zh: '文件名', en: 'File name', fr: 'Nom du fichier' },
+  'transfer.doExport': { zh: '导出文件', en: 'Export', fr: 'Exporter' },
+  'transfer.exportDone': { zh: '已导出', en: 'Exported', fr: 'Exporté' },
+  'transfer.exportNone': { zh: '请先勾选要导出的内容', en: 'Select at least one item first', fr: 'Sélectionnez au moins un élément' },
+  'transfer.pdfHint': {
+    zh: 'PDF 会打开系统打印窗口,在目标里选「另存为 PDF」即可。',
+    en: 'PDF opens the print dialog — pick "Save as PDF" as destination.',
+    fr: 'Le PDF ouvre la fenêtre d\u2019impression — choisissez « Enregistrer en PDF ».'
+  },
+  'transfer.importTarget': { zh: '导入到', en: 'Import into', fr: 'Importer dans' },
+  'transfer.targetExisting': { zh: '已有类别', en: 'Existing category', fr: 'Catégorie existante' },
+  'transfer.targetNew': { zh: '新建类别', en: 'New category', fr: 'Nouvelle catégorie' },
+  'transfer.targetNone': { zh: '未分类', en: 'Uncategorized', fr: 'Non classés' },
+  'transfer.newCategoryPlaceholder': { zh: '新类别名称', en: 'New category name', fr: 'Nom de la nouvelle catégorie' },
+  'transfer.pickFile': { zh: '选择文件', en: 'Choose a file', fr: 'Choisir un fichier' },
+  'transfer.fileHint': {
+    zh: '支持 JSON / XML / TXT / Markdown;层级用编号或缩进表示,内容行写在标题下面。',
+    en: 'JSON / XML / TXT / Markdown; hierarchy from numbering or indentation, content below its title.',
+    fr: 'JSON / XML / TXT / Markdown; hiérarchie par numérotation ou indentation, contenu sous son titre.'
+  },
+  'transfer.preview': { zh: '预览', en: 'Preview', fr: 'Aperçu' },
+  'transfer.previewCounts': { zh: '文件夹 {folders} · 素材 {files}', en: 'Folders {folders} · Items {files}', fr: 'Dossiers {folders} · Éléments {files}' },
+  'transfer.doImport': { zh: '导入到素材树', en: 'Import into tree', fr: 'Importer dans l\u2019arbre' },
+  'transfer.importEmpty': { zh: '没有识别到可导入的内容', en: 'No importable content found', fr: 'Aucun contenu importable' },
+  'transfer.readFailed': { zh: '文件读取失败', en: 'Failed to read the file', fr: 'Échec de lecture du fichier' },
+  // 解析结果的提示走「词条 + 参数」,不在代码里硬写某一种语言
+  'transfer.warn.jsonInvalid': { zh: 'JSON 解析失败：{detail}', en: 'Invalid JSON: {detail}', fr: 'JSON invalide : {detail}' },
+  'transfer.warn.xmlInvalid': { zh: 'XML 格式有误，无法解析', en: 'Malformed XML, cannot parse', fr: 'XML mal formé, impossible à analyser' },
+  'transfer.warn.none': { zh: '没有识别到可导入的结构', en: 'No importable structure found', fr: 'Aucune structure importable' },
+  'transfer.warn.skipped': {
+    zh: '开头 {count} 行没有标题，已忽略',
+    en: 'Ignored {count} line(s) without a heading',
+    fr: '{count} ligne(s) sans titre ignorée(s)'
+  },
   // ---------- 统一确认弹窗(2026-09-20:全站弹窗同一种样式) ----------
   'dialog.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
   // ★ 第五十轮(Forrest):删除类确认弹窗的按钮统一为「确认」——

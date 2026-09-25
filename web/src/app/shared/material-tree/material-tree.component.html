@@ -36,6 +36,14 @@
               (click)="categoryManage.emit()">
         <mat-icon>tune</mat-icon>
       </button>
+      <!-- ★ 2026-09-25 第四轮(Forrest):导入 / 导出入口 ——
+           与类别配置同处一行:一个区域管「分类」和「进出」。 -->
+      <button mat-icon-button class="head-tool cat-transfer"
+              [matTooltip]="t('transfer.open')"
+              [attr.aria-label]="t('transfer.open')"
+              (click)="transferRequest.emit()">
+        <mat-icon>import_export</mat-icon>
+      </button>
     </div>
     <div class="th-row th-tools">
       <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" (click)="addFolder(null)">

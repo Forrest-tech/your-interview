@@ -21,6 +21,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { MaterialNode, MaterialTreeComponent } from '../../shared/material-tree/material-tree.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { CategoryManagerDialogComponent } from './category-manager-dialog.component';
+import { MaterialTransferDialogComponent } from './material-transfer-dialog.component';
 import { MaterialNodeDto, MaterialNodeIn, PracticeApi, PracticeCategoryDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
@@ -1166,25 +1167,56 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       //   回传了素材骨架根节点,这里合并进整树。
       const imported = result.importedNodes ?? [];
       if (imported.length > 0) {
-        if (this.treeLoadFailed()) {
-          // 树加载失败时禁止任何写库动作(与 saveTree 同一口径)
-          this.toast(this.t('practice.treeBlocked'));
-          return;
-        }
-        this.nodes.update((list) => [...list, ...imported]);
-        this.treeDeletedSinceSave = false;
-        this.treeDirty.set(true);
-        if (this.treeEditing()) {
-          // 正在编辑:同步刷新快照,让"取消"也能回到导入后的状态,不吞掉导入
-          this.treeSnapshot = JSON.parse(JSON.stringify(this.nodes())) as MaterialNode[];
-        } else {
-          // 导入是显式动作,直接持久化,不再弹二次确认
-          this.doSaveTree();
-        }
+        this.mergeImportedNodes(imported);
         return;
       }
       if (!this.treeDirty()) this.restoreTree();
     });
+  }
+
+  /**
+   * ★ 2026-09-25 第四轮(Forrest):素材「导入 / 导出」入口。
+   * 导出在弹窗里直接生成文件下载;导入只回传待合并的根节点,由这里统一入库。
+   */
+  openTransfer(): void {
+    if (this.treeLoadFailed()) {
+      this.toast(this.t('practice.treeBlocked'));
+      return;
+    }
+    const ref = this.dialog.open(MaterialTransferDialogComponent, {
+      width: '620px',
+      maxWidth: '94vw',
+      data: { nodes: this.nodes(), categories: this.categories(), filter: this.categoryFilter() }
+    });
+    ref.afterClosed().subscribe((result) => {
+      if (!result) return;
+      this.mergeImportedNodes(result.importedNodes ?? []);
+      // 弹窗里可能新建了类别 → 下拉要能立刻看到它
+      this.loadCategories();
+    });
+  }
+
+  /**
+   * 把「模板导入 / 文件导入」产生的根节点合并进整树并落库。
+   * 三条约定:
+   *  1. 树加载失败时一律不写服务端(防止用陈旧的本地数据覆盖真数据);
+   *  2. 正在编辑时同步刷新快照 —— 之后点"取消"回到的是导入后的状态,不吞导入;
+   *  3. 非编辑态直接持久化:导入是用户显式动作,不必再弹一次保存确认。
+   */
+  private mergeImportedNodes(imported: MaterialNode[]): void {
+    if (imported.length === 0) return;
+    if (this.treeLoadFailed()) {
+      this.toast(this.t('practice.treeBlocked'));
+      return;
+    }
+    this.nodes.update((list) => [...list, ...imported]);
+    this.treeDeletedSinceSave = false;
+    this.treeDirty.set(true);
+    if (this.treeEditing()) {
+      this.treeSnapshot = JSON.parse(JSON.stringify(this.nodes())) as MaterialNode[];
+    } else {
+      this.doSaveTree();
+    }
   }
 
   /**

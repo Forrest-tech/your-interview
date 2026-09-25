@@ -57,6 +57,14 @@
   align-items: center;
   gap: 2px;
   height: 100%;
+  /* ★ 2026-09-26(Forrest):窄窗口下导航不再被裁切、也不撑宽页面 ——
+     主流做法(YouTube/Amazon 移动顶栏):让导航自己在顶栏内横向滚动,
+     滚动条隐藏(细窄窗口下滚动一下就能看到被挡住的项)。 */
+  min-width: 0;                /* 允许作为 flex 子项收缩到顶栏宽度内 */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;       /* Firefox:隐藏自身滚动条 */
+  &::-webkit-scrollbar { display: none; } /* Chrome/Safari:同上 */
 }
 
 .nav-item {

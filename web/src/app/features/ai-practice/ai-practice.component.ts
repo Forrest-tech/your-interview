@@ -1160,7 +1160,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     }
     const ref = this.dialog.open(MaterialTransferDialogComponent, {
       width: '680px',
+      // ★ 第十一轮:默认更高(min(80vh, 760px)),多显示内容但不无限大;
+      //   用户可在 min/max 区间内自己拖拽缩放(见 styles.scss .app-transfer)。
+      height: 'min(80vh, 760px)',
       maxWidth: '94vw',
+      maxHeight: '94vh',
       panelClass: 'app-transfer',
       data: { nodes: this.nodes(), categories: this.categories(), filter: this.categoryFilter(), tab }
     });

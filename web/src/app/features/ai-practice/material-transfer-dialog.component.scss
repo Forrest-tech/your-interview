@@ -50,6 +50,14 @@
   --mat-tab-header-active-focus-label-text-color: #1f2733;
 }
 
+/* ---------- 根容器:撑满弹窗表面,高度跟随用户拖拽 ---------- */
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 /* ---------- 标题栏(与 app-confirm 的头部同构) ---------- */
 .tf-head {
   display: flex;
@@ -58,6 +66,7 @@
   margin: 0;
   padding: 14px 16px 12px 18px;
   border-bottom: 1px solid #eef0f4;
+  flex: 0 0 auto;
 }
 
 .tf-head-ico {
@@ -81,11 +90,15 @@
 .tf-close:hover { color: #333a44; }
 
 /* ---------- 内容区 ----------
-   ★ 第九轮:高度写死 —— 三个页签共用同一块内容区,内容超高时页签内部滚动,
-     切换页签窗口尺寸一丝不变(Notion / VS Code 的设置弹窗同款做法)。 */
+   ★ 第九轮:三个页签共用同一块内容区,内容超高时页签内部滚动,
+     切换页签窗口尺寸一丝不变(Notion / VS Code 的设置弹窗同款做法)。
+   ★ 第十一轮:固定高 468px 改为撑满弹窗剩余空间 —— 弹窗默认更高,
+     用户拖拽缩放时内容区跟着伸缩。 */
 .tf-body {
   padding: 0 20px 16px;
-  height: 468px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;   /* Material 默认给 mat-dialog-content 加 65vh 上限,这里解除 */
   overflow: hidden;
 }
 

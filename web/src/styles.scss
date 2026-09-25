@@ -321,10 +321,23 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 
 /* ---------------- 全站统一「导入 / 导出」弹窗(app-transfer) ----------------
    ★ 2026-09-25(Forrest 第五轮):素材导入导出弹窗与 app-confirm 同一套外壳 ——
-   白卡片、圆角 12、无 MDC 默认内边距(组件自控标题栏/内容留白)。 */
+   白卡片、圆角 12、无 MDC 默认内边距(组件自控标题栏/内容留白)。
+   ★ 第十一轮:弹窗可由用户拖拽缩放(resize: both 需要宿主 overflow ≠ visible)。
+   尺寸区间:默认 680×min(80vh,760px),最小 560×440,最大 94vw×94vh ——
+   与 Chrome / Notion 可缩放弹窗同款:给足空间但不允许无限大。 */
 .app-transfer .mat-mdc-dialog-container { padding: 0; }
+.app-transfer.cdk-overlay-pane {
+  resize: both;
+  overflow: auto;
+  min-width: 560px;
+  min-height: 440px;
+}
 .app-transfer .mat-mdc-dialog-surface {
   border-radius: 12px !important;
   padding: 0 !important;
   box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
 }

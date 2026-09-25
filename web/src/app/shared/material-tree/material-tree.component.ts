@@ -110,12 +110,6 @@ export class MaterialTreeComponent {
   @Output() categoryManage = new EventEmitter<void>();
 
   /**
-   * ★ 2026-09-25 第四轮(Forrest):用户点了「导入 / 导出」按钮 ——
-   *   素材树的备份与迁移入口,和类别管理并排放在同一行,
-   *   遵循 Notion「一个入口管进出」的组织方式。
-   */
-  @Output() transferRequest = new EventEmitter<void>();
-
   /**
    * 按类别过滤后的根级节点(渲染用)。
    * ⚠️ 只过滤**显示**,不过滤数据:this.nodes 永远是全量树,

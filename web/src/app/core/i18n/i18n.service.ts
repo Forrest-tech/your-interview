@@ -370,6 +370,20 @@ const DICT: Record<string, Record<Lang, string>> = {
   },
   'transfer.chooseFile': { zh: '浏览文件…', en: 'Browse…', fr: 'Parcourir…' },
   'transfer.noFilePicked': { zh: '未选择文件', en: 'No file chosen', fr: 'Aucun fichier choisi' },
+  // ★ 第七轮:保存位置在界面上可见可选(每次系统另存为 / 直接进下载文件夹)
+  'transfer.saveLocation': { zh: '保存位置', en: 'Save location', fr: 'Emplacement' },
+  'transfer.saveAsk': { zh: '每次询问（系统「另存为」）', en: 'Ask every time (system dialog)', fr: 'Demander à chaque fois' },
+  'transfer.saveDownloads': { zh: '浏览器下载文件夹', en: 'Browser Downloads folder', fr: 'Dossier Téléchargements' },
+  'transfer.saveAskHint': {
+    zh: '点「导出」会弹出系统「另存为」窗口，自己挑文件夹和文件名；点了取消就不会导出。',
+    en: 'Export opens the system Save As dialog so you can pick the folder and file name; cancel and nothing is written.',
+    fr: 'Exporter ouvre la fenêtre système pour choisir le dossier et le nom ; annulez et rien n\u2019est écrit.'
+  },
+  'transfer.saveUnsupported': {
+    zh: '当前浏览器不支持选择保存位置，文件会直接存到浏览器的下载文件夹（改用 Chrome / Edge 即可选择位置）。',
+    en: 'This browser can\u2019t choose a save location — files go straight to the Downloads folder (switch to Chrome / Edge to pick one).',
+    fr: 'Ce navigateur ne permet pas de choisir l\u2019emplacement — les fichiers vont dans Téléchargements (utilisez Chrome / Edge pour le choisir).'
+  },
   // ★ 第六轮:导出可选路径(系统「另存为」)+ 导入示例文件
   'transfer.sampleBtn': { zh: '示例文件', en: 'Sample file', fr: 'Exemple' },
   'transfer.sampleDone': {

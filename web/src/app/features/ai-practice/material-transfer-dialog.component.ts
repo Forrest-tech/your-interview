@@ -30,6 +30,18 @@ interface DialogData {
   filter: string;
 }
 
+/** 保存位置偏好落盘 key(第七轮:每次询问 / 浏览器下载文件夹)。 */
+const SAVE_MODE_KEY = 'yi.exportSaveMode';
+
+function readSaveMode(): 'ask' | 'downloads' {
+  try {
+    const v = localStorage.getItem(SAVE_MODE_KEY);
+    return v === 'downloads' ? 'downloads' : 'ask';
+  } catch {
+    return 'ask';
+  }
+}
+
 /** 关闭回传:需要合并进整树的节点。 */
 export interface TransferResult {
   importedNodes: MaterialNode[];
@@ -133,6 +145,24 @@ export class MaterialTransferDialogComponent {
     return fileExtension(this.format());
   }
 
+  /**
+   * ★ 第七轮(Forrest):保存位置**在界面上可见、可选** ——
+   *  · 「每次询问」= 点导出弹系统「另存为」,用户自己挑文件夹(默认,Chrome/Edge);
+   *  · 「浏览器下载文件夹」= 跳过询问直接下载,不弹窗;
+   *  · 浏览器不支持 File System Access API(Firefox/Safari)时如实说明,
+   *    而不是让用户以为功能丢了。选择持久化,下次打开弹窗还记得。
+   */
+  readonly saveLocationSupported =
+    typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker === 'function';
+  readonly saveMode = signal<'ask' | 'downloads'>(readSaveMode());
+
+  setSaveMode(mode: 'ask' | 'downloads'): void {
+    this.saveMode.set(mode);
+    try {
+      localStorage.setItem(SAVE_MODE_KEY, mode);
+    } catch { /* 隐私模式:只影响本次会话 */ }
+  }
+
   /** 已勾选的根节点数量(用于提示"已选 N 项")。 */
   readonly selectedCount = computed<number>(() => {
     const set = this.selectedIds();
@@ -228,7 +258,8 @@ export class MaterialTransferDialogComponent {
         }>;
       }>;
     };
-    if (typeof win.showSaveFilePicker !== 'function') {
+    // 「浏览器下载文件夹」模式 = 明确跳过询问;浏览器不支持时也只能下载
+    if (this.saveMode() === 'downloads' || typeof win.showSaveFilePicker !== 'function') {
       this.downloadFile(name, text, fmt);
       return true;
     }

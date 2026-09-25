@@ -70,6 +70,20 @@
           <p class="tf-hint">{{ t('transfer.pdfHint') }}</p>
         }
 
+        <!-- ★ 第七轮:保存位置在界面上可见可选(此前只藏在系统另存为里,用户看不见) -->
+        <label class="tf-label">{{ t('transfer.saveLocation') }}</label>
+        @if (saveLocationSupported) {
+          <mat-radio-group class="tf-formats" [value]="saveMode()" (change)="setSaveMode($event.value)">
+            <mat-radio-button class="tf-fmt" value="ask">{{ t('transfer.saveAsk') }}</mat-radio-button>
+            <mat-radio-button class="tf-fmt" value="downloads">{{ t('transfer.saveDownloads') }}</mat-radio-button>
+          </mat-radio-group>
+          @if (saveMode() === 'ask') {
+            <p class="tf-hint">{{ t('transfer.saveAskHint') }}</p>
+          }
+        } @else {
+          <p class="tf-hint tf-hint-warn">{{ t('transfer.saveUnsupported') }}</p>
+        }
+
         <div class="tf-actions">
           <button mat-flat-button class="tf-primary" [disabled]="exporting()" (click)="doExport()">
             <mat-icon>file_download</mat-icon>{{ t('transfer.doExport') }}

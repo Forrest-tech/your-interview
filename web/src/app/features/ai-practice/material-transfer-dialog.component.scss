@@ -288,6 +288,8 @@
 .tf-sample mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
 .tf-hint { margin: 2px 0 0; font-size: 12px; color: #9aa3b0; }
+/* 浏览器不支持选位置时的说明 —— 要醒目一点,别让用户以为功能丢了 */
+.tf-hint-warn { color: #b06a00; }
 
 /* ---------- 预览 ---------- */
 .tf-preview {

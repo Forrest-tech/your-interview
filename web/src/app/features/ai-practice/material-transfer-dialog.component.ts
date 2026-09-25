@@ -17,9 +17,9 @@ import { PracticeApi, PracticeCategoryDto } from '../../core/api/practice-api.se
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MaterialNode } from '../../shared/material-tree/material-tree.component';
 import {
-  IMPORT_ACCEPT, TransferCategory, TransferFormat, TransferNode,
-  buildExportPayload, countNodes, fileExtension, ImportWarning, parseImport,
-  sanitizeName, serializeTransfer
+  IMPORT_ACCEPT, SAMPLE_FILE_NAME, TransferCategory, TransferFormat, TransferNode,
+  buildExportPayload, buildSampleFile, countNodes, fileExtension, ImportWarning, parseImport,
+  sanitizeName, serializeTransfer, transferMime
 } from './material-transfer';
 
 interface DialogData {
@@ -182,11 +182,15 @@ export class MaterialTransferDialogComponent {
     this.exporting.set(true);
     try {
       const fmt = this.format();
-      const payload = buildExportPayload(this.sourceName(), picked);
-      const text = serializeTransfer(payload, fmt);
+      const text = serializeTransfer(buildExportPayload(this.sourceName(), picked), fmt);
       const name = this.exportFileName();
-      if (fmt === 'pdf') this.printToPdf(text);
-      else this.downloadFile(name, text, fmt);
+      if (fmt === 'pdf') {
+        this.printToPdf(text);
+      } else {
+        // ★ 第六轮:路径由用户选 —— 系统另存为;取消则什么都不发生
+        const saved = await this.saveToFile(name, text, fmt);
+        if (!saved) return;
+      }
       this.notify(this.t('transfer.exportDone'));
     } finally {
       this.exporting.set(false);
@@ -203,6 +207,57 @@ export class MaterialTransferDialogComponent {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  /**
+   * ★ 第六轮(Forrest):导出路径可选 ——
+   * 支持 File System Access API 的浏览器(Chrome/Edge)弹系统「另存为」,
+   * 用户自己挑目录与文件名(Excalidraw / Figma 网页版的同款做法);
+   * 不支持的浏览器回落普通下载(存到浏览器下载目录)。
+   * 返回 false 仅代表用户点了取消(正常反悔,不算错误,静默)。
+   */
+  private async saveToFile(name: string, text: string, fmt: TransferFormat): Promise<boolean> {
+    const win = window as unknown as {
+      showSaveFilePicker?: (opts: {
+        suggestedName?: string;
+        types?: { description?: string; accept: Record<string, string[]> }[];
+      }) => Promise<{
+        createWritable: () => Promise<{
+          write: (data: string) => Promise<void>;
+          close: () => Promise<void>;
+        }>;
+      }>;
+    };
+    if (typeof win.showSaveFilePicker !== 'function') {
+      this.downloadFile(name, text, fmt);
+      return true;
+    }
+    try {
+      // 注意:必须在点击事件的任务里同步调用(浏览器要求 user activation),
+      // 前面不能插入 await。
+      const handle = await win.showSaveFilePicker({
+        suggestedName: name,
+        types: [{
+          description: this.t('transfer.fmt.' + fmt),
+          accept: { [transferMime(fmt)]: ['.' + fileExtension(fmt)] }
+        }]
+      });
+      const stream = await handle.createWritable();
+      await stream.write(text);
+      await stream.close();
+      return true;
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return false;
+      // 其它异常(如权限被拒)不吞结果 —— 回落普通下载,用户至少拿到文件
+      this.downloadFile(name, text, fmt);
+      return true;
+    }
+  }
+
+  /** ★ 第六轮:下载示例文件 —— 用户"照着填",不用猜格式(GitHub/Mailchimp 模板同款)。 */
+  downloadSample(): void {
+    this.downloadFile(SAMPLE_FILE_NAME, buildSampleFile(this.t), 'txt');
+    this.notify(this.t('transfer.sampleDone'));
   }
 
   /**

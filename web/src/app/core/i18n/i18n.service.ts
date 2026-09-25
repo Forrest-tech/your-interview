@@ -353,9 +353,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'transfer.newCategoryPlaceholder': { zh: '新类别名称', en: 'New category name', fr: 'Nom de la nouvelle catégorie' },
   'transfer.pickFile': { zh: '选择文件', en: 'Choose a file', fr: 'Choisir un fichier' },
   'transfer.fileHint': {
-    zh: '支持 JSON / XML / TXT / Markdown;层级用编号或缩进表示,内容行写在标题下面。',
-    en: 'JSON / XML / TXT / Markdown; hierarchy from numbering or indentation, content below its title.',
-    fr: 'JSON / XML / TXT / Markdown; hiérarchie par numérotation ou indentation, contenu sous son titre.'
+    zh: '支持 JSON / XML / TXT / Markdown;层级用编号或缩进表示,内容行写在标题下面;以 // 开头的行是说明,会被忽略。',
+    en: 'JSON / XML / TXT / Markdown; hierarchy from numbering or indentation, content below its title. Lines starting with // are notes and are ignored.',
+    fr: 'JSON / XML / TXT / Markdown; hiérarchie par numérotation ou indentation, contenu sous son titre. Les lignes commençant par // sont des notes ignorées.'
   },
   'transfer.preview': { zh: '预览', en: 'Preview', fr: 'Aperçu' },
   'transfer.previewCounts': { zh: '文件夹 {folders} · 素材 {files}', en: 'Folders {folders} · Items {files}', fr: 'Dossiers {folders} · Éléments {files}' },
@@ -370,6 +370,38 @@ const DICT: Record<string, Record<Lang, string>> = {
   },
   'transfer.chooseFile': { zh: '浏览文件…', en: 'Browse…', fr: 'Parcourir…' },
   'transfer.noFilePicked': { zh: '未选择文件', en: 'No file chosen', fr: 'Aucun fichier choisi' },
+  // ★ 第六轮:导出可选路径(系统「另存为」)+ 导入示例文件
+  'transfer.sampleBtn': { zh: '示例文件', en: 'Sample file', fr: 'Exemple' },
+  'transfer.sampleDone': {
+    zh: '示例文件已下载，按里面的说明填写后再选择导入',
+    en: 'Sample downloaded — follow the instructions inside, then import it',
+    fr: 'Exemple téléchargé — suivez les instructions, puis importez-le'
+  },
+  'transfer.sample.title': {
+    zh: 'Your Interview 素材导入示例：按下面几条说明填写，保存后在「导入」页选择本文件。',
+    en: 'Your Interview sample import file — follow the notes below, save, then pick this file on the Import tab.',
+    fr: 'Exemple d\u2019import Your Interview — suivez les notes ci-dessous, enregistrez, puis choisissez ce fichier dans l\u2019onglet Importer.'
+  },
+  'transfer.sample.howtoBody': {
+    zh: '以 // 开头的行是说明，导入时会自动忽略，可以留着也可以删掉。\n数字编号表示层级：1 是最外层，1.1 是它的子项，1.1.1 再深一层。\n带编号的行是标题（文件夹或素材名），不要以「> 」开头。\n正文写在标题正下方，每一行都以「> 」开头；需要空行就写一个单独的「>」。\n填好保存后，在「导入」页选择这个文件；也可以原样导入本文件先看看效果。',
+    en: 'Lines starting with // are notes — ignored on import, so you can keep or delete them.\nThe numbering is the nesting: 1 is the top level, 1.1 its child, 1.1.1 goes one level deeper.\nA numbered line is a title (folder or material name) — never start it with "> ".\nWrite an item\'s content on the lines right below its title, each starting with "> "; use a single ">" for a blank line.\nSave the file, then pick it on the Import tab — or import this file as-is to see the result.',
+    fr: 'Les lignes commençant par // sont des notes — ignorées à l\u2019import, à garder ou à supprimer.\nLa numérotation définit la hiérarchie : 1 est le niveau principal, 1.1 son enfant, 1.1.1 plus profond.\nUne ligne numérotée est un titre (dossier ou élément) — ne commencez jamais par « > ».\nÉcrivez le contenu d\u2019un élément juste sous son titre, chaque ligne commençant par « > » ; pour une ligne vide écrivez un simple « > ».\nEnregistrez le fichier, puis choisissez-le dans l\u2019onglet Importer — ou importez ce fichier tel quel pour voir le résultat.'
+  },
+  'transfer.sample.body1': {
+    zh: '你好，我叫……。我有五年后端开发经验，主导过支付系统的重构。',
+    en: 'Hello, my name is … I have five years of backend experience and led the re-platforming of our payment system.',
+    fr: 'Bonjour, je m\u2019appelle … J\u2019ai cinq ans d\u2019expérience backend et j\u2019ai piloté la refonte de notre système de paiement.'
+  },
+  'transfer.sample.body2': {
+    zh: '选一个你做过的并发系统：讲清楚需求、技术选型的取舍和最终结果。',
+    en: 'Pick one high-traffic system you built: cover requirements, key trade-offs, and the outcome.',
+    fr: 'Choisissez un système à fort trafic que vous avez construit : besoins, arbitrages clés et résultat.'
+  },
+  'transfer.sample.body3': {
+    zh: '打扰一下，请问 CA123 航班的登机口在哪里？',
+    en: 'Excuse me, which gate does flight CA123 board at?',
+    fr: 'Excusez-moi, à quelle porte embarque le vol CA123 ?'
+  },
   // 解析结果的提示走「词条 + 参数」,不在代码里硬写某一种语言
   'transfer.warn.jsonInvalid': { zh: 'JSON 解析失败：{detail}', en: 'Invalid JSON: {detail}', fr: 'JSON invalide : {detail}' },
   'transfer.warn.xmlInvalid': { zh: 'XML 格式有误，无法解析', en: 'Malformed XML, cannot parse', fr: 'XML mal formé, impossible à analyser' },

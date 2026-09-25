@@ -114,10 +114,14 @@
           <button type="button" mat-stroked-button class="tf-pick" (click)="pickFile()">
             <mat-icon>upload_file</mat-icon>{{ t('transfer.chooseFile') }}
           </button>
-          <span class="tf-picked" [class.is-empty]="!pickedFileName()">
-            {{ pickedFileName() || t('transfer.noFilePicked') }}
-          </span>
+          <!-- ★ 第六轮:示例文件 —— 按说明填写即可,本身也能直接导入试玩 -->
+          <button type="button" class="link tf-sample" (click)="downloadSample()">
+            <mat-icon>download</mat-icon>{{ t('transfer.sampleBtn') }}
+          </button>
         </div>
+        <span class="tf-picked" [class.is-empty]="!pickedFileName()">
+          {{ pickedFileName() || t('transfer.noFilePicked') }}
+        </span>
         <input #fileInput type="file" hidden [accept]="accept" (change)="onFilePicked($event)" />
         <p class="tf-hint">{{ t('transfer.fileHint') }}</p>
 

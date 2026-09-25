@@ -57,6 +57,49 @@ export function sanitizeName(s: string): string {
     .slice(0, 80);
 }
 
+/** 示例文件名(固定英文,跨语言稳定;下载后按里面说明填写)。 */
+export const SAMPLE_FILE_NAME = 'practice-materials-sample.txt';
+
+/**
+ * 说明行前缀(★ 第六轮 Forrest)。
+ * 为什么需要:示例文件要"边看说明边填",但不能让说明变成一条素材 ——
+ * 用 "//" 写说明、导入时整行忽略,是 .gitignore / .env / 各类模板文件的通用做法,
+ * 用户不用先删说明再导入,也永远不会在树里多出一条"如何使用本示例"。
+ */
+export const COMMENT_PREFIX = '//';
+
+export function isCommentLine(line: string): boolean {
+  return /^\s*\/\//.test(line);
+}
+
+/**
+ * 生成示例文件(★ 第六轮 Forrest)。
+ * 设计要点:
+ *  · 头部是 "//" 说明块 —— 打开文件就能照着填,导入时自动忽略;
+ *  · 说明下面是**填好的真实例子**,原样导入即得一棵干净的示例树
+ *    (和 GitHub / Mailchimp 的 sample file 同一思路,但更进一步:示例即可用模板)。
+ * 文案走 i18n,结构编号固定。
+ */
+export function buildSampleFile(t: (key: string) => string): string {
+  const note = (s: string): string => `${COMMENT_PREFIX} ${s}`;
+  const howto = t('transfer.sample.howtoBody').split('\n').filter((l) => l.trim());
+  return [
+    note(t('transfer.sample.title')),
+    ...howto.map(note),
+    '',
+    `1. ${t('practice.tpl.jobInterview.label')}`,
+    `1.1 ${t('practice.ti.selfIntro')}`,
+    `> ${t('transfer.sample.body1')}`,
+    `1.2 ${t('practice.ti.tech')}`,
+    `> ${t('transfer.sample.body2')}`,
+    '',
+    `2. ${t('practice.tpl.dailyEnglish.label')}`,
+    `2.1 ${t('practice.ti.travel')}`,
+    `> ${t('transfer.sample.body3')}`,
+    ''
+  ].join('\n');
+}
+
 /** 下载用的 MIME(部分格式用 text/plain 兜底,浏览器一律走下载而非预览)。 */
 export function transferMime(format: TransferFormat): string {
   switch (format) {
@@ -407,7 +450,8 @@ const BULLET = /^[-*+]\s+(.*)$/;
  * 否则同一个文件会得出不同的树(这也是多数 outline 工具的做法)。
  */
 function parseOutline(raw: string, fallbackName: string): ImportResult {
-  const lines = raw.split(/\r?\n/);
+  // "//" 说明行先剔除再判断形态 —— 否则示例文件的说明块会被当成正文/节点
+  const lines = raw.split(/\r?\n/).filter((l) => !isCommentLine(l));
   const hasHead = lines.some((l) => MD_HEAD.test(l.trim()));
   const hasNumber = lines.some((l) => NUMBERED.test(l.trim()));
   const warnings: ImportWarning[] = [];
@@ -453,15 +497,17 @@ function buildFromTitles(lines: string[], fallbackName: string, warnings: Import
       last = node;
       continue;
     }
-    // 非标题行 = 正文
+    // 非标题行 = 正文。"> " 行即便后面是空的也要接上 —— 导出把段落空行写成
+    // 单独一个 ">",不接回来的话两段正文会粘在一起(round-trip 丢格式)。
+    const quote = trimmed.match(/^>\s?(.*)$/);
+    const text = quote ? quote[1] : quoted(trimmed);
     if (last) {
-      const text = quoted(line.trim());
-      if (text) {
+      if (quote || text) {
         last.folder = false;
         last.content = last.content ? `${last.content}\n${text}` : text;
       }
-    } else {
-      skipped++;
+    } else if (!quote) {
+      skipped++;      // 标题之前的散行;文件头的 "> " 引言不算"被忽略的行"
     }
   }
   if (skipped > 0) warnings.push({ key: 'transfer.warn.skipped', count: skipped });

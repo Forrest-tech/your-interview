@@ -15,6 +15,28 @@
     <div class="th-row th-top">
       <span class="th-title">{{ t('tree.title') }}</span>
     </div>
+    <!-- ★ 2026-09-25(Forrest 第二轮):类别行与工具行交换 ——
+         切换类别是最高频动作,放到紧贴标题的第一行;
+         新建/展开等工具行退居其后。与 VS Code 资源管理器
+         "视图选择在上、动作按钮在下"的信息层级一致。 -->
+    <div class="th-row th-category">
+      <select class="cat-select"
+              [ngModel]="categoryFilter"
+              (ngModelChange)="onCategoryChange($event)"
+              [attr.aria-label]="t('practice.categoryLabel')">
+        <option value="all">{{ t('practice.categoryAll') }}</option>
+        @for (c of categories; track c.id) {
+          <option [value]="c.id">{{ c.name }}</option>
+        }
+        <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
+      </select>
+      <button mat-icon-button class="head-tool cat-manage"
+              [matTooltip]="t('practice.categoryManage')"
+              [attr.aria-label]="t('practice.categoryManage')"
+              (click)="categoryManage.emit()">
+        <mat-icon>tune</mat-icon>
+      </button>
+    </div>
     <div class="th-row th-tools">
       <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" (click)="addFolder(null)">
         <mat-icon>create_new_folder</mat-icon>
@@ -51,30 +73,6 @@
           <mat-icon>close</mat-icon>
         </button>
       }
-    </div>
-    <!-- ★ 2026-09-25(Forrest):第三行「练习类别」——
-         下拉按场景过滤素材树(全部/各类别/未分类),右侧小按钮打开类别配置弹窗
-         (新增/重命名/删除/拖拽排序都在弹窗里做,保持侧栏一行不膨胀)。
-         UX 参考 Anki 卡组选择器 + Notion 数据库视图筛选:
-         · 高频动作(切换过滤)一步直达,收在常驻下拉里;
-         · 低频动作(增删改排序)收进弹窗,不与树操作抢空间。 -->
-    <div class="th-row th-category">
-      <select class="cat-select"
-              [ngModel]="categoryFilter"
-              (ngModelChange)="onCategoryChange($event)"
-              [attr.aria-label]="t('practice.categoryLabel')">
-        <option value="all">{{ t('practice.categoryAll') }}</option>
-        @for (c of categories; track c.id) {
-          <option [value]="c.id">{{ c.name }}</option>
-        }
-        <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
-      </select>
-      <button mat-icon-button class="head-tool cat-manage"
-              [matTooltip]="t('practice.categoryManage')"
-              [attr.aria-label]="t('practice.categoryManage')"
-              (click)="categoryManage.emit()">
-        <mat-icon>tune</mat-icon>
-      </button>
     </div>
   </header>
 
@@ -196,9 +194,29 @@
       }
     </div>
 
-    <!-- 「移动到…」弹层:不依赖拖拽的兜底路径 -->
+    <!-- 「移动到…」弹层:不依赖拖拽的兜底路径。
+         ★ 2026-09-25(Forrest):
+         · 点击面板内部不再冒泡到 document(否则点面板空白处也会关掉);
+         · 顶部新增「移动到类别」分区 —— 编辑时可直接把文件夹/文件
+           挪到其它练习类别(参考 Notion「Move to」的分区列表:
+           目的地分组展示,点选即完成,无需拖拽)。 -->
     @if (moveMenuId() === n.id) {
-      <div class="move-panel" [style.margin-left.px]="18 + depth * 15">
+      <div class="move-panel" [style.margin-left.px]="18 + depth * 15"
+           (click)="$event.stopPropagation()">
+        @if (categories.length > 0) {
+          <div class="move-title">{{ t('tree.moveToCategory') }}</div>
+          @for (c of categories; track c.id) {
+            <button class="move-item is-category" (click)="moveToCategory(n, c.id)">
+              <mat-icon>label</mat-icon>
+              <span>{{ c.name }}</span>
+            </button>
+          }
+          <button class="move-item is-category" (click)="moveToCategory(n, null)">
+            <mat-icon>label_outline</mat-icon>
+            <span>{{ t('practice.categoryUncategorized') }}</span>
+          </button>
+          <div class="move-divider"></div>
+        }
         <div class="move-title">{{ t('tree.moveTo') }}</div>
         @if (!isRoot(n)) {
           <button class="move-item" (click)="moveTo(n, null)">

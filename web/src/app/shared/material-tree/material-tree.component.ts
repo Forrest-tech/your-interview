@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -501,9 +501,50 @@ export class MaterialTreeComponent {
   }
 
   // ---------- 「移动到…」兜底(不依赖拖拽) ----------
+  /**
+   * ★ 2026-09-25(Forrest):Move-to 弹层必须"用完即走"。
+   *   旧实现只能靠再点一次菜单或选中目标才关,点别处它一直杵着 ——
+   *   UX 修复采用 Notion / Google Docs 的成熟做法:
+   *   · 点击弹层以外任何位置 → 关闭(document:click);
+   *   · 按 Esc → 关闭(document:keydown.escape)。
+   *
+   *   ⚠️ 实现细节:打开弹层的那一下点击发生在 mat-menu 菜单项上,
+   *   它会正常冒泡到 document(不能 stopPropagation —— 那会把
+   *   mat-menu 自己的关闭链路也拦死,菜单会一直挂在弹层后面)。
+   *   所以用"标记一次"的方式:onDocumentClick 收到打开后的第一下
+   *   点击时跳过关闭,此后每次点击都照常关。
+   */
+  private suppressDocClick = false;
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    if (this.suppressDocClick) {
+      this.suppressDocClick = false;
+      return;
+    }
+    this.closeMoveMenu();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.closeMoveMenu();
+  }
+
+  closeMoveMenu(): void {
+    this.moveMenuId.set(null);
+  }
+
   openMoveMenu(node: MaterialNode): void {
-    this.moveMenuId.set(this.moveMenuId() === node.id ? null : node.id);
-    this.folderOptions.set(this.collectFolders(node));
+    this.suppressDocClick = true;        // 打开动作自身的那下点击不算"点外部"
+    // ⚠️ 必须延一拍再开弹层:点击处理函数里**同步**改 signal 会让 Angular
+    //   抢在 mat-menu 自己的关闭逻辑之前重渲染,菜单卡在打开态 ——
+    //   它的透明遮罩会挡住整页,用户怎么点都没反应(正是 Forrest 报的
+   //   "弹框一直没有消失")。setTimeout 让菜单先走完正常关闭流程。
+    setTimeout(() => {
+      this.moveMenuId.set(this.moveMenuId() === node.id ? null : node.id);
+      this.folderOptions.set(this.collectFolders(node));
+    });
+    // DEBUG-EXP-A: 空操作
   }
 
   /** 列出可作为目标的文件夹(排除自身与自身子孙)。 */
@@ -538,6 +579,29 @@ export class MaterialTreeComponent {
     const target = this.locate(folderId, this.nodes, null)?.node;
     if (!target) return;
     this.moveInto(node.id, target);
+  }
+
+  /**
+   * ★ 2026-09-25(Forrest):把节点移动到另一个「练习类别」。
+   *   类别只挂在**根级**节点上(与保存/回读契约一致),所以这里的语义是:
+   *   · 节点无论原来在多深,先摘出来放到最外层;
+   *   · 再把它的 categoryId 改成目标类别(null = 未分类)。
+   *   这与拖到根层时采纳当前过滤的行为同一套规则,不会出现
+   *   "子节点私自挂类别、保存被服务端忽略"的错位。
+   */
+  moveToCategory(node: MaterialNode, categoryId: string | null): void {
+    if (!this.editable) return;
+    this.moveMenuId.set(null);
+    const src = this.locate(node.id, this.nodes, null);
+    if (!src) return;
+    if (src.parent) {
+      // 先从原位置摘除(无论多深)
+      const from = src.parent;
+      from.splice(from.findIndex((n) => n.id === node.id), 1);
+      this.nodes.push(src.node);
+    }
+    src.node.categoryId = categoryId;
+    this.nodeChange.emit(this.nodes);
   }
 
   /** 当前节点是否已在最外层。 */

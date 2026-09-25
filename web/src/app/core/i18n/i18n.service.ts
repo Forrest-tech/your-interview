@@ -274,6 +274,54 @@ const DICT: Record<string, Record<Lang, string>> = {
     fr: 'Nouvelle catégorie, ex. Présentation'
   },
   'practice.categoryAdd': { zh: '添加', en: 'Add', fr: 'Ajouter' },
+  // ★ 2026-09-25 第二轮(Forrest):未分类系统行 / Move-to 类别分区 / 导入模板
+  'practice.categorySystemNote': {
+    zh: '系统保留 · 删除的类别归入此处',
+    en: 'System · deleted categories land here',
+    fr: 'Système · les catégories supprimées arrivent ici'
+  },
+  'tree.moveToCategory': { zh: '移动到类别', en: 'Move to category', fr: 'Déplacer vers la catégorie' },
+  'practice.templateTitle': { zh: '导入模板', en: 'Import template', fr: 'Importer un modèle' },
+  'practice.templatePlaceholder': { zh: '选择一个模板…', en: 'Choose a template…', fr: 'Choisir un modèle…' },
+  'practice.templateImport': { zh: '导入', en: 'Import', fr: 'Importer' },
+  'practice.tpl.jobInterview.label': { zh: '求职面试', en: 'Job Interview', fr: 'Entretien d\u2019embauche' },
+  'practice.tpl.jobInterview.desc': {
+    zh: '自我介绍、技术、行为与反问四段式面试素材骨架。',
+    en: 'A self-intro / technical / behavioral / questions-to-ask skeleton.',
+    fr: 'Un squelette présentation / technique / comportemental / questions.'
+  },
+  'practice.tpl.dailyEnglish.label': { zh: '生活英语', en: 'Daily English', fr: 'Anglais au quotidien' },
+  'practice.tpl.dailyEnglish.desc': {
+    zh: '日常寒暄、旅行出行、购物点餐三大场景。',
+    en: 'Small talk, travel, and shopping & dining scenarios.',
+    fr: 'Scénarios : discussions, voyages, achats et repas.'
+  },
+  'practice.tpl.studyPlan.label': { zh: '学习计划', en: 'Study Plan', fr: 'Plan d\u2019études' },
+  'practice.tpl.studyPlan.desc': {
+    zh: '每日练习打卡与错题复习笔记骨架。',
+    en: 'Daily practice log and mistake-review notes skeleton.',
+    fr: 'Journal quotidien et notes de révision des erreurs.'
+  },
+  // 模板骨架节点名(导入后可随意改名)
+  'practice.ti.selfIntro': { zh: '自我介绍', en: 'Self-introduction', fr: 'Présentation' },
+  'practice.ti.intro1m': { zh: '一分钟自我介绍', en: 'One-minute self-intro', fr: 'Présentation d\u2019une minute' },
+  'practice.ti.whyCompany': { zh: '为什么选择这家公司', en: 'Why this company', fr: 'Pourquoi cette entreprise' },
+  'practice.ti.tech': { zh: '技术问题', en: 'Technical questions', fr: 'Questions techniques' },
+  'practice.ti.techList': { zh: '高频技术题清单', en: 'Frequent tech questions', fr: 'Questions techniques fréquentes' },
+  'practice.ti.behavioral': { zh: '行为面试', en: 'Behavioral', fr: 'Comportemental' },
+  'practice.ti.star': { zh: 'STAR 故事集', en: 'STAR stories', fr: 'Histoires STAR' },
+  'practice.ti.questions': { zh: '反问环节', en: 'Questions to ask', fr: 'Questions à poser' },
+  'practice.ti.questionsList': { zh: '问面试官的问题', en: 'For the interviewer', fr: 'Pour l\u2019intervieweur' },
+  'practice.ti.dailyTalk': { zh: '日常寒暄', en: 'Small talk', fr: 'Discussions' },
+  'practice.ti.smallTalkTopics': { zh: '寒暄话题库', en: 'Small-talk topics', fr: 'Sujets de discussion' },
+  'practice.ti.travel': { zh: '旅行出行', en: 'Travel', fr: 'Voyage' },
+  'practice.ti.airport': { zh: '机场与交通', en: 'Airport & transit', fr: 'Aéroport et transport' },
+  'practice.ti.dining': { zh: '购物与点餐', en: 'Shopping & dining', fr: 'Achats et repas' },
+  'practice.ti.restaurant': { zh: '餐厅点餐', en: 'Ordering at a restaurant', fr: 'Commander au restaurant' },
+  'practice.ti.dailyPractice': { zh: '每日练习', en: 'Daily practice', fr: 'Pratique quotidienne' },
+  'practice.ti.practiceLog': { zh: '练习打卡记录', en: 'Practice log', fr: 'Journal de pratique' },
+  'practice.ti.notes': { zh: '复习笔记', en: 'Review notes', fr: 'Notes de révision' },
+  'practice.ti.mistakeBook': { zh: '错题本', en: 'Mistake notebook', fr: 'Cahier d\u2019erreurs' },
   // ---------- 统一确认弹窗(2026-09-20:全站弹窗同一种样式) ----------
   'dialog.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
   // ★ 第五十轮(Forrest):删除类确认弹窗的按钮统一为「确认」——

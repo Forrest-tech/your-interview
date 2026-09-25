@@ -1117,7 +1117,28 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     });
     ref.afterClosed().subscribe((result) => {
       if (!result) return;
-      this.categories.set(result);
+      this.categories.set(result.categories ?? []);
+      // ★ 2026-09-25(Forrest 第二轮):弹窗里点了「导入模板」→
+      //   回传了素材骨架根节点,这里合并进整树。
+      const imported = result.importedNodes ?? [];
+      if (imported.length > 0) {
+        if (this.treeLoadFailed()) {
+          // 树加载失败时禁止任何写库动作(与 saveTree 同一口径)
+          this.toast(this.t('practice.treeBlocked'));
+          return;
+        }
+        this.nodes.update((list) => [...list, ...imported]);
+        this.treeDeletedSinceSave = false;
+        this.treeDirty.set(true);
+        if (this.treeEditing()) {
+          // 正在编辑:同步刷新快照,让"取消"也能回到导入后的状态,不吞掉导入
+          this.treeSnapshot = JSON.parse(JSON.stringify(this.nodes())) as MaterialNode[];
+        } else {
+          // 导入是显式动作,直接持久化,不再弹二次确认
+          this.doSaveTree();
+        }
+        return;
+      }
       if (!this.treeDirty()) this.restoreTree();
     });
   }

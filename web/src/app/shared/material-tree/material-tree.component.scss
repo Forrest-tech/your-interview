@@ -391,6 +391,16 @@
 
 .move-item:hover { background: rgba(63, 81, 181, 0.1); }
 
+/* ★ 2026-09-25:类别分区 —— 图标用中性蓝灰(区别于文件夹的黄),可辨识即可 */
+.move-item.is-category mat-icon { color: #5b7fd4; }
+
+/* 类别分区与文件夹分区之间的细分隔线(Notion Move to 同款分组法) */
+.move-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(63, 81, 181, 0.16);
+}
+
 .move-item mat-icon {
   font-size: 16px;
   width: 16px;

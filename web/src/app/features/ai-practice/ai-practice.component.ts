@@ -152,8 +152,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 当前类别过滤:'all' | 'uncategorized' | 类别id。
    * 过滤只作用于树**显示**(visibleNodes 在树控件内部),
    * 新建/拖拽/保存永远操作全量树,所以过滤态下也不会丢数据。
+   *
+   * ★ 2026-09-25 第三轮(Forrest):刷新后要记住上次选的类别,不再每次回"全部"。
+   *   初值从 localStorage 恢复(与 practice.lang / user_practice_zoom 同一套约定);
+   *   类别列表加载回来后若发现存的 id 已被删除,回落"全部"(见 loadCategories)。
    */
-  readonly categoryFilter = signal<string>('all');
+  readonly categoryFilter = signal<string>(AiPracticeComponent.readStoredCategoryFilter());
 
   /** 编辑态正文(仅编辑模式下可改)。 */
   readonly draft = signal('');
@@ -1089,20 +1093,58 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
 
+  /** 类别过滤的 localStorage 键(刷新后恢复上次选中,第三轮 Forrest)。 */
+  private static readonly CATEGORY_FILTER_KEY = 'practice.categoryFilter';
+
+  /**
+   * 从 localStorage 读上次选中的类别过滤。
+   * 静态方法:字段初始化器要赶在构造器之前用上它。
+   * 值不合法(被篡改)一律回落"全部";隐私模式读不了也不影响。
+   */
+  private static readStoredCategoryFilter(): string {
+    try {
+      const v = localStorage.getItem(AiPracticeComponent.CATEGORY_FILTER_KEY);
+      return v && v.trim() ? v.trim() : 'all';
+    } catch {
+      return 'all';
+    }
+  }
+
   /**
    * 加载类别下拉。失败**静默降级**:下拉只剩"全部/未分类",
    * 素材树照常可用 —— 类别是锦上添花,不该因为它挂掉整棵树。
+   *
+   * ★ 第三轮:加载完成后校验恢复的过滤值 —— 存的类别 id 若已被删除
+   *   (比如在别的设备上删的),回落"全部",避免下拉显示成空选项。
    */
   private loadCategories(): void {
     this.practiceApi.getCategories().subscribe({
-      next: (list) => this.categories.set(list ?? []),
+      next: (list) => {
+        this.categories.set(list ?? []);
+        this.validateCategoryFilter();
+      },
       error: () => this.categories.set([])
     });
   }
 
-  /** 下拉切换过滤值(树控件通过事件抛上来,这里回写给 signal)。 */
+  /**
+   * 校验当前过滤值:若指向一个已不存在的类别 id(被删了/别的设备删了),
+   * 回落"全部"并清掉存储,避免下拉显示成空选项。
+   */
+  private validateCategoryFilter(): void {
+    const f = this.categoryFilter();
+    if (f === 'all' || f === 'uncategorized') return;
+    if (this.categories().some((c) => c.id === f)) return;
+    this.categoryFilter.set('all');
+    try { localStorage.removeItem(AiPracticeComponent.CATEGORY_FILTER_KEY); } catch { /* 忽略 */ }
+  }
+
+  /** 下拉切换过滤值(树控件通过事件抛上来,这里回写给 signal 并落盘)。 */
   onCategoryFilterChange(value: string): void {
     this.categoryFilter.set(value);
+    try {
+      localStorage.setItem(AiPracticeComponent.CATEGORY_FILTER_KEY, value);
+    } catch { /* 隐私模式写不了,不影响本次会话 */ }
   }
 
   /**
@@ -1118,6 +1160,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     ref.afterClosed().subscribe((result) => {
       if (!result) return;
       this.categories.set(result.categories ?? []);
+      // 弹窗里可能删了类别 → 当前过滤若指向被删类别,回落"全部"
+      this.validateCategoryFilter();
       // ★ 2026-09-25(Forrest 第二轮):弹窗里点了「导入模板」→
       //   回传了素材骨架根节点,这里合并进整树。
       const imported = result.importedNodes ?? [];

@@ -1,17 +1,93 @@
-/* 素材「导入 / 导出」弹窗样式。
-   与全站一致的浅色卡片语言:细边框、中性灰、蓝色主操作。
-   范围树刻意保持单行高度 + 缩进,避免多级内容把弹窗撑成滚动迷宫。 */
+/* 素材「导入 / 导出」弹窗样式(★ 第五轮重排,Forrest)。
+   与全站同一套设计令牌:白卡片、细边框 #e3e7ee、中性灰阶、主蓝 #2f6fed。
+   面板外壳(.app-transfer)写在全局 styles.scss —— overlay 不在组件 DOM 里。
+   这里只管内容:标题栏、两个标签页、表单控件、范围树、预览。 */
 
-.tf-body {
-  min-width: 460px;
-  max-width: 560px;
+/* 主题的 accent 是琥珀色,而勾选框 / 单选 / 标签页默认就吃 accent ——
+   不处理的话整个弹窗会发橙,和全站主蓝操作色打架。
+   ⚠️ 关键点:主题是把这些变量**定义在控件自身**上
+      (.mat-mdc-checkbox.mat-accent / .mat-mdc-radio-button.mat-accent /
+       .mat-mdc-tab-group.mat-accent)。写在 :host 上只是"继承值",
+      继承值永远输给元素自身的声明 —— 所以必须直接压到控件类上,
+      且选择器要比".类.类"更具体(这里用 宿主 + 控件类 + 自有类)。 */
+
+:host ::ng-deep .mat-mdc-checkbox.pk-check {
+  --mdc-checkbox-selected-icon-color: #2f6fed;
+  --mdc-checkbox-selected-hover-icon-color: #2f6fed;
+  --mdc-checkbox-selected-focus-icon-color: #2f6fed;
+  --mdc-checkbox-selected-pressed-icon-color: #2f6fed;
+  --mdc-checkbox-selected-checkmark-color: #fff;
+  --mdc-checkbox-selected-focus-state-layer-color: #2f6fed;
+  --mdc-checkbox-selected-hover-state-layer-color: #2f6fed;
+  --mdc-checkbox-selected-pressed-state-layer-color: #2f6fed;
+  --mdc-checkbox-unselected-icon-color: #b3bcc9;
+  --mdc-checkbox-unselected-hover-icon-color: #2f6fed;
+  --mdc-checkbox-unselected-focus-icon-color: #2f6fed;
+  --mdc-checkbox-unselected-pressed-icon-color: #2f6fed;
+  --mdc-checkbox-unselected-hover-state-layer-color: #2f6fed;
+  --mdc-checkbox-unselected-focus-state-layer-color: #2f6fed;
+  --mdc-checkbox-unselected-pressed-state-layer-color: #2f6fed;
 }
+
+:host ::ng-deep .mat-mdc-radio-button.tf-fmt {
+  --mdc-radio-selected-icon-color: #2f6fed;
+  --mdc-radio-selected-hover-icon-color: #2f6fed;
+  --mdc-radio-selected-focus-icon-color: #2f6fed;
+  --mdc-radio-selected-pressed-icon-color: #2f6fed;
+  --mdc-radio-unselected-icon-color: #b3bcc9;
+  --mdc-radio-unselected-hover-icon-color: #2f6fed;
+  --mdc-radio-unselected-focus-icon-color: #2f6fed;
+  --mat-radio-ripple-color: #2f6fed;
+}
+
+:host ::ng-deep .mat-mdc-tab-group.tf-tabs {
+  --mdc-tab-indicator-active-indicator-color: #2f6fed;
+  --mat-tab-header-active-label-text-color: #1f2733;
+  --mat-tab-header-inactive-label-text-color: #7a8393;
+  --mat-tab-header-active-hover-indicator-color: #2f6fed;
+  --mat-tab-header-active-focus-indicator-color: #2f6fed;
+  --mat-tab-header-active-hover-label-text-color: #1f2733;
+  --mat-tab-header-active-focus-label-text-color: #1f2733;
+}
+
+/* ---------- 标题栏(与 app-confirm 的头部同构) ---------- */
+.tf-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 14px 16px 12px 18px;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.tf-head-ico {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  color: #2f6fed;
+}
+
+.tf-head-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2733;
+  line-height: 1.4;
+}
+
+.tf-close {
+  color: #8a93a2;
+}
+
+.tf-close:hover { color: #333a44; }
+
+/* ---------- 内容区 ---------- */
+.tf-body { padding: 0 20px 18px; }
 
 .tf-pane {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 10px;
+  padding-top: 12px;
 }
 
 .tf-label {
@@ -20,6 +96,8 @@
   font-weight: 600;
   color: #6b7484;
 }
+
+.tf-scope-head .tf-label { margin-top: 0; }
 
 .tf-select {
   height: 32px;
@@ -60,7 +138,7 @@
 
 /* ---------- 勾选范围树 ---------- */
 .tf-tree {
-  max-height: 210px;
+  max-height: 208px;
   overflow: auto;
   padding: 6px 4px;
   border: 1px solid #e6eaf0;
@@ -96,7 +174,7 @@
 
 .pk-check { flex: 1; min-width: 0; }
 
-.pk-check ::ng-deep .mdc-label { font-size: 13px; color: #333a44; }
+.pk-check ::ng-deep .mdc-label { font-size: 13px; color: #333a44; padding-left: 6px; }
 
 .pk-name {
   overflow: hidden;
@@ -111,7 +189,7 @@
   color: #9aa3b0;
 }
 
-/* ---------- 格式选择 ---------- */
+/* ---------- 格式 / 目标单选 ---------- */
 .tf-formats {
   display: flex;
   flex-wrap: wrap;
@@ -120,18 +198,86 @@
 }
 
 .tf-fmt { font-size: 13px; }
-
-.tf-file {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: #8a93a2;
+.tf-fmt ::ng-deep .mdc-form-field > label {
+  font-size: 13px;
+  color: #333a44;
+  padding-left: 6px;
 }
 
-.tf-file b { color: #333a44; font-weight: 600; word-break: break-all; }
+/* ---------- 文件名:可编辑基础名 + 固定后缀块 ---------- */
+.tf-name-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.tf-name {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #333a44;
+  border: 1px solid #d7dce4;
+  border-right: 0;
+  border-radius: 6px 0 0 6px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.tf-name:focus {
+  border-color: #2f6fed;
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, .14);
+}
+
+/* 后缀块:不可编辑,让扩展名永远与格式一致(Chrome「另存为」同款) */
+.tf-ext {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #55606f;
+  background: #f3f5f9;
+  border: 1px solid #d7dce4;
+  border-radius: 0 6px 6px 0;
+  user-select: none;
+}
+
+.tf-name:focus + .tf-ext { border-color: #2f6fed; }
+
+/* ---------- 导入:风格化文件选择 ---------- */
+.tf-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tf-pick {
+  --mdc-outlined-button-label-text-color: #333a44;
+  --mdc-outlined-button-outline-color: #d7dce4;
+  --mdc-outlined-button-container-height: 32px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.tf-pick mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 6px; }
+
+.tf-picked {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: #333a44;
+}
+
+.tf-picked.is-empty { color: #9aa3b0; }
 
 .tf-hint { margin: 2px 0 0; font-size: 12px; color: #9aa3b0; }
-
-.tf-file-input { font-size: 12.5px; max-width: 62%; }
 
 /* ---------- 预览 ---------- */
 .tf-preview {
@@ -151,6 +297,7 @@
 }
 
 .tf-preview-head mat-icon { font-size: 16px; width: 16px; height: 16px; color: #8a93a2; }
+.tf-preview-head b { font-weight: 600; }
 .spacer { flex: 1; }
 
 .tf-preview-list {
@@ -173,8 +320,25 @@
   color: #c0392b;
 }
 
+/* ---------- 动作区:主操作 = 站内蓝实心(与确认弹窗的「确认」按钮同款) ---------- */
 .tf-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 12px;
+  margin-top: 14px;
+}
+
+.tf-primary {
+  --mdc-filled-button-container-color: #2f6fed;
+  --mdc-filled-button-label-text-color: #fff;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tf-primary mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 6px; }
+
+/* ---------- 标签页文字(默认 14px/大写间距偏重,压到与正文一致) ---------- */
+:host ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
 }

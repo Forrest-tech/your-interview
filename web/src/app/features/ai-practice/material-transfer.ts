@@ -48,6 +48,15 @@ export function fileExtension(format: TransferFormat): string {
   return format === 'markdown' ? 'md' : format === 'pdf' ? 'pdf' : format;
 }
 
+/** 文件名消毒:非法字符换下划线、压掉多余空白并限长(Windows/macOS 都安全)。 */
+export function sanitizeName(s: string): string {
+  return (s ?? '')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
+
 /** 下载用的 MIME(部分格式用 text/plain 兜底,浏览器一律走下载而非预览)。 */
 export function transferMime(format: TransferFormat): string {
   switch (format) {

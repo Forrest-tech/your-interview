@@ -362,6 +362,14 @@ const DICT: Record<string, Record<Lang, string>> = {
   'transfer.doImport': { zh: '导入到素材树', en: 'Import into tree', fr: 'Importer dans l\u2019arbre' },
   'transfer.importEmpty': { zh: '没有识别到可导入的内容', en: 'No importable content found', fr: 'Aucun contenu importable' },
   'transfer.readFailed': { zh: '文件读取失败', en: 'Failed to read the file', fr: 'Échec de lecture du fichier' },
+  // ★ 第五轮:文件名可编辑(基础名 + 自动扩展名)与风格化文件选择
+  'transfer.fileNameHint': {
+    zh: '扩展名会按所选格式自动添加，改格式时自动跟随。',
+    en: 'The extension is added automatically and follows the chosen format.',
+    fr: 'L\u2019extension est ajoutée automatiquement et suit le format choisi.'
+  },
+  'transfer.chooseFile': { zh: '浏览文件…', en: 'Browse…', fr: 'Parcourir…' },
+  'transfer.noFilePicked': { zh: '未选择文件', en: 'No file chosen', fr: 'Aucun fichier choisi' },
   // 解析结果的提示走「词条 + 参数」,不在代码里硬写某一种语言
   'transfer.warn.jsonInvalid': { zh: 'JSON 解析失败：{detail}', en: 'Invalid JSON: {detail}', fr: 'JSON invalide : {detail}' },
   'transfer.warn.xmlInvalid': { zh: 'XML 格式有误，无法解析', en: 'Malformed XML, cannot parse', fr: 'XML mal formé, impossible à analyser' },

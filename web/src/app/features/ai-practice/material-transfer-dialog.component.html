@@ -1,12 +1,24 @@
-<!-- 素材「导入 / 导出」弹窗(★ 2026-09-25 第四轮 Forrest)
-     Notion「Settings → Import / Export」式的两页布局:
-     导入导出放在同一处入口,不必记功能藏在哪;
-     导出 = 选来源 → 勾选范围 → 选格式 → 导出;
+<!-- 素材「导入 / 导出」弹窗(★ 2026-09-25 第四轮 Forrest;第五轮重排视觉)
+     布局对齐全站弹窗语言(与确认弹窗/类别管理同一套设计令牌):
+     · 白卡片圆角 12,标题栏「图标 + 标题 + 右侧关闭」,与 app-confirm 同构;
+     · 复选框 / 单选统一站内主蓝 #2f6fed(主题 accent 是琥珀,不做处理会发橙);
+     · 原生 file input / 原生按钮一律替换成风格化控件;
+     · 文件名 = 可编辑基础名 + 固定后缀块(扩展名随格式自动变化)。
+     Notion「Settings → Import / Export」式的两页布局保持不变:
+     导出 = 选来源 → 勾范围 → 选格式 → 命名 → 导出;
      导入 = 选目标 → 选文件 → 看预览 → 导入(绝不"选完就写库")。 -->
-<h2 mat-dialog-title>{{ t('transfer.title') }}</h2>
+<h2 mat-dialog-title class="tf-head">
+  <mat-icon class="tf-head-ico">import_export</mat-icon>
+  <span class="tf-head-title">{{ t('transfer.title') }}</span>
+  <span class="spacer"></span>
+  <button mat-icon-button class="tf-close" [mat-dialog-close]
+          [attr.aria-label]="t('common.close')" [matTooltip]="t('common.close')">
+    <mat-icon>close</mat-icon>
+  </button>
+</h2>
 
 <mat-dialog-content class="tf-body">
-  <mat-tab-group animationDuration="120ms">
+  <mat-tab-group class="tf-tabs" animationDuration="120ms" dynamicHeight>
     <!-- ================= 导出 ================= -->
     <mat-tab [label]="t('transfer.exportTab')">
       <div class="tf-pane">
@@ -19,7 +31,7 @@
           <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
         </select>
 
-        <div class="tf-row-between">
+        <div class="tf-row-between tf-scope-head">
           <label class="tf-label">{{ t('transfer.pickFolders') }}</label>
           <span class="tf-mini">
             <button type="button" class="link" (click)="selectAll(true)">{{ t('transfer.selectAll') }}</button>
@@ -47,13 +59,19 @@
           }
         </mat-radio-group>
 
-        <p class="tf-file">{{ t('transfer.fileName') }}:<b>{{ exportFileName() }}</b></p>
+        <label class="tf-label">{{ t('transfer.fileName') }}</label>
+        <div class="tf-name-row">
+          <input class="tf-name" [ngModel]="fileNameBase()" (ngModelChange)="onNameInput($event)"
+                 maxlength="100" spellcheck="false" autocomplete="off" />
+          <span class="tf-ext">.{{ ext }}</span>
+        </div>
+        <p class="tf-hint">{{ t('transfer.fileNameHint') }}</p>
         @if (format() === 'pdf') {
           <p class="tf-hint">{{ t('transfer.pdfHint') }}</p>
         }
 
         <div class="tf-actions">
-          <button mat-flat-button color="primary" [disabled]="exporting()" (click)="doExport()">
+          <button mat-flat-button class="tf-primary" [disabled]="exporting()" (click)="doExport()">
             <mat-icon>file_download</mat-icon>{{ t('transfer.doExport') }}
           </button>
         </div>
@@ -92,11 +110,15 @@
         }
 
         <label class="tf-label">{{ t('transfer.pickFile') }}</label>
-        <div class="tf-row-between">
-          <input type="file" class="tf-file-input" [accept]="accept"
-                 (change)="onFilePicked($event)" />
-          <span class="tf-mini">{{ pickedFileName() }}</span>
+        <div class="tf-pick-row">
+          <button type="button" mat-stroked-button class="tf-pick" (click)="pickFile()">
+            <mat-icon>upload_file</mat-icon>{{ t('transfer.chooseFile') }}
+          </button>
+          <span class="tf-picked" [class.is-empty]="!pickedFileName()">
+            {{ pickedFileName() || t('transfer.noFilePicked') }}
+          </span>
         </div>
+        <input #fileInput type="file" hidden [accept]="accept" (change)="onFilePicked($event)" />
         <p class="tf-hint">{{ t('transfer.fileHint') }}</p>
 
         @if (parsed().length > 0 || warningTexts().length > 0) {
@@ -124,7 +146,7 @@
         }
 
         <div class="tf-actions">
-          <button mat-flat-button color="primary"
+          <button mat-flat-button class="tf-primary"
                   [disabled]="parsed().length === 0 || importing()"
                   (click)="doImport()">
             <mat-icon>file_upload</mat-icon>{{ t('transfer.doImport') }}
@@ -134,10 +156,6 @@
     </mat-tab>
   </mat-tab-group>
 </mat-dialog-content>
-
-<mat-dialog-actions align="end">
-  <button mat-button (click)="cancel()">{{ t('common.close') }}</button>
-</mat-dialog-actions>
 
 <!-- ---------- 递归模板:可勾选的范围树 ---------- -->
 <ng-template #pickLevel let-items="items" let-depth="depth">

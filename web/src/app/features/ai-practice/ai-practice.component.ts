@@ -1184,8 +1184,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       return;
     }
     const ref = this.dialog.open(MaterialTransferDialogComponent, {
-      width: '620px',
+      width: '560px',
       maxWidth: '94vw',
+      panelClass: 'app-transfer',
       data: { nodes: this.nodes(), categories: this.categories(), filter: this.categoryFilter() }
     });
     ref.afterClosed().subscribe((result) => {

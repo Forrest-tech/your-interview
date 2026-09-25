@@ -318,3 +318,13 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   padding: 0 !important;
   box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
 }
+
+/* ---------------- 全站统一「导入 / 导出」弹窗(app-transfer) ----------------
+   ★ 2026-09-25(Forrest 第五轮):素材导入导出弹窗与 app-confirm 同一套外壳 ——
+   白卡片、圆角 12、无 MDC 默认内边距(组件自控标题栏/内容留白)。 */
+.app-transfer .mat-mdc-dialog-container { padding: 0; }
+.app-transfer .mat-mdc-dialog-surface {
+  border-radius: 12px !important;
+  padding: 0 !important;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
+}

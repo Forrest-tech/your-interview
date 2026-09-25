@@ -1,4 +1,6 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import {
+  Component, computed, ElementRef, inject, signal, ViewChild
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -16,7 +18,8 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { MaterialNode } from '../../shared/material-tree/material-tree.component';
 import {
   IMPORT_ACCEPT, TransferCategory, TransferFormat, TransferNode,
-  buildExportPayload, countNodes, fileExtension, ImportWarning, parseImport, serializeTransfer
+  buildExportPayload, countNodes, fileExtension, ImportWarning, parseImport,
+  sanitizeName, serializeTransfer
 } from './material-transfer';
 
 interface DialogData {
@@ -102,12 +105,33 @@ export class MaterialTransferDialogComponent {
     return this.categories.find((c) => c.id === f)?.name ?? this.t('practice.categoryAll');
   });
 
-  readonly exportFileName = computed<string>(() => {
-    const stamp = new Date().toISOString().slice(0, 10);
-    const base = (this.sourceName() || this.t('transfer.title'))
-      .replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
-    return `${base}-${stamp}.${fileExtension(this.format())}`;
+  /**
+   * ★ 第五轮(Forrest):文件名可编辑 ——
+   *  · 输入框里只写**基础名**,扩展名由所选格式自动补(后缀以灰色块固定展示);
+   *    换格式时扩展名自动跟着变,永远不会出现 ".md 后缀配 JSON 内容"的错位;
+   *  · 用户没改过(或清空)时跟随默认「来源-日期」,改过就完全尊重用户输入;
+   *  · 保存前过一遍 sanitizeName,非法字符不落盘。
+   *  (Chrome「另存为」/ Notion Export 的同款拆分方式。)
+   */
+  readonly defaultBase = computed<string>(() =>
+    sanitizeName(`${this.sourceName()}-${new Date().toISOString().slice(0, 10)}`));
+  readonly customName = signal('');
+  readonly fileNameBase = computed<string>(() => {
+    const c = this.customName().trim();
+    return c ? sanitizeName(c) : this.defaultBase();
   });
+
+  readonly exportFileName = computed<string>(
+    () => `${this.fileNameBase()}.${fileExtension(this.format())}`);
+
+  onNameInput(value: string): void {
+    this.customName.set(value);
+  }
+
+  /** 当前格式的扩展名(模板里展示后缀块用)。 */
+  get ext(): string {
+    return fileExtension(this.format());
+  }
 
   /** 已勾选的根节点数量(用于提示"已选 N 项")。 */
   readonly selectedCount = computed<number>(() => {
@@ -214,6 +238,13 @@ export class MaterialTransferDialogComponent {
   readonly parsed = signal<TransferCategory[]>([]);
   readonly warnings = signal<ImportWarning[]>([]);
   readonly importing = signal(false);
+
+  /** 隐藏的 file input(由风格化「浏览文件」按钮触发,原生控件不入画)。 */
+  @ViewChild('fileInput') private fileInput?: ElementRef<HTMLInputElement>;
+
+  pickFile(): void {
+    this.fileInput?.nativeElement.click();
+  }
 
   readonly importCounts = computed(() => countNodes(this.parsed()));
 

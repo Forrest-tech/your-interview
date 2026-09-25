@@ -14,7 +14,8 @@ namespace YourInterview.Services.Assessment.Application;
 /// <summary>素材节点(树形,children 递归)。MarkColor:null/none/orange/red/green(第四十三轮)。</summary>
 public sealed record MaterialNodeDto(
     Guid Id, string Name, bool Folder, int SortOrder, bool Expanded,
-    string? Content, IReadOnlyList<MaterialNodeDto> Children, string? MarkColor = null);
+    string? Content, IReadOnlyList<MaterialNodeDto> Children, string? MarkColor = null,
+    Guid? CategoryId = null);
 
 /// <summary>一条录音 + 可选评分。</summary>
 public sealed record RecordingDto(
@@ -61,7 +62,7 @@ public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
         all.Where(x => x.ParentId == parentId)
             .Select(x => new MaterialNodeDto(
                 x.Id, x.Name, x.Kind == MaterialKind.Folder, x.SortOrder, x.IsExpanded,
-                x.Content, Build(all, x.Id), x.MarkColor))
+                x.Content, Build(all, x.Id), x.MarkColor, x.CategoryId))
             .ToList();
 }
 
@@ -76,10 +77,10 @@ public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
 public sealed record SaveMaterialTreeCommand(Guid UserId, IReadOnlyList<MaterialNodeIn> Nodes, bool Force = false)
     : MediatR.IRequest<Result<int>>;
 
-/// <summary>前端提交的节点(Id 为 null = 新建)。MarkColor 可选 —— 旧客户端不传也能存。</summary>
+/// <summary>前端提交的节点(Id 为 null = 新建)。MarkColor / CategoryId 可选 —— 旧客户端不传也能存。</summary>
 public sealed record MaterialNodeIn(
     string? Id, string Name, bool Folder, string? Content, int SortOrder, bool Expanded,
-    IReadOnlyList<MaterialNodeIn>? Children, string? MarkColor = null);
+    IReadOnlyList<MaterialNodeIn>? Children, string? MarkColor = null, Guid? CategoryId = null);
 
 public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
     : MediatR.IRequestHandler<SaveMaterialTreeCommand, Result<int>>
@@ -92,8 +93,27 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
             .ToListAsync(ct);
         var byId = existing.ToDictionary(x => x.Id);
 
+        // ★ 2026-09-25:类别校验集 —— 只接受"本用户自己的类别"。
+        //   客户端传来的 categoryId 若是别人的/不存在的,一律当 null(未分类)处理,
+        //   不让坏引用进库(外键虽然也会拦,但 500 不如静默修正体验好)。
+        var myCategoryIds = (await db.Categories.AsNoTracking()
+                .Where(x => x.UserId == r.UserId)
+                .Select(x => x.Id)
+                .ToListAsync(ct))
+            .ToHashSet();
+
         var incoming = new HashSet<Guid>();
         var touched = new List<PracticeMaterial>();
+
+        // 根节点才挂类别 —— 类别是"练习场景",子节点跟随根,过滤才不会碎
+        void ApplyCategory(PracticeMaterial entity, MaterialNodeIn n, Guid? parentId)
+        {
+            if (parentId is not null) return;
+            Guid? cat = n.CategoryId is not null && myCategoryIds.Contains(n.CategoryId.Value)
+                ? n.CategoryId
+                : null;
+            entity.SetCategory(cat);
+        }
 
         void Walk(IReadOnlyList<MaterialNodeIn> nodes, Guid? parentId)
         {
@@ -121,6 +141,7 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
                         ? new PracticeMaterial(gid, r.UserId, parentId, kind, n.Name, n.Content, n.SortOrder)
                         : new PracticeMaterial(r.UserId, parentId, kind, n.Name, n.Content, n.SortOrder);
                     TryApplyMark(entity, n.MarkColor);   // ★ 第四十三轮:整树保存也带上标记色
+                    ApplyCategory(entity, n, parentId);  // ★ 2026-09-25:新建即归类
                     db.Materials.Add(entity);
                 }
                 else
@@ -134,6 +155,7 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
                     entity.MoveTo(parentId, n.SortOrder);
                     entity.SetExpanded(n.Expanded);
                     TryApplyMark(entity, n.MarkColor);      // ★ 第四十三轮:整树保存也带上标记色
+                    ApplyCategory(entity, n, parentId);     // ★ 2026-09-25:根节点类别随整树更新
                     touched.Add(entity);
                 }
 

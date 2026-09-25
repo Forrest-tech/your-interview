@@ -29,6 +29,8 @@ export interface MaterialNodeDto {
   content: string | null;
   /** ★ 第四十三轮:标记色(null/none/orange/red/green) —— 属于素材本身,可按颜色筛选。 */
   markColor: string | null;
+  /** ★ 2026-09-25:练习类别(仅根级有意义;null = 未分类)。 */
+  categoryId: string | null;
   children: MaterialNodeDto[];
 }
 
@@ -42,7 +44,17 @@ export interface MaterialNodeIn {
   expanded: boolean;
   /** ★ 第四十三轮:标记色随整树保存一起提交。 */
   markColor?: string | null;
+  /** ★ 2026-09-25:练习类别随整树保存一起提交(仅根节点会被采纳)。 */
+  categoryId?: string | null;
   children: MaterialNodeIn[];
+}
+
+// ---------- 练习类别(★ 2026-09-25 Forrest) ----------
+
+export interface PracticeCategoryDto {
+  id: string;
+  name: string;
+  sortOrder: number;
 }
 
 // ---------- 录音 ----------
@@ -162,6 +174,31 @@ export class PracticeApi {
    */
   saveMaterials(nodes: MaterialNodeIn[], force = false): Observable<{ saved: number }> {
     return this.api.put<{ saved: number }>(`${PracticeApi.BASE}/materials`, { nodes, force });
+  }
+
+  // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
+
+  /** 我的类别列表(升序)。首次调用服务端会播种默认类别。 */
+  getCategories(): Observable<PracticeCategoryDto[]> {
+    return this.api.get<PracticeCategoryDto[]>(`${PracticeApi.BASE}/categories`);
+  }
+
+  createCategory(name: string): Observable<PracticeCategoryDto> {
+    return this.api.post<PracticeCategoryDto>(`${PracticeApi.BASE}/categories`, { name });
+  }
+
+  renameCategory(id: string, name: string): Observable<{ saved: boolean }> {
+    return this.api.put<{ saved: boolean }>(`${PracticeApi.BASE}/categories/${id}`, { name });
+  }
+
+  /** 按提交顺序整体重排(管理弹窗拖拽后调用)。 */
+  reorderCategories(orderedIds: string[]): Observable<{ saved: boolean }> {
+    return this.api.put<{ saved: boolean }>(`${PracticeApi.BASE}/categories/reorder`, { orderedIds });
+  }
+
+  /** 删除类别;其下素材由服务端自动归入"未分类"。 */
+  deleteCategory(id: string): Observable<{ deleted: boolean }> {
+    return this.api.delete<{ deleted: boolean }>(`${PracticeApi.BASE}/categories/${id}`);
   }
 
   /**

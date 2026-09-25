@@ -20,7 +20,8 @@ import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MaterialNode, MaterialTreeComponent } from '../../shared/material-tree/material-tree.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
-import { MaterialNodeDto, MaterialNodeIn, PracticeApi } from '../../core/api/practice-api.service';
+import { CategoryManagerDialogComponent } from './category-manager-dialog.component';
+import { MaterialNodeDto, MaterialNodeIn, PracticeApi, PracticeCategoryDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
 import {
@@ -143,6 +144,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   // ---------- 素材树 ----------
   readonly nodes = signal<MaterialNode[]>([]);
   readonly selectedId = signal<string | null>(null);
+
+  // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
+  /** 类别下拉的数据源(服务端加载;空 = 只有"全部/未分类"两项)。 */
+  readonly categories = signal<PracticeCategoryDto[]>([]);
+  /**
+   * 当前类别过滤:'all' | 'uncategorized' | 类别id。
+   * 过滤只作用于树**显示**(visibleNodes 在树控件内部),
+   * 新建/拖拽/保存永远操作全量树,所以过滤态下也不会丢数据。
+   */
+  readonly categoryFilter = signal<string>('all');
 
   /** 编辑态正文(仅编辑模式下可改)。 */
   readonly draft = signal('');
@@ -1046,6 +1057,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   private restoreTree(): void {
     this.treeLoading.set(true);
+    this.loadCategories();   // ★ 2026-09-25:类别与树并行加载;类别失败不阻塞树
     this.practiceApi.getMaterials().subscribe({
       next: (dtos) => {
         this.nodes.set(AiPracticeComponent.fromDto(dtos ?? []));
@@ -1074,6 +1086,41 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   //   · 不再从 localStorage 导入旧素材树(那也是“非数据库来源”的数据)。
   //   · 不再向数据库写入任何硬编码种子。
   //   空库就空着,界面给提示文字,由用户自己新建。
+
+  // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
+
+  /**
+   * 加载类别下拉。失败**静默降级**:下拉只剩"全部/未分类",
+   * 素材树照常可用 —— 类别是锦上添花,不该因为它挂掉整棵树。
+   */
+  private loadCategories(): void {
+    this.practiceApi.getCategories().subscribe({
+      next: (list) => this.categories.set(list ?? []),
+      error: () => this.categories.set([])
+    });
+  }
+
+  /** 下拉切换过滤值(树控件通过事件抛上来,这里回写给 signal)。 */
+  onCategoryFilterChange(value: string): void {
+    this.categoryFilter.set(value);
+  }
+
+  /**
+   * 打开类别管理弹窗(新增/重命名/删除/拖拽排序都在弹窗里)。
+   * 关闭后:用回传列表刷新下拉;若树没有未保存改动,顺带回读一次 ——
+   * 弹窗里删除的类别,素材的 categoryId 已被服务端 SetNull,需要对齐。
+   */
+  openCategoryManager(): void {
+    const ref = this.dialog.open(CategoryManagerDialogComponent, {
+      width: '480px',
+      data: { categories: this.categories() }
+    });
+    ref.afterClosed().subscribe((result) => {
+      if (!result) return;
+      this.categories.set(result);
+      if (!this.treeDirty()) this.restoreTree();
+    });
+  }
 
   /**
    * ★★ 第四十一轮:重试加载素材树。
@@ -1160,6 +1207,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       sortOrder: i,
       expanded: n.folder ? !!n.expanded : true,
       markColor: n.markColor ?? null,        // ★ 第十三轮:标记色随整树保存
+      categoryId: n.categoryId ?? null,      // ★ 2026-09-25:类别随整树保存(服务端只认根节点)
       children: AiPracticeComponent.toPayload(n.children ?? [])
     }));
   }
@@ -1179,6 +1227,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         content: d.content ?? '',
         expanded: !!d.expanded,
         markColor: d.markColor ?? null,      // ★ 第十三轮:标记色从库回读
+        categoryId: d.categoryId ?? null,    // ★ 2026-09-25:类别从库回读
         children: AiPracticeComponent.fromDto(d.children ?? [])
       }));
   }

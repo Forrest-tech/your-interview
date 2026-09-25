@@ -107,6 +107,12 @@ public sealed class PracticeMaterial
     /// </summary>
     public string? MarkColor { get; private set; }
 
+    /// <summary>
+    /// ★ 2026-09-25(Forrest):练习类别 —— 只对根级素材有意义,
+    ///   null = 未分类(含所有子节点,子节点跟随根)。见 PracticeCategory。
+    /// </summary>
+    public Guid? CategoryId { get; private set; }
+
     // ---------- 行为(全部经聚合方法改,不允许外部直接改属性) ----------
 
     public void Rename(string name)
@@ -183,6 +189,16 @@ public sealed class PracticeMaterial
     {
         if (!IsDeleted) return;
         IsDeleted = false;
+        Touch();
+    }
+
+    /// <summary>
+    /// ★ 2026-09-25:挂到练习类别(null = 未分类)。
+    /// 调用方负责校验类别归属(必须是本用户的类别),这里只管存。
+    /// </summary>
+    public void SetCategory(Guid? categoryId)
+    {
+        CategoryId = categoryId;
         Touch();
     }
 }

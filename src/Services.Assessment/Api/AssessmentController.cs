@@ -298,6 +298,64 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                                 : result.ToProblemDetails();
     }
 
+    // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
+    // 素材树上方的「练习类别」下拉 + 配置弹窗的数据源。
+    // GET 用 MockRead(与读树同权),写操作用 MockManage(与改树同权)。
+
+    /// <summary>我的类别列表(升序)。首次调用播种默认类别(工作面试/生活英语)。</summary>
+    [HttpGet("categories")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    public async Task<IResult> GetCategories(CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var list = await sender.Send(new ListCategoriesQuery(userId), ct);
+        return Results.Ok(list);
+    }
+
+    public sealed record CreateCategoryBody(string Name);
+
+    [HttpPost("categories")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> CreateCategory([FromBody] CreateCategoryBody body, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new CreateCategoryCommand(userId, body.Name), ct);
+        return result.IsSuccess ? Results.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    public sealed record RenameCategoryBody(string Name);
+
+    [HttpPut("categories/{categoryId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> RenameCategory(Guid categoryId, [FromBody] RenameCategoryBody body, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new RenameCategoryCommand(userId, categoryId, body.Name), ct);
+        return result.IsSuccess ? Results.Ok(new { saved = true }) : result.ToProblemDetails();
+    }
+
+    /// <summary>按数组顺序整体重排(类别管理弹窗拖拽排序用)。</summary>
+    public sealed record ReorderCategoriesBody(IReadOnlyList<Guid> OrderedIds);
+
+    [HttpPut("categories/reorder")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> ReorderCategories([FromBody] ReorderCategoriesBody body, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new ReorderCategoriesCommand(userId, body.OrderedIds ?? []), ct);
+        return result.IsSuccess ? Results.Ok(new { saved = true }) : result.ToProblemDetails();
+    }
+
+    /// <summary>删除类别;素材由数据库 SetNull 自动回"未分类",数据零丢失。</summary>
+    [HttpDelete("categories/{categoryId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> DeleteCategory(Guid categoryId, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new DeleteCategoryCommand(userId, categoryId), ct);
+        return result.IsSuccess ? Results.Ok(new { deleted = true }) : result.ToProblemDetails();
+    }
+
     // ---------- 录音 ----------
 
     /// <summary>某素材下的录音列表(含已缓存的评分)。</summary>

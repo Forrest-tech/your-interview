@@ -63,6 +63,44 @@
 .th-row.th-top { min-height: 30px; }
 /* 第二行工具行:与标题行之间留出明显呼吸感,不再贴死 */
 .th-row.th-tools { margin-top: 6px; }
+
+/* ============================================================
+   ★ 2026-09-25(Forrest):第三行「练习类别」
+   下拉占满剩余宽度,配置按钮靠右;紧凑高度与工具行一致。
+   ============================================================ */
+.th-row.th-category {
+  margin-top: 8px;
+  gap: 4px;
+}
+
+.cat-select {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 24px 0 8px;
+  font-size: 12.5px;
+  color: #3a3f47;
+  background: #fff
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237a8393' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  border: 1px solid #d7dce4;
+  border-radius: 6px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cat-select:hover { border-color: #b9c2d0; }
+.cat-select:focus {
+  outline: none;
+  border-color: #2f6fed;
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.14);
+}
+
+.cat-manage {
+  flex: none;
+}
 /* 编辑 / 保存·取消 与左侧工具同一行,靠最右;
    与前面按钮之间由 .spacer 撑开,不再需要额外间距。 */
 .th-row .head-act { margin-left: 2px; }

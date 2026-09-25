@@ -24,6 +24,8 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
     public DbSet<PracticeRecording> Recordings => Set<PracticeRecording>();
     public DbSet<PracticeRecordingScore> RecordingScores => Set<PracticeRecordingScore>();
     public DbSet<SpeechSetting> SpeechSettings => Set<SpeechSetting>();
+    // ★ 2026-09-25(Forrest):练习类别 —— 素材树按场景过滤的下拉数据源。
+    public DbSet<PracticeCategory> Categories => Set<PracticeCategory>();
 
     // ---- 用户简历正文(2026-09-18:简历匹配分析 + 准备包输入)----
     // 简历是长文本内容,独立成表,不让内容查询跟着其他配置变重。
@@ -140,6 +142,26 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.HasIndex(x => new { x.UserId, x.ParentId, x.SortOrder });
             e.UseXminAsConcurrencyToken();
         });
+
+        // ★ 2026-09-25(Forrest):练习类别。
+        //   素材挂类别用 SetNull:删类别只摘标签,素材一行不丢(自动回"未分类")。
+        b.Entity<PracticeCategory>(e =>
+        {
+            e.ToTable("practice_categories");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+
+            // 同一用户内类别名唯一(忽略大小写靠应用层归一化,这里保证精确唯一)
+            e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.SortOrder });
+            e.UseXminAsConcurrencyToken();
+        });
+
+        b.Entity<PracticeMaterial>()
+            .HasOne<PracticeCategory>()
+            .WithMany()
+            .HasForeignKey(x => x.CategoryId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         b.Entity<PracticeRecording>(e =>
         {

@@ -34,6 +34,17 @@ export interface MaterialNode {
    * 树上以彩色圆点显示,之后可按颜色筛选(如"列出所有红色")。
    */
   markColor?: string | null;
+  /**
+   * ★ 2026-09-25(Forrest):练习类别 —— 仅根级节点有意义,
+   * undefined/null = 未分类。子节点跟随根,不单独持有类别。
+   */
+  categoryId?: string | null;
+}
+
+/** 类别下拉的数据(与 PracticeCategoryDto 结构对齐,控件不依赖 API 层)。 */
+export interface CategoryOption {
+  id: string;
+  name: string;
 }
 
 /**
@@ -83,6 +94,42 @@ export class MaterialTreeComponent {
 
   // ★ 2026-09-23(Forrest):面板标题字段(materials)已删除 —— 头部只留工具按钮。
   @Input() emptyHint = '';
+
+  // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
+
+  /** 类别选项(父级加载;空数组时下拉只显示"全部/未分类")。 */
+  @Input() categories: CategoryOption[] = [];
+
+  /** 当前类别过滤:'all' | 'uncategorized' | 类别id。 */
+  @Input() categoryFilter: string = 'all';
+
+  /** 用户在下拉里换了类别(把新值抛给父级,父级回写 categoryFilter)。 */
+  @Output() categorySelect = new EventEmitter<string>();
+
+  /** 用户点了「配置类别」小按钮(弹窗由父级打开)。 */
+  @Output() categoryManage = new EventEmitter<void>();
+
+  /**
+   * 按类别过滤后的根级节点(渲染用)。
+   * ⚠️ 只过滤**显示**,不过滤数据:this.nodes 永远是全量树,
+   * 新建/拖拽都落在全量数组上,保存时才不会漏节点 ——
+   * 这一点是过滤不丢数据的关键,别改成"过滤后数组当数据源"。
+   */
+  get visibleNodes(): MaterialNode[] {
+    const f = this.categoryFilter;
+    if (f === 'all') return this.nodes;
+    if (f === 'uncategorized') return this.nodes.filter((n) => !n.categoryId);
+    return this.nodes.filter((n) => n.categoryId === f);
+  }
+
+  /** 当前过滤是否是具体的类别 id(决定新建根节点要不要自动归类)。 */
+  private get isCategoryActive(): boolean {
+    return this.categoryFilter !== 'all' && this.categoryFilter !== 'uncategorized';
+  }
+
+  onCategoryChange(value: string): void {
+    this.categorySelect.emit(value);
+  }
 
   @Output() nodeSelect = new EventEmitter<MaterialNode>();
   /**
@@ -203,7 +250,9 @@ export class MaterialTreeComponent {
       name: this.t('tree.newFolderName'),
       folder: true,
       expanded: true,
-      children: []
+      children: [],
+      // 根级新建且选着某类别 → 自动归入(子节点不挂类别)
+      categoryId: parent === null && this.isCategoryActive ? this.categoryFilter : undefined
     };
     if (!this.editable) this.editRequest.emit();
     this.attach(node, parent);
@@ -216,7 +265,8 @@ export class MaterialTreeComponent {
       id: this.newId(),
       name: this.t('tree.newFileName'),
       folder: false,
-      content: ''
+      content: '',
+      categoryId: parent === null && this.isCategoryActive ? this.categoryFilter : undefined
     };
     if (!this.editable) this.editRequest.emit();
     this.attach(node, parent);
@@ -400,6 +450,9 @@ export class MaterialTreeComponent {
     const from = src.parent;
     from.splice(from.findIndex((n) => n.id === src.node.id), 1);
     this.nodes.push(src.node);
+    // ★ 2026-09-25:拖到根层时采纳当前类别过滤 —— 否则选着"工作面试"
+    //   把子节点拖出来,它带着旧类别,立刻从过滤视图里消失,像凭空蒸发。
+    if (this.isCategoryActive) src.node.categoryId = this.categoryFilter;
     this.nodeChange.emit(this.nodes);
   }
 

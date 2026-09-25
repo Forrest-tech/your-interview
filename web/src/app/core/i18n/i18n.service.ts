@@ -252,6 +252,28 @@ const DICT: Record<string, Record<Lang, string>> = {
     fr: 'Cliquez pour modifier le contenu'
   },
   // 一键展开/收起整棵树用的是共享控件自己的词条(tree.expandAll / tree.collapseAll)。
+  // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
+  'practice.categoryLabel': { zh: '练习类别', en: 'Practice category', fr: 'Catégorie de pratique' },
+  'practice.categoryAll': { zh: '全部', en: 'All', fr: 'Tous' },
+  'practice.categoryUncategorized': { zh: '未分类', en: 'Uncategorized', fr: 'Non classés' },
+  'practice.categoryManage': { zh: '配置类别', en: 'Manage categories', fr: 'Gérer les catégories' },
+  'practice.categoryManageTitle': { zh: '练习类别', en: 'Practice categories', fr: 'Catégories de pratique' },
+  'practice.categoryHint': {
+    zh: '拖动排序;双击名称可重命名;删除类别后,其下素材会归入"未分类"。',
+    en: 'Drag to reorder; double-click a name to rename; deleting a category moves its materials to "Uncategorized".',
+    fr: 'Glissez pour trier; double-cliquez pour renommer; la suppression d\'une catégorie renvoie ses supports dans « Non classés ».'
+  },
+  'practice.categoryDrag': { zh: '拖动排序', en: 'Drag to reorder', fr: 'Glisser pour trier' },
+  'practice.categoryRename': { zh: '重命名', en: 'Rename', fr: 'Renommer' },
+  'practice.categoryDelete': { zh: '删除类别', en: 'Delete category', fr: 'Supprimer la catégorie' },
+  'practice.categoryDelConfirm': { zh: '确认删除？', en: 'Delete?', fr: 'Supprimer ?' },
+  'practice.categoryEmpty': { zh: '还没有类别,在下面添加一个吧。', en: 'No categories yet — add one below.', fr: 'Aucune catégorie — ajoutez-en une ci-dessous.' },
+  'practice.categoryNewPlaceholder': {
+    zh: '新类别名称,如:面试自我介绍',
+    en: 'New category name, e.g. Self-introduction',
+    fr: 'Nouvelle catégorie, ex. Présentation'
+  },
+  'practice.categoryAdd': { zh: '添加', en: 'Add', fr: 'Ajouter' },
   // ---------- 统一确认弹窗(2026-09-20:全站弹窗同一种样式) ----------
   'dialog.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
   // ★ 第五十轮(Forrest):删除类确认弹窗的按钮统一为「确认」——

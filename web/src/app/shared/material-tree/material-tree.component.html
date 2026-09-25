@@ -52,19 +52,44 @@
         </button>
       }
     </div>
+    <!-- ★ 2026-09-25(Forrest):第三行「练习类别」——
+         下拉按场景过滤素材树(全部/各类别/未分类),右侧小按钮打开类别配置弹窗
+         (新增/重命名/删除/拖拽排序都在弹窗里做,保持侧栏一行不膨胀)。
+         UX 参考 Anki 卡组选择器 + Notion 数据库视图筛选:
+         · 高频动作(切换过滤)一步直达,收在常驻下拉里;
+         · 低频动作(增删改排序)收进弹窗,不与树操作抢空间。 -->
+    <div class="th-row th-category">
+      <select class="cat-select"
+              [ngModel]="categoryFilter"
+              (ngModelChange)="onCategoryChange($event)"
+              [attr.aria-label]="t('practice.categoryLabel')">
+        <option value="all">{{ t('practice.categoryAll') }}</option>
+        @for (c of categories; track c.id) {
+          <option [value]="c.id">{{ c.name }}</option>
+        }
+        <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
+      </select>
+      <button mat-icon-button class="head-tool cat-manage"
+              [matTooltip]="t('practice.categoryManage')"
+              [attr.aria-label]="t('practice.categoryManage')"
+              (click)="categoryManage.emit()">
+        <mat-icon>tune</mat-icon>
+      </button>
+    </div>
   </header>
 
-  <!-- 空白落点:拖到这里 = 移到最外层 -->
+  <!-- 空白落点:拖到这里 = 移到最外层。
+       ⚠️ 渲染走 visibleNodes(按类别过滤),数据仍是全量 this.nodes。 -->
   <div class="tree-body"
        (dragover)="onRootDragOver($event)"
        (drop)="onRootDrop($event)"
        [class.root-drop]="dropMode() === 'root'">
-    @if (nodes.length === 0) {
+    @if (visibleNodes.length === 0) {
       <p class="tree-empty">{{ emptyHint || t('tree.emptyHint') }}</p>
     }
     <ng-container
       [ngTemplateOutlet]="level"
-      [ngTemplateOutletContext]="{ items: nodes, depth: 0, parent: null }">
+      [ngTemplateOutletContext]="{ items: visibleNodes, depth: 0, parent: null }">
     </ng-container>
   </div>
 </div>

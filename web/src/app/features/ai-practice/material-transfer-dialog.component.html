@@ -1,31 +1,47 @@
-<!-- 素材「导入 / 导出」弹窗(★ 2026-09-25 第四轮 Forrest;第五轮重排视觉)
-     布局对齐全站弹窗语言(与确认弹窗/类别管理同一套设计令牌):
+<!-- 素材「类别 / 导出 / 导入」弹窗(★ 第四轮 Forrest;第五轮重排视觉;第九轮三合一)
+     布局对齐全站弹窗语言(与确认弹窗同一套设计令牌):
      · 白卡片圆角 12,标题栏「图标 + 标题 + 右侧关闭」,与 app-confirm 同构;
      · 复选框 / 单选统一站内主蓝 #2f6fed(主题 accent 是琥珀,不做处理会发橙);
      · 原生 file input / 原生按钮一律替换成风格化控件;
      · 文件名 = 可编辑基础名 + 固定后缀块(扩展名随格式自动变化)。
-     Notion「Settings → Import / Export」式的两页布局保持不变:
-     导出 = 选来源 → 勾范围 → 选格式 → 命名 → 导出;
-     导入 = 选目标 → 选文件 → 看预览 → 导入(绝不"选完就写库")。 -->
+
+     ★ 第九轮:类别管理与导入导出合成**一个弹窗的三个页签**
+       (Notion Settings / VS Code Settings 的同款形态),并且
+       **三个页签共用同一块固定高度的内容区**(内容超高时页签内滚动),
+       切换页签时窗口尺寸完全不变。
+     导出 = 选来源 → 勾范围 → 选格式 → 命名 → 选本地文件夹 → 导出;
+     导入 = 选目标 → 选文件 → 看预览 → 导入(绝不"选完就写库");
+     类别 = 增删改/排序/导入模板(改动立即生效并同步到另两个页签)。 -->
 <h2 mat-dialog-title class="tf-head">
   <mat-icon class="tf-head-ico">import_export</mat-icon>
   <span class="tf-head-title">{{ t('transfer.title') }}</span>
   <span class="spacer"></span>
-  <button mat-icon-button class="tf-close" [mat-dialog-close]
+  <button mat-icon-button class="tf-close" (click)="cancel()"
           [attr.aria-label]="t('common.close')" [matTooltip]="t('common.close')">
     <mat-icon>close</mat-icon>
   </button>
 </h2>
 
 <mat-dialog-content class="tf-body">
-  <mat-tab-group class="tf-tabs" animationDuration="120ms" dynamicHeight>
+  <mat-tab-group class="tf-tabs" animationDuration="120ms" [selectedIndex]="tabIndex()">
+    <!-- ================= 类别 ================= -->
+    <mat-tab [label]="t('transfer.categoriesTab')">
+      <div class="tf-pane">
+        <app-category-manager
+          [categories]="categories()"
+          (changed)="onCategoriesChanged($event)"
+          (imported)="onCategoryImported($event)">
+        </app-category-manager>
+      </div>
+    </mat-tab>
+
     <!-- ================= 导出 ================= -->
     <mat-tab [label]="t('transfer.exportTab')">
       <div class="tf-pane">
         <label class="tf-label">{{ t('transfer.sourceCategory') }}</label>
         <select class="tf-select" [ngModel]="exportSource()" (ngModelChange)="onSourceChange($event)">
           <option value="all">{{ t('practice.categoryAll') }}</option>
-          @for (c of categories; track c.id) {
+          @for (c of categories(); track c.id) {
             <option [value]="c.id">{{ c.name }}</option>
           }
           <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
@@ -71,16 +87,30 @@
           <p class="tf-hint">{{ t('transfer.pdfHint') }}</p>
         }
 
-        <!-- ★ 第七轮:保存位置在界面上可见可选(此前只藏在系统另存为里,用户看不见) -->
+        <!-- ★ 第九轮:保存位置 = 用户自己选的本地文件夹(默认下载文件夹)。
+             路径直接写在界面上(不是"点了才知道"),选过就一直写那里。 -->
         <label class="tf-label">{{ t('transfer.saveLocation') }}</label>
-        @if (saveLocationSupported) {
-          <mat-radio-group class="tf-formats" [value]="saveMode()" (change)="setSaveMode($event.value)">
-            <mat-radio-button class="tf-fmt" value="ask">{{ t('transfer.saveAsk') }}</mat-radio-button>
-            <mat-radio-button class="tf-fmt" value="downloads">{{ t('transfer.saveDownloads') }}</mat-radio-button>
-          </mat-radio-group>
-          @if (saveMode() === 'ask') {
-            <p class="tf-hint">{{ t('transfer.saveAskHint') }}</p>
+        <div class="tf-dir">
+          <mat-icon class="tf-dir-ico">folder_open</mat-icon>
+          <span class="tf-dir-path" [class.is-default]="!hasDir()">
+            {{ hasDir() ? saveDirName() : t('transfer.saveDefault') }}
+          </span>
+          <span class="spacer"></span>
+          @if (hasDir()) {
+            <button type="button" class="link tf-dir-reset" (click)="resetFolder()">
+              {{ t('transfer.saveReset') }}
+            </button>
           }
+          @if (saveLocationSupported) {
+            <button type="button" mat-stroked-button class="tf-dir-pick" (click)="chooseFolder()">
+              {{ t('transfer.saveChange') }}
+            </button>
+          }
+        </div>
+        @if (saveLocationSupported) {
+          <p class="tf-hint">
+            {{ hasDir() ? t('transfer.savePickedHint') : t('transfer.saveDefaultHint') }}
+          </p>
         } @else {
           <p class="tf-hint tf-hint-warn">{{ t('transfer.saveUnsupported') }}</p>
         }
@@ -100,7 +130,7 @@
         <mat-radio-group class="tf-formats" [value]="importMode()"
                          (change)="importMode.set($event.value)">
           <mat-radio-button class="tf-fmt" value="existing"
-                            [disabled]="categories.length === 0">
+                            [disabled]="categories().length === 0">
             {{ t('transfer.targetExisting') }}
           </mat-radio-button>
           <mat-radio-button class="tf-fmt" value="new">
@@ -113,7 +143,7 @@
 
         @if (importMode() === 'existing') {
           <select class="tf-select" [ngModel]="importCategoryId()" (ngModelChange)="importCategoryId.set($event)">
-            @for (c of categories; track c.id) {
+            @for (c of categories(); track c.id) {
               <option [value]="c.id">{{ c.name }}</option>
             }
           </select>

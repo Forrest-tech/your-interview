@@ -1,5 +1,5 @@
 import {
-  Component, computed, ElementRef, inject, signal, ViewChild
+  Component, computed, ElementRef, inject, OnInit, signal, ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -16,11 +16,27 @@ import { firstValueFrom } from 'rxjs';
 import { PracticeApi, PracticeCategoryDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MaterialNode } from '../../shared/material-tree/material-tree.component';
+import { CategoryManagerDialogComponent } from './category-manager-dialog.component';
 import {
   IMPORT_ACCEPT, SAMPLE_FILE_NAME, TransferCategory, TransferFormat, TransferNode,
   buildExportPayload, buildSampleFile, countNodes, fileExtension, ImportWarning, parseImport,
-  sanitizeName, serializeTransfer, transferMime
+  sanitizeName, serializeTransfer
 } from './material-transfer';
+
+/** 弹窗的三个页签:类别管理 / 导出 / 导入(★ 第九轮:三合一)。 */
+type ManageTab = 'categories' | 'export' | 'import';
+
+/* File System Access API 的最小类型面(项目未引入 @types/wicg-file-system-access,
+   只声明真正用到的几个成员,避免把整个 lib 拉进来)。 */
+interface FsWritable { write(data: string): Promise<void>; close(): Promise<void>; }
+interface FsFileHandle { createWritable(): Promise<FsWritable>; }
+interface FsDirHandle {
+  readonly name: string;
+  queryPermission?(opts: { mode: 'readwrite' }): Promise<PermissionState>;
+  requestPermission?(opts: { mode: 'readwrite' }): Promise<PermissionState>;
+  getFileHandle(name: string, opts?: { create?: boolean }): Promise<FsFileHandle>;
+}
+interface FsWindow { showDirectoryPicker?(opts: { mode: 'readwrite' }): Promise<FsDirHandle> }
 
 interface DialogData {
   /** 整棵素材树(已在内存中的全量数据)。 */
@@ -28,10 +44,9 @@ interface DialogData {
   categories: PracticeCategoryDto[];
   /** 打开弹窗时树上的类别过滤值,作为导出来源的默认值。 */
   filter: string;
+  /** 打开时落在哪个页签(工具栏两个入口分别指向 类别 / 导出)。 */
+  tab?: ManageTab;
 }
-
-/** 保存位置偏好落盘 key(第七轮:每次询问 / 浏览器下载文件夹)。 */
-const SAVE_MODE_KEY = 'yi.exportSaveMode';
 
 /** 收集一个节点及其全部后代的 id(勾选/取消要沿子树级联)。 */
 function collectIds(n: MaterialNode): string[] {
@@ -40,28 +55,65 @@ function collectIds(n: MaterialNode): string[] {
   return out;
 }
 
-function readSaveMode(): 'ask' | 'downloads' {
-  try {
-    const v = localStorage.getItem(SAVE_MODE_KEY);
-    return v === 'downloads' ? 'downloads' : 'ask';
-  } catch {
-    return 'ask';
-  }
+/* ============================================================
+   本地文件夹句柄的持久化(★ 第九轮:导出目录由用户自己选)
+   File System Access API 的句柄可以存进 IndexedDB —— 下次打开
+   弹窗还是同一个文件夹,不用每次重选(VS Code Web / Excalidraw 同款做法)。
+   ============================================================ */
+const DIR_DB = 'yi-export-fs';
+const DIR_STORE = 'handles';
+const DIR_KEY = 'export-dir';
+
+function openDirDb(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(DIR_DB, 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore(DIR_STORE); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch { resolve(null); }
+  });
 }
 
-/** 关闭回传:需要合并进整树的节点。 */
+function idbRun<T>(
+  mode: IDBTransactionMode,
+  work: (store: IDBObjectStore) => IDBRequest<T>
+): Promise<T | undefined> {
+  return openDirDb().then((db) => new Promise<T | undefined>((resolve) => {
+    if (!db) { resolve(undefined); return; }
+    try {
+      const tx = db.transaction(DIR_STORE, mode);
+      const req = work(tx.objectStore(DIR_STORE));
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(undefined);
+    } catch { resolve(undefined); }
+  }));
+}
+
+const putDirHandle = (h: unknown): Promise<unknown> => idbRun('readwrite', (s) => s.put(h, DIR_KEY));
+const delDirHandle = (): Promise<unknown> => idbRun('readwrite', (s) => s.delete(DIR_KEY));
+const getDirHandle = (): Promise<unknown> => idbRun('readonly', (s) => s.get(DIR_KEY));
+
+/** 关闭回传:需要合并进整树的节点 + 最新的类别列表(可选,仅关闭时带)。 */
 export interface TransferResult {
   importedNodes: MaterialNode[];
+  categories?: PracticeCategoryDto[];
 }
 
 /**
- * 素材「导入 / 导出」弹窗(★ 2026-09-25 第四轮 Forrest)。
+ * 素材「类别 / 导出 / 导入」弹窗(★ 2026-09-25 第四轮 Forrest;第九轮三合一)。
+ *
+ * ★ 第九轮:类别管理与导入导出**合成一个弹窗的三个页签**(原先是两个弹窗),
+ *   尺寸固定 —— 三个页签共用同一块内容区(内容超高时页签内部滚动),
+ *   切换页签时窗口不跳动(Notion Settings / VS Code Settings 的同款形态)。
  *
  * UX 参考(成熟产品):
- *  · Notion「Settings → Import / Export」:导入导出同处一处、分两个标签页,
+ *  · Notion「Settings → Import / Export」:导入导出同处一处、分页签,
  *    用户不用记功能的藏身之处;
  *  · 导出侧提供**范围勾选**(勾选文件夹)而非整库导出 —— 对齐 Notion Export
  *    的 "Include subpages" 思路,但粒度更细:精确到子树;
+ *  · 导出位置 = 用户**自己选的本地文件夹**(默认浏览器下载文件夹),
+ *    句柄存 IndexedDB 记住下次(VS Code Web / Excalidraw 同款);
  *  · 导入侧强制**先预览再落库**(显示层级统计与条目预览),
  *    不做"选完文件直接写库"的隐式行为 —— 与 GitHub Import / Notion Import 一致;
  *  · 格式描述里明确写出"可再导入"(JSON/XML),让用户知道哪种格式适合备份迁移。
@@ -71,12 +123,13 @@ export interface TransferResult {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
-    MatTooltipModule, MatTabsModule, MatRadioModule, MatCheckboxModule, MatSnackBarModule
+    MatTooltipModule, MatTabsModule, MatRadioModule, MatCheckboxModule, MatSnackBarModule,
+    CategoryManagerDialogComponent
   ],
   templateUrl: './material-transfer-dialog.component.html',
   styleUrl: './material-transfer-dialog.component.scss'
 })
-export class MaterialTransferDialogComponent {
+export class MaterialTransferDialogComponent implements OnInit {
   readonly dialogRef = inject<MatDialogRef<MaterialTransferDialogComponent, TransferResult>>(MatDialogRef);
   readonly data = inject<DialogData>(MAT_DIALOG_DATA);
   private readonly api = inject(PracticeApi);
@@ -86,9 +139,13 @@ export class MaterialTransferDialogComponent {
 
   // ---------- 本地数据 ----------
   private readonly roots: MaterialNode[] = [...(this.data.nodes ?? [])];
-  readonly categories: PracticeCategoryDto[] = [...(this.data.categories ?? [])];
+  /** ★ 类别是 signal:在「类别」页签里增删改后,导出/导入的下拉要立刻同步。 */
+  readonly categories = signal<PracticeCategoryDto[]>([...(this.data.categories ?? [])]);
 
-  readonly tab = signal<'export' | 'import'>('export');
+  /** 打开时落在哪个页签(工具栏两个入口分别指向 类别 / 导出)。 */
+  readonly tab = signal<ManageTab>(this.data.tab ?? 'export');
+  readonly tabIndex = computed<number>(() =>
+    ({ categories: 0, export: 1, import: 2 } as Record<ManageTab, number>)[this.tab()]);
 
   /** 文件选择框的 accept(与 material-transfer 里支持的格式一致)。 */
   readonly accept = IMPORT_ACCEPT;
@@ -121,7 +178,7 @@ export class MaterialTransferDialogComponent {
     const f = this.exportSource();
     if (f === 'all') return this.t('practice.categoryAll');
     if (f === 'uncategorized') return this.t('practice.categoryUncategorized');
-    return this.categories.find((c) => c.id === f)?.name ?? this.t('practice.categoryAll');
+    return this.categories().find((c) => c.id === f)?.name ?? this.t('practice.categoryAll');
   });
 
   /**
@@ -153,21 +210,58 @@ export class MaterialTransferDialogComponent {
   }
 
   /**
-   * ★ 第七轮(Forrest):保存位置**在界面上可见、可选** ——
-   *  · 「每次询问」= 点导出弹系统「另存为」,用户自己挑文件夹(默认,Chrome/Edge);
-   *  · 「浏览器下载文件夹」= 跳过询问直接下载,不弹窗;
-   *  · 浏览器不支持 File System Access API(Firefox/Safari)时如实说明,
-   *    而不是让用户以为功能丢了。选择持久化,下次打开弹窗还记得。
+   * ★ 第九轮(Forrest):保存位置 = **用户自己选的本地文件夹**,默认下载文件夹。
+   *  · 没选过 → 走浏览器默认下载文件夹(与系统"下载"一致,零学习成本);
+   *  · 点「选择文件夹」→ 系统目录选择器,之后导出**直接写入**该目录,不再弹窗;
+   *  · 句柄存 IndexedDB,下次打开弹窗自动找回(权限失效会如实提示并回落下载文件夹);
+   *  · 浏览器不支持(File System Access API 缺失,如 Firefox/Safari)时如实说明。
    */
   readonly saveLocationSupported =
-    typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker === 'function';
-  readonly saveMode = signal<'ask' | 'downloads'>(readSaveMode());
+    typeof (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker === 'function';
 
-  setSaveMode(mode: 'ask' | 'downloads'): void {
-    this.saveMode.set(mode);
+  /** 已选文件夹的名字(空 = 用默认下载文件夹)。 */
+  readonly saveDirName = signal<string>('');
+  /** 是否已有可用文件夹(模板用它决定显示"更改"还是"选择文件夹")。 */
+  readonly hasDir = computed<boolean>(() => this.saveDirName().length > 0);
+  private dirHandle: FsDirHandle | null = null;
+
+  ngOnInit(): void {
+    void this.restoreDir();
+  }
+
+  /** 找回上次选过的文件夹:句柄还在且权限仍是 granted 才直接用。 */
+  private async restoreDir(): Promise<void> {
+    if (!this.saveLocationSupported) return;
+    const h = (await getDirHandle()) as FsDirHandle | null;
+    if (!h?.name) return;
     try {
-      localStorage.setItem(SAVE_MODE_KEY, mode);
-    } catch { /* 隐私模式:只影响本次会话 */ }
+      const perm = (await h.queryPermission?.({ mode: 'readwrite' })) ?? 'granted';
+      if (perm === 'granted') {
+        this.dirHandle = h;
+        this.saveDirName.set(h.name);
+      }
+    } catch { /* 读权限失败就当作没选过,退回默认下载文件夹 */ }
+  }
+
+  /** 打开系统目录选择器(必须在点击任务里同步调用,浏览器要求用户手势)。 */
+  async chooseFolder(): Promise<void> {
+    if (!this.saveLocationSupported) return;
+    try {
+      const h = await (window as unknown as FsWindow).showDirectoryPicker!({ mode: 'readwrite' });
+      this.dirHandle = h;
+      this.saveDirName.set(h.name);
+      void putDirHandle(h);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;   // 用户取消,静默
+      this.notify(this.t('transfer.dirFailed'));
+    }
+  }
+
+  /** 恢复默认下载文件夹。 */
+  async resetFolder(): Promise<void> {
+    this.dirHandle = null;
+    this.saveDirName.set('');
+    void delDirHandle();
   }
 
   /** 已勾选的节点数量(含子项 —— 勾了什么导出什么,计数也要一致)。 */
@@ -302,54 +396,53 @@ export class MaterialTransferDialogComponent {
   }
 
   /**
-   * ★ 第六轮(Forrest):导出路径可选 ——
-   * 支持 File System Access API 的浏览器(Chrome/Edge)弹系统「另存为」,
-   * 用户自己挑目录与文件名(Excalidraw / Figma 网页版的同款做法);
-   * 不支持的浏览器回落普通下载(存到浏览器下载目录)。
-   * 返回 false 仅代表用户点了取消(正常反悔,不算错误,静默)。
+   * ★ 第九轮(Forrest):导出落盘 ——
+   *  · 用户选过本地文件夹 → 直接写进去(不弹任何系统窗口);
+   *  · 没选过 / 浏览器不支持 → 普通下载(浏览器下载文件夹);
+   *  · 写选定的文件夹失败(权限失效等)→ 如实提示并回落下载,用户不会空手而归。
    */
   private async saveToFile(name: string, text: string, fmt: TransferFormat): Promise<boolean> {
-    const win = window as unknown as {
-      showSaveFilePicker?: (opts: {
-        suggestedName?: string;
-        types?: { description?: string; accept: Record<string, string[]> }[];
-      }) => Promise<{
-        createWritable: () => Promise<{
-          write: (data: string) => Promise<void>;
-          close: () => Promise<void>;
-        }>;
-      }>;
-    };
-    // 「浏览器下载文件夹」模式 = 明确跳过询问;浏览器不支持时也只能下载
-    if (this.saveMode() === 'downloads' || typeof win.showSaveFilePicker !== 'function') {
+    if (this.dirHandle) {
+      if (await this.writeToDir(this.dirHandle, name, text)) return true;
       this.downloadFile(name, text, fmt);
       return true;
     }
+    this.downloadFile(name, text, fmt);
+    return true;
+  }
+
+  /** 往已选文件夹里写文件;失败返回 false(调用方回落下载并已提示原因)。 */
+  private async writeToDir(dir: FsDirHandle, name: string, text: string): Promise<boolean> {
     try {
-      // 注意:必须在点击事件的任务里同步调用(浏览器要求 user activation),
-      // 前面不能插入 await。
-      const handle = await win.showSaveFilePicker({
-        suggestedName: name,
-        types: [{
-          description: this.t('transfer.fmt.' + fmt),
-          accept: { [transferMime(fmt)]: ['.' + fileExtension(fmt)] }
-        }]
-      });
-      const stream = await handle.createWritable();
+      const opts = { mode: 'readwrite' as const };
+      let perm = (await dir.queryPermission?.(opts)) ?? 'granted';
+      // 权限在页面重新加载后会变成 prompt,点导出时的用户手势正好可以补申请
+      if (perm !== 'granted') perm = (await dir.requestPermission?.(opts)) ?? 'denied';
+      if (perm !== 'granted') {
+        this.notify(this.t('transfer.dirDenied'));
+        return false;
+      }
+      const file = await dir.getFileHandle(name, { create: true });
+      const stream = await file.createWritable();
       await stream.write(text);
       await stream.close();
       return true;
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return false;
-      // 其它异常(如权限被拒)不吞结果 —— 回落普通下载,用户至少拿到文件
-      this.downloadFile(name, text, fmt);
-      return true;
+    } catch {
+      this.notify(this.t('transfer.dirFailed'));
+      return false;
     }
   }
 
   /** ★ 第六轮:下载示例文件 —— 用户"照着填",不用猜格式(GitHub/Mailchimp 模板同款)。 */
-  downloadSample(): void {
-    this.downloadFile(SAMPLE_FILE_NAME, buildSampleFile(this.t), 'txt');
+  async downloadSample(): Promise<void> {
+    const text = buildSampleFile(this.t);
+    if (this.dirHandle) {
+      if (await this.writeToDir(this.dirHandle, SAMPLE_FILE_NAME, text)) {
+        this.notify(this.t('transfer.sampleDone'));
+        return;
+      }
+    }
+    this.downloadFile(SAMPLE_FILE_NAME, text, 'txt');
     this.notify(this.t('transfer.sampleDone'));
   }
 
@@ -378,9 +471,9 @@ export class MaterialTransferDialogComponent {
 
   // ---------- 导入 ----------
   readonly importMode = signal<'existing' | 'new' | 'none'>(
-    this.categories.length > 0 ? 'existing' : 'none'
+    this.categories().length > 0 ? 'existing' : 'none'
   );
-  readonly importCategoryId = signal<string>(this.categories[0]?.id ?? '');
+  readonly importCategoryId = signal<string>(this.categories()[0]?.id ?? '');
   readonly newCategoryName = signal('');
   readonly pickedFileName = signal('');
   readonly parsed = signal<TransferCategory[]>([]);
@@ -454,11 +547,35 @@ export class MaterialTransferDialogComponent {
         const created = await firstValueFrom(this.api.createCategory(name));
         categoryId = created.id;
       }
-      this.dialogRef.close({ importedNodes: this.toMaterialNodes(cats, categoryId) });
+      this.close({ importedNodes: this.toMaterialNodes(cats, categoryId) });
     } catch {
       this.importing.set(false);
       this.notify(this.t('practice.errUnknown'));
     }
+  }
+
+  // ---------- 「类别」页签与宿主的联动 ----------
+
+  /** 类别增删改/排序 → 同步本地列表,导出/导入页的下拉立刻可见。 */
+  onCategoriesChanged(list: PracticeCategoryDto[]): void {
+    this.categories.set([...list]);
+    if (this.importMode() === 'none' && list.length > 0) {
+      this.importMode.set('existing');
+      this.importCategoryId.set(list[0].id);
+    }
+    if (this.importMode() === 'existing' && !list.some((c) => c.id === this.importCategoryId())) {
+      this.importCategoryId.set(list[0]?.id ?? '');
+    }
+  }
+
+  /** 模板导入 → 回传骨架节点并关闭弹窗(与原先类别弹窗的行为一致)。 */
+  onCategoryImported(nodes: MaterialNode[]): void {
+    this.close({ importedNodes: nodes });
+  }
+
+  /** 统一出口:关闭时总是带上最新类别列表,宿主的下拉不会因为"直接关窗"而漏更新。 */
+  private close(result: TransferResult): void {
+    this.dialogRef.close(result);
   }
 
   private toMaterialNodes(cats: TransferCategory[], categoryId: string | null): MaterialNode[] {
@@ -511,6 +628,6 @@ export class MaterialTransferDialogComponent {
   }
 
   cancel(): void {
-    this.dialogRef.close();
+    this.close({ importedNodes: [], categories: this.categories() });
   }
 }

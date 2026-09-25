@@ -80,8 +80,25 @@
 
 .tf-close:hover { color: #333a44; }
 
-/* ---------- 内容区 ---------- */
-.tf-body { padding: 0 20px 18px; }
+/* ---------- 内容区 ----------
+   ★ 第九轮:高度写死 —— 三个页签共用同一块内容区,内容超高时页签内部滚动,
+     切换页签窗口尺寸一丝不变(Notion / VS Code 的设置弹窗同款做法)。 */
+.tf-body {
+  padding: 0 20px 16px;
+  height: 468px;
+  overflow: hidden;
+}
+
+/* 让 mat-tab-group 撑满这块固定高度,滚动交给 tab-body-content(自带 overflow:auto) */
+:host ::ng-deep .mat-mdc-tab-group.tf-tabs { height: 100%; }
+
+:host ::ng-deep .mat-mdc-tab-group.tf-tabs .mat-mdc-tab-body-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 滚动条贴边会压住内容,留 4px 呼吸 */
+:host ::ng-deep .mat-mdc-tab-group.tf-tabs .mat-mdc-tab-body-content { padding-right: 4px; }
 
 .tf-pane {
   display: flex;
@@ -89,6 +106,9 @@
   gap: 6px;
   padding-top: 12px;
 }
+
+/* 「类别」页签:内嵌的类别管理组件按块级铺满 */
+.tf-pane app-category-manager { display: block; }
 
 .tf-label {
   margin-top: 10px;
@@ -246,6 +266,43 @@
 }
 
 .tf-name:focus + .tf-ext { border-color: #2f6fed; }
+
+/* ---------- 保存位置:用户自选的本地文件夹路径(第九轮) ---------- */
+.tf-dir {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: #fbfcfe;
+  border: 1px solid #e3e7ee;
+  border-radius: 8px;
+}
+
+.tf-dir-ico { font-size: 18px; width: 18px; height: 18px; color: #8a93a2; }
+
+.tf-dir-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #333a44;
+}
+
+.tf-dir-path.is-default { color: #7a8393; }
+
+.tf-dir-pick {
+  --mdc-outlined-button-label-text-color: #2f6fed;
+  --mdc-outlined-button-outline-color: #2f6fed;
+  --mdc-outlined-button-container-height: 30px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.tf-dir-pick mat-icon { font-size: 15px; width: 15px; height: 15px; margin-right: 5px; }
+
+.tf-dir-reset { font-size: 12.5px; }
 
 /* ---------- 导入:风格化文件选择 ---------- */
 .tf-pick-row {

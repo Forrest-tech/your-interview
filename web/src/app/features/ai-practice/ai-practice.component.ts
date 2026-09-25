@@ -20,7 +20,6 @@ import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MaterialNode, MaterialTreeComponent } from '../../shared/material-tree/material-tree.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
-import { CategoryManagerDialogComponent } from './category-manager-dialog.component';
 import { MaterialTransferDialogComponent } from './material-transfer-dialog.component';
 import { MaterialNodeDto, MaterialNodeIn, PracticeApi, PracticeCategoryDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -1149,51 +1148,30 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * 打开类别管理弹窗(新增/重命名/删除/拖拽排序都在弹窗里)。
-   * 关闭后:用回传列表刷新下拉;若树没有未保存改动,顺带回读一次 ——
-   * 弹窗里删除的类别,素材的 categoryId 已被服务端 SetNull,需要对齐。
+   * ★ 第九轮(Forrest):类别管理与导入导出**合并成一个弹窗的三个页签**。
+   * 两个工具栏入口(menu 的 tune 图标 = 类别页签,import_export 图标 = 导出页签)
+   * 打开的是同一个弹窗,只是初始落点不同,窗口尺寸一致。
+   * 关闭后:用回传的类别列表刷新下拉;合并回传的素材骨架节点。
    */
-  openCategoryManager(): void {
-    const ref = this.dialog.open(CategoryManagerDialogComponent, {
-      width: '480px',
-      data: { categories: this.categories() }
-    });
-    ref.afterClosed().subscribe((result) => {
-      if (!result) return;
-      this.categories.set(result.categories ?? []);
-      // 弹窗里可能删了类别 → 当前过滤若指向被删类别,回落"全部"
-      this.validateCategoryFilter();
-      // ★ 2026-09-25(Forrest 第二轮):弹窗里点了「导入模板」→
-      //   回传了素材骨架根节点,这里合并进整树。
-      const imported = result.importedNodes ?? [];
-      if (imported.length > 0) {
-        this.mergeImportedNodes(imported);
-        return;
-      }
-      if (!this.treeDirty()) this.restoreTree();
-    });
-  }
-
-  /**
-   * ★ 2026-09-25 第四轮(Forrest):素材「导入 / 导出」入口。
-   * 导出在弹窗里直接生成文件下载;导入只回传待合并的根节点,由这里统一入库。
-   */
-  openTransfer(): void {
+  openManage(tab: 'categories' | 'export' = 'export'): void {
     if (this.treeLoadFailed()) {
       this.toast(this.t('practice.treeBlocked'));
       return;
     }
     const ref = this.dialog.open(MaterialTransferDialogComponent, {
-      width: '560px',
+      width: '680px',
       maxWidth: '94vw',
       panelClass: 'app-transfer',
-      data: { nodes: this.nodes(), categories: this.categories(), filter: this.categoryFilter() }
+      data: { nodes: this.nodes(), categories: this.categories(), filter: this.categoryFilter(), tab }
     });
     ref.afterClosed().subscribe((result) => {
       if (!result) return;
-      this.mergeImportedNodes(result.importedNodes ?? []);
-      // 弹窗里可能新建了类别 → 下拉要能立刻看到它
+      // 类别可能在「类别」页签里被增删改/导入模板 → 下拉立刻对齐
+      if (result.categories?.length != null) this.categories.set(result.categories);
+      this.validateCategoryFilter();
       this.loadCategories();
+      // 弹窗里任何来源(模板导入 / 文件导入)产出的素材骨架 → 合并进整树
+      this.mergeImportedNodes(result.importedNodes ?? []);
     });
   }
 

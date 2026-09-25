@@ -49,6 +49,7 @@
             [ngTemplateOutletContext]="{ items: exportRoots(), depth: 0 }">
           </ng-container>
         </div>
+        <p class="tf-hint">{{ t('transfer.pickHint') }}</p>
 
         <label class="tf-label">{{ t('transfer.format') }}</label>
         <mat-radio-group class="tf-formats" [value]="format()" (change)="format.set($event.value)">
@@ -189,6 +190,7 @@
       }
       <mat-checkbox class="pk-check"
                     [checked]="isSelected(n.id)"
+                    [indeterminate]="!isSelected(n.id) && hasCheckedDesc(n)"
                     (change)="toggleChecked(n)">
         <span class="pk-name">{{ n.name }}</span>
       </mat-checkbox>

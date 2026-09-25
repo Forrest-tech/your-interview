@@ -329,6 +329,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   'transfer.importTab': { zh: '导入', en: 'Import', fr: 'Importer' },
   'transfer.sourceCategory': { zh: '导出来源', en: 'Export from', fr: 'Exporter depuis' },
   'transfer.pickFolders': { zh: '选择要导出的内容', en: 'Choose what to export', fr: 'Choisir quoi exporter' },
+  // ★ 第八轮:勾选语义 = 勾了什么导出什么(所见即所得)
+  'transfer.pickHint': {
+    zh: '勾选的内容才会导出；勾选文件夹会连里面的子项一起勾上。',
+    en: 'Only checked items are exported; checking a folder also checks everything inside it.',
+    fr: 'Seuls les éléments cochés sont exportés ; cocher un dossier coche aussi son contenu.'
+  },
   'transfer.selectAll': { zh: '全选', en: 'Select all', fr: 'Tout sélectionner' },
   'transfer.clearAll': { zh: '清空', en: 'Clear', fr: 'Effacer' },
   'transfer.format': { zh: '导出格式', en: 'Format', fr: 'Format' },

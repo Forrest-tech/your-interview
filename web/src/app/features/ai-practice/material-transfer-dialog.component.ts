@@ -33,6 +33,13 @@ interface DialogData {
 /** 保存位置偏好落盘 key(第七轮:每次询问 / 浏览器下载文件夹)。 */
 const SAVE_MODE_KEY = 'yi.exportSaveMode';
 
+/** 收集一个节点及其全部后代的 id(勾选/取消要沿子树级联)。 */
+function collectIds(n: MaterialNode): string[] {
+  const out: string[] = [n.id];
+  for (const c of n.children ?? []) out.push(...collectIds(c));
+  return out;
+}
+
 function readSaveMode(): 'ask' | 'downloads' {
   try {
     const v = localStorage.getItem(SAVE_MODE_KEY);
@@ -163,15 +170,36 @@ export class MaterialTransferDialogComponent {
     } catch { /* 隐私模式:只影响本次会话 */ }
   }
 
-  /** 已勾选的根节点数量(用于提示"已选 N 项")。 */
+  /** 已勾选的节点数量(含子项 —— 勾了什么导出什么,计数也要一致)。 */
   readonly selectedCount = computed<number>(() => {
     const set = this.selectedIds();
-    return this.exportRoots().filter((r) => set.has(r.id)).length;
+    let count = 0;
+    const walk = (list: MaterialNode[]): void => {
+      for (const n of list) {
+        if (set.has(n.id)) count++;
+        if (n.folder) walk(n.children ?? []);
+      }
+    };
+    walk(this.exportRoots());
+    return count;
   });
 
   constructor() {
     // 默认全选根节点 —— 大部分时候用户就是想导出整个类别
     this.selectAll(true);
+    // 展开状态沿用主树:主树里展开的文件夹在这里也展开,
+    // 否则子项勾选框看不见,用户会以为"子项没被选中/不会导出"(第八轮实测反馈)。
+    const expanded = new Set<string>();
+    const walk = (list: MaterialNode[]): void => {
+      for (const n of list) {
+        if (n.folder) {
+          if (n.expanded) expanded.add(n.id);
+          walk(n.children ?? []);
+        }
+      }
+    };
+    walk(this.roots);
+    this.expandedIds.set(expanded);
   }
 
   // ---------- 复选框树 ----------
@@ -185,15 +213,33 @@ export class MaterialTransferDialogComponent {
     this.expandedIds.set(set);
   }
 
+  /**
+   * ★ 第八轮(Forrest):勾选语义 = 「勾了什么导出什么」,所见即所得。
+   *  · 勾选文件夹 = 连同子项一起勾上(标准树形语义,和系统文件选择器一致);
+   *  · 取消勾选 = 连同子树一起取消;
+   *  · 导出时**逐节点**过滤 —— 文件夹里没勾的子项不会混进去,
+   *    反过来,只勾了深层子项时,父文件夹会以半选状态被带上(保住层级)。
+   *  旧行为的两个毛病:Select all 只勾根节点(子项看着没选,其实会导出,
+   *  用户以为丢了);只勾子项不勾父级时整个子树都被丢掉。
+   */
   toggleChecked(node: MaterialNode): void {
     const set = new Set(this.selectedIds());
-    set.has(node.id) ? set.delete(node.id) : set.add(node.id);
+    if (set.has(node.id)) {
+      collectIds(node).forEach((id) => set.delete(id));   // 取消 = 整棵子树取消
+    } else {
+      collectIds(node).forEach((id) => set.add(id));      // 勾选 = 连子项一起勾
+    }
     this.selectedIds.set(set);
+  }
+
+  /** 半选态:自己没勾,但子树里有勾选的 —— 文件夹上显示一条短横线。 */
+  hasCheckedDesc(node: MaterialNode): boolean {
+    return (node.children ?? []).some((c) => this.selectedIds().has(c.id) || this.hasCheckedDesc(c));
   }
 
   selectAll(on: boolean): void {
     const set = new Set<string>();
-    if (on) for (const r of this.exportRoots()) set.add(r.id);
+    if (on) for (const r of this.exportRoots()) collectIds(r).forEach((id) => set.add(id));
     this.selectedIds.set(set);
   }
 
@@ -204,7 +250,11 @@ export class MaterialTransferDialogComponent {
 
   // ---------- 导出动作 ----------
   async doExport(): Promise<void> {
-    const picked = this.exportRoots().filter((r) => this.selectedIds().has(r.id));
+    // 逐节点过滤:只导出勾选中的节点;只勾了深层子项时,
+    // 父文件夹作为半选容器被自动带上,层级不丢。
+    const picked = this.exportRoots()
+      .map((r) => this.filterChecked(r))
+      .filter((n): n is MaterialNode => n !== null);
     if (picked.length === 0) {
       this.notify(this.t('transfer.exportNone'));
       return;
@@ -225,6 +275,18 @@ export class MaterialTransferDialogComponent {
     } finally {
       this.exporting.set(false);
     }
+  }
+
+  /** 只保留勾选中的节点:文件夹在「自己被勾」或「子树里有勾选」时保留。 */
+  private filterChecked(n: MaterialNode): MaterialNode | null {
+    const kids = n.folder
+      ? (n.children ?? [])
+          .map((c) => this.filterChecked(c))
+          .filter((c): c is MaterialNode => c !== null)
+      : [];
+    if (!this.selectedIds().has(n.id) && kids.length === 0) return null;
+    if (!n.folder) return n;
+    return { ...n, children: kids };
   }
 
   private downloadFile(name: string, text: string, fmt: TransferFormat): void {

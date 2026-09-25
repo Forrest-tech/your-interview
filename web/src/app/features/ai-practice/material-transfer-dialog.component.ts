@@ -301,15 +301,16 @@ export class MaterialTransferDialogComponent implements OnInit {
 
   /**
    * ★ 第九轮(Forrest):文件夹的**显示状态派生自子树**,与文件勾选框样式一致:
-   *  · 自己勾了,或子项**全部**选中 → 对勾(选中态);
+   *  · 子项**全部**选中 → 对勾(选中态);
    *  · 子项选中了一部分(没全选) → 短横线(半选态);
-   *  · 之前的问题:逐个勾完所有子项后,文件夹自己的 id 不在集合里,
-   *    永远停在半选横线上,和"全选了"的直觉矛盾。
+   *  · 有子项的文件夹**不看自己的 id** —— 之前点文件夹时会把文件夹 id 也记进
+   *    集合,之后取消其中一个子文件,文件夹 id 还在集合里,对勾就不回落,
+   *    半选状态永远不会出现(正是用户报的 bug)。无子项的文件夹/文件才看自己。
    */
   nodeChecked(node: MaterialNode): boolean {
-    if (this.selectedIds().has(node.id)) return true;
     const kids = node.children ?? [];
-    return kids.length > 0 && kids.every((c) => this.nodeChecked(c));
+    if (kids.length > 0) return kids.every((c) => this.nodeChecked(c));
+    return this.selectedIds().has(node.id);
   }
   isExpanded(id: string): boolean { return this.expandedIds().has(id); }
 

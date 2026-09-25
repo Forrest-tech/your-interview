@@ -5,6 +5,9 @@
       <p class="sub">按状态分列看清整个漏斗,卡住在哪一步一目了然</p>
     </div>
     <div class="head-actions">
+      <button mat-stroked-button class="al-btn" (click)="openAnswerLibrary()" [matTooltip]="t('tracker.alTitle')">
+        <mat-icon>library_books</mat-icon>{{ t('tracker.alTitle') }}
+      </button>
       <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
@@ -54,10 +57,10 @@
         <mat-form-field appearance="outline" class="sort">
           <mat-label>排序</mat-label>
           <mat-select [ngModel]="sort()" (ngModelChange)="onSortChange($event)" name="sort">
-            <mat-option value="updatedDesc">最近更新</mat-option>
-            <mat-option value="appliedDesc">投递日期(新→旧)</mat-option>
+            <mat-option value="updated">最近更新</mat-option>
+            <mat-option value="applied">投递日期(新→旧)</mat-option>
             <mat-option value="appliedAsc">投递日期(旧→新)</mat-option>
-            <mat-option value="companyAsc">公司名 A→Z</mat-option>
+            <mat-option value="company">公司名 A→Z</mat-option>
           </mat-select>
         </mat-form-field>
       </div>
@@ -123,6 +126,12 @@
           @for (a of col.items; track a.id) {
             <mat-card class="app-card" (click)="openDetail(a)">
               <div class="app-top">
+                <span class="logo-wrap">
+                  <span class="logo-avatar" [style.background]="avatarColor(a.companyName)">{{ companyInitials(a.companyName) }}</span>
+                  @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
+                    <img class="logo" [src]="a.companyLogoUrl" (error)="markLogoBroken(a.id)">
+                  }
+                </span>
                 <span class="company">{{ a.companyName }}</span>
                 @if (a.priority) {
                   <span class="pri" [class]="priorityClass(a.priority)"
@@ -150,8 +159,8 @@
                 @if (a.needsConnectFirst) {
                   <span class="tag warn">需先 Connect</span>
                 }
-                @if (a.outreachStatus) {
-                  <span class="tag">{{ a.outreachStatus }}</span>
+                @if (a.outreachMessage) {
+                  <span class="tag">{{ a.outreachMessage }}</span>
                 }
                 @if (a.resumeScore != null) {
                   <span class="tag">匹配 {{ a.resumeScore }}</span>

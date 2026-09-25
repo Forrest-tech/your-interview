@@ -75,6 +75,21 @@ public sealed class Company : AuditableAggregateRoot
         IsBlacklisted = value;
         Touch();
     }
+
+    /// <summary>
+    /// 按公司官网解析一个 Logo 地址(确定性,不做网络请求)。
+    /// 用 Google 的 favicon 服务:输入一个能解析出 host 的网址即返回该 host 的图标,
+    /// 浏览器侧再叠加"加载失败则降级为首字母头像"的兜底。
+    /// 返回 null = 没有可依据的网址,交给前端用首字母头像。
+    /// </summary>
+    public static string? LogoUrlFromWebsite(string? website)
+    {
+        if (string.IsNullOrWhiteSpace(website)) return null;
+        if (!Uri.TryCreate(website, UriKind.Absolute, out var u)) return null;
+        var host = u.Host;
+        if (string.IsNullOrWhiteSpace(host)) return null;
+        return $"https://www.google.com/s2/favicons?sz=128&domain={host}";
+    }
 }
 
 /// <summary>
@@ -147,15 +162,16 @@ public sealed class JobApplication : AuditableAggregateRoot
 
     private static readonly Dictionary<ApplicationStatus, ApplicationStatus[]> AllowedTransitions = new()
     {
-        [ApplicationStatus.Saved] = [ApplicationStatus.Applied, ApplicationStatus.Paused, ApplicationStatus.Rejected],
-        [ApplicationStatus.Applied] = [ApplicationStatus.Screen, ApplicationStatus.Interview, ApplicationStatus.Rejected, ApplicationStatus.Ghosted, ApplicationStatus.Paused],
-        [ApplicationStatus.Screen] = [ApplicationStatus.Interview, ApplicationStatus.Rejected, ApplicationStatus.Ghosted, ApplicationStatus.Paused],
-        [ApplicationStatus.Interview] = [ApplicationStatus.Offer, ApplicationStatus.Rejected, ApplicationStatus.Ghosted, ApplicationStatus.Paused],
+        [ApplicationStatus.Saved] = [ApplicationStatus.Applied, ApplicationStatus.Paused, ApplicationStatus.Rejected, ApplicationStatus.Withdrawn],
+        [ApplicationStatus.Applied] = [ApplicationStatus.Screen, ApplicationStatus.Interview, ApplicationStatus.Rejected, ApplicationStatus.Ghosted, ApplicationStatus.Paused, ApplicationStatus.Withdrawn],
+        [ApplicationStatus.Screen] = [ApplicationStatus.Interview, ApplicationStatus.Rejected, ApplicationStatus.Ghosted, ApplicationStatus.Paused, ApplicationStatus.Withdrawn],
+        [ApplicationStatus.Interview] = [ApplicationStatus.Offer, ApplicationStatus.Rejected, ApplicationStatus.Ghosted, ApplicationStatus.Paused, ApplicationStatus.Withdrawn],
         [ApplicationStatus.Offer] = [ApplicationStatus.Accepted, ApplicationStatus.Rejected, ApplicationStatus.Paused],
         [ApplicationStatus.Accepted] = [],
         [ApplicationStatus.Rejected] = [ApplicationStatus.Saved],
         [ApplicationStatus.Ghosted] = [ApplicationStatus.Saved],
-        [ApplicationStatus.Paused] = [ApplicationStatus.Saved, ApplicationStatus.Applied]
+        [ApplicationStatus.Paused] = [ApplicationStatus.Saved, ApplicationStatus.Applied, ApplicationStatus.Withdrawn],
+        [ApplicationStatus.Withdrawn] = [ApplicationStatus.Saved]
     };
 
     public bool CanTransitionTo(ApplicationStatus target)
@@ -377,7 +393,9 @@ public enum ApplicationStatus
     Accepted = 5,
     Rejected = 6,
     Ghosted = 7,
-    Paused = 8
+    Paused = 8,
+    /// <summary>主动撤回(已投递后不想继续)。可由 Applied/Screen/Interview/Paused 进入,可重新打开回 Saved。</summary>
+    Withdrawn = 9
 }
 
 public enum Priority { Low = 0, Medium = 1, High = 2, Critical = 3 }
@@ -444,5 +462,101 @@ public sealed class UserResume : AuditableAggregateRoot
     {
         Content = content;
         Version++;
+    }
+}
+
+/// <summary>
+/// 申请问答库 —— 用户个人沉淀的"常见申请问题 → 我的标准回答"。
+///
+/// 为什么用户级(UserId):这是私人素材,不同用户的答题风格/经历不同,必须按用户隔离。
+/// 与 Company/JdText 的单租户空间不同 —— 简历已经是用户级,问答库跟它同口径。
+///
+/// 用途:填每一家投递的备注时,从库里一键插入现成答案(为什么想来、薪资预期、
+/// 可到岗时间等),避免每次重写。
+/// </summary>
+public sealed class ApplicationAnswerTemplate : AuditableAggregateRoot
+{
+    private ApplicationAnswerTemplate() { }
+
+    public ApplicationAnswerTemplate(Guid userId, string category, string question, string answer, int sortOrder)
+    {
+        UserId = userId;
+        Category = category;
+        Question = question;
+        Answer = answer;
+        SortOrder = sortOrder;
+    }
+
+    /// <summary>一人一套,按 UserId 隔离。</summary>
+    public Guid UserId { get; private set; }
+
+    /// <summary>分类(如 动机 / 经历 / 薪资 / 到岗),便于筛选与组织。</summary>
+    public string Category { get; private set; } = string.Empty;
+
+    /// <summary>问题(提示词),如"为什么想加入我们?"。</summary>
+    public string Question { get; private set; } = string.Empty;
+
+    /// <summary>我的标准回答(可复用正文)。</summary>
+    public string Answer { get; private set; } = string.Empty;
+
+    /// <summary>同分类内的排序。</summary>
+    public int SortOrder { get; private set; }
+
+    public void Update(string category, string question, string answer, int sortOrder)
+    {
+        Category = category;
+        Question = question;
+        Answer = answer;
+        SortOrder = sortOrder;
+        Touch();
+    }
+}
+
+/// <summary>
+/// 沟通记录 —— 每条投递的对外沟通时间线。
+///
+/// 记录类型 Type:Email / Call / Interview / Message / Note。
+/// 与投递同属单租户空间(挂在 ApplicationId 下),不作用户级隔离 ——
+/// 投递本身是共享空间,沟通记录是投递的子对象,跟随投递走。
+/// </summary>
+public sealed class ApplicationCommunication : AuditableAggregateRoot
+{
+    private ApplicationCommunication() { }
+
+    public ApplicationCommunication(Guid applicationId, string type, string? subject, string content,
+        string? contactName, string? contactEmail, DateTimeOffset occurredAt)
+    {
+        ApplicationId = applicationId;
+        Type = type;
+        Subject = subject;
+        Content = content;
+        ContactName = contactName;
+        ContactEmail = contactEmail;
+        OccurredAt = occurredAt;
+    }
+
+    public Guid ApplicationId { get; private set; }
+
+    /// <summary>Email / Call / Interview / Message / Note。</summary>
+    public string Type { get; private set; } = string.Empty;
+
+    public string? Subject { get; private set; }
+    public string Content { get; private set; } = string.Empty;
+    public string? ContactName { get; private set; }
+    public string? ContactEmail { get; private set; }
+
+    /// <summary>发生时间(用户填写,不一定等于创建时间)。</summary>
+    public DateTimeOffset OccurredAt { get; private set; }
+
+    public void Update(string type, string? subject, string content, string? contactName,
+        string? contactEmail, DateTimeOffset occurredAt)
+    {
+        Type = type;
+        Subject = subject;
+        Content = content;
+        ContactName = contactName;
+        ContactEmail = contactEmail;
+        OccurredAt = occurredAt;
+        Touch();
     }
 }

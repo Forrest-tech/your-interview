@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using YourInterview.Services.Jobs.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using YourInterview.Services.Jobs.Infrastructure.Persistence;
 namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(JobsDbContext))]
-    partial class JobsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921080000_AddTrackerEnhancements")]
+    partial class AddTrackerEnhancements
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -500,6 +503,20 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.ToTable("resumes", "jobs");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationAnswerTemplate", b =>
+                {
+                    b.HasIndex("UserId");
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationCommunication", b =>
+                {
+                    b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationStatusChange", b =>
                 {
                     b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
@@ -522,20 +539,6 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
                         .WithMany("Rounds")
-                        .HasForeignKey("ApplicationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationAnswerTemplate", b =>
-                {
-                    b.HasIndex("UserId");
-                });
-
-            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationCommunication", b =>
-                {
-                    b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
-                        .WithMany()
                         .HasForeignKey("ApplicationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

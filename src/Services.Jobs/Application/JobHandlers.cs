@@ -22,7 +22,7 @@ public sealed record InterviewRoundDto(Guid Id, int Order, string Stage, DateOnl
     string? Interviewer, string? Format, string Outcome, string? Notes, string? Feedback);
 
 public sealed record ApplicationDto(
-    Guid Id, Guid CompanyId, string CompanyName, string Role, string? Location, string? Link,
+    Guid Id, Guid CompanyId, string CompanyName, string? CompanyLogoUrl, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary,
     // JD 全文与出处(2026-09-18:面试前准备包的输入)。
     // 与 JdSummary 并存:摘要是给人看的速览,全文是给 AI 的原料 —— 两者用途不同。
@@ -178,8 +178,8 @@ public sealed class ChangeApplicationStatusCommandValidator : AbstractValidator<
 
 internal static class JobsMapping
 {
-    public static ApplicationDto ToDto(this JobApplication a, string companyName) => new(
-        a.Id, a.CompanyId, companyName, a.Role, a.Location, a.Link, a.Salary, a.WorkMode, a.Source, a.JdSummary,
+    public static ApplicationDto ToDto(this JobApplication a, string companyName, string? companyLogoUrl = null) => new(
+        a.Id, a.CompanyId, companyName, companyLogoUrl, a.Role, a.Location, a.Link, a.Salary, a.WorkMode, a.Source, a.JdSummary,
         // JD 全文随详情一并带出(2026-09-18)。列表查询同样走本映射 ——
         // 实测投递记录量级为个人求职(几十条),40000 字符全文带来的负载可接受;
         // 若未来记录上千,再拆出"不含全文"的精简映射给列表用。
@@ -248,13 +248,17 @@ public sealed class CreateCompanyCommandHandler(JobsDbContext db)
         if (existing is not null)
             return Result.Success(existing.Id); // 幂等:已存在直接返回
 
+        var logoUrl = string.IsNullOrWhiteSpace(request.LogoUrl)
+            ? Company.LogoUrlFromWebsite(request.Website)
+            : request.LogoUrl;
+
         var company = new Company(name, request.Website, request.Industry, request.Location,
-            request.LogoUrl, request.Notes)
+            logoUrl, request.Notes)
         {
             // CompanyType/EmployeeCount 通过 Update 设置(保持聚合封装)
         };
         company.Update(name, request.Website, request.Industry, request.Location,
-            request.LogoUrl, request.Notes, request.CompanyType, request.EmployeeCount);
+            logoUrl, request.Notes, request.CompanyType, request.EmployeeCount);
 
         db.Companies.Add(company);
         await db.SaveChangesAsync(ct);
@@ -270,8 +274,13 @@ public sealed class UpdateCompanyCommandHandler(JobsDbContext db)
         var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
         if (c is null) return Result.Failure(Error.NotFound("公司"));
 
+        // Logo 自动解析:用户没显式给 Logo 且填了官网时,按官网 host 推导 favicon 地址。
+        var logoUrl = string.IsNullOrWhiteSpace(request.LogoUrl)
+            ? Company.LogoUrlFromWebsite(request.Website)
+            : request.LogoUrl;
+
         c.Update(request.Name, request.Website, request.Industry, request.Location,
-            request.LogoUrl, request.Notes, request.CompanyType, request.EmployeeCount);
+            logoUrl, request.Notes, request.CompanyType, request.EmployeeCount);
         c.SetBlacklisted(request.IsBlacklisted);
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -335,6 +344,7 @@ public sealed class ListApplicationsQueryHandler(JobsDbContext db)
         q = request.SortBy switch
         {
             "applied" => q.OrderByDescending(a => a.AppliedDate),
+            "appliedAsc" => q.OrderBy(a => a.AppliedDate),
             "deadline" => q.OrderBy(a => a.Deadline),
             "priority" => q.OrderByDescending(a => a.Priority).ThenByDescending(a => a.UpdatedAt),
             "company" => q.OrderBy(a => db.Companies.First(c => c.Id == a.CompanyId).Name),
@@ -347,8 +357,13 @@ public sealed class ListApplicationsQueryHandler(JobsDbContext db)
         var names = await db.Companies.AsNoTracking()
             .Where(c => companyIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var logoUrls = await db.Companies.AsNoTracking()
+            .Where(c => companyIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.LogoUrl, ct);
 
-        var items = rows.Select(r => r.ToDto(names.TryGetValue(r.CompanyId, out var n) ? n : "—")).ToList();
+        var items = rows.Select(r => r.ToDto(
+            names.TryGetValue(r.CompanyId, out var n) ? n : "—",
+            logoUrls.TryGetValue(r.CompanyId, out var l) ? l : null)).ToList();
         return Result.Success(new PagedResult<ApplicationDto>(items, total, page, size));
     }
 }
@@ -399,9 +414,9 @@ public sealed class GetApplicationQueryHandler(JobsDbContext db)
             .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
         if (a is null) return Result.Failure<ApplicationDto>(Error.NotFound("投递记录"));
 
-        var name = await db.Companies.AsNoTracking().Where(c => c.Id == a.CompanyId)
-            .Select(c => c.Name).FirstOrDefaultAsync(ct) ?? "—";
-        return Result.Success(a.ToDto(name));
+        var company = await db.Companies.AsNoTracking().Where(c => c.Id == a.CompanyId)
+            .Select(c => new { c.Name, c.LogoUrl }).FirstOrDefaultAsync(ct);
+        return Result.Success(a.ToDto(company?.Name ?? "—", company?.LogoUrl));
     }
 }
 
@@ -672,9 +687,11 @@ public sealed class GetUpcomingFollowUpsQueryHandler(JobsDbContext db, TimeProvi
         var ids = apps.Select(a => a.CompanyId).Distinct().ToList();
         var names = await db.Companies.AsNoTracking().Where(c => ids.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var logos = await db.Companies.AsNoTracking().Where(c => ids.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.LogoUrl, ct);
 
         return Result.Success<IReadOnlyList<ApplicationDto>>(
-            apps.Select(a => a.ToDto(names.GetValueOrDefault(a.CompanyId, "—"))).ToList());
+            apps.Select(a => a.ToDto(names.GetValueOrDefault(a.CompanyId, "—"), logos.GetValueOrDefault(a.CompanyId))).ToList());
     }
 }
 
@@ -693,9 +710,11 @@ public sealed class GetDeadlinesQueryHandler(JobsDbContext db, TimeProvider cloc
         var ids = apps.Select(a => a.CompanyId).Distinct().ToList();
         var names = await db.Companies.AsNoTracking().Where(c => ids.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var logos = await db.Companies.AsNoTracking().Where(c => ids.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.LogoUrl, ct);
 
         return Result.Success<IReadOnlyList<ApplicationDto>>(
-            apps.Select(a => a.ToDto(names.GetValueOrDefault(a.CompanyId, "—"))).ToList());
+            apps.Select(a => a.ToDto(names.GetValueOrDefault(a.CompanyId, "—"), logos.GetValueOrDefault(a.CompanyId))).ToList());
     }
 }
 

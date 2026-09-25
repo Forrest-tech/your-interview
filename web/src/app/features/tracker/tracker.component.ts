@@ -14,15 +14,23 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatDividerModule } from '@angular/material/divider';
-import { catchError, of } from 'rxjs';
+import { catchError, forkJoin, of, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { Application, ApplicationStatus, Company, Paged, TrackerStats } from '../../core/models/api.models';
+import { TrackerApi } from '../../core/api/tracker-api.service';
+import { Application, ApplicationStatus, AnswerTemplate, Communication, CommunicationType, Company, Paged, TrackerStats } from '../../core/models/api.models';
+import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
 
 /** 状态下拉的选项 —— 顺序即漏斗顺序,下拉里也按流程排,避免用户找"面试中"要找半天。 */
 const STATUS_ORDER: ApplicationStatus[] = [
-  'Saved', 'Applied', 'Screen', 'Interview', 'Offer', 'Rejected', 'Paused', 'Withdrawn'
+  'Saved', 'Applied', 'Screen', 'Interview', 'Offer', 'Accepted', 'Rejected', 'Ghosted', 'Paused', 'Withdrawn'
 ];
+
+/**
+ * 新建对话框允许直接设置的初始状态(只能是从 Saved 合法流转出去的那几个;
+ * 其余状态(面试中/Offer 等)需要走正式的状态流转,不能在新建时越级设置)。
+ */
+const CREATE_STATUS_OPTIONS: ApplicationStatus[] = ['Saved', 'Applied', 'Paused', 'Rejected'];
 
 /**
  * 投递表单的可编辑形状。
@@ -40,14 +48,15 @@ export interface ApplicationForm {
   link: string;
   notes: string;
   needsConnectFirst: boolean;
-  outreachStatus: string;
+  /** 对应后端 OutreachMessage(外联留言,如"已发 LinkedIn 私信")。 */
+  outreachMessage: string;
 }
 
 function emptyForm(): ApplicationForm {
   return {
     companyName: '', role: '', location: '', salary: '',
     status: 'Applied', priority: 'Medium', appliedDate: todayIso(), link: '',
-    notes: '', needsConnectFirst: false, outreachStatus: ''
+    notes: '', needsConnectFirst: false, outreachMessage: ''
   };
 }
 
@@ -127,8 +136,8 @@ function todayIso(): string {
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>外联状态</mat-label>
-          <input matInput name="outreachStatus" [(ngModel)]="form.outreachStatus"
+          <mat-label>外联留言</mat-label>
+          <input matInput name="outreachMessage" [(ngModel)]="form.outreachMessage"
                  placeholder="如 已发 LinkedIn 私信">
         </mat-form-field>
       </div>
@@ -140,8 +149,15 @@ function todayIso(): string {
 
       <mat-form-field appearance="outline" class="full">
         <mat-label>备注</mat-label>
-        <textarea matInput name="notes" rows="3" [(ngModel)]="form.notes"></textarea>
+        <textarea matInput name="notes" rows="4" [(ngModel)]="form.notes"></textarea>
       </mat-form-field>
+
+      <div class="qa-row">
+        <span class="qa-hint">{{ t('tracker.insertAnswer') }}</span>
+        <button mat-stroked-button type="button" (click)="insertAnswer()">
+          <mat-icon>library_books</mat-icon>{{ t('tracker.insertAnswer') }}
+        </button>
+      </div>
 
       <mat-divider></mat-divider>
 
@@ -177,14 +193,26 @@ function todayIso(): string {
       background: #fdecea; color: #b3261e; font-size: 13px;
     }
     .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .qa-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 10px 12px; margin-bottom: 4px; border-radius: 8px;
+      background: rgba(63, 81, 181, 0.06); border: 1px solid rgba(63, 81, 181, 0.16);
+    }
+    .qa-row .qa-hint { font-size: 12.5px; opacity: 0.7; }
+    .qa-row mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; vertical-align: middle; }
   `]
 })
 export class ApplicationDialogComponent {
   readonly dialogRef = inject(MatDialogRef<ApplicationDialogComponent, ApplicationForm | null>);
   /** 传入 null 表示新建;传入 Application 表示编辑。 */
   readonly existing = inject<Application | null>(MAT_DIALOG_DATA);
+  private readonly dialog = inject(MatDialog);
+  private readonly trackerApi = inject(TrackerApi);
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
 
-  readonly statusOptions = STATUS_ORDER;
+  /** 新建时只允许从 Saved 合法流转出去的状态;编辑时沿用全部顺序。 */
+  readonly statusOptions: ApplicationStatus[] = this.existing ? STATUS_ORDER : CREATE_STATUS_OPTIONS;
   readonly priorities = ['High', 'Medium', 'Low'];
 
   readonly error = signal<string | null>(null);
@@ -201,6 +229,23 @@ export class ApplicationDialogComponent {
 
   canSave(): boolean {
     return this.form.companyName.trim().length > 0 && this.form.role.trim().length > 0;
+  }
+
+  /**
+   * 从问答库挑一条标准回答,插入到备注末尾(留一个空行分隔)。
+   * 选完即关弹窗,不阻断主表单填写。
+   */
+  insertAnswer(): void {
+    const ref = this.dialog.open(AnswerLibraryDialogComponent, {
+      data: { pick: true as const },
+      maxWidth: '720px'
+    });
+    ref.afterClosed().subscribe((tpl?: AnswerTemplate | null) => {
+      if (!tpl) return;
+      const block = `【${tpl.question}】\n${tpl.answer}`;
+      const cur = this.form.notes?.trim() ?? '';
+      this.form.notes = cur ? `${cur}\n\n${block}` : block;
+    });
   }
 
   save(): void {
@@ -236,10 +281,39 @@ export class ApplicationDialogComponent {
 })
 export class TrackerComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  private readonly trackerApi = inject(TrackerApi);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
+
+  /** 名称首字母头像(看板卡 + 详情页共用)。 */
+  companyInitials(name?: string): string {
+    const n = (name ?? '').trim();
+    if (!n) return '?';
+    const parts = n.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  /** 由名称哈希出稳定的彩色背景,让降级头像不单调。 */
+  avatarColor(name?: string): string {
+    const n = (name ?? '?').trim() || '?';
+    let h = 0;
+    for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360;
+    return `hsl(${h}, 52%, 52%)`;
+  }
+
+  /** 看板卡 Logo 加载失败的 id 集合(每卡独立降级,不互相影响)。 */
+  private readonly brokenLogos = signal<Set<string>>(new Set());
+  logoBrokenCard(id: string): boolean { return this.brokenLogos().has(id); }
+  markLogoBroken(id: string): void {
+    const next = new Set(this.brokenLogos());
+    next.add(id);
+    this.brokenLogos.set(next);
+  }
 
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
@@ -259,7 +333,8 @@ export class TrackerComponent implements OnInit {
   /** 筛选条件走服务端 —— 数据量大时前端过滤会漏数据,所以 search/status 都进 query。 */
   readonly search = signal('');
   readonly statusFilter = signal<ApplicationStatus | null>(null);
-  readonly sort = signal<string>('updatedDesc');
+  /** 排序键直接对齐后端 sortBy(updated/applied/appliedAsc/company/deadline)。 */
+  readonly sort = signal<string>('updated');
 
   readonly stats = signal<TrackerStats | null>(null);
 
@@ -297,7 +372,7 @@ export class TrackerComponent implements OnInit {
       pageSize: this.pageSize(),
       status: this.statusFilter(),
       search: this.search().trim(),
-      sort: this.sort()
+      sortBy: this.sort()
     }).subscribe({
       next: (r) => {
         this.items.set(r.items ?? []);
@@ -352,7 +427,7 @@ export class TrackerComponent implements OnInit {
   clearFilters(): void {
     this.search.set('');
     this.statusFilter.set(null);
-    this.sort.set('updatedDesc');
+    this.sort.set('updated');
     this.page.set(1);
     this.load();
   }
@@ -389,23 +464,82 @@ export class TrackerComponent implements OnInit {
   }
 
   private create(form: ApplicationForm): void {
-    this.api.post<Application>('/api/jobs/applications', form).subscribe({
-      next: () => {
-        this.notify('已创建投递记录');
-        this.reload();
+    // 先按公司名解析/创建公司(幂等),拿到 companyId 再建投递 —— 否则后端会因缺 CompanyId 拒收。
+    this.trackerApi.resolveCompany(form.companyName.trim()).subscribe({
+      next: (c) => {
+        this.api.post<Application>('/api/jobs/applications', {
+          companyId: c.id,
+          role: form.role,
+          location: form.location || null,
+          link: form.link || null,
+          salary: form.salary || null,
+          workMode: null,
+          source: null,
+          jdSummary: null,
+          priority: form.priority || null
+        }).subscribe({
+          next: (app) => this.afterCreate(app, form),
+          error: (e: Error) => this.notify(e.message, true)
+        });
       },
       error: (e: Error) => this.notify(e.message, true)
     });
   }
 
+  /** 建完投递后,补齐初始状态(仅合法流转)/备注/外联留言,再刷新看板。 */
+  private afterCreate(app: Application, form: ApplicationForm): void {
+    const tasks: Observable<unknown>[] = [];
+    if (form.status !== 'Saved') {
+      // 非法流转(如越级设成面试中)会被后端 409 拦下 —— 静默忽略,保持 Saved。
+      tasks.push(this.api.post<void>(`/api/jobs/applications/${app.id}/status`,
+        { status: form.status, note: '新建时设置' }).pipe(catchError(() => of(null))));
+    }
+    if (form.notes) {
+      tasks.push(this.updateAppPayload(app.id, form).pipe(catchError(() => of(null))));
+    }
+    if (form.needsConnectFirst || form.outreachMessage) {
+      tasks.push(this.api.put<void>(`/api/jobs/applications/${app.id}/outreach`,
+        { posterName: null, needsConnectFirst: form.needsConnectFirst, message: form.outreachMessage || null })
+        .pipe(catchError(() => of(null))));
+    }
+
+    const done = () => { this.notify('已创建投递记录'); this.reload(); };
+    if (tasks.length === 0) { done(); return; }
+    forkJoin(tasks).subscribe({ next: done, error: done });
+  }
+
   private update(id: string, form: ApplicationForm): void {
-    this.api.put<Application>(`/api/jobs/applications/${id}`, form).subscribe({
-      next: () => {
-        this.notify('已保存修改');
-        this.reload();
-      },
-      error: (e: Error) => this.notify(e.message, true)
+    const tasks: Observable<unknown>[] = [
+      this.updateAppPayload(id, form).pipe(catchError((e: Error) => { this.notify(e.message, true); return of(null); }))
+    ];
+    if (form.needsConnectFirst || form.outreachMessage) {
+      tasks.push(this.api.put<void>(`/api/jobs/applications/${id}/outreach`,
+        { posterName: null, needsConnectFirst: form.needsConnectFirst, message: form.outreachMessage || null })
+        .pipe(catchError(() => of(null))));
+    }
+    const done = () => { this.notify('已保存修改'); this.reload(); };
+    forkJoin(tasks).subscribe({ next: done, error: done });
+  }
+
+  /** 把表单字段拼成 UpdateApplication 所需的完整负载(后端要求全量)。 */
+  private updateAppPayload(id: string, form: ApplicationForm): Observable<unknown> {
+    return this.api.put<void>(`/api/jobs/applications/${id}`, {
+      role: form.role,
+      location: form.location || null,
+      link: form.link || null,
+      salary: form.salary || null,
+      workMode: null,
+      source: null,
+      jdSummary: null,
+      notes: form.notes || null,
+      priority: form.priority || null,
+      deadline: null
     });
+  }
+
+  /** 打开申请问答库(管理态)。 */
+  openAnswerLibrary(): void {
+    this.dialog.open(AnswerLibraryDialogComponent, { data: { pick: false as const }, maxWidth: '760px' });
   }
 
   /** 删除必须二次确认 —— 误删一条投递记录要重新回忆时间线,代价不对称。 */
@@ -467,7 +601,9 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   Screen: '初筛',
   Interview: '面试中',
   Offer: 'Offer',
+  Accepted: '已录用',
   Rejected: '已拒',
+  Ghosted: '失联',
   Paused: '暂停',
   Withdrawn: '已撤回'
 };
@@ -491,7 +627,7 @@ function fromApplication(a: Application): ApplicationForm {
     link: a.link ?? '',
     notes: a.notes ?? '',
     needsConnectFirst: a.needsConnectFirst ?? false,
-    outreachStatus: a.outreachStatus ?? ''
+    outreachMessage: a.outreachMessage ?? ''
   };
 }
 
@@ -504,7 +640,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     salary: f.salary.trim(),
     link: f.link.trim(),
     notes: f.notes.trim(),
-    outreachStatus: f.outreachStatus.trim()
+    outreachMessage: f.outreachMessage.trim()
   };
 }
 
@@ -520,15 +656,32 @@ function trimForm(f: ApplicationForm): ApplicationForm {
   imports: [
     CommonModule, MatDialogModule, MatButtonModule, MatIconModule,
     MatChipsModule, MatDividerModule, FormsModule, MatProgressBarModule,
-    MatFormFieldModule, MatInputModule
+    MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule
   ],
   template: `
     <h2 mat-dialog-title>
+      <span class="logo-wrap detail-logo">
+        <span class="logo-avatar" [style.background]="avatarColor(app.companyName)">{{ companyInitials(app.companyName) }}</span>
+        @if (app.companyLogoUrl && !logoBroken()) {
+          <img class="logo" [src]="app.companyLogoUrl" (error)="logoBroken.set(true)">
+        }
+      </span>
       {{ app.companyName }}
       <span class="role">{{ app.role }}</span>
     </h2>
 
     <mat-dialog-content class="detail-body">
+      <div class="tabs">
+        <button class="tab" [class.active]="detailTab() === 'overview'"
+                (click)="switchTab('overview')">概览</button>
+        <button class="tab" [class.active]="detailTab() === 'comms'"
+                (click)="switchTab('comms')">
+          {{ t('tracker.comms') }}
+          @if (comms().length > 0) { ({{ comms().length }}) }
+        </button>
+      </div>
+
+      @if (detailTab() === 'overview') {
       <div class="top">
         <mat-chip-set>
           <mat-chip [class]="'chip ' + statusClass(detail.status)">{{ statusLabel(detail.status) }}</mat-chip>
@@ -548,11 +701,11 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         <div><dt>地点</dt><dd>{{ app.location || '—' }}</dd></div>
         <div><dt>薪资</dt><dd>{{ app.salary || '—' }}</dd></div>
         <div><dt>投递日期</dt><dd>{{ app.appliedDate || '—' }}</dd></div>
-        <div><dt>外联状态</dt><dd>{{ app.outreachStatus || '—' }}</dd></div>
+        <div><dt>外联留言</dt><dd>{{ app.outreachMessage || '—' }}</dd></div>
         <div><dt>简历匹配度</dt>
           <dd>{{ app.resumeScore != null ? app.resumeScore + ' 分' : '—' }}</dd></div>
         <div><dt>预估通过率</dt>
-          <dd>{{ app.passRateEstimate != null ? app.passRateEstimate + '%' : '—' }}</dd></div>
+          <dd>{{ app.passRateEstimate ? app.passRateEstimate : '—' }}</dd></div>
         <div><dt>创建时间</dt><dd>{{ app.createdAt | date: 'yyyy-MM-dd HH:mm' }}</dd></div>
         <div><dt>最近更新</dt>
           <dd>{{ app.updatedAt ? (app.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd></div>
@@ -795,6 +948,94 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           </a>
         </section>
       }
+      }
+
+      @else {
+        <!-- 沟通记录:按发生时间倒序的时间线 + 增删改 -->
+        <div class="comms">
+          <div class="comms-head">
+            <button mat-flat-button color="primary" (click)="startAddComm()">
+              <mat-icon>add</mat-icon>{{ t('tracker.commsAdd') }}
+            </button>
+          </div>
+
+          @if (commsLoading()) {
+            <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+          }
+
+          @if (commEditingId(); as editing) {
+            <div class="comm-form">
+              <div class="row2">
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.commsType') }}</mat-label>
+                  <mat-select [(ngModel)]="commDraft().type">
+                    @for (tp of commTypes; track tp) {
+                      <mat-option [value]="tp">{{ commTypeLabel(tp) }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.commsOccurredAt') }}</mat-label>
+                  <input matInput type="datetime-local" [(ngModel)]="commDraft().occurredAt">
+                </mat-form-field>
+              </div>
+              <mat-form-field appearance="outline" class="full">
+                <mat-label>{{ t('tracker.commsSubject') }}</mat-label>
+                <input matInput [(ngModel)]="commDraft().subject" placeholder="如 终面安排">
+              </mat-form-field>
+              <div class="row2">
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.commsContact') }}</mat-label>
+                  <input matInput [(ngModel)]="commDraft().contactName" placeholder="如 张经理">
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>Email</mat-label>
+                  <input matInput [(ngModel)]="commDraft().contactEmail" placeholder="name@company.com">
+                </mat-form-field>
+              </div>
+              <mat-form-field appearance="outline" class="full">
+                <mat-label>{{ t('tracker.commsContent') }}</mat-label>
+                <textarea matInput rows="3" [(ngModel)]="commDraft().content"></textarea>
+              </mat-form-field>
+              <div class="comm-form-actions">
+                <button mat-flat-button color="primary" [disabled]="!commDraft().content.trim()"
+                        (click)="saveComm()">{{ editing ? '保存' : '添加' }}</button>
+                <button mat-button (click)="cancelComm()">取消</button>
+              </div>
+            </div>
+          }
+
+          @if (comms().length === 0 && !commsLoading()) {
+            <p class="comms-empty">{{ t('tracker.commsEmpty') }}</p>
+          }
+
+          <ul class="comm-list">
+            @for (c of comms(); track c.id) {
+              <li class="comm-item">
+                <span class="comm-type" [class]="'ct-' + c.type.toLowerCase()">{{ commTypeLabel(c.type) }}</span>
+                <div class="comm-body">
+                  @if (c.subject) { <div class="comm-subject">{{ c.subject }}</div> }
+                  <div class="comm-content pre">{{ c.content }}</div>
+                  <div class="comm-meta">
+                    @if (c.contactName) { <span>{{ c.contactName }}</span> }
+                    @if (c.contactEmail) { <span>{{ c.contactEmail }}</span> }
+                    <span>{{ c.occurredAt | date: 'yyyy-MM-dd HH:mm' }}</span>
+                  </div>
+                </div>
+                <div class="comm-actions">
+                  <button mat-icon-button [matTooltip]="t('common.edit')" (click)="startEditComm(c)">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button class="danger" [matTooltip]="t('common.delete')"
+                          (click)="deleteComm(c)">
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+        </div>
+      }
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
@@ -908,11 +1149,72 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       max-height: 420px; overflow-y: auto;
     }
     .cl-empty { margin: 10px 0 0; font-size: 13px; opacity: 0.55; }
+
+    /* ---- 公司 Logo ---- */
+    .logo-wrap { position: relative; flex: 0 0 30px; width: 30px; height: 30px; }
+    .logo-avatar {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 8px;
+      color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.3px;
+      text-transform: uppercase; overflow: hidden;
+    }
+    .logo {
+      position: absolute; inset: 0;
+      width: 30px; height: 30px; border-radius: 8px; object-fit: contain;
+      background: #fff;
+    }
+    .detail-logo { margin-right: 8px; }
+
+    /* ---- 页签 ---- */
+    .tabs { display: flex; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    .tab {
+      appearance: none; background: none; border: none; cursor: pointer;
+      padding: 8px 12px; font-size: 13.5px; color: inherit; opacity: 0.6;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .tab:hover { opacity: 0.85; }
+    .tab.active { opacity: 1; font-weight: 600; border-bottom-color: #3f51b5; }
+
+    /* ---- 沟通记录 ---- */
+    .comms-head { margin-bottom: 10px; }
+    .comms-empty { font-size: 13px; opacity: 0.55; margin: 4px 0 0; }
+    .comm-form {
+      padding: 12px; margin-bottom: 14px; border-radius: 10px;
+      background: rgba(0,0,0,0.025); border: 1px solid rgba(0,0,0,0.08);
+    }
+    .comm-form mat-form-field { width: 100%; }
+    .comm-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .comm-form .row2 mat-form-field { width: 100%; }
+    .comm-form-actions { display: flex; gap: 8px; }
+    .comm-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    .comm-item {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08);
+    }
+    .comm-type {
+      flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px;
+      background: rgba(0,0,0,0.06);
+    }
+    .comm-type.ct-email { background: #e3f2fd; color: #1565c0; }
+    .comm-type.ct-call { background: #e8f5e9; color: #2e7d32; }
+    .comm-type.ct-interview { background: #fff3e0; color: #ef6c00; }
+    .comm-type.ct-message { background: #f3e5f5; color: #7b1fa2; }
+    .comm-type.ct-note { background: #eceff1; color: #455a64; }
+    .comm-body { flex: 1; min-width: 0; }
+    .comm-subject { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
+    .comm-content { margin: 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    .comm-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 11.5px; opacity: 0.6; }
+    .comm-actions { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+    .comm-actions .danger { color: #c62828; }
   `]
 })
 export class ApplicationDetailDialogComponent {
   readonly app = inject<Application>(MAT_DIALOG_DATA);
   private readonly api = inject(ApiClient);
+  private readonly trackerApi = inject(TrackerApi);
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+  private readonly snack = inject(MatSnackBar);
 
   /**
    * 服务端全量详情(M1.5)。列表项不带轮次/历史/拒因 —— 之前弹窗直接渲染
@@ -987,6 +1289,9 @@ export class ApplicationDetailDialogComponent {
     // 求职信 + 输入体检:详情弹窗打开时各查一次
     this.loadCoverLetter();
     this.loadReadiness();
+
+    // 沟通记录:提前拉一次,这样概览页"沟通记录(N)"角标的数字才准
+    this.loadCommunications();
   }
 
   // ---------------------------- 求职信方法 ----------------------------
@@ -1106,6 +1411,163 @@ export class ApplicationDetailDialogComponent {
     if (score >= 70) return '强匹配';
     if (score >= 50) return '一般匹配';
     return '弱匹配';
+  }
+
+  // ---------------------------- 公司 Logo / 页签 ----------------------------
+
+  /** 名称首字母头像(Logo 加载失败时的降级展示)。 */
+  companyInitials(name?: string): string {
+    const n = (name ?? '').trim();
+    if (!n) return '?';
+    const parts = n.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  /** 由名称哈希出稳定的彩色背景。 */
+  avatarColor(name?: string): string {
+    const n = (name ?? '?').trim() || '?';
+    let h = 0;
+    for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360;
+    return `hsl(${h}, 52%, 52%)`;
+  }
+
+  /** Logo 加载失败时降级为首字母头像。 */
+  readonly logoBroken = signal(false);
+
+  /** 详情页当前页签。 */
+  readonly detailTab = signal<'overview' | 'comms'>('overview');
+
+  switchTab(tab: 'overview' | 'comms'): void {
+    this.detailTab.set(tab);
+    if (tab === 'comms') this.loadCommunications();
+  }
+
+  // ---------------------------- 沟通记录 ----------------------------
+
+  readonly comms = signal<Communication[]>([]);
+  readonly commsLoading = signal(false);
+  readonly commEditingId = signal<string | null>(null);
+  readonly commTypes: CommunicationType[] = ['Email', 'Call', 'Interview', 'Message', 'Note'];
+
+  /** 编辑中的草稿(新增态时 commEditingId 为 null)。 */
+  readonly commDraft = signal<{
+    type: CommunicationType; subject: string; content: string;
+    contactName: string; contactEmail: string; occurredAt: string;
+  }>({
+    type: 'Email', subject: '', content: '', contactName: '', contactEmail: '', occurredAt: ''
+  });
+
+  private blankDraft(): {
+    type: CommunicationType; subject: string; content: string;
+    contactName: string; contactEmail: string; occurredAt: string;
+  } {
+    return {
+      type: 'Email', subject: '', content: '', contactName: '', contactEmail: '',
+      occurredAt: this.nowLocalInput()
+    };
+  }
+
+  private loadCommunications(): void {
+    this.commsLoading.set(true);
+    this.trackerApi.listCommunications(this.app.id).subscribe({
+      next: (list) => { this.comms.set(list); this.commsLoading.set(false); },
+      error: () => { this.commsLoading.set(false); }
+    });
+  }
+
+  commTypeLabel(t: CommunicationType): string {
+    switch (t) {
+      case 'Email': return this.t('tracker.commsTypeEmail');
+      case 'Call': return this.t('tracker.commsTypeCall');
+      case 'Interview': return this.t('tracker.commsTypeInterview');
+      case 'Message': return this.t('tracker.commsTypeMessage');
+      case 'Note': return this.t('tracker.commsTypeNote');
+      default: return this.t('tracker.commsUnknown');
+    }
+  }
+
+  startAddComm(): void {
+    this.commEditingId.set(null);
+    this.commDraft.set(this.blankDraft());
+  }
+
+  startEditComm(c: Communication): void {
+    this.commEditingId.set(c.id);
+    this.commDraft.set({
+      type: c.type,
+      subject: c.subject ?? '',
+      content: c.content,
+      contactName: c.contactName ?? '',
+      contactEmail: c.contactEmail ?? '',
+      occurredAt: this.toLocalInput(c.occurredAt)
+    });
+  }
+
+  cancelComm(): void {
+    this.commEditingId.set(null);
+  }
+
+  saveComm(): void {
+    const d = this.commDraft();
+    if (!d.content.trim()) return;
+    const body = {
+      type: d.type,
+      subject: d.subject.trim() || null,
+      content: d.content.trim(),
+      contactName: d.contactName.trim() || null,
+      contactEmail: d.contactEmail.trim() || null,
+      occurredAt: this.fromLocalInput(d.occurredAt)
+    };
+    const editing = this.commEditingId();
+    const req: Observable<unknown> = editing
+      ? this.trackerApi.updateCommunication(this.app.id, editing, body)
+      : this.trackerApi.createCommunication(this.app.id, body);
+    req.subscribe({
+      next: () => {
+        this.commEditingId.set(null);
+        this.loadCommunications();
+        this.snack.open(this.t('tracker.commsSaved'), '关闭', { duration: 2500 });
+      },
+      error: (err) => alert(readError(err))
+    });
+  }
+
+  deleteComm(c: Communication): void {
+    if (!confirm(this.t('tracker.commsConfirmDelete'))) return;
+    this.trackerApi.deleteCommunication(this.app.id, c.id).subscribe({
+      next: () => {
+        this.commEditingId.set(null);
+        this.loadCommunications();
+        this.snack.open(this.t('tracker.commsDeleted'), '关闭', { duration: 2500 });
+      },
+      error: (err) => alert(readError(err))
+    });
+  }
+
+  // ---------------------------- 时间工具 ----------------------------
+
+  /** ISO(含 offset)→ datetime-local 输入值(YYYY-MM-DDTHH:mm,浏览器本地时区)。 */
+  private toLocalInput(iso?: string | null): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const p = (n: number) => `${n}`.padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  private nowLocalInput(): string {
+    return this.toLocalInput(new Date().toISOString());
+  }
+
+  /** datetime-local 输入值 → ISO。无 tz 视为浏览器本地时间,交给后端解析。 */
+  private fromLocalInput(v: string): string {
+    if (!v) return new Date().toISOString();
+    const withSec = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v) ? v + ':00' : v;
+    const d = new Date(withSec);
+    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
   }
 }
 

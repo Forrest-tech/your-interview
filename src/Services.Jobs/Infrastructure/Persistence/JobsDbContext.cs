@@ -18,6 +18,10 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
     public DbSet<UserResume> Resumes => Set<UserResume>();
     public DbSet<CoverLetter> CoverLetters => Set<CoverLetter>();
 
+    // ---- M3:申请问答库(用户级)与沟通记录(投递级)----
+    public DbSet<ApplicationAnswerTemplate> AnswerTemplates => Set<ApplicationAnswerTemplate>();
+    public DbSet<ApplicationCommunication> Communications => Set<ApplicationCommunication>();
+
     /// <summary>
     /// 修正「新增子实体被 EF 误判为 Modified」。共享实现见 NewChildEntityFixer ——
     /// 之前这里的私有版本是"状态 Modified 一律转 Added",把「修改既有轮次」也
@@ -149,6 +153,39 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             e.Property(x => x.LastPromptHint).HasMaxLength(4000);
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // M3:申请问答库(用户级,不挂投递,按 UserId 隔离)
+        b.Entity<ApplicationAnswerTemplate>(e =>
+        {
+            e.ToTable("answer_templates");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Question).HasMaxLength(500).IsRequired();
+            // Answer 是正文,给足空间但不设上限(用户答案可较长)
+            e.Property(x => x.Answer).HasColumnType("text").IsRequired();
+            e.Property(x => x.SortOrder).IsRequired();
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.Category });
+        });
+
+        // M3:沟通记录(投递级,挂在 ApplicationId 下)
+        b.Entity<ApplicationCommunication>(e =>
+        {
+            e.ToTable("application_communications");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Type).HasMaxLength(30).IsRequired();
+            e.Property(x => x.Subject).HasMaxLength(300);
+            e.Property(x => x.Content).HasColumnType("text").IsRequired();
+            e.Property(x => x.ContactName).HasMaxLength(300);
+            e.Property(x => x.ContactEmail).HasMaxLength(300);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasIndex(x => x.ApplicationId);
             e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
         });
     }

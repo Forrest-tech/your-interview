@@ -61,12 +61,14 @@ export interface AuthResult {
 
 export type ApplicationStatus =
   | 'Saved' | 'Applied' | 'Screen' | 'Interview' | 'Offer'
-  | 'Rejected' | 'Paused' | 'Withdrawn';
+  | 'Accepted' | 'Rejected' | 'Ghosted' | 'Paused' | 'Withdrawn';
 
 export interface Application {
   id: string;
   companyId: string;
   companyName: string;
+  /** M3:公司 Logo 地址(后端按官网自动解析,可为空)。 */
+  companyLogoUrl?: string | null;
   role: string;
   location?: string;
   salary?: string;
@@ -85,9 +87,11 @@ export interface Application {
   /** JD 出处 URL,便于复核原文。 */
   jdSourceUrl?: string;
   resumeScore?: number;
-  passRateEstimate?: number;
+  /** 预估通过率(后端存为字符串,如 "75%";展示时原样显示)。 */
+  passRateEstimate?: string | null;
   notes?: string;
-  outreachStatus?: string;
+  /** 外联留言(对应后端 OutreachMessage;如"已发 LinkedIn 私信")。 */
+  outreachMessage?: string | null;
   /** 命中 JD 要求的关键词(逗号分隔),由匹配分析写入。 */
   matchKeywords?: string;
   /** 拒因(状态 Rejected 时展示;M1.5 起实战机经回写也写这里)。 */
@@ -146,6 +150,35 @@ export interface TrackerStats {
   offerCount: number;
   responseRate?: number;
   weeklyTrend?: { week: string; applied: number; interviews: number }[];
+}
+
+/** M3:申请问答库条目(用户级)。 */
+export interface AnswerTemplate {
+  id: string;
+  category: string;
+  question: string;
+  answer: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+/** M3:沟通记录类型。 */
+export type CommunicationType = 'Email' | 'Call' | 'Interview' | 'Message' | 'Note';
+
+/** M3:沟通记录(投递级)。 */
+export interface Communication {
+  id: string;
+  applicationId: string;
+  type: CommunicationType;
+  subject?: string | null;
+  content: string;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  /** 发生时间(ISO 字符串)。 */
+  occurredAt: string;
+  createdAt: string;
+  updatedAt?: string | null;
 }
 
 // ============================ 实战机经(Interviews) ============================

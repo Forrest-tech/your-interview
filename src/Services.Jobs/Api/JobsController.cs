@@ -358,6 +358,85 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
+    // ---------- M3:申请问答库(用户级) ----------
+
+    [HttpGet("answer-templates")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ListAnswerTemplates([FromQuery] string? category, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListAnswerTemplatesQuery(Me, category), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    [HttpPost("answer-templates")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> CreateAnswerTemplate([FromBody] AnswerTemplateBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new CreateAnswerTemplateCommand(Me, body.Category, body.Question, body.Answer), ct);
+        return r.IsSuccess
+            ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/answer-templates/{r.Value}", new { id = r.Value })
+            : r.ToProblemDetails();
+    }
+
+    [HttpPut("answer-templates/{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> UpdateAnswerTemplate(Guid id, [FromBody] AnswerTemplateBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateAnswerTemplateCommand(id, Me, body.Category, body.Question, body.Answer), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    [HttpDelete("answer-templates/{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    public async Task<IResult> DeleteAnswerTemplate(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteAnswerTemplateCommand(id, Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    // ---------- M3:沟通记录(投递级) ----------
+
+    [HttpGet("applications/{id:guid}/communications")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ListCommunications(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListCommunicationsQuery(id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    [HttpPost("applications/{id:guid}/communications")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> CreateCommunication(Guid id, [FromBody] CommunicationBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new CreateCommunicationCommand(id, body.Type, body.Subject, body.Content,
+            body.ContactName, body.ContactEmail, body.OccurredAt), ct);
+        return r.IsSuccess
+            ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{id}/communications/{r.Value}", new { id = r.Value })
+            : r.ToProblemDetails();
+    }
+
+    [HttpPut("applications/{id:guid}/communications/{commId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> UpdateCommunication(Guid id, Guid commId, [FromBody] CommunicationBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateCommunicationCommand(commId, id, body.Type, body.Subject, body.Content,
+            body.ContactName, body.ContactEmail, body.OccurredAt), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    [HttpDelete("applications/{id:guid}/communications/{commId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    public async Task<IResult> DeleteCommunication(Guid id, Guid commId, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteCommunicationCommand(commId, id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    public sealed record AnswerTemplateBody(string Category, string Question, string Answer);
+
+    public sealed record CommunicationBody(string Type, string? Subject, string Content,
+        string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt);
+
 }
 
 /// <summary>简历正文提交。空串由 Handler 归一为"清空"。</summary>

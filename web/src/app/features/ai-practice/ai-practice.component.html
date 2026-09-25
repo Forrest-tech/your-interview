@@ -308,11 +308,6 @@
                  · 就绪              → 真实 seek() / duration() -->
             <span class="sample-time">{{ speakTimeText() }}</span>
 
-            <!-- 只在"回退/失败"性质时才渲染引擎提示(诚实红线) -->
-            @if (showTtsNote()) {
-              <span class="tts-note" [title]="ttsNote()">{{ ttsNote() }}</span>
-            }
-
             <!-- 示范朗读的额度消耗提示 —— ★ 2026-09-19(Forrest):按要求隐藏。
                  原第三十三/三十四轮需求是显示"本次花了多少字符",
                  现 Forrest 明确要求不显示。
@@ -362,6 +357,34 @@
               <mat-icon>{{ speaking() ? 'stop' : 'play_arrow' }}</mat-icon>
             </button>
           </div>
+
+          <!-- ★ 2026-09-24(Forrest):错误/提示不再挤进播放胶囊(主流 UX:
+               Material Design 的 inline banner —— 图标 + 说明 + 修正动作,
+               放在音频区内部、胶囊条下方),胶囊只负责播放本身。 -->
+          @if (langMismatch()) {
+            <div class="tts-alert" role="alert">
+              <mat-icon>translate</mat-icon>
+              <span class="ta-msg">
+                {{ (langMismatch() === 'to-zh'
+                      ? t('practice.langMismatchZh')
+                      : t('practice.langMismatchEn'))
+                     .replace('{lang}', mismatchLangLabel()) }}
+              </span>
+              <button type="button" class="ta-act" (click)="fixLang()">
+                {{ langMismatch() === 'to-zh'
+                     ? t('practice.langSwitchZh')
+                     : t('practice.langSwitchEn') }}
+              </button>
+            </div>
+          } @else if (ttsNote()) {
+            <div class="tts-alert is-error" role="alert">
+              <mat-icon>warning_amber</mat-icon>
+              <span class="ta-msg">{{ ttsNote() }}</span>
+              <button type="button" class="ta-act" (click)="speak()">
+                {{ t('common.retry') }}
+              </button>
+            </div>
+          }
 
           <!-- 录音交互区(浅绿底):2026-09-16 第二十轮 —— 彻底去掉横向
                「麦克风 + Start recording」胶囊条,改为上下垂直居中:

@@ -711,6 +711,19 @@ const DICT: Record<string, Record<Lang, string>> = {
     fr: 'Le navigateur a bloqué la lecture — recliquez sur lecture.'
   },
   'practice.ttsNotConfigured': { zh: 'Azure 语音未配置', en: 'Azure voice not configured', fr: 'Voix Azure non configurée' },
+  // ★ 2026-09-24(Forrest):正文语言与朗读语言不一致 —— 预检提示 + 一键修正。
+  'practice.langMismatchZh': {
+    zh: '这篇内容是中文，但当前朗读语言是 {lang}，可能无法正常朗读。',
+    en: 'This text is in Chinese, but the reading language is {lang} — playback may fail.',
+    fr: 'Ce texte est en chinois, mais la langue de lecture est {lang} — la lecture peut échouer.'
+  },
+  'practice.langMismatchEn': {
+    zh: '这篇内容不是中文，但当前朗读语言是中文，发音会不自然。',
+    en: 'This text is not in Chinese, but the reading language is Chinese — pronunciation will sound off.',
+    fr: 'Ce texte n’est pas en chinois, mais la langue de lecture est le chinois — la prononciation sera incorrecte.'
+  },
+  'practice.langSwitchZh': { zh: '切换为中文', en: 'Switch to Chinese', fr: 'Passer au chinois' },
+  'practice.langSwitchEn': { zh: '切换为 English (US)', en: 'Switch to English (US)', fr: 'Passer à l’anglais (US)' },
   'practice.ttsKeyInvalid': { zh: 'Azure 密钥/区域无效', en: 'Invalid Azure key or region', fr: 'Clé ou région Azure invalide' },
   'practice.ttsSynthFailed': { zh: '语音合成失败', en: 'Synthesis failed', fr: 'Échec de la synthèse' },
   'practice.recGone': {

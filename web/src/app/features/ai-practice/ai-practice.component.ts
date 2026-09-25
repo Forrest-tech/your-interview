@@ -697,25 +697,46 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   });
 
   /**
-   * 示范朗读条上要不要显示引擎提示。
+   * ★ 2026-09-24(Forrest):正文语言与朗读语言不一致的**预检**。
    *
-   * ⚠️ 2026-09-16(Forrest 本轮明确要求):
-   *   · **不显示** "Azure 神经语音(服务端合成)"这类"正常走 Azure"的标记 ——
-   *     用户只想看进度,不关心底层引擎。
-   *   · **必须显示**"回退/失败/未配置"类提示 —— 否则用户会把浏览器语音
-   *     当成 Azure 人声,这是诚实红线,与"想不想看"无关。
-   * 实现:只放行包含 回退/未配置/失败/无法/拦截 等警示词的 note。
+   * 真实案例:正文是中文,朗读语言却选了 English (US) → Azure 用英文音色
+   * 合成中文,拿到手的是坏音频 → 播放条报"Audio failed to load"。
+   * 与其等失败后让用户猜,不如在播放前就发现并给出**一键修正**(fixLang)。
+   *
+   * 判定用 Unicode 书写系统启发式(行业标准做法,Chrome/VS Code 同类):
+   *   · 正文含 CJK 统一表意文字 → 期望 zh-CN;
+   *   · 正文完全不含 CJK → 中文音色念英文必然跑调 → 期望 en-US。
+   * 只在"明确矛盾"时警告,不做更细的法/英区分(heuristic 不可靠)。
+   * 返回:'' = 无矛盾; 'to-zh' = 应切到中文; 'to-en' = 应切回英文。
    */
-  readonly showTtsNote = computed(() => {
-    const n = this.ttsNote();
-    if (!n) return false;
-    // ⚠️ 2026-09-20 修复(Forrest 报"点播放毫无反应"):
-    //   旧实现把所有含"合成"二字的提示一律藏起来(初衷是隐藏"合成中"的进度),
-    //   结果把 **"语音合成失败"** 也吞了 —— 用户点了播放,界面一点反馈都没有。
-    //   现在:纯进度提示不再写入 ttsNote(本组件已无"正在合成"分支),
-    //   因此这里只判断"有没有提示" —— 失败/未配置类一律如实显示。
-    return true;
+  readonly langMismatch = computed<'' | 'to-zh' | 'to-en'>(() => {
+    const text = (this.saved() || '').trim();
+    if (!text) return '';
+    const hasCjk = /[\u3400-\u9FFF\uF900-\uFAFF]/.test(text);
+    if (hasCjk && this.practiceLang() !== 'zh-CN') return 'to-zh';
+    if (!hasCjk && this.practiceLang() === 'zh-CN') return 'to-en';
+    return '';
   });
+
+  /** 当前朗读语言的展示名(用于提示文案里的 {lang} 占位)。 */
+  readonly mismatchLangLabel = computed(() => {
+    const opt = this.langOptions.find((o) => o.code === this.practiceLang());
+    return opt ? opt.label : this.practiceLang();
+  });
+
+  /** 提示条上的"一键修正":切到正确语言并立即重播。 */
+  fixLang(): void {
+    const target: 'zh-CN' | 'en-US' = this.langMismatch() === 'to-zh' ? 'zh-CN' : 'en-US';
+    this.setPracticeLang(target);
+    this.ttsNote.set('');
+    this.speak();
+  }
+
+  /**
+   * ★ 2026-09-24:引擎/失败提示不再渲染在播放胶囊里(Forrest 指令),
+   *   改为音频区下方的行内警示条(.tts-alert),ttsNote 仅作数据源。
+   *   原 showTtsNote 门禁随之删除 —— 警示条永远如实显示 ttsNote。
+   */
 
   /**
    * ★ 2026-09-20(Forrest 第三十六轮):**取消引擎切换**。

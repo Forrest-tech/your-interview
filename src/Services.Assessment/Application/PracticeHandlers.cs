@@ -656,9 +656,10 @@ public sealed class GetOrCreateTtsCommandHandler(AssessmentDbContext db, SpeechS
             // ★ 2026-09-19:把语言透传给合成器 —— 之前这里就没传,
             //   导致 SSML 的 xml:lang 与音色永远只能是英语。
             mp3 = await synth.SynthesizeAsync(r.Text, r.Voice, speed, r.UserId, ct, language);
+            // ★ 2026-09-25:voiceUsed 的推断复用 SpeechSynthesizer.DefaultVoiceFor ——
+            //   此前这里手抄了一份 fr/else 判断,漏了中文,与合成器实际选音色分叉。
             voiceUsed = string.IsNullOrWhiteSpace(r.Voice)
-                ? (language.StartsWith("fr", StringComparison.OrdinalIgnoreCase)
-                    ? "fr-FR-DeniseNeural" : "en-US-AriaNeural")
+                ? SpeechSynthesizer.DefaultVoiceFor(language)
                 : r.Voice.Trim();
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("未配置"))

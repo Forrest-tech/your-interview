@@ -434,17 +434,30 @@ public sealed class SpeechSynthesizer(
     private const string DefaultVoiceFr = "fr-FR-DeniseNeural";
 
     /// <summary>
-    /// 按语言代码选默认音色 —— 单一出口,避免各处各写一份语言判断而分叉。
-    /// 目前只分"法语 / 其它(回落英语)";将来加语言只改这一个方法。
+    /// 中文默认音色 —— 2026-09-25(用户报"选中文播放直接报错")。
+    ///
+    /// 与 2026-09-19 法语问题同因:当时只给 DefaultVoiceFor 加了 fr 分支,
+    /// zh-CN 依旧落到英语音色 → 音色 locale(en-US)与 SSML xml:lang(zh-CN)
+    /// 不匹配,Azure 拒绝合成,前端表现为 "Audio failed to load"。
+    /// Xiaoxiao 是 Azure 最常用的中文女声,自然度与 Aria 相当。
     /// </summary>
-    private static string DefaultVoiceFor(string? language)
+    private const string DefaultVoiceZh = "zh-CN-XiaoxiaoNeural";
+
+    /// <summary>
+    /// 按语言代码选默认音色 —— 单一出口,避免各处各写一份语言判断而分叉。
+    /// 法语 / 中文各走各的神经音色,其它回落英语;将来加语言只改这一个方法。
+    /// </summary>
+    internal static string DefaultVoiceFor(string? language)
     {
         var lang = string.IsNullOrWhiteSpace(language) ? "en-US" : language.Trim();
         // 只要以 fr 开头(fr / fr-FR / fr-CA)就用法语音色 ——
         // 法语各区域变体都能被 fr-FR 音色正确朗读,无需逐区域建表。
-        return lang.StartsWith("fr", StringComparison.OrdinalIgnoreCase)
-            ? DefaultVoiceFr
-            : DefaultVoice;
+        if (lang.StartsWith("fr", StringComparison.OrdinalIgnoreCase))
+            return DefaultVoiceFr;
+        // 同理:zh / zh-CN / zh-TW 都能用 zh-CN 音色正确朗读
+        if (lang.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return DefaultVoiceZh;
+        return DefaultVoice;
     }
 
     /// <summary>

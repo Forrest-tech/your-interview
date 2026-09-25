@@ -110,8 +110,12 @@
   min-height: 0;
 }
 
-/* 滚动条贴边会压住内容,留 4px 呼吸 */
-:host ::ng-deep .mat-mdc-tab-group.tf-tabs .mat-mdc-tab-body-content { padding-right: 4px; }
+/* 滚动条贴边会压住内容,留 4px 呼吸;
+   ★ 第十二轮:body-content 定高 100%,让「填满式」页签(.tf-pane-fill)有确定的高度基准 */
+:host ::ng-deep .mat-mdc-tab-group.tf-tabs .mat-mdc-tab-body-content {
+  height: 100%;
+  padding-right: 4px;
+}
 
 .tf-pane {
   display: flex;
@@ -119,6 +123,44 @@
   gap: 6px;
   padding-top: 12px;
 }
+
+/* ★ 第十二轮:导出页签 = 「填满式」布局 ——
+   上面的范围树 flex 撑满剩余空间(内部滚动),
+   下面的 .tf-foot(文件名/保存位置/导出按钮)固定可见,
+   整个页签自身永不滚动 —— 内容再多也是树在滚。 */
+.tf-pane-fill {
+  height: 100%;
+  overflow: hidden;
+}
+
+.tf-pane-fill .tf-tree {
+  flex: 1 1 auto;
+  min-height: 96px;
+  max-height: none;
+}
+
+.tf-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 并排字段(导出来源 + 格式):主流导出弹窗的一行双列做法 */
+.tf-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.tf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tf-field .tf-label { margin-top: 0; }
 
 /* 「类别」页签:内嵌的类别管理组件按块级铺满 */
 .tf-pane app-category-manager { display: block; }

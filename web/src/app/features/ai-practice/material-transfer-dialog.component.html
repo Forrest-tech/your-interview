@@ -35,17 +35,34 @@
       </div>
     </mat-tab>
 
-    <!-- ================= 导出 ================= -->
+    <!-- ================= 导出 =================
+         ★ 第十二轮(Forrest)布局重排(参考 Notion / Google Takeout 导出弹窗):
+        · 「导出来源」和「格式」并排一行(格式从两组单选改为下拉,主流做法);
+        · 范围树 flex 撑满剩余空间,内部滚动 —— 列表再长也不把下面的设置顶出窗口;
+        · 文件名 / 保存位置 / 导出按钮固定在底部,**任何情况下都可见**,
+          彻底解决"默认看不到完整内容"的问题。 -->
     <mat-tab [label]="t('transfer.exportTab')">
-      <div class="tf-pane">
-        <label class="tf-label">{{ t('transfer.sourceCategory') }}</label>
-        <select class="tf-select" [ngModel]="exportSource()" (ngModelChange)="onSourceChange($event)">
-          <option value="all">{{ t('practice.categoryAll') }}</option>
-          @for (c of categories(); track c.id) {
-            <option [value]="c.id">{{ c.name }}</option>
-          }
-          <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
-        </select>
+      <div class="tf-pane tf-pane-fill">
+        <div class="tf-two">
+          <div class="tf-field">
+            <label class="tf-label">{{ t('transfer.sourceCategory') }}</label>
+            <select class="tf-select" [ngModel]="exportSource()" (ngModelChange)="onSourceChange($event)">
+              <option value="all">{{ t('practice.categoryAll') }}</option>
+              @for (c of categories(); track c.id) {
+                <option [value]="c.id">{{ c.name }}</option>
+              }
+              <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
+            </select>
+          </div>
+          <div class="tf-field">
+            <label class="tf-label">{{ t('transfer.format') }}</label>
+            <select class="tf-select tf-fmt-select" [ngModel]="format()" (ngModelChange)="format.set($event)">
+              @for (f of formats; track f.key) {
+                <option [value]="f.key">{{ t(f.labelKey) }}</option>
+              }
+            </select>
+          </div>
+        </div>
 
         <div class="tf-row-between tf-scope-head">
           <label class="tf-label">{{ t('transfer.pickFolders') }}</label>
@@ -67,58 +84,56 @@
         </div>
         <p class="tf-hint">{{ t('transfer.pickHint') }}</p>
 
-        <label class="tf-label">{{ t('transfer.format') }}</label>
-        <mat-radio-group class="tf-formats" [value]="format()" (change)="format.set($event.value)">
-          @for (f of formats; track f.key) {
-            <mat-radio-button class="tf-fmt" [value]="f.key">
-              {{ t(f.labelKey) }}
-            </mat-radio-button>
-          }
-        </mat-radio-group>
+        <div class="tf-foot">
+          <div class="tf-field">
+            <label class="tf-label">{{ t('transfer.fileName') }}</label>
+            <div class="tf-name-row">
+              <input class="tf-name" [ngModel]="fileNameBase()" (ngModelChange)="onNameInput($event)"
+                     maxlength="100" spellcheck="false" autocomplete="off" />
+              <span class="tf-ext">.{{ ext }}</span>
+            </div>
+            @if (format() === 'pdf') {
+              <p class="tf-hint">{{ t('transfer.pdfHint') }}</p>
+            } @else {
+              <p class="tf-hint">{{ t('transfer.fileNameHint') }}</p>
+            }
+          </div>
 
-        <label class="tf-label">{{ t('transfer.fileName') }}</label>
-        <div class="tf-name-row">
-          <input class="tf-name" [ngModel]="fileNameBase()" (ngModelChange)="onNameInput($event)"
-                 maxlength="100" spellcheck="false" autocomplete="off" />
-          <span class="tf-ext">.{{ ext }}</span>
-        </div>
-        <p class="tf-hint">{{ t('transfer.fileNameHint') }}</p>
-        @if (format() === 'pdf') {
-          <p class="tf-hint">{{ t('transfer.pdfHint') }}</p>
-        }
+          <!-- ★ 第九轮:保存位置 = 用户自己选的本地文件夹(默认下载文件夹)。
+               路径直接写在界面上(不是"点了才知道"),选过就一直写那里。 -->
+          <div class="tf-field">
+            <label class="tf-label">{{ t('transfer.saveLocation') }}</label>
+            <div class="tf-dir">
+              <mat-icon class="tf-dir-ico">folder_open</mat-icon>
+              <span class="tf-dir-path" [class.is-default]="!hasDir()">
+                {{ hasDir() ? saveDirName() : t('transfer.saveDefault') }}
+              </span>
+              <span class="spacer"></span>
+              @if (hasDir()) {
+                <button type="button" class="link tf-dir-reset" (click)="resetFolder()">
+                  {{ t('transfer.saveReset') }}
+                </button>
+              }
+              @if (saveLocationSupported) {
+                <button type="button" mat-stroked-button class="tf-dir-pick" (click)="chooseFolder()">
+                  {{ t('transfer.saveChange') }}
+                </button>
+              }
+            </div>
+            @if (saveLocationSupported) {
+              <p class="tf-hint">
+                {{ hasDir() ? t('transfer.savePickedHint') : t('transfer.saveDefaultHint') }}
+              </p>
+            } @else {
+              <p class="tf-hint tf-hint-warn">{{ t('transfer.saveUnsupported') }}</p>
+            }
+          </div>
 
-        <!-- ★ 第九轮:保存位置 = 用户自己选的本地文件夹(默认下载文件夹)。
-             路径直接写在界面上(不是"点了才知道"),选过就一直写那里。 -->
-        <label class="tf-label">{{ t('transfer.saveLocation') }}</label>
-        <div class="tf-dir">
-          <mat-icon class="tf-dir-ico">folder_open</mat-icon>
-          <span class="tf-dir-path" [class.is-default]="!hasDir()">
-            {{ hasDir() ? saveDirName() : t('transfer.saveDefault') }}
-          </span>
-          <span class="spacer"></span>
-          @if (hasDir()) {
-            <button type="button" class="link tf-dir-reset" (click)="resetFolder()">
-              {{ t('transfer.saveReset') }}
+          <div class="tf-actions">
+            <button mat-flat-button class="tf-primary" [disabled]="exporting()" (click)="doExport()">
+              <mat-icon>file_download</mat-icon>{{ t('transfer.doExport') }}
             </button>
-          }
-          @if (saveLocationSupported) {
-            <button type="button" mat-stroked-button class="tf-dir-pick" (click)="chooseFolder()">
-              {{ t('transfer.saveChange') }}
-            </button>
-          }
-        </div>
-        @if (saveLocationSupported) {
-          <p class="tf-hint">
-            {{ hasDir() ? t('transfer.savePickedHint') : t('transfer.saveDefaultHint') }}
-          </p>
-        } @else {
-          <p class="tf-hint tf-hint-warn">{{ t('transfer.saveUnsupported') }}</p>
-        }
-
-        <div class="tf-actions">
-          <button mat-flat-button class="tf-primary" [disabled]="exporting()" (click)="doExport()">
-            <mat-icon>file_download</mat-icon>{{ t('transfer.doExport') }}
-          </button>
+          </div>
         </div>
       </div>
     </mat-tab>

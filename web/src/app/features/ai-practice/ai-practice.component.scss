@@ -510,7 +510,9 @@
   box-sizing: border-box;
   width: 70%;
   max-width: 680px;
-  min-width: 380px;
+  /* ★ 2026-09-26(Forrest):380px 硬下限删除 —— 素材栏拖宽后主列变窄,
+     这个下限会把整页撑出横向滚动条。允许收缩,窄列时控件自然变窄。 */
+  min-width: 0;
   margin: 32px auto 0 auto;
   padding: 0;
   background: transparent;
@@ -2642,7 +2644,7 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 .audio-stack {
   width: 70%;
   max-width: 680px;
-  min-width: 380px;
+  min-width: 0;              /* ★ 2026-09-26:同上,不再强制 380px 下限 */
   margin: 24px auto 0 auto;
   display: flex;
   flex-direction: column;

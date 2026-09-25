@@ -95,3 +95,181 @@
 }
 
 .actions a mat-icon { margin-right: 8px; }
+
+// ===================== 行动中心(M4) =====================
+.action-center { margin-bottom: 18px; }
+
+.ac-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 4px 2px 12px;
+  color: #2b2f36;
+}
+
+.ac-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  font-size: 14px;
+  color: #4a7d3a;
+  background: #f3faf0;
+  border: 1px solid rgba(74, 125, 58, 0.22);
+}
+
+.ac-empty mat-icon { color: #4a7d3a; }
+
+.ac-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 960px) {
+  .ac-grid { grid-template-columns: 1fr; }
+}
+
+.ac-card {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px 12px;
+  border-left: 4px solid #c9ccd2;
+}
+
+.ac-card.kind-followup { border-left-color: #f0a020; }
+.ac-card.kind-deadline { border-left-color: #d24b3e; }
+.ac-card.kind-weak { border-left-color: #6a5acd; }
+.ac-card.kind-pipeline { border-left-color: #3f51b5; }
+
+.ac-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ac-head mat-icon { color: #6b6f76; }
+
+.ac-head .ac-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #2b2f36;
+}
+
+.ac-head .ac-count {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: #3f51b5;
+  border-radius: 999px;
+  padding: 1px 9px;
+  min-width: 22px;
+  text-align: center;
+}
+
+.ac-items {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.ac-items li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.ac-avatar {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ac-item-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ac-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ac-item-sub {
+  font-size: 11.5px;
+  color: #8b8f96;
+}
+
+.ac-pri {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.ac-pri.pri-high { background: #fdecea; color: #b3261e; }
+.ac-pri.pri-mid { background: #fff4e0; color: #b9770a; }
+.ac-pri.pri-low { background: #eef1f4; color: #6b6f76; }
+
+.ac-weak { margin-bottom: 10px; }
+.ac-weak .dim { margin-bottom: 12px; }
+
+.ac-tip {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #5b5f66;
+  background: #f5f3ff;
+  border: 1px solid rgba(106, 90, 205, 0.18);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.ac-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.ac-chips .chip {
+  font-size: 12px;
+  color: #4a4e55;
+  background: #eef1f4;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.ac-chips .chip b { color: #303f9f; }
+
+.ac-cta {
+  margin-top: auto;
+  align-self: flex-start;
+  font-size: 12.5px;
+}
+
+.ac-cta mat-icon {
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
+  margin-left: 2px;
+}
+

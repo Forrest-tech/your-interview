@@ -74,6 +74,21 @@ const DICT: Record<string, Record<Lang, string>> = {
   'dash.startMock': { zh: '开一场 AI 模拟', en: 'Start an AI mock', fr: 'Lancer une simulation IA' },
   'dash.newApp': { zh: '记录新投递', en: 'Log a new application', fr: 'Ajouter une candidature' },
 
+  // ---------- 行动中心(M4) ----------
+  'dash.actionCenter': { zh: '行动中心 · 今天该做什么', en: 'Action Center · What to do today', fr: 'Centre d’action · Que faire aujourd’hui' },
+  'dash.followUpsDue': { zh: '待跟进', en: 'Follow-ups due', fr: 'Suivis à faire' },
+  'dash.deadlinesSoon': { zh: '临近截止', en: 'Deadlines approaching', fr: 'Échéances proches' },
+  'dash.weakAreas': { zh: '能力短板', en: 'Weak areas', fr: 'Points faibles' },
+  'dash.pipeline': { zh: '投递漏斗', en: 'Pipeline', fr: 'Pipeline' },
+  'dash.goHandle': { zh: '去处理', en: 'Handle', fr: 'Traiter' },
+  'dash.goPractice': { zh: '去练习', en: 'Practice', fr: 'Pratiquer' },
+  'dash.viewTracker': { zh: '查看投递', en: 'View applications', fr: 'Voir les candidatures' },
+  'dash.followUpAt': { zh: '跟进于', en: 'Follow up on', fr: 'Suivre le' },
+  'dash.deadlineOn': { zh: '截止于', en: 'Due on', fr: 'Échéance le' },
+  'dash.none': { zh: '今天没有紧急待办,保持节奏 🎯', en: 'Nothing urgent today — keep the momentum 🎯', fr: 'Rien d’urgent aujourd’hui — gardez le cap 🎯' },
+  'dash.allClear': { zh: '全部清空', en: 'All clear', fr: 'Tout est clair' },
+  'dash.items': { zh: '项', en: 'items', fr: 'éléments' },
+
   // ---------- 六维能力 ----------
   'dim.overall': { zh: '总分', en: 'Overall', fr: 'Global' },
   'dim.pronunciation': { zh: '发音', en: 'Pronunciation', fr: 'Prononciation' },

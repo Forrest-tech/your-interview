@@ -210,6 +210,14 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    [HttpGet("action-center")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ActionCenter([FromQuery] int followUpDays = 7, [FromQuery] int deadlineDays = 14, CancellationToken ct = default)
+    {
+        var r = await sender.Send(new GetActionCenterQuery(followUpDays, deadlineDays), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     [HttpGet("follow-ups")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> FollowUps([FromQuery] int days = 7, CancellationToken ct = default)

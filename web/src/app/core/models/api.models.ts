@@ -75,6 +75,10 @@ export interface Application {
   status: ApplicationStatus;
   priority?: string;
   appliedDate?: string;
+  /** 投递截止日(ISO 日期,如 2026-09-30)。 */
+  deadline?: string;
+  /** 下次跟进时间(ISO 时间)。 */
+  nextFollowUpAt?: string;
   needsConnectFirst?: boolean;
   link?: string;
   jdSummary?: string;
@@ -150,6 +154,22 @@ export interface TrackerStats {
   offerCount: number;
   responseRate?: number;
   weeklyTrend?: { week: string; applied: number; interviews: number }[];
+}
+
+/** M4: 行动中心聚合(Jobs 侧)。 */
+export interface StatusCount {
+  status: string;
+  count: number;
+}
+
+export interface ActionCenter {
+  followUps: Application[];
+  deadlines: Application[];
+  byStatus: StatusCount[];
+  activeCount: number;
+  interviewCount: number;
+  offerCount: number;
+  total: number;
 }
 
 /** M3:申请问答库条目(用户级)。 */

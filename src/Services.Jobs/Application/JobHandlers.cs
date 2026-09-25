@@ -83,6 +83,13 @@ public sealed record GetUpcomingFollowUpsQuery(int Days = 7) : IRequest<Result<I
 
 public sealed record GetDeadlinesQuery(int Days = 14) : IRequest<Result<IReadOnlyList<ApplicationDto>>>;
 
+/// <summary>
+/// 行动中心聚合:一次请求给全仪表盘"今天该做什么"所需的 Jobs 侧数据。
+/// 只聚合 Jobs 自有数据(待跟进 / 临近截止 / 状态分布 / 总数),不跨服务,无迁移。
+/// </summary>
+public sealed record GetActionCenterQuery(int FollowUpDays = 7, int DeadlineDays = 14)
+    : IRequest<Result<ActionCenterDto>>;
+
 // ============================ 命令 ============================
 
 public sealed record CreateCompanyCommand(string Name, string? Website, string? Industry,
@@ -607,6 +614,16 @@ public sealed class UpdateInterviewRoundCommandHandler(JobsDbContext db)
 
 // ============================ Handler:统计与看板 ============================
 
+/// <summary>行动中心 —— 仪表盘"今天该做什么"的 Jobs 侧聚合。</summary>
+public sealed record ActionCenterDto(
+    IReadOnlyList<ApplicationDto> FollowUps,
+    IReadOnlyList<ApplicationDto> Deadlines,
+    IReadOnlyList<StatusCountDto> ByStatus,
+    int ActiveCount, int InterviewCount, int OfferCount, int Total);
+
+/// <summary>单个状态的数量。</summary>
+public sealed record StatusCountDto(string Status, int Count);
+
 public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
     : IRequestHandler<GetTrackerStatsQuery, Result<TrackerStats>>
 {
@@ -668,6 +685,51 @@ public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
             Rate(responded, appliedOrBeyond), Rate(interviewed, appliedOrBeyond), Rate(offers, appliedOrBeyond),
             responseDurations.Count > 0 ? Math.Round(responseDurations.Average(), 1) : 0,
             pipeline, bySource, byMonth));
+    }
+}
+
+public sealed class GetActionCenterQueryHandler(JobsDbContext db, TimeProvider clock)
+    : IRequestHandler<GetActionCenterQuery, Result<ActionCenterDto>>
+{
+    public async Task<Result<ActionCenterDto>> Handle(GetActionCenterQuery request, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var followUntil = now.AddDays(Math.Clamp(request.FollowUpDays, 1, 90));
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var deadlineUntil = today.AddDays(Math.Clamp(request.DeadlineDays, 1, 120));
+
+        var apps = await db.Applications.AsNoTracking().ToListAsync(ct);
+
+        var followUps = apps
+            .Where(a => a.NextFollowUpAt != null && a.NextFollowUpAt <= followUntil)
+            .OrderBy(a => a.NextFollowUpAt)
+            .Take(50).ToList();
+        var deadlines = apps
+            .Where(a => a.Deadline != null && a.Deadline >= today && a.Deadline <= deadlineUntil)
+            .OrderBy(a => a.Deadline).Take(50).ToList();
+
+        var ids = apps.Select(a => a.CompanyId).Distinct().ToList();
+        var names = await db.Companies.AsNoTracking().Where(c => ids.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var logos = await db.Companies.AsNoTracking().Where(c => ids.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.LogoUrl, ct);
+
+        var byStatus = apps.GroupBy(a => a.Status)
+            .Select(g => new StatusCountDto(g.Key.ToString(), g.Count()))
+            .OrderByDescending(x => x.Count).ToList();
+
+        var active = apps.Count(a => a.Status is ApplicationStatus.Applied or ApplicationStatus.Screen
+            or ApplicationStatus.Interview or ApplicationStatus.Offer);
+        var interviewed = apps.Count(a => a.Status is ApplicationStatus.Interview or ApplicationStatus.Offer
+            or ApplicationStatus.Accepted);
+        var offers = apps.Count(a => a.Status is ApplicationStatus.Offer or ApplicationStatus.Accepted);
+
+        return Result.Success(new ActionCenterDto(
+            followUps.Select(a => a.ToDto(names.GetValueOrDefault(a.CompanyId, "—"),
+                logos.GetValueOrDefault(a.CompanyId))).ToList(),
+            deadlines.Select(a => a.ToDto(names.GetValueOrDefault(a.CompanyId, "—"),
+                logos.GetValueOrDefault(a.CompanyId))).ToList(),
+            byStatus, active, interviewed, offers, apps.Count));
     }
 }
 

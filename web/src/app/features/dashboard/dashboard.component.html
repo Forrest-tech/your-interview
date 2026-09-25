@@ -26,10 +26,98 @@
     </mat-card>
   }
 
+  <!-- 行动中心(M4):把聚合数据变成"今天该做什么" -->
+  @if (actionCenter(); as ac) {
+    <section class="action-center">
+      <h3 class="ac-title">{{ t('dash.actionCenter') }}</h3>
+
+      @if (!hasActions()) {
+        <mat-card class="ac-empty">
+          <mat-icon>celebration</mat-icon>
+          <span>{{ t('dash.none') }}</span>
+        </mat-card>
+      } @else {
+        <div class="ac-grid">
+          @for (c of cards(); track c.kind) {
+            <mat-card class="ac-card" [class.kind-followup]="c.kind === 'followup'"
+                      [class.kind-deadline]="c.kind === 'deadline'"
+                      [class.kind-weak]="c.kind === 'weak'"
+                      [class.kind-pipeline]="c.kind === 'pipeline'">
+              <div class="ac-head">
+                <mat-icon>{{ c.icon }}</mat-icon>
+                <span class="ac-name">{{ t(c.titleKey) }}</span>
+                <span class="ac-count">{{ c.count }}</span>
+              </div>
+
+              @if (c.kind === 'followup') {
+                <ul class="ac-items">
+                  @for (a of ac.followUps; track a.id) {
+                    <li>
+                      <span class="ac-avatar" [style.background]="avatarColor(a.companyName)">
+                        {{ companyInitials(a.companyName) }}
+                      </span>
+                      <span class="ac-item-main">
+                        <span class="ac-item-title">{{ a.companyName }} · {{ a.role }}</span>
+                        <span class="ac-item-sub">{{ t('dash.followUpAt') }} {{ dateOnly(a.nextFollowUpAt) }}</span>
+                      </span>
+                      @if (a.priority) {
+                        <span class="ac-pri" [class]="priorityClass(a.priority)">{{ a.priority }}</span>
+                      }
+                    </li>
+                  }
+                </ul>
+              } @else if (c.kind === 'deadline') {
+                <ul class="ac-items">
+                  @for (a of ac.deadlines; track a.id) {
+                    <li>
+                      <span class="ac-avatar" [style.background]="avatarColor(a.companyName)">
+                        {{ companyInitials(a.companyName) }}
+                      </span>
+                      <span class="ac-item-main">
+                        <span class="ac-item-title">{{ a.companyName }} · {{ a.role }}</span>
+                        <span class="ac-item-sub">{{ t('dash.deadlineOn') }} {{ dateOnly(a.deadline) }}</span>
+                      </span>
+                    </li>
+                  }
+                </ul>
+              } @else if (c.kind === 'weak') {
+                <div class="ac-weak">
+                  @for (r of weakest(); track r.dimension) {
+                    <div class="dim">
+                      <div class="dim-head">
+                        <span class="dim-name">{{ dimLabel(r) }}</span>
+                        <span class="dim-score" [class]="scoreClass(r.current)">{{ r.current }}</span>
+                      </div>
+                      <mat-progress-bar [value]="r.current" [class]="scoreClass(r.current)"></mat-progress-bar>
+                    </div>
+                  }
+                  @if (suggestedAction()) {
+                    <p class="ac-tip">{{ suggestedAction() }}</p>
+                  }
+                </div>
+              } @else if (c.kind === 'pipeline') {
+                <div class="ac-chips">
+                  @for (s of ac.byStatus; track s.status) {
+                    <span class="chip"><b>{{ s.count }}</b> {{ statusLabel(s.status) }}</span>
+                  }
+                </div>
+              }
+
+              <a mat-stroked-button color="primary" [routerLink]="c.link" class="ac-cta">
+                {{ t(c.ctaKey) }}
+                <mat-icon>arrow_forward</mat-icon>
+              </a>
+            </mat-card>
+          }
+        </div>
+      }
+    </section>
+  }
+
   <!-- 投递漏斗概览 -->
   <section id="overview" class="metrics">
     <mat-card class="metric">
-      <div class="metric-val">{{ totalCount() }}</div>
+      <div class="metric-val">{{ total() }}</div>
       <div class="metric-label">{{ t('dash.total') }}</div>
     </mat-card>
     <mat-card class="metric">

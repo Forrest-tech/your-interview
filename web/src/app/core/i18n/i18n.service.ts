@@ -421,6 +421,27 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'From playbook reviews',
     fr: 'Depuis les revues du journal'
   },
+  'techstack.startReview': { zh: '今日复习', en: 'Review due', fr: 'Réviser' },
+  'techstack.showAnswer': { zh: '显示答案', en: 'Show answer', fr: 'Voir la réponse' },
+  'techstack.revealHint': {
+    zh: '先自己想一遍，再对照答案',
+    en: 'Recall it yourself before checking',
+    fr: 'Essayez de vous rappeler avant de vérifier'
+  },
+  'techstack.reviewExit': { zh: '退出', en: 'Exit', fr: 'Quitter' },
+  'techstack.reviewDone': { zh: '本轮复习完成', en: 'Session complete', fr: 'Session terminée' },
+  'techstack.reviewDoneMsg': {
+    zh: '你复习了 {n} 个知识点，明天它们会以新的间隔回来。',
+    en: 'You reviewed {n} items — they will return on a fresh SM-2 schedule.',
+    fr: 'Vous avez révisé {n} notions — elles reviendront selon un nouveau rythme SM-2.'
+  },
+  'techstack.reviewEmpty': { zh: '今天没有待复习，棒！', en: 'Nothing due today — nice!', fr: 'Rien à réviser aujourd’hui !' },
+  'techstack.reviewEmptyMsg': {
+    zh: '保持节奏，有新的遗忘曲线到期时再来。',
+    en: 'Keep the streak — come back when new items fall due.',
+    fr: 'Gardez le rythme — revenez quand de nouvelles notions seront dues.'
+  },
+  'techstack.reviewNoDue': { zh: '暂时没有到期的知识点', en: 'No items are due right now', fr: 'Aucune notion n’est due pour l’instant' },
   'tracker.newApp': { zh: '新建投递', en: 'New application', fr: 'Nouvelle candidature' },
   'tracker.openLink': { zh: '打开岗位链接', en: 'Open job link', fr: 'Ouvrir le lien de l’offre' },
   'tracker.priority': { zh: '优先级 {n}', en: 'Priority {n}', fr: 'Priorité {n}' },

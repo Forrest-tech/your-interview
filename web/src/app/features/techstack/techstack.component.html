@@ -5,6 +5,14 @@
       <p class="sub">每个概念九块拆解:从一句话直觉到面试话术</p>
     </div>
     <div class="head-actions">
+      @if ((buckets()?.dueToday ?? 0) > 0) {
+        <button mat-stroked-button color="primary" class="review-btn"
+                (click)="startReview()" [matTooltip]="t('techstack.startReview')">
+          <mat-icon>auto_stories</mat-icon>
+          {{ t('techstack.startReview') }}
+          <span class="review-badge">{{ buckets()?.dueToday }}</span>
+        </button>
+      }
       <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
@@ -14,6 +22,7 @@
     </div>
   </header>
 
+  @if (!reviewMode()) {
   <!-- 熟练度分布:接口失败时整块隐藏,不显示误导性的全 0 -->
   @if (buckets()) {
     <mat-card class="buckets">
@@ -219,4 +228,111 @@
       }
     </mat-card>
   </div>
+
+  } @else {
+  <!-- ============ 今日复习专注模式(闪卡会话) ============ -->
+  <section class="review-session">
+    @if (reviewDone()) {
+      <mat-card class="rs-card rs-summary">
+        <mat-icon class="rs-check">check_circle</mat-icon>
+        <h3>{{ t('techstack.reviewDone') }}</h3>
+        <p class="rs-summary-msg">
+          {{ t('techstack.reviewDoneMsg').replace('{n}', reviewReviewed().toString()) }}
+        </p>
+        <button mat-flat-button color="primary" (click)="exitReview()">
+          {{ t('techstack.reviewExit') }}
+        </button>
+      </mat-card>
+    } @else if (reviewLoading() && !reviewRevealed()) {
+      <mat-card class="rs-card rs-loading">
+        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        <p>加载中…</p>
+      </mat-card>
+    } @else {
+      @if (currentCard(); as c) {
+      <div class="rs-top">
+        <span class="rs-progress">{{ reviewProgress() }}</span>
+        <button mat-button (click)="exitReview()" [matTooltip]="t('techstack.reviewExit')">
+          <mat-icon>close</mat-icon> {{ t('techstack.reviewExit') }}
+        </button>
+      </div>
+
+      <mat-card class="rs-card">
+        <div class="rs-head">
+          <h3>{{ c.title }}</h3>
+          <span class="li-mastery" [class]="masteryClass(c.mastery)">{{ masteryLabel(c.mastery) }}</span>
+        </div>
+        <div class="rs-meta">
+          <span class="dh-topic">{{ c.topic }}</span>
+          <span class="dh-topic">难度 {{ c.difficulty }}</span>
+          <span class="dh-topic">重要度 {{ c.importance }}</span>
+          @if (c.source === 'FromInterview') {
+            <span class="li-src" [matTooltip]="t('techstack.fromPlaybook')">机经</span>
+          }
+        </div>
+
+        <div class="rs-question">
+          <mat-icon>help_outline</mat-icon>
+          <p>{{ c.question }}</p>
+        </div>
+
+        @if (!reviewRevealed()) {
+          <div class="rs-front-actions">
+            <button mat-flat-button color="primary" (click)="revealAnswer()">
+              <mat-icon>visibility</mat-icon> {{ t('techstack.showAnswer') }}
+            </button>
+            <p class="rs-hint">{{ t('techstack.revealHint') }}</p>
+          </div>
+        } @else {
+          <div class="rs-answer">
+            @if (reviewCurrent(); as rc) {
+              @for (b of blocks; track b.key) {
+                @if (blockText(rc, b.key)) {
+                  <section class="block">
+                    <header class="block-head">
+                      <mat-icon>{{ b.icon }}</mat-icon>
+                      <span class="block-label">{{ b.label }}</span>
+                      <span class="block-hint">{{ b.hint }}</span>
+                    </header>
+                    <p class="block-text">{{ blockText(rc, b.key) }}</p>
+                  </section>
+                }
+              }
+              @if (allBlocksEmpty(rc)) {
+                <p class="empty">这个条目还没填内容，先补齐「一句话直觉」再背其他部分。</p>
+              }
+            }
+          </div>
+
+          <div class="rs-grade">
+            @for (r of reviewChoices; track r.value) {
+              <button mat-flat-button [class]="'g-' + r.value.toLowerCase()"
+                      [disabled]="reviewLoading()" (click)="grade(r.value)">
+                {{ r.label }}
+              </button>
+            }
+          </div>
+        }
+      </mat-card>
+      } @else {
+      <mat-card class="rs-card rs-summary">
+        @if ((buckets()?.dueToday ?? 0) === 0) {
+          <mat-icon class="rs-check">celebration</mat-icon>
+          <h3>{{ t('techstack.reviewEmpty') }}</h3>
+          <p class="rs-summary-msg">{{ t('techstack.reviewEmptyMsg') }}</p>
+        } @else {
+          <mat-icon class="rs-check">check_circle</mat-icon>
+          <h3>{{ t('techstack.reviewDone') }}</h3>
+          <p class="rs-summary-msg">
+            {{ t('techstack.reviewDoneMsg').replace('{n}', reviewReviewed().toString()) }}
+          </p>
+        }
+        <button mat-flat-button color="primary" (click)="exitReview()">
+          {{ t('techstack.reviewExit') }}
+        </button>
+      </mat-card>
+      }
+    }
+  </section>
+  }
 </div>

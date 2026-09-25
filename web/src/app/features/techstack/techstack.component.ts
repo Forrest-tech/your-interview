@@ -131,6 +131,36 @@ export class TechStackComponent implements OnInit {
     { value: 'Easy', label: REVIEW_LABELS.Easy }
   ];
 
+  // ------------------------------ 今日复习会话 ------------------------------
+
+  /** 是否进入"今日复习"专注模式:进入后隐藏列表/筛选,改走闪卡队列。 */
+  readonly reviewMode = signal(false);
+  /** 待复习队列(取自 dueOnly 列表,已按优先级排好)。 */
+  readonly reviewQueue = signal<KnowledgeItem[]>([]);
+  /** 当前卡片下标。 */
+  readonly reviewIndex = signal(0);
+  /** 当前卡片是否已翻开答案。 */
+  readonly reviewRevealed = signal(false);
+  /** 拉取队列 / 翻答案时的加载态。 */
+  readonly reviewLoading = signal(false);
+  /** 本轮是否全部复习完。 */
+  readonly reviewDone = signal(false);
+  /** 本轮已评分的卡片数。 */
+  readonly reviewReviewed = signal(0);
+  /** 翻面时拉取的全量条目(列表 DTO 不含答案内容,需 GET 详情)。 */
+  readonly reviewCurrent = signal<KnowledgeItem | null>(null);
+
+  /** 当前卡片(列表条目,含题干/主题/熟练度,不含答案正文)。 */
+  readonly currentCard = computed<KnowledgeItem | null>(
+    () => this.reviewQueue()[this.reviewIndex()] ?? null
+  );
+
+  /** 进度文案,如 "3 / 7"。 */
+  readonly reviewProgress = computed(() => {
+    const total = this.reviewQueue().length;
+    return total === 0 ? '0 / 0' : `${this.reviewIndex() + 1} / ${total}`;
+  });
+
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
 
@@ -426,6 +456,126 @@ export class TechStackComponent implements OnInit {
     if (!v) return '未排期';
     const d = new Date(v);
     return Number.isNaN(d.getTime()) ? '未排期' : d.toLocaleDateString('zh-CN');
+  }
+
+  // ------------------------------ 今日复习会话逻辑 ------------------------------
+
+  /**
+   * 进入"今日复习"专注模式。
+   *
+   * 取 dueOnly 列表(后端已按"待复习优先 → 重要度 → 熟练度弱优先 → 最近"排好),
+   * 一次性拉满( pageSize 200)避免翻页打断节奏。队列空则提示并退出。
+   */
+  startReview(): void {
+    if (this.reviewMode()) return;
+    this.reviewLoading.set(true);
+    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', {
+      page: 1, pageSize: 200, dueOnly: true
+    }).subscribe({
+      next: (r) => {
+        this.reviewLoading.set(false);
+        const queue = r.items ?? [];
+        if (queue.length === 0) {
+          this.notify(this.t('techstack.reviewNoDue'));
+          return;
+        }
+        this.reviewQueue.set(queue);
+        this.reviewIndex.set(0);
+        this.reviewRevealed.set(false);
+        this.reviewReviewed.set(0);
+        this.reviewDone.set(false);
+        this.reviewCurrent.set(null);
+        this.reviewMode.set(true);
+      },
+      error: (e: Error) => {
+        this.reviewLoading.set(false);
+        this.notify(e.message, true);
+      }
+    });
+  }
+
+  /** 退出会话:回到列表,并刷新 dueToday 计数(刚复习过的会退出队列)。 */
+  exitReview(): void {
+    this.reviewMode.set(false);
+    this.reviewCurrent.set(null);
+    this.loadBuckets();
+  }
+
+  /**
+   * 翻答案:列表 DTO 不含答案正文(概念/要点/更好答案),
+   * 这里按 id 拉详情,只用于展示,不写入队列条目。
+   */
+  revealAnswer(): void {
+    const card = this.currentCard();
+    if (!card || this.reviewRevealed()) return;
+    this.reviewLoading.set(true);
+    this.api.get<KnowledgeItem>(`/api/knowledge/${card.id}`)
+      .pipe(catchError(() => of(null)))
+      .subscribe((full) => {
+        this.reviewLoading.set(false);
+        this.reviewCurrent.set(full ?? card);
+        this.reviewRevealed.set(true);
+      });
+  }
+
+  /**
+   * 给当前卡片打分并推进。
+   *
+   * 直接复用后端 /review 端点(SM-2 算法在服务端算 nextReviewAt 与 mastery),
+   * 回包是 ReviewOutcomeDto,不是完整条目 —— 只把排期相关字段原地更新到队列条目,
+   * 不动内容字段。打分后:还有卡片就翻到下一张并收起答案;没有就标记本轮完成。
+   */
+  grade(result: ReviewResultLabel): void {
+    const card = this.currentCard();
+    if (!card) return;
+    this.reviewLoading.set(true);
+    this.api
+      .post<ReviewOutcome>(`/api/knowledge/${card.id}/review`, {
+        result,
+        confidenceAfter: CONFIDENCE_FOR[result]
+      })
+      .subscribe({
+        next: (o) => {
+          this.reviewLoading.set(false);
+          this.reviewReviewed.update((n) => n + 1);
+          this.updateQueueItem(card.id, o);
+          this.advance();
+        },
+        error: (e: Error) => {
+          this.reviewLoading.set(false);
+          this.notify(e.message, true);
+        }
+      });
+  }
+
+  /** 用复习回包原地更新队列里的条目(只覆盖排期/掌握度相关字段)。 */
+  private updateQueueItem(id: string, o: ReviewOutcome): void {
+    this.reviewQueue.update((list) =>
+      list.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              reviewCount: (x.reviewCount ?? 0) + 1,
+              nextReviewAt: o.nextReviewAt ?? x.nextReviewAt,
+              mastery: (o.mastery as KnowledgeItem['mastery']) ?? x.mastery,
+              easinessFactor: o.easinessFactor ?? x.easinessFactor,
+              repetitionStreak: o.repetitionStreak ?? x.repetitionStreak
+            }
+          : x
+      )
+    );
+  }
+
+  /** 推进到下一张:收起答案;若已是最后一张则结束本轮。 */
+  private advance(): void {
+    const idx = this.reviewIndex();
+    if (idx + 1 >= this.reviewQueue().length) {
+      this.reviewDone.set(true);
+      return;
+    }
+    this.reviewIndex.set(idx + 1);
+    this.reviewRevealed.set(false);
+    this.reviewCurrent.set(null);
   }
 
   /** 后端返回完整对象时就地替换,返回空则只刷新列表,避免详情面板显示旧值。 */

@@ -54,7 +54,7 @@ export interface ConfirmDialogData {
         <p class="cf-body">{{ data.body }}</p>
       }
 
-      <div class="cf-actions">
+      <div class="cf-actions" [class.cf-three]="!!data.discardText">
         @if (data.discardText) {
           <button mat-button class="cf-discard"
                   [class.is-danger]="data.discardDanger"
@@ -84,11 +84,23 @@ export interface ConfirmDialogData {
       margin: 10px 0 0 32px;
       font-size: 13px; line-height: 1.65; color: #5a6472;
     }
+    /* 按钮文字永不折行 —— 放不下时整颗按钮换到下一行,
+       而不是把「Discard & reload」挤成两行高的怪按钮(2026-09-25 实测翻车)。 */
+    .cf-actions button { white-space: nowrap; }
     .cf-actions {
       margin-top: 20px;
       display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+      flex-wrap: wrap; row-gap: 8px;
     }
     .cf-spacer { flex: 1 1 auto; }
+    /* 三个动作(刷新拦截:放弃 / 留下 / 保存)竖排 ——
+       德法文按钮文案比中文长一倍,横排无论弹窗多宽都可能溢出;
+       竖排(主操作在最上,危险静默操作垫底)是 M3 / Gmail 删除确认的同款布局。 */
+    .cf-actions.cf-three { flex-direction: column; align-items: stretch; }
+    .cf-three .cf-spacer { display: none; }
+    .cf-three .cf-ok { order: 1; }
+    .cf-three .cf-cancel { order: 2; }
+    .cf-three .cf-discard { order: 3; margin-top: 2px; }
     .cf-discard {
       --mdc-text-button-label-text-color: #5a6472;
       border-radius: 8px;

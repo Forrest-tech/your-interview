@@ -298,6 +298,19 @@ export class MaterialTransferDialogComponent implements OnInit {
 
   // ---------- 复选框树 ----------
   isSelected(id: string): boolean { return this.selectedIds().has(id); }
+
+  /**
+   * ★ 第九轮(Forrest):文件夹的**显示状态派生自子树**,与文件勾选框样式一致:
+   *  · 自己勾了,或子项**全部**选中 → 对勾(选中态);
+   *  · 子项选中了一部分(没全选) → 短横线(半选态);
+   *  · 之前的问题:逐个勾完所有子项后,文件夹自己的 id 不在集合里,
+   *    永远停在半选横线上,和"全选了"的直觉矛盾。
+   */
+  nodeChecked(node: MaterialNode): boolean {
+    if (this.selectedIds().has(node.id)) return true;
+    const kids = node.children ?? [];
+    return kids.length > 0 && kids.every((c) => this.nodeChecked(c));
+  }
   isExpanded(id: string): boolean { return this.expandedIds().has(id); }
 
   toggleExpanded(node: MaterialNode): void {
@@ -318,7 +331,8 @@ export class MaterialTransferDialogComponent implements OnInit {
    */
   toggleChecked(node: MaterialNode): void {
     const set = new Set(this.selectedIds());
-    if (set.has(node.id)) {
+    // 用「有效选中态」判断方向:逐个勾满子项的文件夹再点一次 = 整棵子树取消
+    if (this.nodeChecked(node)) {
       collectIds(node).forEach((id) => set.delete(id));   // 取消 = 整棵子树取消
     } else {
       collectIds(node).forEach((id) => set.add(id));      // 勾选 = 连子项一起勾

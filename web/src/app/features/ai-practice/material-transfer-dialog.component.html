@@ -219,8 +219,8 @@
         <span class="pk-caret pk-none"></span>
       }
       <mat-checkbox class="pk-check"
-                    [checked]="isSelected(n.id)"
-                    [indeterminate]="!isSelected(n.id) && hasCheckedDesc(n)"
+                    [checked]="nodeChecked(n)"
+                    [indeterminate]="!nodeChecked(n) && hasCheckedDesc(n)"
                     (change)="toggleChecked(n)">
         <span class="pk-name">{{ n.name }}</span>
       </mat-checkbox>

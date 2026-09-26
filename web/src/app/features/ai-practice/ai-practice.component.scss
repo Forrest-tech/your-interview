@@ -121,6 +121,11 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* ★ 2026-09-26(Forrest):必须显式 hidden —— 只写 overflow-y:auto 时
+     overflow-x 会被浏览器计算成 auto,头部按钮隐形触摸目标(Material
+     48px touch-target)探出的 3px 就会在这里挂出一条通到底部的横向
+     滚动条。树内名称一律省略号,永远不需要横向滚动。 */
+  overflow-x: hidden;
 }
 
 /* ★ 第四十一轮:数据库加载中 / 加载失败的状态提示。

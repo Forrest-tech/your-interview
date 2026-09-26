@@ -27,7 +27,17 @@ public sealed class PronunciationAssessor(
     YourInterview.Services.Assessment.Infrastructure.Storage.ISpeechKeyProvider keyProvider,
     ILogger<PronunciationAssessor> logger)
 {
-    private const int MaxAudioBytes = 9 * 1024 * 1024;
+    // ★ 2026-09-26:9MB → 32MB。长音频分段评估上线后,后端能吃下完整长录音
+    //   (16kHz 单声道 16bit ≈ 32KB/s → 32MB ≈ 17 分钟)。前端 base64 后约 1.33 倍,
+    //   HTTP 请求体仍在 Kestrel 64MB 上限内。
+    private const int MaxAudioBytes = 32 * 1024 * 1024;
+
+    /// <summary>
+    /// 单段上限(秒)。Azure 官方文档:STT 短音频 REST 接口请求最多 60 秒,
+    /// 且"发音评估音频不应超过 30 秒"。取 28s 留余量;尾段并入最多 +2s(仍 ≤30s)。
+    /// 超过即走分段评估(WavSegmenter + AssessSegmentedAsync)。
+    /// </summary>
+    private const double MaxSegmentSeconds = 28.0;
 
     /// <summary>
     /// 调用 Azure Speech 时带的 User-Agent。
@@ -171,6 +181,16 @@ public sealed class PronunciationAssessor(
 
     /// <summary>
     /// 对一段音频做跟读评分。
+    ///
+    /// ★ 2026-09-26(Forrest 报"评分只有一半"):**长音频分段评估**。
+    ///   根因:Azure STT 短音频 REST 接口请求最多 60 秒音频,且官方明确
+    ///   "发音评估音频不应超过 30 秒";超长音频 Azure **不报错、静默只处理
+    ///   前 ~60 秒** → 后半篇全部记 Omission,Completeness/Recognition 腰斩
+    ///   (实测 1:59 录音只评出前 59.5s,Recognition 29%)。
+    ///   修法(官方推荐思路):把 WAV 在句间停顿(能量最低点)切成 ≤30s 的段,
+    ///   逐段送评;每段传"尚未被认领的剩余参考文本",用 Azure 自己的词级对齐
+    ///   推进指针;最后按官方权重公式合并:
+    ///   Pron = 0.3·Accuracy + 0.2·Prosody + 0.3·Fluency + 0.2·Completeness。
     /// </summary>
     /// <param name="audio">PCM WAV 16kHz 单声道(浏览器录的 webm 必须先转码)。</param>
     /// <param name="referenceText">参考文本(有它才是 scripted 模式,能拿完整度和错读判定)。</param>
@@ -191,7 +211,147 @@ public sealed class PronunciationAssessor(
             throw new InvalidOperationException(
                 $"音频 {audio.Length / 1024.0 / 1024.0:F1}MB 超过 {MaxAudioBytes / 1024 / 1024}MB 上限。");
 
-        var url = $"{_endpoint}/speech/recognition/conversation/cognitiveservices/v1" +
+        // 长音频:分段评估。仅 scripted 模式(有参考文本)才需要 ——
+        // unscripted 没有 Omission 概念,保持单次行为不变。
+        if (!string.IsNullOrWhiteSpace(referenceText) &&
+            WavSegmenter.TryParse(audio, out var info) &&
+            WavSegmenter.DurationSeconds(info) > MaxSegmentSeconds)
+        {
+            return await AssessSegmentedAsync(audio, referenceText, language,
+                _key, _endpoint, info, ct);
+        }
+
+        return await CallAzureOnce(audio, referenceText, language, _key, _endpoint, ct);
+    }
+
+    /// <summary>
+    /// 分段评估 + 合并。
+    ///
+    /// 参考文本指针的推进规则:每段把"剩余全部参考文本"传给 Azure(它会把
+    /// 本段没读到的词全标 Omission)。我们只保留**最后一个读出词之前**的部分
+    /// —— 之后的 Omission 属于后续段落,提前收下会重复计数。指针按
+    /// "读出词 + 保留区间的 Omission"推进(Insertion/无词级数据不消费引用)。
+    /// 全程静音的段不消费引用;结尾若引用还有剩,统一补 Omission 收尾
+    /// —— 与 Azure 单次评估"没读到的都算 Omission"的语义一致。
+    /// </summary>
+    private async Task<PronunciationResult> AssessSegmentedAsync(
+        byte[] audio, string referenceText, string language,
+        string key, string endpoint, WavSegmenter.WavInfo info, CancellationToken ct)
+    {
+        var segments = WavSegmenter.Split(audio, MaxSegmentSeconds, info);
+        var refTokens = ReferenceTokens(referenceText);
+        var allWords = new List<WordScore>();
+        var recognizedParts = new List<string>();
+        double fluencyW = 0, prosodyW = 0, fluencyDur = 0, prosodyDur = 0;
+        var pointer = 0;
+
+        logger.LogInformation(
+            "发音评估:音频 {Sec:F1}s 超过单段 {Max}s 上限,切分为 {N} 段逐段评估",
+            WavSegmenter.DurationSeconds(info), MaxSegmentSeconds, segments.Count);
+
+        for (var i = 0; i < segments.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var seg = segments[i];
+            var segSec = WavSegmenter.TryParse(seg, out var si)
+                ? WavSegmenter.DurationSeconds(si) : 0;
+
+            var sliceText = pointer < refTokens.Length
+                ? string.Join(' ', refTokens.Skip(pointer))
+                : string.Empty;
+
+            var parsed = await CallAzureOnce(seg, sliceText, language, key, endpoint, ct,
+                label: $"段{i + 1}/{segments.Count}");
+
+            if (parsed.Words.Count > 0)
+            {
+                var lastSpoken = -1;
+                for (var j = 0; j < parsed.Words.Count; j++)
+                    if (parsed.Words[j].ErrorType is "None" or "Mispronunciation")
+                        lastSpoken = j;
+
+                if (lastSpoken >= 0)
+                {
+                    var consumed = 0;
+                    for (var j = 0; j <= lastSpoken; j++)
+                    {
+                        var w = parsed.Words[j];
+                        allWords.Add(w);
+                        // Insertion / 无词级数据("")不消费参考文本
+                        if (w.ErrorType is not ("Insertion" or "")) consumed++;
+                    }
+                    pointer += consumed;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(parsed.RecognizedText))
+                recognizedParts.Add(parsed.RecognizedText.Trim());
+
+            if (parsed.FluencyScore is double f) { fluencyW += f * segSec; fluencyDur += segSec; }
+            if (parsed.ProsodyScore is double p) { prosodyW += p * segSec; prosodyDur += segSec; }
+
+            logger.LogInformation(
+                "发音评估[段{Idx}/{N}]:读出={Spoken} Omission={Omit} 指针={Pointer}/{Total}",
+                i + 1, segments.Count,
+                parsed.Words.Count(w => w.ErrorType is "None" or "Mispronunciation"),
+                parsed.Words.Count(w => w.ErrorType == "Omission"),
+                pointer, refTokens.Length);
+        }
+
+        // 引用没走完 → 剩余全部按 Omission 收尾
+        for (; pointer < refTokens.Length; pointer++)
+            allWords.Add(new WordScore(refTokens[pointer], 0, "Omission"));
+
+        // ---- 合并各维度 ----
+        var spoken = allWords.Where(w => w.ErrorType is "None" or "Mispronunciation").ToList();
+        double? accuracy = spoken.Count > 0 ? Math.Round(spoken.Average(w => w.Accuracy), 1) : null;
+        var noneCount = allWords.Count(w => w.ErrorType == "None");
+        double? completeness = refTokens.Length > 0
+            ? Math.Round(100.0 * noneCount / refTokens.Length, 1)
+            : null;
+        double? fluency = fluencyDur > 0 ? Math.Round(fluencyW / fluencyDur, 1) : null;
+        double? prosody = prosodyDur > 0 ? Math.Round(prosodyW / prosodyDur, 1) : null;
+
+        logger.LogInformation(
+            "发音评估合并:A={Acc} F={Flu} P={Pro} C={Comp} 总词={Total} 读出={Spoken} 引用词={Ref}",
+            accuracy, fluency, prosody, completeness,
+            allWords.Count, spoken.Count, refTokens.Length);
+
+        return new PronunciationResult(
+            MergePron(accuracy, prosody, fluency, completeness),
+            accuracy, fluency, completeness, prosody,
+            string.Join(' ', recognizedParts), allWords);
+    }
+
+    /// <summary>
+    /// Azure 官方权重:Pron = 0.3·Accuracy + 0.2·Prosody + 0.3·Fluency + 0.2·Completeness。
+    /// 某维度拿不到(F0 层只给 Accuracy)时,按剩余维度的权重和归一,绝不拿 0 冒充。
+    /// </summary>
+    private static double? MergePron(double? acc, double? pro, double? flu, double? comp)
+    {
+        double sum = 0, wsum = 0;
+        if (acc.HasValue) { sum += 0.3 * acc.Value; wsum += 0.3; }
+        if (pro.HasValue) { sum += 0.2 * pro.Value; wsum += 0.2; }
+        if (flu.HasValue) { sum += 0.3 * flu.Value; wsum += 0.3; }
+        if (comp.HasValue) { sum += 0.2 * comp.Value; wsum += 0.2; }
+        return wsum > 0 ? Math.Round(sum / wsum, 1) : null;
+    }
+
+    /// <summary>参考文本 → 词序列(按空白切,保留原词面,供 Omission 收尾用)。</summary>
+    private static string[] ReferenceTokens(string text) =>
+        string.IsNullOrWhiteSpace(text)
+            ? []
+            : text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
+    /// 单次调用 Azure(含 429 退避重试)。分段评估时每段独立走这里 ——
+    /// 一段失败重试不会推倒整份长音频。
+    /// </summary>
+    private async Task<PronunciationResult> CallAzureOnce(
+        byte[] audio, string referenceText, string language,
+        string key, string endpoint, CancellationToken ct, string? label = null)
+    {
+        var url = $"{endpoint}/speech/recognition/conversation/cognitiveservices/v1" +
                   $"?language={language}&format=detailed";
 
         var paConfig = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
@@ -210,7 +370,7 @@ public sealed class PronunciationAssessor(
             try
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post, url);
-                req.Headers.Add("Ocp-Apim-Subscription-Key", _key);
+                req.Headers.Add("Ocp-Apim-Subscription-Key", key);
                 req.Headers.Add("Pronunciation-Assessment", paConfig);
                 // ⚠️ 必须带 User-Agent,否则 Azure 接入层(istio-envoy)回 400 空 body。
                 req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
@@ -227,7 +387,8 @@ public sealed class PronunciationAssessor(
                 if ((int)resp.StatusCode == 429)
                 {
                     var wait = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                    logger.LogWarning("发音评估被限流(429),{Wait}s 后重试", wait.TotalSeconds);
+                    logger.LogWarning("发音评估{Label}被限流(429),{Wait}s 后重试",
+                        Label(label), wait.TotalSeconds);
                     await Task.Delay(wait, ct);
                     continue;
                 }
@@ -236,7 +397,7 @@ public sealed class PronunciationAssessor(
                 if (!resp.IsSuccessStatusCode)
                 {
                     last = new HttpRequestException(
-                        $"Azure 发音评估 {(int)resp.StatusCode}: {Truncate(body, 300)}");
+                        $"Azure 发音评估{Label(label)} {(int)resp.StatusCode}: {Truncate(body, 300)}");
                     await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
                     continue;
                 }
@@ -255,10 +416,10 @@ public sealed class PronunciationAssessor(
                     var omitted = parsed.Words.Count(x => x.ErrorType == "Omission");
                     var w0 = parsed.Words.FirstOrDefault();
                     logger.LogInformation(
-                        "发音评估解析:词数={Total} 有词级数据={WithData} None={NoneOk} " +
+                        "发音评估{Label}解析:词数={Total} 有词级数据={WithData} None={NoneOk} " +
                         "Omission={Omitted} 样例=({Word}/{Acc}/{Err}) " +
                         "Pron={Pron} Acc={Acc2} 识别文本长度={RecLen}",
-                        parsed.Words.Count, withData, noneOk, omitted,
+                        Label(label), parsed.Words.Count, withData, noneOk, omitted,
                         w0?.Word ?? "-", w0?.Accuracy ?? -1, w0?.ErrorType ?? "-",
                         parsed.PronScore, parsed.AccuracyScore,
                         (parsed.RecognizedText ?? "").Length);
@@ -270,13 +431,17 @@ public sealed class PronunciationAssessor(
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 last = ex;
-                logger.LogWarning(ex, "发音评估第 {Attempt} 次失败", attempt);
+                logger.LogWarning(ex, "发音评估{Label}第 {Attempt} 次失败",
+                    Label(label), attempt);
                 await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
             }
         }
 
-        throw new InvalidOperationException($"发音评估失败(重试 3 次):{last?.Message}", last);
+        throw new InvalidOperationException(
+            $"发音评估{Label(label)}失败(重试 3 次):{last?.Message}", last);
     }
+
+    private static string Label(string? label) => label is null ? "" : $"[{label}]";
 
     /// <summary>
     /// 解析 Azure 响应。

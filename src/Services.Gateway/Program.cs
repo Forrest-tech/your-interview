@@ -5,6 +5,11 @@ using YourInterview.Services.Gateway.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ★ 2026-09-26(Forrest 413 修复):网关是所有请求的第一跳,它自己的
+//   Kestrel 默认 30MB 上限会在音频上传/评分时代理转发前就掐断请求(413)。
+//   与 Assessment 服务对齐放宽到 64MB;YARP 本身不做二次限制。
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 64 * 1024 * 1024);
+
 // ---------- 日志 ----------
 builder.Host.UseSerilog((ctx, cfg) => cfg
     .MinimumLevel.Information()

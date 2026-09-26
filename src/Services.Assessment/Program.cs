@@ -11,6 +11,12 @@ using YourInterview.SharedContracts;   // AddMassTransitWithRabbitMq 扩展所�
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ★ 2026-09-26(Forrest 413 修复):Kestrel 默认请求体上限 30MB,
+//   长录音(>2分钟)的 multipart 上传/评分送审会撞 413 Payload Too Large。
+//   行业做法(如 GitHub API):按业务最大合理体积显式声明 —— 这里放宽到 64MB,
+//   覆盖 10 分钟 16k 单声道 WAV 的 base64(约 25MB)绰绰有余。
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 64 * 1024 * 1024);
+
 builder.AddServiceDefaults("assessment-api");
 
 // ---------- 数据库:独占 schema "assessment" ----------

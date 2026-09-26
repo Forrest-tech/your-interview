@@ -685,6 +685,24 @@ export class RecorderService {
         return;
       }
 
+      // ============================================================
+      // ★★ 2026-09-26(Forrest:Run AI Scoring 报 413 Payload Too Large)★★
+      //
+      // 根因:旧实现把 Float32 采样**逐个 JSON 数字**发上去 ——
+      //   1:55 的录音 @48kHz = 550 万个采样,JSON 文本化后 ~100MB,
+      //   远超 Kestrel 默认 30MB 请求体上限 → 服务器直接 413。
+      //
+      // 修法(行业标准):在浏览器里完成"降采样 + 打包",只传紧凑字节:
+      //   1. 线性插值重采样到 16kHz(与后端 PcmWav.TargetSampleRate 一致,
+      //      Azure 发音评估本来只吃 16k 单声道 —— 48k 传上去也是被降掉);
+      //   2. 装 WAV 头转 16bit PCM,再 base64;
+      //   3. 走后端早已支持的 `wavBase64` 分支(服务端零改动即可用)。
+      //   1:55 录音体积:100MB JSON → ~5MB base64,稳定通过。
+      // ============================================================
+      const pcm16k = RecorderService.resample(
+        samples.data, samples.rate, RecorderService.ASSESS_RATE);
+      const wavBase64 = RecorderService.encodeWavBase64(pcm16k, RecorderService.ASSESS_RATE);
+
       const res = await firstValueFrom(
         this.api.post<{
           pronScore: number | null; accuracyScore: number | null;
@@ -697,8 +715,7 @@ export class RecorderService {
           billedSeconds?: number | null;
           billedBytes?: number | null;
         }>('/api/assessment/pronunciation/assess', {
-          samples: samples.data,
-          sampleRate: samples.rate,
+          wavBase64,
           referenceText,
           // ★ 2026-09-19:不再写死 en-US —— 法语素材被当英语评分,
           //   Azure 会用英语解码法语音频,结果就是识别乱码或评不出分,
@@ -789,10 +806,13 @@ export class RecorderService {
    * 把浏览器录音解成 Float32 PCM。
    * decodeAudioData 能直接吃 webm/opus —— 不用自己写解码器。
    * 失败返回 null(例如采样率不支持的容器),由调用方降级。
+   * ★ 2026-09-26(Forrest 413 修复):返回 Float32Array 本体,
+   *   不再 Array.from —— 1:55@48kHz 有 550 万个采样,转 number[]
+   *   既慢又多占几十 MB 内存。
    */
   private async decodeToPcm(
     blob: Blob
-  ): Promise<{ data: number[]; rate: number } | null> {
+  ): Promise<{ data: Float32Array; rate: number } | null> {
     const Ctor = window.AudioContext
       || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return null;
@@ -836,10 +856,9 @@ export class RecorderService {
 
       // 取单声道(多声道就取第一轨 —— 语音评测不需要立体声)
       const ch = audio.getChannelData(0);
-      const data = Array.from(ch);
       const rate = audio.sampleRate;
 
-      return { data, rate };
+      return { data: ch, rate };
     } catch (e) {
       // 不静默:把真实原因留给调用方诊断(仍返回 null 以保持既有契约)
       this.decodeError.set(RecorderService.describeDecodeError(e));
@@ -847,6 +866,72 @@ export class RecorderService {
     } finally {
       try { await ctx.close(); } catch { /* 已关闭/不支持 close,忽略 */ }
     }
+  }
+
+  // ============================================================
+  // ★ 2026-09-26(Forrest 413 修复):评分上送的音频打包工具
+  // ============================================================
+
+  /** 评分送 Azure 的统一采样率 —— 与后端 PcmWav.TargetSampleRate(16k)一致。 */
+  private static readonly ASSESS_RATE = 16000;
+
+  /**
+   * 线性插值重采样(与后端 PcmWav.Resample 同一套数学)。
+   * 48kHz→16kHz 直接把数据量砍到 1/3,且 Azure 本来就按 16k 消费。
+   */
+  private static resample(input: Float32Array, fromRate: number, toRate: number): Float32Array {
+    if (fromRate === toRate || input.length === 0) return input;
+    const ratio = fromRate / toRate;
+    const outLen = Math.floor(input.length / ratio);
+    if (outLen <= 0) return new Float32Array(0);
+    const out = new Float32Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+      const src = i * ratio;
+      const i0 = Math.floor(src);
+      const i1 = Math.min(i0 + 1, input.length - 1);
+      const frac = src - i0;
+      out[i] = input[i0] * (1 - frac) + input[i1] * frac;
+    }
+    return out;
+  }
+
+  /**
+   * Float32 PCM → 16bit/单声道 WAV → base64。
+   * WAV 头与后端 PcmWav.FromFloat32 产出的完全一致,
+   * 所以服务端 DurationSeconds(读头算计费时长)照常工作。
+   * base64 分块转换,避免大数组把 btoa 的调用栈压爆。
+   */
+  private static encodeWavBase64(samples: Float32Array, rate: number): string {
+    const dataBytes = samples.length * 2;
+    const buf = new ArrayBuffer(44 + dataBytes);
+    const view = new DataView(buf);
+
+    const wstr = (off: number, s: string) => {
+      for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+    };
+    wstr(0, 'RIFF'); view.setUint32(4, 36 + dataBytes, true); wstr(8, 'WAVE');
+    wstr(12, 'fmt '); view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);            // PCM
+    view.setUint16(22, 1, true);            // 单声道
+    view.setUint32(24, rate, true);
+    view.setUint32(28, rate * 2, true);     // 字节率 = rate * channels * bits/8
+    view.setUint16(32, 2, true);            // 块对齐
+    view.setUint16(34, 16, true);           // 16bit
+    wstr(36, 'data'); view.setUint32(40, dataBytes, true);
+
+    for (let i = 0; i < samples.length; i++) {
+      const v = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(44 + i * 2, Math.round(v * 32767), true);
+    }
+
+    const bytes = new Uint8Array(buf);
+    const CHUNK = 0x8000;
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      bin += String.fromCharCode.apply(
+        null, bytes.subarray(i, i + CHUNK) as unknown as number[]);
+    }
+    return btoa(bin);
   }
 
   /**

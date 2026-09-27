@@ -159,6 +159,16 @@ services:
       #     `~/dev/recordings/assessment/`、以后 interviews 的视频在
       #     `~/dev/recordings/interviews/` …,互不串、互不覆盖。
       #   本服务只认 `assessment` 这个子目录(见 PRACTICE_STORAGE_DIR)。
+      # ★★ 2026-09-27(根因修复):必须走**配置项**而不是环境变量 ★★
+      #   IAudioStore.ResolveRoot 的优先级在所有代码版本里都是:
+      #     ① Storage:RootDirectory(配置)  ② PRACTICE_STORAGE_DIR(环境变量)  ③ 兜底目录
+      #   过去只设了 ② —— 而 Mac 上长期跑的是**旧镜像**(镜像自 09-22 起没真正重建过),
+      #   旧代码不认 ②,于是走了 ③ 兜底,把录音写到容器内部的意外路径
+      #   (实测落在 /Users/jadenfly/dev/your-interview/1ac878bc/2026/09/,宿主机根本看不到)。
+      #   改成 ① 之后:**无论镜像新旧**,根目录都被强制钉死在 /app/storage/assessment,
+      #   也就是宿主机的 ~/dev/recordings/assessment —— 不会再错位。
+      Storage__RootDirectory: /app/storage/assessment
+      # 保留环境变量,兼容读环境变量的老代码路径(双保险)
       PRACTICE_STORAGE_DIR: /app/storage/assessment
     volumes:
       - ../recordings:/app/storage

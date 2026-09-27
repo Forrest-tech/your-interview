@@ -664,10 +664,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *   · 'cache' = 该录音已有入库评分,直接读库 → 未消耗额度
    *   · ''      = 无提示
    *
-   * 为什么评分这边"未消耗"也是真实可考据的:
-   *   grade() 开头有一道 `if (rec.score) return;` ——
-   *   列表接口已把历史评分带回,有分就不再发请求。
-   *   所以看到分数且本次未发评估请求 = 确实是读库的。
+   * ★ 第五十四轮:grade() 允许重复评分后,评分入口恒为 'fresh';
+   *   'cache' 仅保留给"列表首次加载带回历史评分"的展示路径。
    */
   readonly scoreCost = signal<'' | 'fresh' | 'cache'>('');
 
@@ -2369,8 +2367,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *   (列表每行的 ✦ 按钮)。评分即把它设为当前作品 —— 报告区跟随被评的那条。
    *
    * ★ 第三十三/三十四轮(Forrest):如实标记本次评分花没花 Azure 额度与计费量
-   *   判定依据是 grade() 里那条硬规则 `if (rec.score) return;`:
-   *   有分 → 读库不调 Azure → 'cache';无分 → 真调 → 'fresh'。
+   *   判定依据是 grade() 的行为:
+   *   ★ 第五十四轮起 grade() 允许重复评分 —— 每次点击都真调 Azure,故恒为 'fresh'。
    */
   async gradeRecording(id: string): Promise<void> {
     const t = this.myRecordings().find((r) => r.id === id);
@@ -2378,11 +2376,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.stopPlayback();
     this.activeTakeId.set(id);
 
-    // ⚠️ 必须在 grade() 之前定下来:它可能直接把已有分数拿回来,
-    //    事后看 rec.score 已经判不出"本次到底发没发请求"。
-    this.scoreCost.set(t.score ? 'cache' : 'fresh');
-    this.scoreBilledSeconds.set(t.score?.billedSeconds ?? null);
-    this.scoreBilledBytes.set(t.score?.billedBytes ?? null);
+    // 每次都会真调 Azure(重复评分覆盖旧分数)→ 计费口径一律 'fresh'。
+    this.scoreCost.set('fresh');
+    this.scoreBilledSeconds.set(null);
+    this.scoreBilledBytes.set(null);
 
     await this.recorder.grade(id, this.currentText(), this.practiceLang());
 

@@ -639,7 +639,13 @@ export class RecorderService {
     //        有分就是有分,直接读本地即可,根本不需要为此再发一次请求;
     //      · 评分结果一旦产生,会由 saveScore 写库并在列表刷新时带回来;
     //      · 消除这个探测请求 = 彻底消除那条红色 404。
-    if (rec.score) return;                 // 本地已有分数(列表带回来的)→ 不再重复评分
+    //
+    // ★ 第五十四轮(Forrest):**允许重复评分**。
+    //    旧实现 `if (rec.score) return;` —— 已评过分的录音再点「Run AI Scoring」
+    //    直接静默返回,按钮像坏了一样。后端 SaveRecordingScoreCommandHandler
+    //    本来就支持覆盖写(主键即 RecordingId),所以这里删掉这道闸:
+    //    每次点击都真调 Azure 重新评,结果落库覆盖旧行。
+    //    (首次评分时的"入库避免重复评分"诉求,由"用户不点就不会重复调"满足。)
 
     this.patch(id, { grading: true, error: null });
 

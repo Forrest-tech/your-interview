@@ -57,15 +57,17 @@ public sealed class LocalAudioStore(IConfiguration config, ILogger<LocalAudioSto
         if (!string.IsNullOrWhiteSpace(env)) return env;
 
         // 兜底(2026-09-27,Forrest 要求):录音**不能放进仓库里面**(防止误提交 GitHub),
-        //   统一放「仓库的同级 recordings/」—— 仓库在 ~/dev/your-interview,录音在 ~/dev/recordings。
+        //   统一放「仓库的同级 recordings/assessment/」—— 仓库在 ~/dev/your-interview,
+        //   录音在 ~/dev/recordings/assessment。再加一层 `assessment` 子目录,
+        //   是为了让 ../recordings 下能按服务分目录(interviews 的视频将来放 ../recordings/interviews …)。
         //   向上找 .git 定位仓库根;找不到 .git(罕见)才退回旧位置。
         var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
         while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, ".git")))
             dir = dir.Parent;
 
         return dir is null
-            ? Path.Combine(Directory.GetCurrentDirectory(), "storage", "recordings")
-            : Path.GetFullPath(Path.Combine(dir.FullName, "..", "recordings"));
+            ? Path.Combine(Directory.GetCurrentDirectory(), "storage", "assessment")
+            : Path.GetFullPath(Path.Combine(dir.FullName, "..", "recordings", "assessment"));
     }
 
     public async Task<string> SaveAsync(Guid userId, Guid recordingId, string extension,

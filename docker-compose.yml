@@ -154,11 +154,14 @@ services:
       #   所以这里 bind mount 的是**仓库的同级目录** `../recordings`
       #     (仓库在 ~/dev/your-interview,录音就在 ~/dev/recordings),
       #   完全脱离 git 仓库,Finder 里直接可见。
-      #   代码侧 IAudioStore 的兜底根目录也同步改成"仓库同级 recordings/",
-      #   无论用容器跑还是本机 dotnet run,录音都落在同一个地方。
-      PRACTICE_STORAGE_DIR: /app/storage/recordings
+      #   挂载点是 **整个 `../recordings`**(抬到上一层),而不是某服务的子目录 ——
+      #   这样每个服务在自己的子目录里落地:assessment 的录音在
+      #     `~/dev/recordings/assessment/`、以后 interviews 的视频在
+      #     `~/dev/recordings/interviews/` …,互不串、互不覆盖。
+      #   本服务只认 `assessment` 这个子目录(见 PRACTICE_STORAGE_DIR)。
+      PRACTICE_STORAGE_DIR: /app/storage/assessment
     volumes:
-      - ../recordings:/app/storage/recordings
+      - ../recordings:/app/storage
     depends_on: *service-deps
     healthcheck: *service-health
 

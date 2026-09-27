@@ -12,6 +12,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { ApiClient } from '../../core/api/api-client';
+import { PracticeApi, StorageSettingDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { AuthUser } from '../../core/models/api.models';
@@ -50,6 +51,8 @@ interface TzOption { id: string; label: string; }
 })
 export class ProfileComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  /** 录音存储目录的接口在 Assessment 服务上(不是 Identity),所以走练习页那套 API 层。 */
+  private readonly practice = inject(PracticeApi);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
@@ -142,6 +145,80 @@ export class ProfileComponent implements OnInit {
     return base;
   });
 
+  // ---------- 本机录音存储目录(★ 2026-09-27 Forrest) ----------
+
+  /** 服务端判定的真实状态 —— 界面说的话必须和落盘位置一致,不允许自己猜。 */
+  readonly storageStatus = signal<StorageSettingDto | null>(null);
+  readonly storageBusy = signal(false);
+  readonly storageMsg = signal<string | null>(null);
+  storageDraft = '';
+
+  /** 未设置时给的默认建议: ~/Documents/your-interview/recordings。 */
+  readonly storagePlaceholder = '~/Documents/your-interview/recordings';
+
+  readonly storageStatusKind = computed<'ok' | 'warn' | 'muted'>(() => {
+    const s = this.storageStatus()?.status;
+    if (s === 'CustomActive') return 'ok';
+    if (s === 'Default') return 'muted';
+    return 'warn';
+  });
+
+  readonly storageStatusIcon = computed(() => {
+    const s = this.storageStatus()?.status;
+    if (s === 'CustomActive') return 'check_circle';
+    if (s === 'Default') return 'info';
+    return 'warning_amber';
+  });
+
+  readonly storageStatusText = computed(() => {
+    const st = this.storageStatus();
+    if (!st) return this.t('profile.storageUnknown');
+    let text: string;
+    switch (st.status) {
+      case 'CustomActive':
+        text = this.tn('profile.storageActive', st.desiredPath ?? st.effectiveRoot);
+        break;
+      case 'CustomPendingMount':
+        text = this.t('profile.storagePending');
+        break;
+      case 'CustomUnusable':
+        text = this.t('profile.storageUnusable');
+        break;
+      default:
+        text = this.tn('profile.storageDefault', st.hostDirectory ?? st.effectiveRoot);
+    }
+    return st.message ? `${text}（${st.message}）` : text;
+  });
+
+  /** 已有多少录音文件(从生效目录里数出来的,不是估计值)。 */
+  readonly storageFilesText = computed(() => {
+    const st = this.storageStatus();
+    if (!st) return '';
+    const mb = st.totalBytes / 1024 / 1024;
+    // 空目录就是 0,不编一个"1 KB"出来 —— 数字必须和实际一致
+    const size = st.totalBytes <= 0
+      ? '0 KB'
+      : (mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(st.totalBytes / 1024))} KB`);
+    return `${st.fileCount} · ${size}`;
+  });
+
+  /** 需要挂载时给的可直接复制的配置片段(改 .env + 重建容器)。 */
+  readonly storageMountSnippet = computed(() => {
+    const path = this.storageDraft.trim() || this.storageStatus()?.desiredPath || this.storagePlaceholder;
+    const head = path.startsWith('~')
+      // Docker 不会把 ~ 展开成你 Mac 上的家目录 —— 必须写完整路径,否则挂载会失败
+      ? ['# 请把 ~ 换成完整路径,例如 /Users/你的用户名/Documents/your-interview/recordings', '']
+      : [];
+    return [
+      ...head,
+      '# .env（仓库根目录）',
+      `RECORDINGS_HOST_DIR=${path}`,
+      '',
+      '# 让新挂载生效',
+      'docker compose up -d --force-recreate assessment'
+    ].join('\n');
+  });
+
   // ---------- 修改密码 ----------
 
   readonly pwdBusy = signal(false);
@@ -189,6 +266,8 @@ export class ProfileComponent implements OnInit {
         this.me.set(u);
         this.syncDrafts(u);
         this.loading.set(false);
+        // 存储目录是**另一个服务**的数据,单独拉:它失败不影响整页渲染。
+        this.loadStorage();
       },
       // 失败不整页报错:本地缓存的 user 仍可展示,只在顶部提示"不是最新的"
       error: (e: Error) => {
@@ -243,6 +322,71 @@ export class ProfileComponent implements OnInit {
         },
         error: () => this.savingPrefs.set(false)
       });
+  }
+
+  // ---------- 本机录音存储目录 ----------
+
+  private loadStorage(): void {
+    this.practice.getStorageSettings().subscribe({
+      next: (s) => {
+        this.storageStatus.set(s);
+        this.storageDraft = s.desiredPath ?? '';
+      },
+      // 读不到就当"未自定义":页面其余部分照常工作,不因此整页报错
+      error: () => this.storageStatus.set(null)
+    });
+  }
+
+  /**
+   * 保存自选路径。
+   * 后端会真去探测这个目录能不能写;不能写也会把路径存下来,
+   * 但状态如实标成"待挂载",并回显需要的挂载配置 —— 不会假装成功。
+   */
+  saveStoragePath(): void {
+    if (this.storageBusy()) return;
+    this.storageBusy.set(true);
+    this.storageMsg.set(null);
+
+    const path = this.storageDraft.trim();
+    this.practice.saveStorageSettings(path.length > 0 ? path : null).subscribe({
+      next: (s) => {
+        this.storageStatus.set(s);
+        this.storageDraft = s.desiredPath ?? '';
+        this.storageBusy.set(false);
+        this.storageMsg.set(this.t('profile.storageSaved'));
+      },
+      error: (e: Error) => {
+        this.storageBusy.set(false);
+        this.storageMsg.set(e.message || this.t('profile.storageSaveFail'));
+      }
+    });
+  }
+
+  /** 把已有录音搬到新目录(相对路径不变,所以数据库记录不用动)。 */
+  migrateStorageFiles(): void {
+    if (this.storageBusy()) return;
+    this.storageBusy.set(true);
+    this.storageMsg.set(null);
+
+    this.practice.migrateStorage().subscribe({
+      next: (r) => {
+        this.storageBusy.set(false);
+        this.storageMsg.set(this.tn('profile.storageMigrated', r.moved));
+        this.loadStorage();
+      },
+      error: (e: Error) => {
+        this.storageBusy.set(false);
+        this.storageMsg.set(e.message || this.t('profile.storageMigrateFail'));
+      }
+    });
+  }
+
+  copyMountSnippet(): void {
+    const text = this.storageMountSnippet();
+    navigator.clipboard?.writeText(text).then(
+      () => this.storageMsg.set(this.t('profile.storageCopied')),
+      () => this.storageMsg.set(text)
+    );
   }
 
   // ---------- 修改密码 ----------

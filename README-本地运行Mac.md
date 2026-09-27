@@ -108,6 +108,25 @@ npm start
 
 登录用 `.env` 里 `ADMIN_PASSWORD` 配合 `admin@your-interview.local`。
 
+## 五点五、录音文件存在本机哪里
+
+默认:仓库**同级**的 `recordings/`(仓库在 `~/dev/your-interview`,录音就在 `~/dev/recordings`),
+按服务分目录 —— 练习录音在 `~/dev/recordings/assessment/`,结构:
+
+```
+recordings/assessment/{用户ID前8位}/{yyyy}/{MM}/{录音ID}.webm
+```
+
+想换地方(例如放到"文稿"里),两种办法任选:
+
+- **界面里改**(推荐):我的账户 → 偏好设置 → "录音存储位置",填 Mac 上的绝对路径,
+  例如 `/Users/你的用户名/Documents/your-interview/recordings`;页面会给出要复制到 `.env` 的配置。
+- **直接改配置**:在 `.env` 里写 `RECORDINGS_HOST_DIR=/Users/你的用户名/Documents/your-interview/recordings`,
+  然后 `docker compose up -d --force-recreate assessment`。
+
+⚠️ 换目录后,**先在 Mac 上把原录音文件夹搬到新位置**,否则旧录音会随旧挂载一起"看不见"
+(数据库记录的相对路径不变,搬文件本身不需要改任何数据)。
+
 ## 六、常用命令
 
 ```bash

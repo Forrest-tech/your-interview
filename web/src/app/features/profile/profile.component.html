@@ -162,6 +162,58 @@
         </mat-card-content>
       </mat-card>
 
+      <!-- ★ 2026-09-27(Forrest):录音存到本机哪个文件夹,在这里选 -->
+      <mat-card class="storage">
+        <mat-card-header>
+          <mat-card-title>{{ t('profile.storageTitle') }}</mat-card-title>
+          <mat-card-subtitle>{{ t('profile.storageHint') }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('profile.storagePath') }}</mat-label>
+            <input matInput name="storageDraft" [(ngModel)]="storageDraft"
+                   [placeholder]="storagePlaceholder" spellcheck="false" autocomplete="off">
+            <mat-hint>{{ t('profile.storagePathHint') }}</mat-hint>
+          </mat-form-field>
+
+          <div class="storage-status" [class]="'storage-status ' + storageStatusKind()">
+            <mat-icon>{{ storageStatusIcon() }}</mat-icon>
+            <span>{{ storageStatusText() }}</span>
+          </div>
+
+          @if (storageStatus(); as st) {
+            <p class="hint mono">{{ st.layoutExample }}</p>
+            <p class="hint">{{ t('profile.storageFiles') }}{{ storageFilesText() }}</p>
+
+            @if (st.status === 'CustomPendingMount') {
+              <div class="mount-help">
+                <p class="hint">{{ t('profile.storageMountHint') }}</p>
+                <pre class="mount-snippet">{{ storageMountSnippet() }}</pre>
+                <button mat-stroked-button (click)="copyMountSnippet()">
+                  {{ t('profile.storageCopy') }}
+                </button>
+              </div>
+            }
+
+            @if (st.canMigrate) {
+              <button mat-stroked-button class="full" [disabled]="storageBusy()"
+                      (click)="migrateStorageFiles()">
+                {{ t('profile.storageMigrate') }}
+              </button>
+            }
+          }
+
+          <button mat-raised-button color="primary" class="full"
+                  [disabled]="storageBusy()" (click)="saveStoragePath()">
+            {{ storageBusy() ? t('profile.saving') : t('profile.storageSave') }}
+          </button>
+
+          @if (storageMsg()) {
+            <p class="storage-msg">{{ storageMsg() }}</p>
+          }
+        </mat-card-content>
+      </mat-card>
+
       <mat-card class="security">
         <mat-card-header>
           <mat-card-title>{{ t('profile.security') }}</mat-card-title>

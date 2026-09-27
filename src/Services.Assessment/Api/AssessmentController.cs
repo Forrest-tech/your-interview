@@ -716,6 +716,42 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    // ---------- 本机录音存储目录(★ 2026-09-27 Forrest:"我的账户"里可自选) ----------
+
+    /// <summary>
+    /// 当前存储目录状态:用户选了哪、实际写到哪、能不能写、已有多少文件。
+    /// ⚠️ 与实际落盘走同一套判定 —— 界面状态与磁盘真实位置不允许分叉。
+    /// </summary>
+    [HttpGet("storage/settings")]
+    [Authorize]   // 只要求登录:这是**我自己**的存储偏好,按 UserId 隔离,与"管理题库"无关
+    public async Task<IResult> GetStorageSettings(CancellationToken ct)
+    {
+        var status = await sender.Send(new GetStorageSettingQuery(currentUser.RequireUserId()), ct);
+        return Results.Ok(status);
+    }
+
+    /// <summary>
+    /// 保存自选目录。路径当前不可用(容器里还没挂载)也允许保存,
+    /// 只是状态如实标为 CustomPendingMount —— 否则用户永远走不完"改设置 + 改挂载"两步。
+    /// </summary>
+    [HttpPut("storage/settings")]
+    [Authorize]
+    public async Task<IResult> SaveStorageSettings([FromBody] StorageSettingsBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(
+            new SaveStorageSettingCommand(currentUser.RequireUserId(), body.RootPath), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>把已有录音搬到自选目录(相对路径不变,所以不需要改任何数据库记录)。</summary>
+    [HttpPost("storage/migrate")]
+    [Authorize]
+    public async Task<IResult> MigrateStorage(CancellationToken ct)
+    {
+        var r = await sender.Send(new MigrateStorageCommand(currentUser.RequireUserId()), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
 
 /// <summary>简历正文提交。空串由 Handler 归一为"清空"。</summary>
 public sealed record ResumeTextBody(string? ResumeText);
@@ -757,6 +793,9 @@ public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessmen
 
 /// <summary>Azure Speech 设置提交。⚠️ 只入不出 —— 保存后绝不回传 key。</summary>
 public sealed record SpeechSettingsBody(string Key, string Region, string? Endpoint);
+
+/// <summary>本机存储目录提交。RootPath 为空串 = 恢复部署默认目录。</summary>
+public sealed record StorageSettingsBody(string? RootPath);
 
 /// <summary>
 /// 测试一把**尚未保存**的候选凭据(先测后存)。

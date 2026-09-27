@@ -170,8 +170,16 @@ services:
       Storage__RootDirectory: /app/storage/assessment
       # 保留环境变量,兼容读环境变量的老代码路径(双保险)
       PRACTICE_STORAGE_DIR: /app/storage/assessment
+      # ★ 2026-09-27(Forrest:本机存储路径可在"我的账户"里自选):
+      #   容器里只认 /app/storage/assessment,**本机那一侧的目录**用户是看不到的 ——
+      #   这里把它作为字符串透传进来,设置页才能如实回显"录音现在存在本机的哪个文件夹"。
+      #   换位置只改这一处的 RECORDINGS_HOST_DIR(写在 .env 里),下面挂载点会同步跟着变。
+      Storage__HostDirectory: ${RECORDINGS_HOST_DIR:-../recordings}
     volumes:
-      - ../recordings:/app/storage
+      # 想换成"文稿"目录:在 .env 里写
+      #   RECORDINGS_HOST_DIR=/Users/你的用户名/Documents/your-interview/recordings
+      # 然后 docker compose up -d assessment(容器会带着新挂载重建)。
+      - ${RECORDINGS_HOST_DIR:-../recordings}:/app/storage
     depends_on: *service-deps
     healthcheck: *service-health
 

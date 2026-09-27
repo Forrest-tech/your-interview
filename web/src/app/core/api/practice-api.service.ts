@@ -153,6 +153,44 @@ export interface SpeechSettingStatusDto {
   endpoint: string | null;
 }
 
+/**
+ * 本机存储目录状态(与后端 StorageSettingDto 一一对应)。
+ *
+ * status 的四种取值:
+ *   · Default            = 没自定义,用部署默认目录
+ *   · CustomActive       = 自定义目录已生效,录音就写在那
+ *   · CustomPendingMount = 已保存,但容器里还看不到(需要改挂载后重启)
+ *   · CustomUnusable     = 路径不可用(权限等原因)
+ */
+export interface StorageSettingDto {
+  /** 用户保存的本机目录;null = 未设置。 */
+  desiredPath: string | null;
+  /** 容器内实际写盘的根目录。 */
+  effectiveRoot: string;
+  /** 部署时挂载进容器的本机目录(compose 注入),用于界面回显。 */
+  hostDirectory: string | null;
+  status: 'Default' | 'CustomActive' | 'CustomPendingMount' | 'CustomUnusable';
+  writable: boolean;
+  /** 不可用时的人话原因;可用时为 null。 */
+  message: string | null;
+  fileCount: number;
+  totalBytes: number;
+  /** 目录结构示例(让用户一眼看懂文件会落在哪)。 */
+  layoutExample: string;
+  /** 后端是否跑在容器里(容器里换目录必须改挂载)。 */
+  inContainer: boolean;
+  /** 是否可以迁移已有录音到新目录。 */
+  canMigrate: boolean;
+}
+
+/** 迁移结果。 */
+export interface StorageMigrationDto {
+  moved: number;
+  skipped: number;
+  bytes: number;
+  targetRoot: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PracticeApi {
   private readonly api = inject(ApiClient);
@@ -321,6 +359,33 @@ export class PracticeApi {
   /** 真连通性测试 —— 拿当前 key 去 Azure 走一次。失败会返回 401/403。 */
   testSpeech(): Observable<{ ok: boolean; message: string }> {
     return this.api.post<{ ok: boolean; message: string }>(`${PracticeApi.BASE}/speech/test`);
+  }
+
+  // ---------- 本机录音存储目录(★ 2026-09-27 Forrest:"我的账户"里可自选) ----------
+
+  /**
+   * 当前存储目录状态。
+   *
+   * ⚠️ 这里的 `status` 是**服务端实际落盘位置**的判定结果 ——
+   *    不是前端自己猜的。界面显示"已生效"就必须真的生效。
+   */
+  getStorageSettings(): Observable<StorageSettingDto> {
+    return this.api.get<StorageSettingDto>(`${PracticeApi.BASE}/storage/settings`);
+  }
+
+  /**
+   * 保存自选目录。路径当前不可用(容器里还没挂载)也会被保存,
+   * 只是状态标成 CustomPendingMount,并把需要的挂载配置回显给界面。
+   * 传空串 = 恢复部署默认目录。
+   */
+  saveStorageSettings(rootPath: string | null): Observable<StorageSettingDto> {
+    return this.api.put<StorageSettingDto>(
+      `${PracticeApi.BASE}/storage/settings`, { rootPath });
+  }
+
+  /** 把已有录音搬到自选目录(相对路径不变,数据库记录不受影响)。 */
+  migrateStorage(): Observable<StorageMigrationDto> {
+    return this.api.post<StorageMigrationDto>(`${PracticeApi.BASE}/storage/migrate`);
   }
 
   /**

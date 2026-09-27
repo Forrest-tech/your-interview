@@ -413,7 +413,7 @@ public sealed class GetRecordingAudioQueryHandler(AssessmentDbContext db, IAudio
             .FirstOrDefaultAsync(x => x.Id == r.RecordingId && x.UserId == r.UserId && !x.IsDeleted, ct);
         if (rec is null) return Result.Failure<(Stream, string, string)>(Error.NotFound("录音"));
 
-        var s = await store.OpenReadAsync(rec.StoragePath, ct);
+        var s = await store.OpenReadAsync(r.UserId, rec.StoragePath, ct);
         if (s is null)
             return Result.Failure<(Stream, string, string)>(Error.NotFound("录音文件"));
 
@@ -464,7 +464,7 @@ public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudio
         var fileGone = true;
         if (!string.IsNullOrWhiteSpace(path))
         {
-            fileGone = await store.DeleteAsync(path, ct);
+            fileGone = await store.DeleteAsync(r.UserId, path, ct);
             if (!fileGone)
                 logger.LogWarning("录音 {RecordingId} 的音频文件删除失败,留下孤儿文件 {Path};数据库行仍将删除",
                     rec.Id, path);
@@ -641,7 +641,7 @@ public sealed class GetOrCreateTtsCommandHandler(AssessmentDbContext db, SpeechS
                 .FirstOrDefaultAsync(x => x.UserId == r.UserId && x.CacheKey == cacheKey, ct);
             if (hit is not null)
             {
-                var cached = await store.OpenReadAsync(hit.StoragePath, ct);
+                var cached = await store.OpenReadAsync(r.UserId, hit.StoragePath, ct);
                 if (cached is not null)
                 {
                     await using (cached)
@@ -916,5 +916,226 @@ public sealed class SaveSpeechSettingCommandHandler(AssessmentDbContext db, Pron
             true, row.Region,
             row.Key.Length <= 8 ? "••••••••" : row.Key[..4] + "••••••••" + row.Key[^4..],
             "database", row.Endpoint));
+    }
+}
+
+// ============================================================
+// 本机录音存储目录(★ 2026-09-27 Forrest:在"我的账户"里自选)
+// ============================================================
+
+/// <summary>存储目录状态 —— 设置页据此说清"我现在到底存到哪了"。</summary>
+public sealed record StorageSettingDto(
+    /// <summary>用户保存的本机目录(null = 未设置,用部署默认)。</summary>
+    string? DesiredPath,
+    /// <summary>容器内实际写盘的根目录。</summary>
+    string EffectiveRoot,
+    /// <summary>部署时挂载进容器的**本机**目录(由 compose 注入,用于界面回显)。</summary>
+    string? HostDirectory,
+    /// <summary>Default / CustomActive / CustomPendingMount / CustomUnusable。</summary>
+    string Status,
+    bool Writable,
+    /// <summary>不可用时的人话原因。可用时为 null。</summary>
+    string? Message,
+    long FileCount,
+    long TotalBytes,
+    /// <summary>目录结构示例,让用户一眼看懂文件会落在哪。</summary>
+    string LayoutExample,
+    bool InContainer,
+    /// <summary>是否可以把已有录音搬到新目录(新目录已生效且旧目录里还有文件)。</summary>
+    bool CanMigrate);
+
+/// <summary>迁移结果。</summary>
+public sealed record StorageMigrationDto(int Moved, int Skipped, long Bytes, string TargetRoot);
+
+/// <summary>
+/// 查询当前存储目录状态。
+///
+/// ⚠️ 与"实际写盘"走**同一份**判定(<see cref="LocalStorageRules"/>):
+///   界面说"已生效"就必须真的生效,绝不能出现界面绿了、文件却去了别处 ——
+///   那正是 2026-09-27 "录音录完找不到"事故的样子。
+/// </summary>
+public sealed record GetStorageSettingQuery(Guid UserId) : MediatR.IRequest<StorageSettingDto>;
+
+public sealed class GetStorageSettingQueryHandler(IAudioStore store, IConfiguration config)
+    : MediatR.IRequestHandler<GetStorageSettingQuery, StorageSettingDto>
+{
+    public async Task<StorageSettingDto> Handle(GetStorageSettingQuery r, CancellationToken ct)
+    {
+        var roots = await store.ResolveRootsAsync(r.UserId, ct);
+        var hostDir = config["Storage:HostDirectory"];
+
+        string status;
+        string? message = null;
+
+        if (roots.DesiredRoot is null)
+        {
+            status = "Default";
+        }
+        else if (roots.DesiredActive)
+        {
+            status = "CustomActive";
+        }
+        else
+        {
+            // 容器里"路径存在但不在挂载点下"= 需要用户去 compose 里挂一下;
+            // 其它情况(没权限等)才是真不可用。
+            status = LocalStorageRules.RunningInContainer ? "CustomPendingMount" : "CustomUnusable";
+            message = roots.Reason;
+        }
+
+        var (files, bytes) = LocalStorageRules.Measure(roots.ActiveRoot);
+
+        // 展示用的"用户视角根目录":优先用户所选,其次是挂载进来的本机目录
+        var displayBase = roots.DesiredRoot
+            ?? (string.IsNullOrWhiteSpace(hostDir) ? LocalStorageRules.TrimServiceFolder(roots.DefaultRoot) : hostDir);
+
+        var userPart = r.UserId.ToString("N")[..8];
+        // ⚠️ 格式串里的 / 要加单引号转义:否则 .NET 会把它当"日期分隔符"，
+        //    某些区域设置下会渲染成 2026.09 或 2026-09。
+        var layout = $"{displayBase}/{LocalStorageRules.ServiceFolder}/{userPart}/" +
+                     $"{DateTimeOffset.UtcNow:yyyy'/'MM}/{{录音ID}}.webm";
+
+        var canMigrate = roots.DesiredActive
+            && !string.Equals(roots.ActiveRoot, roots.DefaultRoot, StringComparison.Ordinal)
+            && Directory.Exists(Path.Combine(roots.DefaultRoot, userPart));
+
+        return new StorageSettingDto(
+            roots.DesiredRoot, roots.ActiveRoot,
+            string.IsNullOrWhiteSpace(hostDir) ? null : hostDir,
+            status, message is null, message,
+            files, bytes, layout,
+            LocalStorageRules.RunningInContainer, canMigrate);
+    }
+}
+
+/// <summary>
+/// 保存用户自选的本机存储目录。
+///
+/// ★ 关键取舍:**路径当前不可用也照样保存**,只是状态如实标成
+///   "待挂载"。用户在容器里换目录本来就需要两步(改设置 + 改挂载后重启),
+///   若因为"现在还看不见"就拒绝保存,用户永远走不完这个流程 ——
+///   而真正危险的是"保存了但静默写进容器内部",那由
+///   <see cref="LocalStorageRules.Evaluate"/> 在每次落盘时拦住,不是靠界面。
+/// </summary>
+public sealed record SaveStorageSettingCommand(Guid UserId, string? RootPath)
+    : MediatR.IRequest<Result<StorageSettingDto>>;
+
+public sealed class SaveStorageSettingCommandHandler(AssessmentDbContext db, MediatR.ISender sender)
+    : MediatR.IRequestHandler<SaveStorageSettingCommand, Result<StorageSettingDto>>
+{
+    public async Task<Result<StorageSettingDto>> Handle(SaveStorageSettingCommand r, CancellationToken ct)
+    {
+        var raw = (r.RootPath ?? string.Empty).Trim();
+
+        // 空 = 回到部署默认(用户主动"恢复默认"的出口)
+        if (raw.Length == 0)
+        {
+            var existing = await db.StorageSettings.FirstOrDefaultAsync(x => x.UserId == r.UserId, ct);
+            if (existing is not null)
+            {
+                db.StorageSettings.Remove(existing);
+                await db.SaveChangesAsync(ct);
+            }
+            return Result.Success(await sender.Send(new GetStorageSettingQuery(r.UserId), ct));
+        }
+
+        // ⚠️ 容器里 `~` 会被展开成容器自己的家目录(/root)—— 那是**容器内部**,
+        //    写进去的录音 Mac 上根本看不到(2026-09-27 事故就是这一类)。
+        //    所以这里不猜、不展开,直接让用户填 Mac 上的完整路径。
+        if (raw.StartsWith('~') && LocalStorageRules.RunningInContainer)
+            return Result.Failure<StorageSettingDto>(Error.Validation("Storage.HomeShortcut",
+                "容器里无法把 ~ 展开成你 Mac 上的家目录,请填写完整绝对路径," +
+                "例如 /Users/你的用户名/Documents/your-interview/recordings"));
+
+        var normalized = LocalStorageRules.Normalize(raw);
+
+        if (!normalized.StartsWith('/'))
+            return Result.Failure<StorageSettingDto>(Error.Validation("Storage.NotAbsolute",
+                "请填写本机绝对路径,例如 /Users/你的用户名/Documents/your-interview/recordings"));
+        if (normalized == "/" || normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Length < 2)
+            return Result.Failure<StorageSettingDto>(Error.Validation("Storage.TooShallow",
+                "这个路径太浅(接近系统根目录),请指定一个专门的文件夹。"));
+        if (normalized.Contains("..", StringComparison.Ordinal))
+            return Result.Failure<StorageSettingDto>(Error.Validation("Storage.HasDotDot",
+                "路径里不能包含 .. 。"));
+
+        var row = await db.StorageSettings.FirstOrDefaultAsync(x => x.UserId == r.UserId, ct);
+        if (row is null)
+        {
+            row = new UserStorageSetting(r.UserId, normalized);
+            db.StorageSettings.Add(row);
+        }
+        else
+        {
+            row.Update(normalized);
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        return Result.Success(await sender.Send(new GetStorageSettingQuery(r.UserId), ct));
+    }
+}
+
+/// <summary>
+/// 把已有录音搬到用户自选的目录。
+///
+/// 为什么需要:换了根目录之后,旧目录里的录音虽然还能播(读取会两边都找),
+///   但文件分散在两个地方 —— 正是 Forrest 最反感的"录音散落"。
+///   由于数据库里存的是**相对路径**,搬文件**不需要改任何数据库记录**。
+/// </summary>
+public sealed record MigrateStorageCommand(Guid UserId) : MediatR.IRequest<Result<StorageMigrationDto>>;
+
+public sealed class MigrateStorageCommandHandler(IAudioStore store,
+    ILogger<MigrateStorageCommandHandler> logger)
+    : MediatR.IRequestHandler<MigrateStorageCommand, Result<StorageMigrationDto>>
+{
+    public async Task<Result<StorageMigrationDto>> Handle(MigrateStorageCommand r, CancellationToken ct)
+    {
+        var roots = await store.ResolveRootsAsync(r.UserId, ct);
+        if (!roots.DesiredActive)
+            return Result.Failure<StorageMigrationDto>(Error.Validation("Storage.NotActive",
+                "新目录当前不可用,先按提示挂载好再迁移。"));
+        if (string.Equals(roots.ActiveRoot, roots.DefaultRoot, StringComparison.Ordinal))
+            return Result.Failure<StorageMigrationDto>(Error.Validation("Storage.SameRoot",
+                "当前生效的就是默认目录,无需迁移。"));
+
+        var userPart = r.UserId.ToString("N")[..8];
+        var sourceDir = Path.Combine(roots.DefaultRoot, userPart);
+        if (!Directory.Exists(sourceDir))
+            return Result.Success(new StorageMigrationDto(0, 0, 0, roots.ActiveRoot));
+
+        var moved = 0;
+        var skipped = 0;
+        long bytes = 0;
+
+        foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(roots.DefaultRoot, file);
+            var target = Path.Combine(roots.ActiveRoot, relative);
+            var targetDir = Path.GetDirectoryName(target);
+            if (!string.IsNullOrEmpty(targetDir)) Directory.CreateDirectory(targetDir);
+
+            var size = new FileInfo(file).Length;
+
+            if (File.Exists(target))
+            {
+                skipped++;                       // 目标已有一份 —— 不覆盖,保守处理
+                continue;
+            }
+
+            try
+            {
+                File.Move(file, target);
+                moved++;
+                bytes += size;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "迁移录音失败 {File} → {Target}", file, target);
+                skipped++;
+            }
+        }
+
+        return Result.Success(new StorageMigrationDto(moved, skipped, bytes, roots.ActiveRoot));
     }
 }

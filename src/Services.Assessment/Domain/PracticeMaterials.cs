@@ -499,3 +499,48 @@ public sealed class SpeechSetting
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
+
+/// <summary>
+/// 用户自定义的"**本机**录音存储根目录"(★ 2026-09-27 Forrest)。
+///
+/// 为什么落库而不是写配置文件:
+///   配置文件在容器里是镜像的一部分(只读、改了也会被下次 build 覆盖),
+///   而且改完要重启服务;落库后用户在"我的账户"里改完立即生效,
+///   与 SpeechSetting 的取舍完全一致。
+///
+/// ⚠️ 存的是**用户心里的那个本机目录**(Mac 上的绝对路径,
+///    例如 /Users/forrest/Documents/your-interview/recordings),
+///    不是容器里的挂载点 —— 两者由 docker-compose 的 bind mount 对应起来。
+///    服务端必须**先验证这个目录在容器内真的可写**,验证不过就继续用部署默认目录,
+///    绝不静默写到一个"Mac 上根本看不见"的容器内部路径
+///    (2026-09-27 那个"录音凭空消失"的事故就是这么来的)。
+///
+/// 目录结构沿用既有约定:
+///   {Root}/assessment/{userId 前8位}/{yyyy}/{MM}/{recordingId}.{ext}
+///   即:用户选的是**各服务共用的 recordings 根目录**,本服务只在自己那层子目录里落地。
+/// </summary>
+public sealed class UserStorageSetting
+{
+    private UserStorageSetting() { }
+
+    public UserStorageSetting(Guid userId, string rootPath)
+    {
+        UserId = userId;
+        RootPath = rootPath.Trim();
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>一人一条(与 SpeechSetting 同策略)。</summary>
+    public Guid UserId { get; private set; }
+
+    /// <summary>用户选择的本机存储根目录(绝对路径)。</summary>
+    public string RootPath { get; private set; } = string.Empty;
+
+    public DateTimeOffset UpdatedAt { get; private set; }
+
+    public void Update(string rootPath)
+    {
+        RootPath = rootPath.Trim();
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+}

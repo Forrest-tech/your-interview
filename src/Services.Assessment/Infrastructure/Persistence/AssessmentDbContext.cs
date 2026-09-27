@@ -24,6 +24,8 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
     public DbSet<PracticeRecording> Recordings => Set<PracticeRecording>();
     public DbSet<PracticeRecordingScore> RecordingScores => Set<PracticeRecordingScore>();
     public DbSet<SpeechSetting> SpeechSettings => Set<SpeechSetting>();
+    // ★ 2026-09-27(Forrest):用户在"我的账户"里自选的本机录音存储根目录。
+    public DbSet<UserStorageSetting> StorageSettings => Set<UserStorageSetting>();
     // ★ 2026-09-25(Forrest):练习类别 —— 素材树按场景过滤的下拉数据源。
     public DbSet<PracticeCategory> Categories => Set<PracticeCategory>();
 
@@ -210,6 +212,15 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.Property(x => x.Key).HasColumnType("text").IsRequired();
             e.Property(x => x.Region).HasMaxLength(50).IsRequired();
             e.Property(x => x.Endpoint).HasMaxLength(500);
+        });
+
+        // ★ 2026-09-27(Forrest):本机录音存储根目录(一人一条)
+        b.Entity<UserStorageSetting>(e =>
+        {
+            e.ToTable("practice_storage_settings");
+            e.HasKey(x => x.UserId);
+            // 路径用 1000 上限:macOS 的 PATH_MAX 是 1024,深目录也要装得下
+            e.Property(x => x.RootPath).HasMaxLength(1000).IsRequired();
         });
 
         // 用户简历正文(2026-09-18)

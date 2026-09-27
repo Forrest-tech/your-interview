@@ -933,6 +933,59 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'This account has no fine-grained permissions — basic pages only.',
     fr: 'Ce compte n’a aucune permission fine — pages de base uniquement.'
   },
+  // ★ 2026-09-27:本机录音存储目录(用户可在"我的账户"里自选)
+  'profile.storageTitle': { zh: '录音存储位置', en: 'Recording storage', fr: 'Stockage des enregistrements' },
+  'profile.storageHint': {
+    zh: '录音音频保存在你本机(Mac)的这个文件夹里,不进代码仓库',
+    en: 'Audio files live in this folder on your Mac — never in the code repository',
+    fr: 'Les fichiers audio sont stockés dans ce dossier sur votre Mac — jamais dans le dépôt'
+  },
+  'profile.storagePath': { zh: '本地存储路径', en: 'Local storage folder', fr: 'Dossier de stockage local' },
+  'profile.storagePathHint': {
+    zh: '填 Mac 上的绝对路径,例如 /Users/你的用户名/Documents/your-interview/recordings',
+    en: 'Absolute path on your Mac, e.g. /Users/you/Documents/your-interview/recordings',
+    fr: 'Chemin absolu sur votre Mac, ex. /Users/you/Documents/your-interview/recordings'
+  },
+  'profile.storageSave': { zh: '保存路径', en: 'Save folder', fr: 'Enregistrer le dossier' },
+  'profile.storageMigrate': { zh: '把已有录音搬到这里', en: 'Move existing recordings here', fr: 'Déplacer les enregistrements ici' },
+  'profile.storageMountHint': {
+    zh: '这个目录还没挂进 Docker 容器,暂时仍写入原目录。两步生效:① 先在 Mac 上把原录音文件夹搬到这个新位置;② 把下面的配置写进 .env 并重建容器。',
+    en: 'This folder is not mounted into the container yet, so recordings still go to the previous folder. Two steps: (1) move the old recordings folder to the new location on your Mac; (2) put the config below into .env and recreate the container.',
+    fr: 'Ce dossier n’est pas encore monté dans le conteneur, les enregistrements vont donc encore dans l’ancien dossier. Deux étapes : (1) déplacez l’ancien dossier vers le nouvel emplacement sur votre Mac ; (2) ajoutez la config ci-dessous dans .env et recréez le conteneur.'
+  },
+  'profile.storageCopy': { zh: '复制配置', en: 'Copy config', fr: 'Copier la config' },
+  'profile.storageCopied': { zh: '已复制,粘贴到终端执行即可', en: 'Copied — paste it in your terminal', fr: 'Copié — collez-le dans votre terminal' },
+  'profile.storageActive': {
+    zh: '正在使用:{n}(录音就写在这里)',
+    en: 'Active:{n} — recordings are written here',
+    fr: 'Actif :{n} — les enregistrements y sont écrits'
+  },
+  'profile.storageDefault': {
+    zh: '未自定义,使用部署默认目录:{n}',
+    en: 'Using the deployment default: {n}',
+    fr: 'Utilisation du dossier par défaut : {n}'
+  },
+  'profile.storagePending': {
+    zh: '路径已保存,但容器里还看不到它 —— 需要挂载后重启服务',
+    en: 'Saved, but the container cannot see it yet — mount it and restart the service',
+    fr: 'Enregistré, mais le conteneur ne le voit pas encore — montez-le puis redémarrez'
+  },
+  'profile.storageUnusable': {
+    zh: '这个路径不可用,录音仍写入原目录',
+    en: 'This path is unusable — recordings still go to the previous folder',
+    fr: 'Ce chemin est inutilisable — les enregistrements vont encore dans l’ancien dossier'
+  },
+  'profile.storageUnknown': { zh: '暂时无法确定存储位置', en: 'Storage location unknown right now', fr: 'Emplacement de stockage inconnu' },
+  'profile.storageSaved': { zh: '已保存', en: 'Saved', fr: 'Enregistré' },
+  'profile.storageSaveFail': { zh: '保存失败,请检查路径后重试', en: 'Save failed — check the path and retry', fr: 'Échec de l’enregistrement — vérifiez le chemin' },
+  'profile.storageMigrated': {
+    zh: '已完成:搬了 {n} 个录音文件(数据库记录不变)',
+    en: 'Done: {n} recording file(s) moved (database records unchanged)',
+    fr: 'Terminé : {n} fichier(s) déplacé(s) (enregistrements DB inchangés)'
+  },
+  'profile.storageMigrateFail': { zh: '迁移失败,请先确认新目录已生效', en: 'Migration failed — make sure the new folder is active', fr: 'Échec de la migration — vérifiez que le dossier est actif' },
+  'profile.storageFiles': { zh: '当前目录已有:', en: 'Current folder holds:', fr: 'Contenu actuel du dossier :' },
+
   'profile.fetchFail': { zh: '未能获取最新资料', en: 'Could not fetch the latest profile', fr: 'Impossible de récupérer le profil' },
   'profile.notLatest': {
     zh: '以下内容来自本地缓存,可能不是最新的。',

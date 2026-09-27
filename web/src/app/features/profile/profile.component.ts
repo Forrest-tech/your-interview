@@ -151,7 +151,12 @@ export class ProfileComponent implements OnInit {
   readonly storageStatus = signal<StorageSettingDto | null>(null);
   readonly storageBusy = signal(false);
   readonly storageMsg = signal<string | null>(null);
-  storageDraft = '';
+  /**
+   * 初值直接给默认建议 —— 字段永不为空:
+   * 一则默认路径本来就是用户要的(填完存一下就走流程),
+   * 二则空输入框会被浏览器自作主张地自动填成邮箱(实测 Chrome 会塞 admin@…),误导性极强。
+   */
+  storageDraft = '~/Documents/your-interview/recordings';
 
   /** 未设置时给的默认建议: ~/Documents/your-interview/recordings。 */
   readonly storagePlaceholder = '~/Documents/your-interview/recordings';
@@ -330,7 +335,8 @@ export class ProfileComponent implements OnInit {
     this.practice.getStorageSettings().subscribe({
       next: (s) => {
         this.storageStatus.set(s);
-        this.storageDraft = s.desiredPath ?? '';
+        // 没设置过也显示默认建议(而不是空框) —— 理由同上:防浏览器乱填
+        this.storageDraft = s.desiredPath ?? this.storagePlaceholder;
       },
       // 读不到就当"未自定义":页面其余部分照常工作,不因此整页报错
       error: () => this.storageStatus.set(null)
@@ -348,10 +354,16 @@ export class ProfileComponent implements OnInit {
     this.storageMsg.set(null);
 
     const path = this.storageDraft.trim();
+    // ~ 在容器里无法还原成你 Mac 上的家目录(会变成容器自己的 /root,录音就写丢了)。
+    //    与其让后端报错,不如在这里就把话说明白 —— 立即可见,不用等请求往返。
+    if (path.startsWith('~')) {
+      this.storageMsg.set(this.t('profile.storageNeedAbsolute'));
+      return;
+    }
     this.practice.saveStorageSettings(path.length > 0 ? path : null).subscribe({
       next: (s) => {
         this.storageStatus.set(s);
-        this.storageDraft = s.desiredPath ?? '';
+        this.storageDraft = s.desiredPath ?? this.storagePlaceholder;
         this.storageBusy.set(false);
         this.storageMsg.set(this.t('profile.storageSaved'));
       },

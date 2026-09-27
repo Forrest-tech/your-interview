@@ -977,6 +977,11 @@ const DICT: Record<string, Record<Lang, string>> = {
   },
   'profile.storageUnknown': { zh: '暂时无法确定存储位置', en: 'Storage location unknown right now', fr: 'Emplacement de stockage inconnu' },
   'profile.storageSaved': { zh: '已保存', en: 'Saved', fr: 'Enregistré' },
+  'profile.storageNeedAbsolute': {
+    zh: '请先把 ~ 换成完整路径,例如 /Users/你的用户名/Documents/your-interview/recordings(容器里识别不了 ~)',
+    en: 'Replace ~ with the full path first, e.g. /Users/you/Documents/your-interview/recordings (containers cannot expand ~)',
+    fr: 'Remplacez ~ par le chemin complet, ex. /Users/you/Documents/your-interview/recordings (le conteneur ne peut pas développer ~)'
+  },
   'profile.storageSaveFail': { zh: '保存失败,请检查路径后重试', en: 'Save failed — check the path and retry', fr: 'Échec de l’enregistrement — vérifiez le chemin' },
   'profile.storageMigrated': {
     zh: '已完成:搬了 {n} 个录音文件(数据库记录不变)',

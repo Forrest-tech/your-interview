@@ -147,13 +147,20 @@ services:
     environment:
       <<: *service-env
       ASPNETCORE_URLS: "http://+:8080"
-      # ★ 2026-09-20:录音音频的落盘目录。容器里默认是工作目录下的
-      #   storage/recordings —— 不挂卷的话,done 重建/重新创建容器时
-      #   这些音频会被清掉,而 PostgreSQL 里的录音行还在,
-      #   于是列表里还能看到 Take #x,点播放却 404 "数据不存在"。
+      # ★ 2026-09-27(Forrest 明确要求):**录音必须落在 Mac 本机**,不能只存在
+      #   Docker 数据卷里(数据卷在宿主机上看不见、也摸不着)。
+      #   所以这里用 **bind mount 直接挂宿主机目录**,容器里的 /app/storage/recordings
+      #   就是宿主机上的 src/Services.Assessment/storage/recordings ——
+      #   在 Finder 里能直接看到文件,备份、清理、误删恢复都在自己手里。
+      #
+      #   为什么挂这一个目录(而不是仓库根的 storage/):
+      #     宿主机直接 `dotnet run` 时,IAudioStore 的兜底根目录是
+      #     「当前工作目录 + storage/recordings」,而工作目录正是
+      #     src/Services.Assessment —— 两边因此指向**同一个文件夹**,
+      #     无论用容器跑还是本机跑,录音都不会错位(此前 404 的根因就是这个)。
       PRACTICE_STORAGE_DIR: /app/storage/recordings
     volumes:
-      - assessment-recordings:/app/storage/recordings
+      - ./src/Services.Assessment/storage/recordings:/app/storage/recordings
     depends_on: *service-deps
     healthcheck: *service-health
 
@@ -279,7 +286,7 @@ services:
 volumes:
   rabbitdata:
   analysis-work:
-  # ★ 录音音频持久化:不留在此处的容器 storage 会随容器重建被清掉
-  assessment-recordings:
+  # ★ 练习录音不再用数据卷 —— 改挂宿主机目录(见 assessment.volumes 的说明)。
+  #   旧的 assessment-recordings 卷已确认是空的(9-22 建,从未写入),留着只会误导。
   # ★ 2026-09-24(M1):面试录音 —— interviews 写 / analysis-worker 读,同一份数据
   interview-recordings:

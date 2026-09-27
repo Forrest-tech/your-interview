@@ -41,9 +41,13 @@ public static class LocalStorageRules
 
         if (p == "~" || p.StartsWith("~/", StringComparison.Ordinal))
         {
-            // ⚠️ 容器里 HOME 通常是 /root —— 展开后**不会**被判定为可用(不在挂载点下),
-            //    所以这里不会造成"写进容器内部"的事故,只是让用户看到明确的提示。
-            var home = Environment.GetEnvironmentVariable("HOME");
+            // ⚠️ 容器里的 HOME 是 /root,不是 Mac 的家目录 —— 所以 compose 会把
+            //    **宿主机的家目录**通过 HOST_HOME 注入(见 docker-compose.yml)。
+            //    有了它,用户选 "~/Documents/…" 才能被还原成真正的 Mac 路径;
+            //    没有它,展开结果(/root/…)通不过挂载校验,只会得到明确提示,不会写丢。
+            var home = Environment.GetEnvironmentVariable("HOST_HOME");
+            if (string.IsNullOrWhiteSpace(home))
+                home = Environment.GetEnvironmentVariable("HOME");
             if (string.IsNullOrWhiteSpace(home))
                 home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             p = p == "~" ? home : Path.Combine(home, p[2..]);

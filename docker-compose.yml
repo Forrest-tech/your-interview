@@ -175,6 +175,9 @@ services:
       #   这里把它作为字符串透传进来,设置页才能如实回显"录音现在存在本机的哪个文件夹"。
       #   换位置只改这一处的 RECORDINGS_HOST_DIR(写在 .env 里),下面挂载点会同步跟着变。
       Storage__HostDirectory: ${RECORDINGS_HOST_DIR:-../recordings}
+      # 宿主机家目录:让用户在界面里选 "~/Documents/…" 这类路径时,
+      # 容器能把它还原成 Mac 上的真实路径(否则 ~ 会变成容器自己的 /root)
+      HOST_HOME: ${HOME:-}
     volumes:
       # 想换成"文稿"目录:在 .env 里写
       #   RECORDINGS_HOST_DIR=/Users/你的用户名/Documents/your-interview/recordings

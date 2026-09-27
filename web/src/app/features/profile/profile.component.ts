@@ -151,15 +151,20 @@ export class ProfileComponent implements OnInit {
   readonly storageStatus = signal<StorageSettingDto | null>(null);
   readonly storageBusy = signal(false);
   readonly storageMsg = signal<string | null>(null);
-  /**
-   * 初值直接给默认建议 —— 字段永不为空:
-   * 一则默认路径本来就是用户要的(填完存一下就走流程),
-   * 二则空输入框会被浏览器自作主张地自动填成邮箱(实测 Chrome 会塞 admin@…),误导性极强。
-   */
-  storageDraft = '~/Documents/your-interview/recordings';
 
-  /** 未设置时给的默认建议: ~/Documents/your-interview/recordings。 */
-  readonly storagePlaceholder = '~/Documents/your-interview/recordings';
+  /**
+   * 预设位置 —— **选**而不是填(浏览器拿不到 Mac 的系统文件夹选择框,
+   * 预设下拉是最接近"选择路径"的方式;特殊位置仍可走"自定义")。
+   * `~` 由服务端展开:compose 会把 Mac 的家目录经 HOST_HOME 注入容器。
+   */
+  readonly storagePresetDocs = '~/Documents/your-interview/recordings';
+  readonly storagePresetRepo = '~/dev/recordings';
+  /** 下拉里"自定义路径"的哨兵值。 */
+  readonly storageCustom = '__custom__';
+  /** 下拉选中值(预设路径 或 __custom__)。默认即用户要求的 Documents 方案。 */
+  storageSelect = '~/Documents/your-interview/recordings';
+  /** 选择"自定义路径"时出现的输入框。 */
+  storageDraft = '';
 
   readonly storageStatusKind = computed<'ok' | 'warn' | 'muted'>(() => {
     const s = this.storageStatus()?.status;
@@ -207,9 +212,11 @@ export class ProfileComponent implements OnInit {
     return `${st.fileCount} · ${size}`;
   });
 
-  /** 需要挂载时给的可直接复制的配置片段(改 .env + 重建容器)。 */
+  /** 需要挂载时给的可直接复制的配置片段(改 .env + 重建容器)。优先用后端展开后的绝对路径。 */
   readonly storageMountSnippet = computed(() => {
-    const path = this.storageDraft.trim() || this.storageStatus()?.desiredPath || this.storagePlaceholder;
+    const path = this.storageStatus()?.desiredPath
+      || this.storageDraft.trim()
+      || this.storagePresetDocs;
     const head = path.startsWith('~')
       // Docker 不会把 ~ 展开成你 Mac 上的家目录 —— 必须写完整路径,否则挂载会失败
       ? ['# 请把 ~ 换成完整路径,例如 /Users/你的用户名/Documents/your-interview/recordings', '']
@@ -335,16 +342,31 @@ export class ProfileComponent implements OnInit {
     this.practice.getStorageSettings().subscribe({
       next: (s) => {
         this.storageStatus.set(s);
-        // 没设置过也显示默认建议(而不是空框) —— 理由同上:防浏览器乱填
-        this.storageDraft = s.desiredPath ?? this.storagePlaceholder;
+        this.applyDesiredPath(s.desiredPath);
       },
       // 读不到就当"未自定义":页面其余部分照常工作,不因此整页报错
       error: () => this.storageStatus.set(null)
     });
   }
 
+  /** 后端存的是展开后的绝对路径;预设命中就回到下拉项,否则落到"自定义"。 */
+  private applyDesiredPath(desired: string | null): void {
+    if (!desired) {
+      this.storageSelect = this.storagePresetDocs;
+      this.storageDraft = '';
+      return;
+    }
+    if (desired === this.storagePresetDocs || desired === this.storagePresetRepo) {
+      this.storageSelect = desired;
+      this.storageDraft = '';
+    } else {
+      this.storageSelect = this.storageCustom;
+      this.storageDraft = desired;
+    }
+  }
+
   /**
-   * 保存自选路径。
+   * 保存所选路径。
    * 后端会真去探测这个目录能不能写;不能写也会把路径存下来,
    * 但状态如实标成"待挂载",并回显需要的挂载配置 —— 不会假装成功。
    */
@@ -353,17 +375,14 @@ export class ProfileComponent implements OnInit {
     this.storageBusy.set(true);
     this.storageMsg.set(null);
 
-    const path = this.storageDraft.trim();
-    // ~ 在容器里无法还原成你 Mac 上的家目录(会变成容器自己的 /root,录音就写丢了)。
-    //    与其让后端报错,不如在这里就把话说明白 —— 立即可见,不用等请求往返。
-    if (path.startsWith('~')) {
-      this.storageMsg.set(this.t('profile.storageNeedAbsolute'));
-      return;
-    }
-    this.practice.saveStorageSettings(path.length > 0 ? path : null).subscribe({
+    const raw = (this.storageSelect === this.storageCustom
+      ? this.storageDraft
+      : this.storageSelect).trim();
+
+    this.practice.saveStorageSettings(raw.length > 0 ? raw : null).subscribe({
       next: (s) => {
         this.storageStatus.set(s);
-        this.storageDraft = s.desiredPath ?? this.storagePlaceholder;
+        this.applyDesiredPath(s.desiredPath);
         this.storageBusy.set(false);
         this.storageMsg.set(this.t('profile.storageSaved'));
       },

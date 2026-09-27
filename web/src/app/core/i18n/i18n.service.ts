@@ -940,11 +940,23 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'Audio files live in this folder on your Mac — never in the code repository',
     fr: 'Les fichiers audio sont stockés dans ce dossier sur votre Mac — jamais dans le dépôt'
   },
-  'profile.storagePath': { zh: '本地存储路径', en: 'Local storage folder', fr: 'Dossier de stockage local' },
+  'profile.storagePath': { zh: '录音保存位置', en: 'Recording folder', fr: 'Dossier des enregistrements' },
+  'profile.storagePresetDocs': {
+    zh: '文稿 Documents:~/Documents/your-interview/recordings（推荐）',
+    en: 'Documents: ~/Documents/your-interview/recordings (recommended)',
+    fr: 'Documents : ~/Documents/your-interview/recordings (recommandé)'
+  },
+  'profile.storagePresetRepo': {
+    zh: '与仓库同级:~/dev/recordings（原默认）',
+    en: 'Next to the repo: ~/dev/recordings (previous default)',
+    fr: 'À côté du dépôt : ~/dev/recordings (défaut précédent)'
+  },
+  'profile.storagePresetCustom': { zh: '自定义路径…', en: 'Custom path…', fr: 'Chemin personnalisé…' },
+  'profile.storageCustomPath': { zh: '完整绝对路径', en: 'Full absolute path', fr: 'Chemin absolu complet' },
   'profile.storagePathHint': {
-    zh: '填 Mac 上的绝对路径,例如 /Users/你的用户名/Documents/your-interview/recordings',
-    en: 'Absolute path on your Mac, e.g. /Users/you/Documents/your-interview/recordings',
-    fr: 'Chemin absolu sur votre Mac, ex. /Users/you/Documents/your-interview/recordings'
+    zh: '选好后点"保存路径";需要挂载时页面会给出要复制的配置',
+    en: 'Pick one and hit Save; if mounting is needed the exact config appears below',
+    fr: 'Choisissez puis enregistrez ; la config à copier apparaît si nécessaire'
   },
   'profile.storageSave': { zh: '保存路径', en: 'Save folder', fr: 'Enregistrer le dossier' },
   'profile.storageMigrate': { zh: '把已有录音搬到这里', en: 'Move existing recordings here', fr: 'Déplacer les enregistrements ici' },

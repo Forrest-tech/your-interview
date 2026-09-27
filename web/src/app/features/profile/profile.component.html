@@ -171,10 +171,21 @@
         <mat-card-content>
           <mat-form-field appearance="outline" class="full">
             <mat-label>{{ t('profile.storagePath') }}</mat-label>
-            <input matInput name="storageDraft" [(ngModel)]="storageDraft"
-                   [placeholder]="storagePlaceholder" spellcheck="false" autocomplete="off">
+            <mat-select name="storageSelect" [(ngModel)]="storageSelect" data-testid="storage-select">
+              <mat-option [value]="storagePresetDocs">{{ t('profile.storagePresetDocs') }}</mat-option>
+              <mat-option [value]="storagePresetRepo">{{ t('profile.storagePresetRepo') }}</mat-option>
+              <mat-option [value]="storageCustom">{{ t('profile.storagePresetCustom') }}</mat-option>
+            </mat-select>
             <mat-hint>{{ t('profile.storagePathHint') }}</mat-hint>
           </mat-form-field>
+
+          @if (storageSelect === storageCustom) {
+            <mat-form-field appearance="outline" class="full">
+              <mat-label>{{ t('profile.storageCustomPath') }}</mat-label>
+              <input matInput name="storageDraft" [(ngModel)]="storageDraft"
+                     [placeholder]="storagePresetDocs" spellcheck="false" autocomplete="off">
+            </mat-form-field>
+          }
 
           <div class="storage-status" [class]="'storage-status ' + storageStatusKind()">
             <mat-icon>{{ storageStatusIcon() }}</mat-icon>

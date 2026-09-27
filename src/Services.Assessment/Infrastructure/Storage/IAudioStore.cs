@@ -145,7 +145,7 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
                 return new StorageRoots(_defaultRoot, desired, _defaultRoot, true, null);
 
             return new StorageRoots(_defaultRoot, desired, _defaultRoot, false,
-                $"容器当前挂载的是 {hostDir},还不是你选的这个目录 —— 改 .env 后重建 assessment 容器即可。");
+                $"容器当前挂载的是 {hostDirRaw},还不是你选的这个目录 —— 按 .env 配置改好后重建 assessment 容器即可。");
         }
 
         return new StorageRoots(_defaultRoot, desired, _defaultRoot, false, reason);

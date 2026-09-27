@@ -1039,13 +1039,13 @@ public sealed class SaveStorageSettingCommandHandler(AssessmentDbContext db, Med
             return Result.Success(await sender.Send(new GetStorageSettingQuery(r.UserId), ct));
         }
 
-        // ⚠️ 容器里 `~` 会被展开成容器自己的家目录(/root)—— 那是**容器内部**,
-        //    写进去的录音 Mac 上根本看不到(2026-09-27 事故就是这一类)。
-        //    所以这里不猜、不展开,直接让用户填 Mac 上的完整路径。
-        if (raw.StartsWith('~') && LocalStorageRules.RunningInContainer)
+        // ⚠️ 容器里 `~` 要靠 HOST_HOME(compose 注入的**宿主机**家目录)才能还原成
+        //    Mac 上的真实路径。没有它就展开成 /root/… —— 那是容器内部,写进去的
+        //    录音 Mac 上根本看不到。所以这里不猜,直接让用户二选一:配 HOST_HOME 或填绝对路径。
+        if (raw.StartsWith('~') && LocalStorageRules.RunningInContainer
+            && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("HOST_HOME")))
             return Result.Failure<StorageSettingDto>(Error.Validation("Storage.HomeShortcut",
-                "容器里无法把 ~ 展开成你 Mac 上的家目录,请填写完整绝对路径," +
-                "例如 /Users/你的用户名/Documents/your-interview/recordings"));
+                "容器里识别不了 ~:请在 .env 里加 HOST_HOME=/Users/你的用户名 后重建 assessment 容器,或直接填写完整绝对路径。"));
 
         var normalized = LocalStorageRules.Normalize(raw);
 

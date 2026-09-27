@@ -149,18 +149,16 @@ services:
       ASPNETCORE_URLS: "http://+:8080"
       # ★ 2026-09-27(Forrest 明确要求):**录音必须落在 Mac 本机**,不能只存在
       #   Docker 数据卷里(数据卷在宿主机上看不见、也摸不着)。
-      #   所以这里用 **bind mount 直接挂宿主机目录**,容器里的 /app/storage/recordings
-      #   就是宿主机上的 src/Services.Assessment/storage/recordings ——
-      #   在 Finder 里能直接看到文件,备份、清理、误删恢复都在自己手里。
-      #
-      #   为什么挂这一个目录(而不是仓库根的 storage/):
-      #     宿主机直接 `dotnet run` 时,IAudioStore 的兜底根目录是
-      #     「当前工作目录 + storage/recordings」,而工作目录正是
-      #     src/Services.Assessment —— 两边因此指向**同一个文件夹**,
-      #     无论用容器跑还是本机跑,录音都不会错位(此前 404 的根因就是这个)。
+      #   ★ 2026-09-27 晚(Forrest 再次明确要求):录音**不能放在仓库里面** ——
+      #     放在仓库里迟早有一天会被误提交到 GitHub,是灾难。
+      #   所以这里 bind mount 的是**仓库的同级目录** `../recordings`
+      #     (仓库在 ~/dev/your-interview,录音就在 ~/dev/recordings),
+      #   完全脱离 git 仓库,Finder 里直接可见。
+      #   代码侧 IAudioStore 的兜底根目录也同步改成"仓库同级 recordings/",
+      #   无论用容器跑还是本机 dotnet run,录音都落在同一个地方。
       PRACTICE_STORAGE_DIR: /app/storage/recordings
     volumes:
-      - ./src/Services.Assessment/storage/recordings:/app/storage/recordings
+      - ../recordings:/app/storage/recordings
     depends_on: *service-deps
     healthcheck: *service-health
 

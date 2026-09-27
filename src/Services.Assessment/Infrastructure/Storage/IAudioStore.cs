@@ -41,7 +41,7 @@ public sealed class LocalAudioStore(IConfiguration config, ILogger<LocalAudioSto
 {
     /// <summary>
     /// 存储根目录。
-    /// 优先级:Storage:RootDirectory 配置 > AZURE_STORAGE_DIR 环境变量 > 仓库旁的 storage/recordings。
+    /// 优先级:Storage:RootDirectory 配置 > PRACTICE_STORAGE_DIR 环境变量 > 仓库**同级**的 recordings/。
     /// 未显式配置时落到一个**可预测**的目录,而不是随机临时目录 —— 否则重启后找不到文件。
     /// </summary>
     private readonly string _root = ResolveRoot(config);
@@ -56,8 +56,16 @@ public sealed class LocalAudioStore(IConfiguration config, ILogger<LocalAudioSto
         var env = Environment.GetEnvironmentVariable("PRACTICE_STORAGE_DIR");
         if (!string.IsNullOrWhiteSpace(env)) return env;
 
-        // 兜底:当前工作目录下的 storage/recordings
-        return Path.Combine(Directory.GetCurrentDirectory(), "storage", "recordings");
+        // 兜底(2026-09-27,Forrest 要求):录音**不能放进仓库里面**(防止误提交 GitHub),
+        //   统一放「仓库的同级 recordings/」—— 仓库在 ~/dev/your-interview,录音在 ~/dev/recordings。
+        //   向上找 .git 定位仓库根;找不到 .git(罕见)才退回旧位置。
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            dir = dir.Parent;
+
+        return dir is null
+            ? Path.Combine(Directory.GetCurrentDirectory(), "storage", "recordings")
+            : Path.GetFullPath(Path.Combine(dir.FullName, "..", "recordings"));
     }
 
     public async Task<string> SaveAsync(Guid userId, Guid recordingId, string extension,

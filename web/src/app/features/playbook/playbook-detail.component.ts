@@ -236,6 +236,17 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     this.pastedMaterial.set(null);
   }
 
+  /** 去 Mock 实战:带上公司/职位,方便选择对应模板。 */
+  goMock(): void {
+    const e = this.entry();
+    this.router.navigate(['/mock'], {
+      queryParams: {
+        company: e?.companyName ?? '',
+        role: e?.role ?? ''
+      }
+    });
+  }
+
   /** 目录:从当前材料提取 h2/h3,点击滚动定位。 */
   readonly toc = computed(() => {
     const pasted = this.pastedMaterial();

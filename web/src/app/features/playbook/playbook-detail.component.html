@@ -62,6 +62,9 @@
 
       <!-- 动作区 -->
       <div class="head-actions">
+        <button mat-stroked-button (click)="goMock()" [matTooltip]="t('pb.action.goMockHint')">
+          <mat-icon>record_voice_over</mat-icon> {{ t('pb.action.goMock') }}
+        </button>
         @if (auth.can('interviews.write')) {
           <button mat-stroked-button (click)="startTranscription()" [disabled]="busy() !== null">
             <mat-icon>graphic_eq</mat-icon> {{ t('pb.action.startTranscription') }}

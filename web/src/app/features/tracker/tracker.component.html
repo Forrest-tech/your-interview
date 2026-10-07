@@ -258,6 +258,10 @@
           }
         </div>
         <div class="lr-side" (click)="$event.stopPropagation()">
+          <button mat-icon-button (click)="prepareInterview(a, $event)"
+                  [matTooltip]="t('tracker.prepareInterview')" class="prep-btn">
+            <mat-icon>school</mat-icon>
+          </button>
           <mat-form-field appearance="outline" class="lr-status">
             <mat-select [ngModel]="a.status" (ngModelChange)="quickChangeStatus(a, $event)"
                         [attr.aria-label]="t('tracker.changeStatus')"

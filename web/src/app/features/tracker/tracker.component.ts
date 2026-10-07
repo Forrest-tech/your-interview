@@ -13,6 +13,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { Router } from '@angular/router';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
 import { catchError, forkJoin, of, type Observable } from 'rxjs';
@@ -284,6 +285,7 @@ export class ApplicationDialogComponent {
 export class TrackerComponent implements OnInit, AfterViewInit {
   private readonly api = inject(ApiClient);
   private readonly trackerApi = inject(TrackerApi);
+  private readonly router = inject(Router);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
@@ -417,6 +419,25 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     link.download = `applications-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  /** 备战:从投递一键创建 Playbook 面试条目,JD/公司/职位自动带入。 */
+  prepareInterview(app: Application, event: Event): void {
+    event.stopPropagation();
+    this.api.post<{ id: string }>('/api/interviews', {
+      companyName: app.companyName,
+      role: app.role,
+      location: app.location || null,
+      jdText: (app as any).jdText || null,
+      jdSummary: (app as any).jdSummary || null,
+      notes: `从 Tracker 一键创建 (${new Date().toISOString().slice(0, 10)})`
+    }).subscribe({
+      next: (r) => {
+        this.notify(this.t('tracker.prepCreated'));
+        this.router.navigate(['/playbook', r.id]);
+      },
+      error: (e: Error) => this.notify(e.message, true)
+    });
   }
 
   /** 看板横向滚动:macOS 默认隐藏滚动条,显式左右按钮保证可发现。 */

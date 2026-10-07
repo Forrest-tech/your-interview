@@ -661,6 +661,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.exportEmpty': { zh: '没有可导出的数据', en: 'Nothing to export', fr: 'Rien à exporter' },
   'tracker.followupHint': { zh: '需要跟进:已到跟进时间,或早期阶段投递超过14天无进展', en: 'Follow up needed', fr: 'Suivi nécessaire' },
   'tracker.prepareInterview': { zh: '备战:创建面试准备条目', en: 'Prepare: create interview prep entry', fr: 'Préparer' },
+  'tracker.prepShort': { zh: '备战', en: 'Prep', fr: 'Préparer' },
   'tracker.prepCreated': { zh: '已创建备战条目,正在跳转', en: 'Prep entry created, navigating', fr: 'Créé' },
   'tracker.openLink': { zh: '打开岗位链接', en: 'Open job link', fr: 'Ouvrir le lien de l’offre' },
   'tracker.priority': { zh: '优先级 {n}', en: 'Priority {n}', fr: 'Priorité {n}' },

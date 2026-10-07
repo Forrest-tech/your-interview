@@ -99,6 +99,8 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   /** 当前选中的 tab(0=Overview, 3=Questions, 4=Assets, 5=Edit)。 */
   readonly selectedTab = signal(0);
+  /** 手工补录问答表单是否展开(默认收起)。 */
+  readonly showAddQuestion = signal(false);
 
   readonly id = signal('');
   readonly loading = signal(true);
@@ -697,6 +699,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       next: () => {
         this.busy.set(null);
         this.questionForm = this.emptyQuestionForm();
+        this.showAddQuestion.set(false);
         this.snack.open(this.t('pb.question.added'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },

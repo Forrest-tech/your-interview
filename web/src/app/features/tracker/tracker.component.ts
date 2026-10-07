@@ -346,6 +346,37 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     return Math.max(0, Math.floor(ms / 86400000));
   }
 
+  /** 公司 Logo:优先用后端解析的,fallback 用 Clearbit 按域名猜,再失败显示首字母。 */
+  logoUrl(app: Application): string | null {
+    if (app.companyLogoUrl) return app.companyLogoUrl;
+    const domain = this.guessDomain(app.companyName);
+    return domain ? `https://logo.clearbit.com/${domain}` : null;
+  }
+
+  /** 常见公司名 → 域名(猜错也没关系,加载失败会自动 fallback 到首字母)。 */
+  private guessDomain(name: string): string | null {
+    const n = (name || '').toLowerCase().trim();
+    const map: Record<string, string> = {
+      'td bank': 'td.com',
+      'td securities': 'td.com',
+      'thoughtstorm': 'thoughtstorm.ca',
+      'descartes': 'descartes.com',
+      'questrade': 'questrade.com',
+      'corpay': 'corpay.com',
+      'mohawk medbuy': 'mohawkmedbuy.ca',
+      'rbc': 'rbc.com',
+      'cibc': 'cibc.com',
+      'scotiabank': 'scotiabank.com',
+      'bmo': 'bmo.com',
+    };
+    for (const [k, v] of Object.entries(map)) {
+      if (n.includes(k)) return v;
+    }
+    // 通用猜测:去掉空格+特殊字符+.com
+    const clean = n.replace(/[^a-z0-9]/g, '');
+    return clean.length >= 3 ? `${clean}.com` : null;
+  }
+
   /** 是否需要跟进:到了 nextFollowUpAt,或早期阶段投递超过 14 天无进展。 */
   needsFollowUp(app: Application): boolean {
     if (['Offer', 'Accepted', 'Rejected', 'Withdrawn', 'Ghosted'].includes(app.status)) return false;

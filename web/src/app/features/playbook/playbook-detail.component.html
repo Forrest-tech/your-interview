@@ -736,8 +736,13 @@
             </mat-card>
           }
 
-          <!-- 手工补录问答 -->
+          <!-- 手工补录问答:默认收起,点按钮展开 -->
           @if (auth.can('interviews.write')) {
+            @if (!showAddQuestion()) {
+              <button mat-stroked-button (click)="showAddQuestion.set(true)" class="add-qa-toggle">
+                <mat-icon>add</mat-icon> {{ t('pb.question.addTitle') }}
+              </button>
+            } @else {
             <mat-card class="panel add-question">
               <mat-card-header>
                 <mat-card-title>{{ t('pb.question.addTitle') }}</mat-card-title>
@@ -799,8 +804,12 @@
                         [disabled]="busy() !== null">
                   <mat-icon>add</mat-icon> {{ t('pb.question.add') }}
                 </button>
+                <button mat-button (click)="showAddQuestion.set(false)">
+                  {{ t('common.cancel') }}
+                </button>
               </mat-card-content>
             </mat-card>
+            }
           }
         </div>
       </mat-tab>

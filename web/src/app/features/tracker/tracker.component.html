@@ -215,8 +215,8 @@
     @for (a of items(); track a.id) {
       <div class="list-row" (click)="openDetail(a)" [class.followup]="needsFollowUp(a)">
         <div class="lr-logo">
-          @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
-            <img [src]="a.companyLogoUrl" [alt]="a.companyName"
+          @if (logoUrl(a) && !logoBrokenCard(a.id)) {
+            <img [src]="logoUrl(a)" [alt]="a.companyName"
                  (error)="markLogoBroken(a.id)">
           } @else {
             <span class="lr-initials" [style.background]="avatarColor(a.companyName)">
@@ -258,9 +258,9 @@
           }
         </div>
         <div class="lr-side" (click)="$event.stopPropagation()">
-          <button mat-icon-button (click)="prepareInterview(a, $event)"
+          <button mat-stroked-button (click)="prepareInterview(a, $event)"
                   [matTooltip]="t('tracker.prepareInterview')" class="prep-btn">
-            <mat-icon>school</mat-icon>
+            <mat-icon>school</mat-icon>{{ t('tracker.prepShort') }}
           </button>
           <mat-form-field appearance="outline" class="lr-status">
             <mat-select [ngModel]="a.status" (ngModelChange)="quickChangeStatus(a, $event)"

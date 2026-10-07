@@ -255,7 +255,7 @@
   </div>
   }
 
-  <!-- 列表视图:每行 = 公司 + pipeline stepper + 状态下拉(Simplify 模式) -->
+  <!-- 列表视图:横向一行 = logo | 职位信息 | pipeline | 状态下拉(Simplify 模式) -->
   @if (viewMode() === 'list') {
   <div class="list-view">
     @for (a of items(); track a.id) {
@@ -270,7 +270,7 @@
             </span>
           }
         </div>
-        <div class="lr-main">
+        <div class="lr-info">
           <div class="lr-title">{{ a.role }}</div>
           <div class="lr-sub">
             <span class="lr-company">{{ a.companyName }}</span>
@@ -278,25 +278,19 @@
               <span class="lr-loc"><mat-icon>place</mat-icon>{{ a.location }}</span>
             }
           </div>
-          <!-- pipeline stepper -->
-          <div class="lr-pipe">
-            @for (s of pipelineStages; track s; let i = $index) {
-              <div class="pipe-node" [class.done]="stageReached(a, s)">
-                <span class="pipe-dot"></span>
-                @if (stageDate(a, s)) {
-                  <span class="pipe-date">{{ stageDate(a, s) }}</span>
-                }
-              </div>
+        </div>
+        <div class="lr-pipe">
+          @for (s of pipelineStages; track s; let i = $index) {
+            <div class="pipe-step" [class.done]="stageReached(a, s)">
+              <span class="pipe-dot" [title]="t('status.' + s)"></span>
               @if (i < pipelineStages.length - 1) {
-                <span class="pipe-line" [class.done]="stageReached(a, pipelineStages[i + 1])"></span>
+                <span class="pipe-bar" [class.done]="stageReached(a, pipelineStages[i + 1])"></span>
               }
-            }
-          </div>
-          <div class="lr-stages">
+            </div>
+          }
+          <div class="pipe-labels">
             @for (s of pipelineStages; track s) {
-              <span class="pipe-label" [class.done]="stageReached(a, s)">
-                {{ t('status.' + s) }}
-              </span>
+              <span [class.done]="stageReached(a, s)">{{ t('status.' + s) }}</span>
             }
           </div>
         </div>

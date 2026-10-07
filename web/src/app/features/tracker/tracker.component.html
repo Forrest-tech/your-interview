@@ -11,6 +11,9 @@
       <button mat-stroked-button class="al-btn" (click)="openAnswerLibrary()" [matTooltip]="t('tracker.alTitle')">
         <mat-icon>library_books</mat-icon>{{ t('tracker.alTitle') }}
       </button>
+      <button mat-stroked-button (click)="exportCsv()" [matTooltip]="t('tracker.exportCsv')">
+        <mat-icon>download</mat-icon>{{ t('tracker.exportCsv') }}
+      </button>
       <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>

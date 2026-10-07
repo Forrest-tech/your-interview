@@ -371,6 +371,37 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     });
   }
 
+  /** 导出 CSV(Simplify 对等功能):当前筛选下的所有投递。 */
+  exportCsv(): void {
+    const rows = this.items();
+    if (rows.length === 0) {
+      this.snack.open(this.t('tracker.exportEmpty'), this.t('common.close'), { duration: 2500 });
+      return;
+    }
+    const header = ['Company', 'Role', 'Location', 'Status', 'Priority', 'Applied Date', 'Salary', 'Link', 'Notes'];
+    const esc = (v: unknown): string => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [header.join(',')];
+    for (const a of rows) {
+      lines.push([
+        esc(a.companyName), esc(a.role), esc(a.location),
+        esc(this.i18n.t('status.' + a.status)), esc(a.priority),
+        esc(a.appliedDate), esc(a.salary), esc(a.link),
+        esc((a.notes ?? '').replace(/\n/g, ' '))
+      ].join(','));
+    }
+    // BOM 让 Excel 正确识别 UTF-8 中文
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `applications-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   /** 看板横向滚动:macOS 默认隐藏滚动条,显式左右按钮保证可发现。 */
   private readonly boardEl = viewChild<ElementRef<HTMLElement>>('board');
   private readonly canLeft = signal(false);

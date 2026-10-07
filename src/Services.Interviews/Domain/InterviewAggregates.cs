@@ -159,6 +159,12 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public int? RelevanceScore { get; private set; }
     public string? AnalysisSummary { get; private set; }
 
+    /// <summary>
+    /// 客观声学指标 JSON(缺口4,2026-10-07)。Worker 回写时带上,
+    /// 内容即 Analysis.Worker 的 SpeechMetrics 序列化。存原文,前端直接展示。
+    /// </summary>
+    public string? SpeechMetricsJson { get; private set; }
+
     public IReadOnlyCollection<InterviewAsset> Assets => _assets.AsReadOnly();
     public IReadOnlyCollection<InterviewQuestion> Questions => _questions.AsReadOnly();
     public IReadOnlyCollection<InterviewWeakness> Weaknesses => _weaknesses.AsReadOnly();
@@ -310,7 +316,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public void ApplyAnalysis(int overall, int pronunciation, int fluency, int structure,
         int technicalDepth, int relevance, string? summary,
         IEnumerable<QuestionDraft>? questions = null,
-        IEnumerable<WeaknessDraft>? weaknesses = null)
+        IEnumerable<WeaknessDraft>? weaknesses = null,
+        string? speechMetricsJson = null)
     {
         OverallScore = overall;
         PronunciationScore = pronunciation;
@@ -319,6 +326,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         TechnicalDepthScore = technicalDepth;
         RelevanceScore = relevance;
         AnalysisSummary = summary;
+        // 指标 JSON 可空:老 Worker/手动回写可能不带
+        if (!string.IsNullOrWhiteSpace(speechMetricsJson))
+            SpeechMetricsJson = speechMetricsJson;
 
         if (questions is not null)
         {

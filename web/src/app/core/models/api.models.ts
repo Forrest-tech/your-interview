@@ -224,6 +224,8 @@ export interface InterviewEntry {
   companyProfile?: string;
   notes?: string;
   analysisSummary?: string;
+  /** 客观声学指标(缺口4):Worker 回写,字段与后端 SpeechMetricsDto 对应。 */
+  speechMetrics?: SpeechMetrics;
   failureReason?: string;
   // 六维
   overallScore?: number;
@@ -298,6 +300,31 @@ export interface GuidanceVersion {
   version: number;
   generatedAt: string;
   model: string;
+}
+
+/** 客观声学指标(缺口4)。 */
+export interface ProblemWord {
+  word: string;
+  accuracyScore: number;
+  fluencyScore?: number;
+  startSeconds: number;
+  endSeconds: number;
+}
+
+export interface SpeechMetrics {
+  durationSeconds: number;
+  wordCount: number;
+  wordsPerMinute: number;
+  averageSentenceLength: number;
+  shortSentenceCount: number;
+  fillerWordCount: number;
+  fillerWordBreakdown?: Record<string, number>;
+  selfRepetitionCount: number;
+  longPauseCount: number;
+  totalSilenceSeconds: number;
+  pronunciationAccuracy: number;
+  lowScoreWordRatio: number;
+  problemWords?: ProblemWord[];
 }
 
 /** 问答候选(缺口3):勾选导入 TechStack。 */

@@ -21,7 +21,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
-  InterviewRound, InterviewStatus, InterviewWeakness, QuestionCandidate
+  InterviewRound, InterviewStatus, InterviewWeakness, QuestionCandidate, SpeechMetrics
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -270,6 +270,12 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     if (!g) return null;
     return this.guidanceVersions().find((v) => v.version === g.version) ?? null;
   });
+
+  /** 填充词明细 → [词, 次数][] ,按次数降序,供模板展示。 */
+  fillerEntries(m: SpeechMetrics): [string, number][] {
+    const d = m.fillerWordBreakdown ?? {};
+    return Object.entries(d).sort((a, b) => b[1] - a[1]);
+  }
 
   selectGuidanceVersionById(id: string): void {
     const v = this.guidanceVersions().find((x) => x.id === id);

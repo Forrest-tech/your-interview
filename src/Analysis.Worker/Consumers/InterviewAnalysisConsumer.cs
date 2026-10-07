@@ -203,7 +203,8 @@ public sealed class InterviewAnalysisRequestedConsumer(
             relevance = scores.Relevance,
             summary = BuildSummary(artifact, scores),
             questions = Array.Empty<object>(),   // 问题清单需要面试官问题,由人工/后续分析补
-            weaknesses = BuildWeaknesses(artifact, scores)
+            weaknesses = BuildWeaknesses(artifact, scores),
+            speechMetrics = artifact.Metrics   // 缺口4:客观声学指标回写入库,前端展示
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post,

@@ -649,3 +649,37 @@ mat-progress-bar {
     }
   }
 }
+
+/* 客观声学指标(缺口4) */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 6px;
+
+  .metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 6px;
+    border-radius: 6px;
+    background: #f5f7fa;
+
+    .m-value { font-size: 22px; font-weight: 700; color: #333; }
+    .m-label { font-size: 11px; color: #777; margin-top: 2px; }
+  }
+}
+.sub-title { margin: 12px 0 6px; font-size: 13px; color: #555; }
+.filler-list {
+  display: flex; flex-wrap: wrap; gap: 6px;
+
+  .filler-chip {
+    font-size: 12px;
+    background: #eef1f6;
+    border-radius: 12px;
+    padding: 3px 10px;
+    color: #444;
+
+    &.warn { background: #fdecea; color: #b3261e; }
+  }
+}

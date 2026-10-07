@@ -145,6 +145,73 @@
             </mat-card-content>
           </mat-card>
 
+          <!-- 客观声学指标(缺口4):可测量的数字,不是主观打分 -->
+          @if (e.speechMetrics) {
+            <mat-card class="panel">
+              <mat-card-header>
+                <mat-card-title>客观声学指标</mat-card-title>
+                <mat-card-subtitle>只统计候选人自己的发言 · 舒适语速约 130–170 词/分钟</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="metric-grid">
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.wordsPerMinute | number:'1.0-0' }}</span>
+                    <span class="m-label">词/分钟</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.averageSentenceLength | number:'1.1-1' }}</span>
+                    <span class="m-label">平均句长(词)</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.shortSentenceCount }}</span>
+                    <span class="m-label">过短句(&lt;5词)</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.fillerWordCount }}</span>
+                    <span class="m-label">填充词总数</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.longPauseCount }}</span>
+                    <span class="m-label">长停顿(&gt;2s)</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.selfRepetitionCount }}</span>
+                    <span class="m-label">自我重复</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.pronunciationAccuracy | number:'1.0-0' }}</span>
+                    <span class="m-label">发音准确度</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.wordCount }}</span>
+                    <span class="m-label">总词数</span>
+                  </div>
+                </div>
+
+                @if (fillerEntries(e.speechMetrics).length > 0) {
+                  <h4 class="sub-title">填充词明细</h4>
+                  <div class="filler-list">
+                    @for (f of fillerEntries(e.speechMetrics); track f[0]) {
+                      <span class="filler-chip">{{ f[0] }} × {{ f[1] }}</span>
+                    }
+                  </div>
+                }
+
+                @if (e.speechMetrics.problemWords && e.speechMetrics.problemWords.length > 0) {
+                  <h4 class="sub-title">术语发音关注</h4>
+                  <div class="filler-list">
+                    @for (w of e.speechMetrics.problemWords; track w.word) {
+                      <span class="filler-chip warn"
+                            [matTooltip]="'准确度 ' + (w.accuracyScore | number:'1.0-0') + ' 分'">
+                        {{ w.word }}
+                      </span>
+                    }
+                  </div>
+                }
+              </mat-card-content>
+            </mat-card>
+          }
+
           <!-- 短板清单 -->
           <mat-card class="panel">
             <mat-card-header>

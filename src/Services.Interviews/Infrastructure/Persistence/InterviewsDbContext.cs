@@ -80,6 +80,7 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.Notes).HasMaxLength(20000);
             e.Property(x => x.FailureReason).HasMaxLength(4000);
             e.Property(x => x.AnalysisSummary).HasMaxLength(20000);
+            e.Property(x => x.SpeechMetricsJson).HasColumnType("text");
 
             // 枚举存字符串:数据库可读性远高于魔法数字,加新枚举值也不会错位
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);

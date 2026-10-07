@@ -197,9 +197,12 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> ApplyAnalysis(Guid id, [FromBody] ApplyAnalysisBody body,
         CancellationToken ct)
     {
+        var metricsJson = body.SpeechMetrics.HasValue
+            ? body.SpeechMetrics.Value.GetRawText()
+            : null;
         var r = await sender.Send(new ApplyAnalysisCommand(id, body.Overall, body.Pronunciation,
             body.Fluency, body.Structure, body.TechnicalDepth, body.Relevance, body.Summary,
-            body.Questions, body.Weaknesses), ct);
+            body.Questions, body.Weaknesses, metricsJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -423,7 +426,8 @@ public sealed record TranscriptBody(string FullText, string? SegmentsJson = null
 public sealed record ApplyAnalysisBody(
     int Overall, int Pronunciation, int Fluency, int Structure, int TechnicalDepth, int Relevance,
     string? Summary = null, List<QuestionDraft>? Questions = null,
-    List<WeaknessDraft>? Weaknesses = null);
+    List<WeaknessDraft>? Weaknesses = null,
+    System.Text.Json.JsonElement? SpeechMetrics = null);
 
 public sealed record FailureBody(string Reason);
 

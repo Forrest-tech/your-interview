@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -47,6 +48,21 @@ public sealed record QuestionCandidateDto(
     Guid QuestionId, string QuestionText, string? MyAnswerText, string? RecommendedAnswer,
     string? Category, int Difficulty, bool GotStuck, string? Assessment);
 
+/// <summary>
+/// 客观声学指标 DTO(缺口4)。字段与 Analysis.Worker 的 SpeechMetrics 一一对应,
+/// 由存储的 SpeechMetricsJson 反序列化得到,缺字段时容错(可空/默认值)。
+/// </summary>
+public sealed record SpeechMetricsDto(
+    double DurationSeconds, int WordCount, double WordsPerMinute,
+    double AverageSentenceLength, int ShortSentenceCount, int FillerWordCount,
+    Dictionary<string, int>? FillerWordBreakdown, int SelfRepetitionCount,
+    int LongPauseCount, double TotalSilenceSeconds, double PronunciationAccuracy,
+    double LowScoreWordRatio, List<ProblemWordDto>? ProblemWords);
+
+public sealed record ProblemWordDto(
+    string Word, double AccuracyScore, double? FluencyScore,
+    double StartSeconds, double EndSeconds);
+
 public sealed record InterviewEntryDto(
     Guid Id, Guid CompanyId, string CompanyName, Guid? JobApplicationId, string Role,
     string? CompanyProfile, string? JdText, string? JdSummary,
@@ -55,6 +71,7 @@ public sealed record InterviewEntryDto(
     string Status, string? FailureReason, DateTimeOffset? TranscribedAt, DateTimeOffset? AnalyzedAt,
     int? OverallScore, int? PronunciationScore, int? FluencyScore, int? StructureScore,
     int? TechnicalDepthScore, int? RelevanceScore, string? AnalysisSummary,
+    SpeechMetricsDto? SpeechMetrics,
     int AssetCount, int QuestionCount, int WeaknessCount, int RoundCount,
     List<AssetDto> Assets, List<QuestionDto> Questions, List<WeaknessDto> Weaknesses,
     List<RoundDto> Rounds,
@@ -185,7 +202,8 @@ public sealed record RequestAnalysisCommand(Guid EntryId) : IRequest<Result>;
 public sealed record ApplyAnalysisCommand(
     Guid EntryId, int Overall, int Pronunciation, int Fluency, int Structure,
     int TechnicalDepth, int Relevance, string? Summary,
-    List<QuestionDraft>? Questions, List<WeaknessDraft>? Weaknesses) : IRequest<Result>;
+    List<QuestionDraft>? Questions, List<WeaknessDraft>? Weaknesses,
+    string? SpeechMetricsJson = null) : IRequest<Result>;
 
 public sealed record MarkEntryFailedCommand(Guid EntryId, string Reason) : IRequest<Result>;
 
@@ -357,12 +375,29 @@ public static class InterviewMappingExtensions
         e.Status.ToString(), e.FailureReason, e.TranscribedAt, e.AnalyzedAt,
         e.OverallScore, e.PronunciationScore, e.FluencyScore, e.StructureScore,
         e.TechnicalDepthScore, e.RelevanceScore, e.AnalysisSummary,
+        ParseSpeechMetrics(e.SpeechMetricsJson),
         e.Assets.Count, e.Questions.Count, e.Weaknesses.Count, e.Rounds.Count,
         e.Assets.OrderBy(x => x.UploadedAt).Select(x => x.ToDto()).ToList(),
         e.Questions.OrderBy(x => x.Sequence).Select(x => x.ToDto()).ToList(),
         e.Weaknesses.OrderByDescending(x => x.Severity).Select(x => x.ToDto()).ToList(),
         e.Rounds.OrderBy(x => x.Order).Select(x => x.ToDto()).ToList(),
         e.CreatedAt, e.UpdatedAt);
+
+    /// <summary>指标 JSON 反序列化:坏数据/缺字段时返回 null,前端按"无指标"处理。</summary>
+    private static SpeechMetricsDto? ParseSpeechMetrics(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<SpeechMetricsDto>(json, JsonOpts);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     /// <summary>列表项只带聚合的标量字段(不带子集合),避免列表页把大文本拖出来。</summary>
     public static InterviewEntryListItemDto ToListItemDto(this InterviewEntry e) => new(
@@ -791,7 +826,7 @@ public sealed class ApplyAnalysisCommandHandler(InterviewsDbContext db)
         {
             e.ApplyAnalysis(request.Overall, request.Pronunciation, request.Fluency,
                 request.Structure, request.TechnicalDepth, request.Relevance, request.Summary,
-                request.Questions, request.Weaknesses);
+                request.Questions, request.Weaknesses, request.SpeechMetricsJson);
             // 分析结果回写 = 流水线终点:同事务关单
             await db.StageCloseOpenJobsAsync(request.EntryId, AnalysisJobStatus.Succeeded, null, ct);
             await db.SaveChangesAsync(ct);

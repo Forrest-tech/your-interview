@@ -49,7 +49,7 @@ interface DialogData {
         <div class="al-form">
           <mat-form-field appearance="outline">
             <mat-label>{{ t('tracker.alCategory') }}</mat-label>
-            <input matInput [(ngModel)]="category" placeholder="如 自我介绍">
+            <input matInput [(ngModel)]="category" [placeholder]="t('tracker.alCatPh')">
           </mat-form-field>
           <mat-form-field appearance="outline" class="full">
             <mat-label>{{ t('tracker.alQuestion') }}</mat-label>
@@ -64,7 +64,7 @@ interface DialogData {
                     (click)="save()">
               {{ editingId() ? t('tracker.alEdit') : t('tracker.alNew') }}
             </button>
-            <button mat-button (click)="cancel()">取消</button>
+            <button mat-button (click)="cancel()">{{ t('common.cancel') }}</button>
           </div>
         </div>
       }
@@ -111,7 +111,7 @@ interface DialogData {
           <mat-icon>add</mat-icon>{{ t('tracker.alNew') }}
         </button>
       }
-      <button mat-button mat-dialog-close>关闭</button>
+      <button mat-button mat-dialog-close>{{ t('common.close') }}</button>
     </mat-dialog-actions>
   `,
   styles: [`
@@ -202,11 +202,11 @@ export class AnswerLibraryDialogComponent {
 
   save(): void {
     if (!this.question.trim() || !this.answer.trim()) {
-      alert('问题和回答均为必填');
+      alert(this.t('tracker.alRequired'));
       return;
     }
     const body = {
-      category: this.category.trim() || '通用',
+      category: this.category.trim() || this.t('tracker.alDefaultCat'),
       question: this.question.trim(),
       answer: this.answer.trim()
     };
@@ -219,7 +219,7 @@ export class AnswerLibraryDialogComponent {
         this.showForm.set(false);
         this.editingId.set(null);
         this.load();
-        this.snack.open(this.t(editing ? 'tracker.alSaved' : 'tracker.alCreated'), '关闭', { duration: 2200 });
+        this.snack.open(this.t(editing ? 'tracker.alSaved' : 'tracker.alCreated'), this.t('common.close'), { duration: 2200 });
       },
       error: (err) => alert(this.readError(err))
     });
@@ -230,7 +230,7 @@ export class AnswerLibraryDialogComponent {
     this.trackerApi.deleteAnswerTemplate(item.id).subscribe({
       next: () => {
         this.load();
-        this.snack.open(this.t('tracker.alDeleted'), '关闭', { duration: 2200 });
+        this.snack.open(this.t('tracker.alDeleted'), this.t('common.close'), { duration: 2200 });
       },
       error: (err) => alert(this.readError(err))
     });
@@ -238,6 +238,6 @@ export class AnswerLibraryDialogComponent {
 
   private readError(err: unknown): string {
     const e = err as { error?: { description?: string; detail?: string; title?: string }; message?: string };
-    return e?.error?.description ?? e?.error?.detail ?? e?.error?.title ?? e?.message ?? '操作失败,请重试。';
+    return e?.error?.description ?? e?.error?.detail ?? e?.error?.title ?? e?.message ?? this.t('tracker.opFailed');
   }
 }

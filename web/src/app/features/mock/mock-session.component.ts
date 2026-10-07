@@ -13,6 +13,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { DimensionIssue, MockQuestion, MockSessionDetail } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -106,6 +107,9 @@ export class MockSessionComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
 
   readonly id = signal('');
   readonly loading = signal(true);
@@ -147,12 +151,12 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     const s = this.lastResult()?.scores ?? this.session()?.averageScores;
     if (!s) return [];
     return [
-      { key: 'pronunciation', label: '发音', value: s.pronunciation },
-      { key: 'fluency', label: '流畅度', value: s.fluency },
-      { key: 'sentenceIntegrity', label: '句子完整', value: s.sentenceIntegrity },
-      { key: 'structure', label: '结构', value: s.structure },
-      { key: 'technicalDepth', label: '技术深度', value: s.technicalDepth },
-      { key: 'relevance', label: '相关性', value: s.relevance }
+      { key: 'pronunciation', label: this.t('dim.pronunciation'), value: s.pronunciation },
+      { key: 'fluency', label: this.t('dim.fluency'), value: s.fluency },
+      { key: 'sentenceIntegrity', label: this.t('dim.sentenceIntegrity'), value: s.sentenceIntegrity },
+      { key: 'structure', label: this.t('dim.structure'), value: s.structure },
+      { key: 'technicalDepth', label: this.t('dim.technicalDepth'), value: s.technicalDepth },
+      { key: 'relevance', label: this.t('dim.relevance'), value: s.relevance }
     ];
   });
 
@@ -164,7 +168,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     const id = this.route.snapshot.paramMap.get('id') ?? '';
     this.id.set(id);
     if (!id) {
-      this.error.set('缺少会话 ID');
+      this.error.set(this.t('mock.errMissingId'));
       this.loading.set(false);
       return;
     }
@@ -228,7 +232,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
 
     if (!q) return;
     if (!text) {
-      this.snack.open('请先写下你的回答', '关闭', { duration: 3000 });
+      this.snack.open(this.t('mock.errAnswerRequired'), this.t('common.close'), { duration: 3000 });
       return;
     }
 
@@ -243,13 +247,13 @@ export class MockSessionComponent implements OnInit, OnDestroy {
         next: () => {
           this.busy.set(null);
           this.answerText.set('');
-          this.snack.open('回答已提交', '关闭', { duration: 2500 });
+          this.snack.open(this.t('mock.answerSubmitted'), this.t('common.close'), { duration: 2500 });
           // 重新拉会话:评分由后端流水线写回,以服务端为准而不是本地拼
           this.load(false);
         },
         error: (e: Error) => {
           this.busy.set(null);
-          this.snack.open(e.message, '关闭', { duration: 5000 });
+          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
         }
       });
   }
@@ -281,7 +285,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
           this.lastResult.set(upcoming.state === 'Scored' ? upcoming : null);
           this.answerText.set('');
         } else {
-          this.nextHint.set('没有更多待答题目了。可以「结束并总结」拿到本轮总评。');
+          this.nextHint.set(this.t('mock.noMoreQuestions'));
         }
         return of(null);
       }))
@@ -307,7 +311,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------- 结束
 
   complete(): void {
-    if (!confirm('结束本轮练习并生成总评?结束后不能再作答。')) return;
+    if (!confirm(this.t('mock.confirmComplete'))) return;
 
     this.busy.set('complete');
     this.api.post<{
@@ -321,12 +325,12 @@ export class MockSessionComponent implements OnInit, OnDestroy {
         next: (r) => {
           this.busy.set(null);
           this.summary.set(r);
-          this.snack.open('本轮已结束,总评已生成', '关闭', { duration: 4000 });
+          this.snack.open(this.t('mock.completedToast'), this.t('common.close'), { duration: 4000 });
           this.load(false);
         },
         error: (e: Error) => {
           this.busy.set(null);
-          this.snack.open(e.message, '关闭', { duration: 5000 });
+          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
         }
       });
   }
@@ -335,14 +339,19 @@ export class MockSessionComponent implements OnInit, OnDestroy {
 
   stateLabel(state: string): string {
     const map: Record<string, string> = {
-      Asked: '未作答', Answered: '已作答', Scored: '已评分', Skipped: '已跳过'
+      Asked: this.t('mock.stateAsked'),
+      Answered: this.t('mock.stateAnswered'),
+      Scored: this.t('mock.stateScored'),
+      Skipped: this.t('mock.stateSkipped')
     };
     return map[state] ?? state;
   }
 
   statusLabel(s: string): string {
     const map: Record<string, string> = {
-      InProgress: '进行中', Completed: '已完成', Abandoned: '已放弃'
+      InProgress: this.t('mock.statusInProgress'),
+      Completed: this.t('mock.statusCompleted'),
+      Abandoned: this.t('mock.statusAbandoned')
     };
     return map[s] ?? s;
   }

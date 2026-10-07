@@ -99,7 +99,7 @@ export class ProfileComponent implements OnInit {
   readonly mustChange = computed(() => this.user()?.mustChangePassword === true);
 
   readonly displayName = computed(() =>
-    this.user()?.displayName || this.auth.displayName() || '未命名用户'
+    this.user()?.displayName || this.auth.displayName() || this.t('prof.unnamedUser')
   );
 
   readonly initials = computed(() => {
@@ -128,15 +128,15 @@ export class ProfileComponent implements OnInit {
   readonly tzOptions = computed<TzOption[]>(() => {
     const stored = this.user()?.timeZone;
     const base: TzOption[] = [
-      { id: 'America/Toronto', label: '多伦多 Toronto' },
-      { id: 'America/Vancouver', label: '温哥华 Vancouver' },
-      { id: 'America/New_York', label: '纽约 New York' },
-      { id: 'America/Los_Angeles', label: '洛杉矶 Los Angeles' },
-      { id: 'Europe/London', label: '伦敦 London' },
-      { id: 'Europe/Paris', label: '巴黎 Paris' },
-      { id: 'Asia/Shanghai', label: '上海 Shanghai' },
-      { id: 'Asia/Hong_Kong', label: '香港 Hong Kong' },
-      { id: 'Asia/Tokyo', label: '东京 Tokyo' },
+      { id: 'America/Toronto', label: this.t('prof.tzToronto') },
+      { id: 'America/Vancouver', label: this.t('prof.tzVancouver') },
+      { id: 'America/New_York', label: this.t('prof.tzNewYork') },
+      { id: 'America/Los_Angeles', label: this.t('prof.tzLosAngeles') },
+      { id: 'Europe/London', label: this.t('prof.tzLondon') },
+      { id: 'Europe/Paris', label: this.t('prof.tzParis') },
+      { id: 'Asia/Shanghai', label: this.t('prof.tzShanghai') },
+      { id: 'Asia/Hong_Kong', label: this.t('prof.tzHongKong') },
+      { id: 'Asia/Tokyo', label: this.t('prof.tzTokyo') },
       { id: 'UTC', label: 'UTC' }
     ];
     if (stored && !base.some((o) => o.id === stored)) {
@@ -219,7 +219,7 @@ export class ProfileComponent implements OnInit {
       || this.storagePresetDocs;
     const head = path.startsWith('~')
       // Docker 不会把 ~ 展开成你 Mac 上的家目录 —— 必须写完整路径,否则挂载会失败
-      ? ['# 请把 ~ 换成完整路径,例如 /Users/你的用户名/Documents/your-interview/recordings', '']
+      ? [this.t('prof.mountPathComment'), '']
       : [];
     return [
       ...head,
@@ -283,7 +283,7 @@ export class ProfileComponent implements OnInit {
       },
       // 失败不整页报错:本地缓存的 user 仍可展示,只在顶部提示"不是最新的"
       error: (e: Error) => {
-        this.error.set(e.message || '网络异常,请稍后重试');
+        this.error.set(e.message || this.t('prof.errNetwork'));
         this.loading.set(false);
       }
     });
@@ -493,16 +493,17 @@ export class ProfileComponent implements OnInit {
 
   /** 权限前缀 → 中文分组名。目的只是让分组有个人话标题,未收录的前缀直接显示原文。 */
   private groupLabel(prefix: string): string {
-    const known: Record<string, string> = {
-      admin: '管理后台',
-      jobs: '投递跟踪',
-      interviews: '实战机经',
-      knowledge: '技术栈',
-      mock: 'AI 模拟',
-      analytics: '数据分析',
-      profile: '个人资料',
-      other: '其他权限'
+    const keyMap: Record<string, string> = {
+      admin: 'prof.permGroupAdmin',
+      jobs: 'prof.permGroupJobs',
+      interviews: 'prof.permGroupInterviews',
+      knowledge: 'prof.permGroupKnowledge',
+      mock: 'prof.permGroupMock',
+      analytics: 'prof.permGroupAnalytics',
+      profile: 'prof.permGroupProfile',
+      other: 'prof.permGroupOther'
     };
-    return known[prefix] ?? prefix;
+    const key = keyMap[prefix];
+    return key ? this.t(key) : prefix;
   }
 }

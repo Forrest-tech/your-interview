@@ -33,19 +33,9 @@ export interface SmartAddDialogResult {
 const WORK_MODES = ['Remote', 'Hybrid', 'Onsite'];
 const PRIORITIES = ['High', 'Medium', 'Low'];
 const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
-const ROUND_STAGE_LABELS: Record<string, string> = {
-  Screen: '初筛',
-  Technical: '技术面',
-  SystemDesign: '系统设计',
-  Behavioral: '行为面',
-  Final: '终面'
-};
+
 const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
-const INVITE_FORMAT_LABELS: Record<string, string> = {
-  Phone: '电话',
-  Video: '视频',
-  Onsite: '现场'
-};
+
 
 /**
  * 智能粘贴弹窗(需求 6.2.2 / 6.2.3)。
@@ -66,37 +56,37 @@ const INVITE_FORMAT_LABELS: Record<string, string> = {
   template: `
     <h2 mat-dialog-title>
       <mat-icon>auto_awesome</mat-icon>
-      {{ mode() === 'jd' ? '智能粘贴岗位' : '粘贴面试邀请' }}
+      {{ mode() === 'jd' ? t('tracker.saJd') : t('tracker.saInvite') }}
     </h2>
 
     <mat-dialog-content class="sad-body">
       <div class="mode-switch">
         <button type="button" class="mode-btn" [class.on]="mode() === 'jd'"
                 (click)="mode.set('jd')">
-          <mat-icon>work_outline</mat-icon> 岗位 JD
+          <mat-icon>work_outline</mat-icon>{{ t('tracker.saTabJd') }}
         </button>
         <button type="button" class="mode-btn" [class.on]="mode() === 'invite'"
                 (click)="mode.set('invite')">
-          <mat-icon>event_available</mat-icon> 面试邀请
+          <mat-icon>event_available</mat-icon>{{ t('tracker.saTabInvite') }}
         </button>
       </div>
 
       <!-- ============ 第一步:粘贴 ============ -->
       <mat-form-field appearance="outline" class="full">
-        <mat-label>{{ mode() === 'jd' ? '粘贴 JD 链接 / 正文 / 截图' : '粘贴邀请邮件或消息' }}</mat-label>
+        <mat-label>{{ mode() === 'jd' ? t('tracker.saPasteJd') : t('tracker.saPasteInvite') }}</mat-label>
         <textarea matInput rows="5" [(ngModel)]="raw"
-                  placeholder="支持 LinkedIn / Indeed / Greenhouse / Workday / 公司官网链接,或直接粘贴 JD 正文"></textarea>
+                  [placeholder]="t('tracker.saPastePh')"></textarea>
         <mat-icon matPrefix>content_paste</mat-icon>
       </mat-form-field>
 
       <div class="paste-row">
         <label class="ai-toggle">
           <input type="checkbox" [(ngModel)]="useAi">
-          用 AI 补全规则解不出的字段
+          {{ t('tracker.saAiFill') }}
         </label>
         <span class="spacer"></span>
         <button mat-stroked-button type="button" [disabled]="!canParse() || busy()" (click)="parse()">
-          <mat-icon>auto_awesome</mat-icon>{{ parsed() ? '重新解析' : '解析' }}
+          <mat-icon>auto_awesome</mat-icon>{{ parsed() ? t('tracker.saReparse') : t('tracker.saParse') }}
         </button>
       </div>
 
@@ -114,40 +104,40 @@ const INVITE_FORMAT_LABELS: Record<string, string> = {
         @if (parsed()) {
           <div class="grid">
             <mat-form-field appearance="outline">
-              <mat-label>公司</mat-label>
+              <mat-label>{{ t('tracker.saCompany') }}</mat-label>
               <input matInput name="jdCompany" [(ngModel)]="jd.company">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>职位</mat-label>
+              <mat-label>{{ t('tracker.saRole') }}</mat-label>
               <input matInput name="jdRole" [(ngModel)]="jd.role">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>地点</mat-label>
+              <mat-label>{{ t('tracker.saLocation') }}</mat-label>
               <input matInput name="jdLocation" [(ngModel)]="jd.location">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>薪资</mat-label>
+              <mat-label>{{ t('tracker.saSalary') }}</mat-label>
               <input matInput name="jdSalary" [(ngModel)]="jd.salary">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>办公形式</mat-label>
+              <mat-label>{{ t('tracker.saWorkMode') }}</mat-label>
               <mat-select name="jdWorkMode" [(ngModel)]="jd.workMode">
-                <mat-option [value]="null">未识别</mat-option>
+                <mat-option [value]="null">{{ t('tracker.saUnrecognized') }}</mat-option>
                 @for (w of workModes; track w) { <mat-option [value]="w">{{ w }}</mat-option> }
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>优先级</mat-label>
+              <mat-label>{{ t('tracker.saPriority') }}</mat-label>
               <mat-select name="jdPriority" [(ngModel)]="jd.priority">
                 @for (p of priorities; track p) { <mat-option [value]="p">{{ p }}</mat-option> }
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>申请截止</mat-label>
+              <mat-label>{{ t('tracker.saDeadline') }}</mat-label>
               <input matInput type="date" name="jdDeadline" [(ngModel)]="jd.deadline">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>初始状态</mat-label>
+              <mat-label>{{ t('tracker.saInitStatus') }}</mat-label>
               <mat-select name="jdStatus" [(ngModel)]="jd.status">
                 @for (s of createStatuses; track s) {
                   <mat-option [value]="s">{{ s }}</mat-option>
@@ -157,17 +147,17 @@ const INVITE_FORMAT_LABELS: Record<string, string> = {
           </div>
 
           <mat-form-field appearance="outline" class="full">
-            <mat-label>岗位链接</mat-label>
+            <mat-label>{{ t('tracker.saJobLink') }}</mat-label>
             <input matInput name="jdLink" [(ngModel)]="jd.link">
           </mat-form-field>
 
           <mat-form-field appearance="outline" class="full">
-            <mat-label>JD 摘要</mat-label>
+            <mat-label>{{ t('tracker.saJdSummary') }}</mat-label>
             <textarea matInput rows="3" name="jdSummary" [(ngModel)]="jd.jdSummary"></textarea>
           </mat-form-field>
 
           <mat-form-field appearance="outline" class="full">
-            <mat-label>匹配关键词(逗号分隔)</mat-label>
+            <mat-label>{{ t('tracker.saKeywords') }}</mat-label>
             <input matInput name="jdKeywords" [(ngModel)]="jd.matchKeywords">
           </mat-form-field>
         }
@@ -175,9 +165,9 @@ const INVITE_FORMAT_LABELS: Record<string, string> = {
         @if (invite()) {
           <div class="grid">
             <mat-form-field appearance="outline" class="full">
-              <mat-label>关联到哪条投递</mat-label>
+              <mat-label>{{ t('tracker.saLinkApp') }}</mat-label>
               <mat-select name="invApp" [(ngModel)]="inviteApplicationId">
-                <mat-option [value]="null">选择投递记录…</mat-option>
+                <mat-option [value]="null">{{ t('tracker.saSelectApp') }}</mat-option>
                 @for (a of applications; track a.id) {
                   <mat-option [value]="a.id">{{ a.companyName }} · {{ a.role }}</mat-option>
                 }
@@ -185,61 +175,61 @@ const INVITE_FORMAT_LABELS: Record<string, string> = {
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>轮次</mat-label>
+              <mat-label>{{ t('tracker.saRound') }}</mat-label>
               <input matInput type="number" min="1" name="invRound" [(ngModel)]="inv.roundNo">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>轮次类型</mat-label>
+              <mat-label>{{ t('tracker.saRoundType') }}</mat-label>
               <mat-select name="invStage" [(ngModel)]="inv.stage">
-                <mat-option [value]="null">未识别</mat-option>
+                <mat-option [value]="null">{{ t('tracker.saUnrecognized') }}</mat-option>
                 @for (s of stages; track s) {
                   <mat-option [value]="s">{{ stageLabel(s) }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>形式</mat-label>
+              <mat-label>{{ t('tracker.saFormat') }}</mat-label>
               <mat-select name="invFormat" [(ngModel)]="inv.format">
-                <mat-option [value]="null">未识别</mat-option>
+                <mat-option [value]="null">{{ t('tracker.saUnrecognized') }}</mat-option>
                 @for (f of formats; track f) {
                   <mat-option [value]="f">{{ formatLabel(f) }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>面试日期</mat-label>
+              <mat-label>{{ t('tracker.saInterviewDate') }}</mat-label>
               <input matInput type="date" name="invDate" [(ngModel)]="inv.date">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>时间</mat-label>
+              <mat-label>{{ t('tracker.saTime') }}</mat-label>
               <input matInput type="time" name="invTime" [(ngModel)]="inv.time">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>面试官</mat-label>
+              <mat-label>{{ t('tracker.saInterviewers') }}</mat-label>
               <input matInput name="invInterviewer" [(ngModel)]="inv.interviewer">
             </mat-form-field>
             <mat-form-field appearance="outline">
-              <mat-label>地点 / 会议链接</mat-label>
+              <mat-label>{{ t('tracker.saMeetLink') }}</mat-label>
               <input matInput name="invLocation" [(ngModel)]="inv.location">
             </mat-form-field>
           </div>
 
           <p class="hint">
-            关联后会登记一轮面试并把投递推进到「面试中」,同时在实战机经里生成一条草稿。
+            {{ t('tracker.saLinkHint') }}
           </p>
         }
       }
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>取消</button>
+      <button mat-button mat-dialog-close>{{ t('common.cancel') }}</button>
       @if (mode() === 'jd') {
         <button mat-raised-button color="primary" [disabled]="!canSaveJd() || busy()" (click)="saveJd()">
-          保存为投递记录
+          {{ t('tracker.saSaveApp') }}
         </button>
       } @else {
         <button mat-raised-button color="primary" [disabled]="!canLinkInvite() || busy()" (click)="linkInvite()">
-          一键关联
+          {{ t('tracker.saLinkOnce') }}
         </button>
       }
     </mat-dialog-actions>
@@ -278,6 +268,7 @@ export class SmartAddDialogComponent {
   private readonly trackerApi = inject(TrackerApi);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
+  tf = (key: string, params: Record<string, string | number>): string => this.i18n.tf(key, params);
 
   readonly applications = this.data?.applications ?? [];
 
@@ -320,8 +311,8 @@ export class SmartAddDialogComponent {
   canSaveJd = computed(() => this.jd.company.trim().length > 0 && this.jd.role.trim().length > 0);
   canLinkInvite = computed(() => !!this.inviteApplicationId);
 
-  stageLabel(s: string): string { return ROUND_STAGE_LABELS[s] ?? s; }
-  formatLabel(f: string): string { return INVITE_FORMAT_LABELS[f] ?? f; }
+  stageLabel(s: string): string { return this.i18n.t('tracker.rt' + s); }
+  formatLabel(f: string): string { return this.i18n.t('tracker.fm' + f); }
 
   parse(): void {
     this.busy.set(true);
@@ -386,7 +377,7 @@ export class SmartAddDialogComponent {
     }).subscribe({
       next: (r) => {
         this.busy.set(false);
-        this.dialogRef.close({ ok: true, message: `已创建「${r.companyName} · ${this.jd.role}」` });
+        this.dialogRef.close({ ok: true, message: this.tf('tracker.saCreated', { a: `${r.companyName} · ${this.jd.role}` }) });
       },
       error: (e: Error) => { this.busy.set(false); this.status.set('Failed'); this.msg.set(e.message); }
     });
@@ -400,11 +391,11 @@ export class SmartAddDialogComponent {
       scheduledDate: this.inv.date,
       interviewer: this.inv.interviewer || null,
       format: this.inv.format,
-      notes: this.inv.location ? `地点/会议:${this.inv.location}` : null
+      notes: this.inv.location ? `${this.t('tracker.saLocNote')}${this.inv.location}` : null
     }).subscribe({
       next: (r) => {
         this.busy.set(false);
-        this.dialogRef.close({ ok: true, message: `已登记第 ${r.roundNo} 轮面试` });
+        this.dialogRef.close({ ok: true, message: this.i18n.tn('tracker.saRoundLogged', r.roundNo) });
       },
       error: (e: Error) => { this.busy.set(false); this.status.set('Failed'); this.msg.set(e.message); }
     });

@@ -79,12 +79,12 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
     if (snaps.length === 0) return [];
     const last = [...snaps].sort((a, b) => a.date.localeCompare(b.date))[snaps.length - 1];
     const stages = [
-      { stage: '已收藏', count: last.saved },
-      { stage: '已投递', count: last.applied },
-      { stage: '初筛', count: last.screening },
-      { stage: '面试', count: last.interviewing },
+      { stage: 'Saved', count: last.saved },
+      { stage: 'Applied', count: last.applied },
+      { stage: 'Screen', count: last.screening },
+      { stage: 'Interview', count: last.interviewing },
       { stage: 'Offer', count: last.offered },
-      { stage: '已拒', count: last.rejected }
+      { stage: 'Rejected', count: last.rejected }
     ];
     const max = Math.max(...stages.map((r) => r.count), 1);
     return stages.map((r) => ({ ...r, pct: Math.round((r.count / max) * 100) }));
@@ -202,6 +202,8 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private buildOption(points: Dashboard['radar']): echarts.EChartsOption {
     const dims = points.map((p) => p.nameZh || p.dimension);
+    const curName = this.t('an.curLevel');
+    const bestName = this.t('an.bestLevel');
 
     return {
       tooltip: { trigger: 'item' },
@@ -210,7 +212,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
         itemWidth: 10,
         itemHeight: 10,
         textStyle: { fontSize: 12, color: '#5f6368' },
-        data: ['当前水平', '历史最佳']
+        data: [curName, bestName]
       },
       radar: {
         indicator: dims.map((name) => ({ name, max: 100 })),
@@ -229,14 +231,14 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
           data: [
             {
               value: points.map((p) => p.current),
-              name: '当前水平',
+              name: curName,
               lineStyle: { width: 2, color: '#3f51b5' },
               itemStyle: { color: '#3f51b5' },
               areaStyle: { color: 'rgba(63,81,181,0.22)' }
             },
             {
               value: points.map((p) => p.best),
-              name: '历史最佳',
+              name: bestName,
               lineStyle: { width: 1.5, type: 'dashed', color: '#2e7d32' },
               itemStyle: { color: '#2e7d32' },
               areaStyle: { color: 'rgba(46,125,50,0.1)' }
@@ -256,12 +258,13 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   statusLabel(s: string): string {
-    const map: Record<string, string> = {
-      Saved: '已收藏', Applied: '已投递', Screen: '初筛',
-      Interview: '面试中', Offer: 'Offer', Rejected: '已拒',
-      Paused: '暂停', Withdrawn: '已撤回'
+    const keyMap: Record<string, string> = {
+      Saved: 'status.Saved', Applied: 'status.Applied', Screen: 'status.Screen',
+      Interview: 'status.Interview', Offer: 'status.Offer', Rejected: 'status.Rejected',
+      Paused: 'status.Paused', Withdrawn: 'status.Withdrawn'
     };
-    return map[s] ?? s;
+    const key = keyMap[s];
+    return key ? this.t(key) : s;
   }
 
   funnelColor(i: number): string {

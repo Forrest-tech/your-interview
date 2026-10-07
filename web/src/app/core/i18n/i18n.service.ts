@@ -124,6 +124,10 @@ const DICT: Record<string, Record<Lang, string>> = {
   'status.Rejected': { zh: '已拒', en: 'Rejected', fr: 'Refusé' },
   'status.Paused': { zh: '暂停', en: 'Paused', fr: 'En pause' },
   'status.Withdrawn': { zh: '已撤回', en: 'Withdrawn', fr: 'Retiré' },
+  'status.Accepted': { zh: '已录用', en: 'Accepted', fr: 'Accepté' },
+  'status.Ghosted': { zh: '失联', en: 'Ghosted', fr: 'Sans nouvelles' },
+  'outcome.Passed': { zh: '通过', en: 'Passed', fr: 'Réussi' },
+  'outcome.Failed': { zh: '未通过', en: 'Failed', fr: 'Échoué' },
 
   // ---------- AI 面试练习 ----------
   'nav.practice': { zh: 'AI 面试练习', en: 'AI Practice', fr: 'Pratique IA' },
@@ -683,6 +687,150 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.commsTypeMessage': { zh: '消息', en: 'Message', fr: 'Message' },
   'tracker.commsTypeNote': { zh: '笔记', en: 'Note', fr: 'Note' },
   'tracker.commsUnknown': { zh: '其他', en: 'Other', fr: 'Autre' },
+
+  // ---------- 投递跟踪 · 主页面(2026-10-07 i18n 补齐) ----------
+  'tracker.subtitle': { zh: '按状态分列看清整个漏斗,卡住在哪一步一目了然', en: 'See the whole funnel by status — spot where you are stuck at a glance', fr: 'Visualisez l’entonnoir par statut — repérez d’un coup d’œil où vous bloquez' },
+  'tracker.smartAdd': { zh: '智能粘贴', en: 'Smart paste', fr: 'Collage intelligent' },
+  'tracker.total': { zh: '总投递', en: 'Total', fr: 'Total' },
+  'tracker.searchLabel': { zh: '搜索公司 / 职位 / 备注', en: 'Search company / role / notes', fr: 'Rechercher entreprise / poste / notes' },
+  'tracker.searchPlaceholder': { zh: '例如 Shopify', en: 'e.g. Shopify', fr: 'p. ex. Shopify' },
+  'tracker.sortLabel': { zh: '排序', en: 'Sort', fr: 'Trier' },
+  'tracker.empty': { zh: '还没有投递记录。', en: 'No applications yet.', fr: 'Aucune candidature pour le moment.' },
+  'tracker.needsConnect': { zh: '需先 Connect', en: 'Connect first', fr: 'Connecter d’abord' },
+  'tracker.matchScore': { zh: '匹配 {n}', en: 'Match {n}', fr: 'Score {n}' },
+  'tracker.pager': { zh: '第{p} / {tp} 页 · 共 {t} 条', en: 'Page {p} of {tp} · {t} total', fr: 'Page {p} sur {tp} · {t} au total' },
+
+  // ---------- 投递跟踪 · 新建/编辑弹窗 ----------
+  'tracker.dlgEdit': { zh: '编辑投递', en: 'Edit application', fr: 'Modifier la candidature' },
+  'tracker.dlgNew': { zh: '新建投递', en: 'New application', fr: 'Nouvelle candidature' },
+  'tracker.fCompany': { zh: '公司名称', en: 'Company', fr: 'Entreprise' },
+  'tracker.fRole': { zh: '职位', en: 'Role', fr: 'Poste' },
+  'tracker.fLocation': { zh: '地点', en: 'Location', fr: 'Lieu' },
+  'tracker.fLocationPh': { zh: '如 Toronto / Remote', en: 'e.g. Toronto / Remote', fr: 'p. ex. Toronto / Remote' },
+  'tracker.fSalary': { zh: '薪资范围', en: 'Salary range', fr: 'Fourchette salariale' },
+  'tracker.fSalaryPh': { zh: '如 90k-110k CAD', en: 'e.g. 90k-110k CAD', fr: 'p. ex. 90k-110k CAD' },
+  'tracker.fStatus': { zh: '状态', en: 'Status', fr: 'Statut' },
+  'tracker.fPriority': { zh: '优先级', en: 'Priority', fr: 'Priorité' },
+  'tracker.fAppliedDate': { zh: '投递日期', en: 'Applied on', fr: 'Date de candidature' },
+  'tracker.fOutreach': { zh: '外联留言', en: 'Outreach note', fr: 'Note de prospection' },
+  'tracker.fOutreachPh': { zh: '如 已发 LinkedIn 私信', en: 'e.g. Sent LinkedIn DM', fr: 'p. ex. MP LinkedIn envoyé' },
+  'tracker.fLink': { zh: '岗位链接', en: 'Job link', fr: 'Lien de l’offre' },
+  'tracker.fNotes': { zh: '备注', en: 'Notes', fr: 'Notes' },
+  'tracker.fConnectFirst': { zh: '需要先建立人脉(如先 Connect 再内推)', en: 'Need to network first (e.g. connect before referral)', fr: 'Réseauter d’abord (p. ex. se connecter avant une recommandation)' },
+  'tracker.required': { zh: '公司名称与职位为必填项', en: 'Company and role are required', fr: 'L’entreprise et le poste sont requis' },
+  'tracker.confirmDelete': { zh: '确认删除「{a}」这条投递记录?此操作不可撤销。', en: 'Delete the application “{a}”? This cannot be undone.', fr: 'Supprimer la candidature « {a} » ? Irréversible.' },
+  'tracker.deleted': { zh: '已删除', en: 'Deleted', fr: 'Supprimé' },
+  'tracker.created': { zh: '已创建投递记录', en: 'Application created', fr: 'Candidature créée' },
+  'tracker.saved': { zh: '已保存修改', en: 'Changes saved', fr: 'Modifications enregistrées' },
+  'tracker.opFailed': { zh: '操作失败,请重试。', en: 'Operation failed, please retry.', fr: 'Échec de l’opération, réessayez.' },
+
+  // ---------- 投递跟踪 · 详情弹窗 ----------
+  'tracker.dOverview': { zh: '概览', en: 'Overview', fr: 'Aperçu' },
+  'tracker.dPriority': { zh: '优先级', en: 'Priority', fr: 'Priorité' },
+  'tracker.dNeedNetwork': { zh: '需先建立人脉', en: 'Network first', fr: 'Réseauter d’abord' },
+  'tracker.dRejectReason': { zh: '拒因:', en: 'Rejection reason:', fr: 'Motif du refus :' },
+  'tracker.dLocation': { zh: '地点', en: 'Location', fr: 'Lieu' },
+  'tracker.dSalary': { zh: '薪资', en: 'Salary', fr: 'Salaire' },
+  'tracker.dAppliedDate': { zh: '投递日期', en: 'Applied on', fr: 'Date de candidature' },
+  'tracker.dOutreachMsg': { zh: '外联留言', en: 'Outreach message', fr: 'Message de prospection' },
+  'tracker.dResumeMatch': { zh: '简历匹配度', en: 'Resume match', fr: 'Adéquation CV' },
+  'tracker.dPassRate': { zh: '预估通过率', en: 'Est. pass rate', fr: 'Taux de réussite estimé' },
+  'tracker.dCreatedAt': { zh: '创建时间', en: 'Created', fr: 'Créé le' },
+  'tracker.dUpdatedAt': { zh: '最近更新', en: 'Updated', fr: 'Mis à jour le' },
+  'tracker.dScoreUnit': { zh: '分', en: 'pts', fr: 'pts' },
+  'tracker.dJdSummary': { zh: 'JD 摘要', en: 'JD summary', fr: 'Résumé de l’offre' },
+  'tracker.dMatchAnalysis': { zh: '简历匹配分析', en: 'Resume match analysis', fr: 'Analyse d’adéquation CV' },
+  'tracker.dHitKw': { zh: '命中 {n} / {m} 个 JD 技术关键词', en: '{n} of {m} JD tech keywords matched', fr: '{n} mots-clés techniques sur {m} trouvés' },
+  'tracker.dMissingKw': { zh: '缺少的关键词 ({n})', en: 'Missing keywords ({n})', fr: 'Mots-clés manquants ({n})' },
+  'tracker.dHitKwTitle': { zh: '已命中 ({n})', en: 'Matched ({n})', fr: 'Trouvés ({n})' },
+  'tracker.dSoftSkills': { zh: '另提及软素质要求(不计入分数):', en: 'Also mentioned soft skills (not scored):', fr: 'Compétences générales mentionnées (non notées) :' },
+  'tracker.dCoverLetter': { zh: '求职信', en: 'Cover letter', fr: 'Lettre de motivation' },
+  'tracker.dClChars': { zh: '{n} 字符', en: '{n} chars', fr: '{n} caractères' },
+  'tracker.dClStale': { zh: '这封信基于简历 v{a} 生成,当前简历已是 v{b} —— 建议重新生成。', en: 'Generated from resume v{a}; current resume is v{b} — consider regenerating.', fr: 'Générée depuis le CV v{a} ; le CV actuel est v{b} — régénérez.' },
+  'tracker.dClExtra': { zh: '额外要求(可选)', en: 'Extra requirements (optional)', fr: 'Exigences supplémentaires (facultatif)' },
+  'tracker.dClExtraPh': { zh: '例:强调我在 Citigroup 的低延迟交易经验,语气务实一些', en: 'e.g. emphasize my low-latency trading experience at Citigroup, pragmatic tone', fr: 'p. ex. souligner mon expérience trading basse latence chez Citigroup, ton pragmatique' },
+  'tracker.dClHint': { zh: 'AI 会读你的简历 + JD 全文 + 公司情报,再叠加这里的补充。', en: 'AI reads your resume + full JD + company intel, plus your notes here.', fr: 'L’IA lit votre CV + l’offre complète + les infos entreprise, plus vos notes.' },
+  'tracker.dClGenerating': { zh: '正在生成…通常 20-60 秒,请勿关闭窗口。', en: 'Generating… usually 20–60 seconds, please keep this open.', fr: 'Génération… 20 à 60 secondes en général, gardez la fenêtre ouverte.' },
+  'tracker.dClRegen': { zh: '重新生成', en: 'Regenerate', fr: 'Régénérer' },
+  'tracker.dClGenerate': { zh: 'AI 生成', en: 'Generate with AI', fr: 'Générer avec l’IA' },
+  'tracker.dClPreview': { zh: '预览', en: 'Preview', fr: 'Aperçu' },
+  'tracker.dClEditMan': { zh: '手动编辑', en: 'Edit manually', fr: 'Modifier manuellement' },
+  'tracker.dClConfirm': { zh: '标记为已确认', en: 'Mark as confirmed', fr: 'Marquer comme confirmée' },
+  'tracker.dClEmpty': { zh: '还没有求职信。点上面的按钮,基于你的简历与该岗位 JD 生成一封。', en: 'No cover letter yet. Use the button above to generate one from your resume and this JD.', fr: 'Aucune lettre pour le moment. Utilisez le bouton ci-dessus pour en générer une.' },
+  'tracker.dJdFull': { zh: 'JD 全文', en: 'Full JD', fr: 'Offre complète' },
+  'tracker.dJdChars': { zh: '{n} 字符', en: '{n} chars', fr: '{n} caractères' },
+  'tracker.dViewPosting': { zh: '查看原始发布页', en: 'View original posting', fr: 'Voir l’annonce d’origine' },
+  'tracker.dCompanyIntel': { zh: '公司情报', en: 'Company intel', fr: 'Infos entreprise' },
+  'tracker.dNotes': { zh: '备注', en: 'Notes', fr: 'Notes' },
+  'tracker.dHistory': { zh: '状态流转', en: 'Status history', fr: 'Historique des statuts' },
+  'tracker.dRounds': { zh: '面试轮次', en: 'Interview rounds', fr: 'Tours d’entretien' },
+  'tracker.dRoundN': { zh: '第 {n} 轮', en: 'Round {n}', fr: 'Tour {n}' },
+  'tracker.dJobLink': { zh: '岗位链接', en: 'Job link', fr: 'Lien de l’offre' },
+  'tracker.dCommSubjectPh': { zh: '如 终面安排', en: 'e.g. Final interview scheduling', fr: 'p. ex. Planification de l’entretien final' },
+  'tracker.dCommContactPh': { zh: '如 张经理', en: 'e.g. Hiring manager', fr: 'p. ex. Responsable du recrutement' },
+  'tracker.dClOverwrite': { zh: '这会用新生成的内容覆盖当前求职信(包括你手改的部分)。继续?', en: 'This will overwrite the current cover letter (including your manual edits). Continue?', fr: 'Cela écrasera la lettre actuelle (y compris vos modifications). Continuer ?' },
+  'tracker.dClEmptyErr': { zh: '求职信内容不能为空。', en: 'Cover letter cannot be empty.', fr: 'La lettre ne peut pas être vide.' },
+  'tracker.dClDelete': { zh: '删除这封求职信?此操作不可撤销。', en: 'Delete this cover letter? This cannot be undone.', fr: 'Supprimer cette lettre ? Irréversible.' },
+  'tracker.dClStatusGen': { zh: 'AI 生成', en: 'AI generated', fr: 'Générée par l’IA' },
+  'tracker.dClStatusFinal': { zh: '已确认', en: 'Confirmed', fr: 'Confirmée' },
+  'tracker.dClStatusDraft': { zh: '草稿', en: 'Draft', fr: 'Brouillon' },
+  'tracker.dStrongMatch': { zh: '强匹配', en: 'Strong match', fr: 'Forte adéquation' },
+  'tracker.dMedMatch': { zh: '一般匹配', en: 'Moderate match', fr: 'Adéquation moyenne' },
+  'tracker.dWeakMatch': { zh: '弱匹配', en: 'Weak match', fr: 'Faible adéquation' },
+  'tracker.historyCreated': { zh: '新建时设置', en: 'Set on creation', fr: 'Défini à la création' },
+
+  // ---------- 投递跟踪 · 智能粘贴弹窗 ----------
+  'tracker.saJd': { zh: '智能粘贴岗位', en: 'Smart paste job', fr: 'Collage intelligent d’offre' },
+  'tracker.saInvite': { zh: '粘贴面试邀请', en: 'Paste interview invite', fr: 'Coller l’invitation d’entretien' },
+  'tracker.saTabJd': { zh: '岗位 JD', en: 'Job JD', fr: 'Offre d’emploi' },
+  'tracker.saTabInvite': { zh: '面试邀请', en: 'Interview invite', fr: 'Invitation d’entretien' },
+  'tracker.saPasteJd': { zh: '粘贴 JD 链接 / 正文 / 截图', en: 'Paste JD link / text / screenshot', fr: 'Collez le lien / texte / capture de l’offre' },
+  'tracker.saPasteInvite': { zh: '粘贴邀请邮件或消息', en: 'Paste the invite email or message', fr: 'Collez l’e-mail ou le message d’invitation' },
+  'tracker.saPastePh': { zh: '支持 LinkedIn / Indeed / Greenhouse / Workday / 公司官网链接,或直接粘贴 JD 正文', en: 'Supports LinkedIn / Indeed / Greenhouse / Workday / company site links, or paste the JD text directly', fr: 'Accepte les liens LinkedIn / Indeed / Greenhouse / Workday / site entreprise, ou collez le texte de l’offre' },
+  'tracker.saAiFill': { zh: '用 AI 补全规则解不出的字段', en: 'Let AI fill fields that rules cannot parse', fr: 'Laisser l’IA remplir les champs non reconnus' },
+  'tracker.saParse': { zh: '解析', en: 'Parse', fr: 'Analyser' },
+  'tracker.saReparse': { zh: '重新解析', en: 'Re-parse', fr: 'Réanalyser' },
+  'tracker.saStep2': { zh: '确认并修改结果', en: 'Review and edit', fr: 'Vérifier et modifier' },
+  'tracker.saCompany': { zh: '公司', en: 'Company', fr: 'Entreprise' },
+  'tracker.saRole': { zh: '职位', en: 'Role', fr: 'Poste' },
+  'tracker.saLocation': { zh: '地点', en: 'Location', fr: 'Lieu' },
+  'tracker.saSalary': { zh: '薪资', en: 'Salary', fr: 'Salaire' },
+  'tracker.saWorkMode': { zh: '办公形式', en: 'Work mode', fr: 'Mode de travail' },
+  'tracker.saUnrecognized': { zh: '未识别', en: 'Not recognized', fr: 'Non reconnu' },
+  'tracker.saPriority': { zh: '优先级', en: 'Priority', fr: 'Priorité' },
+  'tracker.saDeadline': { zh: '申请截止', en: 'Deadline', fr: 'Date limite' },
+  'tracker.saInitStatus': { zh: '初始状态', en: 'Initial status', fr: 'Statut initial' },
+  'tracker.saJobLink': { zh: '岗位链接', en: 'Job link', fr: 'Lien de l’offre' },
+  'tracker.saJdSummary': { zh: 'JD 摘要', en: 'JD summary', fr: 'Résumé de l’offre' },
+  'tracker.saKeywords': { zh: '匹配关键词(逗号分隔)', en: 'Match keywords (comma-separated)', fr: 'Mots-clés (séparés par des virgules)' },
+  'tracker.saLinkApp': { zh: '关联到哪条投递', en: 'Link to application', fr: 'Lier à la candidature' },
+  'tracker.saSelectApp': { zh: '选择投递记录…', en: 'Select an application…', fr: 'Choisir une candidature…' },
+  'tracker.saRound': { zh: '轮次', en: 'Round', fr: 'Tour' },
+  'tracker.saRoundType': { zh: '轮次类型', en: 'Round type', fr: 'Type de tour' },
+  'tracker.saFormat': { zh: '形式', en: 'Format', fr: 'Format' },
+  'tracker.saInterviewDate': { zh: '面试日期', en: 'Interview date', fr: 'Date d’entretien' },
+  'tracker.saTime': { zh: '时间', en: 'Time', fr: 'Heure' },
+  'tracker.saInterviewers': { zh: '面试官', en: 'Interviewers', fr: 'Interlocuteurs' },
+  'tracker.saMeetLink': { zh: '地点 / 会议链接', en: 'Location / meeting link', fr: 'Lieu / lien de réunion' },
+  'tracker.saLinkHint': { zh: '关联后会登记一轮面试并把投递推进到「面试中」,同时在实战机经里生成一条草稿。', en: 'Linking logs an interview round, moves the application to Interview, and creates a draft in Playbook.', fr: 'La liaison enregistre un tour d’entretien, passe la candidature en Entretien et crée un brouillon dans Journal.' },
+  'tracker.saSaveApp': { zh: '保存为投递记录', en: 'Save as application', fr: 'Enregistrer comme candidature' },
+  'tracker.saLinkOnce': { zh: '一键关联', en: 'Link', fr: 'Lier' },
+  'tracker.saCreated': { zh: '已创建「{a}」', en: 'Created “{a}”', fr: '« {a} » créé' },
+  'tracker.saRoundLogged': { zh: '已登记第 {n} 轮面试', en: 'Round {n} interview logged', fr: 'Tour {n} enregistré' },
+  'tracker.saLocNote': { zh: '地点/会议:', en: 'Location/meeting:', fr: 'Lieu/réunion :' },
+  'tracker.rtScreen': { zh: '初筛', en: 'Screen', fr: 'Préqualification' },
+  'tracker.rtTechnical': { zh: '技术面', en: 'Technical', fr: 'Technique' },
+  'tracker.rtSystemDesign': { zh: '系统设计', en: 'System design', fr: 'Conception système' },
+  'tracker.rtBehavioral': { zh: '行为面', en: 'Behavioral', fr: 'Comportemental' },
+  'tracker.rtFinal': { zh: '终面', en: 'Final', fr: 'Final' },
+  'tracker.fmPhone': { zh: '电话', en: 'Phone', fr: 'Téléphone' },
+  'tracker.fmVideo': { zh: '视频', en: 'Video', fr: 'Vidéo' },
+  'tracker.fmOnsite': { zh: '现场', en: 'Onsite', fr: 'Sur place' },
+
+  // ---------- 投递跟踪 · 问答库弹窗 ----------
+  'tracker.alCatPh': { zh: '如 自我介绍', en: 'e.g. Self-intro', fr: 'p. ex. Présentation' },
+  'tracker.alRequired': { zh: '问题和回答均为必填', en: 'Question and answer are both required', fr: 'La question et la réponse sont requises' },
+  'tracker.alDefaultCat': { zh: '通用', en: 'General', fr: 'Général' },
   'analytics.nEntries': { zh: '{n} 个条目', en: '{n} entries', fr: '{n} entrées' },
 
   // ---------- 播放 / 合成失败提示(2026-09-23:此前写死中文) ----------
@@ -1281,6 +1429,16 @@ export class I18nService {
     return this.t(key).replace('{n}', String(n));
   }
 
+  /**
+   * 多占位符版本:'{a}' '{b}' … 会被 params 里同名的值替换。
+   * 模板里用 tf('tracker.pager', { p: 1, tp: 5, t: 42 })。
+   */
+  tf(key: string, params: Record<string, string | number>): string {
+    let s = this.t(key);
+    for (const [k, v] of Object.entries(params)) s = s.replace(`{${k}}`, String(v));
+    return s;
+  }
+
   /** 用于数字/日期本地化。 */
   locale(): string {
     switch (this._lang()) {
@@ -1297,6 +1455,6 @@ export class I18nService {
     } catch {
       /* ignore */
     }
-    return 'zh';
+    return 'en';
   }
 }

@@ -1,12 +1,12 @@
 <div class="page">
   <header class="page-head">
     <div>
-      <h2>投递跟踪</h2>
-      <p class="sub">按状态分列看清整个漏斗,卡住在哪一步一目了然</p>
+      <h2>{{ t('nav.tracker') }}</h2>
+      <p class="sub">{{ t('tracker.subtitle') }}</p>
     </div>
     <div class="head-actions">
       <button mat-flat-button color="primary" class="smart-btn" (click)="openSmartAdd()">
-        <mat-icon>auto_awesome</mat-icon>智能粘贴
+        <mat-icon>auto_awesome</mat-icon>{{ t('tracker.smartAdd') }}
       </button>
       <button mat-stroked-button class="al-btn" (click)="openAnswerLibrary()" [matTooltip]="t('tracker.alTitle')">
         <mat-icon>library_books</mat-icon>{{ t('tracker.alTitle') }}
@@ -24,19 +24,19 @@
   <section class="metrics">
     <mat-card class="metric">
       <div class="metric-val">{{ statTotal() }}</div>
-      <div class="metric-label">总投递</div>
+      <div class="metric-label">{{ t('tracker.total') }}</div>
     </mat-card>
     <mat-card class="metric">
       <div class="metric-val">{{ statActive() }}</div>
-      <div class="metric-label">进行中</div>
+      <div class="metric-label">{{ t('dash.inProgress') }}</div>
     </mat-card>
     <mat-card class="metric">
       <div class="metric-val">{{ statInterview() }}</div>
-      <div class="metric-label">面试中</div>
+      <div class="metric-label">{{ t('dash.interviewing') }}</div>
     </mat-card>
     <mat-card class="metric highlight">
       <div class="metric-val">{{ statOffer() }}</div>
-      <div class="metric-label">Offer</div>
+      <div class="metric-label">{{ t('dash.offer') }}</div>
     </mat-card>
   </section>
 
@@ -45,9 +45,9 @@
     <mat-card-content>
       <div class="filter-row">
         <mat-form-field appearance="outline" class="search">
-          <mat-label>搜索公司 / 职位 / 备注</mat-label>
+          <mat-label>{{ t('tracker.searchLabel') }}</mat-label>
           <input matInput [value]="search()" (input)="onSearchInput($any($event.target).value)"
-                 (keyup.enter)="onSearchEnter()" placeholder="例如 Shopify">
+                 (keyup.enter)="onSearchEnter()" [placeholder]="t('tracker.searchPlaceholder')">
           <mat-icon matPrefix>search</mat-icon>
           @if (search()) {
             <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
@@ -58,12 +58,12 @@
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="sort">
-          <mat-label>排序</mat-label>
+          <mat-label>{{ t('tracker.sortLabel') }}</mat-label>
           <mat-select [ngModel]="sort()" (ngModelChange)="onSortChange($event)" name="sort">
-            <mat-option value="updated">最近更新</mat-option>
-            <mat-option value="applied">投递日期(新→旧)</mat-option>
-            <mat-option value="appliedAsc">投递日期(旧→新)</mat-option>
-            <mat-option value="company">公司名 A→Z</mat-option>
+            <mat-option value="updated">{{ t('tracker.sortUpdated') }}</mat-option>
+            <mat-option value="applied">{{ t('tracker.sortAppliedDesc') }}</mat-option>
+            <mat-option value="appliedAsc">{{ t('tracker.sortAppliedAsc') }}</mat-option>
+            <mat-option value="company">{{ t('tracker.sortCompany') }}</mat-option>
           </mat-select>
         </mat-form-field>
       </div>
@@ -72,7 +72,7 @@
       <mat-chip-set class="status-chips">
         <mat-chip class="fchip" [highlighted]="statusFilter() === null"
                   (click)="clearFilters()">
-          全部 ({{ total() }})
+          {{ t('common.all') }} ({{ total() }})
         </mat-chip>
         @for (s of statusOptions; track s) {
           <mat-chip class="fchip" [class]="statusClass(s)"
@@ -93,7 +93,7 @@
     <mat-card class="err-card">
       <mat-icon>error_outline</mat-icon>
       <div>
-        <strong>加载失败</strong>
+        <strong>{{ t('common.loadFailed') }}</strong>
         <p>{{ error() }}</p>
       </div>
     </mat-card>
@@ -103,7 +103,7 @@
   @if (!loading() && items().length === 0) {
     <mat-card class="empty-card">
       <mat-icon>inbox</mat-icon>
-      <p>还没有投递记录。</p>
+      <p>{{ t('tracker.empty') }}</p>
       @if (search() || statusFilter()) {
         <button mat-icon-button (click)="clearFilters()" [matTooltip]="t('common.clearFilter')">
           <mat-icon>filter_alt_off</mat-icon>
@@ -160,13 +160,13 @@
 
               <div class="tags">
                 @if (a.needsConnectFirst) {
-                  <span class="tag warn">需先 Connect</span>
+                  <span class="tag warn">{{ t('tracker.needsConnect') }}</span>
                 }
                 @if (a.outreachMessage) {
                   <span class="tag">{{ a.outreachMessage }}</span>
                 }
                 @if (a.resumeScore != null) {
-                  <span class="tag">匹配 {{ a.resumeScore }}</span>
+                  <span class="tag">{{ tn('tracker.matchScore', a.resumeScore) }}</span>
                 }
               </div>
 
@@ -203,7 +203,7 @@
               [matTooltip]="t('common.prevPage')">
         <mat-icon>chevron_left</mat-icon>
       </button>
-      <span class="pager-info">第 {{ page() }} / {{ totalPages() }} 页 · 共 {{ total() }} 条</span>
+      <span class="pager-info">{{ tf('tracker.pager', { p: page(), tp: totalPages(), t: total() }) }}</span>
       <button mat-icon-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)"
               [matTooltip]="t('common.nextPage')">
         <mat-icon>chevron_right</mat-icon>

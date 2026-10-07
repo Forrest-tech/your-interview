@@ -553,7 +553,18 @@
                 @if (pastedMaterial()) {
                   <p class="muted" style="margin-bottom:8px">📌 {{ t('pb.guidance.pasteTitle') }}</p>
                 }
-                <div class="guidance-body" [innerHTML]="guidanceHtml()"></div>
+                <div class="guidance-layout">
+                  @if (toc().length > 0) {
+                    <nav class="guidance-toc">
+                      <div class="toc-title">{{ t('pb.guidance.toc') }}</div>
+                      @for (item of toc(); track item.id) {
+                        <a class="toc-item" [class.toc-h3]="item.level === 3"
+                           (click)="scrollToToc(item.id)">{{ item.text }}</a>
+                      }
+                    </nav>
+                  }
+                  <div class="guidance-body" [innerHTML]="guidanceHtml()"></div>
+                </div>
               } @else {
                 <div class="empty-panel">
                   <mat-icon>article</mat-icon>

@@ -1639,6 +1639,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.guidance.pasted': { zh: '已保存到本地', en: 'Saved locally', fr: 'Enregistré' },
   'pb.guidance.clearPasted': { zh: '清除粘贴内容', en: 'Clear pasted', fr: 'Effacer' },
   'pb.guidance.popupBlocked': { zh: '弹窗被拦截,请允许弹窗后重试', en: 'Popup blocked, please allow and retry', fr: 'Popup bloqué' },
+  'pb.guidance.toc': { zh: '目录', en: 'Contents', fr: 'Sommaire' },
   'pb.guidance.historyLabel': { zh: '历史版本', en: 'Version history', fr: 'Historique des versions' },
   'pb.guidance.empty': { zh: '还没有指导材料。点击「生成指导材料」,AI 会根据 JD、公司介绍、历史问答、短板和六维诊断生成一份备战文档。', en: 'No guidance yet. Click "Generate guidance" — the AI will build a prep document from the JD, company profile, past Q&A, weaknesses and the six-dimension diagnosis.', fr: 'Aucun guide. Cliquez sur « Générer le guide » — l’IA rédigera un document de préparation à partir de l’offre, du profil de l’entreprise, des Q&R passées, des faiblesses et du diagnostic en six dimensions.' },
   'pb.guidance.confirmGenerate': { zh: '生成新版本指导材料?会调用 AI,可能需要几十秒。', en: 'Generate a new version of the guidance? It calls the AI and may take tens of seconds.', fr: 'Générer une nouvelle version du guide ? Cela appelle l’IA et peut prendre des dizaines de secondes.' },

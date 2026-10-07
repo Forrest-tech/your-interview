@@ -233,18 +233,46 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     this.pastedMaterial.set(null);
   }
 
+  /** 目录:从当前材料提取 h2/h3,点击滚动定位。 */
+  readonly toc = computed(() => {
+    const pasted = this.pastedMaterial();
+    const md = pasted ?? this.guidance()?.contentMarkdown ?? '';
+    const items: { id: string; text: string; level: number }[] = [];
+    let idx = 0;
+    for (const line of md.split('\n')) {
+      const t = line.trim();
+      const m = t.match(/^(#{2,3})\s+(.+)/);
+      if (m) {
+        items.push({
+          id: `toc-${idx++}`,
+          text: m[2].replace(/[*_`]/g, ''),
+          level: m[1].length
+        });
+      }
+    }
+    return items;
+  });
+
+  scrollToToc(id: string): void {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   private renderMarkdown(md: string): string {
     const esc = md
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = esc.split('\n');
     const out: string[] = [];
     let inList = false;
+    let tocIdx = 0;
     for (const line of lines) {
       const t = line.trim();
       if (/^#{1,3}\s/.test(t)) {
         if (inList) { out.push('</ul>'); inList = false; }
         const level = t.match(/^#+/)![0].length;
-        out.push(`<h${level + 1}>${this.inlineMd(t.replace(/^#+\s*/, ''))}</h${level + 1}>`);
+        // h2/h3 加 id,与 toc() 的顺序对应
+        const idAttr = level >= 2 ? ` id="toc-${tocIdx++}"` : '';
+        out.push(`<h${level + 1}${idAttr}>${this.inlineMd(t.replace(/^#+\s*/, ''))}</h${level + 1}>`);
       } else if (/^[-*]\s/.test(t)) {
         if (!inList) { out.push('<ul>'); inList = true; }
         out.push(`<li>${this.inlineMd(t.replace(/^[-*]\s*/, ''))}</li>`);

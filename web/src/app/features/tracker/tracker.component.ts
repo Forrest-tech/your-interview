@@ -946,7 +946,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
                 @if (r.stage) { <span class="tag">{{ r.stage }}</span> }
                 @if (r.scheduledDate) { <span>{{ r.scheduledDate | date: 'yyyy-MM-dd' }}</span> }
                 @if (r.format) { <span class="tag">{{ r.format }}</span> }
-                @if (r.interviewer) { <span class="tag">{{ r.interviewer }}</span> }
+                @if (r.interviewers) { <span class="tag">{{ r.interviewers }}</span> }
                 @if (r.outcome && r.outcome !== 'Pending') {
                   <span class="tag" [class.outcome-pass]="r.outcome === 'Passed'"
                         [class.outcome-fail]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>

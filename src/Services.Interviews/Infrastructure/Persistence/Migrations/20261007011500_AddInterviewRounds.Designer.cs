@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using YourInterview.Services.Interviews.Infrastructure.Persistence;
 namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(InterviewsDbContext))]
-    partial class InterviewsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007011500_AddInterviewRounds")]
+    partial class AddInterviewRounds
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -175,9 +178,6 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<string>("AnalysisSummary")
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
-
-                    b.Property<string>("SpeechMetricsJson")
-                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("AnalyzedAt")
                         .HasColumnType("timestamp with time zone");
@@ -471,47 +471,6 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.ToTable("rounds", "interviews");
                 });
 
-            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.GeneratedMaterial", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContentMarkdown")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int?>("CompletionTokens")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("GeneratedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("InterviewEntryId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Model")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int?>("PromptTokens")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InterviewEntryId");
-
-                    b.HasIndex("InterviewEntryId", "Version")
-                        .IsUnique();
-
-                    b.ToTable("guidance_materials", "interviews");
-                });
-
-
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewAsset", b =>
                 {
                     b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
@@ -548,22 +507,11 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.GeneratedMaterial", b =>
-                {
-                    b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
-                        .WithMany("Materials")
-                        .HasForeignKey("InterviewEntryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewEntry", b =>
                 {
                     b.Navigation("Assets");
 
                     b.Navigation("Questions");
-
-                    b.Navigation("Materials");
 
                     b.Navigation("Rounds");
 

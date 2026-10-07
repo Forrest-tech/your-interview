@@ -577,3 +577,136 @@ mat-progress-bar {
     border-top: 1px dashed #e0e0e0;
   }
 }
+
+/* 轮次(缺口1) */
+.round {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #fafafa;
+  border-left: 3px solid #5c6bc0;
+
+  .round-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    margin-bottom: 6px;
+
+    .round-order { font-weight: 700; }
+    .round-stage {
+      font-size: 12px; color: #555;
+      background: #e8eaf6; border-radius: 10px; padding: 2px 10px;
+    }
+    .round-outcome { font-size: 12px; color: #333; font-weight: 600; }
+    .round-date { font-size: 12px; color: #777; }
+    .spacer { flex: 1; }
+  }
+
+  .round-line { margin: 4px 0; font-size: 13px; color: #444; }
+  .row-actions { display: flex; gap: 8px; margin-top: 8px; }
+}
+
+/* 指导材料(缺口2) */
+.guidance-body {
+  h2, h3, h4 { margin: 14px 0 8px; }
+  p { margin: 6px 0; line-height: 1.7; }
+  ul { margin: 6px 0; padding-left: 22px; }
+  li { margin: 4px 0; line-height: 1.6; }
+  code { background: #f0f0f0; border-radius: 3px; padding: 1px 5px; font-size: 12px; }
+  .md-num { font-weight: 600; }
+}
+.ver-select { width: 220px; margin-left: 8px; }
+.row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+@media print {
+  /* 导出 PDF 时只打指导材料正文 */
+  body * { visibility: hidden; }
+  .guidance-body, .guidance-body * { visibility: visible; }
+  .guidance-body { position: absolute; left: 0; top: 0; width: 100%; }
+}
+
+/* 候选导入 TechStack(缺口3) */
+.import-bar { margin-bottom: 12px; }
+.candidate-panel { margin-top: 8px; }
+.candidate {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #fafafa;
+
+  &.unselected { opacity: 0.55; }
+
+  .cand-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+
+    .cand-cat {
+      font-size: 12px; color: #555;
+      background: #e8eaf6; border-radius: 10px; padding: 2px 10px;
+    }
+  }
+}
+
+/* 客观声学指标(缺口4) */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 6px;
+
+  .metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 6px;
+    border-radius: 6px;
+    background: #f5f7fa;
+
+    .m-value { font-size: 22px; font-weight: 700; color: #333; }
+    .m-label { font-size: 11px; color: #777; margin-top: 2px; }
+  }
+}
+.sub-title { margin: 12px 0 6px; font-size: 13px; color: #555; }
+.filler-list {
+  display: flex; flex-wrap: wrap; gap: 6px;
+
+  .filler-chip {
+    font-size: 12px;
+    background: #eef1f6;
+    border-radius: 12px;
+    padding: 3px 10px;
+    color: #444;
+
+    &.warn { background: #fdecea; color: #b3261e; }
+  }
+}
+
+/* 问答切题度(缺口4补齐) */
+.relevance {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #fafafa;
+  border-left: 3px solid #2e7d32;
+
+  &.warn { border-left-color: #c62828; }
+
+  .rel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+
+    .rel-ok { color: #2e7d32; display: inline-flex; align-items: center; gap: 3px; }
+  }
+  .rel-q, .rel-a { margin: 4px 0; font-size: 13px; line-height: 1.6; }
+  .rel-assess {
+    margin: 6px 0 0; font-size: 12px; color: #5c6bc0;
+    display: flex; align-items: flex-start; gap: 4px;
+  }
+}
+.filler-chip.ok { background: #e8f5e9; color: #2e7d32; }

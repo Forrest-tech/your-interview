@@ -133,18 +133,6 @@ export interface StatusChange {
 }
 
 /** 面试轮次(与后端 InterviewRoundDto 对齐:order/scheduledDate/interviewer)。 */
-export interface InterviewRound {
-  id: string;
-  order: number;
-  stage?: string;
-  scheduledDate?: string;
-  interviewer?: string;
-  format?: string;
-  outcome?: string;
-  notes?: string;
-  feedback?: string;
-}
-
 export interface TrackerStats {
   total: number;
   byStatus: Record<string, number>;
@@ -224,6 +212,8 @@ export interface InterviewEntry {
   companyProfile?: string;
   notes?: string;
   analysisSummary?: string;
+  /** 客观声学指标(缺口4):Worker 回写,字段与后端 SpeechMetricsDto 对应。 */
+  speechMetrics?: SpeechMetrics;
   failureReason?: string;
   // 六维
   overallScore?: number;
@@ -270,6 +260,80 @@ export interface InterviewWeakness {
   createdAt?: string;
 }
 
+export interface InterviewRound {
+  id: string;
+  order: number;
+  stage: string;
+  scheduledDate?: string;
+  interviewers?: string;
+  format?: string;
+  location?: string;
+  outcome: string;
+  notes?: string;
+  feedback?: string;
+}
+
+export interface GuidanceMaterial {
+  id: string;
+  version: number;
+  contentMarkdown: string;
+  model: string;
+  generatedAt: string;
+  promptTokens?: number;
+  completionTokens?: number;
+}
+
+export interface GuidanceVersion {
+  id: string;
+  version: number;
+  generatedAt: string;
+  model: string;
+}
+
+/** 客观声学指标(缺口4)。 */
+export interface ProblemWord {
+  word: string;
+  accuracyScore: number;
+  fluencyScore?: number;
+  startSeconds: number;
+  endSeconds: number;
+}
+
+export interface SpeechMetrics {
+  durationSeconds: number;
+  wordCount: number;
+  wordsPerMinute: number;
+  averageSentenceLength: number;
+  shortSentenceCount: number;
+  fillerWordCount: number;
+  fillerWordBreakdown?: Record<string, number>;
+  selfRepetitionCount: number;
+  longPauseCount: number;
+  totalSilenceSeconds: number;
+  pronunciationAccuracy: number;
+  lowScoreWordRatio: number;
+  problemWords?: ProblemWord[];
+  /** 结构骨架标记(缺口4补齐):标记 → 出现次数。 */
+  structureMarkers?: Record<string, number>;
+}
+
+/** 问答候选(缺口3):勾选导入 TechStack。 */
+export interface QuestionCandidate {
+  questionId: string;
+  questionText: string;
+  myAnswerText?: string;
+  recommendedAnswer?: string;
+  category?: string;
+  difficulty: number;
+  gotStuck: boolean;
+  assessment?: string;
+  /** 前端本地状态:是否勾选 / 行内编辑草稿。 */
+  selected?: boolean;
+  editText?: string;
+  editAnswer?: string;
+  editCategory?: string;
+}
+
 export interface InterviewAsset {
   id: string;
   kind: 'Audio' | 'Transcript' | 'Notes' | string;
@@ -296,6 +360,7 @@ export interface InterviewDetail extends InterviewEntry {
   assets?: InterviewAsset[];
   questions?: InterviewQuestion[];
   weaknesses?: InterviewWeakness[];
+  rounds?: InterviewRound[];
 }
 
 /** 分析任务台账行 —— 「流水线记录」区直出(投递尝试与失败原因留痕)。 */

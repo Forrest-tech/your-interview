@@ -1,9 +1,12 @@
+using System.Text;
+using System.Text.Json;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.Services.Interviews.Domain;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
+using YourInterview.Services.Interviews.Infrastructure.Services;
 using YourInterview.Services.Interviews.Infrastructure.Storage;
 
 namespace YourInterview.Services.Interviews.Application;
@@ -29,6 +32,38 @@ public sealed record WeaknessDto(
     int Severity, string? Suggestion, int OccurrenceCount, string SourceType,
     DateTimeOffset CreatedAt);
 
+public sealed record RoundDto(
+    Guid Id, int Order, string Stage, DateOnly? ScheduledDate, string? Interviewers,
+    string? Format, string? Location, string Outcome, string? Notes, string? Feedback);
+
+public sealed record GuidanceMaterialDto(
+    Guid Id, int Version, string ContentMarkdown, string Model,
+    DateTimeOffset GeneratedAt, int? PromptTokens, int? CompletionTokens);
+
+public sealed record GuidanceVersionDto(
+    Guid Id, int Version, DateTimeOffset GeneratedAt, string Model);
+
+/// <summary>问答候选(缺口3):把条目的 InterviewQuestion 转成可勾选导入 TechStack 的候选。</summary>
+public sealed record QuestionCandidateDto(
+    Guid QuestionId, string QuestionText, string? MyAnswerText, string? RecommendedAnswer,
+    string? Category, int Difficulty, bool GotStuck, string? Assessment);
+
+/// <summary>
+/// 客观声学指标 DTO(缺口4)。字段与 Analysis.Worker 的 SpeechMetrics 一一对应,
+/// 由存储的 SpeechMetricsJson 反序列化得到,缺字段时容错(可空/默认值)。
+/// </summary>
+public sealed record SpeechMetricsDto(
+    double DurationSeconds, int WordCount, double WordsPerMinute,
+    double AverageSentenceLength, int ShortSentenceCount, int FillerWordCount,
+    Dictionary<string, int>? FillerWordBreakdown, int SelfRepetitionCount,
+    int LongPauseCount, double TotalSilenceSeconds, double PronunciationAccuracy,
+    double LowScoreWordRatio, List<ProblemWordDto>? ProblemWords,
+    Dictionary<string, int>? StructureMarkers = null);
+
+public sealed record ProblemWordDto(
+    string Word, double AccuracyScore, double? FluencyScore,
+    double StartSeconds, double EndSeconds);
+
 public sealed record InterviewEntryDto(
     Guid Id, Guid CompanyId, string CompanyName, Guid? JobApplicationId, string Role,
     string? CompanyProfile, string? JdText, string? JdSummary,
@@ -37,8 +72,10 @@ public sealed record InterviewEntryDto(
     string Status, string? FailureReason, DateTimeOffset? TranscribedAt, DateTimeOffset? AnalyzedAt,
     int? OverallScore, int? PronunciationScore, int? FluencyScore, int? StructureScore,
     int? TechnicalDepthScore, int? RelevanceScore, string? AnalysisSummary,
-    int AssetCount, int QuestionCount, int WeaknessCount,
+    SpeechMetricsDto? SpeechMetrics,
+    int AssetCount, int QuestionCount, int WeaknessCount, int RoundCount,
     List<AssetDto> Assets, List<QuestionDto> Questions, List<WeaknessDto> Weaknesses,
+    List<RoundDto> Rounds,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
 
 public sealed record InterviewEntryListItemDto(
@@ -166,7 +203,8 @@ public sealed record RequestAnalysisCommand(Guid EntryId) : IRequest<Result>;
 public sealed record ApplyAnalysisCommand(
     Guid EntryId, int Overall, int Pronunciation, int Fluency, int Structure,
     int TechnicalDepth, int Relevance, string? Summary,
-    List<QuestionDraft>? Questions, List<WeaknessDraft>? Weaknesses) : IRequest<Result>;
+    List<QuestionDraft>? Questions, List<WeaknessDraft>? Weaknesses,
+    string? SpeechMetricsJson = null) : IRequest<Result>;
 
 public sealed record MarkEntryFailedCommand(Guid EntryId, string Reason) : IRequest<Result>;
 
@@ -180,6 +218,18 @@ public sealed record UpdateQuestionCommand(
     string? RecommendedAnswer) : IRequest<Result>;
 
 public sealed record RemoveQuestionCommand(Guid EntryId, Guid QuestionId) : IRequest<Result>;
+
+// ============================ 轮次(缺口1) ============================
+
+public sealed record AddRoundCommand(
+    Guid EntryId, string Stage = "Technical") : IRequest<Result<Guid>>;
+
+public sealed record UpdateRoundCommand(
+    Guid EntryId, Guid RoundId, string Stage, DateOnly? ScheduledDate, string? Interviewers,
+    string? Format, string? Location, string Outcome, string? Notes,
+    string? Feedback) : IRequest<Result>;
+
+public sealed record RemoveRoundCommand(Guid EntryId, Guid RoundId) : IRequest<Result>;
 
 public sealed record AddWeaknessCommand(
     Guid EntryId, string Category, string Title, string? Detail, string? Evidence,
@@ -255,6 +305,28 @@ public sealed class AddQuestionCommandValidator : AbstractValidator<AddQuestionC
     }
 }
 
+public sealed class AddRoundCommandValidator : AbstractValidator<AddRoundCommand>
+{
+    public AddRoundCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.Stage).NotEmpty().MaximumLength(50);
+    }
+}
+
+public sealed class UpdateRoundCommandValidator : AbstractValidator<UpdateRoundCommand>
+{
+    public UpdateRoundCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.RoundId).NotEmpty();
+        RuleFor(x => x.Stage).NotEmpty().MaximumLength(50);
+        RuleFor(x => x.Outcome).NotEmpty();
+        RuleFor(x => x.Interviewers).MaximumLength(1000);
+        RuleFor(x => x.Location).MaximumLength(300);
+    }
+}
+
 public sealed class AddWeaknessCommandValidator : AbstractValidator<AddWeaknessCommand>
 {
     public AddWeaknessCommandValidator()
@@ -285,6 +357,18 @@ public static class InterviewMappingExtensions
         w.Id, w.Category.ToString(), w.Title, w.Detail, w.Evidence, w.Severity, w.Suggestion,
         w.OccurrenceCount, w.SourceType.ToString(), w.CreatedAt);
 
+    public static RoundDto ToDto(this InterviewRound r) => new(
+        r.Id, r.Order, r.Stage, r.ScheduledDate, r.Interviewers, r.Format, r.Location,
+        r.Outcome.ToString(), r.Notes, r.Feedback);
+
+    public static GuidanceMaterialDto ToDto(this GeneratedMaterial m) => new(
+        m.Id, m.Version, m.ContentMarkdown, m.Model, m.GeneratedAt,
+        m.PromptTokens, m.CompletionTokens);
+
+    public static QuestionCandidateDto ToCandidateDto(this InterviewQuestion q) => new(
+        q.Id, q.QuestionText, q.MyAnswerText, q.RecommendedAnswer,
+        q.Category.ToString(), q.Difficulty, q.GotStuck, q.Assessment);
+
     public static InterviewEntryDto ToDto(this InterviewEntry e) => new(
         e.Id, e.CompanyId, e.CompanyName, e.JobApplicationId, e.Role,
         e.CompanyProfile, e.JdText, e.JdSummary,
@@ -292,11 +376,29 @@ public static class InterviewMappingExtensions
         e.Status.ToString(), e.FailureReason, e.TranscribedAt, e.AnalyzedAt,
         e.OverallScore, e.PronunciationScore, e.FluencyScore, e.StructureScore,
         e.TechnicalDepthScore, e.RelevanceScore, e.AnalysisSummary,
-        e.Assets.Count, e.Questions.Count, e.Weaknesses.Count,
+        ParseSpeechMetrics(e.SpeechMetricsJson),
+        e.Assets.Count, e.Questions.Count, e.Weaknesses.Count, e.Rounds.Count,
         e.Assets.OrderBy(x => x.UploadedAt).Select(x => x.ToDto()).ToList(),
         e.Questions.OrderBy(x => x.Sequence).Select(x => x.ToDto()).ToList(),
         e.Weaknesses.OrderByDescending(x => x.Severity).Select(x => x.ToDto()).ToList(),
+        e.Rounds.OrderBy(x => x.Order).Select(x => x.ToDto()).ToList(),
         e.CreatedAt, e.UpdatedAt);
+
+    /// <summary>指标 JSON 反序列化:坏数据/缺字段时返回 null,前端按"无指标"处理。</summary>
+    private static SpeechMetricsDto? ParseSpeechMetrics(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<SpeechMetricsDto>(json, JsonOpts);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     /// <summary>列表项只带聚合的标量字段(不带子集合),避免列表页把大文本拖出来。</summary>
     public static InterviewEntryListItemDto ToListItemDto(this InterviewEntry e) => new(
@@ -725,7 +827,7 @@ public sealed class ApplyAnalysisCommandHandler(InterviewsDbContext db)
         {
             e.ApplyAnalysis(request.Overall, request.Pronunciation, request.Fluency,
                 request.Structure, request.TechnicalDepth, request.Relevance, request.Summary,
-                request.Questions, request.Weaknesses);
+                request.Questions, request.Weaknesses, request.SpeechMetricsJson);
             // 分析结果回写 = 流水线终点:同事务关单
             await db.StageCloseOpenJobsAsync(request.EntryId, AnalysisJobStatus.Succeeded, null, ct);
             await db.SaveChangesAsync(ct);
@@ -828,6 +930,65 @@ public sealed class RemoveQuestionCommandHandler(InterviewsDbContext db)
     }
 }
 
+public sealed class AddRoundCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<AddRoundCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(AddRoundCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
+
+        var r = e.AddRound(request.Stage);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(r.Id);
+    }
+}
+
+public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<UpdateRoundCommand, Result>
+{
+    public async Task<Result> Handle(UpdateRoundCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        if (!Enum.TryParse<InterviewRoundOutcome>(request.Outcome, true, out var outcome))
+            return Result.Failure(Error.Validation("Round.InvalidOutcome", "轮次结果无效"));
+
+        try
+        {
+            e.UpdateRound(request.RoundId, request.Stage, request.ScheduledDate, request.Interviewers,
+                request.Format, request.Location, outcome, request.Notes, request.Feedback);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+
+public sealed class RemoveRoundCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<RemoveRoundCommand, Result>
+{
+    public async Task<Result> Handle(RemoveRoundCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try
+        {
+            e.RemoveRound(request.RoundId);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+
 public sealed class AddWeaknessCommandHandler(InterviewsDbContext db)
     : IRequestHandler<AddWeaknessCommand, Result<Guid>>
 {
@@ -856,5 +1017,167 @@ public sealed class RemoveWeaknessCommandHandler(InterviewsDbContext db)
         e.RemoveWeakness(request.WeaknessId);
         await db.SaveChangesAsync(ct);
         return Result.Success();
+    }
+}
+
+// ============================ 指导材料(缺口2) ============================
+
+/// <summary>手动触发:为该条目生成一份新的面试指导材料(版本号自动 +1)。</summary>
+public sealed record GenerateGuidanceCommand(Guid EntryId) : IRequest<Result<GuidanceMaterialDto>>;
+
+public sealed record GetGuidanceQuery(Guid EntryId, int? Version = null)
+    : IRequest<Result<GuidanceMaterialDto>>;
+
+public sealed record ListGuidanceVersionsQuery(Guid EntryId)
+    : IRequest<Result<IReadOnlyList<GuidanceVersionDto>>>;
+
+public sealed class GenerateGuidanceCommandHandler(InterviewsDbContext db, IAiGatewayClient ai)
+    : IRequestHandler<GenerateGuidanceCommand, Result<GuidanceMaterialDto>>
+{
+    public async Task<Result<GuidanceMaterialDto>> Handle(GenerateGuidanceCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries
+            .Include(x => x.Questions)
+            .Include(x => x.Weaknesses)
+            .Include(x => x.Rounds)
+            .Include(x => x.Materials)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<GuidanceMaterialDto>(Error.NotFound("面试条目"));
+
+        var prompt = BuildPrompt(e);
+
+        AiCompletionResult completion;
+        try
+        {
+            completion = await ai.CompleteAsync("interview-guidance", prompt,
+                "你是资深面试教练,只输出 Markdown,不要多余寒暄。", 0.7, 4000, ct);
+        }
+        catch (AiGatewayException ex) when (ex.IsConfigurationError)
+        {
+            return Result.Failure<GuidanceMaterialDto>(
+                Error.Validation("Guidance.AiNotConfigured", "AI 未配置:请先在设置里配置模型凭据。"));
+        }
+        catch (AiGatewayException ex)
+        {
+            return Result.Failure<GuidanceMaterialDto>(Error.Validation("Guidance.AiFailed", ex.Message));
+        }
+
+        var m = e.AddMaterial(completion.Text, completion.Model,
+            completion.PromptTokens, completion.CompletionTokens);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(m.ToDto());
+    }
+
+    private static string BuildPrompt(InterviewEntry e)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"# 面试对象:{e.CompanyName} —— {e.Role}");
+        if (!string.IsNullOrWhiteSpace(e.CompanyProfile))
+            sb.AppendLine($"## 公司情况\n{e.CompanyProfile}");
+        if (!string.IsNullOrWhiteSpace(e.JdSummary))
+            sb.AppendLine($"## JD 要点\n{e.JdSummary}");
+        else if (!string.IsNullOrWhiteSpace(e.JdText))
+            sb.AppendLine($"## JD 原文(截断)\n{e.JdText[..Math.Min(e.JdText.Length, 6000)]}");
+
+        var rounds = e.Rounds.OrderBy(r => r.Order).ToList();
+        if (rounds.Count > 0)
+        {
+            sb.AppendLine("## 已知轮次");
+            foreach (var r in rounds)
+                sb.AppendLine($"- 第{r.Order}轮 {r.Stage}:面试官 {r.Interviewers ?? "未知"},形式 {r.Format ?? "未知"},结果 {r.Outcome}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(e.AnalysisSummary))
+            sb.AppendLine($"## AI 总评\n{e.AnalysisSummary}");
+        sb.AppendLine($"## 六维分数:发音 {e.PronunciationScore},流利 {e.FluencyScore}," +
+                      $"结构 {e.StructureScore},技术深度 {e.TechnicalDepthScore},相关度 {e.RelevanceScore}");
+
+        var qs = e.Questions.OrderBy(q => q.Sequence).ToList();
+        if (qs.Count > 0)
+        {
+            sb.AppendLine("## 历史问答(重点看答得不好的)");
+            foreach (var q in qs.Take(30))
+            {
+                sb.AppendLine($"- [{q.Category}] {q.QuestionText}");
+                if (!string.IsNullOrWhiteSpace(q.MyAnswerText))
+                    sb.AppendLine($"  我的回答:{q.MyAnswerText[..Math.Min(q.MyAnswerText.Length, 500)]}");
+                if (!string.IsNullOrWhiteSpace(q.Assessment))
+                    sb.AppendLine($"  诊断:{q.Assessment}");
+                if (q.GotStuck) sb.AppendLine($"  ⚠️ 当场卡壳:{q.StuckReason}");
+                if (!string.IsNullOrWhiteSpace(q.RecommendedAnswer))
+                    sb.AppendLine($"  推荐答案:{q.RecommendedAnswer[..Math.Min(q.RecommendedAnswer.Length, 500)]}");
+            }
+        }
+
+        var ws = e.Weaknesses.OrderByDescending(w => w.Severity).ToList();
+        if (ws.Count > 0)
+        {
+            sb.AppendLine("## 短板清单");
+            foreach (var w in ws.Take(15))
+                sb.AppendLine($"- [{w.Category} 严重度{w.Severity}] {w.Title}: {w.Suggestion}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("请输出一份面试指导材料(Markdown),结构:");
+        sb.AppendLine("## 1. 公司与岗位速览(3-5 条要点)");
+        sb.AppendLine("## 2. 必准备的高频问题(5-8 个,带答题要点,不是完整背稿)");
+        sb.AppendLine("## 3. 我的短板针对性补救(结合上面的短板和卡壳点)");
+        sb.AppendLine("## 4. 每轮的注意事项(结合已知轮次)");
+        sb.AppendLine("## 5. 临场 checklist(开场 30 秒 / 结构骨架 / trade-off 话术)");
+        sb.AppendLine("要求:具体、可执行、不说空话;英文术语保留原文。");
+        return sb.ToString();
+    }
+}
+
+public sealed class GetGuidanceQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetGuidanceQuery, Result<GuidanceMaterialDto>>
+{
+    public async Task<Result<GuidanceMaterialDto>> Handle(GetGuidanceQuery request, CancellationToken ct)
+    {
+        var q = db.GuidanceMaterials.Where(m => m.InterviewEntryId == request.EntryId);
+        var m = request.Version.HasValue
+            ? await q.FirstOrDefaultAsync(x => x.Version == request.Version.Value, ct)
+            : await q.OrderByDescending(x => x.Version).FirstOrDefaultAsync(ct);
+        if (m is null) return Result.Failure<GuidanceMaterialDto>(Error.NotFound("指导材料"));
+        return Result.Success(m.ToDto());
+    }
+}
+
+public sealed class ListGuidanceVersionsQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<ListGuidanceVersionsQuery, Result<IReadOnlyList<GuidanceVersionDto>>>
+{
+    public async Task<Result<IReadOnlyList<GuidanceVersionDto>>> Handle(
+        ListGuidanceVersionsQuery request, CancellationToken ct)
+    {
+        var list = await db.GuidanceMaterials
+            .Where(m => m.InterviewEntryId == request.EntryId)
+            .OrderByDescending(m => m.Version)
+            .Select(m => new GuidanceVersionDto(m.Id, m.Version, m.GeneratedAt, m.Model))
+            .ToListAsync(ct);
+        return Result.Success<IReadOnlyList<GuidanceVersionDto>>(list);
+    }
+}
+
+// ============================ 问答候选(缺口3) ============================
+
+/// <summary>把该条目的问答转成候选列表,供前端勾选导入 TechStack。默认全选由前端做。</summary>
+public sealed record ListQuestionCandidatesQuery(Guid EntryId)
+    : IRequest<Result<IReadOnlyList<QuestionCandidateDto>>>;
+
+public sealed class ListQuestionCandidatesQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<ListQuestionCandidatesQuery, Result<IReadOnlyList<QuestionCandidateDto>>>
+{
+    public async Task<Result<IReadOnlyList<QuestionCandidateDto>>> Handle(
+        ListQuestionCandidatesQuery request, CancellationToken ct)
+    {
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        if (!exists) return Result.Failure<IReadOnlyList<QuestionCandidateDto>>(Error.NotFound("面试条目"));
+
+        var list = await db.Questions
+            .Where(q => q.InterviewEntryId == request.EntryId)
+            .OrderBy(q => q.Sequence)
+            .Select(q => q.ToCandidateDto())
+            .ToListAsync(ct);
+        return Result.Success<IReadOnlyList<QuestionCandidateDto>>(list);
     }
 }

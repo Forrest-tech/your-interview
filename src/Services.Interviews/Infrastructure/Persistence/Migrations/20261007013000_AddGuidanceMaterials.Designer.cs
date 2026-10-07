@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using YourInterview.Services.Interviews.Infrastructure.Persistence;
 namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(InterviewsDbContext))]
-    partial class InterviewsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007013000_AddGuidanceMaterials")]
+    partial class AddGuidanceMaterials
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -175,9 +178,6 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<string>("AnalysisSummary")
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
-
-                    b.Property<string>("SpeechMetricsJson")
-                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("AnalyzedAt")
                         .HasColumnType("timestamp with time zone");
@@ -510,7 +510,6 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
 
                     b.ToTable("guidance_materials", "interviews");
                 });
-
 
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewAsset", b =>
                 {

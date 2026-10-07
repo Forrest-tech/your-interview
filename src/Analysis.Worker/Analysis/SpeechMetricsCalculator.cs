@@ -129,6 +129,11 @@ public static class SpeechMetricsCalculator
             .Take(10)
             .ToList();
 
+        // ---------- 结构骨架标记(缺口4补齐) ----------
+        // 检出分点/转折/收尾标记 —— 有标记说明在尝试结构化表达。
+        // 与 DiagnoseStage.ScoreStructure 用的词表保持一致。
+        var markers = DetectStructureMarkers(text);
+
         return new SpeechMetrics(
             DurationSeconds: Math.Round(durationSeconds, 1),
             WordCount: wordCount,
@@ -142,7 +147,36 @@ public static class SpeechMetricsCalculator
             TotalSilenceSeconds: Math.Round(totalSilence, 1),
             PronunciationAccuracy: Math.Round(accuracy, 1),
             LowScoreWordRatio: Math.Round(lowScoreRatio, 1),
-            ProblemWords: [.. problemWords, .. nonTermProblems]);
+            ProblemWords: [.. problemWords, .. nonTermProblems],
+            StructureMarkers: markers);
+    }
+
+    /// <summary>
+    /// 结构骨架标记检测。返回 标记 → 出现次数(只返回出现过的)。
+    /// 词表与 DiagnoseStage.ScoreStructure 一致,另加开场/收尾常用句式。
+    /// </summary>
+    internal static Dictionary<string, int> DetectStructureMarkers(string text)
+    {
+        var markers = new[]
+        {
+            "the short answer is",
+            "first", "second", "third", "finally",
+            "the main trade-off", "trade-off",
+            "on the other hand", "however", "for example", "that said",
+            "in conclusion", "to summarize", "in summary",
+        };
+        var lower = " " + text.ToLowerInvariant() + " ";
+        var result = new Dictionary<string, int>();
+        foreach (var m in markers)
+        {
+            // 多词标记用包含匹配,单词标记用词边界(避免 "first" 误命中 "firsthand")
+            var pattern = m.Contains(' ')
+                ? Regex.Escape(m)
+                : $@"\b{Regex.Escape(m)}\b";
+            var count = Regex.Matches(lower, pattern).Count;
+            if (count > 0) result[m] = count;
+        }
+        return result;
     }
 
     internal static List<string> TokenizeWords(string text) =>

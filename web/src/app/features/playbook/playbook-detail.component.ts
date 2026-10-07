@@ -16,11 +16,13 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  AnalysisJob, InterviewAsset, InterviewDetail, InterviewQuestion, InterviewStatus, InterviewWeakness
+  AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
+  InterviewRound, InterviewStatus, InterviewWeakness, QuestionCandidate, SpeechMetrics
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -73,7 +75,7 @@ interface WeaknessForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatTabsModule, MatFormFieldModule, MatInputModule,
-    MatSelectModule, MatCheckboxModule, MatSnackBarModule, MatDividerModule
+    MatSelectModule, MatCheckboxModule, MatSnackBarModule, MatDividerModule, MatTooltipModule
   ],
   templateUrl: './playbook-detail.component.html',
   styleUrl: './playbook-detail.component.scss'
@@ -117,6 +119,19 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     'SentenceIntegrity', 'Communication', 'Other'
   ];
 
+  /** 轮次阶段 / 结果选项 —— 与后端 InterviewRoundOutcome / Stage 约定一致。 */
+  readonly roundStages = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
+  readonly roundOutcomes = ['Pending', 'Passed', 'Rejected', 'Ghosted', 'Cancelled', 'NoShow'];
+  readonly roundOutcomeLabel: Record<string, string> = {
+    Pending: '待定', Passed: '通过', Rejected: '被拒',
+    Ghosted: '失联', Cancelled: '取消', NoShow: '缺席'
+  };
+
+  /** 轮次行内编辑草稿:key = round.id,打开编辑时从行数据复制一份。 */
+  roundDrafts: Record<string, InterviewRound> = {};
+  /** 新增轮次的阶段选择。 */
+  newRoundStage = 'Technical';
+
   // 表单模型(非 signal —— 它们只在提交那一刻被读,不需要触发变更检测)
   questionForm: QuestionForm = this.emptyQuestionForm();
   weaknessForm: WeaknessForm = this.emptyWeaknessForm();
@@ -151,8 +166,146 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly questions = computed(() => this.entry()?.questions ?? []);
   readonly weaknesses = computed(() => this.entry()?.weaknesses ?? []);
   readonly assets = computed(() => this.entry()?.assets ?? []);
+  readonly rounds = computed(() => this.entry()?.rounds ?? []);
   readonly audioAssets = computed(() =>
     this.assets().filter((a) => (a.kind ?? '').toLowerCase() === 'audio'));
+
+  // ------------------------------------------------------------ 指导材料(缺口2)
+  readonly guidance = signal<GuidanceMaterial | null>(null);
+  readonly guidanceVersions = signal<GuidanceVersion[]>([]);
+  readonly guidanceLoading = signal(false);
+
+  /** 当前材料的 Markdown → 安全 HTML(极简渲染:标题/加粗/列表/换行,先转义防 XSS)。 */
+  readonly guidanceHtml = computed(() => this.renderMarkdown(this.guidance()?.contentMarkdown ?? ''));
+
+  private renderMarkdown(md: string): string {
+    const esc = md
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const lines = esc.split('\n');
+    const out: string[] = [];
+    let inList = false;
+    for (const line of lines) {
+      const t = line.trim();
+      if (/^#{1,3}\s/.test(t)) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        const level = t.match(/^#+/)![0].length;
+        out.push(`<h${level + 1}>${this.inlineMd(t.replace(/^#+\s*/, ''))}</h${level + 1}>`);
+      } else if (/^[-*]\s/.test(t)) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push(`<li>${this.inlineMd(t.replace(/^[-*]\s*/, ''))}</li>`);
+      } else if (/^\d+[.)]\s/.test(t)) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<p class="md-num">${this.inlineMd(t)}</p>`);
+      } else if (t === '') {
+        if (inList) { out.push('</ul>'); inList = false; }
+      } else {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<p>${this.inlineMd(t)}</p>`);
+      }
+    }
+    if (inList) out.push('</ul>');
+    return out.join('\n');
+  }
+
+  private inlineMd(s: string): string {
+    return s
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
+  loadGuidance(): void {
+    this.guidanceLoading.set(true);
+    this.api.get<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance`).subscribe({
+      next: (g) => {
+        this.guidance.set(g);
+        this.guidanceLoading.set(false);
+        this.loadGuidanceVersions();
+      },
+      error: () => {
+        // 404 = 还没生成过,不是错误
+        this.guidance.set(null);
+        this.guidanceLoading.set(false);
+        this.loadGuidanceVersions();
+      }
+    });
+  }
+
+  private loadGuidanceVersions(): void {
+    this.api.get<GuidanceVersion[]>(`/api/interviews/${this.id()}/guidance/versions`).subscribe({
+      next: (v) => this.guidanceVersions.set(v ?? []),
+      error: () => this.guidanceVersions.set([])
+    });
+  }
+
+  generateGuidance(): void {
+    if (!confirm('生成新版本指导材料?会调用 AI,可能需要几十秒。')) return;
+    this.busy.set('guidance');
+    this.api.post<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance/generate`, {}).subscribe({
+      next: (g) => {
+        this.busy.set(null);
+        this.guidance.set(g);
+        this.loadGuidanceVersions();
+        this.snack.open(`指导材料 v${g.version} 已生成`, '关闭', { duration: 3000 });
+      },
+      error: (e: Error) => {
+        this.busy.set(null);
+        this.snack.open(e.message, '关闭', { duration: 6000 });
+      }
+    });
+  }
+
+  selectGuidanceVersion(v: GuidanceVersion): void {
+    this.guidanceLoading.set(true);
+    this.api.get<GuidanceMaterial>(
+      `/api/interviews/${this.id()}/guidance`, { version: v.version }).subscribe({
+      next: (g) => { this.guidance.set(g); this.guidanceLoading.set(false); },
+      error: (e: Error) => {
+        this.guidanceLoading.set(false);
+        this.snack.open(e.message, '关闭', { duration: 5000 });
+      }
+    });
+  }
+
+  readonly selectedGuidanceVersion = computed(() => {
+    const g = this.guidance();
+    if (!g) return null;
+    return this.guidanceVersions().find((v) => v.version === g.version) ?? null;
+  });
+
+  /** 填充词明细 → [词, 次数][] ,按次数降序,供模板展示。 */
+  fillerEntries(m: SpeechMetrics): [string, number][] {
+    const d = m.fillerWordBreakdown ?? {};
+    return Object.entries(d).sort((a, b) => b[1] - a[1]);
+  }
+
+  /** 结构骨架标记 → [标记, 次数][],按次数降序。 */
+  structureMarkerEntries(m: SpeechMetrics): [string, number][] {
+    const d = m.structureMarkers ?? {};
+    return Object.entries(d).sort((a, b) => b[1] - a[1]);
+  }
+
+  selectGuidanceVersionById(id: string): void {
+    const v = this.guidanceVersions().find((x) => x.id === id);
+    if (v) this.selectGuidanceVersion(v);
+  }
+
+  /** 导出 PDF:走浏览器打印(用户选"另存为 PDF")。 */
+  exportGuidancePdf(): void {
+    window.print();
+  }
+
+  /** 导出 Word:拼一个 Word 能打开的 HTML 文件下载。 */
+  exportGuidanceWord(): void {
+    const g = this.guidance();
+    if (!g) return;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${this.guidanceHtml()}</body></html>`;
+    const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `面试指导材料-v${g.version}.doc`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   /**
    * 分析任务台账(流水线记录)。
@@ -247,6 +400,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     if (showSpinner) this.loading.set(true);
     this.error.set(null);
     this.loadJobs();
+    this.loadGuidance();
 
     this.api.get<InterviewDetail>(`/api/interviews/${this.id()}`).subscribe({
       next: (d) => {
@@ -416,6 +570,156 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     if (!confirm('删除这条问答?')) return;
 
     this.api.delete<void>(`/api/interviews/${this.id()}/questions/${q.id}`).subscribe({
+      next: () => {
+        this.snack.open('已删除', '关闭', { duration: 3000 });
+        this.load(false);
+      },
+      error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+    });
+  }
+
+  // ------------------------------------------------------------ 候选导入 TechStack(缺口3)
+
+  readonly showCandidates = signal(false);
+  readonly candidates = signal<QuestionCandidate[]>([]);
+  readonly candidatesLoading = signal(false);
+
+  readonly selectedCandidates = computed(() => this.candidates().filter((c) => c.selected));
+
+  openCandidateImport(): void {
+    this.showCandidates.set(true);
+    this.candidatesLoading.set(true);
+    this.api.get<QuestionCandidate[]>(`/api/interviews/${this.id()}/question-candidates`).subscribe({
+      next: (list) => {
+        // 默认全选;编辑草稿预填当前值
+        for (const c of list) {
+          c.selected = true;
+          c.editText = c.questionText;
+          c.editAnswer = c.myAnswerText ?? c.recommendedAnswer ?? '';
+          c.editCategory = c.category ?? 'Technical';
+        }
+        this.candidates.set(list);
+        this.candidatesLoading.set(false);
+      },
+      error: (e: Error) => {
+        this.candidatesLoading.set(false);
+        this.snack.open(e.message, '关闭', { duration: 5000 });
+      }
+    });
+  }
+
+  closeCandidateImport(): void {
+    this.showCandidates.set(false);
+    this.candidates.set([]);
+  }
+
+  toggleAllCandidates(select: boolean): void {
+    this.candidates.update((list) => list.map((c) => ({ ...c, selected: select })));
+  }
+
+  importCandidates(): void {
+    const sel = this.selectedCandidates();
+    if (sel.length === 0) {
+      this.snack.open('请至少勾选一条', '关闭', { duration: 3000 });
+      return;
+    }
+    const e = this.entry();
+    this.busy.set('candidates');
+    this.api.post<{ created: number; skipped: number; total: number }>(
+      '/api/knowledge/import-candidates',
+      {
+        entryId: this.id(),
+        company: e?.companyName ?? null,
+        date: e?.interviewDate ?? null,
+        roundNo: e?.roundNo ?? null,
+        roundStage: null,
+        applicationId: null,
+        items: sel.map((c) => ({
+          title: (c.editText ?? c.questionText).slice(0, 80),
+          topic: c.editCategory ?? 'Technical',
+          question: c.editText ?? c.questionText,
+          difficulty: c.difficulty ?? 3,
+          importance: c.gotStuck ? 4 : 3,
+          betterAnswer: c.editAnswer || null,
+          clientKey: c.questionId
+        }))
+      }).subscribe({
+      next: (r) => {
+        this.busy.set(null);
+        this.closeCandidateImport();
+        this.snack.open(
+          `导入完成:新增 ${r.created} 条,跳过重复 ${r.skipped} 条`, '关闭', { duration: 4000 });
+      },
+      error: (err: Error) => {
+        this.busy.set(null);
+        this.snack.open(err.message, '关闭', { duration: 6000 });
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------- 轮次(缺口1)
+
+  addRound(): void {
+    this.busy.set('round');
+    this.api.post<{ id: string }>(`/api/interviews/${this.id()}/rounds`, {
+      stage: this.newRoundStage
+    }).subscribe({
+      next: () => {
+        this.busy.set(null);
+        this.snack.open('已新增一轮', '关闭', { duration: 3000 });
+        this.load(false);
+      },
+      error: (e: Error) => {
+        this.busy.set(null);
+        this.snack.open(e.message, '关闭', { duration: 5000 });
+      }
+    });
+  }
+
+  /** 打开行内编辑:复制一份草稿,改完点保存才提交。 */
+  editRound(r: InterviewRound): void {
+    this.roundDrafts[r.id] = { ...r };
+  }
+
+  cancelEditRound(r: InterviewRound): void {
+    delete this.roundDrafts[r.id];
+  }
+
+  isEditingRound(r: InterviewRound): boolean {
+    return r.id in this.roundDrafts;
+  }
+
+  saveRound(r: InterviewRound): void {
+    const d = this.roundDrafts[r.id];
+    if (!d) return;
+    this.busy.set('round');
+    this.api.put<void>(`/api/interviews/${this.id()}/rounds/${r.id}`, {
+      stage: d.stage,
+      scheduledDate: d.scheduledDate || null,
+      interviewers: d.interviewers || null,
+      format: d.format || null,
+      location: d.location || null,
+      outcome: d.outcome,
+      notes: d.notes || null,
+      feedback: d.feedback || null
+    }).subscribe({
+      next: () => {
+        this.busy.set(null);
+        delete this.roundDrafts[r.id];
+        this.snack.open('轮次已保存', '关闭', { duration: 3000 });
+        this.load(false);
+      },
+      error: (e: Error) => {
+        this.busy.set(null);
+        this.snack.open(e.message, '关闭', { duration: 5000 });
+      }
+    });
+  }
+
+  removeRound(r: InterviewRound): void {
+    if (!confirm(`删除第 ${r.order} 轮?`)) return;
+
+    this.api.delete<void>(`/api/interviews/${this.id()}/rounds/${r.id}`).subscribe({
       next: () => {
         this.snack.open('已删除', '关闭', { duration: 3000 });
         this.load(false);

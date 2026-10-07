@@ -145,6 +145,121 @@
             </mat-card-content>
           </mat-card>
 
+          <!-- 客观声学指标(缺口4):可测量的数字,不是主观打分 -->
+          @if (e.speechMetrics) {
+            <mat-card class="panel">
+              <mat-card-header>
+                <mat-card-title>客观声学指标</mat-card-title>
+                <mat-card-subtitle>只统计候选人自己的发言 · 舒适语速约 130–170 词/分钟</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="metric-grid">
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.wordsPerMinute | number:'1.0-0' }}</span>
+                    <span class="m-label">词/分钟</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.averageSentenceLength | number:'1.1-1' }}</span>
+                    <span class="m-label">平均句长(词)</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.shortSentenceCount }}</span>
+                    <span class="m-label">过短句(&lt;5词)</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.fillerWordCount }}</span>
+                    <span class="m-label">填充词总数</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.longPauseCount }}</span>
+                    <span class="m-label">长停顿(&gt;2s)</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.selfRepetitionCount }}</span>
+                    <span class="m-label">自我重复</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.pronunciationAccuracy | number:'1.0-0' }}</span>
+                    <span class="m-label">发音准确度</span>
+                  </div>
+                  <div class="metric">
+                    <span class="m-value">{{ e.speechMetrics.wordCount }}</span>
+                    <span class="m-label">总词数</span>
+                  </div>
+                </div>
+
+                @if (fillerEntries(e.speechMetrics).length > 0) {
+                  <h4 class="sub-title">填充词明细</h4>
+                  <div class="filler-list">
+                    @for (f of fillerEntries(e.speechMetrics); track f[0]) {
+                      <span class="filler-chip">{{ f[0] }} × {{ f[1] }}</span>
+                    }
+                  </div>
+                }
+
+                @if (e.speechMetrics.problemWords && e.speechMetrics.problemWords.length > 0) {
+                  <h4 class="sub-title">术语发音关注</h4>
+                  <div class="filler-list">
+                    @for (w of e.speechMetrics.problemWords; track w.word) {
+                      <span class="filler-chip warn"
+                            [matTooltip]="'准确度 ' + (w.accuracyScore | number:'1.0-0') + ' 分'">
+                        {{ w.word }}
+                      </span>
+                    }
+                  </div>
+                }
+
+                @if (structureMarkerEntries(e.speechMetrics).length > 0) {
+                  <h4 class="sub-title">结构骨架标记</h4>
+                  <p class="muted" style="margin-bottom:6px;">检出分点/转折/收尾标记 {{ structureMarkerEntries(e.speechMetrics).length }} 类 —— 有标记说明在尝试结构化表达</p>
+                  <div class="filler-list">
+                    @for (m of structureMarkerEntries(e.speechMetrics); track m[0]) {
+                      <span class="filler-chip ok">{{ m[0] }} × {{ m[1] }}</span>
+                    }
+                  </div>
+                } @else if (e.speechMetrics.wordCount > 0) {
+                  <h4 class="sub-title">结构骨架标记</h4>
+                  <p class="muted">全程未检出分点/转折/收尾标记 —— 表达偏平铺直叙，建议刻意练习 "First… Second… Third…" 和 trade-off 收尾。</p>
+                }
+              </mat-card-content>
+            </mat-card>
+          }
+
+          <!-- 问答切题度(缺口4补齐):问题 vs 回答对照,答非所问预警 -->
+          @if (questions().length > 0) {
+            <mat-card class="panel">
+              <mat-card-header>
+                <mat-card-title>问答切题度</mat-card-title>
+                <mat-card-subtitle>问题 vs 回答对照 —— 卡壳 / 诊断存疑的标出来</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                @for (q of questions(); track q.id) {
+                  <div class="relevance" [class.warn]="q.gotStuck">
+                    <div class="rel-head">
+                      <span class="q-seq">Q{{ q.sequence }}</span>
+                      @if (q.category) { <span class="q-cat">{{ q.category }}</span> }
+                      @if (q.gotStuck) {
+                        <span class="q-stuck"><mat-icon inline>warning</mat-icon> 卡壳{{ q.stuckReason ? '：' + q.stuckReason : '' }}</span>
+                      } @else {
+                        <span class="rel-ok"><mat-icon inline>check_circle</mat-icon> 作答流畅</span>
+                      }
+                    </div>
+                    <p class="rel-q"><strong>问：</strong>{{ q.questionText }}</p>
+                    @if (q.myAnswerText) {
+                      <p class="rel-a"><strong>答：</strong>{{ q.myAnswerText.length > 120 ? (q.myAnswerText | slice:0:120) + '…' : q.myAnswerText }}</p>
+                    } @else {
+                      <p class="rel-a muted">（未记录回答）</p>
+                    }
+                    @if (q.assessment) {
+                      <p class="rel-assess"><mat-icon inline>insights</mat-icon> {{ q.assessment }}</p>
+                    }
+                  </div>
+                  <mat-divider></mat-divider>
+                }
+              </mat-card-content>
+            </mat-card>
+          }
+
           <!-- 短板清单 -->
           <mat-card class="panel">
             <mat-card-header>
@@ -236,12 +351,285 @@
         </div>
       </mat-tab>
 
+      <!-- ============ 轮次(缺口1:一家公司多轮) ============ -->
+      <mat-tab label="轮次 ({{ rounds().length }})">
+        <div class="tab-body">
+          <mat-card class="panel">
+            <mat-card-header>
+              <mat-card-title>面试轮次</mat-card-title>
+              <mat-card-subtitle>一家公司多轮,每轮独立记录时间 / 面试官 / 结果</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              @if (rounds().length === 0) {
+                <p class="muted">还没有轮次记录。旧数据的第 1 轮会在迁移后自动出现,也可以手动新增。</p>
+              } @else {
+                @for (r of rounds(); track r.id) {
+                  <div class="round">
+                    <div class="round-head">
+                      <span class="round-order">第 {{ r.order }} 轮</span>
+                      <span class="round-stage">{{ r.stage }}</span>
+                      <span class="round-outcome">{{ roundOutcomeLabel[r.outcome] ?? r.outcome }}</span>
+                      @if (r.scheduledDate) {
+                        <span class="round-date">{{ r.scheduledDate }}</span>
+                      }
+                      <span class="spacer"></span>
+                      @if (auth.can('interviews.write')) {
+                        @if (!isEditingRound(r)) {
+                          <button mat-icon-button (click)="editRound(r)" title="编辑">
+                            <mat-icon>edit</mat-icon>
+                          </button>
+                        }
+                        @if (auth.can('interviews.delete')) {
+                          <button mat-icon-button (click)="removeRound(r)" title="删除">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        }
+                      }
+                    </div>
+
+                    @if (isEditingRound(r)) {
+                      <div class="form-grid">
+                        <mat-form-field appearance="outline">
+                          <mat-label>阶段</mat-label>
+                          <mat-select [(ngModel)]="roundDrafts[r.id].stage">
+                            @for (s of roundStages; track s) {
+                              <mat-option [value]="s">{{ s }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>结果</mat-label>
+                          <mat-select [(ngModel)]="roundDrafts[r.id].outcome">
+                            @for (o of roundOutcomes; track o) {
+                              <mat-option [value]="o">{{ roundOutcomeLabel[o] }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>日期</mat-label>
+                          <input matInput type="date" [(ngModel)]="roundDrafts[r.id].scheduledDate" />
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>形式</mat-label>
+                          <mat-select [(ngModel)]="roundDrafts[r.id].format">
+                            <mat-option value="">—</mat-option>
+                            <mat-option value="Phone">Phone</mat-option>
+                            <mat-option value="Video">Video</mat-option>
+                            <mat-option value="Onsite">Onsite</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>面试官</mat-label>
+                        <input matInput [(ngModel)]="roundDrafts[r.id].interviewers"
+                               placeholder="如: David Castelino (Sr SWE)" />
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>地点</mat-label>
+                        <input matInput [(ngModel)]="roundDrafts[r.id].location" />
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>备注</mat-label>
+                        <textarea matInput rows="2" [(ngModel)]="roundDrafts[r.id].notes"></textarea>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>反馈</mat-label>
+                        <textarea matInput rows="2" [(ngModel)]="roundDrafts[r.id].feedback"></textarea>
+                      </mat-form-field>
+                      <div class="row-actions">
+                        <button mat-stroked-button color="primary" (click)="saveRound(r)"
+                                [disabled]="busy() !== null">
+                          <mat-icon>check</mat-icon> 保存
+                        </button>
+                        <button mat-button (click)="cancelEditRound(r)">取消</button>
+                      </div>
+                    } @else {
+                      @if (r.interviewers) {
+                        <p class="round-line"><strong>面试官:</strong> {{ r.interviewers }}</p>
+                      }
+                      @if (r.format || r.location) {
+                        <p class="round-line">
+                          @if (r.format) { <span>{{ r.format }}</span> }
+                          @if (r.format && r.location) { <span> · </span> }
+                          @if (r.location) { <span>{{ r.location }}</span> }
+                        </p>
+                      }
+                      @if (r.notes) {
+                        <p class="round-line">{{ r.notes }}</p>
+                      }
+                      @if (r.feedback) {
+                        <blockquote class="wk-evidence">
+                          <strong>反馈</strong><span>{{ r.feedback }}</span>
+                        </blockquote>
+                      }
+                    }
+                  </div>
+                  <mat-divider></mat-divider>
+                }
+              }
+
+              @if (auth.can('interviews.write')) {
+                <div class="add-block">
+                  <mat-divider></mat-divider>
+                  <h4 class="add-title">新增一轮</h4>
+                  <div class="form-grid">
+                    <mat-form-field appearance="outline">
+                      <mat-label>阶段</mat-label>
+                      <mat-select [(ngModel)]="newRoundStage">
+                        @for (s of roundStages; track s) {
+                          <mat-option [value]="s">{{ s }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <button mat-stroked-button color="primary" (click)="addRound()"
+                          [disabled]="busy() !== null">
+                    <mat-icon>add</mat-icon> 新增轮次
+                  </button>
+                </div>
+              }
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+      <!-- ============ 指导材料(缺口2) ============ -->
+      <mat-tab label="指导材料">
+        <div class="tab-body">
+          <mat-card class="panel">
+            <mat-card-header>
+              <mat-card-title>面试指导材料</mat-card-title>
+              <mat-card-subtitle>
+                @if (guidance()) {
+                  <span>v{{ guidance()!.version }} · {{ guidance()!.model }} · {{ guidance()!.generatedAt }}</span>
+                } @else {
+                  <span>手动生成,站内浏览,版本保留</span>
+                }
+              </mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="row-actions" style="margin-bottom: 12px;">
+                @if (auth.can('interviews.write')) {
+                  <button mat-stroked-button color="primary" (click)="generateGuidance()"
+                          [disabled]="busy() !== null">
+                    <mat-icon>auto_awesome</mat-icon>
+                    {{ guidance() ? '重新生成新版本' : '生成指导材料' }}
+                  </button>
+                }
+                @if (guidance()) {
+                  <button mat-stroked-button (click)="exportGuidancePdf()">
+                    <mat-icon>picture_as_pdf</mat-icon> 导出 PDF(打印)
+                  </button>
+                  <button mat-stroked-button (click)="exportGuidanceWord()">
+                    <mat-icon>description</mat-icon> 导出 Word
+                  </button>
+                }
+                @if (guidanceVersions().length > 1) {
+                  <mat-form-field appearance="outline" class="ver-select">
+                    <mat-label>历史版本</mat-label>
+                    <mat-select [value]="selectedGuidanceVersion()?.id"
+                                (selectionChange)="selectGuidanceVersionById($event.value)">
+                      @for (v of guidanceVersions(); track v.id) {
+                        <mat-option [value]="v.id">v{{ v.version }} · {{ v.generatedAt }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                }
+              </div>
+
+              @if (guidanceLoading()) {
+                <p class="muted">加载中…</p>
+              } @else if (guidance()) {
+                <div class="guidance-body" [innerHTML]="guidanceHtml()"></div>
+              } @else {
+                <div class="empty-panel">
+                  <mat-icon>article</mat-icon>
+                  <p>还没有指导材料。点击「生成指导材料」,AI 会根据 JD、公司介绍、历史问答、短板和六维诊断生成一份备战文档。</p>
+                </div>
+              }
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
       <!-- ============ 问答(核心价值区) ============ -->
       <mat-tab label="问答 ({{ questions().length }})">
         <div class="tab-body">
           <p class="tab-intro">
             复盘的价值几乎全在这页:把「当时怎么答的」和「应该怎么答」并排放在一起。
           </p>
+
+          <!-- 候选导入 TechStack(缺口3) -->
+          @if (auth.can('interviews.write') && questions().length > 0) {
+            <div class="import-bar">
+              @if (!showCandidates()) {
+                <button mat-stroked-button color="primary" (click)="openCandidateImport()">
+                  <mat-icon>upload</mat-icon> 导入到 TechStack
+                </button>
+              } @else {
+                <mat-card class="panel candidate-panel">
+                  <mat-card-header>
+                    <mat-card-title>勾选导入 TechStack</mat-card-title>
+                    <mat-card-subtitle>
+                      已选 {{ selectedCandidates().length }} / {{ candidates().length }} ·
+                      重复条目会自动跳过
+                    </mat-card-subtitle>
+                  </mat-card-header>
+                  <mat-card-content>
+                    @if (candidatesLoading()) {
+                      <p class="muted">加载候选中…</p>
+                    } @else if (candidates().length === 0) {
+                      <p class="muted">没有可导入的问答。</p>
+                    } @else {
+                      <div class="row-actions" style="margin-bottom: 8px;">
+                        <button mat-button (click)="toggleAllCandidates(true)">全选</button>
+                        <button mat-button (click)="toggleAllCandidates(false)">全不选</button>
+                        <span class="spacer"></span>
+                        <button mat-stroked-button color="primary"
+                                (click)="importCandidates()"
+                                [disabled]="busy() !== null || selectedCandidates().length === 0">
+                          <mat-icon>check</mat-icon>
+                          确认导入 ({{ selectedCandidates().length }})
+                        </button>
+                        <button mat-button (click)="closeCandidateImport()">取消</button>
+                      </div>
+                      @for (c of candidates(); track c.questionId) {
+                        <div class="candidate" [class.unselected]="!c.selected">
+                          <div class="cand-head">
+                            <mat-checkbox [(ngModel)]="c.selected"></mat-checkbox>
+                            <span class="cand-cat">{{ c.editCategory }}</span>
+                            @if (c.gotStuck) {
+                              <span class="q-stuck"><mat-icon inline>sentiment_dissatisfied</mat-icon> 卡住了</span>
+                            }
+                          </div>
+                          <mat-form-field appearance="outline" class="wide">
+                            <mat-label>问题</mat-label>
+                            <textarea matInput rows="2" [(ngModel)]="c.editText"></textarea>
+                          </mat-form-field>
+                          <div class="form-grid">
+                            <mat-form-field appearance="outline">
+                              <mat-label>分类</mat-label>
+                              <mat-select [(ngModel)]="c.editCategory">
+                                @for (cat of questionCategories; track cat) {
+                                  <mat-option [value]="cat">{{ cat }}</mat-option>
+                                }
+                              </mat-select>
+                            </mat-form-field>
+                            <mat-form-field appearance="outline">
+                              <mat-label>答案 / 要点</mat-label>
+                              <textarea matInput rows="2" [(ngModel)]="c.editAnswer"
+                                        placeholder="留空则不带答案导入"></textarea>
+                            </mat-form-field>
+                          </div>
+                        </div>
+                        <mat-divider></mat-divider>
+                      }
+                    }
+                  </mat-card-content>
+                </mat-card>
+              }
+            </div>
+          }
 
           @if (questions().length === 0) {
             <mat-card class="panel empty-panel">

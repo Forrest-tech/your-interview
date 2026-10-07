@@ -104,6 +104,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     private readonly List<InterviewAsset> _assets = [];
     private readonly List<InterviewQuestion> _questions = [];
     private readonly List<InterviewWeakness> _weaknesses = [];
+    private readonly List<InterviewRound> _rounds = [];
+    private readonly List<GeneratedMaterial> _materials = [];
 
     private InterviewEntry() { }
 
@@ -157,9 +159,17 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public int? RelevanceScore { get; private set; }
     public string? AnalysisSummary { get; private set; }
 
+    /// <summary>
+    /// 客观声学指标 JSON(缺口4,2026-10-07)。Worker 回写时带上,
+    /// 内容即 Analysis.Worker 的 SpeechMetrics 序列化。存原文,前端直接展示。
+    /// </summary>
+    public string? SpeechMetricsJson { get; private set; }
+
     public IReadOnlyCollection<InterviewAsset> Assets => _assets.AsReadOnly();
     public IReadOnlyCollection<InterviewQuestion> Questions => _questions.AsReadOnly();
     public IReadOnlyCollection<InterviewWeakness> Weaknesses => _weaknesses.AsReadOnly();
+    public IReadOnlyCollection<InterviewRound> Rounds => _rounds.AsReadOnly();
+    public IReadOnlyCollection<GeneratedMaterial> Materials => _materials.AsReadOnly();
 
     /// <summary>
     /// 合法流转表。集中定义,避免散落在各处 if-else。
@@ -306,7 +316,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public void ApplyAnalysis(int overall, int pronunciation, int fluency, int structure,
         int technicalDepth, int relevance, string? summary,
         IEnumerable<QuestionDraft>? questions = null,
-        IEnumerable<WeaknessDraft>? weaknesses = null)
+        IEnumerable<WeaknessDraft>? weaknesses = null,
+        string? speechMetricsJson = null)
     {
         OverallScore = overall;
         PronunciationScore = pronunciation;
@@ -315,6 +326,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         TechnicalDepthScore = technicalDepth;
         RelevanceScore = relevance;
         AnalysisSummary = summary;
+        // 指标 JSON 可空:老 Worker/手动回写可能不带
+        if (!string.IsNullOrWhiteSpace(speechMetricsJson))
+            SpeechMetricsJson = speechMetricsJson;
 
         if (questions is not null)
         {
@@ -392,6 +406,45 @@ public sealed class InterviewEntry : AuditableAggregateRoot
             ?? throw new InvalidOperationException("问题不存在");
         _questions.Remove(q);
         Touch();
+    }
+
+    /// <summary>新增一轮。Order 自动取 max+1,调用方可显式指定 Stage。</summary>
+    public InterviewRound AddRound(string stage = "Technical")
+    {
+        var order = _rounds.Count == 0 ? 1 : _rounds.Max(r => r.Order) + 1;
+        var r = new InterviewRound(Id, order, string.IsNullOrWhiteSpace(stage) ? "Technical" : stage.Trim());
+        _rounds.Add(r);
+        Touch();
+        return r;
+    }
+
+    public void UpdateRound(Guid roundId, string stage, DateOnly? scheduledDate, string? interviewers,
+        string? format, string? location, InterviewRoundOutcome outcome, string? notes, string? feedback)
+    {
+        var r = _rounds.FirstOrDefault(x => x.Id == roundId)
+            ?? throw new InvalidOperationException("轮次不存在");
+        r.Update(stage, scheduledDate, interviewers, format, location, outcome, notes, feedback);
+        Touch();
+    }
+
+    public void RemoveRound(Guid roundId)
+    {
+        var r = _rounds.FirstOrDefault(x => x.Id == roundId)
+            ?? throw new InvalidOperationException("轮次不存在");
+        _rounds.Remove(r);
+        Touch();
+    }
+
+    /// <summary>新增一份指导材料,版本号自动取 max+1。</summary>
+    public GeneratedMaterial AddMaterial(string contentMarkdown, string model,
+        int? promptTokens = null, int? completionTokens = null)
+    {
+        var version = _materials.Count == 0 ? 1 : _materials.Max(m => m.Version) + 1;
+        var m = new GeneratedMaterial(Id, version, contentMarkdown, model);
+        m.SetUsage(promptTokens, completionTokens);
+        _materials.Add(m);
+        Touch();
+        return m;
     }
 
     public InterviewWeakness AddWeakness(WeaknessCategory category, string title, string? detail,
@@ -636,6 +689,117 @@ public sealed class InterviewWeakness : Entity
 
     public WeaknessSource SourceType { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+}
+
+/// <summary>
+/// 面试轮次。一家公司可多轮,每轮独立记录时间/地点/面试官/形式/结果。
+/// 缺口1(2026-10-07):替代原来 InterviewEntry 上的扁平 RoundNo/InterviewDate/Interviewers
+/// 等字段 —— 旧字段保留做兼容,新数据走这里。
+/// </summary>
+public sealed class InterviewRound : Entity
+{
+    private InterviewRound() { }
+
+    internal InterviewRound(Guid interviewEntryId, int order, string stage)
+    {
+        InterviewEntryId = interviewEntryId;
+        Order = order;
+        Stage = stage;
+        Outcome = InterviewRoundOutcome.Pending;
+    }
+
+    public Guid InterviewEntryId { get; private set; }
+
+    /// <summary>第几轮,从 1 开始。</summary>
+    public int Order { get; private set; }
+
+    /// <summary>轮次阶段:Screen / Technical / SystemDesign / Behavioral / Final。</summary>
+    public string Stage { get; private set; } = string.Empty;
+
+    public DateOnly? ScheduledDate { get; private set; }
+
+    /// <summary>面试官,如 "David Castelino (Sr SWE), Vinitha Kotha (Lead SWE)"。</summary>
+    public string? Interviewers { get; private set; }
+
+    /// <summary>形式:Phone | Video | Onsite。</summary>
+    public string? Format { get; private set; }
+
+    public string? Location { get; private set; }
+
+    public InterviewRoundOutcome Outcome { get; private set; }
+
+    public string? Notes { get; private set; }
+
+    public string? Feedback { get; private set; }
+
+    internal void Update(string stage, DateOnly? scheduledDate, string? interviewers,
+        string? format, string? location, InterviewRoundOutcome outcome,
+        string? notes, string? feedback)
+    {
+        if (!string.IsNullOrWhiteSpace(stage)) Stage = stage;
+        ScheduledDate = scheduledDate;
+        Interviewers = interviewers;
+        Format = format;
+        Location = location;
+        Outcome = outcome;
+        Notes = notes;
+        Feedback = feedback;
+    }
+
+    /// <summary>只记结果,不动其它字段 —— 结果回写不该清掉已填的时间/面试官/形式。</summary>
+    internal void RecordOutcome(InterviewRoundOutcome outcome) => Outcome = outcome;
+}
+
+/// <summary>轮次结果。存库用字符串,见 DbContext 配置。</summary>
+public enum InterviewRoundOutcome
+{
+    Pending = 0,
+    Passed = 1,
+    Rejected = 2,
+    Ghosted = 3,
+    Cancelled = 4,
+    NoShow = 5
+}
+
+/// <summary>
+/// 面试指导材料。手动点击生成,每次生成版本号 +1,历史版本保留可回看。
+/// 缺口2(2026-10-07):内容由 AI 根据 JD/公司介绍/问答/短板/六维诊断拼 prompt 生成。
+/// </summary>
+public sealed class GeneratedMaterial : Entity
+{
+    private GeneratedMaterial() { }
+
+    internal GeneratedMaterial(Guid interviewEntryId, int version, string contentMarkdown,
+        string model)
+    {
+        InterviewEntryId = interviewEntryId;
+        Version = version;
+        ContentMarkdown = contentMarkdown;
+        Model = model;
+        GeneratedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Guid InterviewEntryId { get; private set; }
+
+    /// <summary>版本号,从 1 开始递增。</summary>
+    public int Version { get; private set; }
+
+    /// <summary>指导材料正文(Markdown)。</summary>
+    public string ContentMarkdown { get; private set; } = string.Empty;
+
+    /// <summary>生成时用的模型名(网关回传)。</summary>
+    public string Model { get; private set; } = string.Empty;
+
+    public DateTimeOffset GeneratedAt { get; private set; }
+
+    public int? PromptTokens { get; private set; }
+    public int? CompletionTokens { get; private set; }
+
+    internal void SetUsage(int? promptTokens, int? completionTokens)
+    {
+        PromptTokens = promptTokens;
+        CompletionTokens = completionTokens;
+    }
 }
 
 // ============================ 领域事件 ============================

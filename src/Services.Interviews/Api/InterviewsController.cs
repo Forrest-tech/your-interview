@@ -197,9 +197,12 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> ApplyAnalysis(Guid id, [FromBody] ApplyAnalysisBody body,
         CancellationToken ct)
     {
+        var metricsJson = body.SpeechMetrics.HasValue
+            ? body.SpeechMetrics.Value.GetRawText()
+            : null;
         var r = await sender.Send(new ApplyAnalysisCommand(id, body.Overall, body.Pronunciation,
             body.Fluency, body.Structure, body.TechnicalDepth, body.Relevance, body.Summary,
-            body.Questions, body.Weaknesses), ct);
+            body.Questions, body.Weaknesses, metricsJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -243,6 +246,75 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     {
         var r = await sender.Send(new RemoveQuestionCommand(id, questionId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>轮次:新增一轮(Order 自动递增)。</summary>
+    [HttpPost("{id:guid}/rounds")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> AddRound(Guid id, [FromBody] AddRoundBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new AddRoundCommand(id, body.Stage ?? "Technical"), ct);
+        return r.IsSuccess
+            ? Results.Created($"/api/interviews/{id}/rounds/{r.Value}", new { id = r.Value })
+            : r.ToProblemDetails();
+    }
+
+    [HttpPut("{id:guid}/rounds/{roundId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> UpdateRound(Guid id, Guid roundId, [FromBody] UpdateRoundBody body,
+        CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateRoundCommand(id, roundId, body.Stage, body.ScheduledDate,
+            body.Interviewers, body.Format, body.Location, body.Outcome ?? "Pending",
+            body.Notes, body.Feedback), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    [HttpDelete("{id:guid}/rounds/{roundId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> RemoveRound(Guid id, Guid roundId, CancellationToken ct)
+    {
+        var r = await sender.Send(new RemoveRoundCommand(id, roundId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>指导材料:手动触发 AI 生成新版本(版本号自动 +1)。</summary>
+    [HttpPost("{id:guid}/guidance/generate")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> GenerateGuidance(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new GenerateGuidanceCommand(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>指导材料:取最新版,或 ?version=N 取指定版本。</summary>
+    [HttpGet("{id:guid}/guidance")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> GetGuidance(Guid id, [FromQuery] int? version, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetGuidanceQuery(id, version), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>指导材料:版本列表(站内浏览切换用)。</summary>
+    [HttpGet("{id:guid}/guidance/versions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListGuidanceVersions(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListGuidanceVersionsQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 问答候选(缺口3):把该条目的问答转成候选列表,前端勾选后调
+    /// POST /api/knowledge/import-candidates 导入 TechStack。
+    /// </summary>
+    [HttpGet("{id:guid}/question-candidates")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListQuestionCandidates(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListQuestionCandidatesQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
     /// <summary>任务台账:该条目的分析任务历史(投递尝试/失败原因,排障第一入口)。</summary>
@@ -354,13 +426,20 @@ public sealed record TranscriptBody(string FullText, string? SegmentsJson = null
 public sealed record ApplyAnalysisBody(
     int Overall, int Pronunciation, int Fluency, int Structure, int TechnicalDepth, int Relevance,
     string? Summary = null, List<QuestionDraft>? Questions = null,
-    List<WeaknessDraft>? Weaknesses = null);
+    List<WeaknessDraft>? Weaknesses = null,
+    System.Text.Json.JsonElement? SpeechMetrics = null);
 
 public sealed record FailureBody(string Reason);
 
 public sealed record AddQuestionBody(
     string QuestionText, string? MyAnswerText = null, string? Category = null,
     int Difficulty = 3, string? Assessment = null);
+
+public sealed record AddRoundBody(string? Stage = null);
+
+public sealed record UpdateRoundBody(
+    string Stage, DateOnly? ScheduledDate, string? Interviewers, string? Format,
+    string? Location, string? Outcome, string? Notes, string? Feedback);
 
 public sealed record UpdateQuestionBody(
     string QuestionText, string? MyAnswerText, string Category, int Difficulty,

@@ -526,6 +526,14 @@
                     <mat-icon>description</mat-icon> {{ t('pb.guidance.exportWord') }}
                   </button>
                 }
+                <button mat-stroked-button (click)="pasteMaterial()">
+                  <mat-icon>content_paste</mat-icon> {{ t('pb.guidance.paste') }}
+                </button>
+                @if (pastedMaterial()) {
+                  <button mat-stroked-button (click)="clearPastedMaterial()">
+                    <mat-icon>delete_outline</mat-icon> {{ t('pb.guidance.clearPasted') }}
+                  </button>
+                }
                 @if (guidanceVersions().length > 1) {
                   <mat-form-field appearance="outline" class="ver-select">
                     <mat-label>{{ t('pb.guidance.historyLabel') }}</mat-label>
@@ -541,7 +549,10 @@
 
               @if (guidanceLoading()) {
                 <p class="muted">{{ t('common.loading') }}</p>
-              } @else if (guidance()) {
+              } @else if (guidance() || pastedMaterial()) {
+                @if (pastedMaterial()) {
+                  <p class="muted" style="margin-bottom:8px">📌 {{ t('pb.guidance.pasteTitle') }}</p>
+                }
                 <div class="guidance-body" [innerHTML]="guidanceHtml()"></div>
               } @else {
                 <div class="empty-panel">

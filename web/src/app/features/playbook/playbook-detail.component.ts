@@ -185,7 +185,53 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly guidanceLoading = signal(false);
 
   /** 当前材料的 Markdown → 安全 HTML(极简渲染:标题/加粗/列表/换行,先转义防 XSS)。 */
-  readonly guidanceHtml = computed(() => this.renderMarkdown(this.guidance()?.contentMarkdown ?? ''));
+  readonly guidanceHtml = computed(() => {
+    const pasted = this.pastedMaterial();
+    if (pasted) return this.renderMarkdown(pasted);
+    return this.renderMarkdown(this.guidance()?.contentMarkdown ?? '');
+  });
+
+  /** 手动粘贴的备战材料( localStorage,按面试 ID 存)——聊天里生成的直接贴进来。 */
+  readonly pastedMaterial = signal<string | null>(null);
+
+  private pastedKey(): string { return `pb-pasted-${this.id()}`; }
+
+  loadPastedMaterial(): void {
+    try {
+      this.pastedMaterial.set(localStorage.getItem(this.pastedKey()));
+    } catch { /* 无痕模式等存不了就跳过 */ }
+  }
+
+  pasteMaterial(): void {
+    const current = this.pastedMaterial() ?? '';
+    // 用 textarea 对话框:大文本 prompt 放不下,这里用一个简单的可编辑区
+    const w = window.open('', '_blank', 'width=700,height=500');
+    if (!w) {
+      this.snack.open(this.t('pb.guidance.popupBlocked'), this.t('common.close'), { duration: 3000 });
+      return;
+    }
+    w.document.write(`<title>${this.t('pb.guidance.pasteTitle')}</title>
+      <textarea id="t" style="width:100%;height:85%;font-family:monospace">${current.replace(/</g, '&lt;')}</textarea><br>
+      <button onclick="opener.postMessage({type:'pb-paste',text:document.getElementById('t').value},'*');window.close()">
+      ${this.t('common.save')}</button>`);
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type !== 'pb-paste') return;
+      window.removeEventListener('message', handler);
+      const text = (e.data.text ?? '').trim();
+      try {
+        if (text) localStorage.setItem(this.pastedKey(), text);
+        else localStorage.removeItem(this.pastedKey());
+      } catch { /* 忽略 */ }
+      this.pastedMaterial.set(text || null);
+      this.snack.open(this.t('pb.guidance.pasted'), this.t('common.close'), { duration: 2500 });
+    };
+    window.addEventListener('message', handler);
+  }
+
+  clearPastedMaterial(): void {
+    try { localStorage.removeItem(this.pastedKey()); } catch { /* 忽略 */ }
+    this.pastedMaterial.set(null);
+  }
 
   private renderMarkdown(md: string): string {
     const esc = md
@@ -369,6 +415,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       return;
     }
     this.load();
+    this.loadPastedMaterial();
 
     // 详情页的子导航:切换 tab,而不是滚动(列表页才用滚动锚点)。
     // Tab 顺序: 0=Overview, 1=Rounds, 2=Guidance, 3=Questions, 4=Assets, 5=Edit

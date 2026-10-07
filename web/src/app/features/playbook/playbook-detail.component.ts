@@ -17,7 +17,9 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog } from '@angular/material/dialog';
 import { SubnavService } from '../../layout/subnav.service';
+import { GuidanceInputDialogComponent } from './guidance-input-dialog.component';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -91,6 +93,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
   private readonly subnav = inject(SubnavService);
   readonly auth = inject(AuthService);
 
@@ -321,9 +324,27 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   }
 
   generateGuidance(): void {
-    if (!confirm(this.t('pb.guidance.confirmGenerate'))) return;
-    this.busy.set('guidance');
-    this.api.post<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance/generate`, {}).subscribe({
+    // 弹出输入对话框:收集 JD/简历/面经/自定义要求
+    const dialogRef = this.dialog.open(GuidanceInputDialogComponent, {
+      data: {
+        jdText: this.entry()?.jdText ?? '',
+        resumeText: '',
+        interviewExperiences: '',
+        customRequirements: ''
+      },
+      width: '720px',
+      maxHeight: '90vh'
+    });
+    dialogRef.afterClosed().subscribe((result) => {
+      if (!result) return; // 用户取消
+      if (!confirm(this.t('pb.guidance.confirmGenerate'))) return;
+      this.busy.set('guidance');
+      this.api.post<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance/generate`, {
+        jdText: result.jdText?.trim() || null,
+        resumeText: result.resumeText?.trim() || null,
+        interviewExperiences: result.interviewExperiences?.trim() || null,
+        customRequirements: result.customRequirements?.trim() || null
+      }).subscribe({
       next: (g) => {
         this.busy.set(null);
         this.guidance.set(g);
@@ -336,6 +357,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
         this.busy.set(null);
         this.snack.open(e.message, this.t('common.close'), { duration: 6000 });
       }
+      });
     });
   }
 

@@ -1023,7 +1023,12 @@ public sealed class RemoveWeaknessCommandHandler(InterviewsDbContext db)
 // ============================ 指导材料(缺口2) ============================
 
 /// <summary>手动触发:为该条目生成一份新的面试指导材料(版本号自动 +1)。</summary>
-public sealed record GenerateGuidanceCommand(Guid EntryId) : IRequest<Result<GuidanceMaterialDto>>;
+public sealed record GenerateGuidanceCommand(
+    Guid EntryId,
+    string? JdText = null,
+    string? ResumeText = null,
+    string? InterviewExperiences = null,
+    string? CustomRequirements = null) : IRequest<Result<GuidanceMaterialDto>>;
 
 public sealed record GetGuidanceQuery(Guid EntryId, int? Version = null)
     : IRequest<Result<GuidanceMaterialDto>>;
@@ -1044,7 +1049,7 @@ public sealed class GenerateGuidanceCommandHandler(InterviewsDbContext db, IAiGa
             .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
         if (e is null) return Result.Failure<GuidanceMaterialDto>(Error.NotFound("面试条目"));
 
-        var prompt = BuildPrompt(e);
+        var prompt = BuildPrompt(e, request);
 
         AiCompletionResult completion;
         try
@@ -1068,16 +1073,29 @@ public sealed class GenerateGuidanceCommandHandler(InterviewsDbContext db, IAiGa
         return Result.Success(m.ToDto());
     }
 
-    private static string BuildPrompt(InterviewEntry e)
+    private static string BuildPrompt(InterviewEntry e, GenerateGuidanceCommand req)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"# 面试对象:{e.CompanyName} —— {e.Role}");
         if (!string.IsNullOrWhiteSpace(e.CompanyProfile))
             sb.AppendLine($"## 公司情况\n{e.CompanyProfile}");
-        if (!string.IsNullOrWhiteSpace(e.JdSummary))
+        // JD:优先用本次传入的,fallback 到 entry 存的
+        var jd = req.JdText;
+        if (!string.IsNullOrWhiteSpace(jd))
+            sb.AppendLine($"## JD(本次提供)\n{jd[..Math.Min(jd.Length, 8000)]}");
+        else if (!string.IsNullOrWhiteSpace(e.JdSummary))
             sb.AppendLine($"## JD 要点\n{e.JdSummary}");
         else if (!string.IsNullOrWhiteSpace(e.JdText))
             sb.AppendLine($"## JD 原文(截断)\n{e.JdText[..Math.Min(e.JdText.Length, 6000)]}");
+        // 简历
+        if (!string.IsNullOrWhiteSpace(req.ResumeText))
+            sb.AppendLine($"## 候选人简历\n{req.ResumeText[..Math.Min(req.ResumeText.Length, 8000)]}");
+        // 全网面经
+        if (!string.IsNullOrWhiteSpace(req.InterviewExperiences))
+            sb.AppendLine($"## 相关面经(全网检索)\n{req.InterviewExperiences[..Math.Min(req.InterviewExperiences.Length, 8000)]}");
+        // 用户自定义要求
+        if (!string.IsNullOrWhiteSpace(req.CustomRequirements))
+            sb.AppendLine($"## 用户特别要求\n{req.CustomRequirements}");
 
         var rounds = e.Rounds.OrderBy(r => r.Order).ToList();
         if (rounds.Count > 0)

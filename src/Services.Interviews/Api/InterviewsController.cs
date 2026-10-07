@@ -281,11 +281,22 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     /// <summary>指导材料:手动触发 AI 生成新版本(版本号自动 +1)。</summary>
     [HttpPost("{id:guid}/guidance/generate")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
-    public async Task<IResult> GenerateGuidance(Guid id, CancellationToken ct)
+    public async Task<IResult> GenerateGuidance(
+        Guid id,
+        [FromBody] GenerateGuidanceRequest? req,
+        CancellationToken ct)
     {
-        var r = await sender.Send(new GenerateGuidanceCommand(id), ct);
+        var r = await sender.Send(new GenerateGuidanceCommand(
+            id, req?.JdText, req?.ResumeText,
+            req?.InterviewExperiences, req?.CustomRequirements), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
+
+    public sealed record GenerateGuidanceRequest(
+        string? JdText,
+        string? ResumeText,
+        string? InterviewExperiences,
+        string? CustomRequirements);
 
     /// <summary>指导材料:取最新版,或 ?version=N 取指定版本。</summary>
     [HttpGet("{id:guid}/guidance")]

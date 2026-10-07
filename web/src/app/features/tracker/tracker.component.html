@@ -66,6 +66,39 @@
             <mat-option value="company">{{ t('tracker.sortCompany') }}</mat-option>
           </mat-select>
         </mat-form-field>
+
+        <!-- 视图切换:看板 / 列表(Simplify 模式) -->
+        <div class="view-toggle" role="group" [attr.aria-label]="t('tracker.viewMode')">
+          <button mat-button type="button" class="view-btn"
+                  [class.active]="viewMode() === 'board'"
+                  (click)="viewMode.set('board')"
+                  [matTooltip]="t('tracker.boardView')">
+            <mat-icon>view_kanban</mat-icon>
+          </button>
+          <button mat-button type="button" class="view-btn"
+                  [class.active]="viewMode() === 'list'"
+                  (click)="viewMode.set('list')"
+                  [matTooltip]="t('tracker.listView')">
+            <mat-icon>view_list</mat-icon>
+          </button>
+        </div>
+
+        <!-- 列可见性:只在看板视图显示 -->
+        @if (viewMode() === 'board') {
+          <button mat-stroked-button type="button" [matMenuTriggerFor]="colMenu"
+                  [matTooltip]="t('tracker.visibleColumns')">
+            <mat-icon>visibility</mat-icon>
+            {{ t('tracker.columns') }}
+          </button>
+          <mat-menu #colMenu="matMenu">
+            @for (c of columnVisibility(); track c.status) {
+              <button mat-menu-item type="button" (click)="c.visible ? hideColumn(c.status) : showColumn(c.status); $event.stopPropagation()">
+                <mat-icon>{{ c.visible ? 'visibility' : 'visibility_off' }}</mat-icon>
+                <span>{{ c.label }}</span>
+              </button>
+            }
+          </mat-menu>
+        }
       </div>
 
       <!-- 状态筛选用 chips 而不是 select:状态少,平铺点击成本更低 -->
@@ -116,6 +149,7 @@
     </mat-card>
   }
 
+  @if (viewMode() === 'board') {
   <div class="board-wrap">
     <button mat-icon-button class="board-nav left" type="button"
             (click)="scrollBoard(-1)" [attr.aria-label]="t('tracker.scrollLeft')"
@@ -129,6 +163,12 @@
           <span class="col-dot"></span>
           <span class="col-name">{{ col.label }}</span>
           <span class="col-count">{{ col.items.length }}</span>
+          <button mat-icon-button class="col-hide" type="button"
+                  (click)="hideColumn(col.status)"
+                  [matTooltip]="t('tracker.hideColumn')"
+                  [attr.aria-label]="t('tracker.hideColumn')">
+            <mat-icon>visibility_off</mat-icon>
+          </button>
         </header>
 
         <div class="col-body">
@@ -144,7 +184,10 @@
                     <img class="logo" [src]="a.companyLogoUrl" [alt]="a.companyName" (error)="markLogoBroken(a.id)">
                   }
                 </span>
-                <span class="company">{{ a.companyName }}</span>
+                <div class="app-head">
+                  <div class="role">{{ a.role }}</div>
+                  <div class="company">{{ a.companyName }}</div>
+                </div>
                 @if (a.priority) {
                   <span class="pri" [class]="priorityClass(a.priority)"
                         [matTooltip]="tn('tracker.priority', a.priority)">
@@ -153,31 +196,31 @@
                 }
               </div>
 
-              <div class="role">{{ a.role }}</div>
-
               <div class="meta">
                 @if (a.location) {
                   <span class="meta-item"><mat-icon>place</mat-icon>{{ a.location }}</span>
                 }
-                @if (a.salary) {
-                  <span class="meta-item"><mat-icon>payments</mat-icon>{{ a.salary }}</span>
-                }
                 @if (a.appliedDate) {
                   <span class="meta-item"><mat-icon>event</mat-icon>{{ a.appliedDate | date: 'MM-dd' }}</span>
                 }
+                @if (a.salary) {
+                  <span class="meta-item"><mat-icon>payments</mat-icon>{{ a.salary }}</span>
+                }
               </div>
 
-              <div class="tags">
-                @if (a.needsConnectFirst) {
-                  <span class="tag warn">{{ t('tracker.needsConnect') }}</span>
-                }
-                @if (a.outreachMessage) {
-                  <span class="tag">{{ a.outreachMessage }}</span>
-                }
-                @if (a.resumeScore != null) {
-                  <span class="tag">{{ tn('tracker.matchScore', a.resumeScore) }}</span>
-                }
-              </div>
+              @if (a.needsConnectFirst || a.outreachMessage || a.resumeScore != null) {
+                <div class="tags">
+                  @if (a.needsConnectFirst) {
+                    <span class="tag warn">{{ t('tracker.needsConnect') }}</span>
+                  }
+                  @if (a.outreachMessage) {
+                    <span class="tag">{{ a.outreachMessage }}</span>
+                  }
+                  @if (a.resumeScore != null) {
+                    <span class="tag">{{ tn('tracker.matchScore', a.resumeScore) }}</span>
+                  }
+                </div>
+              }
 
               <div class="app-actions">
                 <button mat-icon-button [matTooltip]="t('common.edit')" (click)="openEdit(a, $event)">
@@ -210,6 +253,69 @@
       <mat-icon>chevron_right</mat-icon>
     </button>
   </div>
+  }
+
+  <!-- 列表视图:每行 = 公司 + pipeline stepper + 状态下拉(Simplify 模式) -->
+  @if (viewMode() === 'list') {
+  <div class="list-view">
+    @for (a of items(); track a.id) {
+      <mat-card class="list-row" (click)="openDetail(a)">
+        <div class="lr-logo">
+          @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
+            <img [src]="a.companyLogoUrl" [alt]="a.companyName"
+                 (error)="markLogoBroken(a.id)">
+          } @else {
+            <span class="lr-initials" [style.background]="avatarColor(a.companyName)">
+              {{ companyInitials(a.companyName) }}
+            </span>
+          }
+        </div>
+        <div class="lr-main">
+          <div class="lr-title">{{ a.role }}</div>
+          <div class="lr-sub">
+            <span class="lr-company">{{ a.companyName }}</span>
+            @if (a.location) {
+              <span class="lr-loc"><mat-icon>place</mat-icon>{{ a.location }}</span>
+            }
+          </div>
+          <!-- pipeline stepper -->
+          <div class="lr-pipe">
+            @for (s of pipelineStages; track s; let i = $index) {
+              <div class="pipe-node" [class.done]="stageReached(a, s)">
+                <span class="pipe-dot"></span>
+                @if (stageDate(a, s)) {
+                  <span class="pipe-date">{{ stageDate(a, s) }}</span>
+                }
+              </div>
+              @if (i < pipelineStages.length - 1) {
+                <span class="pipe-line" [class.done]="stageReached(a, pipelineStages[i + 1])"></span>
+              }
+            }
+          </div>
+          <div class="lr-stages">
+            @for (s of pipelineStages; track s) {
+              <span class="pipe-label" [class.done]="stageReached(a, s)">
+                {{ t('status.' + s) }}
+              </span>
+            }
+          </div>
+        </div>
+        <div class="lr-side" (click)="$event.stopPropagation()">
+          <mat-form-field appearance="outline" class="lr-status">
+            <mat-select [ngModel]="a.status" (ngModelChange)="quickChangeStatus(a, $event)"
+                        [attr.aria-label]="t('tracker.changeStatus')">
+              @for (s of statusOptions; track s) {
+                <mat-option [value]="s">{{ t('status.' + s) }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
+      </mat-card>
+    } @empty {
+      <div class="list-empty">{{ t('tracker.noResults') }}</div>
+    }
+  </div>
+  }
 
   <!-- 分页:数据量大时才有必要出现 -->
   @if (totalPages() > 1) {

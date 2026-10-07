@@ -14,6 +14,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatMenuModule } from '@angular/material/menu';
 import { catchError, forkJoin, of, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -275,7 +276,7 @@ export class ApplicationDialogComponent {
     CommonModule, FormsModule, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatDividerModule,
-    MatSelectModule
+    MatSelectModule, MatMenuModule
   ],
   templateUrl: './tracker.component.html',
   styleUrl: './tracker.component.scss'
@@ -288,6 +289,87 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
   tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
+
+  /** 看板/列表视图切换(Simplify 模式)。 */
+  readonly viewMode = signal<'board' | 'list'>('board');
+
+  /** 隐藏的列(用户点了列头的眼睛图标)。 */
+  private readonly hiddenCols = signal<Set<ApplicationStatus>>(new Set());
+  isColumnHidden(s: ApplicationStatus): boolean { return this.hiddenCols().has(s); }
+  hideColumn(s: ApplicationStatus): void {
+    const next = new Set(this.hiddenCols());
+    next.add(s);
+    this.hiddenCols.set(next);
+    setTimeout(() => this.onBoardScroll(), 50);
+  }
+  showColumn(s: ApplicationStatus): void {
+    const next = new Set(this.hiddenCols());
+    next.delete(s);
+    this.hiddenCols.set(next);
+    setTimeout(() => this.onBoardScroll(), 50);
+  }
+  /** 列配置菜单用:所有状态 + 是否可见。 */
+  readonly columnVisibility = computed(() =>
+    this.statusOrder.map(s => ({
+      status: s,
+      label: this.i18n.t('status.' + s),
+      visible: !this.hiddenCols().has(s)
+    }))
+  );
+
+  /** 列表视图的 pipeline stepper:5 个阶段。 */
+  readonly pipelineStages: ApplicationStatus[] =
+    ['Saved', 'Applied', 'Screen', 'Interview', 'Offer'] as ApplicationStatus[];
+
+  /** 某申请在某阶段的到达日期(从 history 里找),没到过返回 null。 */
+  stageDate(app: Application, stage: ApplicationStatus): string | null {
+    const h = app.history?.find(x => x.status === stage);
+    if (!h) return null;
+    // 只取日期部分 MM-DD
+    const d = h.changedAt?.slice(0, 10);
+    return d ? d.slice(5) : null;
+  }
+
+  /** 某阶段是否已到达(用于 stepper 高亮)。 */
+  stageReached(app: Application, stage: ApplicationStatus): boolean {
+    return !!app.history?.some(x => x.status === stage) ||
+      this.pipelineStages.indexOf(app.status as ApplicationStatus) >=
+      this.pipelineStages.indexOf(stage);
+  }
+
+  /**
+   * 卡片/列表行上的快速改状态(Simplify 模式):乐观更新本地,失败回滚。
+   * 后端 PUT 要求全量 payload,这里用当前对象的值拼。
+   */
+  quickChangeStatus(app: Application, status: ApplicationStatus): void {
+    if (app.status === status) return;
+    const prev = app.status;
+    // 乐观更新
+    app.status = status;
+    this.items.set([...this.items()]);
+
+    this.api.put<void>(`/api/jobs/applications/${app.id}`, {
+      role: app.role,
+      location: app.location || null,
+      link: app.link || null,
+      salary: app.salary || null,
+      workMode: null,
+      source: null,
+      jdSummary: null,
+      notes: app.notes || null,
+      priority: app.priority || null,
+      deadline: app.deadline || null,
+      status
+    }).subscribe({
+      next: () => this.loadStats(),
+      error: () => {
+        // 回滚
+        app.status = prev;
+        this.items.set([...this.items()]);
+        this.snack.open(this.t('tracker.statusChangeFailed'), this.t('common.close'), { duration: 3000 });
+      }
+    });
+  }
 
   /** 看板横向滚动:macOS 默认隐藏滚动条,显式左右按钮保证可发现。 */
   private readonly boardEl = viewChild<ElementRef<HTMLElement>>('board');
@@ -368,7 +450,8 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     this.i18n.lang(); // 建立对语言 signal 的依赖,切换语言时重算列标签
     const all = this.items();
     const only = this.statusFilter();
-    const statuses = only ? [only] : this.statusOrder;
+    const hidden = this.hiddenCols();
+    const statuses = (only ? [only] : this.statusOrder).filter(s => !hidden.has(s));
 
     return statuses.map((status) => ({
       status,

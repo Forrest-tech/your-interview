@@ -344,10 +344,12 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     return Math.max(0, Math.floor(ms / 86400000));
   }
 
-  /** 是否需要跟进:到了 nextFollowUpAt,或投递超过 14 天无进展。 */
+  /** 是否需要跟进:到了 nextFollowUpAt,或早期阶段投递超过 14 天无进展。 */
   needsFollowUp(app: Application): boolean {
     if (['Offer', 'Accepted', 'Rejected', 'Withdrawn', 'Ghosted'].includes(app.status)) return false;
     if (app.nextFollowUpAt && new Date(app.nextFollowUpAt).getTime() <= Date.now()) return true;
+    // 14天规则只适用于早期阶段(Saved/Applied/Screen)——Interview+ 已有明确进展
+    if (!['Saved', 'Applied', 'Screen'].includes(app.status)) return false;
     const d = this.daysWaiting(app);
     return d !== null && d >= 14;
   }

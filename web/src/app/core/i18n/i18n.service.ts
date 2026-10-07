@@ -659,7 +659,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.status': { zh: '状态', en: 'Status', fr: 'Statut' },
   'tracker.exportCsv': { zh: '导出 CSV', en: 'Export CSV', fr: 'Exporter CSV' },
   'tracker.exportEmpty': { zh: '没有可导出的数据', en: 'Nothing to export', fr: 'Rien à exporter' },
-  'tracker.followupHint': { zh: '需要跟进:已到跟进时间或投递超过14天无进展', en: 'Follow up needed', fr: 'Suivi nécessaire' },
+  'tracker.followupHint': { zh: '需要跟进:已到跟进时间,或早期阶段投递超过14天无进展', en: 'Follow up needed', fr: 'Suivi nécessaire' },
   'tracker.openLink': { zh: '打开岗位链接', en: 'Open job link', fr: 'Ouvrir le lien de l’offre' },
   'tracker.priority': { zh: '优先级 {n}', en: 'Priority {n}', fr: 'Priorité {n}' },
   'tracker.firstApp': { zh: '记录第一条投递', en: 'Log your first application', fr: 'Ajoutez votre première candidature' },

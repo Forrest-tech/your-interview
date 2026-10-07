@@ -53,7 +53,7 @@
               <span class="prog-text">{{ s.answeredCount }} / {{ s.questionCount }} {{ t('mock.questionUnit') }}</span>
             </div>
             <div class="s-actions">
-              <button mat-flat-button color="primary">
+              <button mat-flat-button color="primary" [routerLink]="['/mock', s.id]">
                 <mat-icon>play_arrow</mat-icon> {{ t('mock.continueAnswering') }}
               </button>
               <span class="spacer"></span>

@@ -1,4 +1,13 @@
-.page { max-width: 1500px; }
+.page {
+  max-width: 1500px;
+  margin: 0 auto;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px 28px 16px;
+}
 
 .page-head {
   display: flex;

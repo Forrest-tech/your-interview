@@ -127,12 +127,15 @@
 
         <div class="col-body">
           @for (a of col.items; track a.id) {
-            <mat-card class="app-card" (click)="openDetail(a)">
+            <mat-card class="app-card" (click)="openDetail(a)"
+                      tabindex="0" role="button"
+                      [attr.aria-label]="a.companyName + ' ' + a.role"
+                      (keydown.enter)="openDetail(a)" (keydown.space)="openDetail(a); $event.preventDefault()">
               <div class="app-top">
                 <span class="logo-wrap">
                   <span class="logo-avatar" [style.background]="avatarColor(a.companyName)">{{ companyInitials(a.companyName) }}</span>
                   @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
-                    <img class="logo" [src]="a.companyLogoUrl" (error)="markLogoBroken(a.id)">
+                    <img class="logo" [src]="a.companyLogoUrl" [alt]="a.companyName" (error)="markLogoBroken(a.id)">
                   }
                 </span>
                 <span class="company">{{ a.companyName }}</span>

@@ -242,6 +242,11 @@ mat-form-field { width: 100%; }
 .app-card:hover .app-actions,
 .app-card:focus-within .app-actions { opacity: 1; }
 
+/* 触屏设备没有 hover,操作按钮常显(否则手机上删不掉卡片) */
+@media (hover: none) {
+  .app-actions { opacity: 1; }
+}
+
 .app-actions .danger { color: #b3261e; }
 
 .app-actions mat-icon { font-size: 18px; width: 18px; height: 18px; }

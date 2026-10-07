@@ -83,6 +83,7 @@ export class PlaybookComponent implements OnInit {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   private readonly router = inject(Router);
   private readonly snack = inject(MatSnackBar);
@@ -103,19 +104,25 @@ export class PlaybookComponent implements OnInit {
   companyFilter = '';
   statusFilter = '';
 
-  readonly statusOptions: { value: InterviewStatus; label: string }[] = [
-    { value: 'Draft', label: '草稿' },
-    { value: 'AssetsUploaded', label: '材料已上传' },
-    { value: 'Transcribing', label: '转写中' },
-    { value: 'Transcribed', label: '已转写' },
-    { value: 'Analyzing', label: '分析中' },
-    { value: 'Analyzed', label: '已分析' },
-    { value: 'Failed', label: '失败' }
+  readonly statusOptions: { value: InterviewStatus }[] = [
+    { value: 'Draft' },
+    { value: 'AssetsUploaded' },
+    { value: 'Transcribing' },
+    { value: 'Transcribed' },
+    { value: 'Analyzing' },
+    { value: 'Analyzed' },
+    { value: 'Failed' }
   ];
 
-  readonly formatOptions = [
-    '电话初筛', '技术一面', '技术二面', '系统设计', '行为面',
-    'Hiring Manager', '终面', '其他'
+  readonly formatOptions: { value: string; labelKey: string }[] = [
+    { value: '电话初筛', labelKey: 'pb.format.phoneScreen' },
+    { value: '技术一面', labelKey: 'pb.format.techRound1' },
+    { value: '技术二面', labelKey: 'pb.format.techRound2' },
+    { value: '系统设计', labelKey: 'pb.format.systemDesign' },
+    { value: '行为面', labelKey: 'pb.format.behavioral' },
+    { value: 'Hiring Manager', labelKey: 'pb.format.hiringManager' },
+    { value: '终面', labelKey: 'pb.format.final' },
+    { value: '其他', labelKey: 'pb.format.other' }
   ];
 
   readonly totalPages = computed(() =>
@@ -216,7 +223,7 @@ export class PlaybookComponent implements OnInit {
 
     // 前端先做最小校验:公司名/岗位是后端硬性必填,提前拦下来省一次往返
     if (!this.form.companyName.trim() || !this.form.role.trim()) {
-      this.formError.set('公司名与岗位为必填项');
+      this.formError.set(this.t('pb.edit.requiredFields'));
       return;
     }
 
@@ -243,7 +250,7 @@ export class PlaybookComponent implements OnInit {
       next: (r) => {
         this.saving.set(false);
         this.dialogOpen.set(false);
-        this.snack.open('条目已创建', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.created'), this.t('common.close'), { duration: 3000 });
         // 直接进详情页 —— 建完就要传材料,少一次"自己找到那条再点进去"
         this.router.navigate(['/playbook', r.id]);
       },
@@ -262,25 +269,37 @@ export class PlaybookComponent implements OnInit {
     ev.stopPropagation();
 
     const ok = confirm(
-      `确认删除「${entry.companyName} · ${entry.role}」这条机经?\n删除后材料与问答一并移除,不可恢复。`);
+      this.t('pb.list.confirmDelete')
+        .replace('{company}', entry.companyName)
+        .replace('{role}', entry.role));
     if (!ok) return;
 
     this.api.delete<void>(`/api/interviews/${entry.id}`).subscribe({
       next: () => {
-        this.snack.open('已删除', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
         // 删掉当前页最后一条时页码可能越界,回退一页更自然
         if (this.entries().length === 1 && this.page() > 1) this.page.update((p) => p - 1);
         this.load();
         this.loadStats();
       },
-      error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
     });
   }
 
   // ---------------------------------------------------------------- 展示辅助
 
   statusLabel(s: InterviewStatus | string): string {
-    return this.statusOptions.find((o) => o.value === s)?.label ?? s;
+    const key = 'pb.status.' + s;
+    const translated = this.i18n.t(key);
+    return translated !== key ? translated : s;
+  }
+
+  /** 翻页信息:"第 1 / 3 页 · 共 25 条"。 */
+  pagerInfo(): string {
+    return this.i18n.t('pb.pager.info')
+      .replace('{page}', String(this.page()))
+      .replace('{totalPages}', String(this.totalPages()))
+      .replace('{total}', String(this.total()));
   }
 
   /** 状态色档 —— 让"卡住不动"的条目一眼能挑出来。 */
@@ -300,13 +319,13 @@ export class PlaybookComponent implements OnInit {
   }
 
   /** 六维打平成数组,模板里 @for 更省事,避免手写五段重复结构。 */
-  dims(e: InterviewEntry): { key: string; label: string; value?: number }[] {
+  dims(e: InterviewEntry): { key: string; labelKey: string; value?: number }[] {
     return [
-      { key: 'pronunciation', label: '发音', value: e.pronunciationScore },
-      { key: 'fluency', label: '流畅', value: e.fluencyScore },
-      { key: 'structure', label: '结构', value: e.structureScore },
-      { key: 'depth', label: '深度', value: e.technicalDepthScore },
-      { key: 'relevance', label: '相关', value: e.relevanceScore }
+      { key: 'pronunciation', labelKey: 'dim.pronunciation', value: e.pronunciationScore },
+      { key: 'fluency', labelKey: 'dim.fluency', value: e.fluencyScore },
+      { key: 'structure', labelKey: 'dim.structure', value: e.structureScore },
+      { key: 'depth', labelKey: 'dim.technicalDepth', value: e.technicalDepthScore },
+      { key: 'relevance', labelKey: 'dim.relevance', value: e.relevanceScore }
     ];
   }
 

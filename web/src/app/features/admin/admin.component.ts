@@ -61,7 +61,7 @@ export class AdminComponent implements OnInit {
 
   t = (key: string): string => this.i18n.t(key);
   /** 带占位符的文案(Angular 模板里拿不到全局 String());计数或邮箱/角色名都走它。 */
-  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   // -------- 权限:按钮级显隐,与后端 perm 策略同源 --------
   readonly canWriteUsers = computed(() => this.auth.can('admin.users.write'));

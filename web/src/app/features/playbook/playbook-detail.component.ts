@@ -29,8 +29,8 @@ import { AuthService } from '../../core/auth/auth.service';
 /** 六维显示用的元数据 —— 顺序即评测报告里的推荐阅读顺序。 */
 interface DimensionMeta {
   key: string;
-  label: string;
-  hint: string;
+  labelKey: string;
+  hintKey: string;
   value?: number;
 }
 
@@ -85,6 +85,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -103,14 +104,14 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   /** 需要轮询的中间态:流水线在跑,用户希望看到自己"进度到哪了"。 */
   private static readonly POLLING_STATES: string[] = ['Transcribing', 'Analyzing'];
 
-  readonly statusOptions: { value: InterviewStatus; label: string }[] = [
-    { value: 'Draft', label: '草稿' },
-    { value: 'AssetsUploaded', label: '材料已上传' },
-    { value: 'Transcribing', label: '转写中' },
-    { value: 'Transcribed', label: '已转写' },
-    { value: 'Analyzing', label: '分析中' },
-    { value: 'Analyzed', label: '已分析' },
-    { value: 'Failed', label: '失败' }
+  readonly statusOptions: { value: InterviewStatus }[] = [
+    { value: 'Draft' },
+    { value: 'AssetsUploaded' },
+    { value: 'Transcribing' },
+    { value: 'Transcribed' },
+    { value: 'Analyzing' },
+    { value: 'Analyzed' },
+    { value: 'Failed' }
   ];
 
   readonly questionCategories = ['Technical', 'SystemDesign', 'Behavioral', 'Coding', 'Culture', 'Other'];
@@ -122,10 +123,13 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   /** 轮次阶段 / 结果选项 —— 与后端 InterviewRoundOutcome / Stage 约定一致。 */
   readonly roundStages = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
   readonly roundOutcomes = ['Pending', 'Passed', 'Rejected', 'Ghosted', 'Cancelled', 'NoShow'];
-  readonly roundOutcomeLabel: Record<string, string> = {
-    Pending: '待定', Passed: '通过', Rejected: '被拒',
-    Ghosted: '失联', Cancelled: '取消', NoShow: '缺席'
-  };
+
+  /** 轮次结果 → 本地化标签(找不到键时回退英文枚举)。 */
+  roundOutcomeLabelFor(o: string): string {
+    const key = 'pb.roundOutcome.' + o;
+    const translated = this.i18n.t(key);
+    return translated !== key ? translated : o;
+  }
 
   /** 轮次行内编辑草稿:key = round.id,打开编辑时从行数据复制一份。 */
   roundDrafts: Record<string, InterviewRound> = {};
@@ -238,18 +242,20 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   }
 
   generateGuidance(): void {
-    if (!confirm('生成新版本指导材料?会调用 AI,可能需要几十秒。')) return;
+    if (!confirm(this.t('pb.guidance.confirmGenerate'))) return;
     this.busy.set('guidance');
     this.api.post<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance/generate`, {}).subscribe({
       next: (g) => {
         this.busy.set(null);
         this.guidance.set(g);
         this.loadGuidanceVersions();
-        this.snack.open(`指导材料 v${g.version} 已生成`, '关闭', { duration: 3000 });
+        this.snack.open(
+          this.t('pb.guidance.generated').replace('{version}', String(g.version)),
+          this.t('common.close'), { duration: 3000 });
       },
       error: (e: Error) => {
         this.busy.set(null);
-        this.snack.open(e.message, '关闭', { duration: 6000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 6000 });
       }
     });
   }
@@ -261,7 +267,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       next: (g) => { this.guidance.set(g); this.guidanceLoading.set(false); },
       error: (e: Error) => {
         this.guidanceLoading.set(false);
-        this.snack.open(e.message, '关闭', { duration: 5000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
       }
     });
   }
@@ -302,7 +308,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `面试指导材料-v${g.version}.doc`;
+    a.download = this.t('pb.guidance.fileName').replace('{version}', String(g.version));
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -313,14 +319,19 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
    */
   readonly jobs = signal<AnalysisJob[]>([]);
 
-  /** 台账状态 → 中文标签(与后端状态机一一对应,直出不下拉)。 */
-  readonly jobStatusLabel: Record<string, string> = {
-    Pending: '待投递',
-    Dispatched: '已投递',
-    Succeeded: '已完成',
-    Failed: '失败',
-    Dead: '投递终止'
-  };
+  /** 台账状态 → 本地化标签(与后端状态机一一对应,直出不下拉;找不到键时回退英文)。 */
+  jobStatusLabelFor(s: string): string {
+    const key = 'pb.jobStatus.' + s;
+    const translated = this.i18n.t(key);
+    return translated !== key ? translated : s;
+  }
+
+  /** 任务行文案:"尝试 1/3"。 */
+  attemptsLabel(j: AnalysisJob): string {
+    return this.i18n.t('pb.asset.attempts')
+      .replace('{a}', String(j.attempts))
+      .replace('{m}', String(j.maxAttempts));
+  }
 
   private loadJobs(): void {
     this.api.get<AnalysisJob[]>(`/api/interviews/${this.id()}/jobs`)
@@ -332,12 +343,12 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly dims = computed<DimensionMeta[]>(() => {
     const e = this.entry();
     return [
-      { key: 'overall', label: '总分', hint: '六维加权结果', value: e?.overallScore },
-      { key: 'pronunciation', label: '发音', hint: '音准与重音', value: e?.pronunciationScore },
-      { key: 'fluency', label: '流畅度', hint: '停顿与语速', value: e?.fluencyScore },
-      { key: 'structure', label: '结构', hint: '是否有清晰框架', value: e?.structureScore },
-      { key: 'technicalDepth', label: '技术深度', hint: '是否讲到原理与权衡', value: e?.technicalDepthScore },
-      { key: 'relevance', label: '相关性', hint: '是否答到点上', value: e?.relevanceScore }
+      { key: 'overall', labelKey: 'dim.overall', hintKey: 'pb.dimHint.overall', value: e?.overallScore },
+      { key: 'pronunciation', labelKey: 'dim.pronunciation', hintKey: 'pb.dimHint.pronunciation', value: e?.pronunciationScore },
+      { key: 'fluency', labelKey: 'dim.fluency', hintKey: 'pb.dimHint.fluency', value: e?.fluencyScore },
+      { key: 'structure', labelKey: 'dim.structure', hintKey: 'pb.dimHint.structure', value: e?.structureScore },
+      { key: 'technicalDepth', labelKey: 'dim.technicalDepth', hintKey: 'pb.dimHint.technicalDepth', value: e?.technicalDepthScore },
+      { key: 'relevance', labelKey: 'dim.relevance', hintKey: 'pb.dimHint.relevance', value: e?.relevanceScore }
     ];
   });
 
@@ -348,7 +359,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     const id = this.route.snapshot.paramMap.get('id') ?? '';
     this.id.set(id);
     if (!id) {
-      this.error.set('缺少条目 ID');
+      this.error.set(this.t('pb.detail.missingId'));
       this.loading.set(false);
       return;
     }
@@ -389,7 +400,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
         },
         error: (e: Error) => {
           this.audioLoadingId.set(null);
-          this.snack.open(e.message || '音频加载失败', '关闭', { duration: 5000 });
+          this.snack.open(e.message || this.t('pb.asset.audioLoadFail'), this.t('common.close'), { duration: 5000 });
         }
       });
   }
@@ -442,30 +453,30 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------- 动作
 
   startTranscription(): void {
-    this.run('transcription', '开始转写',
+    this.run('transcription', 'pb.action.transcriptionStarted',
       this.api.post<void>(`/api/interviews/${this.id()}/transcription/start`));
   }
 
   triggerAnalysis(): void {
-    this.run('analyze', '触发分析',
+    this.run('analyze', 'pb.action.analysisStarted',
       this.api.post<void>(`/api/interviews/${this.id()}/analyze`));
   }
 
   /** 三个动作按钮共用一条流程:置忙 → 请求 → 提示 → 重载详情。 */
-  private run(tag: string, label: string, obs: ReturnType<ApiClient['post']>): void {
+  private run(tag: string, msgKey: string, obs: ReturnType<ApiClient['post']>): void {
     if (this.busy()) return;
     this.busy.set(tag);
 
     (obs as ReturnType<ApiClient['post']>).subscribe({
       next: () => {
         this.busy.set(null);
-        this.snack.open(`${label}已提交,稍后自动刷新`, '关闭', { duration: 4000 });
+        this.snack.open(this.i18n.t(msgKey), this.t('common.close'), { duration: 4000 });
         // 流水线状态变了,重新拉一次顺便把轮询打开
         setTimeout(() => this.load(false), 1200);
       },
       error: (e: Error) => {
         this.busy.set(null);
-        this.snack.open(e.message, '关闭', { duration: 5000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
       }
     });
   }
@@ -491,13 +502,13 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
         next: () => {
           input.value = '';   // 清空,否则同名文件第二次选不会触发 change
           this.busy.set(null);
-          this.snack.open('录音已上传,可点击「开始转写」', '关闭', { duration: 4000 });
+          this.snack.open(this.t('pb.asset.uploaded'), this.t('common.close'), { duration: 4000 });
           this.load(false);
         },
         error: (e: Error) => {
           input.value = '';
           this.busy.set(null);
-          this.snack.open(e.message, '关闭', { duration: 5000 });
+          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
         }
       });
   }
@@ -506,7 +517,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   saveTranscript(asset: InterviewAsset): void {
     const text = (this.transcriptDrafts[asset.id] ?? '').trim();
     if (!text) {
-      this.snack.open('请先粘贴转写文本', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.transcript.emptyFirst'), this.t('common.close'), { duration: 3000 });
       return;
     }
 
@@ -520,12 +531,12 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
         next: () => {
           this.busy.set(null);
           this.transcriptDrafts[asset.id] = '';
-          this.snack.open('转写文本已保存', '关闭', { duration: 3000 });
+          this.snack.open(this.t('pb.transcript.saved'), this.t('common.close'), { duration: 3000 });
           this.load(false);
         },
         error: (e: Error) => {
           this.busy.set(null);
-          this.snack.open(e.message, '关闭', { duration: 5000 });
+          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
         }
       });
   }
@@ -534,7 +545,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   addQuestion(): void {
     if (!this.questionForm.questionText.trim()) {
-      this.snack.open('请填写面试官的问题', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.question.questionRequired'), this.t('common.close'), { duration: 3000 });
       return;
     }
 
@@ -556,25 +567,25 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       next: () => {
         this.busy.set(null);
         this.questionForm = this.emptyQuestionForm();
-        this.snack.open('问答已添加', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.question.added'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },
       error: (e: Error) => {
         this.busy.set(null);
-        this.snack.open(e.message, '关闭', { duration: 5000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
       }
     });
   }
 
   removeQuestion(q: InterviewQuestion): void {
-    if (!confirm('删除这条问答?')) return;
+    if (!confirm(this.t('pb.question.confirmDelete'))) return;
 
     this.api.delete<void>(`/api/interviews/${this.id()}/questions/${q.id}`).subscribe({
       next: () => {
-        this.snack.open('已删除', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },
-      error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
     });
   }
 
@@ -603,7 +614,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       },
       error: (e: Error) => {
         this.candidatesLoading.set(false);
-        this.snack.open(e.message, '关闭', { duration: 5000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
       }
     });
   }
@@ -620,7 +631,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   importCandidates(): void {
     const sel = this.selectedCandidates();
     if (sel.length === 0) {
-      this.snack.open('请至少勾选一条', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.import.selectAtLeastOne'), this.t('common.close'), { duration: 3000 });
       return;
     }
     const e = this.entry();
@@ -648,11 +659,14 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
         this.busy.set(null);
         this.closeCandidateImport();
         this.snack.open(
-          `导入完成:新增 ${r.created} 条,跳过重复 ${r.skipped} 条`, '关闭', { duration: 4000 });
+          this.t('pb.import.done')
+            .replace('{created}', String(r.created))
+            .replace('{skipped}', String(r.skipped)),
+          this.t('common.close'), { duration: 4000 });
       },
       error: (err: Error) => {
         this.busy.set(null);
-        this.snack.open(err.message, '关闭', { duration: 6000 });
+        this.snack.open(err.message, this.t('common.close'), { duration: 6000 });
       }
     });
   }
@@ -666,12 +680,12 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: () => {
         this.busy.set(null);
-        this.snack.open('已新增一轮', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.round.added'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },
       error: (e: Error) => {
         this.busy.set(null);
-        this.snack.open(e.message, '关闭', { duration: 5000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
       }
     });
   }
@@ -706,25 +720,25 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       next: () => {
         this.busy.set(null);
         delete this.roundDrafts[r.id];
-        this.snack.open('轮次已保存', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.round.saved'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },
       error: (e: Error) => {
         this.busy.set(null);
-        this.snack.open(e.message, '关闭', { duration: 5000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
       }
     });
   }
 
   removeRound(r: InterviewRound): void {
-    if (!confirm(`删除第 ${r.order} 轮?`)) return;
+    if (!confirm(this.t('pb.round.confirmDelete').replace('{n}', String(r.order)))) return;
 
     this.api.delete<void>(`/api/interviews/${this.id()}/rounds/${r.id}`).subscribe({
       next: () => {
-        this.snack.open('已删除', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },
-      error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
     });
   }
 
@@ -732,7 +746,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   addWeakness(): void {
     if (!this.weaknessForm.title.trim()) {
-      this.snack.open('请填写短板标题', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.weakness.titleRequired'), this.t('common.close'), { duration: 3000 });
       return;
     }
 
@@ -750,25 +764,25 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       next: () => {
         this.busy.set(null);
         this.weaknessForm = this.emptyWeaknessForm();
-        this.snack.open('短板已记录', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.weakness.added'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },
       error: (e: Error) => {
         this.busy.set(null);
-        this.snack.open(e.message, '关闭', { duration: 5000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
       }
     });
   }
 
   removeWeakness(w: InterviewWeakness): void {
-    if (!confirm(`删除短板「${w.title}」?`)) return;
+    if (!confirm(this.t('pb.weakness.confirmDelete').replace('{title}', w.title))) return;
 
     this.api.delete<void>(`/api/interviews/${this.id()}/weaknesses/${w.id}`).subscribe({
       next: () => {
-        this.snack.open('已删除', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },
-      error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
     });
   }
 
@@ -793,7 +807,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   saveEdit(): void {
     if (!this.editForm.companyName.trim() || !this.editForm.role.trim()) {
-      this.snack.open('公司名与岗位不能为空', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.edit.requiredFields'), this.t('common.close'), { duration: 3000 });
       return;
     }
 
@@ -814,12 +828,12 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: () => {
         this.busy.set(null);
-        this.snack.open('已保存', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.edit.saved'), this.t('common.close'), { duration: 3000 });
         this.load(false);
       },
       error: (e: Error) => {
         this.busy.set(null);
-        this.snack.open(e.message, '关闭', { duration: 5000 });
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
       }
     });
   }
@@ -827,7 +841,16 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------- 展示辅助
 
   statusLabel(s: string): string {
-    return this.statusOptions.find((o) => o.value === s)?.label ?? s;
+    const key = 'pb.status.' + s;
+    const translated = this.i18n.t(key);
+    return translated !== key ? translated : s;
+  }
+
+  /** 候选导入副标题:"已选 3 / 10 · 重复条目会自动跳过"。 */
+  importSub(): string {
+    return this.i18n.t('pb.import.sub')
+      .replace('{selected}', String(this.selectedCandidates().length))
+      .replace('{total}', String(this.candidates().length));
   }
 
   statusClass(s: string): string {

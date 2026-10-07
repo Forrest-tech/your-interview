@@ -130,11 +130,11 @@
     </div>
 
     <nav class="f-links">
-      <a routerLink="/terms">条款</a>
+      <a routerLink="/terms">{{ t('shell.terms') }}</a>
       <span class="f-dot">|</span>
-      <a routerLink="/privacy">隐私</a>
+      <a routerLink="/privacy">{{ t('shell.privacy') }}</a>
       <span class="f-dot">|</span>
-      <a routerLink="/copyright">版权</a>
+      <a routerLink="/copyright">{{ t('shell.copyright') }}</a>
     </nav>
 
     <!-- 联系 + 地址(居中一行) -->
@@ -152,9 +152,9 @@
     <!-- 法规声明 + 版权(居中) -->
     <div class="f-legal-row">
       <p class="f-legal">
-        您的购买受加拿大适用的消费者保护法律保护；您的订单将根据安大略省的法律进行处理。
+        {{ t('shell.legalNotice') }}
       </p>
-      <p class="f-copy">© 2026 Your Interview · All Rights Reserved</p>
+      <p class="f-copy">{{ t('shell.copyLine') }}</p>
     </div>
 
   </div>

@@ -1,6 +1,6 @@
 <div class="page">
   <a mat-button class="back" routerLink="/playbook">
-    <mat-icon>arrow_back</mat-icon> 返回机经列表
+    <mat-icon>arrow_back</mat-icon> {{ t('pb.detail.backToList') }}
   </a>
 
   @if (loading()) {
@@ -11,10 +11,10 @@
     <mat-card class="err-card">
       <mat-icon>error_outline</mat-icon>
       <div>
-        <strong>加载失败</strong>
+        <strong>{{ t('common.loadFailed') }}</strong>
         <p>{{ error() }}</p>
       </div>
-      <button mat-stroked-button (click)="refresh()">重试</button>
+      <button mat-stroked-button (click)="refresh()">{{ t('common.retry') }}</button>
     </mat-card>
   }
 
@@ -28,7 +28,7 @@
           <span class="chip" [class]="statusClass(e.status)">{{ statusLabel(e.status) }}</span>
         </div>
         <div class="head-meta">
-          <span><mat-icon inline>repeat</mat-icon> 第 {{ e.roundNo }} 轮</span>
+          <span><mat-icon inline>repeat</mat-icon> {{ tn('pb.round', e.roundNo) }}</span>
           @if (e.interviewDate) {
             <span><mat-icon inline>event</mat-icon> {{ e.interviewDate }}</span>
           }
@@ -52,11 +52,11 @@
         @for (d of scoredDims(); track d.key) {
           <div class="badge" [class.primary]="d.key === 'overall'">
             <span class="badge-val" [class]="scoreClass(d.value)">{{ d.value }}</span>
-            <span class="badge-lbl">{{ d.label }}</span>
+            <span class="badge-lbl">{{ t(d.labelKey) }}</span>
           </div>
         }
         @if (scoredDims().length === 0) {
-          <p class="no-score">尚未分析,暂无分数。上传材料后点击「触发分析」。</p>
+          <p class="no-score">{{ t('pb.detail.noScore') }}</p>
         }
       </div>
 
@@ -64,21 +64,21 @@
       <div class="head-actions">
         @if (auth.can('interviews.write')) {
           <button mat-stroked-button (click)="startTranscription()" [disabled]="busy() !== null">
-            <mat-icon>graphic_eq</mat-icon> 开始转写
+            <mat-icon>graphic_eq</mat-icon> {{ t('pb.action.startTranscription') }}
           </button>
         }
         @if (auth.can('interviews.analyze')) {
           <button mat-flat-button color="primary" (click)="triggerAnalysis()" [disabled]="busy() !== null">
-            <mat-icon>auto_awesome</mat-icon> 触发分析
+            <mat-icon>auto_awesome</mat-icon> {{ t('pb.action.triggerAnalysis') }}
           </button>
         }
         <button mat-button (click)="refresh()">
-          <mat-icon>refresh</mat-icon> 刷新
+          <mat-icon>refresh</mat-icon> {{ t('common.refresh') }}
         </button>
 
         @if (isPolling()) {
           <span class="polling">
-            <mat-icon inline>sync</mat-icon> 流水线进行中,每 15 秒自动刷新…
+            <mat-icon inline>sync</mat-icon> {{ t('pb.detail.polling') }}
           </span>
         }
       </div>
@@ -87,9 +87,9 @@
         <div class="failed-banner">
           <mat-icon>warning</mat-icon>
           <div>
-            <strong>分析失败</strong>
+            <strong>{{ t('pb.detail.failed') }}</strong>
             <p>{{ e.failureReason }}</p>
-            <p class="hint">修正材料或转写文本后,重新点击「触发分析」即可。</p>
+            <p class="hint">{{ t('pb.detail.failedHint') }}</p>
           </div>
         </div>
       }
@@ -99,13 +99,13 @@
     <mat-tab-group class="tabs" animationDuration="150ms">
 
       <!-- ============ 概览 ============ -->
-      <mat-tab label="概览">
+      <mat-tab [label]="t('sub.overview')">
         <div class="tab-body">
           @if (e.analysisSummary) {
             <mat-card class="panel">
               <mat-card-header>
-                <mat-card-title>AI 总评</mat-card-title>
-                <mat-card-subtitle>这场面试的整体判断与最该改的地方</mat-card-subtitle>
+                <mat-card-title>{{ t('pb.overview.aiSummary') }}</mat-card-title>
+                <mat-card-subtitle>{{ t('pb.overview.aiSummarySub') }}</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
                 <p class="prose">{{ e.analysisSummary }}</p>
@@ -114,26 +114,26 @@
           } @else {
             <mat-card class="panel empty-panel">
               <mat-icon>insights</mat-icon>
-              <p>还没有分析结果。上传录音或粘贴转写文本后点击「触发分析」。</p>
+              <p>{{ t('pb.overview.noAnalysis') }}</p>
             </mat-card>
           }
 
           <!-- 六维进度条:比徽章更能看出"差多少" -->
           <mat-card class="panel">
             <mat-card-header>
-              <mat-card-title>六维能力</mat-card-title>
-              <mat-card-subtitle>低于 55 分的维度应优先补</mat-card-subtitle>
+              <mat-card-title>{{ t('pb.overview.dims') }}</mat-card-title>
+              <mat-card-subtitle>{{ t('pb.overview.dimsSub') }}</mat-card-subtitle>
             </mat-card-header>
             <mat-card-content>
               @if (scoredDims().length === 0) {
-                <p class="muted">暂无分数。</p>
+                <p class="muted">{{ t('pb.overview.noScore') }}</p>
               } @else {
                 @for (d of scoredDims(); track d.key) {
                   <div class="dim">
                     <div class="dim-head">
                       <span class="dim-name">
-                        {{ d.label }}
-                        <em class="dim-hint">{{ d.hint }}</em>
+                        {{ t(d.labelKey) }}
+                        <em class="dim-hint">{{ t(d.hintKey) }}</em>
                       </span>
                       <span class="dim-score" [class]="scoreClass(d.value)">{{ d.value }}</span>
                     </div>
@@ -149,47 +149,47 @@
           @if (e.speechMetrics) {
             <mat-card class="panel">
               <mat-card-header>
-                <mat-card-title>客观声学指标</mat-card-title>
-                <mat-card-subtitle>只统计候选人自己的发言 · 舒适语速约 130–170 词/分钟</mat-card-subtitle>
+                <mat-card-title>{{ t('pb.metrics.title') }}</mat-card-title>
+                <mat-card-subtitle>{{ t('pb.metrics.sub') }}</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
                 <div class="metric-grid">
                   <div class="metric">
                     <span class="m-value">{{ e.speechMetrics.wordsPerMinute | number:'1.0-0' }}</span>
-                    <span class="m-label">词/分钟</span>
+                    <span class="m-label">{{ t('pb.metric.wpm') }}</span>
                   </div>
                   <div class="metric">
                     <span class="m-value">{{ e.speechMetrics.averageSentenceLength | number:'1.1-1' }}</span>
-                    <span class="m-label">平均句长(词)</span>
+                    <span class="m-label">{{ t('pb.metric.avgSentence') }}</span>
                   </div>
                   <div class="metric">
                     <span class="m-value">{{ e.speechMetrics.shortSentenceCount }}</span>
-                    <span class="m-label">过短句(&lt;5词)</span>
+                    <span class="m-label">{{ t('pb.metric.shortSentences') }}</span>
                   </div>
                   <div class="metric">
                     <span class="m-value">{{ e.speechMetrics.fillerWordCount }}</span>
-                    <span class="m-label">填充词总数</span>
+                    <span class="m-label">{{ t('pb.metric.fillers') }}</span>
                   </div>
                   <div class="metric">
                     <span class="m-value">{{ e.speechMetrics.longPauseCount }}</span>
-                    <span class="m-label">长停顿(&gt;2s)</span>
+                    <span class="m-label">{{ t('pb.metric.pauses') }}</span>
                   </div>
                   <div class="metric">
                     <span class="m-value">{{ e.speechMetrics.selfRepetitionCount }}</span>
-                    <span class="m-label">自我重复</span>
+                    <span class="m-label">{{ t('pb.metric.repetition') }}</span>
                   </div>
                   <div class="metric">
                     <span class="m-value">{{ e.speechMetrics.pronunciationAccuracy | number:'1.0-0' }}</span>
-                    <span class="m-label">发音准确度</span>
+                    <span class="m-label">{{ t('pb.metric.pronAccuracy') }}</span>
                   </div>
                   <div class="metric">
                     <span class="m-value">{{ e.speechMetrics.wordCount }}</span>
-                    <span class="m-label">总词数</span>
+                    <span class="m-label">{{ t('pb.metric.wordCount') }}</span>
                   </div>
                 </div>
 
                 @if (fillerEntries(e.speechMetrics).length > 0) {
-                  <h4 class="sub-title">填充词明细</h4>
+                  <h4 class="sub-title">{{ t('pb.metrics.fillersTitle') }}</h4>
                   <div class="filler-list">
                     @for (f of fillerEntries(e.speechMetrics); track f[0]) {
                       <span class="filler-chip">{{ f[0] }} × {{ f[1] }}</span>
@@ -198,11 +198,11 @@
                 }
 
                 @if (e.speechMetrics.problemWords && e.speechMetrics.problemWords.length > 0) {
-                  <h4 class="sub-title">术语发音关注</h4>
+                  <h4 class="sub-title">{{ t('pb.metrics.problemWordsTitle') }}</h4>
                   <div class="filler-list">
                     @for (w of e.speechMetrics.problemWords; track w.word) {
                       <span class="filler-chip warn"
-                            [matTooltip]="'准确度 ' + (w.accuracyScore | number:'1.0-0') + ' 分'">
+                            [matTooltip]="tn('pb.metrics.accuracyTip', (w.accuracyScore | number:'1.0-0'))">
                         {{ w.word }}
                       </span>
                     }
@@ -210,16 +210,16 @@
                 }
 
                 @if (structureMarkerEntries(e.speechMetrics).length > 0) {
-                  <h4 class="sub-title">结构骨架标记</h4>
-                  <p class="muted" style="margin-bottom:6px;">检出分点/转折/收尾标记 {{ structureMarkerEntries(e.speechMetrics).length }} 类 —— 有标记说明在尝试结构化表达</p>
+                  <h4 class="sub-title">{{ t('pb.metrics.structureTitle') }}</h4>
+                  <p class="muted" style="margin-bottom:6px;">{{ tn('pb.metrics.structureFound', structureMarkerEntries(e.speechMetrics).length) }}</p>
                   <div class="filler-list">
                     @for (m of structureMarkerEntries(e.speechMetrics); track m[0]) {
                       <span class="filler-chip ok">{{ m[0] }} × {{ m[1] }}</span>
                     }
                   </div>
                 } @else if (e.speechMetrics.wordCount > 0) {
-                  <h4 class="sub-title">结构骨架标记</h4>
-                  <p class="muted">全程未检出分点/转折/收尾标记 —— 表达偏平铺直叙，建议刻意练习 "First… Second… Third…" 和 trade-off 收尾。</p>
+                  <h4 class="sub-title">{{ t('pb.metrics.structureTitle') }}</h4>
+                  <p class="muted">{{ t('pb.metrics.structureNone') }}</p>
                 }
               </mat-card-content>
             </mat-card>
@@ -229,8 +229,8 @@
           @if (questions().length > 0) {
             <mat-card class="panel">
               <mat-card-header>
-                <mat-card-title>问答切题度</mat-card-title>
-                <mat-card-subtitle>问题 vs 回答对照 —— 卡壳 / 诊断存疑的标出来</mat-card-subtitle>
+                <mat-card-title>{{ t('pb.relevance.title') }}</mat-card-title>
+                <mat-card-subtitle>{{ t('pb.relevance.sub') }}</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
                 @for (q of questions(); track q.id) {
@@ -239,16 +239,16 @@
                       <span class="q-seq">Q{{ q.sequence }}</span>
                       @if (q.category) { <span class="q-cat">{{ q.category }}</span> }
                       @if (q.gotStuck) {
-                        <span class="q-stuck"><mat-icon inline>warning</mat-icon> 卡壳{{ q.stuckReason ? '：' + q.stuckReason : '' }}</span>
+                        <span class="q-stuck"><mat-icon inline>warning</mat-icon> {{ t('pb.relevance.stuck') }}{{ q.stuckReason ? ': ' + q.stuckReason : '' }}</span>
                       } @else {
-                        <span class="rel-ok"><mat-icon inline>check_circle</mat-icon> 作答流畅</span>
+                        <span class="rel-ok"><mat-icon inline>check_circle</mat-icon> {{ t('pb.relevance.smooth') }}</span>
                       }
                     </div>
-                    <p class="rel-q"><strong>问：</strong>{{ q.questionText }}</p>
+                    <p class="rel-q"><strong>{{ t('pb.relevance.q') }}</strong>{{ q.questionText }}</p>
                     @if (q.myAnswerText) {
-                      <p class="rel-a"><strong>答：</strong>{{ q.myAnswerText.length > 120 ? (q.myAnswerText | slice:0:120) + '…' : q.myAnswerText }}</p>
+                      <p class="rel-a"><strong>{{ t('pb.relevance.a') }}</strong>{{ q.myAnswerText.length > 120 ? (q.myAnswerText | slice:0:120) + '…' : q.myAnswerText }}</p>
                     } @else {
-                      <p class="rel-a muted">（未记录回答）</p>
+                      <p class="rel-a muted">{{ t('pb.relevance.noAnswer') }}</p>
                     }
                     @if (q.assessment) {
                       <p class="rel-assess"><mat-icon inline>insights</mat-icon> {{ q.assessment }}</p>
@@ -263,22 +263,22 @@
           <!-- 短板清单 -->
           <mat-card class="panel">
             <mat-card-header>
-              <mat-card-title>短板清单({{ weaknesses().length }})</mat-card-title>
-              <mat-card-subtitle>按严重程度排序,每条都带证据与改法</mat-card-subtitle>
+              <mat-card-title>{{ tn('pb.weakness.title', weaknesses().length) }}</mat-card-title>
+              <mat-card-subtitle>{{ t('pb.weakness.sub') }}</mat-card-subtitle>
             </mat-card-header>
             <mat-card-content>
               @if (weaknesses().length === 0) {
-                <p class="muted">还没有短板记录。分析完成后会自动生成,也可以在下方手工添加。</p>
+                <p class="muted">{{ t('pb.weakness.empty') }}</p>
               } @else {
                 @for (w of weaknesses(); track w.id) {
                   <div class="weakness" [class]="severityClass(w.severity)">
                     <div class="wk-head">
                       <span class="wk-sev" [class]="severityClass(w.severity)">
-                        严重度 {{ w.severity }}
+                        {{ tn('pb.weakness.severity', w.severity) }}
                       </span>
                       <span class="wk-cat">{{ w.category }}</span>
                       @if (w.occurrenceCount > 1) {
-                        <span class="wk-count">已出现 {{ w.occurrenceCount }} 次</span>
+                        <span class="wk-count">{{ tn('pb.weakness.count', w.occurrenceCount) }}</span>
                       }
                       <span class="spacer"></span>
                       @if (auth.can('interviews.delete')) {
@@ -293,7 +293,7 @@
                     }
                     @if (w.evidence) {
                       <blockquote class="wk-evidence">
-                        <strong>原话证据</strong>
+                        <strong>{{ t('pb.weakness.evidence') }}</strong>
                         <span>{{ w.evidence }}</span>
                       </blockquote>
                     }
@@ -308,10 +308,10 @@
               @if (auth.can('interviews.write')) {
                 <div class="add-block">
                   <mat-divider></mat-divider>
-                  <h4 class="add-title">手工添加短板</h4>
+                  <h4 class="add-title">{{ t('pb.weakness.addTitle') }}</h4>
                   <div class="form-grid">
                     <mat-form-field appearance="outline">
-                      <mat-label>类别</mat-label>
+                      <mat-label>{{ t('pb.weakness.category') }}</mat-label>
                       <mat-select [(ngModel)]="weaknessForm.category">
                         @for (c of weaknessCategories; track c) {
                           <mat-option [value]="c">{{ c }}</mat-option>
@@ -319,30 +319,30 @@
                       </mat-select>
                     </mat-form-field>
                     <mat-form-field appearance="outline">
-                      <mat-label>严重度 (1-5)</mat-label>
+                      <mat-label>{{ t('pb.weakness.severityLabel') }}</mat-label>
                       <input matInput type="number" min="1" max="5" [(ngModel)]="weaknessForm.severity" />
                     </mat-form-field>
                   </div>
                   <mat-form-field appearance="outline" class="wide">
-                    <mat-label>标题 *</mat-label>
+                    <mat-label>{{ t('pb.weakness.titleLabel') }}</mat-label>
                     <input matInput [(ngModel)]="weaknessForm.title"
-                           placeholder="如:回答缺少结论先行" />
+                           [placeholder]="t('pb.weakness.titlePh')" />
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="wide">
-                    <mat-label>说明</mat-label>
+                    <mat-label>{{ t('pb.weakness.detailLabel') }}</mat-label>
                     <textarea matInput rows="2" [(ngModel)]="weaknessForm.detail"></textarea>
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="wide">
-                    <mat-label>证据(面试原话)</mat-label>
+                    <mat-label>{{ t('pb.weakness.evidenceLabel') }}</mat-label>
                     <textarea matInput rows="2" [(ngModel)]="weaknessForm.evidence"></textarea>
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="wide">
-                    <mat-label>改进建议</mat-label>
+                    <mat-label>{{ t('pb.weakness.suggestionLabel') }}</mat-label>
                     <textarea matInput rows="2" [(ngModel)]="weaknessForm.suggestion"></textarea>
                   </mat-form-field>
                   <button mat-stroked-button color="primary" (click)="addWeakness()"
                           [disabled]="busy() !== null">
-                    <mat-icon>add</mat-icon> 添加短板
+                    <mat-icon>add</mat-icon> {{ t('pb.weakness.add') }}
                   </button>
                 </div>
               }
@@ -352,35 +352,35 @@
       </mat-tab>
 
       <!-- ============ 轮次(缺口1:一家公司多轮) ============ -->
-      <mat-tab label="轮次 ({{ rounds().length }})">
+      <mat-tab [label]="tn('pb.tab.rounds', rounds().length)">
         <div class="tab-body">
           <mat-card class="panel">
             <mat-card-header>
-              <mat-card-title>面试轮次</mat-card-title>
-              <mat-card-subtitle>一家公司多轮,每轮独立记录时间 / 面试官 / 结果</mat-card-subtitle>
+              <mat-card-title>{{ t('pb.round.title') }}</mat-card-title>
+              <mat-card-subtitle>{{ t('pb.round.sub') }}</mat-card-subtitle>
             </mat-card-header>
             <mat-card-content>
               @if (rounds().length === 0) {
-                <p class="muted">还没有轮次记录。旧数据的第 1 轮会在迁移后自动出现,也可以手动新增。</p>
+                <p class="muted">{{ t('pb.round.empty') }}</p>
               } @else {
                 @for (r of rounds(); track r.id) {
                   <div class="round">
                     <div class="round-head">
-                      <span class="round-order">第 {{ r.order }} 轮</span>
+                      <span class="round-order">{{ tn('pb.round', r.order) }}</span>
                       <span class="round-stage">{{ r.stage }}</span>
-                      <span class="round-outcome">{{ roundOutcomeLabel[r.outcome] ?? r.outcome }}</span>
+                      <span class="round-outcome">{{ roundOutcomeLabelFor(r.outcome) }}</span>
                       @if (r.scheduledDate) {
                         <span class="round-date">{{ r.scheduledDate }}</span>
                       }
                       <span class="spacer"></span>
                       @if (auth.can('interviews.write')) {
                         @if (!isEditingRound(r)) {
-                          <button mat-icon-button (click)="editRound(r)" title="编辑">
+                          <button mat-icon-button (click)="editRound(r)" [title]="t('common.edit')">
                             <mat-icon>edit</mat-icon>
                           </button>
                         }
                         @if (auth.can('interviews.delete')) {
-                          <button mat-icon-button (click)="removeRound(r)" title="删除">
+                          <button mat-icon-button (click)="removeRound(r)" [title]="t('common.delete')">
                             <mat-icon>close</mat-icon>
                           </button>
                         }
@@ -390,7 +390,7 @@
                     @if (isEditingRound(r)) {
                       <div class="form-grid">
                         <mat-form-field appearance="outline">
-                          <mat-label>阶段</mat-label>
+                          <mat-label>{{ t('pb.round.stageLabel') }}</mat-label>
                           <mat-select [(ngModel)]="roundDrafts[r.id].stage">
                             @for (s of roundStages; track s) {
                               <mat-option [value]="s">{{ s }}</mat-option>
@@ -398,19 +398,19 @@
                           </mat-select>
                         </mat-form-field>
                         <mat-form-field appearance="outline">
-                          <mat-label>结果</mat-label>
+                          <mat-label>{{ t('pb.round.resultLabel') }}</mat-label>
                           <mat-select [(ngModel)]="roundDrafts[r.id].outcome">
                             @for (o of roundOutcomes; track o) {
-                              <mat-option [value]="o">{{ roundOutcomeLabel[o] }}</mat-option>
+                              <mat-option [value]="o">{{ roundOutcomeLabelFor(o) }}</mat-option>
                             }
                           </mat-select>
                         </mat-form-field>
                         <mat-form-field appearance="outline">
-                          <mat-label>日期</mat-label>
+                          <mat-label>{{ t('pb.round.dateLabel') }}</mat-label>
                           <input matInput type="date" [(ngModel)]="roundDrafts[r.id].scheduledDate" />
                         </mat-form-field>
                         <mat-form-field appearance="outline">
-                          <mat-label>形式</mat-label>
+                          <mat-label>{{ t('pb.round.formatLabel') }}</mat-label>
                           <mat-select [(ngModel)]="roundDrafts[r.id].format">
                             <mat-option value="">—</mat-option>
                             <mat-option value="Phone">Phone</mat-option>
@@ -420,32 +420,32 @@
                         </mat-form-field>
                       </div>
                       <mat-form-field appearance="outline" class="wide">
-                        <mat-label>面试官</mat-label>
+                        <mat-label>{{ t('pb.round.interviewersField') }}</mat-label>
                         <input matInput [(ngModel)]="roundDrafts[r.id].interviewers"
-                               placeholder="如: David Castelino (Sr SWE)" />
+                               [placeholder]="t('pb.round.interviewersPh')" />
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="wide">
-                        <mat-label>地点</mat-label>
+                        <mat-label>{{ t('pb.round.locationLabel') }}</mat-label>
                         <input matInput [(ngModel)]="roundDrafts[r.id].location" />
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="wide">
-                        <mat-label>备注</mat-label>
+                        <mat-label>{{ t('pb.round.notesLabel') }}</mat-label>
                         <textarea matInput rows="2" [(ngModel)]="roundDrafts[r.id].notes"></textarea>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="wide">
-                        <mat-label>反馈</mat-label>
+                        <mat-label>{{ t('pb.round.feedbackLabel') }}</mat-label>
                         <textarea matInput rows="2" [(ngModel)]="roundDrafts[r.id].feedback"></textarea>
                       </mat-form-field>
                       <div class="row-actions">
                         <button mat-stroked-button color="primary" (click)="saveRound(r)"
                                 [disabled]="busy() !== null">
-                          <mat-icon>check</mat-icon> 保存
+                          <mat-icon>check</mat-icon> {{ t('common.save') }}
                         </button>
-                        <button mat-button (click)="cancelEditRound(r)">取消</button>
+                        <button mat-button (click)="cancelEditRound(r)">{{ t('common.cancel') }}</button>
                       </div>
                     } @else {
                       @if (r.interviewers) {
-                        <p class="round-line"><strong>面试官:</strong> {{ r.interviewers }}</p>
+                        <p class="round-line"><strong>{{ t('pb.round.interviewersLabel') }}</strong> {{ r.interviewers }}</p>
                       }
                       @if (r.format || r.location) {
                         <p class="round-line">
@@ -459,7 +459,7 @@
                       }
                       @if (r.feedback) {
                         <blockquote class="wk-evidence">
-                          <strong>反馈</strong><span>{{ r.feedback }}</span>
+                          <strong>{{ t('pb.round.feedback') }}</strong><span>{{ r.feedback }}</span>
                         </blockquote>
                       }
                     }
@@ -471,10 +471,10 @@
               @if (auth.can('interviews.write')) {
                 <div class="add-block">
                   <mat-divider></mat-divider>
-                  <h4 class="add-title">新增一轮</h4>
+                  <h4 class="add-title">{{ t('pb.round.addTitle') }}</h4>
                   <div class="form-grid">
                     <mat-form-field appearance="outline">
-                      <mat-label>阶段</mat-label>
+                      <mat-label>{{ t('pb.round.stageLabel') }}</mat-label>
                       <mat-select [(ngModel)]="newRoundStage">
                         @for (s of roundStages; track s) {
                           <mat-option [value]="s">{{ s }}</mat-option>
@@ -484,7 +484,7 @@
                   </div>
                   <button mat-stroked-button color="primary" (click)="addRound()"
                           [disabled]="busy() !== null">
-                    <mat-icon>add</mat-icon> 新增轮次
+                    <mat-icon>add</mat-icon> {{ t('pb.round.add') }}
                   </button>
                 </div>
               }
@@ -494,16 +494,16 @@
       </mat-tab>
 
       <!-- ============ 指导材料(缺口2) ============ -->
-      <mat-tab label="指导材料">
+      <mat-tab [label]="t('pb.tab.guidance')">
         <div class="tab-body">
           <mat-card class="panel">
             <mat-card-header>
-              <mat-card-title>面试指导材料</mat-card-title>
+              <mat-card-title>{{ t('pb.guidance.title') }}</mat-card-title>
               <mat-card-subtitle>
                 @if (guidance()) {
                   <span>v{{ guidance()!.version }} · {{ guidance()!.model }} · {{ guidance()!.generatedAt }}</span>
                 } @else {
-                  <span>手动生成,站内浏览,版本保留</span>
+                  <span>{{ t('pb.guidance.sub') }}</span>
                 }
               </mat-card-subtitle>
             </mat-card-header>
@@ -513,20 +513,20 @@
                   <button mat-stroked-button color="primary" (click)="generateGuidance()"
                           [disabled]="busy() !== null">
                     <mat-icon>auto_awesome</mat-icon>
-                    {{ guidance() ? '重新生成新版本' : '生成指导材料' }}
+                    {{ guidance() ? t('pb.guidance.regenerate') : t('pb.guidance.generate') }}
                   </button>
                 }
                 @if (guidance()) {
                   <button mat-stroked-button (click)="exportGuidancePdf()">
-                    <mat-icon>picture_as_pdf</mat-icon> 导出 PDF(打印)
+                    <mat-icon>picture_as_pdf</mat-icon> {{ t('pb.guidance.exportPdf') }}
                   </button>
                   <button mat-stroked-button (click)="exportGuidanceWord()">
-                    <mat-icon>description</mat-icon> 导出 Word
+                    <mat-icon>description</mat-icon> {{ t('pb.guidance.exportWord') }}
                   </button>
                 }
                 @if (guidanceVersions().length > 1) {
                   <mat-form-field appearance="outline" class="ver-select">
-                    <mat-label>历史版本</mat-label>
+                    <mat-label>{{ t('pb.guidance.historyLabel') }}</mat-label>
                     <mat-select [value]="selectedGuidanceVersion()?.id"
                                 (selectionChange)="selectGuidanceVersionById($event.value)">
                       @for (v of guidanceVersions(); track v.id) {
@@ -538,13 +538,13 @@
               </div>
 
               @if (guidanceLoading()) {
-                <p class="muted">加载中…</p>
+                <p class="muted">{{ t('common.loading') }}</p>
               } @else if (guidance()) {
                 <div class="guidance-body" [innerHTML]="guidanceHtml()"></div>
               } @else {
                 <div class="empty-panel">
                   <mat-icon>article</mat-icon>
-                  <p>还没有指导材料。点击「生成指导材料」,AI 会根据 JD、公司介绍、历史问答、短板和六维诊断生成一份备战文档。</p>
+                  <p>{{ t('pb.guidance.empty') }}</p>
                 </div>
               }
             </mat-card-content>
@@ -553,10 +553,10 @@
       </mat-tab>
 
       <!-- ============ 问答(核心价值区) ============ -->
-      <mat-tab label="问答 ({{ questions().length }})">
+      <mat-tab [label]="tn('pb.tab.questions', questions().length)">
         <div class="tab-body">
           <p class="tab-intro">
-            复盘的价值几乎全在这页:把「当时怎么答的」和「应该怎么答」并排放在一起。
+            {{ t('pb.question.intro') }}
           </p>
 
           <!-- 候选导入 TechStack(缺口3) -->
@@ -564,34 +564,33 @@
             <div class="import-bar">
               @if (!showCandidates()) {
                 <button mat-stroked-button color="primary" (click)="openCandidateImport()">
-                  <mat-icon>upload</mat-icon> 导入到 TechStack
+                  <mat-icon>upload</mat-icon> {{ t('pb.import.toTechStack') }}
                 </button>
               } @else {
                 <mat-card class="panel candidate-panel">
                   <mat-card-header>
-                    <mat-card-title>勾选导入 TechStack</mat-card-title>
+                    <mat-card-title>{{ t('pb.import.title') }}</mat-card-title>
                     <mat-card-subtitle>
-                      已选 {{ selectedCandidates().length }} / {{ candidates().length }} ·
-                      重复条目会自动跳过
+                      {{ importSub() }}
                     </mat-card-subtitle>
                   </mat-card-header>
                   <mat-card-content>
                     @if (candidatesLoading()) {
-                      <p class="muted">加载候选中…</p>
+                      <p class="muted">{{ t('pb.import.loading') }}</p>
                     } @else if (candidates().length === 0) {
-                      <p class="muted">没有可导入的问答。</p>
+                      <p class="muted">{{ t('pb.import.empty') }}</p>
                     } @else {
                       <div class="row-actions" style="margin-bottom: 8px;">
-                        <button mat-button (click)="toggleAllCandidates(true)">全选</button>
-                        <button mat-button (click)="toggleAllCandidates(false)">全不选</button>
+                        <button mat-button (click)="toggleAllCandidates(true)">{{ t('pb.import.selectAll') }}</button>
+                        <button mat-button (click)="toggleAllCandidates(false)">{{ t('pb.import.selectNone') }}</button>
                         <span class="spacer"></span>
                         <button mat-stroked-button color="primary"
                                 (click)="importCandidates()"
                                 [disabled]="busy() !== null || selectedCandidates().length === 0">
                           <mat-icon>check</mat-icon>
-                          确认导入 ({{ selectedCandidates().length }})
+                          {{ tn('pb.import.confirm', selectedCandidates().length) }}
                         </button>
-                        <button mat-button (click)="closeCandidateImport()">取消</button>
+                        <button mat-button (click)="closeCandidateImport()">{{ t('common.cancel') }}</button>
                       </div>
                       @for (c of candidates(); track c.questionId) {
                         <div class="candidate" [class.unselected]="!c.selected">
@@ -599,16 +598,16 @@
                             <mat-checkbox [(ngModel)]="c.selected"></mat-checkbox>
                             <span class="cand-cat">{{ c.editCategory }}</span>
                             @if (c.gotStuck) {
-                              <span class="q-stuck"><mat-icon inline>sentiment_dissatisfied</mat-icon> 卡住了</span>
+                              <span class="q-stuck"><mat-icon inline>sentiment_dissatisfied</mat-icon> {{ t('pb.import.stuck') }}</span>
                             }
                           </div>
                           <mat-form-field appearance="outline" class="wide">
-                            <mat-label>问题</mat-label>
+                            <mat-label>{{ t('pb.import.questionLabel') }}</mat-label>
                             <textarea matInput rows="2" [(ngModel)]="c.editText"></textarea>
                           </mat-form-field>
                           <div class="form-grid">
                             <mat-form-field appearance="outline">
-                              <mat-label>分类</mat-label>
+                              <mat-label>{{ t('pb.import.categoryLabel') }}</mat-label>
                               <mat-select [(ngModel)]="c.editCategory">
                                 @for (cat of questionCategories; track cat) {
                                   <mat-option [value]="cat">{{ cat }}</mat-option>
@@ -616,9 +615,9 @@
                               </mat-select>
                             </mat-form-field>
                             <mat-form-field appearance="outline">
-                              <mat-label>答案 / 要点</mat-label>
+                              <mat-label>{{ t('pb.import.answerLabel') }}</mat-label>
                               <textarea matInput rows="2" [(ngModel)]="c.editAnswer"
-                                        placeholder="留空则不带答案导入"></textarea>
+                                        [placeholder]="t('pb.import.answerPh')"></textarea>
                             </mat-form-field>
                           </div>
                         </div>
@@ -634,7 +633,7 @@
           @if (questions().length === 0) {
             <mat-card class="panel empty-panel">
               <mat-icon>question_answer</mat-icon>
-              <p>还没有问答记录。分析完成后会自动拆出,也可以在下方手工补录。</p>
+              <p>{{ t('pb.question.empty') }}</p>
             </mat-card>
           }
 
@@ -646,12 +645,12 @@
                   <span class="q-cat">{{ q.category }}</span>
                 }
                 @if (q.difficulty) {
-                  <span class="q-diff" [title]="'难度 ' + q.difficulty">
-                    难度 {{ q.difficulty }}/5
+                  <span class="q-diff" [title]="tn('pb.question.difficulty', q.difficulty)">
+                    {{ tn('pb.question.difficulty', q.difficulty) }}
                   </span>
                 }
                 @if (q.gotStuck) {
-                  <span class="q-stuck"><mat-icon inline>sentiment_dissatisfied</mat-icon> 卡住了</span>
+                  <span class="q-stuck"><mat-icon inline>sentiment_dissatisfied</mat-icon> {{ t('pb.question.stuck') }}</span>
                 }
                 <span class="spacer"></span>
                 @if (auth.can('interviews.write')) {
@@ -665,27 +664,27 @@
 
               <div class="answer-grid">
                 <div class="answer mine">
-                  <div class="answer-label"><mat-icon inline>person</mat-icon> 我的回答</div>
+                  <div class="answer-label"><mat-icon inline>person</mat-icon> {{ t('pb.question.myAnswer') }}</div>
                   @if (q.myAnswerText) {
                     <p class="answer-body">{{ q.myAnswerText }}</p>
                   } @else {
-                    <p class="muted small">(没有记录回答内容)</p>
+                    <p class="muted small">{{ t('pb.question.noMyAnswer') }}</p>
                   }
                 </div>
 
                 <div class="answer ideal">
-                  <div class="answer-label"><mat-icon inline>star</mat-icon> 推荐回答</div>
+                  <div class="answer-label"><mat-icon inline>star</mat-icon> {{ t('pb.question.recommended') }}</div>
                   @if (q.recommendedAnswer) {
                     <p class="answer-body">{{ q.recommendedAnswer }}</p>
                   } @else {
-                    <p class="muted small">(还没有推荐回答)</p>
+                    <p class="muted small">{{ t('pb.question.noRecommended') }}</p>
                   }
                 </div>
               </div>
 
               @if (q.assessment) {
                 <div class="assessment">
-                  <strong>点评</strong>
+                  <strong>{{ t('pb.question.assessment') }}</strong>
                   <p>{{ q.assessment }}</p>
                 </div>
               }
@@ -693,7 +692,7 @@
               <!-- 遗漏要点:JSON 数组,解析失败则整块不显示而不是显示乱码 -->
               @if (parseList(q.missedPointsJson).length > 0) {
                 <div class="missed">
-                  <strong><mat-icon inline>error_outline</mat-icon> 遗漏的要点</strong>
+                  <strong><mat-icon inline>error_outline</mat-icon> {{ t('pb.question.missedPoints') }}</strong>
                   <ul>
                     @for (p of parseList(q.missedPointsJson); track $index) {
                       <li>{{ p }}</li>
@@ -704,7 +703,7 @@
 
               @if (q.gotStuck && q.stuckReason) {
                 <p class="stuck-reason">
-                  <mat-icon inline>help_outline</mat-icon> 卡住原因:{{ q.stuckReason }}
+                  <mat-icon inline>help_outline</mat-icon> {{ t('pb.question.stuckReason') }}{{ q.stuckReason }}
                 </p>
               }
             </mat-card>
@@ -714,25 +713,25 @@
           @if (auth.can('interviews.write')) {
             <mat-card class="panel add-question">
               <mat-card-header>
-                <mat-card-title>手工补录问答</mat-card-title>
-                <mat-card-subtitle>趁记忆还在,把没被录音覆盖的问题补上</mat-card-subtitle>
+                <mat-card-title>{{ t('pb.question.addTitle') }}</mat-card-title>
+                <mat-card-subtitle>{{ t('pb.question.addSub') }}</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
                 <mat-form-field appearance="outline" class="wide">
-                  <mat-label>面试官的问题 *</mat-label>
+                  <mat-label>{{ t('pb.question.questionLabel') }}</mat-label>
                   <textarea matInput rows="2" [(ngModel)]="questionForm.questionText"
-                            placeholder="尽可能记原话"></textarea>
+                            [placeholder]="t('pb.question.questionPh')"></textarea>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline" class="wide">
-                  <mat-label>我的回答</mat-label>
+                  <mat-label>{{ t('pb.question.myAnswerLabel') }}</mat-label>
                   <textarea matInput rows="4" [(ngModel)]="questionForm.myAnswerText"
-                            placeholder="当时是怎么答的"></textarea>
+                            [placeholder]="t('pb.question.myAnswerPh')"></textarea>
                 </mat-form-field>
 
                 <div class="form-grid">
                   <mat-form-field appearance="outline">
-                    <mat-label>类别</mat-label>
+                    <mat-label>{{ t('pb.question.categoryLabel') }}</mat-label>
                     <mat-select [(ngModel)]="questionForm.category">
                       @for (c of questionCategories; track c) {
                         <mat-option [value]="c">{{ c }}</mat-option>
@@ -741,37 +740,37 @@
                   </mat-form-field>
 
                   <mat-form-field appearance="outline">
-                    <mat-label>难度 (1-5)</mat-label>
+                    <mat-label>{{ t('pb.question.difficultyLabel') }}</mat-label>
                     <input matInput type="number" min="1" max="5"
                            [(ngModel)]="questionForm.difficulty" />
                   </mat-form-field>
 
                   <mat-checkbox [(ngModel)]="questionForm.gotStuck">
-                    当时卡住了
+                    {{ t('pb.question.gotStuck') }}
                   </mat-checkbox>
                 </div>
 
                 @if (questionForm.gotStuck) {
                   <mat-form-field appearance="outline" class="wide">
-                    <mat-label>卡住原因</mat-label>
+                    <mat-label>{{ t('pb.question.stuckReasonLabel') }}</mat-label>
                     <input matInput [(ngModel)]="questionForm.stuckReason"
-                           placeholder="知识点不熟 / 没听懂问题 / 紧张" />
+                           [placeholder]="t('pb.question.stuckReasonPh')" />
                   </mat-form-field>
                 }
 
                 <mat-form-field appearance="outline" class="wide">
-                  <mat-label>自评(哪里答得好/不好)</mat-label>
+                  <mat-label>{{ t('pb.question.selfAssessmentLabel') }}</mat-label>
                   <textarea matInput rows="2" [(ngModel)]="questionForm.assessment"></textarea>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline" class="wide">
-                  <mat-label>推荐回答(事后想到的更好答法)</mat-label>
+                  <mat-label>{{ t('pb.question.recommendedLabel') }}</mat-label>
                   <textarea matInput rows="4" [(ngModel)]="questionForm.recommendedAnswer"></textarea>
                 </mat-form-field>
 
                 <button mat-flat-button color="primary" (click)="addQuestion()"
                         [disabled]="busy() !== null">
-                  <mat-icon>add</mat-icon> 添加问答
+                  <mat-icon>add</mat-icon> {{ t('pb.question.add') }}
                 </button>
               </mat-card-content>
             </mat-card>
@@ -780,17 +779,17 @@
       </mat-tab>
 
       <!-- ============ 材料 ============ -->
-      <mat-tab label="材料 ({{ assets().length }})">
+      <mat-tab [label]="tn('pb.tab.assets', assets().length)">
         <div class="tab-body">
           <p class="tab-intro">
-            录音走「上传 → 转写」两步;手上有现成文本的,也可以直接建一条 Transcript 材料。
+            {{ t('pb.asset.intro') }}
           </p>
 
           @if (auth.can('interviews.write')) {
             <mat-card class="panel upload-card">
               <mat-card-header>
-                <mat-card-title>上传录音</mat-card-title>
-                <mat-card-subtitle>支持 mp3 / m4a / wav / webm / ogg;上传后点「开始转写」自动跑分析</mat-card-subtitle>
+                <mat-card-title>{{ t('pb.asset.uploadTitle') }}</mat-card-title>
+                <mat-card-subtitle>{{ t('pb.asset.uploadSub') }}</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
                 <input type="file" accept="audio/*"
@@ -803,7 +802,7 @@
           @if (assets().length === 0) {
             <mat-card class="panel empty-panel">
               <mat-icon>folder_open</mat-icon>
-              <p>还没有材料。上传面试录音,或粘贴转写文本。</p>
+              <p>{{ t('pb.asset.empty') }}</p>
             </mat-card>
           }
 
@@ -811,8 +810,8 @@
           @if (jobs().length > 0) {
             <mat-card class="panel jobs-panel">
               <mat-card-header>
-                <mat-card-title>流水线记录</mat-card-title>
-                <mat-card-subtitle>每次「开始转写」一行;失败原因与投递尝试留档可查</mat-card-subtitle>
+                <mat-card-title>{{ t('pb.asset.jobsTitle') }}</mat-card-title>
+                <mat-card-subtitle>{{ t('pb.asset.jobsSub') }}</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
                 @for (j of jobs(); track j.id) {
@@ -822,17 +821,17 @@
                           [class.bad]="j.status === 'Failed' || j.status === 'Dead'"
                           [class.busy]="j.status === 'Pending' || j.status === 'Dispatched'"
                           [class.idle]="j.status !== 'Succeeded' && j.status !== 'Failed' && j.status !== 'Dead' && j.status !== 'Pending' && j.status !== 'Dispatched'">
-                      {{ jobStatusLabel[j.status] || j.status }}
+                      {{ jobStatusLabelFor(j.status) }}
                     </span>
                     <span class="job-meta">
-                      {{ j.jobType === 'Transcription' ? '转写分析' : '分析' }}
-                      · 尝试 {{ j.attempts }}/{{ j.maxAttempts }}
+                      {{ j.jobType === 'Transcription' ? t('pb.jobType.transcription') : t('pb.jobType.analysis') }}
+                      · {{ attemptsLabel(j) }}
                       · {{ j.createdAt | date: 'MM-dd HH:mm' }}
                     </span>
                     @if (j.failureReason) {
                       <span class="job-reason">{{ j.failureReason }}</span>
                     } @else if (j.lastError) {
-                      <span class="job-reason">投递错误:{{ j.lastError }}</span>
+                      <span class="job-reason">{{ t('pb.asset.dispatchError') }}{{ j.lastError }}</span>
                     }
                   </div>
                 }
@@ -854,20 +853,20 @@
                     @if (a.durationSeconds) { · {{ humanDuration(a.durationSeconds) }} }
                     @if (a.sourceLanguage) { · {{ a.sourceLanguage }} }
                     @if (a.kind === 'Audio' && a.integrityStatus === 'Ok' && a.lastVerifiedAt) {
-                      · 已校验 {{ a.lastVerifiedAt | date: 'MM-dd HH:mm' }}
+                      · {{ t('pb.asset.verified') }} {{ a.lastVerifiedAt | date: 'MM-dd HH:mm' }}
                     }
                   </span>
                 </div>
                 @if (a.kind === 'Audio' && a.fileExists === false) {
-                  <span class="chip warn">文件丢失</span>
+                  <span class="chip warn">{{ t('pb.asset.fileMissing') }}</span>
                 } @else if (a.kind === 'Audio'
                     && (a.integrityStatus === 'SizeMismatch' || a.integrityStatus === 'HashMismatch')) {
                   <!-- M1.3 巡检:文件在但内容对不上(截断/被换过)—— 录音同样不可信 -->
-                  <span class="chip warn">文件损坏</span>
+                  <span class="chip warn">{{ t('pb.asset.fileCorrupt') }}</span>
                 } @else if (a.hasTranscript) {
-                  <span class="chip ok">已转写</span>
+                  <span class="chip ok">{{ t('pb.asset.transcribed') }}</span>
                 } @else {
-                  <span class="chip idle">未转写</span>
+                  <span class="chip idle">{{ t('pb.asset.untranscribed') }}</span>
                 }
               </div>
 
@@ -881,7 +880,7 @@
                   <button mat-stroked-button (click)="playAsset(a)"
                           [disabled]="audioLoadingId() !== null">
                     <mat-icon>{{ audioLoadingId() === a.id ? 'hourglass_top' : 'play_arrow' }}</mat-icon>
-                    {{ audioLoadingId() === a.id ? '加载中…' : '试听' }}
+                    {{ audioLoadingId() === a.id ? t('pb.asset.previewLoading') : t('pb.asset.preview') }}
                   </button>
                 }
               }
@@ -891,15 +890,15 @@
                 <div class="transcript-box">
                   <mat-form-field appearance="outline" class="wide">
                     <mat-label>
-                      @if (a.hasTranscript) { 重新粘贴转写文本(将覆盖) } @else { 粘贴转写文本 }
+                      {{ a.hasTranscript ? t('pb.transcript.replaceLabel') : t('pb.transcript.pasteLabel') }}
                     </mat-label>
                     <textarea matInput rows="4"
                               [(ngModel)]="transcriptDrafts[a.id]"
-                              placeholder="把转写工具输出的纯文本粘到这里"></textarea>
+                              [placeholder]="t('pb.transcript.placeholder')"></textarea>
                   </mat-form-field>
                   <button mat-stroked-button color="primary" (click)="saveTranscript(a)"
                           [disabled]="busy() !== null">
-                    <mat-icon>save</mat-icon> 保存转写文本
+                    <mat-icon>save</mat-icon> {{ t('pb.transcript.save') }}
                   </button>
                 </div>
               }
@@ -909,64 +908,64 @@
       </mat-tab>
 
       <!-- ============ 编辑 ============ -->
-      <mat-tab label="编辑">
+      <mat-tab [label]="t('sub.edit')">
         <div class="tab-body">
           <mat-card class="panel">
             <mat-card-header>
-              <mat-card-title>条目信息</mat-card-title>
-              <mat-card-subtitle>分析跑完后仍可修正公司/岗位等元数据</mat-card-subtitle>
+              <mat-card-title>{{ t('pb.edit.title') }}</mat-card-title>
+              <mat-card-subtitle>{{ t('pb.edit.sub') }}</mat-card-subtitle>
             </mat-card-header>
             <mat-card-content>
               <div class="form-grid">
                 <mat-form-field appearance="outline">
-                  <mat-label>公司名 *</mat-label>
+                  <mat-label>{{ t('pb.form.companyName') }}</mat-label>
                   <input matInput [(ngModel)]="editForm.companyName" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>岗位 *</mat-label>
+                  <mat-label>{{ t('pb.form.role') }}</mat-label>
                   <input matInput [(ngModel)]="editForm.role" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>第几轮</mat-label>
+                  <mat-label>{{ t('pb.form.roundNo') }}</mat-label>
                   <input matInput type="number" min="1" max="20" [(ngModel)]="editForm.roundNo" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>面试日期</mat-label>
+                  <mat-label>{{ t('pb.form.interviewDate') }}</mat-label>
                   <input matInput type="date" [(ngModel)]="editForm.interviewDate" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>形式</mat-label>
+                  <mat-label>{{ t('pb.form.interviewFormat') }}</mat-label>
                   <input matInput [(ngModel)]="editForm.interviewFormat" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>面试官</mat-label>
+                  <mat-label>{{ t('pb.form.interviewers') }}</mat-label>
                   <input matInput [(ngModel)]="editForm.interviewers" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>地点</mat-label>
+                  <mat-label>{{ t('pb.form.location') }}</mat-label>
                   <input matInput [(ngModel)]="editForm.location" />
                 </mat-form-field>
                 <mat-form-field appearance="outline">
-                  <mat-label>结果</mat-label>
+                  <mat-label>{{ t('pb.edit.resultLabel') }}</mat-label>
                   <input matInput [(ngModel)]="editForm.result"
-                         placeholder="通过 / 被拒 / 待定" />
+                         [placeholder]="t('pb.edit.resultPh')" />
                 </mat-form-field>
               </div>
 
               <mat-form-field appearance="outline" class="wide">
-                <mat-label>JD 摘要</mat-label>
+                <mat-label>{{ t('pb.form.jdSummary') }}</mat-label>
                 <textarea matInput rows="2" [(ngModel)]="editForm.jdSummary"></textarea>
               </mat-form-field>
               <mat-form-field appearance="outline" class="wide">
-                <mat-label>JD 原文</mat-label>
+                <mat-label>{{ t('pb.form.jdText') }}</mat-label>
                 <textarea matInput rows="4" [(ngModel)]="editForm.jdText"></textarea>
               </mat-form-field>
               <mat-form-field appearance="outline" class="wide">
-                <mat-label>公司背景</mat-label>
+                <mat-label>{{ t('pb.form.companyProfile') }}</mat-label>
                 <textarea matInput rows="3" [(ngModel)]="editForm.companyProfile"></textarea>
               </mat-form-field>
               <mat-form-field appearance="outline" class="wide">
-                <mat-label>备注</mat-label>
+                <mat-label>{{ t('pb.form.notes') }}</mat-label>
                 <textarea matInput rows="3" [(ngModel)]="editForm.notes"></textarea>
               </mat-form-field>
 
@@ -974,7 +973,7 @@
                 <button mat-flat-button color="primary" (click)="saveEdit()"
                         [disabled]="busy() !== null">
                   <mat-icon>save</mat-icon>
-                  @if (busy() === 'edit') { 保存中… } @else { 保存修改 }
+                  {{ busy() === 'edit' ? t('pb.edit.saving') : t('pb.edit.save') }}
                 </button>
               }
             </mat-card-content>

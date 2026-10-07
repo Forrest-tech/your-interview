@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 
@@ -33,6 +34,8 @@ interface LegalDoc {
 })
 export class LegalComponent {
   private readonly route = inject(ActivatedRoute);
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
 
   /** 当前文档类型,由 URL 决定(terms / privacy / copyright)。 */
   readonly kind = toSignal(

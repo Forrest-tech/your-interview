@@ -83,36 +83,36 @@ function todayIso(): string {
     MatSelectModule, MatButtonModule, MatIconModule, MatSlideToggleModule, MatDividerModule
   ],
   template: `
-    <h2 mat-dialog-title>{{ isEdit ? '编辑投递' : '新建投递' }}</h2>
+    <h2 mat-dialog-title>{{ isEdit ? t('tracker.dlgEdit') : t('tracker.dlgNew') }}</h2>
 
     <mat-dialog-content class="dlg-body">
       <div class="row2">
         <mat-form-field appearance="outline">
-          <mat-label>公司名称</mat-label>
+          <mat-label>{{ t('tracker.fCompany') }}</mat-label>
           <input matInput name="companyName" [(ngModel)]="form.companyName" required>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>职位</mat-label>
+          <mat-label>{{ t('tracker.fRole') }}</mat-label>
           <input matInput name="role" [(ngModel)]="form.role" required>
         </mat-form-field>
       </div>
 
       <div class="row2">
         <mat-form-field appearance="outline">
-          <mat-label>地点</mat-label>
-          <input matInput name="location" [(ngModel)]="form.location" placeholder="如 Toronto / Remote">
+          <mat-label>{{ t('tracker.fLocation') }}</mat-label>
+          <input matInput name="location" [(ngModel)]="form.location" [placeholder]="t('tracker.fLocationPh')">
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>薪资范围</mat-label>
-          <input matInput name="salary" [(ngModel)]="form.salary" placeholder="如 90k-110k CAD">
+          <mat-label>{{ t('tracker.fSalary') }}</mat-label>
+          <input matInput name="salary" [(ngModel)]="form.salary" [placeholder]="t('tracker.fSalaryPh')">
         </mat-form-field>
       </div>
 
       <div class="row2">
         <mat-form-field appearance="outline">
-          <mat-label>状态</mat-label>
+          <mat-label>{{ t('tracker.fStatus') }}</mat-label>
           <mat-select name="status" [(ngModel)]="form.status">
             @for (s of statusOptions; track s) {
               <mat-option [value]="s">{{ label(s) }}</mat-option>
@@ -121,7 +121,7 @@ function todayIso(): string {
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>优先级</mat-label>
+          <mat-label>{{ t('tracker.fPriority') }}</mat-label>
           <mat-select name="priority" [(ngModel)]="form.priority">
             @for (p of priorities; track p) {
               <mat-option [value]="p">{{ p }}</mat-option>
@@ -132,24 +132,24 @@ function todayIso(): string {
 
       <div class="row2">
         <mat-form-field appearance="outline">
-          <mat-label>投递日期</mat-label>
+          <mat-label>{{ t('tracker.fAppliedDate') }}</mat-label>
           <input matInput type="date" name="appliedDate" [(ngModel)]="form.appliedDate">
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>外联留言</mat-label>
+          <mat-label>{{ t('tracker.fOutreach') }}</mat-label>
           <input matInput name="outreachMessage" [(ngModel)]="form.outreachMessage"
-                 placeholder="如 已发 LinkedIn 私信">
+                 [placeholder]="t('tracker.fOutreachPh')">
         </mat-form-field>
       </div>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>岗位链接</mat-label>
+        <mat-label>{{ t('tracker.fLink') }}</mat-label>
         <input matInput name="link" [(ngModel)]="form.link" placeholder="https://...">
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>备注</mat-label>
+        <mat-label>{{ t('tracker.fNotes') }}</mat-label>
         <textarea matInput name="notes" rows="4" [(ngModel)]="form.notes"></textarea>
       </mat-form-field>
 
@@ -163,7 +163,7 @@ function todayIso(): string {
       <mat-divider></mat-divider>
 
       <mat-slide-toggle name="needsConnectFirst" [(ngModel)]="form.needsConnectFirst">
-        需要先建立人脉(如先 Connect 再内推)
+        {{ t('tracker.fConnectFirst') }}
       </mat-slide-toggle>
 
       @if (error()) {
@@ -174,10 +174,10 @@ function todayIso(): string {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>取消</button>
+      <button mat-button mat-dialog-close>{{ t('common.cancel') }}</button>
       <button mat-raised-button color="primary" [disabled]="!canSave()"
               (click)="save()">
-        {{ isEdit ? '保存' : '创建' }}
+        {{ isEdit ? t('common.save') : t('common.create') }}
       </button>
     </mat-dialog-actions>
   `,
@@ -225,7 +225,7 @@ export class ApplicationDialogComponent {
   }
 
   label(s: ApplicationStatus): string {
-    return STATUS_LABELS[s] ?? s;
+    return this.i18n.t('status.' + s);
   }
 
   canSave(): boolean {
@@ -251,7 +251,7 @@ export class ApplicationDialogComponent {
 
   save(): void {
     if (!this.canSave()) {
-      this.error.set('公司名称与职位为必填项');
+      this.error.set(this.t('tracker.required'));
       return;
     }
     // 空字符串在这里统一转 clean,避免后端存下一堆 "" 的脏字段
@@ -286,7 +286,8 @@ export class TrackerComponent implements OnInit {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
-  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
+  tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
 
   /** 名称首字母头像(看板卡 + 详情页共用)。 */
   companyInitials(name?: string): string {
@@ -341,13 +342,14 @@ export class TrackerComponent implements OnInit {
 
   /** 看板列:按固定状态顺序分组,空组仍保留占位符,好让用户看到"这一列现在是空的"。 */
   readonly columns = computed(() => {
+    this.i18n.lang(); // 建立对语言 signal 的依赖,切换语言时重算列标签
     const all = this.items();
     const only = this.statusFilter();
     const statuses = only ? [only] : this.statusOrder;
 
     return statuses.map((status) => ({
       status,
-      label: STATUS_LABELS[status] ?? status,
+      label: this.i18n.t('status.' + status),
       items: all.filter((a) => a.status === status)
     }));
   });
@@ -493,7 +495,7 @@ export class TrackerComponent implements OnInit {
     if (form.status !== 'Saved') {
       // 非法流转(如越级设成面试中)会被后端 409 拦下 —— 静默忽略,保持 Saved。
       tasks.push(this.api.post<void>(`/api/jobs/applications/${app.id}/status`,
-        { status: form.status, note: '新建时设置' }).pipe(catchError(() => of(null))));
+        { status: form.status, note: this.t('tracker.historyCreated') }).pipe(catchError(() => of(null))));
     }
     if (form.notes) {
       tasks.push(this.updateAppPayload(app.id, form).pipe(catchError(() => of(null))));
@@ -504,7 +506,7 @@ export class TrackerComponent implements OnInit {
         .pipe(catchError(() => of(null))));
     }
 
-    const done = () => { this.notify('已创建投递记录'); this.reload(); };
+    const done = () => { this.notify(this.t('tracker.created')); this.reload(); };
     if (tasks.length === 0) { done(); return; }
     forkJoin(tasks).subscribe({ next: done, error: done });
   }
@@ -518,7 +520,7 @@ export class TrackerComponent implements OnInit {
         { posterName: null, needsConnectFirst: form.needsConnectFirst, message: form.outreachMessage || null })
         .pipe(catchError(() => of(null))));
     }
-    const done = () => { this.notify('已保存修改'); this.reload(); };
+    const done = () => { this.notify(this.t('tracker.saved')); this.reload(); };
     forkJoin(tasks).subscribe({ next: done, error: done });
   }
 
@@ -564,12 +566,12 @@ export class TrackerComponent implements OnInit {
   /** 删除必须二次确认 —— 误删一条投递记录要重新回忆时间线,代价不对称。 */
   remove(app: Application, ev?: Event): void {
     ev?.stopPropagation();
-    const ok = confirm(`确认删除「${app.companyName} · ${app.role}」这条投递记录?此操作不可撤销。`);
+    const ok = confirm(this.tf('tracker.confirmDelete', { a: `${app.companyName} · ${app.role}` }));
     if (!ok) return;
 
     this.api.delete<void>(`/api/jobs/applications/${app.id}`).subscribe({
       next: () => {
-        this.notify('已删除');
+        this.notify(this.t('tracker.deleted'));
         this.reload();
       },
       error: (e: Error) => this.notify(e.message, true)
@@ -585,7 +587,7 @@ export class TrackerComponent implements OnInit {
   }
 
   private notify(msg: string, isError = false): void {
-    this.snack.open(msg, '关闭', {
+    this.snack.open(msg, this.t('common.close'), {
       duration: isError ? 5000 : 2500,
       horizontalPosition: 'center',
       verticalPosition: 'bottom',
@@ -601,7 +603,7 @@ export class TrackerComponent implements OnInit {
   }
 
   statusLabel(s: string): string {
-    return STATUS_LABELS[s as ApplicationStatus] ?? s;
+    return this.i18n.t('status.' + s);
   }
 
   priorityClass(p?: string): string {
@@ -612,26 +614,6 @@ export class TrackerComponent implements OnInit {
     return a.id;
   }
 }
-
-/** 状态中文映射 —— 全局唯一一份,避免各处拼错。 */
-const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  Saved: '已收藏',
-  Applied: '已投递',
-  Screen: '初筛',
-  Interview: '面试中',
-  Offer: 'Offer',
-  Accepted: '已录用',
-  Rejected: '已拒',
-  Ghosted: '失联',
-  Paused: '暂停',
-  Withdrawn: '已撤回'
-};
-
-/** 轮次结果中文映射(M1.5)。Pending 不展示 —— 没结果就别制造噪音。 */
-const OUTCOME_LABELS: Record<string, string> = {
-  Passed: '通过',
-  Failed: '未通过'
-};
 
 /** Application → 表单形状。缺省值就地补,让编辑弹窗不出现 undefined。 */
 function fromApplication(a: Application): ApplicationForm {
@@ -692,7 +674,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     <mat-dialog-content class="detail-body">
       <div class="tabs">
         <button class="tab" [class.active]="detailTab() === 'overview'"
-                (click)="switchTab('overview')">概览</button>
+                (click)="switchTab('overview')">{{ t('tracker.dOverview') }}</button>
         <button class="tab" [class.active]="detailTab() === 'comms'"
                 (click)="switchTab('comms')">
           {{ t('tracker.comms') }}
@@ -705,35 +687,35 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         <mat-chip-set>
           <mat-chip [class]="'chip ' + statusClass(detail.status)">{{ statusLabel(detail.status) }}</mat-chip>
           @if (detail.priority) {
-            <mat-chip>{{ detail.priority }} 优先级</mat-chip>
+            <mat-chip>{{ detail.priority }} {{ t('tracker.dPriority') }}</mat-chip>
           }
           @if (detail.needsConnectFirst) {
-            <mat-chip highlighted>需先建立人脉</mat-chip>
+            <mat-chip highlighted>{{ t('tracker.dNeedNetwork') }}</mat-chip>
           }
         </mat-chip-set>
         @if (detail.rejectionReason) {
-          <p class="rejection">拒因:{{ detail.rejectionReason }}</p>
+          <p class="rejection">{{ t('tracker.dRejectReason') }}{{ detail.rejectionReason }}</p>
         }
       </div>
 
       <dl class="fields">
-        <div><dt>地点</dt><dd>{{ app.location || '—' }}</dd></div>
-        <div><dt>薪资</dt><dd>{{ app.salary || '—' }}</dd></div>
-        <div><dt>投递日期</dt><dd>{{ app.appliedDate || '—' }}</dd></div>
-        <div><dt>外联留言</dt><dd>{{ app.outreachMessage || '—' }}</dd></div>
-        <div><dt>简历匹配度</dt>
-          <dd>{{ app.resumeScore != null ? app.resumeScore + ' 分' : '—' }}</dd></div>
-        <div><dt>预估通过率</dt>
+        <div><dt>{{ t('tracker.dLocation') }}</dt><dd>{{ app.location || '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dSalary') }}</dt><dd>{{ app.salary || '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dAppliedDate') }}</dt><dd>{{ app.appliedDate || '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dOutreachMsg') }}</dt><dd>{{ app.outreachMessage || '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dResumeMatch') }}</dt>
+          <dd>{{ app.resumeScore != null ? tn('tracker.dScoreUnit', app.resumeScore) : '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dPassRate') }}</dt>
           <dd>{{ app.passRateEstimate ? app.passRateEstimate : '—' }}</dd></div>
-        <div><dt>创建时间</dt><dd>{{ app.createdAt | date: 'yyyy-MM-dd HH:mm' }}</dd></div>
-        <div><dt>最近更新</dt>
+        <div><dt>{{ t('tracker.dCreatedAt') }}</dt><dd>{{ app.createdAt | date: 'yyyy-MM-dd HH:mm' }}</dd></div>
+        <div><dt>{{ t('tracker.dUpdatedAt') }}</dt>
           <dd>{{ app.updatedAt ? (app.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd></div>
       </dl>
 
       @if (app.jdSummary) {
         <mat-divider></mat-divider>
         <section>
-          <h4>JD 摘要</h4>
+          <h4>{{ t('tracker.dJdSummary') }}</h4>
           <p class="pre">{{ app.jdSummary }}</p>
         </section>
       }
@@ -742,22 +724,22 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if (match(); as m) {
         <mat-divider></mat-divider>
         <section>
-          <h4>简历匹配分析</h4>
+          <h4>{{ t('tracker.dMatchAnalysis') }}</h4>
 
           <div class="match-head">
             <div class="score" [class]="matchTier(m.score)">
               <span class="score-num">{{ m.score }}</span>
-              <span class="score-unit">分</span>
+              <span class="score-unit">{{ t('tracker.dScoreUnit') }}</span>
             </div>
             <div class="score-note">
               <strong [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</strong>
-              <span>命中 {{ m.hit.length }} / {{ m.total }} 个 JD 技术关键词</span>
+              <span>{{ tf('tracker.dHitKw', { n: m.hit.length, m: m.total }) }}</span>
             </div>
           </div>
 
           @if (m.missing.length > 0) {
             <div class="kw-group">
-              <span class="kw-title">缺少的关键词 ({{ m.missing.length }})</span>
+              <span class="kw-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</span>
               <div class="kw-list">
                 @for (k of m.missing; track k) {
                   <span class="kw miss">{{ k }}</span>
@@ -768,7 +750,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 
           @if (m.hit.length > 0) {
             <div class="kw-group">
-              <span class="kw-title">已命中 ({{ m.hit.length }})</span>
+              <span class="kw-title">{{ tn('tracker.dHitKwTitle', m.hit.length) }}</span>
               <div class="kw-list">
                 @for (k of m.hit; track k) {
                   <span class="kw ok">{{ k }}</span>
@@ -779,7 +761,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 
           @if (m.softSkills.length > 0) {
             <p class="soft-note">
-              另提及软素质要求(不计入分数):{{ m.softSkills.join('、') }}
+              {{ t('tracker.dSoftSkills') }}{{ m.softSkills.join('、') }}
             </p>
           }
         </section>
@@ -790,12 +772,12 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       <section class="cl-section">
         <h4 class="fold-head">
           <mat-icon>description</mat-icon>
-          <span>求职信</span>
+          <span>{{ t('tracker.dCoverLetter') }}</span>
           @if (cl(); as c) {
             <span class="cl-status" [class]="'cl-' + c.status.toLowerCase()">{{ clStatusLabel(c.status) }}</span>
           }
           <span class="fold-len">
-            @if (cl(); as c) { {{ c.content.length }} 字符 }
+            @if (cl(); as c) { {{ tn('tracker.dClChars', c.content.length) }} }
           </span>
         </h4>
 
@@ -810,7 +792,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           @if (cl()?.isStale) {
             <p class="cl-hint stale">
               <mat-icon>history</mat-icon>
-              <span>这封信基于简历 v{{ cl()?.resumeVersion }} 生成,当前简历已是 v{{ rd.resumeVersion }} —— 建议重新生成。</span>
+              <span>{{ tf('tracker.dClStale', { a: cl()?.resumeVersion, b: rd.resumeVersion }) }}</span>
             </p>
           }
         }
@@ -818,10 +800,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         <!-- 生成参数 -->
         @if (!clGenerating()) {
           <mat-form-field appearance="outline" class="cl-extra">
-            <mat-label>额外要求(可选)</mat-label>
+            <mat-label>{{ t('tracker.dClExtra') }}</mat-label>
             <textarea matInput rows="2" [(ngModel)]="clExtra"
-              placeholder="例:强调我在 Citigroup 的低延迟交易经验,语气务实一些"></textarea>
-            <mat-hint>AI 会读你的简历 + JD 全文 + 公司情报,再叠加这里的补充。</mat-hint>
+              [placeholder]="t('tracker.dClExtraPh')"></textarea>
+            <mat-hint>{{ t('tracker.dClHint') }}</mat-hint>
           </mat-form-field>
         }
 
@@ -829,27 +811,27 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         @if (clGenerating()) {
           <div class="cl-generating">
             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-            <p>正在生成…通常 20-60 秒,请勿关闭窗口。</p>
+            <p>{{ t('tracker.dClGenerating') }}</p>
           </div>
         } @else {
           <div class="cl-actions">
             <button mat-flat-button color="primary" (click)="generateCoverLetter()"
               [disabled]="!!clReadiness()?.missingHint">
               <mat-icon>auto_awesome</mat-icon>
-              {{ (cl()?.content ? '重新生成' : 'AI 生成') }}
+              {{ (cl()?.content ? t('tracker.dClRegen') : t('tracker.dClGenerate')) }}
             </button>
             @if (cl()?.content) {
               <button mat-button (click)="clEditing.set(!clEditing())">
                 <mat-icon>{{ clEditing() ? 'visibility' : 'edit' }}</mat-icon>
-                {{ clEditing() ? '预览' : '手动编辑' }}
+                {{ clEditing() ? t('tracker.dClPreview') : t('tracker.dClEditMan') }}
               </button>
               @if (cl()?.status !== 'Final') {
                 <button mat-button (click)="markCoverLetterFinal()">
-                  <mat-icon>check_circle</mat-icon>标记为已确认
+                  <mat-icon>check_circle</mat-icon>{{ t('tracker.dClConfirm') }}
                 </button>
               }
               <button mat-button (click)="deleteCoverLetter()">
-                <mat-icon>delete_outline</mat-icon>删除
+                <mat-icon>delete_outline</mat-icon>{{ t('common.delete') }}
               </button>
             }
           </div>
@@ -860,14 +842,14 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           @if (clEditing()) {
             <textarea matInput class="cl-editor" rows="16" [(ngModel)]="clDraft"></textarea>
             <div class="cl-actions save-row">
-              <button mat-flat-button color="primary" (click)="saveCoverLetter()">保存</button>
-              <button mat-button (click)="cancelEdit()">取消</button>
+              <button mat-flat-button color="primary" (click)="saveCoverLetter()">{{ t('common.save') }}</button>
+              <button mat-button (click)="cancelEdit()">{{ t('common.cancel') }}</button>
             </div>
           } @else {
             <div class="cl-preview">{{ content }}</div>
           }
         } @else if (!clGenerating()) {
-          <p class="cl-empty">还没有求职信。点上面的按钮,基于你的简历与该岗位 JD 生成一封。</p>
+          <p class="cl-empty">{{ t('tracker.dClEmpty') }}</p>
         }
       </section>
 
@@ -877,13 +859,13 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         <section>
           <h4 class="fold-head" (click)="jdExpanded.set(!jdExpanded())">
             <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
-            <span>JD 全文</span>
-            <span class="fold-len">{{ app.jdText.length }} 字符</span>
+            <span>{{ t('tracker.dJdFull') }}</span>
+            <span class="fold-len">{{ tn('tracker.dJdChars', app.jdText.length) }}</span>
           </h4>
 
           @if (app.jdSourceUrl) {
             <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
-              <mat-icon>link</mat-icon>查看原始发布页
+              <mat-icon>link</mat-icon>{{ t('tracker.dViewPosting') }}
             </a>
           }
 
@@ -901,7 +883,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if (company()?.profile) {
         <mat-divider></mat-divider>
         <section>
-          <h4>公司情报 · {{ company()?.name }}</h4>
+          <h4>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</h4>
           <p class="pre">{{ company()?.profile }}</p>
           @if (company()?.website) {
             <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
@@ -914,7 +896,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if (app.notes) {
         <mat-divider></mat-divider>
         <section>
-          <h4>备注</h4>
+          <h4>{{ t('tracker.dNotes') }}</h4>
           <p class="pre">{{ app.notes }}</p>
         </section>
       }
@@ -922,7 +904,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if ((detail.history?.length ?? 0) > 0) {
         <mat-divider></mat-divider>
         <section>
-          <h4>状态流转</h4>
+          <h4>{{ t('tracker.dHistory') }}</h4>
           <ol class="history">
             @for (h of detail.history ?? []; track h.changedAt + h.status) {
               <li>
@@ -938,11 +920,11 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if ((detail.rounds?.length ?? 0) > 0) {
         <mat-divider></mat-divider>
         <section>
-          <h4>面试轮次</h4>
+          <h4>{{ t('tracker.dRounds') }}</h4>
           <ul class="rounds">
             @for (r of detail.rounds ?? []; track r.id) {
               <li>
-                <strong>第 {{ r.order }} 轮</strong>
+                <strong>{{ tn('tracker.dRoundN', r.order) }}</strong>
                 @if (r.stage) { <span class="tag">{{ r.stage }}</span> }
                 @if (r.scheduledDate) { <span>{{ r.scheduledDate | date: 'yyyy-MM-dd' }}</span> }
                 @if (r.format) { <span class="tag">{{ r.format }}</span> }
@@ -961,7 +943,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if (app.link) {
         <mat-divider></mat-divider>
         <section>
-          <h4>岗位链接</h4>
+          <h4>{{ t('tracker.dJobLink') }}</h4>
           <a [href]="app.link" target="_blank" rel="noopener noreferrer" class="link">
             {{ app.link }}
           </a>
@@ -1000,12 +982,12 @@ function trimForm(f: ApplicationForm): ApplicationForm {
               </div>
               <mat-form-field appearance="outline" class="full">
                 <mat-label>{{ t('tracker.commsSubject') }}</mat-label>
-                <input matInput [(ngModel)]="commDraft().subject" placeholder="如 终面安排">
+                <input matInput [(ngModel)]="commDraft().subject" [placeholder]="t('tracker.dCommSubjectPh')">
               </mat-form-field>
               <div class="row2">
                 <mat-form-field appearance="outline">
                   <mat-label>{{ t('tracker.commsContact') }}</mat-label>
-                  <input matInput [(ngModel)]="commDraft().contactName" placeholder="如 张经理">
+                  <input matInput [(ngModel)]="commDraft().contactName" [placeholder]="t('tracker.dCommContactPh')">
                 </mat-form-field>
                 <mat-form-field appearance="outline">
                   <mat-label>Email</mat-label>
@@ -1018,8 +1000,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
               </mat-form-field>
               <div class="comm-form-actions">
                 <button mat-flat-button color="primary" [disabled]="!commDraft().content.trim()"
-                        (click)="saveComm()">{{ editing ? '保存' : '添加' }}</button>
-                <button mat-button (click)="cancelComm()">取消</button>
+                        (click)="saveComm()">{{ editing ? t('common.save') : t('tracker.commsAdd') }}</button>
+                <button mat-button (click)="cancelComm()">{{ t('common.cancel') }}</button>
               </div>
             </div>
           }
@@ -1058,7 +1040,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>关闭</button>
+      <button mat-button mat-dialog-close>{{ t('common.close') }}</button>
     </mat-dialog-actions>
   `,
   styles: [`
@@ -1233,6 +1215,8 @@ export class ApplicationDetailDialogComponent {
   private readonly trackerApi = inject(TrackerApi);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
+  tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
   private readonly snack = inject(MatSnackBar);
 
   /**
@@ -1246,7 +1230,17 @@ export class ApplicationDetailDialogComponent {
 
   /** 轮次结果中文标签(M1.5 回写后展示)。 */
   outcomeLabel(o: string): string {
-    return OUTCOME_LABELS[o] ?? o;
+    return this.i18n.t('outcome.' + o);
+  }
+
+  /**
+   * 从 HttpErrorResponse 里抠出人话错误。
+   * 后端的 ProblemDetails 把说明放在 description(我们的 Error 记录映射过去的)。
+   */
+  private readError(err: unknown): string {
+    const e = err as { error?: { description?: string; detail?: string; title?: string }; message?: string };
+    return e?.error?.description ?? e?.error?.detail ?? e?.error?.title
+      ?? e?.message ?? this.t('tracker.opFailed');
   }
 
   /** 公司情报(懒加载 —— 详情弹窗打开后才查一次)。 */
@@ -1341,7 +1335,7 @@ export class ApplicationDetailDialogComponent {
    */
   generateCoverLetter(): void {
     const hasContent = !!this.cl()?.content;
-    if (hasContent && !confirm('这会用新生成的内容覆盖当前求职信(包括你手改的部分)。继续?')) return;
+    if (hasContent && !confirm(this.t('tracker.dClOverwrite'))) return;
 
     this.clGenerating.set(true);
     this.api.post<CoverLetterDto>(
@@ -1357,19 +1351,19 @@ export class ApplicationDetailDialogComponent {
       error: (err) => {
         this.clGenerating.set(false);
         // 后端的 ProblemDetails.description 已经是人话,直接透出
-        alert(readError(err));
+        alert(this.readError(err));
       }
     });
   }
 
   saveCoverLetter(): void {
     const text = this.clDraft.trim();
-    if (!text) { alert('求职信内容不能为空。'); return; }
+    if (!text) { alert(this.t('tracker.dClEmptyErr')); return; }
 
     this.api.put<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter`, { content: text })
       .subscribe({
         next: (c) => { this.cl.set(c); this.clEditing.set(false); },
-        error: (err) => alert(readError(err))
+        error: (err) => alert(this.readError(err))
       });
   }
 
@@ -1382,24 +1376,24 @@ export class ApplicationDetailDialogComponent {
     this.api.post<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter/final`)
       .subscribe({
         next: (c) => this.cl.set(c),
-        error: (err) => alert(readError(err))
+        error: (err) => alert(this.readError(err))
       });
   }
 
   deleteCoverLetter(): void {
-    if (!confirm('删除这封求职信?此操作不可撤销。')) return;
+    if (!confirm(this.t('tracker.dClDelete'))) return;
     this.api.delete<void>(`/api/jobs/applications/${this.app.id}/cover-letter`)
       .subscribe({
         next: () => { this.cl.set(null); this.clDraft = ''; this.clEditing.set(false); },
-        error: (err) => alert(readError(err))
+        error: (err) => alert(this.readError(err))
       });
   }
 
   clStatusLabel(s: string): string {
     switch (s) {
-      case 'Generated': return 'AI 生成';
-      case 'Final': return '已确认';
-      default: return '草稿';
+      case 'Generated': return this.t('tracker.dClStatusGen');
+      case 'Final': return this.t('tracker.dClStatusFinal');
+      default: return this.t('tracker.dClStatusDraft');
     }
   }
 
@@ -1412,7 +1406,7 @@ export class ApplicationDetailDialogComponent {
   }
 
   statusLabel(s: string): string {
-    return STATUS_LABELS[s as ApplicationStatus] ?? s;
+    return this.i18n.t('status.' + s);
   }
 
   statusClass(s: string): string {
@@ -1427,9 +1421,9 @@ export class ApplicationDetailDialogComponent {
   }
 
   matchTierLabel(score: number): string {
-    if (score >= 70) return '强匹配';
-    if (score >= 50) return '一般匹配';
-    return '弱匹配';
+    if (score >= 70) return this.t('tracker.dStrongMatch');
+    if (score >= 50) return this.t('tracker.dMedMatch');
+    return this.t('tracker.dWeakMatch');
   }
 
   // ---------------------------- 公司 Logo / 页签 ----------------------------
@@ -1548,9 +1542,9 @@ export class ApplicationDetailDialogComponent {
       next: () => {
         this.commEditingId.set(null);
         this.loadCommunications();
-        this.snack.open(this.t('tracker.commsSaved'), '关闭', { duration: 2500 });
+        this.snack.open(this.t('tracker.commsSaved'), this.t('common.close'), { duration: 2500 });
       },
-      error: (err) => alert(readError(err))
+      error: (err) => alert(this.readError(err))
     });
   }
 
@@ -1560,9 +1554,9 @@ export class ApplicationDetailDialogComponent {
       next: () => {
         this.commEditingId.set(null);
         this.loadCommunications();
-        this.snack.open(this.t('tracker.commsDeleted'), '关闭', { duration: 2500 });
+        this.snack.open(this.t('tracker.commsDeleted'), this.t('common.close'), { duration: 2500 });
       },
-      error: (err) => alert(readError(err))
+      error: (err) => alert(this.readError(err))
     });
   }
 
@@ -1759,12 +1753,4 @@ export interface CoverLetterReadinessDto {
   missingHint: string | null;
 }
 
-/**
- * 从 HttpErrorResponse 里抠出人话错误。
- * 后端的 ProblemDetails 把说明放在 description(我们的 Error 记录映射过去的)。
- */
-function readError(err: unknown): string {
-  const e = err as { error?: { description?: string; detail?: string; title?: string }; message?: string };
-  return e?.error?.description ?? e?.error?.detail ?? e?.error?.title
-    ?? e?.message ?? '操作失败,请重试。';
-}
+

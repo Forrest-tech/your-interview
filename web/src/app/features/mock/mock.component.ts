@@ -48,6 +48,7 @@ export class MockComponent implements OnInit {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   private readonly router = inject(Router);
   private readonly snack = inject(MatSnackBar);
@@ -70,12 +71,12 @@ export class MockComponent implements OnInit {
    * 任务里写的 WeaknessDrill 在后端不存在,以实际枚举为准 —— 传错值后端会静默
    * 回退到 TopicDrill,导致"我明明选了薄弱点强化却出了通用题"这种难查的 bug。
    */
-  readonly modeOptions = [
-    { value: 'TopicDrill', label: '主题专项', hint: '就某个技术主题连问' },
-    { value: 'FullMock', label: '完整模拟', hint: '技术 + 系统设计 + 行为混合' },
-    { value: 'WeaknessFocus', label: '薄弱点强化', hint: '从历史短板里挑题' },
-    { value: 'CompanyStyle', label: '公司风格', hint: '模仿目标公司的面试风格' }
-  ];
+  readonly modeOptions = computed(() => [
+    { value: 'TopicDrill', label: this.t('mock.modeTopicDrill'), hint: this.t('mock.modeTopicDrillHint') },
+    { value: 'FullMock', label: this.t('mock.modeFullMock'), hint: this.t('mock.modeFullMockHint') },
+    { value: 'WeaknessFocus', label: this.t('mock.modeWeakness'), hint: this.t('mock.modeWeaknessHint') },
+    { value: 'CompanyStyle', label: this.t('mock.modeCompanyStyle'), hint: this.t('mock.modeCompanyStyleHint') }
+  ]);
 
   readonly totalPages = computed(() =>
     Math.max(1, Math.ceil(this.total() / this.pageSize())));
@@ -145,15 +146,15 @@ export class MockComponent implements OnInit {
     if (this.saving()) return;
 
     if (!this.form.title.trim()) {
-      this.formError.set('请填写练习标题');
+      this.formError.set(this.t('mock.errTitleRequired'));
       return;
     }
     if (this.form.mode === 'TopicDrill' && !this.form.topic.trim()) {
-      this.formError.set('主题专项必须填写主题(后端会校验)');
+      this.formError.set(this.t('mock.errTopicRequiredDrill'));
       return;
     }
     if (this.form.mode === 'CompanyStyle' && !this.form.topic.trim()) {
-      this.formError.set('公司风格练习必须填写目标公司');
+      this.formError.set(this.t('mock.errTopicRequiredCompany'));
       return;
     }
 
@@ -169,7 +170,7 @@ export class MockComponent implements OnInit {
       next: (r) => {
         this.saving.set(false);
         this.dialogOpen.set(false);
-        this.snack.open('模拟已创建,开始答题吧', '关闭', { duration: 3000 });
+        this.snack.open(this.t('mock.createdToast'), this.t('common.close'), { duration: 3000 });
         this.router.navigate(['/mock', r.id]);
       },
       error: (e: Error) => {
@@ -185,30 +186,46 @@ export class MockComponent implements OnInit {
     ev.preventDefault();
     ev.stopPropagation();
 
-    if (!confirm(`删除模拟「${s.title}」?答题记录会一并丢失。`)) return;
+    if (!confirm(this.tn('mock.confirmDelete', s.title))) return;
 
     this.api.delete<void>(`/api/assessment/sessions/${s.id}`).subscribe({
       next: () => {
-        this.snack.open('已删除', '关闭', { duration: 3000 });
+        this.snack.open(this.t('mock.deletedToast'), this.t('common.close'), { duration: 3000 });
         if (this.sessions().length === 1 && this.page() > 1) this.page.update((p) => p - 1);
         this.load();
       },
-      error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
     });
   }
 
   // ---------------------------------------------------------------- 展示辅助
 
   modeLabel(mode: string): string {
-    return this.modeOptions.find((m) => m.value === mode)?.label ?? mode;
+    const keyMap: Record<string, string> = {
+      TopicDrill: 'mock.modeTopicDrill',
+      FullMock: 'mock.modeFullMock',
+      WeaknessFocus: 'mock.modeWeakness',
+      CompanyStyle: 'mock.modeCompanyStyle'
+    };
+    const key = keyMap[mode];
+    return key ? this.t(key) : mode;
   }
 
   statusLabel(s: string): string {
     const map: Record<string, string> = {
-      InProgress: '进行中', Completed: '已完成', Abandoned: '已放弃'
+      InProgress: this.t('mock.statusInProgress'),
+      Completed: this.t('mock.statusCompleted'),
+      Abandoned: this.t('mock.statusAbandoned')
     };
     return map[s] ?? s;
   }
+
+  /** 第 X / Y 页 · 共 Z 场 —— 多占位符,模板里不方便直接拼。 */
+  readonly pagerInfo = computed(() =>
+    this.t('mock.pagerInfo')
+      .replace('{p}', String(this.page()))
+      .replace('{tp}', String(this.totalPages()))
+      .replace('{total}', String(this.total())));
 
   statusClass(s: string): string {
     if (s === 'Completed') return 'ok';

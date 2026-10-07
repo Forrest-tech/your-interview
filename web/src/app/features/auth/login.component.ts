@@ -9,6 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AuthService } from '../../core/auth/auth.service';
+import { I18nService } from '../../core/i18n/i18n.service';
 
 /** Google 登录状态(是否配置了凭据)。 */
 interface GoogleLoginStatus {
@@ -29,6 +30,8 @@ export class LoginComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
 
   email = '';
   password = '';
@@ -84,7 +87,7 @@ export class LoginComponent implements OnInit {
         this.busy.set(false);
         // 后端对"邮箱不存在"和"密码错误"返回同一句话,是刻意的 ——
         // 区分开会让攻击者能探测哪些邮箱已注册。
-        this.error.set(e.message || '登录失败,请检查邮箱与密码');
+        this.error.set(e.message || this.t('auth.loginFailed'));
       }
     });
   }
@@ -125,12 +128,12 @@ export class LoginComponent implements OnInit {
         if (user) {
           this.router.navigateByUrl(this.returnUrl);
         } else {
-          this.error.set('Google 登录已返回,但会话建立失败,请重试');
+          this.error.set(this.t('auth.googleSessionReturnedFail'));
         }
       },
       error: () => {
         this.googleBusy.set(false);
-        this.error.set('Google 登录会话建立失败,请重试');
+        this.error.set(this.t('auth.googleSessionFail'));
       }
     });
   }

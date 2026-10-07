@@ -1,8 +1,8 @@
 <div class="page">
   <header class="page-head">
     <div>
-      <h2>数据分析</h2>
-      <p class="sub">六维能力、投递漏斗与知识补齐情况</p>
+      <h2>{{ t('an.title') }}</h2>
+      <p class="sub">{{ t('an.subtitle') }}</p>
     </div>
     <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
       <mat-icon>refresh</mat-icon>
@@ -17,7 +17,7 @@
     <mat-card class="err-card">
       <mat-icon>error_outline</mat-icon>
       <div>
-        <strong>加载失败</strong>
+        <strong>{{ t('common.loadFailed') }}</strong>
         <p>{{ error() }}</p>
       </div>
     </mat-card>
@@ -43,29 +43,29 @@
     <!-- 雷达 -->
     <mat-card class="panel radar-panel">
       <mat-card-header>
-        <mat-card-title>六维能力雷达</mat-card-title>
-        <mat-card-subtitle>实线为当前水平,虚线为历史最佳</mat-card-subtitle>
+        <mat-card-title>{{ t('an.radarTitle') }}</mat-card-title>
+        <mat-card-subtitle>{{ t('an.radarSub') }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         @if (radarPoints().length === 0) {
           <p class="empty">
-            还没有雷达数据。先去「实战机经」导入一场面试录音,系统会据此评分。
+            {{ t('an.noRadar') }}
           </p>
         } @else {
           <div #radarHost class="radar-host"></div>
 
           <div class="radar-legend">
-            <span><i class="dot cur"></i> 当前水平</span>
-            <span><i class="dot best"></i> 历史最佳</span>
+            <span><i class="dot cur"></i> {{ t('an.curLevel') }}</span>
+            <span><i class="dot best"></i> {{ t('an.bestLevel') }}</span>
           </div>
 
           <div class="weak-list">
-            <div class="weak-title">优先补的三项</div>
+            <div class="weak-title">{{ t('an.weakTitle') }}</div>
             @for (r of weakest(); track r.dimension) {
               <div class="weak-row">
                 <span class="w-name">{{ r.nameZh }}</span>
                 <span class="w-score" [class]="scoreClass(r.current)">{{ r.current }}</span>
-                <span class="w-best">最佳 {{ r.best }}</span>
+                <span class="w-best">{{ tn('an.bestOf', r.best) }}</span>
                 @if (r.changeFromPrevious) {
                   <span class="w-delta" [class.up]="r.changeFromPrevious > 0"
                         [class.down]="r.changeFromPrevious < 0">
@@ -83,12 +83,12 @@
       <!-- 投递漏斗 -->
       <mat-card class="panel">
         <mat-card-header>
-          <mat-card-title>投递漏斗</mat-card-title>
-          <mat-card-subtitle>条长按各阶段最大值归一,不是占比</mat-card-subtitle>
+          <mat-card-title>{{ t('an.funnelTitle') }}</mat-card-title>
+          <mat-card-subtitle>{{ t('an.funnelSub') }}</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           @if (funnel().length === 0) {
-            <p class="empty">还没有投递数据。去「投递跟踪」记一条就有了。</p>
+            <p class="empty">{{ t('an.noFunnel') }}</p>
           } @else {
             @for (f of funnel(); track f.stage; let i = $index) {
               <div class="funnel-row">
@@ -108,17 +108,17 @@
       <!-- 熟练度分布 -->
       <mat-card class="panel">
         <mat-card-header>
-          <mat-card-title>技术栈熟练度</mat-card-title>
-          <mat-card-subtitle>按主题看已掌握比例</mat-card-subtitle>
+          <mat-card-title>{{ t('an.masteryTitle') }}</mat-card-title>
+          <mat-card-subtitle>{{ t('an.masterySub') }}</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           @if (masteryRows().length === 0) {
-            <p class="empty">还没有技术栈条目。</p>
+            <p class="empty">{{ t('an.noMastery') }}</p>
           } @else {
             <div class="legend-row">
-              <span><i class="dot mastered"></i> 精通</span>
-              <span><i class="dot familiar"></i> 熟悉</span>
-              <span><i class="dot learning"></i> 学习中/未接触</span>
+              <span><i class="dot mastered"></i> {{ t('an.levelMastered') }}</span>
+              <span><i class="dot familiar"></i> {{ t('an.levelFamiliar') }}</span>
+              <span><i class="dot learning"></i> {{ t('an.levelLearning') }}</span>
             </div>
 
             @for (m of masteryRows(); track m.topic) {
@@ -141,13 +141,13 @@
   <!-- 趋势摘要 -->
   <mat-card class="panel trend-panel">
     <mat-card-header>
-      <mat-card-title>近 30 天变化</mat-card-title>
-      <mat-card-subtitle>按首末两次评分对比,负数代表退步</mat-card-subtitle>
+      <mat-card-title>{{ t('an.trendTitle') }}</mat-card-title>
+      <mat-card-subtitle>{{ t('an.trendSub') }}</mat-card-subtitle>
     </mat-card-header>
     <mat-card-content>
       @if (trendSummary(); as list) {
         @if (list.length === 0) {
-          <p class="empty">趋势数据为空。</p>
+          <p class="empty">{{ t('an.trendEmpty') }}</p>
         } @else {
           <div class="trend-grid">
             @for (t of list; track t.dimension) {
@@ -163,7 +163,7 @@
           </div>
         }
       } @else {
-        <p class="empty">趋势接口暂不可用,跳过这一段。</p>
+        <p class="empty">{{ t('an.trendUnavailable') }}</p>
       }
     </mat-card-content>
   </mat-card>

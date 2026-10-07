@@ -8,6 +8,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { ApiClient } from '../../core/api/api-client';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeDuplicateGroup, KnowledgeItem } from '../../core/models/api.models';
 
 export interface DuplicatesDialogData {
@@ -33,19 +34,19 @@ export interface DuplicatesDialogData {
   template: `
     <h2 mat-dialog-title>
       <mat-icon>content_copy</mat-icon>
-      重复条目({{ groups.length }} 组)
+      {{ tn('ts.dup.title', groups.length) }}
     </h2>
 
     <mat-dialog-content class="dd-body">
       @if (groups.length === 0) {
-        <p class="empty">没有发现重复条目。</p>
+        <p class="empty">{{ t('ts.dup.empty') }}</p>
       }
 
       @for (g of groups; track g.key) {
         <mat-card class="group">
           <div class="g-head">
             <span class="g-topic">{{ g.topic }}</span>
-            <span class="g-count">{{ g.items.length }} 条重复</span>
+            <span class="g-count">{{ tn('ts.dup.count', g.items.length) }}</span>
           </div>
 
           @for (it of g.items; track it.id) {
@@ -53,21 +54,21 @@ export interface DuplicatesDialogData {
               <div class="row-main">
                 <span class="r-title">{{ it.title }}</span>
                 <span class="r-meta">
-                  复习 {{ it.reviewCount }} 次 · {{ it.mastery }}
+                  {{ tn('ts.reviewCount', it.reviewCount) }} · {{ t('ts.mastery.' + it.mastery) }}
                   @if (it.sourceCompanyName) { · {{ it.sourceCompanyName }} }
                 </span>
                 @if (it.conceptExplanation) {
-                  <span class="r-has" [matTooltip]="'已有讲解正文'">
-                    <mat-icon>article</mat-icon> 讲解
+                  <span class="r-has" [matTooltip]="t('ts.dup.hasExplanation')">
+                    <mat-icon>article</mat-icon> {{ t('ts.dup.explanation') }}
                   </span>
                 }
                 @if (it.keyPointsJson) {
-                  <span class="r-has"><mat-icon>format_list_bulleted</mat-icon> 要点</span>
+                  <span class="r-has"><mat-icon>format_list_bulleted</mat-icon> {{ t('ts.dup.keyPoints') }}</span>
                 }
               </div>
               <button mat-stroked-button color="primary" [disabled]="busy()"
                       (click)="keep(it, g)">
-                保留这条
+                {{ t('ts.dup.keep') }}
               </button>
             </div>
           }
@@ -79,7 +80,7 @@ export interface DuplicatesDialogData {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>关闭</button>
+      <button mat-button mat-dialog-close>{{ t('common.close') }}</button>
     </mat-dialog-actions>
   `,
   styles: [`
@@ -112,6 +113,9 @@ export class DuplicatesDialogComponent {
   readonly dialogRef = inject(MatDialogRef<DuplicatesDialogComponent, boolean>);
   readonly data = inject<DuplicatesDialogData>(MAT_DIALOG_DATA);
   private readonly api = inject(ApiClient);
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   readonly groups = this.data?.groups ?? [];
   readonly busy = signal(false);
@@ -123,8 +127,9 @@ export class DuplicatesDialogComponent {
     if (others.length === 0) return;
 
     const ok = confirm(
-      `把同组的另外 ${others.length} 条合并进「${item.title}」?\n` +
-      `保留条目的已有内容不会被覆盖,只补充它空缺的字段;被合并的条目会被移除。`);
+      this.t('ts.dup.confirmMerge')
+        .replace('{count}', String(others.length))
+        .replace('{title}', item.title));
     if (!ok) return;
 
     this.busy.set(true);
@@ -146,7 +151,7 @@ export class DuplicatesDialogComponent {
         next: () => { done++; step(); },
         error: (e: Error) => {
           this.busy.set(false);
-          this.msg.set(`合并到第 ${done + 1} 条时失败:${e.message}`);
+          this.msg.set(`${this.t('ts.dup.mergeFailed').replace('{n}', String(done + 1))}:${e.message}`);
         }
       });
     };

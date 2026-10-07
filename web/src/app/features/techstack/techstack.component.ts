@@ -28,23 +28,8 @@ import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 /** 熟练度等级顺序 —— 用于展示顺序、进度和"提升一级"的目标值。 */
 const MASTERY_ORDER: MasteryLevel[] = ['New', 'Learning', 'Familiar', 'Proficient', 'Mastered'];
 
-const MASTERY_LABELS: Record<MasteryLevel, string> = {
-  New: '未接触',
-  Learning: '学习中',
-  Familiar: '熟悉',
-  Proficient: '熟练',
-  Mastered: '精通'
-};
-
 /** 复习结果档位 —— 必须与后端 RecordReviewCommandValidator 的允许值一致。 */
 type ReviewResultLabel = 'Again' | 'Hard' | 'Good' | 'Easy';
-
-const REVIEW_LABELS: Record<ReviewResultLabel, string> = {
-  Again: '忘了',
-  Hard: '很吃力',
-  Good: '记住了',
-  Easy: '太简单'
-};
 
 /**
  * 四档映射到后端的主观分。
@@ -75,9 +60,9 @@ interface DetailBlock {
    * (真实字段是 keyPointsJson / commonMistakesJson)。用 keyof 会编译不过。
    */
   key: string;
-  label: string;
+  labelKey: string;
   icon: string;
-  hint: string;
+  hintKey: string;
 }
 
 /**
@@ -89,10 +74,10 @@ const DETAIL_BLOCKS: DetailBlock[] = [
   // 后端存的是 title/question/conceptExplanation + 两个 JSON 数组,
   // 不是八个独立正文字段。这里把 JSON 拆成"要点/常见坑"两块来展示,
   // 复习时的阅读顺序:题干 → 概念 → 要点 → 常见坑。
-  { key: 'question', label: '面试题干', icon: 'help_outline', hint: '被问到时的原题' },
-  { key: 'conceptExplanation', label: '概念讲解', icon: 'menu_book', hint: '原理与机制' },
-  { key: 'keyPoints', label: '关键要点', icon: 'lightbulb_outline', hint: '答题必须覆盖的点' },
-  { key: 'commonMistakes', label: '常见误区', icon: 'warning_amber', hint: '容易被追问打穿的地方' }
+  { key: 'question', labelKey: 'ts.block.question', icon: 'help_outline', hintKey: 'ts.block.questionHint' },
+  { key: 'conceptExplanation', labelKey: 'ts.block.conceptExplanation', icon: 'menu_book', hintKey: 'ts.block.conceptExplanationHint' },
+  { key: 'keyPoints', labelKey: 'ts.block.keyPoints', icon: 'lightbulb_outline', hintKey: 'ts.block.keyPointsHint' },
+  { key: 'commonMistakes', labelKey: 'ts.block.commonMistakes', icon: 'warning_amber', hintKey: 'ts.block.commonMistakesHint' }
 ];
 
 /**
@@ -121,6 +106,7 @@ export class TechStackComponent implements OnInit {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
@@ -129,11 +115,11 @@ export class TechStackComponent implements OnInit {
   readonly blocks = DETAIL_BLOCKS;
 
   /** 复习结果四档,直接对齐后端 SM-2 的 Again/Hard/Good/Easy。 */
-  readonly reviewChoices: { value: ReviewResultLabel; label: string }[] = [
-    { value: 'Again', label: REVIEW_LABELS.Again },
-    { value: 'Hard', label: REVIEW_LABELS.Hard },
-    { value: 'Good', label: REVIEW_LABELS.Good },
-    { value: 'Easy', label: REVIEW_LABELS.Easy }
+  readonly reviewChoices: { value: ReviewResultLabel }[] = [
+    { value: 'Again' },
+    { value: 'Hard' },
+    { value: 'Good' },
+    { value: 'Easy' }
   ];
 
   // ------------------------------ 今日复习会话 ------------------------------
@@ -220,7 +206,6 @@ export class TechStackComponent implements OnInit {
     const denom = b.totalItems > 0 ? b.totalItems : rows.reduce((s, r) => s + r.count, 0);
     return rows.map((r) => ({
       ...r,
-      label: MASTERY_LABELS[r.level],
       pct: denom > 0 ? Math.round((r.count / denom) * 100) : 0
     }));
   });
@@ -258,7 +243,7 @@ export class TechStackComponent implements OnInit {
     });
     ref.afterClosed().subscribe((changed?: boolean) => {
       if (!changed) return;
-      this.notify('已合并重复条目');
+      this.notify(this.t('ts.dup.merged'));
       this.reload();
       this.loadDuplicates();
     });
@@ -422,14 +407,31 @@ export class TechStackComponent implements OnInit {
       });
   }
 
-  /** 来源标记文案:"Shopify · 第2轮 · 2026-09-12"。没有来源信息时返回 null。 */
+  /** 来源标记文案。没有来源信息时返回 null。 */
   sourceLabel(item: KnowledgeItem): string | null {
     if (item.source !== 'FromInterview') return null;
     const parts: string[] = [];
     if (item.sourceCompanyName) parts.push(item.sourceCompanyName);
-    if (item.sourceRoundNo) parts.push(`第${item.sourceRoundNo}轮`);
+    if (item.sourceRoundNo) parts.push(this.i18n.tn('pb.round', item.sourceRoundNo));
     if (item.sourceDate) parts.push(String(item.sourceDate).slice(0, 10));
-    return parts.length > 0 ? parts.join(' · ') : '实战机经';
+    return parts.length > 0 ? parts.join(' · ') : this.i18n.t('nav.playbook');
+  }
+
+  /** 来源公司 chip 的 tooltip:"已掌握 3 / 待复习 2"。 */
+  sourceTooltip(c: KnowledgeSourceCompany): string {
+    return this.i18n.t('ts.source.tooltip')
+      .replace('{m}', String(c.masteredCount))
+      .replace('{d}', String(c.dueCount));
+  }
+
+  /** 来源标记 tooltip:可点击跳回机经。 */
+  sourceJumpTooltip(src: string): string {
+    return this.i18n.t('ts.source.jumpBack').replace('{src}', src);
+  }
+
+  /** 来源标记 tooltip:不可跳转。 */
+  sourceFromTooltip(src: string): string {
+    return this.i18n.t('ts.source.from').replace('{src}', src);
   }
 
   /** 跳回来源:同一场面试一起进来的题,点一下就切过去 —— 反查的落点在"能跳转"。 */
@@ -450,7 +452,7 @@ export class TechStackComponent implements OnInit {
       if (!payload) return;
       this.api.post<KnowledgeItem>('/api/knowledge', payload).subscribe({
         next: () => {
-          this.notify('已新增条目');
+          this.notify(this.t('ts.created'));
           this.page.set(1);
           this.reload();
           this.loadTopics();
@@ -466,12 +468,15 @@ export class TechStackComponent implements OnInit {
   promote(item: KnowledgeItem): void {
     const idx = MASTERY_ORDER.indexOf(item.mastery);
     if (idx < 0 || idx >= MASTERY_ORDER.length - 1) {
-      this.notify('已经是最高熟练度,无需再提升');
+      this.notify(this.t('ts.promote.maxReached'));
       return;
     }
     const next = MASTERY_ORDER[idx + 1];
     const ok = confirm(
-      `把「${item.title}」从「${MASTERY_LABELS[item.mastery]}」提升到「${MASTERY_LABELS[next]}」?`
+      this.t('ts.promote.confirm')
+        .replace('{title}', item.title)
+        .replace('{from}', this.masteryLabel(item.mastery))
+        .replace('{to}', this.masteryLabel(next))
     );
     if (!ok) return;
 
@@ -482,7 +487,7 @@ export class TechStackComponent implements OnInit {
     }).subscribe({
       next: (updated) => {
         this.acting.set(false);
-        this.notify(`已提升为「${MASTERY_LABELS[next]}」`);
+        this.notify(this.t('ts.promote.done').replace('{to}', this.masteryLabel(next)));
         this.applyUpdate(updated, item.id);
         this.loadBuckets();
         // 主题列表可能因为新条目而需要刷新,顺手重拉
@@ -518,7 +523,10 @@ export class TechStackComponent implements OnInit {
       .subscribe({
         next: (outcome) => {
           this.acting.set(false);
-          this.notify(`已记录复习(${REVIEW_LABELS[result]}),下次 ${this.fmtDate(outcome.nextReviewAt)}`);
+          this.notify(
+            this.t('ts.review.recorded')
+              .replace('{grade}', this.reviewLabel(result))
+              .replace('{date}', this.fmtDate(outcome.nextReviewAt)));
           this.applyReviewOutcome(item.id, outcome);
         },
         error: (e: Error) => {
@@ -547,9 +555,9 @@ export class TechStackComponent implements OnInit {
   }
 
   private fmtDate(v: string | null | undefined): string {
-    if (!v) return '未排期';
+    if (!v) return this.t('ts.review.notScheduled');
     const d = new Date(v);
-    return Number.isNaN(d.getTime()) ? '未排期' : d.toLocaleDateString('zh-CN');
+    return Number.isNaN(d.getTime()) ? this.t('ts.review.notScheduled') : d.toLocaleDateString(this.i18n.locale());
   }
 
   // ------------------------------ 今日复习会话逻辑 ------------------------------
@@ -685,7 +693,7 @@ export class TechStackComponent implements OnInit {
   }
 
   private notify(msg: string, isError = false): void {
-    this.snack.open(msg, '关闭', {
+    this.snack.open(msg, this.t('common.close'), {
       duration: isError ? 5000 : 2500,
       horizontalPosition: 'center',
       verticalPosition: 'bottom'
@@ -695,7 +703,16 @@ export class TechStackComponent implements OnInit {
   // ------------------------------ 展示辅助 ------------------------------
 
   masteryLabel(m: string): string {
-    return MASTERY_LABELS[m as MasteryLevel] ?? m;
+    const key = 'ts.mastery.' + m;
+    const translated = this.i18n.t(key);
+    return translated !== key ? translated : m;
+  }
+
+  /** 复习结果档位标签(找不到键时回退英文枚举)。 */
+  reviewLabel(v: string): string {
+    const key = 'ts.review.' + v;
+    const translated = this.i18n.t(key);
+    return translated !== key ? translated : v;
   }
 
   masteryClass(m: string): string {
@@ -739,7 +756,7 @@ export class TechStackComponent implements OnInit {
     return this.blocks.every((b) => this.blockText(item, b.key).length === 0);
   }
   nextReviewLabel(item: KnowledgeItem): string {
-    if (!item.nextReviewAt) return '尚未安排';
-    return item.nextReviewAt.slice(0, 10);
+    if (!item.nextReviewAt) return this.t('ts.detail.notScheduled');
+    return this.t('ts.detail.nextReview').replace('{date}', item.nextReviewAt.slice(0, 10));
   }
 }

@@ -1,14 +1,14 @@
 <div class="page">
   <header class="page-head">
     <div>
-      <h2>技术栈</h2>
-      <p class="sub">每个概念九块拆解:从一句话直觉到面试话术</p>
+      <h2>{{ t('nav.techstack') }}</h2>
+      <p class="sub">{{ t('ts.sub') }}</p>
     </div>
     <div class="head-actions">
       @if (duplicateGroups().length > 0) {
         <button mat-stroked-button class="dup-btn" (click)="openDuplicates()">
           <mat-icon>content_copy</mat-icon>
-          重复 {{ duplicateGroups().length }}
+          {{ tn('ts.duplicates', duplicateGroups().length) }}
         </button>
       }
       @if ((buckets()?.dueToday ?? 0) > 0) {
@@ -34,14 +34,14 @@
     <mat-card class="buckets">
       <mat-card-content>
         <div class="buckets-head">
-          <span class="buckets-title">熟练度分布</span>
-          <span class="buckets-total">共 {{ buckets()?.totalItems }} 个条目</span>
+          <span class="buckets-title">{{ t('ts.buckets.title') }}</span>
+          <span class="buckets-total">{{ tn('ts.buckets.total', buckets()?.totalItems ?? 0) }}</span>
         </div>
         <div class="bucket-row">
           @for (b of bucketRows(); track b.level) {
             <div class="bucket" [class]="'b-' + b.level.toLowerCase()">
               <div class="bucket-top">
-                <span class="bucket-label">{{ b.label }}</span>
+                <span class="bucket-label">{{ masteryLabel(b.level) }}</span>
                 <span class="bucket-count">{{ b.count }}</span>
               </div>
               <div class="bar"><div class="bar-fill" [style.width.%]="b.pct"></div></div>
@@ -58,9 +58,9 @@
     <mat-card-content>
       <div class="filter-row">
         <mat-form-field appearance="outline" class="search">
-          <mat-label>搜索术语 / 释义</mat-label>
+          <mat-label>{{ t('ts.filter.searchLabel') }}</mat-label>
           <input matInput [value]="search()" (input)="onSearchInput($any($event.target).value)"
-                 (keyup.enter)="onSearchEnter()" placeholder="例如 async">
+                 (keyup.enter)="onSearchEnter()" [placeholder]="t('ts.filter.searchPh')">
           <mat-icon matPrefix>search</mat-icon>
           @if (search()) {
             <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
@@ -72,10 +72,10 @@
       </div>
 
       <div class="chip-line">
-        <span class="chip-label">主题</span>
+        <span class="chip-label">{{ t('ts.filter.topic') }}</span>
         <mat-chip-set>
           <mat-chip class="fchip" [highlighted]="topic() === null" (click)="selectTopic(null)">
-            全部
+            {{ t('common.all') }}
           </mat-chip>
           @for (t of topics(); track t) {
             <mat-chip class="fchip" [highlighted]="topic() === t" (click)="selectTopic(t)">
@@ -84,12 +84,12 @@
           }
         </mat-chip-set>
         @if (topicSource() === 'derived' && topics().length > 0) {
-          <span class="chip-note" [matTooltip]="t('techstack.topicDerived')">推导</span>
+          <span class="chip-note" [matTooltip]="t('techstack.topicDerived')">{{ t('ts.topic.derived') }}</span>
         }
       </div>
 
       <div class="chip-line">
-        <span class="chip-label">熟练度</span>
+        <span class="chip-label">{{ t('ts.filter.mastery') }}</span>
         <mat-chip-set>
           @for (m of masteryOrder; track m) {
             <mat-chip class="fchip" [class]="masteryClass(m)"
@@ -99,22 +99,22 @@
           }
         </mat-chip-set>
         @if (hasFilters()) {
-          <button mat-button class="clear-btn" (click)="clearFilters()">清空全部</button>
+          <button mat-button class="clear-btn" (click)="clearFilters()">{{ t('common.clearFilter') }}</button>
         }
       </div>
 
       <!-- 来源公司(需求 6.4.4:反查"这题是哪场面出来的") -->
       @if (sourceCompanies(); as companies) {
         <div class="chip-line">
-          <span class="chip-label">来源</span>
+          <span class="chip-label">{{ t('ts.filter.source') }}</span>
           <mat-chip-set>
             <mat-chip class="fchip" [highlighted]="company() === null" (click)="selectCompany(null)">
-              全部
+              {{ t('common.all') }}
             </mat-chip>
             @for (c of companies; track c.company) {
               <mat-chip class="fchip" [highlighted]="company() === c.company"
                         (click)="selectCompany(c.company)"
-                        [matTooltip]="'已掌握 ' + c.masteredCount + ' / 待复习 ' + c.dueCount">
+                        [matTooltip]="sourceTooltip(c)">
                 {{ c.company }}
                 <span class="chip-count">{{ c.count }}</span>
               </mat-chip>
@@ -133,7 +133,7 @@
     <mat-card class="err-card">
       <mat-icon>error_outline</mat-icon>
       <div>
-        <strong>加载失败</strong>
+        <strong>{{ t('common.loadFailed') }}</strong>
         <p>{{ error() }}</p>
       </div>
     </mat-card>
@@ -143,13 +143,13 @@
     <!-- 左:条目列表 -->
     <mat-card class="list-pane">
       <div class="list-head">
-        <span>{{ total() }} 个条目</span>
+        <span>{{ tn('ts.list.total', total()) }}</span>
       </div>
       <div class="list-body">
         @if (!loading() && items().length === 0) {
           <p class="empty">
-            @if (hasFilters()) { 没有符合筛选条件的条目。 }
-            @else { 知识库还是空的,点右上角新增第一条。 }
+            @if (hasFilters()) { {{ t('ts.list.emptyFiltered') }} }
+            @else { {{ t('ts.list.emptyFirst') }} }
           </p>
         }
 
@@ -166,13 +166,13 @@
               @if (sourceLabel(it); as src) {
                 @if (it.sourceInterviewEntryId) {
                   <a class="li-src link" [routerLink]="['/playbook', it.sourceInterviewEntryId]"
-                     [matTooltip]="'来自实战机经,点击跳回:' + src"
+                     [matTooltip]="sourceJumpTooltip(src)"
                      (click)="$event.stopPropagation()">{{ src }}</a>
                 } @else {
-                  <span class="li-src" [matTooltip]="'来自实战机经:' + src">{{ src }}</span>
+                  <span class="li-src" [matTooltip]="sourceFromTooltip(src)">{{ src }}</span>
                 }
               }
-              <span class="li-review">复习 {{ it.reviewCount }} 次</span>
+              <span class="li-review">{{ tn('ts.reviewCount', it.reviewCount) }}</span>
             </div>
           </button>
         }
@@ -205,31 +205,31 @@
               {{ masteryLabel(it.mastery) }}
             </span>
             <span class="dh-topic">{{ it.topic }}</span>
-            <span class="dh-topic">难度 {{ it.difficulty }}</span>
-            <span class="dh-topic">重要度 {{ it.importance }}</span>
+            <span class="dh-topic">{{ tn('ts.detail.difficulty', it.difficulty) }}</span>
+            <span class="dh-topic">{{ tn('ts.detail.importance', it.importance) }}</span>
           </div>
           <div class="dh-actions">
             <button mat-stroked-button color="primary"
                     [disabled]="acting()" (click)="promote(it)">
-              <mat-icon>trending_up</mat-icon> 提升熟练度
+              <mat-icon>trending_up</mat-icon> {{ t('ts.detail.promote') }}
             </button>
             <button mat-stroked-button [disabled]="acting()"
                     [matMenuTriggerFor]="reviewMenu">
-              <mat-icon>check_circle_outline</mat-icon> 记录复习
+              <mat-icon>check_circle_outline</mat-icon> {{ t('ts.detail.logReview') }}
               <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
             </button>
             <mat-menu #reviewMenu="matMenu" class="app-menu">
               <!-- 四档直接对应 SM-2 的 Again/Hard/Good/Easy:
                    档位决定下次间隔怎么算,所以必须让用户选,不能写死。 -->
               @for (r of reviewChoices; track r.value) {
-                <button mat-menu-item (click)="review(it, r.value)">{{ r.label }}</button>
+                <button mat-menu-item (click)="review(it, r.value)">{{ reviewLabel(r.value) }}</button>
               }
             </mat-menu>
           </div>
           <div class="dh-stats">
-            <span>复习 {{ it.reviewCount }} 次</span>
-            <span>下次复习 {{ nextReviewLabel(it) }}</span>
-            @if (it.easinessFactor) { <span>难度因子 {{ it.easinessFactor | number:'1.2-2' }}</span> }
+            <span>{{ tn('ts.reviewCount', it.reviewCount) }}</span>
+            <span>{{ nextReviewLabel(it) }}</span>
+            @if (it.easinessFactor) { <span>{{ tn('ts.detail.easiness', (it.easinessFactor | number:'1.2-2')) }}</span> }
           </div>
         </div>
 
@@ -239,17 +239,17 @@
             <mat-card class="trail">
               <div class="trail-head">
                 <mat-icon>history_edu</mat-icon>
-                <span class="trail-title">来源</span>
+                <span class="trail-title">{{ t('ts.trail.title') }}</span>
                 @if (tr.roundStage) { <span class="trail-stage">{{ tr.roundStage }}</span> }
               </div>
               <div class="trail-body">
-                @if (tr.company) { <span class="trail-item">公司 {{ tr.company }}</span> }
-                @if (tr.roundNo) { <span class="trail-item">第 {{ tr.roundNo }} 轮</span> }
-                @if (tr.date) { <span class="trail-item">日期 {{ tr.date }}</span> }
+                @if (tr.company) { <span class="trail-item">{{ t('ts.trail.company').replace('{v}', tr.company) }}</span> }
+                @if (tr.roundNo) { <span class="trail-item">{{ tn('pb.round', tr.roundNo) }}</span> }
+                @if (tr.date) { <span class="trail-item">{{ t('ts.trail.date').replace('{v}', tr.date) }}</span> }
               </div>
               @if (tr.siblings.length > 0) {
                 <div class="trail-siblings">
-                  <span class="trail-sub">同一场面试一起进来的题({{ tr.siblings.length }})</span>
+                  <span class="trail-sub">{{ tn('ts.trail.siblings', tr.siblings.length) }}</span>
                   @for (s of tr.siblings; track s.id) {
                     <button class="sib" (click)="selectSibling(s.id)">
                       <span class="sib-title">{{ s.title }}</span>
@@ -270,8 +270,8 @@
               <section class="block">
                 <header class="block-head">
                   <mat-icon>{{ b.icon }}</mat-icon>
-                  <span class="block-label">{{ b.label }}</span>
-                  <span class="block-hint">{{ b.hint }}</span>
+                  <span class="block-label">{{ t(b.labelKey) }}</span>
+                  <span class="block-hint">{{ t(b.hintKey) }}</span>
                 </header>
                 <p class="block-text">{{ blockText(it, b.key) }}</p>
               </section>
@@ -279,13 +279,13 @@
           }
 
           @if (allBlocksEmpty(it)) {
-            <p class="empty">这个条目还没填内容,先补齐「一句话直觉」再背其他部分。</p>
+            <p class="empty">{{ t('ts.blocks.empty') }}</p>
           }
         </div>
       } @else {
         <div class="no-selection">
           <mat-icon>touch_app</mat-icon>
-          <p>从左侧选一个条目查看九块拆解。</p>
+          <p>{{ t('ts.detail.noSelection') }}</p>
         </div>
       }
     </mat-card>
@@ -308,7 +308,7 @@
     } @else if (reviewLoading() && !reviewRevealed()) {
       <mat-card class="rs-card rs-loading">
         <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-        <p>加载中…</p>
+        <p>{{ t('common.loading') }}</p>
       </mat-card>
     } @else {
       @if (currentCard(); as c) {
@@ -326,10 +326,10 @@
         </div>
         <div class="rs-meta">
           <span class="dh-topic">{{ c.topic }}</span>
-          <span class="dh-topic">难度 {{ c.difficulty }}</span>
-          <span class="dh-topic">重要度 {{ c.importance }}</span>
+          <span class="dh-topic">{{ tn('ts.detail.difficulty', c.difficulty) }}</span>
+          <span class="dh-topic">{{ tn('ts.detail.importance', c.importance) }}</span>
           @if (c.source === 'FromInterview') {
-            <span class="li-src" [matTooltip]="t('techstack.fromPlaybook')">机经</span>
+            <span class="li-src" [matTooltip]="t('techstack.fromPlaybook')">{{ t('ts.badge.fromInterview') }}</span>
           }
         </div>
 
@@ -353,15 +353,15 @@
                   <section class="block">
                     <header class="block-head">
                       <mat-icon>{{ b.icon }}</mat-icon>
-                      <span class="block-label">{{ b.label }}</span>
-                      <span class="block-hint">{{ b.hint }}</span>
+                      <span class="block-label">{{ t(b.labelKey) }}</span>
+                      <span class="block-hint">{{ t(b.hintKey) }}</span>
                     </header>
                     <p class="block-text">{{ blockText(rc, b.key) }}</p>
                   </section>
                 }
               }
               @if (allBlocksEmpty(rc)) {
-                <p class="empty">这个条目还没填内容，先补齐「一句话直觉」再背其他部分。</p>
+                <p class="empty">{{ t('ts.blocks.empty') }}</p>
               }
             }
           </div>
@@ -370,7 +370,7 @@
             @for (r of reviewChoices; track r.value) {
               <button mat-flat-button [class]="'g-' + r.value.toLowerCase()"
                       [disabled]="reviewLoading()" (click)="grade(r.value)">
-                {{ r.label }}
+                {{ reviewLabel(r.value) }}
               </button>
             }
           </div>

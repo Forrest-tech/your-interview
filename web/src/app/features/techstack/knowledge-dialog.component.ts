@@ -8,6 +8,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
+import { I18nService } from '../../core/i18n/i18n.service';
+
 /** 新增条目的表单模型(仅本对话框内部使用)。 */
 export interface KnowledgeForm {
   title: string;
@@ -27,13 +29,6 @@ export interface KnowledgeForm {
 }
 
 const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
-const ROUND_STAGE_LABELS: Record<string, string> = {
-  Screen: '初筛',
-  Technical: '技术面',
-  SystemDesign: '系统设计',
-  Behavioral: '行为面',
-  Final: '终面'
-};
 
 /**
  * 新增技术栈条目的对话框。
@@ -50,71 +45,71 @@ const ROUND_STAGE_LABELS: Record<string, string> = {
     MatInputModule, MatSelectModule, MatButtonModule, MatIconModule
   ],
   template: `
-    <h2 mat-dialog-title>新增技术栈条目</h2>
+    <h2 mat-dialog-title>{{ t('ts.dialog.title') }}</h2>
 
     <mat-dialog-content class="dlg">
       <mat-form-field appearance="outline" class="full">
-        <mat-label>标题 *</mat-label>
+        <mat-label>{{ t('ts.dialog.titleLabel') }}</mat-label>
         <input matInput name="title" [(ngModel)]="form.title" required
-               placeholder="如 Clean Architecture / 依赖注入">
+               [placeholder]="t('ts.dialog.titlePh')">
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>分类 *</mat-label>
+        <mat-label>{{ t('ts.dialog.topicLabel') }}</mat-label>
         <input matInput name="topic" [(ngModel)]="form.topic" required
-               placeholder="如 架构 / C#/.NET / 云原生">
+               [placeholder]="t('ts.dialog.topicPh')">
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>面试题干</mat-label>
+        <mat-label>{{ t('ts.dialog.questionLabel') }}</mat-label>
         <textarea matInput name="question" [(ngModel)]="form.question" rows="2"
-                  placeholder="面试官会怎么问这个概念"></textarea>
+                  [placeholder]="t('ts.dialog.questionPh')"></textarea>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>概念讲解</mat-label>
+        <mat-label>{{ t('ts.dialog.conceptLabel') }}</mat-label>
         <textarea matInput name="conceptExplanation" [(ngModel)]="form.conceptExplanation" rows="5"
-                  placeholder="原理、机制、为什么这样设计"></textarea>
+                  [placeholder]="t('ts.dialog.conceptPh')"></textarea>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>关键要点(一行一条)</mat-label>
+        <mat-label>{{ t('ts.dialog.keyPointsLabel') }}</mat-label>
         <textarea matInput name="keyPoints" [(ngModel)]="form.keyPoints" rows="4"
-                  placeholder="答题必须覆盖的点,每行一条"></textarea>
-        <mat-hint>提交时会自动转成结构化列表</mat-hint>
+                  [placeholder]="t('ts.dialog.keyPointsPh')"></textarea>
+        <mat-hint>{{ t('ts.dialog.keyPointsHint') }}</mat-hint>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>常见误区(一行一条)</mat-label>
+        <mat-label>{{ t('ts.dialog.mistakesLabel') }}</mat-label>
         <textarea matInput name="commonMistakes" [(ngModel)]="form.commonMistakes" rows="3"
-                  placeholder="容易被追问打穿的地方,每行一条"></textarea>
+                  [placeholder]="t('ts.dialog.mistakesPh')"></textarea>
       </mat-form-field>
 
       <div class="src-box">
-        <span class="src-title">来源(可选)</span>
-        <span class="src-hint">填了公司名,这条就会标成「来自实战机经」,日后能反查是哪家、第几轮问住的</span>
+        <span class="src-title">{{ t('ts.dialog.sourceTitle') }}</span>
+        <span class="src-hint">{{ t('ts.dialog.sourceHint') }}</span>
         <div class="row2">
           <mat-form-field appearance="outline">
-            <mat-label>公司</mat-label>
+            <mat-label>{{ t('ts.dialog.companyLabel') }}</mat-label>
             <input matInput name="srcCompany" [(ngModel)]="form.sourceCompanyName">
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>第几轮</mat-label>
+            <mat-label>{{ t('ts.dialog.roundLabel') }}</mat-label>
             <input matInput type="number" name="srcRound" min="1" [(ngModel)]="form.sourceRoundNo">
           </mat-form-field>
         </div>
         <div class="row2">
           <mat-form-field appearance="outline">
-            <mat-label>轮次类型</mat-label>
+            <mat-label>{{ t('ts.dialog.stageLabel') }}</mat-label>
             <mat-select name="srcStage" [(ngModel)]="form.sourceRoundStage">
-              <mat-option [value]="null">不限</mat-option>
+              <mat-option [value]="null">{{ t('ts.dialog.anyStage') }}</mat-option>
               @for (s of stages; track s) {
                 <mat-option [value]="s">{{ stageLabel(s) }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>面试日期</mat-label>
+            <mat-label>{{ t('ts.dialog.dateLabel') }}</mat-label>
             <input matInput type="date" name="srcDate" [(ngModel)]="form.sourceDate">
           </mat-form-field>
         </div>
@@ -122,13 +117,13 @@ const ROUND_STAGE_LABELS: Record<string, string> = {
 
       <div class="row2">
         <mat-form-field appearance="outline">
-          <mat-label>难度 1-5</mat-label>
+          <mat-label>{{ t('ts.dialog.difficultyLabel') }}</mat-label>
           <input matInput type="number" name="difficulty" min="1" max="5"
                  [(ngModel)]="form.difficulty">
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>重要度 1-5</mat-label>
+          <mat-label>{{ t('ts.dialog.importanceLabel') }}</mat-label>
           <input matInput type="number" name="importance" min="1" max="5"
                  [(ngModel)]="form.importance">
         </mat-form-field>
@@ -136,9 +131,9 @@ const ROUND_STAGE_LABELS: Record<string, string> = {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>取消</button>
+      <button mat-button mat-dialog-close>{{ t('common.cancel') }}</button>
       <button mat-raised-button color="primary" [disabled]="!canSubmit()" (click)="save()">
-        保存
+        {{ t('common.save') }}
       </button>
     </mat-dialog-actions>
   `,
@@ -158,9 +153,16 @@ const ROUND_STAGE_LABELS: Record<string, string> = {
 })
 export class KnowledgeDialogComponent {
   private readonly ref = inject(MatDialogRef<KnowledgeDialogComponent>);
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
 
   readonly stages = ROUND_STAGES;
-  stageLabel(s: string): string { return ROUND_STAGE_LABELS[s] ?? s; }
+  /** 轮次类型 → 本地化标签(找不到键时回退英文枚举)。 */
+  stageLabel(s: string): string {
+    const key = 'ts.stage.' + s;
+    const translated = this.i18n.t(key);
+    return translated !== key ? translated : s;
+  }
 
   form: KnowledgeForm = {
     title: '', topic: '', question: '', conceptExplanation: '',

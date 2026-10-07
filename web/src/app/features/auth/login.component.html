@@ -7,7 +7,7 @@
         <span class="mark">▮</span>
         <div>
           <h1>Your Interview</h1>
-          <p>求职与面试全流程平台</p>
+          <p>{{ t('auth.tagline') }}</p>
         </div>
       </div>
     </mat-card-header>
@@ -15,14 +15,14 @@
     <mat-card-content>
       <form (ngSubmit)="submit()" #f="ngForm">
         <mat-form-field appearance="outline" class="full">
-          <mat-label>邮箱</mat-label>
+          <mat-label>{{ t('auth.fieldEmail') }}</mat-label>
           <input matInput type="email" name="email" [(ngModel)]="email"
                  autocomplete="username" required autofocus>
           <mat-icon matPrefix>mail_outline</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="full">
-          <mat-label>密码</mat-label>
+          <mat-label>{{ t('auth.fieldPassword') }}</mat-label>
           <input matInput [type]="hidePassword() ? 'password' : 'text'"
                  name="password" [(ngModel)]="password"
                  autocomplete="current-password" required>
@@ -49,12 +49,12 @@
 
         <button mat-raised-button color="primary" class="full submit"
                 type="submit" [disabled]="busy() || !email || !password">
-          {{ busy() ? '登录中…' : '登录' }}
+          {{ busy() ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
       </form>
 
       @if (googleEnabled()) {
-        <div class="divider"><span>或</span></div>
+        <div class="divider"><span>{{ t('auth.or') }}</span></div>
 
         <button mat-stroked-button class="full google-btn" type="button"
                 (click)="loginWithGoogle()" [disabled]="busy() || googleBusy()">
@@ -64,11 +64,11 @@
             <path fill="#FBBC05" d="M5.3 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.01-.17-3.7-2.8-.12.06A11.9 11.9 0 0 0 0 12c0 1.9.5 3.8 1.4 5.5l3.9-3.1z"/>
             <path fill="#EA4335" d="M12 4.6c2.2 0 3.7.9 4.5 1.7l3.3-3.2C17.9 1.2 15.2 0 12 0 7.4 0 3.5 2.7 1.4 6.5l3.9 3.1c.9-2.9 3.6-5 6.7-5z"/>
           </svg>
-          {{ googleBusy() ? '正在建立会话…' : '使用 Google 登录' }}
+          {{ googleBusy() ? t('auth.googleEstablishing') : t('auth.googleSignIn') }}
         </button>
       }
     </mat-card-content>
   </mat-card>
 
-  <p class="foot">个人使用 · 数据仅存本地</p>
+  <p class="foot">{{ t('auth.foot') }}</p>
 </div>

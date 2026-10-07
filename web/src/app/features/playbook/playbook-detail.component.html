@@ -96,7 +96,9 @@
     </mat-card>
 
     <!-- ---------- 页签 ---------- -->
-    <mat-tab-group class="tabs" animationDuration="150ms">
+    <mat-tab-group class="tabs" animationDuration="150ms"
+                   [selectedIndex]="selectedTab()"
+                   (selectedIndexChange)="selectedTab.set($event)">
 
       <!-- ============ 概览 ============ -->
       <mat-tab [label]="t('sub.overview')">

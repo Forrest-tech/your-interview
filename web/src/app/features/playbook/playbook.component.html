@@ -35,7 +35,7 @@
 
   <!-- 统计条:stats 端点失败时整块不渲染,不留空壳 -->
   @if (stats(); as s) {
-    <section class="metrics">
+    <section class="metrics" id="overview">
       <mat-card class="metric">
         <div class="metric-val">{{ s.totalEntries }}</div>
         <div class="metric-label">{{ t('pb.stat.total') }}</div>

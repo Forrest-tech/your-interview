@@ -17,6 +17,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { SubnavService } from '../../layout/subnav.service';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -90,7 +91,11 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly snack = inject(MatSnackBar);
+  private readonly subnav = inject(SubnavService);
   readonly auth = inject(AuthService);
+
+  /** 当前选中的 tab(0=Overview, 3=Questions, 4=Assets, 5=Edit)。 */
+  readonly selectedTab = signal(0);
 
   readonly id = signal('');
   readonly loading = signal(true);
@@ -364,6 +369,22 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       return;
     }
     this.load();
+
+    // 详情页的子导航:切换 tab,而不是滚动(列表页才用滚动锚点)。
+    // Tab 顺序: 0=Overview, 1=Rounds, 2=Guidance, 3=Questions, 4=Assets, 5=Edit
+    const tab = (idx: number, labelKey: string, icon: string) => ({
+      key: 'pb-tab:' + idx,
+      labelKey,
+      icon,
+      active: () => this.selectedTab() === idx,
+      action: () => this.selectedTab.set(idx)
+    });
+    this.subnav.register('/playbook/' + id, [
+      tab(0, 'sub.overview', 'dashboard'),
+      tab(3, 'sub.questions', 'forum'),
+      tab(4, 'sub.assets', 'folder_open'),
+      tab(5, 'sub.edit', 'edit_note')
+    ]);
   }
 
   ngOnDestroy(): void {
@@ -371,6 +392,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     // 释放试听用的 Object URL —— 泄漏会让已卸载的音频 blob 无法被 GC
     for (const url of this.assetAudioUrls.values()) URL.revokeObjectURL(url);
     this.assetAudioUrls.clear();
+    this.subnav.unregister('/playbook/' + this.id());
   }
 
   // ---------------------------------------------------------------- 试听

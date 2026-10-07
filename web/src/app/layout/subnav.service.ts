@@ -44,12 +44,10 @@ export class SubnavService {
     }
 
     // 2) 按模块给出默认子导航(锚点式,滚动到对应区块)
-    if (path.startsWith('/playbook')) {
+    // Playbook 列表页只有 overview 有对应区块;详情页由组件自己注册 tab 切换。
+    if (path === '/playbook') {
       return [
-        this.anchor('sub.overview', 'dashboard', 'overview'),
-        this.anchor('sub.questions', 'forum', 'questions'),
-        this.anchor('sub.assets', 'folder_open', 'assets'),
-        this.anchor('sub.edit', 'edit_note', 'edit')
+        this.anchor('sub.overview', 'dashboard', 'overview')
       ];
     }
     if (path.startsWith('/tracker')) {

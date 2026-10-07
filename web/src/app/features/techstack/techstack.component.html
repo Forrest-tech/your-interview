@@ -139,7 +139,7 @@
     </mat-card>
   }
 
-  <div class="split">
+  <div class="split" id="concepts">
     <!-- 左:条目列表 -->
     <mat-card class="list-pane">
       <div class="list-head">
@@ -293,7 +293,7 @@
 
   } @else {
   <!-- ============ 今日复习专注模式(闪卡会话) ============ -->
-  <section class="review-session">
+  <section class="review-session" id="due">
     @if (reviewDone()) {
       <mat-card class="rs-card rs-summary">
         <mat-icon class="rs-check">check_circle</mat-icon>

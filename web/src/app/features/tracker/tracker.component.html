@@ -21,7 +21,7 @@
   </header>
 
   <!-- 概览指标:数字只在统计接口可用时显示,否则退回列表 total -->
-  <section class="metrics">
+  <section class="metrics" id="overview">
     <mat-card class="metric">
       <div class="metric-val">{{ statTotal() }}</div>
       <div class="metric-label">{{ t('tracker.total') }}</div>
@@ -150,7 +150,7 @@
   }
 
   @if (viewMode() === 'board') {
-  <div class="board-wrap">
+  <div class="board-wrap" id="status">
     <button mat-icon-button class="board-nav left" type="button"
             (click)="scrollBoard(-1)" [attr.aria-label]="t('tracker.scrollLeft')"
             [class.hidden]="!canScrollLeft()">
@@ -208,7 +208,7 @@
 
   <!-- 列表视图:横向一行 = logo | 职位信息 | pipeline stepper | 状态下拉 -->
   @if (viewMode() === 'list') {
-  <div class="list-view">
+  <div class="list-view" id="status">
     @for (a of items(); track a.id) {
       <mat-card class="list-row" (click)="openDetail(a)">
         <div class="lr-logo">

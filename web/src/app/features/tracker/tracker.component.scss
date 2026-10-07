@@ -79,8 +79,31 @@ mat-form-field { width: 100%; }
 
 /* ---------- 看板:唯一滚动区 ---------- */
 
+/* 外层包住看板 + 左右滚动按钮 */
+.board-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  position: relative;
+}
+
+/* 左右滚动按钮:macOS 默认隐藏滚动条时保证可发现横滚 */
+.board-nav {
+  flex: 0 0 auto;
+  align-self: center;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  z-index: 2;
+}
+.board-nav:hover { background: #f5f5f5; }
+.board-nav mat-icon { color: rgba(0, 0, 0, 0.6); }
+
 .board {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;               /* flex 子项允许收缩到内容区高度内 */
   display: grid;
   grid-auto-flow: column;
@@ -90,7 +113,13 @@ mat-form-field { width: 100%; }
   overflow-x: auto;            /* 列多时横向滚 */
   overflow-y: hidden;
   padding-bottom: 8px;
+  /* 常显横向滚动条(webkit):macOS overlay 模式下用户发现不了可滚 */
+  scrollbar-width: thin;
 }
+.board::-webkit-scrollbar { height: 10px; }
+.board::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.04); border-radius: 5px; }
+.board::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.22); border-radius: 5px; }
+.board::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.35); }
 
 .column {
   min-width: 0;

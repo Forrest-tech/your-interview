@@ -646,6 +646,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   },
   'techstack.reviewNoDue': { zh: '暂时没有到期的知识点', en: 'No items are due right now', fr: 'Aucune notion n’est due pour l’instant' },
   'tracker.newApp': { zh: '新建投递', en: 'New application', fr: 'Nouvelle candidature' },
+  'tracker.scrollLeft': { zh: '向左滚动', en: 'Scroll left', fr: 'Défiler vers la gauche' },
+  'tracker.scrollRight': { zh: '向右滚动', en: 'Scroll right', fr: 'Défiler vers la droite' },
   'tracker.openLink': { zh: '打开岗位链接', en: 'Open job link', fr: 'Ouvrir le lien de l’offre' },
   'tracker.priority': { zh: '优先级 {n}', en: 'Priority {n}', fr: 'Priorité {n}' },
   'tracker.firstApp': { zh: '记录第一条投递', en: 'Log your first application', fr: 'Ajoutez votre première candidature' },

@@ -116,8 +116,13 @@
     </mat-card>
   }
 
-  <div class="board">
-    @for (col of columns(); track col.status) {
+  <div class="board-wrap">
+    <button mat-icon-button class="board-nav left" type="button"
+            (click)="scrollBoard(-1)" [attr.aria-label]="t('tracker.scrollLeft')">
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <div class="board" #board>
+      @for (col of columns(); track col.status) {
       <section class="column">
         <header class="col-head" [class]="statusClass(col.status)">
           <span class="col-dot"></span>
@@ -197,6 +202,11 @@
         </div>
       </section>
     }
+    </div>
+    <button mat-icon-button class="board-nav right" type="button"
+            (click)="scrollBoard(1)" [attr.aria-label]="t('tracker.scrollRight')">
+      <mat-icon>chevron_right</mat-icon>
+    </button>
   </div>
 
   <!-- 分页:数据量大时才有必要出现 -->

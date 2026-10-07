@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -288,6 +288,15 @@ export class TrackerComponent implements OnInit {
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
   tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
+
+  /** 看板横向滚动:macOS 默认隐藏滚动条,显式左右按钮保证可发现。 */
+  private readonly boardEl = viewChild<ElementRef<HTMLElement>>('board');
+  scrollBoard(dir: 1 | -1): void {
+    const el = this.boardEl()?.nativeElement;
+    if (!el) return;
+    // 一次滚一列半(列宽 250-300 + 间距 12)
+    el.scrollBy({ left: dir * 450, behavior: 'smooth' });
+  }
 
   /** 名称首字母头像(看板卡 + 详情页共用)。 */
   companyInitials(name?: string): string {

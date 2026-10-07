@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using YourInterview.Services.Knowledge.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using YourInterview.Services.Knowledge.Infrastructure.Persistence;
 namespace YourInterview.Services.Knowledge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(KnowledgeDbContext))]
-    partial class KnowledgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007005537_AddKnowledgeSourceTrailAndImportKey")]
+    partial class AddKnowledgeSourceTrailAndImportKey
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

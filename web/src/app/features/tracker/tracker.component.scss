@@ -10,7 +10,10 @@
 
 .page-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .page-head .sub { margin: 4px 0 0; font-size: 13px; opacity: 0.6; }
-.head-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.head-actions { display: flex; gap: 8px; flex: 0 0 auto; align-items: center; }
+
+/* 智能粘贴是这一页最该被看见的入口 —— 给足视觉权重,别让它淹没在一排图标按钮里 */
+.smart-btn mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; }
 
 mat-card { border-radius: 8px; }
 

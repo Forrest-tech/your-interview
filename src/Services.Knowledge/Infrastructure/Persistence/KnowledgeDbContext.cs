@@ -66,6 +66,12 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
             e.Property(x => x.Question).HasMaxLength(8000);
             e.Property(x => x.Source).HasConversion<string>().HasMaxLength(30);
             e.Property(x => x.SourceCompanyName).HasMaxLength(300);
+            e.Property(x => x.SourceRoundStage).HasMaxLength(60);
+            e.Property(x => x.ImportKey).HasMaxLength(200);
+
+            // 反查索引:来源公司 / 来源机经条目 —— 需求 6.4.4 的几个入口都按它们过滤。
+
+            // 幂等导入键:导入候选题时先按它查重,避免重复导入同一条。
 
             // 内容字段:面试原题/概念讲解可能是很长的 Markdown,给足空间。
             // 用 text 而不是 varchar:PG 里两者性能无差异,但 varchar 上限一旦撞到就丢数据。
@@ -92,6 +98,8 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
             e.HasIndex(x => new { x.Mastery, x.NextReviewAt });
             e.HasIndex(x => x.Source);
             e.HasIndex(x => x.SourceInterviewEntryId);
+            e.HasIndex(x => x.SourceCompanyName);
+            e.HasIndex(x => x.ImportKey);
 
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted);

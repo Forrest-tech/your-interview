@@ -20,6 +20,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { TrackerApi } from '../../core/api/tracker-api.service';
 import { Application, ApplicationStatus, AnswerTemplate, Communication, CommunicationType, Company, Paged, TrackerStats } from '../../core/models/api.models';
 import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
+import { SmartAddDialogComponent } from './smart-add-dialog.component';
 
 /** 状态下拉的选项 —— 顺序即漏斗顺序,下拉里也按流程排,避免用户找"面试中"要找半天。 */
 const STATUS_ORDER: ApplicationStatus[] = [
@@ -534,6 +535,24 @@ export class TrackerComponent implements OnInit {
       notes: form.notes || null,
       priority: form.priority || null,
       deadline: null
+    });
+  }
+
+  /**
+   * 智能粘贴入口(需求 6.2.2 / 6.2.3):先解析、再让用户改、最后才入库。
+   * 弹窗自己完成写入,这里只负责刷新与提示。
+   */
+  openSmartAdd(app?: Application): void {
+    const ref = this.dialog.open(SmartAddDialogComponent, {
+      data: { applications: this.items(), applicationId: app?.id ?? null },
+      maxWidth: '860px',
+      autoFocus: false,
+      restoreFocus: true
+    });
+    ref.afterClosed().subscribe((r) => {
+      if (!r?.ok) return;
+      this.notify(r.message);
+      this.reload();
     });
   }
 

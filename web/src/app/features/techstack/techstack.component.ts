@@ -18,7 +18,11 @@ import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeItem, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged } from '../../core/models/api.models';
+import {
+  KnowledgeSourceCompany, KnowledgeSourceTrail, KnowledgeDuplicateGroup
+} from '../../core/models/api.models';
 import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
+import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 
 /** 熟练度等级顺序 —— 用于展示顺序、进度和"提升一级"的目标值。 */
 const MASTERY_ORDER: MasteryLevel[] = ['New', 'Learning', 'Familiar', 'Proficient', 'Mastered'];
@@ -173,6 +177,15 @@ export class TechStackComponent implements OnInit {
   readonly search = signal('');
   readonly topic = signal<string | null>(null);
   readonly mastery = signal<MasteryLevel | null>(null);
+  /** 来源公司筛选(需求 6.4.4:按"这题来自哪家公司"反查)。 */
+  readonly company = signal<string | null>(null);
+
+  /** 来源公司清单。接口不可用时为 null,整条筛选行隐藏而不是显示空选项。 */
+  readonly sourceCompanies = signal<KnowledgeSourceCompany[] | null>(null);
+  /** 当前选中条目的来源反查结果。 */
+  readonly trail = signal<KnowledgeSourceTrail | null>(null);
+  /** 重复条目组数(0 = 无重复,入口隐藏)。 */
+  readonly duplicateGroups = signal<KnowledgeDuplicateGroup[]>([]);
 
   readonly selected = signal<KnowledgeItem | null>(null);
 
@@ -214,6 +227,40 @@ export class TechStackComponent implements OnInit {
   ngOnInit(): void {
     this.load();
     this.loadBuckets();
+    this.loadSources();
+    this.loadDuplicates();
+  }
+
+  /** 来源公司清单属于可选增强(老库没有来源字段时为空),失败静默降级。 */
+  loadSources(): void {
+    this.api.get<KnowledgeSourceCompany[]>('/api/knowledge/sources')
+      .pipe(catchError(() => of(null)))
+      .subscribe((list) => {
+        this.sourceCompanies.set(
+          Array.isArray(list) && list.length > 0 ? list : null);
+      });
+  }
+
+  /** 重复条目是"偶发需要"的功能:只报个数,点开才真正拉取分组。 */
+  loadDuplicates(): void {
+    this.api.get<KnowledgeDuplicateGroup[]>('/api/knowledge/duplicates')
+      .pipe(catchError(() => of(null)))
+      .subscribe((groups) => this.duplicateGroups.set(
+        Array.isArray(groups) ? groups : []));
+  }
+
+  openDuplicates(): void {
+    const ref = this.dialog.open(DuplicatesDialogComponent, {
+      data: { groups: this.duplicateGroups() },
+      maxWidth: '860px',
+      autoFocus: false
+    });
+    ref.afterClosed().subscribe((changed?: boolean) => {
+      if (!changed) return;
+      this.notify('已合并重复条目');
+      this.reload();
+      this.loadDuplicates();
+    });
   }
 
   // ------------------------------ 加载 ------------------------------
@@ -229,6 +276,7 @@ export class TechStackComponent implements OnInit {
       pageSize: this.pageSize(),
       topic: this.topic(),
       mastery: this.mastery(),
+      company: this.company(),
       search: this.search().trim()
     }).subscribe({
       next: (r) => {
@@ -286,6 +334,14 @@ export class TechStackComponent implements OnInit {
   reload(): void {
     this.load();
     this.loadBuckets();
+    this.loadSources();
+  }
+
+  /** 按来源公司反查(需求 6.4.4)。再点一次同一家即取消。 */
+  selectCompany(c: string | null): void {
+    this.company.set(this.company() === c ? null : c);
+    this.page.set(1);
+    this.load();
   }
 
   private deriveTopics(list: KnowledgeItem[]): void {
@@ -325,12 +381,14 @@ export class TechStackComponent implements OnInit {
     this.search.set('');
     this.topic.set(null);
     this.mastery.set(null);
+    this.company.set(null);
     this.page.set(1);
     this.load();
   }
 
   hasFilters(): boolean {
-    return this.search().length > 0 || this.topic() !== null || this.mastery() !== null;
+    return this.search().length > 0 || this.topic() !== null
+        || this.mastery() !== null || this.company() !== null;
   }
 
   goPage(p: number): void {
@@ -343,10 +401,45 @@ export class TechStackComponent implements OnInit {
 
   select(item: KnowledgeItem): void {
     this.selected.set(item);
+    this.loadTrail(item.id);
   }
 
   isSelected(item: KnowledgeItem): boolean {
     return this.selected()?.id === item.id;
+  }
+
+  /**
+   * 反查当前条目的来源(需求 6.4.4)。
+   * 失败不留旧值 —— 换条目时残留上一题的来源是最难察觉的一类错。
+   */
+  loadTrail(id: string): void {
+    this.trail.set(null);
+    this.api.get<KnowledgeSourceTrail>(`/api/knowledge/${id}/trail`)
+      .pipe(catchError(() => of(null)))
+      .subscribe((t) => {
+        if (t && this.selected()?.id === id) this.trail.set(t);
+      });
+  }
+
+  /** 来源标记文案:"Shopify · 第2轮 · 2026-09-12"。没有来源信息时返回 null。 */
+  sourceLabel(item: KnowledgeItem): string | null {
+    if (item.source !== 'FromInterview') return null;
+    const parts: string[] = [];
+    if (item.sourceCompanyName) parts.push(item.sourceCompanyName);
+    if (item.sourceRoundNo) parts.push(`第${item.sourceRoundNo}轮`);
+    if (item.sourceDate) parts.push(String(item.sourceDate).slice(0, 10));
+    return parts.length > 0 ? parts.join(' · ') : '实战机经';
+  }
+
+  /** 跳回来源:同一场面试一起进来的题,点一下就切过去 —— 反查的落点在"能跳转"。 */
+  selectSibling(id: string): void {
+    const hit = this.items().find((i) => i.id === id);
+    if (hit) { this.select(hit); return; }
+    // 不在当前页(被筛掉)时直接取详情再选中
+    this.api.get<KnowledgeItem>(`/api/knowledge/${id}`).subscribe({
+      next: (it) => { this.selected.set(it); this.loadTrail(it.id); },
+      error: (e: Error) => this.notify(e.message, true)
+    });
   }
 
   openCreate(): void {

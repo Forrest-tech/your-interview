@@ -5,6 +5,9 @@
       <p class="sub">按状态分列看清整个漏斗,卡住在哪一步一目了然</p>
     </div>
     <div class="head-actions">
+      <button mat-flat-button color="primary" class="smart-btn" (click)="openSmartAdd()">
+        <mat-icon>auto_awesome</mat-icon>智能粘贴
+      </button>
       <button mat-stroked-button class="al-btn" (click)="openAnswerLibrary()" [matTooltip]="t('tracker.alTitle')">
         <mat-icon>library_books</mat-icon>{{ t('tracker.alTitle') }}
       </button>

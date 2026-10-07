@@ -69,6 +69,36 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
     public string? SourceCompanyName { get; private set; }
     public DateOnly? SourceDate { get; private set; }
 
+    /// <summary>
+    /// 来源轮次号(第几轮被问到的)。
+    /// 需求 6.4.4 要求「可反查来源公司/轮次」—— 只存公司名不够,
+    /// "一面被问住的题"和"终面被问住的题"含金量完全不同,轮次是判断优先级的关键维度。
+    /// </summary>
+    public int? SourceRoundNo { get; private set; }
+
+    /// <summary>来源轮次类型(Screen / Technical / SystemDesign / Behavioral / Final)。</summary>
+    public string? SourceRoundStage { get; private set; }
+
+    /// <summary>
+    /// 来源投递记录(Jobs 服务的 JobApplicationId)。
+    /// 有了它才能从技术栈直接跳回"我当时投的哪个岗位" —— 反查链路的最后一环。
+    /// </summary>
+    public Guid? SourceJobApplicationId { get; private set; }
+
+    /// <summary>
+    /// 导入幂等键。由导入方为每条候选题生成的稳定键(如 "entry:{guid}:q:3"),
+    /// 重复导入同一批候选时靠它识别"这条已经进来过了"。
+    /// 为什么不用 title+topic 凑:题目在导入前可被用户原地改过标题,
+    /// 改了标题就不该当成新题再插一条 —— 键必须来自源头,不能来自内容。
+    /// </summary>
+    public string? ImportKey { get; private set; }
+
+    public void SetImportKey(string? key)
+    {
+        ImportKey = string.IsNullOrWhiteSpace(key) ? null : key.Trim();
+        Touch();
+    }
+
     public int Difficulty { get; private set; }
     public int Importance { get; private set; }
     /// <summary>标签,JSON 数组字符串(如 ["async","deadlock"])。用 JSON 而不是关联表:标签是查询用的小集合,不值得一次 join。</summary>
@@ -246,12 +276,21 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
         return relation;
     }
 
-    /// <summary>关联到实战机经条目:把"这题是我在哪一场、哪家公司被问住的"钉死,复习时能回忆现场。</summary>
-    public void LinkToInterview(Guid entryId, string? companyName = null, DateOnly? date = null)
+    /// <summary>
+    /// 关联到实战机经条目:把"这题是我在哪一场、哪家公司、第几轮被问住的"钉死,
+    /// 复习时能回忆现场,也能反查回去。
+    /// roundNo/roundStage/applicationId 可后补 —— 先导入题目、后补轮次信息是常见路径,
+    /// 所以它们只在传入非空值时覆盖已有值,不会被空值抹掉。
+    /// </summary>
+    public void LinkToInterview(Guid entryId, string? companyName = null, DateOnly? date = null,
+        int? roundNo = null, string? roundStage = null, Guid? applicationId = null)
     {
         SourceInterviewEntryId = entryId;
-        SourceCompanyName = companyName;
-        SourceDate = date;
+        if (!string.IsNullOrWhiteSpace(companyName)) SourceCompanyName = companyName;
+        if (date is not null) SourceDate = date;
+        if (roundNo is not null) SourceRoundNo = roundNo;
+        if (!string.IsNullOrWhiteSpace(roundStage)) SourceRoundStage = roundStage;
+        if (applicationId is not null) SourceJobApplicationId = applicationId;
         Source = KnowledgeSource.FromInterview;
         Touch();
     }

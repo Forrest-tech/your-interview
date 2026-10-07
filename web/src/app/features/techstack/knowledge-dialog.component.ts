@@ -18,7 +18,22 @@ export interface KnowledgeForm {
   commonMistakes: string;
   difficulty: number;
   importance: number;
+  /** 来源公司(可选)。填了就标成"来自实战机经",为反查留线索。 */
+  sourceCompanyName: string;
+  /** 第几轮被问到的(可选)。 */
+  sourceRoundNo: number | null;
+  sourceRoundStage: string | null;
+  sourceDate: string | null;
 }
+
+const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
+const ROUND_STAGE_LABELS: Record<string, string> = {
+  Screen: '初筛',
+  Technical: '技术面',
+  SystemDesign: '系统设计',
+  Behavioral: '行为面',
+  Final: '终面'
+};
 
 /**
  * 新增技术栈条目的对话框。
@@ -75,6 +90,36 @@ export interface KnowledgeForm {
                   placeholder="容易被追问打穿的地方,每行一条"></textarea>
       </mat-form-field>
 
+      <div class="src-box">
+        <span class="src-title">来源(可选)</span>
+        <span class="src-hint">填了公司名,这条就会标成「来自实战机经」,日后能反查是哪家、第几轮问住的</span>
+        <div class="row2">
+          <mat-form-field appearance="outline">
+            <mat-label>公司</mat-label>
+            <input matInput name="srcCompany" [(ngModel)]="form.sourceCompanyName">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>第几轮</mat-label>
+            <input matInput type="number" name="srcRound" min="1" [(ngModel)]="form.sourceRoundNo">
+          </mat-form-field>
+        </div>
+        <div class="row2">
+          <mat-form-field appearance="outline">
+            <mat-label>轮次类型</mat-label>
+            <mat-select name="srcStage" [(ngModel)]="form.sourceRoundStage">
+              <mat-option [value]="null">不限</mat-option>
+              @for (s of stages; track s) {
+                <mat-option [value]="s">{{ stageLabel(s) }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>面试日期</mat-label>
+            <input matInput type="date" name="srcDate" [(ngModel)]="form.sourceDate">
+          </mat-form-field>
+        </div>
+      </div>
+
       <div class="row2">
         <mat-form-field appearance="outline">
           <mat-label>难度 1-5</mat-label>
@@ -103,14 +148,24 @@ export interface KnowledgeForm {
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 560px) { .dlg { min-width: auto; } .row2 { grid-template-columns: 1fr; } }
     h2[mat-dialog-title] { display: flex; align-items: center; gap: 6px; }
+    .src-box {
+      margin: 6px 0 4px; padding: 10px 12px; border-radius: 8px;
+      background: rgba(63,81,181,0.05); border: 1px solid rgba(63,81,181,0.16);
+    }
+    .src-box .src-title { display: block; font-size: 12.5px; font-weight: 600; color: #3f51b5; }
+    .src-box .src-hint { display: block; font-size: 11.5px; opacity: .65; margin: 2px 0 8px; }
   `]
 })
 export class KnowledgeDialogComponent {
   private readonly ref = inject(MatDialogRef<KnowledgeDialogComponent>);
 
+  readonly stages = ROUND_STAGES;
+  stageLabel(s: string): string { return ROUND_STAGE_LABELS[s] ?? s; }
+
   form: KnowledgeForm = {
     title: '', topic: '', question: '', conceptExplanation: '',
-    keyPoints: '', commonMistakes: '', difficulty: 3, importance: 3
+    keyPoints: '', commonMistakes: '', difficulty: 3, importance: 3,
+    sourceCompanyName: '', sourceRoundNo: null, sourceRoundStage: null, sourceDate: null
   };
 
   /** 标题和分类是后端必填项,前端先挡一道,避免白跑一次 400。 */
@@ -135,7 +190,12 @@ export class KnowledgeDialogComponent {
       commonMistakesJson: this.toJsonList(this.form.commonMistakes),
       difficulty: Number(this.form.difficulty) || 3,
       importance: Number(this.form.importance) || 3,
-      source: 'Personal'
+      // 填了公司名才算"来自实战机经";没填就是我自己主动录入的
+      source: this.form.sourceCompanyName.trim() ? 'FromInterview' : 'Personal',
+      sourceCompanyName: this.form.sourceCompanyName.trim() || null,
+      sourceRoundNo: this.form.sourceRoundNo ? Number(this.form.sourceRoundNo) : null,
+      sourceRoundStage: this.form.sourceRoundStage || null,
+      sourceDate: this.form.sourceDate || null
     };
     this.ref.close(payload);
   }

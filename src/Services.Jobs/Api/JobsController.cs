@@ -243,6 +243,57 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    // ---------- 智能粘贴(需求 6.2.2 / 6.2.3) ----------
+
+    /// <summary>
+    /// 解析粘贴内容(JD 链接 / JD 文本 / 图片)。
+    /// 只返回草稿,不落库 —— 用户要在界面上确认并改过再保存(需求明确要求"可编辑后再存")。
+    /// </summary>
+    [HttpPost("parse-jd")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ParseJd([FromBody] ParseJdBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ParseJdCommand(body.Raw ?? string.Empty, body.UseAi), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一键建档:把(用户改过的)解析结果落成公司与投递记录。
+    /// 公司按名解析,不存在则新建 —— 粘贴入口不该要求用户先去建公司。
+    /// </summary>
+    [HttpPost("applications/smart-add")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> SmartAddApplication([FromBody] SmartAddApplicationBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SmartAddApplicationCommand(body.Company, body.Role, body.Location,
+            body.Salary, body.WorkMode, body.JdSummary, body.MatchKeywords, body.Priority,
+            body.Link, body.JdText, body.Source, body.Status, body.Deadline), ct);
+        return r.IsSuccess
+            ? Microsoft.AspNetCore.Http.Results.Ok(r.Value)
+            : r.ToProblemDetails();
+    }
+
+    /// <summary>解析面试邀请邮件/消息(时间、地点、形式、面试官、轮次)。</summary>
+    [HttpPost("parse-invite")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ParseInvite([FromBody] ParseJdBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ParseInviteCommand(body.Raw ?? string.Empty, body.UseAi), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一键关联邀请:登记面试轮次并推进状态(同时触发机经草稿创建)。
+    /// </summary>
+    [HttpPost("applications/{id:guid}/invite")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> LinkInvite(Guid id, [FromBody] LinkInviteBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new LinkInviteCommand(id, body.Stage, body.ScheduledDate,
+            body.Interviewer, body.Format, body.Notes), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     public sealed record UpdateCompanyBody(string Name, string? Website, string? Industry, string? Location,
         string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted);
     public sealed record UpdateApplicationBody(string Role, string? Location, string? Link, string? Salary,
@@ -259,6 +310,20 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public sealed record AddRoundBody(string Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format, string? Notes);
     public sealed record UpdateRoundBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
         string? Format, string Outcome, string? Notes);
+
+    // ---- 智能粘贴请求体 ----
+
+    /// <summary>粘贴原文。UseAi=false 时只走规则解析(未配 AI 凭据也能用)。</summary>
+    public sealed record ParseJdBody(string? Raw, bool UseAi = true);
+
+    /// <summary>解析结果(经用户改过)提交建档。</summary>
+    public sealed record SmartAddApplicationBody(
+        string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
+        string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
+        string? JdText, string? Source, string? Status, DateOnly? Deadline = null);
+
+    public sealed record LinkInviteBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
+        string? Format, string? Notes);
 
     // ======================= 简历正文(2026-09-18)=======================
     // 用途:简历匹配分析(简历 vs JD 关键词比对)+ 面试前准备包的输入。

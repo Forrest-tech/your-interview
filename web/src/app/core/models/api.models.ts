@@ -349,6 +349,58 @@ export interface KnowledgeItem {
   relations?: KnowledgeRelation[];
   createdAt?: string;
   updatedAt?: string;
+
+  // ---- 来源标记(需求 6.4.2 / 6.4.4)----
+  /** 来源实战机经条目 id。 */
+  sourceInterviewEntryId?: string | null;
+  sourceCompanyName?: string | null;
+  /** 来源面试日期(YYYY-MM-DD)。 */
+  sourceDate?: string | null;
+  /** 第几轮被问到的。 */
+  sourceRoundNo?: number | null;
+  /** 轮次类型:Screen / Technical / SystemDesign / Behavioral / Final。 */
+  sourceRoundStage?: string | null;
+  /** 来源投递记录 id(可据此跳回 Tracker)。 */
+  sourceJobApplicationId?: string | null;
+  /** 导入幂等键(由导入方生成,重复导入靠它判重)。 */
+  importKey?: string | null;
+}
+
+/** 来源公司汇总(GET /api/knowledge/sources)。 */
+export interface KnowledgeSourceCompany {
+  company: string;
+  count: number;
+  masteredCount: number;
+  dueCount: number;
+  lastDate?: string | null;
+}
+
+/** 单条知识点的来源反查结果(GET /api/knowledge/{id}/trail)。 */
+export interface KnowledgeSourceTrail {
+  itemId: string;
+  company?: string | null;
+  date?: string | null;
+  roundNo?: number | null;
+  roundStage?: string | null;
+  entryId?: string | null;
+  applicationId?: string | null;
+  role?: string | null;
+  siblings: KnowledgeItem[];
+}
+
+/** 重复条目分组(GET /api/knowledge/duplicates)。 */
+export interface KnowledgeDuplicateGroup {
+  topic: string;
+  key: string;
+  items: KnowledgeItem[];
+}
+
+/** 机经候选题导入结果(POST /api/knowledge/import-candidates)。 */
+export interface CandidateImportResult {
+  created: number;
+  skipped: number;
+  total: number;
+  ids: string[];
 }
 
 export interface KnowledgeReviewLog {

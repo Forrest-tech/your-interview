@@ -28,10 +28,11 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
         [FromQuery] string? topic = null, [FromQuery] string? mastery = null,
         [FromQuery] string? source = null, [FromQuery] string? tag = null,
         [FromQuery] string? search = null, [FromQuery] bool dueOnly = false,
+        [FromQuery] string? company = null, [FromQuery] Guid? entryId = null,
         CancellationToken ct = default)
     {
         var r = await sender.Send(new ListKnowledgeQuery(page, pageSize, topic, mastery, source,
-            tag, search, dueOnly), ct);
+            tag, search, dueOnly, company, entryId), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -68,6 +69,56 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     public async Task<IResult> Due([FromQuery] int days = 7, CancellationToken ct = default)
     {
         var r = await sender.Send(new GetDuePlanQuery(days), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>来源公司清单(需求 6.4.4:按公司反查"这题是哪场面出来的")。</summary>
+    [HttpGet("sources")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
+    public async Task<IResult> Sources(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetSourceCompaniesQuery(), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>反查某条知识点的来源:公司 / 日期 / 轮次 / 同场面试的其它题。</summary>
+    [HttpGet("{id:guid}/trail")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
+    public async Task<IResult> Trail(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetSourceTrailQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>重复条目分组(需求 6.4.3 去重)。</summary>
+    [HttpGet("duplicates")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
+    public async Task<IResult> Duplicates([FromQuery] int maxGroups = 50, CancellationToken ct = default)
+    {
+        var r = await sender.Send(new FindDuplicatesQuery(maxGroups), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>合并两条重复条目(保留方的已有内容不动,只补空缺)。</summary>
+    [HttpPost("merge")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> Merge([FromBody] MergeBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new MergeDuplicatesCommand(body.KeepId, body.MergeId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 从实战机经分析结果导入候选题(需求 6.4.2 / 验收 5)。
+    /// 幂等:同一条候选重复导入只会安静跳过,不会产生重复条目。
+    /// </summary>
+    [HttpPost("import-candidates")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> ImportCandidates([FromBody] ImportCandidatesBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ImportInterviewCandidatesCommand(
+            body.EntryId, body.Company, body.Date, body.RoundNo, body.RoundStage,
+            body.ApplicationId, body.Items ?? new List<InterviewCandidateRow>()), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -159,3 +210,15 @@ public sealed record MasteryBody(string Mastery);
 public sealed record RelationBody(Guid RelatedItemId, string RelationType, string? Note = null);
 
 public sealed record ImportBody(List<ImportKnowledgeRow> Items);
+
+/// <summary>合并重复条目请求体。</summary>
+public sealed record MergeBody(Guid KeepId, Guid MergeId);
+
+/// <summary>
+/// 机经候选题导入请求体。
+/// EntryId 与 ClientKey 至少给一个 —— 两者都是幂等的依据,
+/// 都没有时后端只能退回"同分类 + 同标题"判重,用户改过标题就会重复插入。
+/// </summary>
+public sealed record ImportCandidatesBody(
+    Guid? EntryId, string? Company, DateOnly? Date, int? RoundNo, string? RoundStage,
+    Guid? ApplicationId, List<InterviewCandidateRow>? Items);

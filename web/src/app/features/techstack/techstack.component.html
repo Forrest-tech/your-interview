@@ -5,6 +5,12 @@
       <p class="sub">每个概念九块拆解:从一句话直觉到面试话术</p>
     </div>
     <div class="head-actions">
+      @if (duplicateGroups().length > 0) {
+        <button mat-stroked-button class="dup-btn" (click)="openDuplicates()">
+          <mat-icon>content_copy</mat-icon>
+          重复 {{ duplicateGroups().length }}
+        </button>
+      }
       @if ((buckets()?.dueToday ?? 0) > 0) {
         <button mat-stroked-button color="primary" class="review-btn"
                 (click)="startReview()" [matTooltip]="t('techstack.startReview')">
@@ -96,6 +102,26 @@
           <button mat-button class="clear-btn" (click)="clearFilters()">清空全部</button>
         }
       </div>
+
+      <!-- 来源公司(需求 6.4.4:反查"这题是哪场面出来的") -->
+      @if (sourceCompanies(); as companies) {
+        <div class="chip-line">
+          <span class="chip-label">来源</span>
+          <mat-chip-set>
+            <mat-chip class="fchip" [highlighted]="company() === null" (click)="selectCompany(null)">
+              全部
+            </mat-chip>
+            @for (c of companies; track c.company) {
+              <mat-chip class="fchip" [highlighted]="company() === c.company"
+                        (click)="selectCompany(c.company)"
+                        [matTooltip]="'已掌握 ' + c.masteredCount + ' / 待复习 ' + c.dueCount">
+                {{ c.company }}
+                <span class="chip-count">{{ c.count }}</span>
+              </mat-chip>
+            }
+          </mat-chip-set>
+        </div>
+      }
     </mat-card-content>
   </mat-card>
 
@@ -137,8 +163,8 @@
             </div>
             <div class="li-foot">
               <span class="li-topic">{{ it.topic }}</span>
-              @if (it.source === 'FromInterview') {
-                <span class="li-src" [matTooltip]="t('techstack.fromPlaybook')">机经</span>
+              @if (sourceLabel(it); as src) {
+                <span class="li-src" [matTooltip]="'来自实战机经:' + src">{{ src }}</span>
               }
               <span class="li-review">复习 {{ it.reviewCount }} 次</span>
             </div>
@@ -198,9 +224,39 @@
             <span>复习 {{ it.reviewCount }} 次</span>
             <span>下次复习 {{ nextReviewLabel(it) }}</span>
             @if (it.easinessFactor) { <span>难度因子 {{ it.easinessFactor | number:'1.2-2' }}</span> }
-            @if (it.source === 'FromInterview') { <span>来源:实战机经复盘</span> }
           </div>
         </div>
+
+        <!-- 来源反查(需求 6.4.4):这题是哪家公司、第几轮、哪一场问住的 -->
+        @if (trail(); as tr) {
+          @if (tr.company || tr.date || tr.roundNo || tr.entryId) {
+            <mat-card class="trail">
+              <div class="trail-head">
+                <mat-icon>history_edu</mat-icon>
+                <span class="trail-title">来源</span>
+                @if (tr.roundStage) { <span class="trail-stage">{{ tr.roundStage }}</span> }
+              </div>
+              <div class="trail-body">
+                @if (tr.company) { <span class="trail-item">公司 {{ tr.company }}</span> }
+                @if (tr.roundNo) { <span class="trail-item">第 {{ tr.roundNo }} 轮</span> }
+                @if (tr.date) { <span class="trail-item">日期 {{ tr.date }}</span> }
+              </div>
+              @if (tr.siblings.length > 0) {
+                <div class="trail-siblings">
+                  <span class="trail-sub">同一场面试一起进来的题({{ tr.siblings.length }})</span>
+                  @for (s of tr.siblings; track s.id) {
+                    <button class="sib" (click)="selectSibling(s.id)">
+                      <span class="sib-title">{{ s.title }}</span>
+                      <span class="li-mastery" [class]="masteryClass(s.mastery)">
+                        {{ masteryLabel(s.mastery) }}
+                      </span>
+                    </button>
+                  }
+                </div>
+              }
+            </mat-card>
+          }
+        }
 
         <div class="detail-body">
           @for (b of blocks; track b.key) {

@@ -34,7 +34,7 @@ export interface GuidanceInputData {
         <mat-label>{{ t('pb.guidance.inputJd') }}</mat-label>
         <textarea matInput rows="5" [(ngModel)]="data.jdText"
                   [placeholder]="t('pb.guidance.inputJdPh')"></textarea>
-        @if (!data.jdText?.trim()) {
+        @if (!data.jdText.trim()) {
           <mat-hint>
             {{ t('pb.guidance.noJd') }}
             <a routerLink="/tracker" (click)="close()">{{ t('pb.guidance.goTracker') }}</a>
@@ -46,7 +46,7 @@ export interface GuidanceInputData {
         <mat-label>{{ t('pb.guidance.inputResume') }}</mat-label>
         <textarea matInput rows="5" [(ngModel)]="data.resumeText"
                   [placeholder]="t('pb.guidance.inputResumePh')"></textarea>
-        @if (!data.resumeText?.trim()) {
+        @if (!data.resumeText.trim()) {
           <mat-hint>
             {{ t('pb.guidance.noResume') }}
             <a routerLink="/profile" (click)="close()">{{ t('pb.guidance.goProfile') }}</a>

@@ -1,23 +1,57 @@
-<div class="login-wrap">
-  <mat-card class="login-card">
-    @if (busy()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
-
-    <mat-card-header>
-      <div class="head">
-        <span class="mark">▮</span>
-        <div>
-          <h1>Your Interview</h1>
-          <p>{{ t('auth.tagline') }}</p>
-        </div>
+<div class="login-page">
+  <!-- 左侧品牌区 -->
+  <aside class="brand-panel">
+    <div class="brand-content">
+      <div class="brand-mark">
+        <mat-icon>work</mat-icon>
       </div>
-    </mat-card-header>
+      <h1>Your Interview</h1>
+      <p class="tagline">{{ t('auth.tagline') }}</p>
 
-    <mat-card-content>
-      <form (ngSubmit)="submit()" #f="ngForm">
+      <ul class="highlights">
+        <li>
+          <mat-icon>track_changes</mat-icon>
+          <div>
+            <strong>{{ t('auth.hl1Title') }}</strong>
+            <span>{{ t('auth.hl1Desc') }}</span>
+          </div>
+        </li>
+        <li>
+          <mat-icon>menu_book</mat-icon>
+          <div>
+            <strong>{{ t('auth.hl2Title') }}</strong>
+            <span>{{ t('auth.hl2Desc') }}</span>
+          </div>
+        </li>
+        <li>
+          <mat-icon>psychology</mat-icon>
+          <div>
+            <strong>{{ t('auth.hl3Title') }}</strong>
+            <span>{{ t('auth.hl3Desc') }}</span>
+          </div>
+        </li>
+      </ul>
+
+      <p class="brand-foot">{{ t('auth.foot') }}</p>
+    </div>
+  </aside>
+
+  <!-- 右侧表单区 -->
+  <main class="form-panel">
+    <div class="form-inner">
+      <div class="form-head">
+        <h2>{{ t('auth.welcomeBack') }}</h2>
+        <p>{{ t('auth.signInHint') }}</p>
+      </div>
+
+      @if (busy()) { <mat-progress-bar mode="indeterminate" class="top-bar"></mat-progress-bar> }
+
+      <form (ngSubmit)="submit()" #f="ngForm" class="login-form">
         <mat-form-field appearance="outline" class="full">
           <mat-label>{{ t('auth.fieldEmail') }}</mat-label>
           <input matInput type="email" name="email" [(ngModel)]="email"
-                 autocomplete="username" required autofocus>
+                 autocomplete="username" required autofocus
+                 placeholder="you@example.com">
           <mat-icon matPrefix>mail_outline</mat-icon>
         </mat-form-field>
 
@@ -28,10 +62,15 @@
                  autocomplete="current-password" required>
           <mat-icon matPrefix>lock_outline</mat-icon>
           <button mat-icon-button matSuffix type="button"
-                  (click)="hidePassword.set(!hidePassword())" tabindex="-1">
+                  (click)="hidePassword.set(!hidePassword())" tabindex="-1"
+                  [attr.aria-label]="t('auth.togglePassword')">
             <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
           </button>
         </mat-form-field>
+
+        <div class="human-row">
+          <app-human-check [(verified)]="humanOk"></app-human-check>
+        </div>
 
         @if (notice()) {
           <div class="info">
@@ -41,16 +80,20 @@
         }
 
         @if (error()) {
-          <div class="err">
+          <div class="err" role="alert">
             <mat-icon>error_outline</mat-icon>
             <span>{{ error() }}</span>
           </div>
         }
 
-        <button mat-raised-button color="primary" class="full submit"
-                type="submit" [disabled]="busy() || !email || !password">
+        <button mat-flat-button color="primary" class="full submit"
+                type="submit" [disabled]="busy() || !email || !password || !humanOk">
           {{ busy() ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
+
+        @if (!humanOk && email && password) {
+          <p class="human-hint">{{ t('auth.humanHint') }}</p>
+        }
       </form>
 
       @if (googleEnabled()) {
@@ -67,8 +110,6 @@
           {{ googleBusy() ? t('auth.googleEstablishing') : t('auth.googleSignIn') }}
         </button>
       }
-    </mat-card-content>
-  </mat-card>
-
-  <p class="foot">{{ t('auth.foot') }}</p>
+    </div>
+  </main>
 </div>

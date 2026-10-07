@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AuthService } from '../../core/auth/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { HumanCheckComponent } from './human-check.component';
 
 /** Google 登录状态(是否配置了凭据)。 */
 interface GoogleLoginStatus {
@@ -21,7 +22,8 @@ interface GoogleLoginStatus {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatCardModule, MatFormFieldModule,
-    MatInputModule, MatButtonModule, MatIconModule, MatProgressBarModule
+    MatInputModule, MatButtonModule, MatIconModule, MatProgressBarModule,
+    HumanCheckComponent
   ],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss'
@@ -40,6 +42,9 @@ export class LoginComponent implements OnInit {
   /** 中性提示(区别于红色报错):如改密成功后"请重新登录"。 */
   readonly notice = signal<string | null>(null);
   readonly hidePassword = signal(true);
+  /** "I'm not a robot" 验证状态 —— 通过后才允许提交。 */
+  humanOk = false;
+  private readonly humanCheck = viewChild(HumanCheckComponent);
 
   /** Google 登录按钮是否展示(后端配置了凭据才展示)。 */
   readonly googleEnabled = signal(false);
@@ -73,7 +78,7 @@ export class LoginComponent implements OnInit {
   }
 
   submit(): void {
-    if (!this.email || !this.password || this.busy()) return;
+    if (!this.email || !this.password || !this.humanOk || this.busy()) return;
 
     this.busy.set(true);
     this.error.set(null);
@@ -85,11 +90,28 @@ export class LoginComponent implements OnInit {
       },
       error: (e: Error) => {
         this.busy.set(false);
-        // 后端对"邮箱不存在"和"密码错误"返回同一句话,是刻意的 ——
-        // 区分开会让攻击者能探测哪些邮箱已注册。
-        this.error.set(e.message || this.t('auth.loginFailed'));
+        // 验证重置:登录失败后要求重新过人机验证,防止暴力破解。
+        this.humanOk = false;
+        this.humanCheck()?.reset();
+        this.error.set(this.friendlyError(e));
       }
     });
+  }
+
+  /**
+   * 把后端/网络的原始错误翻译成用户能看懂的话。
+   * 之前直接显示 "Cannot POST /api/auth/login" 的 HTML,用户完全看不懂。
+   */
+  private friendlyError(e: Error): string {
+    const msg = (e?.message ?? '').toLowerCase();
+    // 后端没起 / 网络不通:fetch 失败或返回 HTML 错误页
+    if (!msg || msg.includes('cannot post') || msg.includes('<!doctype') ||
+        msg.includes('failed to fetch') || msg.includes('networkerror') ||
+        msg.includes('load failed')) {
+      return this.t('auth.errServerUnreachable');
+    }
+    // 401 等:后端故意不区分"邮箱不存在"和"密码错误"(防枚举攻击)
+    return e.message || this.t('auth.loginFailed');
   }
 
   /** 跳到后端 authorize 端点 → 302 到 Google 授权页。 */

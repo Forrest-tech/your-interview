@@ -236,6 +236,148 @@
         </div>
       </mat-tab>
 
+      <!-- ============ 轮次(缺口1:一家公司多轮) ============ -->
+      <mat-tab label="轮次 ({{ rounds().length }})">
+        <div class="tab-body">
+          <mat-card class="panel">
+            <mat-card-header>
+              <mat-card-title>面试轮次</mat-card-title>
+              <mat-card-subtitle>一家公司多轮,每轮独立记录时间 / 面试官 / 结果</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              @if (rounds().length === 0) {
+                <p class="muted">还没有轮次记录。旧数据的第 1 轮会在迁移后自动出现,也可以手动新增。</p>
+              } @else {
+                @for (r of rounds(); track r.id) {
+                  <div class="round">
+                    <div class="round-head">
+                      <span class="round-order">第 {{ r.order }} 轮</span>
+                      <span class="round-stage">{{ r.stage }}</span>
+                      <span class="round-outcome">{{ roundOutcomeLabel[r.outcome] ?? r.outcome }}</span>
+                      @if (r.scheduledDate) {
+                        <span class="round-date">{{ r.scheduledDate }}</span>
+                      }
+                      <span class="spacer"></span>
+                      @if (auth.can('interviews.write')) {
+                        @if (!isEditingRound(r)) {
+                          <button mat-icon-button (click)="editRound(r)" title="编辑">
+                            <mat-icon>edit</mat-icon>
+                          </button>
+                        }
+                        @if (auth.can('interviews.delete')) {
+                          <button mat-icon-button (click)="removeRound(r)" title="删除">
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        }
+                      }
+                    </div>
+
+                    @if (isEditingRound(r)) {
+                      <div class="form-grid">
+                        <mat-form-field appearance="outline">
+                          <mat-label>阶段</mat-label>
+                          <mat-select [(ngModel)]="roundDrafts[r.id].stage">
+                            @for (s of roundStages; track s) {
+                              <mat-option [value]="s">{{ s }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>结果</mat-label>
+                          <mat-select [(ngModel)]="roundDrafts[r.id].outcome">
+                            @for (o of roundOutcomes; track o) {
+                              <mat-option [value]="o">{{ roundOutcomeLabel[o] }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>日期</mat-label>
+                          <input matInput type="date" [(ngModel)]="roundDrafts[r.id].scheduledDate" />
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>形式</mat-label>
+                          <mat-select [(ngModel)]="roundDrafts[r.id].format">
+                            <mat-option value="">—</mat-option>
+                            <mat-option value="Phone">Phone</mat-option>
+                            <mat-option value="Video">Video</mat-option>
+                            <mat-option value="Onsite">Onsite</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>面试官</mat-label>
+                        <input matInput [(ngModel)]="roundDrafts[r.id].interviewers"
+                               placeholder="如: David Castelino (Sr SWE)" />
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>地点</mat-label>
+                        <input matInput [(ngModel)]="roundDrafts[r.id].location" />
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>备注</mat-label>
+                        <textarea matInput rows="2" [(ngModel)]="roundDrafts[r.id].notes"></textarea>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>反馈</mat-label>
+                        <textarea matInput rows="2" [(ngModel)]="roundDrafts[r.id].feedback"></textarea>
+                      </mat-form-field>
+                      <div class="row-actions">
+                        <button mat-stroked-button color="primary" (click)="saveRound(r)"
+                                [disabled]="busy() !== null">
+                          <mat-icon>check</mat-icon> 保存
+                        </button>
+                        <button mat-button (click)="cancelEditRound(r)">取消</button>
+                      </div>
+                    } @else {
+                      @if (r.interviewers) {
+                        <p class="round-line"><strong>面试官:</strong> {{ r.interviewers }}</p>
+                      }
+                      @if (r.format || r.location) {
+                        <p class="round-line">
+                          @if (r.format) { <span>{{ r.format }}</span> }
+                          @if (r.format && r.location) { <span> · </span> }
+                          @if (r.location) { <span>{{ r.location }}</span> }
+                        </p>
+                      }
+                      @if (r.notes) {
+                        <p class="round-line">{{ r.notes }}</p>
+                      }
+                      @if (r.feedback) {
+                        <blockquote class="wk-evidence">
+                          <strong>反馈</strong><span>{{ r.feedback }}</span>
+                        </blockquote>
+                      }
+                    }
+                  </div>
+                  <mat-divider></mat-divider>
+                }
+              }
+
+              @if (auth.can('interviews.write')) {
+                <div class="add-block">
+                  <mat-divider></mat-divider>
+                  <h4 class="add-title">新增一轮</h4>
+                  <div class="form-grid">
+                    <mat-form-field appearance="outline">
+                      <mat-label>阶段</mat-label>
+                      <mat-select [(ngModel)]="newRoundStage">
+                        @for (s of roundStages; track s) {
+                          <mat-option [value]="s">{{ s }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <button mat-stroked-button color="primary" (click)="addRound()"
+                          [disabled]="busy() !== null">
+                    <mat-icon>add</mat-icon> 新增轮次
+                  </button>
+                </div>
+              }
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
       <!-- ============ 问答(核心价值区) ============ -->
       <mat-tab label="问答 ({{ questions().length }})">
         <div class="tab-body">

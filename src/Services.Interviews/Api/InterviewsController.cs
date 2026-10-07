@@ -245,6 +245,36 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>轮次:新增一轮(Order 自动递增)。</summary>
+    [HttpPost("{id:guid}/rounds")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> AddRound(Guid id, [FromBody] AddRoundBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new AddRoundCommand(id, body.Stage ?? "Technical"), ct);
+        return r.IsSuccess
+            ? Results.Created($"/api/interviews/{id}/rounds/{r.Value}", new { id = r.Value })
+            : r.ToProblemDetails();
+    }
+
+    [HttpPut("{id:guid}/rounds/{roundId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> UpdateRound(Guid id, Guid roundId, [FromBody] UpdateRoundBody body,
+        CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateRoundCommand(id, roundId, body.Stage, body.ScheduledDate,
+            body.Interviewers, body.Format, body.Location, body.Outcome ?? "Pending",
+            body.Notes, body.Feedback), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    [HttpDelete("{id:guid}/rounds/{roundId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> RemoveRound(Guid id, Guid roundId, CancellationToken ct)
+    {
+        var r = await sender.Send(new RemoveRoundCommand(id, roundId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     /// <summary>任务台账:该条目的分析任务历史(投递尝试/失败原因,排障第一入口)。</summary>
     [HttpGet("{id:guid}/jobs")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
@@ -361,6 +391,12 @@ public sealed record FailureBody(string Reason);
 public sealed record AddQuestionBody(
     string QuestionText, string? MyAnswerText = null, string? Category = null,
     int Difficulty = 3, string? Assessment = null);
+
+public sealed record AddRoundBody(string? Stage = null);
+
+public sealed record UpdateRoundBody(
+    string Stage, DateOnly? ScheduledDate, string? Interviewers, string? Format,
+    string? Location, string? Outcome, string? Notes, string? Feedback);
 
 public sealed record UpdateQuestionBody(
     string QuestionText, string? MyAnswerText, string Category, int Difficulty,

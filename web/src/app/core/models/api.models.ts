@@ -270,6 +270,19 @@ export interface InterviewWeakness {
   createdAt?: string;
 }
 
+export interface InterviewRound {
+  id: string;
+  order: number;
+  stage: string;
+  scheduledDate?: string;
+  interviewers?: string;
+  format?: string;
+  location?: string;
+  outcome: string;
+  notes?: string;
+  feedback?: string;
+}
+
 export interface InterviewAsset {
   id: string;
   kind: 'Audio' | 'Transcript' | 'Notes' | string;
@@ -296,6 +309,7 @@ export interface InterviewDetail extends InterviewEntry {
   assets?: InterviewAsset[];
   questions?: InterviewQuestion[];
   weaknesses?: InterviewWeakness[];
+  rounds?: InterviewRound[];
 }
 
 /** 分析任务台账行 —— 「流水线记录」区直出(投递尝试与失败原因留痕)。 */

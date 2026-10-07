@@ -29,6 +29,10 @@ public sealed record WeaknessDto(
     int Severity, string? Suggestion, int OccurrenceCount, string SourceType,
     DateTimeOffset CreatedAt);
 
+public sealed record RoundDto(
+    Guid Id, int Order, string Stage, DateOnly? ScheduledDate, string? Interviewers,
+    string? Format, string? Location, string Outcome, string? Notes, string? Feedback);
+
 public sealed record InterviewEntryDto(
     Guid Id, Guid CompanyId, string CompanyName, Guid? JobApplicationId, string Role,
     string? CompanyProfile, string? JdText, string? JdSummary,
@@ -37,8 +41,9 @@ public sealed record InterviewEntryDto(
     string Status, string? FailureReason, DateTimeOffset? TranscribedAt, DateTimeOffset? AnalyzedAt,
     int? OverallScore, int? PronunciationScore, int? FluencyScore, int? StructureScore,
     int? TechnicalDepthScore, int? RelevanceScore, string? AnalysisSummary,
-    int AssetCount, int QuestionCount, int WeaknessCount,
+    int AssetCount, int QuestionCount, int WeaknessCount, int RoundCount,
     List<AssetDto> Assets, List<QuestionDto> Questions, List<WeaknessDto> Weaknesses,
+    List<RoundDto> Rounds,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
 
 public sealed record InterviewEntryListItemDto(
@@ -181,6 +186,18 @@ public sealed record UpdateQuestionCommand(
 
 public sealed record RemoveQuestionCommand(Guid EntryId, Guid QuestionId) : IRequest<Result>;
 
+// ============================ 轮次(缺口1) ============================
+
+public sealed record AddRoundCommand(
+    Guid EntryId, string Stage = "Technical") : IRequest<Result<Guid>>;
+
+public sealed record UpdateRoundCommand(
+    Guid EntryId, Guid RoundId, string Stage, DateOnly? ScheduledDate, string? Interviewers,
+    string? Format, string? Location, string Outcome, string? Notes,
+    string? Feedback) : IRequest<Result>;
+
+public sealed record RemoveRoundCommand(Guid EntryId, Guid RoundId) : IRequest<Result>;
+
 public sealed record AddWeaknessCommand(
     Guid EntryId, string Category, string Title, string? Detail, string? Evidence,
     int Severity, string? Suggestion) : IRequest<Result<Guid>>;
@@ -255,6 +272,28 @@ public sealed class AddQuestionCommandValidator : AbstractValidator<AddQuestionC
     }
 }
 
+public sealed class AddRoundCommandValidator : AbstractValidator<AddRoundCommand>
+{
+    public AddRoundCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.Stage).NotEmpty().MaximumLength(50);
+    }
+}
+
+public sealed class UpdateRoundCommandValidator : AbstractValidator<UpdateRoundCommand>
+{
+    public UpdateRoundCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.RoundId).NotEmpty();
+        RuleFor(x => x.Stage).NotEmpty().MaximumLength(50);
+        RuleFor(x => x.Outcome).NotEmpty();
+        RuleFor(x => x.Interviewers).MaximumLength(1000);
+        RuleFor(x => x.Location).MaximumLength(300);
+    }
+}
+
 public sealed class AddWeaknessCommandValidator : AbstractValidator<AddWeaknessCommand>
 {
     public AddWeaknessCommandValidator()
@@ -285,6 +324,10 @@ public static class InterviewMappingExtensions
         w.Id, w.Category.ToString(), w.Title, w.Detail, w.Evidence, w.Severity, w.Suggestion,
         w.OccurrenceCount, w.SourceType.ToString(), w.CreatedAt);
 
+    public static RoundDto ToDto(this InterviewRound r) => new(
+        r.Id, r.Order, r.Stage, r.ScheduledDate, r.Interviewers, r.Format, r.Location,
+        r.Outcome.ToString(), r.Notes, r.Feedback);
+
     public static InterviewEntryDto ToDto(this InterviewEntry e) => new(
         e.Id, e.CompanyId, e.CompanyName, e.JobApplicationId, e.Role,
         e.CompanyProfile, e.JdText, e.JdSummary,
@@ -292,10 +335,11 @@ public static class InterviewMappingExtensions
         e.Status.ToString(), e.FailureReason, e.TranscribedAt, e.AnalyzedAt,
         e.OverallScore, e.PronunciationScore, e.FluencyScore, e.StructureScore,
         e.TechnicalDepthScore, e.RelevanceScore, e.AnalysisSummary,
-        e.Assets.Count, e.Questions.Count, e.Weaknesses.Count,
+        e.Assets.Count, e.Questions.Count, e.Weaknesses.Count, e.Rounds.Count,
         e.Assets.OrderBy(x => x.UploadedAt).Select(x => x.ToDto()).ToList(),
         e.Questions.OrderBy(x => x.Sequence).Select(x => x.ToDto()).ToList(),
         e.Weaknesses.OrderByDescending(x => x.Severity).Select(x => x.ToDto()).ToList(),
+        e.Rounds.OrderBy(x => x.Order).Select(x => x.ToDto()).ToList(),
         e.CreatedAt, e.UpdatedAt);
 
     /// <summary>列表项只带聚合的标量字段(不带子集合),避免列表页把大文本拖出来。</summary>
@@ -818,6 +862,65 @@ public sealed class RemoveQuestionCommandHandler(InterviewsDbContext db)
         try
         {
             e.RemoveQuestion(request.QuestionId);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+
+public sealed class AddRoundCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<AddRoundCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(AddRoundCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
+
+        var r = e.AddRound(request.Stage);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(r.Id);
+    }
+}
+
+public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<UpdateRoundCommand, Result>
+{
+    public async Task<Result> Handle(UpdateRoundCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        if (!Enum.TryParse<InterviewRoundOutcome>(request.Outcome, true, out var outcome))
+            return Result.Failure(Error.Validation("Round.InvalidOutcome", "轮次结果无效"));
+
+        try
+        {
+            e.UpdateRound(request.RoundId, request.Stage, request.ScheduledDate, request.Interviewers,
+                request.Format, request.Location, outcome, request.Notes, request.Feedback);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+
+public sealed class RemoveRoundCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<RemoveRoundCommand, Result>
+{
+    public async Task<Result> Handle(RemoveRoundCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try
+        {
+            e.RemoveRound(request.RoundId);
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }

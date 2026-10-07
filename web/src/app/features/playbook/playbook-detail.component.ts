@@ -20,7 +20,7 @@ import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  AnalysisJob, InterviewAsset, InterviewDetail, InterviewQuestion, InterviewStatus, InterviewWeakness
+  AnalysisJob, InterviewAsset, InterviewDetail, InterviewQuestion, InterviewRound, InterviewStatus, InterviewWeakness
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -117,6 +117,19 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     'SentenceIntegrity', 'Communication', 'Other'
   ];
 
+  /** 轮次阶段 / 结果选项 —— 与后端 InterviewRoundOutcome / Stage 约定一致。 */
+  readonly roundStages = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
+  readonly roundOutcomes = ['Pending', 'Passed', 'Rejected', 'Ghosted', 'Cancelled', 'NoShow'];
+  readonly roundOutcomeLabel: Record<string, string> = {
+    Pending: '待定', Passed: '通过', Rejected: '被拒',
+    Ghosted: '失联', Cancelled: '取消', NoShow: '缺席'
+  };
+
+  /** 轮次行内编辑草稿:key = round.id,打开编辑时从行数据复制一份。 */
+  roundDrafts: Record<string, InterviewRound> = {};
+  /** 新增轮次的阶段选择。 */
+  newRoundStage = 'Technical';
+
   // 表单模型(非 signal —— 它们只在提交那一刻被读,不需要触发变更检测)
   questionForm: QuestionForm = this.emptyQuestionForm();
   weaknessForm: WeaknessForm = this.emptyWeaknessForm();
@@ -151,6 +164,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly questions = computed(() => this.entry()?.questions ?? []);
   readonly weaknesses = computed(() => this.entry()?.weaknesses ?? []);
   readonly assets = computed(() => this.entry()?.assets ?? []);
+  readonly rounds = computed(() => this.entry()?.rounds ?? []);
   readonly audioAssets = computed(() =>
     this.assets().filter((a) => (a.kind ?? '').toLowerCase() === 'audio'));
 
@@ -416,6 +430,77 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     if (!confirm('删除这条问答?')) return;
 
     this.api.delete<void>(`/api/interviews/${this.id()}/questions/${q.id}`).subscribe({
+      next: () => {
+        this.snack.open('已删除', '关闭', { duration: 3000 });
+        this.load(false);
+      },
+      error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+    });
+  }
+
+  // ---------------------------------------------------------------- 轮次(缺口1)
+
+  addRound(): void {
+    this.busy.set('round');
+    this.api.post<{ id: string }>(`/api/interviews/${this.id()}/rounds`, {
+      stage: this.newRoundStage
+    }).subscribe({
+      next: () => {
+        this.busy.set(null);
+        this.snack.open('已新增一轮', '关闭', { duration: 3000 });
+        this.load(false);
+      },
+      error: (e: Error) => {
+        this.busy.set(null);
+        this.snack.open(e.message, '关闭', { duration: 5000 });
+      }
+    });
+  }
+
+  /** 打开行内编辑:复制一份草稿,改完点保存才提交。 */
+  editRound(r: InterviewRound): void {
+    this.roundDrafts[r.id] = { ...r };
+  }
+
+  cancelEditRound(r: InterviewRound): void {
+    delete this.roundDrafts[r.id];
+  }
+
+  isEditingRound(r: InterviewRound): boolean {
+    return r.id in this.roundDrafts;
+  }
+
+  saveRound(r: InterviewRound): void {
+    const d = this.roundDrafts[r.id];
+    if (!d) return;
+    this.busy.set('round');
+    this.api.put<void>(`/api/interviews/${this.id()}/rounds/${r.id}`, {
+      stage: d.stage,
+      scheduledDate: d.scheduledDate || null,
+      interviewers: d.interviewers || null,
+      format: d.format || null,
+      location: d.location || null,
+      outcome: d.outcome,
+      notes: d.notes || null,
+      feedback: d.feedback || null
+    }).subscribe({
+      next: () => {
+        this.busy.set(null);
+        delete this.roundDrafts[r.id];
+        this.snack.open('轮次已保存', '关闭', { duration: 3000 });
+        this.load(false);
+      },
+      error: (e: Error) => {
+        this.busy.set(null);
+        this.snack.open(e.message, '关闭', { duration: 5000 });
+      }
+    });
+  }
+
+  removeRound(r: InterviewRound): void {
+    if (!confirm(`删除第 ${r.order} 轮?`)) return;
+
+    this.api.delete<void>(`/api/interviews/${this.id()}/rounds/${r.id}`).subscribe({
       next: () => {
         this.snack.open('已删除', '关闭', { duration: 3000 });
         this.load(false);

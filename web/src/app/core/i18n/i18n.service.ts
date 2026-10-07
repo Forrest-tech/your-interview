@@ -656,6 +656,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.hideColumn': { zh: '隐藏此列', en: 'Hide column', fr: 'Masquer la colonne' },
   'tracker.changeStatus': { zh: '更改状态', en: 'Change status', fr: 'Changer le statut' },
   'tracker.statusChangeFailed': { zh: '状态更新失败,已回滚', en: 'Status update failed, reverted', fr: 'Échec de la mise à jour, annulée' },
+  'tracker.status': { zh: '状态', en: 'Status', fr: 'Statut' },
   'tracker.openLink': { zh: '打开岗位链接', en: 'Open job link', fr: 'Ouvrir le lien de l’offre' },
   'tracker.priority': { zh: '优先级 {n}', en: 'Priority {n}', fr: 'Priorité {n}' },
   'tracker.firstApp': { zh: '记录第一条投递', en: 'Log your first application', fr: 'Ajoutez votre première candidature' },

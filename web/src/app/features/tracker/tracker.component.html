@@ -255,7 +255,7 @@
   </div>
   }
 
-  <!-- 列表视图:横向一行 = logo | 职位信息 | pipeline | 状态下拉(Simplify 模式) -->
+  <!-- 列表视图:横向一行 = logo | 职位信息 | pipeline stepper | 状态下拉 -->
   @if (viewMode() === 'list') {
   <div class="list-view">
     @for (a of items(); track a.id) {
@@ -273,31 +273,33 @@
         <div class="lr-info">
           <div class="lr-title">{{ a.role }}</div>
           <div class="lr-sub">
-            <span class="lr-company">{{ a.companyName }}</span>
+            <span class="lr-company"><mat-icon>business</mat-icon>{{ a.companyName }}</span>
+          </div>
+          <div class="lr-sub">
             @if (a.location) {
               <span class="lr-loc"><mat-icon>place</mat-icon>{{ a.location }}</span>
             }
           </div>
         </div>
         <div class="lr-pipe">
-          @for (s of pipelineStages; track s; let i = $index) {
-            <div class="pipe-step" [class.done]="stageReached(a, s)">
-              <span class="pipe-dot" [title]="t('status.' + s)"></span>
-              @if (i < pipelineStages.length - 1) {
-                <span class="pipe-bar" [class.done]="stageReached(a, pipelineStages[i + 1])"></span>
-              }
+          @for (s of pipelineStages; track s; let i = $index; let last = $last) {
+            <div class="sp-stage" [class.done]="stageReached(a, s)">
+              <span class="sp-label">{{ t('status.' + s) }}</span>
+              <span class="sp-track">
+                <span class="sp-dot"></span>
+                @if (!last) {
+                  <span class="sp-line" [class.done]="stageReached(a, pipelineStages[i + 1])"></span>
+                }
+              </span>
+              <span class="sp-date">{{ stageDate(a, s) ?? '' }}</span>
             </div>
           }
-          <div class="pipe-labels">
-            @for (s of pipelineStages; track s) {
-              <span [class.done]="stageReached(a, s)">{{ t('status.' + s) }}</span>
-            }
-          </div>
         </div>
         <div class="lr-side" (click)="$event.stopPropagation()">
           <mat-form-field appearance="outline" class="lr-status">
             <mat-select [ngModel]="a.status" (ngModelChange)="quickChangeStatus(a, $event)"
-                        [attr.aria-label]="t('tracker.changeStatus')">
+                        [attr.aria-label]="t('tracker.changeStatus')"
+                        [placeholder]="t('tracker.status')">
               @for (s of statusOptions; track s) {
                 <mat-option [value]="s">{{ t('status.' + s) }}</mat-option>
               }

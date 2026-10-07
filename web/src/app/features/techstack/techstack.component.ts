@@ -434,6 +434,9 @@ export class TechStackComponent implements OnInit {
     return this.i18n.t('ts.source.from').replace('{src}', src);
   }
 
+  /** 同场面试题默认收起,点标题展开。 */
+  readonly siblingsOpen = signal(false);
+
   /** 跳回来源:同一场面试一起进来的题,点一下就切过去 —— 反查的落点在"能跳转"。 */
   selectSibling(id: string): void {
     const hit = this.items().find((i) => i.id === id);

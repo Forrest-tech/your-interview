@@ -249,14 +249,19 @@
               </div>
               @if (tr.siblings.length > 0) {
                 <div class="trail-siblings">
-                  <span class="trail-sub">{{ tn('ts.trail.siblings', tr.siblings.length) }}</span>
-                  @for (s of tr.siblings; track s.id) {
-                    <button class="sib" (click)="selectSibling(s.id)">
-                      <span class="sib-title">{{ s.title }}</span>
-                      <span class="li-mastery" [class]="masteryClass(s.mastery)">
-                        {{ masteryLabel(s.mastery) }}
-                      </span>
-                    </button>
+                  <button class="trail-sub-toggle" (click)="siblingsOpen.set(!siblingsOpen())">
+                    <mat-icon>{{ siblingsOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    <span class="trail-sub">{{ tn('ts.trail.siblings', tr.siblings.length) }}</span>
+                  </button>
+                  @if (siblingsOpen()) {
+                    @for (s of tr.siblings; track s.id) {
+                      <button class="sib" (click)="selectSibling(s.id)">
+                        <span class="sib-title">{{ s.title }}</span>
+                        <span class="li-mastery" [class]="masteryClass(s.mastery)">
+                          {{ masteryLabel(s.mastery) }}
+                        </span>
+                      </button>
+                    }
                   }
                 </div>
               }

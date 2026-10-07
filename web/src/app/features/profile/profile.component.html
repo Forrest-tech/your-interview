@@ -169,10 +169,22 @@
           <mat-card-subtitle>{{ t('profile.resumeHint') }}</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
+          <div class="resume-upload-row">
+            <button mat-stroked-button (click)="resumeFile.click()">
+              <mat-icon>upload_file</mat-icon> {{ t('profile.resumeUpload') }}
+            </button>
+            <input #resumeFile type="file" hidden
+                   accept=".pdf,.txt,.md,.docx"
+                   (change)="onResumeFile($event)">
+            @if (resumeFileName()) {
+              <span class="file-name">{{ resumeFileName() }}</span>
+            }
+          </div>
           <mat-form-field appearance="outline" class="full">
             <mat-label>{{ t('profile.resumeLabel') }}</mat-label>
             <textarea matInput rows="8" [(ngModel)]="resumeDraft"
                       [placeholder]="t('profile.resumePh')"></textarea>
+            <mat-hint>{{ t('profile.resumeExtractHint') }}</mat-hint>
           </mat-form-field>
           <button mat-raised-button color="primary" class="full" (click)="saveResume()">
             {{ t('common.save') }}

@@ -32,6 +32,7 @@
     "@types/howler": "^2.2.13",
     "echarts": "^6.1.0",
     "howler": "^2.2.4",
+    "pdfjs-dist": "^6.4.299",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.3"

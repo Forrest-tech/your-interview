@@ -128,6 +128,7 @@ export class ProfileComponent implements OnInit {
 
   /** 我的简历(localStorage,备战材料生成时自动带入)。 */
   resumeDraft = '';
+  resumeFileName = signal('');
   private readonly resumeKey = 'yi-my-resume';
 
   saveResume(): void {
@@ -146,6 +147,51 @@ export class ProfileComponent implements OnInit {
     } catch {
       return '';
     }
+  }
+
+  /** 上传简历文件:txt/md 直接读,PDF 用 pdf.js 提取文字。 */
+  async onResumeFile(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.resumeFileName.set(file.name);
+
+    try {
+      const name = file.name.toLowerCase();
+      if (name.endsWith('.txt') || name.endsWith('.md')) {
+        this.resumeDraft = await file.text();
+        this.snack.open(this.t('profile.resumeExtracted'), this.t('common.close'), { duration: 2500 });
+      } else if (name.endsWith('.pdf')) {
+        this.snack.open(this.t('profile.resumeExtracting'), this.t('common.close'), { duration: 2000 });
+        const text = await this.extractPdfText(file);
+        if (text.trim()) {
+          this.resumeDraft = text;
+          this.snack.open(this.t('profile.resumeExtracted'), this.t('common.close'), { duration: 2500 });
+        } else {
+          this.snack.open(this.t('profile.resumeExtractFailed'), this.t('common.close'), { duration: 4000 });
+        }
+      } else {
+        // docx 等:提示复制粘贴
+        this.snack.open(this.t('profile.resumeDocxHint'), this.t('common.close'), { duration: 5000 });
+      }
+    } catch {
+      this.snack.open(this.t('profile.resumeExtractFailed'), this.t('common.close'), { duration: 4000 });
+    }
+    input.value = '';
+  }
+
+  private async extractPdfText(file: File): Promise<string> {
+    const pdfjs = await import('pdfjs-dist');
+    const buf = await file.arrayBuffer();
+    const pdf = await (pdfjs as any).getDocument({ data: buf }).promise;
+    const parts: string[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const line = (content.items as any[]).map((it: any) => it.str ?? '').join(' ');
+      parts.push(line);
+    }
+    return parts.join('\n');
   }
 
   /** 常用时区。用户已存的值不在列表里时(历史数据/手动改库)动态补一项,不丢值。 */

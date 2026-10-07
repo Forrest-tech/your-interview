@@ -16,6 +16,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -74,7 +75,7 @@ interface WeaknessForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatTabsModule, MatFormFieldModule, MatInputModule,
-    MatSelectModule, MatCheckboxModule, MatSnackBarModule, MatDividerModule
+    MatSelectModule, MatCheckboxModule, MatSnackBarModule, MatDividerModule, MatTooltipModule
   ],
   templateUrl: './playbook-detail.component.html',
   styleUrl: './playbook-detail.component.scss'

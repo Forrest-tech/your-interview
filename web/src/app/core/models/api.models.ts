@@ -133,18 +133,6 @@ export interface StatusChange {
 }
 
 /** 面试轮次(与后端 InterviewRoundDto 对齐:order/scheduledDate/interviewer)。 */
-export interface InterviewRound {
-  id: string;
-  order: number;
-  stage?: string;
-  scheduledDate?: string;
-  interviewer?: string;
-  format?: string;
-  outcome?: string;
-  notes?: string;
-  feedback?: string;
-}
-
 export interface TrackerStats {
   total: number;
   byStatus: Record<string, number>;

@@ -268,7 +268,7 @@ export class SmartAddDialogComponent {
   private readonly trackerApi = inject(TrackerApi);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
-  tf = (key: string, params: Record<string, string | number>): string => this.i18n.tf(key, params);
+  tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
 
   readonly applications = this.data?.applications ?? [];
 

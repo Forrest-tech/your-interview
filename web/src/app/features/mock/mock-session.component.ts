@@ -109,7 +109,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
-  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   readonly id = signal('');
   readonly loading = signal(true);

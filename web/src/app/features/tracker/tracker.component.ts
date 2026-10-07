@@ -286,8 +286,8 @@ export class TrackerComponent implements OnInit {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
-  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
-  tf = (key: string, params: Record<string, string | number>): string => this.i18n.tf(key, params);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
+  tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
 
   /** 名称首字母头像(看板卡 + 详情页共用)。 */
   companyInitials(name?: string): string {
@@ -1215,8 +1215,8 @@ export class ApplicationDetailDialogComponent {
   private readonly trackerApi = inject(TrackerApi);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
-  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
-  tf = (key: string, params: Record<string, string | number>): string => this.i18n.tf(key, params);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
+  tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
   private readonly snack = inject(MatSnackBar);
 
   /**
@@ -1231,6 +1231,16 @@ export class ApplicationDetailDialogComponent {
   /** 轮次结果中文标签(M1.5 回写后展示)。 */
   outcomeLabel(o: string): string {
     return this.i18n.t('outcome.' + o);
+  }
+
+  /**
+   * 从 HttpErrorResponse 里抠出人话错误。
+   * 后端的 ProblemDetails 把说明放在 description(我们的 Error 记录映射过去的)。
+   */
+  private readError(err: unknown): string {
+    const e = err as { error?: { description?: string; detail?: string; title?: string }; message?: string };
+    return e?.error?.description ?? e?.error?.detail ?? e?.error?.title
+      ?? e?.message ?? this.t('tracker.opFailed');
   }
 
   /** 公司情报(懒加载 —— 详情弹窗打开后才查一次)。 */
@@ -1341,7 +1351,7 @@ export class ApplicationDetailDialogComponent {
       error: (err) => {
         this.clGenerating.set(false);
         // 后端的 ProblemDetails.description 已经是人话,直接透出
-        alert(readError(err));
+        alert(this.readError(err));
       }
     });
   }
@@ -1353,7 +1363,7 @@ export class ApplicationDetailDialogComponent {
     this.api.put<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter`, { content: text })
       .subscribe({
         next: (c) => { this.cl.set(c); this.clEditing.set(false); },
-        error: (err) => alert(readError(err))
+        error: (err) => alert(this.readError(err))
       });
   }
 
@@ -1366,7 +1376,7 @@ export class ApplicationDetailDialogComponent {
     this.api.post<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter/final`)
       .subscribe({
         next: (c) => this.cl.set(c),
-        error: (err) => alert(readError(err))
+        error: (err) => alert(this.readError(err))
       });
   }
 
@@ -1375,7 +1385,7 @@ export class ApplicationDetailDialogComponent {
     this.api.delete<void>(`/api/jobs/applications/${this.app.id}/cover-letter`)
       .subscribe({
         next: () => { this.cl.set(null); this.clDraft = ''; this.clEditing.set(false); },
-        error: (err) => alert(readError(err))
+        error: (err) => alert(this.readError(err))
       });
   }
 
@@ -1534,7 +1544,7 @@ export class ApplicationDetailDialogComponent {
         this.loadCommunications();
         this.snack.open(this.t('tracker.commsSaved'), this.t('common.close'), { duration: 2500 });
       },
-      error: (err) => alert(readError(err))
+      error: (err) => alert(this.readError(err))
     });
   }
 
@@ -1546,7 +1556,7 @@ export class ApplicationDetailDialogComponent {
         this.loadCommunications();
         this.snack.open(this.t('tracker.commsDeleted'), this.t('common.close'), { duration: 2500 });
       },
-      error: (err) => alert(readError(err))
+      error: (err) => alert(this.readError(err))
     });
   }
 
@@ -1743,12 +1753,4 @@ export interface CoverLetterReadinessDto {
   missingHint: string | null;
 }
 
-/**
- * 从 HttpErrorResponse 里抠出人话错误。
- * 后端的 ProblemDetails 把说明放在 description(我们的 Error 记录映射过去的)。
- */
-function readError(err: unknown): string {
-  const e = err as { error?: { description?: string; detail?: string; title?: string }; message?: string };
-  return e?.error?.description ?? e?.error?.detail ?? e?.error?.title
-    ?? e?.message ?? this.t('tracker.opFailed');
-}
+

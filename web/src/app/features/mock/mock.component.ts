@@ -48,7 +48,7 @@ export class MockComponent implements OnInit {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
-  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   private readonly router = inject(Router);
   private readonly snack = inject(MatSnackBar);
@@ -194,7 +194,7 @@ export class MockComponent implements OnInit {
         if (this.sessions().length === 1 && this.page() > 1) this.page.update((p) => p - 1);
         this.load();
       },
-      error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
     });
   }
 

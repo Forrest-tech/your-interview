@@ -58,7 +58,7 @@ export class ProfileComponent implements OnInit {
   private readonly router = inject(Router);
   t = (key: string): string => this.i18n.t(key);
   /** 带占位符的词条(模板只能访问公开成员,所以包一层)。 */
-  tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
+  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
   /** 语言选项(i18n 是私有依赖,模板经此公开字段访问)。 */
   readonly langOptions = this.i18n.options;
 
@@ -223,10 +223,10 @@ export class ProfileComponent implements OnInit {
       : [];
     return [
       ...head,
-      '# .env（仓库根目录）',
+      this.t('prof.mountEnvComment'),
       `RECORDINGS_HOST_DIR=${path}`,
       '',
-      '# 让新挂载生效',
+      this.t('prof.mountReloadComment'),
       'docker compose up -d --force-recreate assessment'
     ].join('\n');
   });

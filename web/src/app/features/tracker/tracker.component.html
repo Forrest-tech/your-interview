@@ -159,16 +159,14 @@
     <div class="board" #board (scroll)="onBoardScroll()">
       @for (col of columns(); track col.status) {
       <section class="column">
-        <header class="col-head" [class]="statusClass(col.status)">
-          <span class="col-dot"></span>
-          <span class="col-name">{{ col.label }}</span>
-          <span class="col-count">{{ col.items.length }}</span>
+        <header class="col-head">
           <button mat-icon-button class="col-hide" type="button"
                   (click)="hideColumn(col.status)"
                   [matTooltip]="t('tracker.hideColumn')"
                   [attr.aria-label]="t('tracker.hideColumn')">
             <mat-icon>visibility_off</mat-icon>
           </button>
+          <span class="col-name">{{ col.label }} ({{ col.items.length }})</span>
         </header>
 
         <div class="col-body">
@@ -177,65 +175,18 @@
                       tabindex="0" role="button"
                       [attr.aria-label]="a.companyName + ' ' + a.role"
                       (keydown.enter)="openDetail(a)" (keydown.space)="openDetail(a); $event.preventDefault()">
-              <div class="app-top">
-                <span class="logo-wrap">
-                  <span class="logo-avatar" [style.background]="avatarColor(a.companyName)">{{ companyInitials(a.companyName) }}</span>
-                  @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
-                    <img class="logo" [src]="a.companyLogoUrl" [alt]="a.companyName" (error)="markLogoBroken(a.id)">
-                  }
-                </span>
-                <div class="app-head">
-                  <div class="role">{{ a.role }}</div>
-                  <div class="company">{{ a.companyName }}</div>
-                </div>
-                @if (a.priority) {
-                  <span class="pri" [class]="priorityClass(a.priority)"
-                        [matTooltip]="tn('tracker.priority', a.priority)">
-                    {{ a.priority }}
-                  </span>
+              <span class="logo-wrap">
+                <span class="logo-avatar" [style.background]="avatarColor(a.companyName)">{{ companyInitials(a.companyName) }}</span>
+                @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
+                  <img class="logo" [src]="a.companyLogoUrl" [alt]="a.companyName" (error)="markLogoBroken(a.id)">
                 }
-              </div>
-
-              <div class="meta">
+              </span>
+              <div class="app-head">
+                <div class="role">{{ a.role }}</div>
+                <div class="company"><mat-icon>business</mat-icon>{{ a.companyName }}</div>
                 @if (a.location) {
-                  <span class="meta-item"><mat-icon>place</mat-icon>{{ a.location }}</span>
+                  <div class="company"><mat-icon>place</mat-icon>{{ a.location }}</div>
                 }
-                @if (a.appliedDate) {
-                  <span class="meta-item"><mat-icon>event</mat-icon>{{ a.appliedDate | date: 'MM-dd' }}</span>
-                }
-                @if (a.salary) {
-                  <span class="meta-item"><mat-icon>payments</mat-icon>{{ a.salary }}</span>
-                }
-              </div>
-
-              @if (a.needsConnectFirst || a.outreachMessage || a.resumeScore != null) {
-                <div class="tags">
-                  @if (a.needsConnectFirst) {
-                    <span class="tag warn">{{ t('tracker.needsConnect') }}</span>
-                  }
-                  @if (a.outreachMessage) {
-                    <span class="tag">{{ a.outreachMessage }}</span>
-                  }
-                  @if (a.resumeScore != null) {
-                    <span class="tag">{{ tn('tracker.matchScore', a.resumeScore) }}</span>
-                  }
-                </div>
-              }
-
-              <div class="app-actions">
-                <button mat-icon-button [matTooltip]="t('common.edit')" (click)="openEdit(a, $event)">
-                  <mat-icon>edit</mat-icon>
-                </button>
-                @if (a.link) {
-                  <a mat-icon-button [matTooltip]="t('tracker.openLink')" [href]="a.link"
-                     target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">
-                    <mat-icon>open_in_new</mat-icon>
-                  </a>
-                }
-                <button mat-icon-button [matTooltip]="t('common.delete')" class="danger"
-                        (click)="remove(a, $event)">
-                  <mat-icon>delete_outline</mat-icon>
-                </button>
               </div>
             </mat-card>
           }

@@ -213,7 +213,7 @@
   @if (viewMode() === 'list') {
   <div class="list-view" id="status">
     @for (a of items(); track a.id) {
-      <mat-card class="list-row" (click)="openDetail(a)">
+      <div class="list-row" (click)="openDetail(a)">
         <div class="lr-logo">
           @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
             <img [src]="a.companyLogoUrl" [alt]="a.companyName"
@@ -260,7 +260,7 @@
             </mat-select>
           </mat-form-field>
         </div>
-      </mat-card>
+      </div>
     } @empty {
       <div class="list-empty">{{ t('tracker.noResults') }}</div>
     }

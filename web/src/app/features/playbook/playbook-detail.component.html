@@ -378,6 +378,65 @@
         </div>
       </mat-tab>
 
+      <!-- ============ 指导材料(缺口2) ============ -->
+      <mat-tab label="指导材料">
+        <div class="tab-body">
+          <mat-card class="panel">
+            <mat-card-header>
+              <mat-card-title>面试指导材料</mat-card-title>
+              <mat-card-subtitle>
+                @if (guidance()) {
+                  <span>v{{ guidance()!.version }} · {{ guidance()!.model }} · {{ guidance()!.generatedAt }}</span>
+                } @else {
+                  <span>手动生成,站内浏览,版本保留</span>
+                }
+              </mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="row-actions" style="margin-bottom: 12px;">
+                @if (auth.can('interviews.write')) {
+                  <button mat-stroked-button color="primary" (click)="generateGuidance()"
+                          [disabled]="busy() !== null">
+                    <mat-icon>auto_awesome</mat-icon>
+                    {{ guidance() ? '重新生成新版本' : '生成指导材料' }}
+                  </button>
+                }
+                @if (guidance()) {
+                  <button mat-stroked-button (click)="exportGuidancePdf()">
+                    <mat-icon>picture_as_pdf</mat-icon> 导出 PDF(打印)
+                  </button>
+                  <button mat-stroked-button (click)="exportGuidanceWord()">
+                    <mat-icon>description</mat-icon> 导出 Word
+                  </button>
+                }
+                @if (guidanceVersions().length > 1) {
+                  <mat-form-field appearance="outline" class="ver-select">
+                    <mat-label>历史版本</mat-label>
+                    <mat-select [value]="selectedGuidanceVersion()?.id"
+                                (selectionChange)="selectGuidanceVersionById($event.value)">
+                      @for (v of guidanceVersions(); track v.id) {
+                        <mat-option [value]="v.id">v{{ v.version }} · {{ v.generatedAt }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                }
+              </div>
+
+              @if (guidanceLoading()) {
+                <p class="muted">加载中…</p>
+              } @else if (guidance()) {
+                <div class="guidance-body" [innerHTML]="guidanceHtml()"></div>
+              } @else {
+                <div class="empty-panel">
+                  <mat-icon>article</mat-icon>
+                  <p>还没有指导材料。点击「生成指导材料」,AI 会根据 JD、公司介绍、历史问答、短板和六维诊断生成一份备战文档。</p>
+                </div>
+              }
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
       <!-- ============ 问答(核心价值区) ============ -->
       <mat-tab label="问答 ({{ questions().length }})">
         <div class="tab-body">

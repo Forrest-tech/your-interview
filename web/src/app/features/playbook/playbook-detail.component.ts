@@ -20,7 +20,7 @@ import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  AnalysisJob, InterviewAsset, InterviewDetail, InterviewQuestion, InterviewRound, InterviewStatus, InterviewWeakness
+  AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion, InterviewRound, InterviewStatus, InterviewWeakness
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -168,6 +168,131 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly audioAssets = computed(() =>
     this.assets().filter((a) => (a.kind ?? '').toLowerCase() === 'audio'));
 
+  // ------------------------------------------------------------ 指导材料(缺口2)
+  readonly guidance = signal<GuidanceMaterial | null>(null);
+  readonly guidanceVersions = signal<GuidanceVersion[]>([]);
+  readonly guidanceLoading = signal(false);
+
+  /** 当前材料的 Markdown → 安全 HTML(极简渲染:标题/加粗/列表/换行,先转义防 XSS)。 */
+  readonly guidanceHtml = computed(() => this.renderMarkdown(this.guidance()?.contentMarkdown ?? ''));
+
+  private renderMarkdown(md: string): string {
+    const esc = md
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const lines = esc.split('\n');
+    const out: string[] = [];
+    let inList = false;
+    for (const line of lines) {
+      const t = line.trim();
+      if (/^#{1,3}\s/.test(t)) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        const level = t.match(/^#+/)![0].length;
+        out.push(`<h${level + 1}>${this.inlineMd(t.replace(/^#+\s*/, ''))}</h${level + 1}>`);
+      } else if (/^[-*]\s/.test(t)) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push(`<li>${this.inlineMd(t.replace(/^[-*]\s*/, ''))}</li>`);
+      } else if (/^\d+[.)]\s/.test(t)) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<p class="md-num">${this.inlineMd(t)}</p>`);
+      } else if (t === '') {
+        if (inList) { out.push('</ul>'); inList = false; }
+      } else {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<p>${this.inlineMd(t)}</p>`);
+      }
+    }
+    if (inList) out.push('</ul>');
+    return out.join('\n');
+  }
+
+  private inlineMd(s: string): string {
+    return s
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
+  loadGuidance(): void {
+    this.guidanceLoading.set(true);
+    this.api.get<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance`).subscribe({
+      next: (g) => {
+        this.guidance.set(g);
+        this.guidanceLoading.set(false);
+        this.loadGuidanceVersions();
+      },
+      error: () => {
+        // 404 = 还没生成过,不是错误
+        this.guidance.set(null);
+        this.guidanceLoading.set(false);
+        this.loadGuidanceVersions();
+      }
+    });
+  }
+
+  private loadGuidanceVersions(): void {
+    this.api.get<GuidanceVersion[]>(`/api/interviews/${this.id()}/guidance/versions`).subscribe({
+      next: (v) => this.guidanceVersions.set(v ?? []),
+      error: () => this.guidanceVersions.set([])
+    });
+  }
+
+  generateGuidance(): void {
+    if (!confirm('生成新版本指导材料?会调用 AI,可能需要几十秒。')) return;
+    this.busy.set('guidance');
+    this.api.post<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance/generate`, {}).subscribe({
+      next: (g) => {
+        this.busy.set(null);
+        this.guidance.set(g);
+        this.loadGuidanceVersions();
+        this.snack.open(`指导材料 v${g.version} 已生成`, '关闭', { duration: 3000 });
+      },
+      error: (e: Error) => {
+        this.busy.set(null);
+        this.snack.open(e.message, '关闭', { duration: 6000 });
+      }
+    });
+  }
+
+  selectGuidanceVersion(v: GuidanceVersion): void {
+    this.guidanceLoading.set(true);
+    this.api.get<GuidanceMaterial>(
+      `/api/interviews/${this.id()}/guidance`, { version: v.version }).subscribe({
+      next: (g) => { this.guidance.set(g); this.guidanceLoading.set(false); },
+      error: (e: Error) => {
+        this.guidanceLoading.set(false);
+        this.snack.open(e.message, '关闭', { duration: 5000 });
+      }
+    });
+  }
+
+  readonly selectedGuidanceVersion = computed(() => {
+    const g = this.guidance();
+    if (!g) return null;
+    return this.guidanceVersions().find((v) => v.version === g.version) ?? null;
+  });
+
+  selectGuidanceVersionById(id: string): void {
+    const v = this.guidanceVersions().find((x) => x.id === id);
+    if (v) this.selectGuidanceVersion(v);
+  }
+
+  /** 导出 PDF:走浏览器打印(用户选"另存为 PDF")。 */
+  exportGuidancePdf(): void {
+    window.print();
+  }
+
+  /** 导出 Word:拼一个 Word 能打开的 HTML 文件下载。 */
+  exportGuidanceWord(): void {
+    const g = this.guidance();
+    if (!g) return;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${this.guidanceHtml()}</body></html>`;
+    const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `面试指导材料-v${g.version}.doc`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   /**
    * 分析任务台账(流水线记录)。
    * 与详情分开拉:详情 15s 轮询时任务列表也该跟着刷新(投递中 → 已回写)。
@@ -261,6 +386,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     if (showSpinner) this.loading.set(true);
     this.error.set(null);
     this.loadJobs();
+    this.loadGuidance();
 
     this.api.get<InterviewDetail>(`/api/interviews/${this.id()}`).subscribe({
       next: (d) => {

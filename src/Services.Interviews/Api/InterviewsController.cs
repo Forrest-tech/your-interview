@@ -275,6 +275,33 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>指导材料:手动触发 AI 生成新版本(版本号自动 +1)。</summary>
+    [HttpPost("{id:guid}/guidance/generate")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> GenerateGuidance(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new GenerateGuidanceCommand(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>指导材料:取最新版,或 ?version=N 取指定版本。</summary>
+    [HttpGet("{id:guid}/guidance")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> GetGuidance(Guid id, [FromQuery] int? version, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetGuidanceQuery(id, version), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>指导材料:版本列表(站内浏览切换用)。</summary>
+    [HttpGet("{id:guid}/guidance/versions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListGuidanceVersions(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListGuidanceVersionsQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>任务台账:该条目的分析任务历史(投递尝试/失败原因,排障第一入口)。</summary>
     [HttpGet("{id:guid}/jobs")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]

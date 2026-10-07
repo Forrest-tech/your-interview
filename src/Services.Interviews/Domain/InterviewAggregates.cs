@@ -105,6 +105,7 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     private readonly List<InterviewQuestion> _questions = [];
     private readonly List<InterviewWeakness> _weaknesses = [];
     private readonly List<InterviewRound> _rounds = [];
+    private readonly List<GeneratedMaterial> _materials = [];
 
     private InterviewEntry() { }
 
@@ -162,6 +163,7 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public IReadOnlyCollection<InterviewQuestion> Questions => _questions.AsReadOnly();
     public IReadOnlyCollection<InterviewWeakness> Weaknesses => _weaknesses.AsReadOnly();
     public IReadOnlyCollection<InterviewRound> Rounds => _rounds.AsReadOnly();
+    public IReadOnlyCollection<GeneratedMaterial> Materials => _materials.AsReadOnly();
 
     /// <summary>
     /// 合法流转表。集中定义,避免散落在各处 if-else。
@@ -421,6 +423,18 @@ public sealed class InterviewEntry : AuditableAggregateRoot
             ?? throw new InvalidOperationException("轮次不存在");
         _rounds.Remove(r);
         Touch();
+    }
+
+    /// <summary>新增一份指导材料,版本号自动取 max+1。</summary>
+    public GeneratedMaterial AddMaterial(string contentMarkdown, string model,
+        int? promptTokens = null, int? completionTokens = null)
+    {
+        var version = _materials.Count == 0 ? 1 : _materials.Max(m => m.Version) + 1;
+        var m = new GeneratedMaterial(Id, version, contentMarkdown, model);
+        m.SetUsage(promptTokens, completionTokens);
+        _materials.Add(m);
+        Touch();
+        return m;
     }
 
     public InterviewWeakness AddWeakness(WeaknessCategory category, string title, string? detail,
@@ -735,6 +749,47 @@ public enum InterviewRoundOutcome
     Ghosted = 3,
     Cancelled = 4,
     NoShow = 5
+}
+
+/// <summary>
+/// 面试指导材料。手动点击生成,每次生成版本号 +1,历史版本保留可回看。
+/// 缺口2(2026-10-07):内容由 AI 根据 JD/公司介绍/问答/短板/六维诊断拼 prompt 生成。
+/// </summary>
+public sealed class GeneratedMaterial : Entity
+{
+    private GeneratedMaterial() { }
+
+    internal GeneratedMaterial(Guid interviewEntryId, int version, string contentMarkdown,
+        string model)
+    {
+        InterviewEntryId = interviewEntryId;
+        Version = version;
+        ContentMarkdown = contentMarkdown;
+        Model = model;
+        GeneratedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Guid InterviewEntryId { get; private set; }
+
+    /// <summary>版本号,从 1 开始递增。</summary>
+    public int Version { get; private set; }
+
+    /// <summary>指导材料正文(Markdown)。</summary>
+    public string ContentMarkdown { get; private set; } = string.Empty;
+
+    /// <summary>生成时用的模型名(网关回传)。</summary>
+    public string Model { get; private set; } = string.Empty;
+
+    public DateTimeOffset GeneratedAt { get; private set; }
+
+    public int? PromptTokens { get; private set; }
+    public int? CompletionTokens { get; private set; }
+
+    internal void SetUsage(int? promptTokens, int? completionTokens)
+    {
+        PromptTokens = promptTokens;
+        CompletionTokens = completionTokens;
+    }
 }
 
 // ============================ 领域事件 ============================

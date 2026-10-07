@@ -283,6 +283,23 @@ export interface InterviewRound {
   feedback?: string;
 }
 
+export interface GuidanceMaterial {
+  id: string;
+  version: number;
+  contentMarkdown: string;
+  model: string;
+  generatedAt: string;
+  promptTokens?: number;
+  completionTokens?: number;
+}
+
+export interface GuidanceVersion {
+  id: string;
+  version: number;
+  generatedAt: string;
+  model: string;
+}
+
 export interface InterviewAsset {
   id: string;
   kind: 'Audio' | 'Transcript' | 'Notes' | string;

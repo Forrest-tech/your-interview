@@ -606,3 +606,22 @@ mat-progress-bar {
   .round-line { margin: 4px 0; font-size: 13px; color: #444; }
   .row-actions { display: flex; gap: 8px; margin-top: 8px; }
 }
+
+/* 指导材料(缺口2) */
+.guidance-body {
+  h2, h3, h4 { margin: 14px 0 8px; }
+  p { margin: 6px 0; line-height: 1.7; }
+  ul { margin: 6px 0; padding-left: 22px; }
+  li { margin: 4px 0; line-height: 1.6; }
+  code { background: #f0f0f0; border-radius: 3px; padding: 1px 5px; font-size: 12px; }
+  .md-num { font-weight: 600; }
+}
+.ver-select { width: 220px; margin-left: 8px; }
+.row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+@media print {
+  /* 导出 PDF 时只打指导材料正文 */
+  body * { visibility: hidden; }
+  .guidance-body, .guidance-body * { visibility: visible; }
+  .guidance-body { position: absolute; left: 0; top: 0; width: 100%; }
+}

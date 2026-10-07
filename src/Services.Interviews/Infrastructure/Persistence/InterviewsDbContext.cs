@@ -19,6 +19,7 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
     public DbSet<InterviewQuestion> Questions => Set<InterviewQuestion>();
     public DbSet<InterviewWeakness> Weaknesses => Set<InterviewWeakness>();
     public DbSet<InterviewRound> Rounds => Set<InterviewRound>();
+    public DbSet<GeneratedMaterial> GuidanceMaterials => Set<GeneratedMaterial>();
 
     /// <summary>分析任务台账(发件箱)。派发器与回写端点共用。</summary>
     public DbSet<AnalysisJob> AnalysisJobs => Set<AnalysisJob>();
@@ -100,6 +101,8 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Rounds).WithOne().HasForeignKey(r => r.InterviewEntryId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Materials).WithOne().HasForeignKey(m => m.InterviewEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // 集合用字段访问模式 + 只读暴露,保证外部不能绕过领域方法直接改集合(封装不变量)
             e.Metadata.FindNavigation(nameof(InterviewEntry.Assets))!
@@ -109,6 +112,8 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Metadata.FindNavigation(nameof(InterviewEntry.Weaknesses))!
                 .SetPropertyAccessMode(PropertyAccessMode.Field);
             e.Metadata.FindNavigation(nameof(InterviewEntry.Rounds))!
+                .SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindNavigation(nameof(InterviewEntry.Materials))!
                 .SetPropertyAccessMode(PropertyAccessMode.Field);
         });
 
@@ -174,6 +179,16 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Order }).IsUnique();
+        });
+
+        b.Entity<GeneratedMaterial>(e =>
+        {
+            e.ToTable("guidance_materials");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ContentMarkdown).HasColumnType("text").IsRequired();
+            e.Property(x => x.Model).HasMaxLength(200).IsRequired();
+            e.HasIndex(x => x.InterviewEntryId);
+            e.HasIndex(x => new { x.InterviewEntryId, x.Version }).IsUnique();
         });
 
         b.Entity<AnalysisJob>(e =>

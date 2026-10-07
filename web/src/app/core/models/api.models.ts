@@ -300,6 +300,23 @@ export interface GuidanceVersion {
   model: string;
 }
 
+/** 问答候选(缺口3):勾选导入 TechStack。 */
+export interface QuestionCandidate {
+  questionId: string;
+  questionText: string;
+  myAnswerText?: string;
+  recommendedAnswer?: string;
+  category?: string;
+  difficulty: number;
+  gotStuck: boolean;
+  assessment?: string;
+  /** 前端本地状态:是否勾选 / 行内编辑草稿。 */
+  selected?: boolean;
+  editText?: string;
+  editAnswer?: string;
+  editCategory?: string;
+}
+
 export interface InterviewAsset {
   id: string;
   kind: 'Audio' | 'Transcript' | 'Notes' | string;

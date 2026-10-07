@@ -42,6 +42,11 @@ public sealed record GuidanceMaterialDto(
 public sealed record GuidanceVersionDto(
     Guid Id, int Version, DateTimeOffset GeneratedAt, string Model);
 
+/// <summary>问答候选(缺口3):把条目的 InterviewQuestion 转成可勾选导入 TechStack 的候选。</summary>
+public sealed record QuestionCandidateDto(
+    Guid QuestionId, string QuestionText, string? MyAnswerText, string? RecommendedAnswer,
+    string? Category, int Difficulty, bool GotStuck, string? Assessment);
+
 public sealed record InterviewEntryDto(
     Guid Id, Guid CompanyId, string CompanyName, Guid? JobApplicationId, string Role,
     string? CompanyProfile, string? JdText, string? JdSummary,
@@ -340,6 +345,10 @@ public static class InterviewMappingExtensions
     public static GuidanceMaterialDto ToDto(this GeneratedMaterial m) => new(
         m.Id, m.Version, m.ContentMarkdown, m.Model, m.GeneratedAt,
         m.PromptTokens, m.CompletionTokens);
+
+    public static QuestionCandidateDto ToCandidateDto(this InterviewQuestion q) => new(
+        q.Id, q.QuestionText, q.MyAnswerText, q.RecommendedAnswer,
+        q.Category.ToString(), q.Difficulty, q.GotStuck, q.Assessment);
 
     public static InterviewEntryDto ToDto(this InterviewEntry e) => new(
         e.Id, e.CompanyId, e.CompanyName, e.JobApplicationId, e.Role,
@@ -1110,5 +1119,29 @@ public sealed class ListGuidanceVersionsQueryHandler(InterviewsDbContext db)
             .Select(m => new GuidanceVersionDto(m.Id, m.Version, m.GeneratedAt, m.Model))
             .ToListAsync(ct);
         return Result.Success<IReadOnlyList<GuidanceVersionDto>>(list);
+    }
+}
+
+// ============================ 问答候选(缺口3) ============================
+
+/// <summary>把该条目的问答转成候选列表,供前端勾选导入 TechStack。默认全选由前端做。</summary>
+public sealed record ListQuestionCandidatesQuery(Guid EntryId)
+    : IRequest<Result<IReadOnlyList<QuestionCandidateDto>>>;
+
+public sealed class ListQuestionCandidatesQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<ListQuestionCandidatesQuery, Result<IReadOnlyList<QuestionCandidateDto>>>
+{
+    public async Task<Result<IReadOnlyList<QuestionCandidateDto>>> Handle(
+        ListQuestionCandidatesQuery request, CancellationToken ct)
+    {
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        if (!exists) return Result.Failure<IReadOnlyList<QuestionCandidateDto>>(Error.NotFound("面试条目"));
+
+        var list = await db.Questions
+            .Where(q => q.InterviewEntryId == request.EntryId)
+            .OrderBy(q => q.Sequence)
+            .Select(q => q.ToCandidateDto())
+            .ToListAsync(ct);
+        return Result.Success<IReadOnlyList<QuestionCandidateDto>>(list);
     }
 }

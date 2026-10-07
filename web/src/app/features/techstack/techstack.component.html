@@ -164,7 +164,13 @@
             <div class="li-foot">
               <span class="li-topic">{{ it.topic }}</span>
               @if (sourceLabel(it); as src) {
-                <span class="li-src" [matTooltip]="'来自实战机经:' + src">{{ src }}</span>
+                @if (it.sourceInterviewEntryId) {
+                  <a class="li-src link" [routerLink]="['/playbook', it.sourceInterviewEntryId]"
+                     [matTooltip]="'来自实战机经,点击跳回:' + src"
+                     (click)="$event.stopPropagation()">{{ src }}</a>
+                } @else {
+                  <span class="li-src" [matTooltip]="'来自实战机经:' + src">{{ src }}</span>
+                }
               }
               <span class="li-review">复习 {{ it.reviewCount }} 次</span>
             </div>

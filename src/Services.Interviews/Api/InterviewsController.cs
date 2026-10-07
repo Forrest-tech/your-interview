@@ -302,6 +302,18 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 问答候选(缺口3):把该条目的问答转成候选列表,前端勾选后调
+    /// POST /api/knowledge/import-candidates 导入 TechStack。
+    /// </summary>
+    [HttpGet("{id:guid}/question-candidates")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListQuestionCandidates(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListQuestionCandidatesQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>任务台账:该条目的分析任务历史(投递尝试/失败原因,排障第一入口)。</summary>
     [HttpGet("{id:guid}/jobs")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]

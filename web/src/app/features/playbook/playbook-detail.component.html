@@ -444,6 +444,78 @@
             复盘的价值几乎全在这页:把「当时怎么答的」和「应该怎么答」并排放在一起。
           </p>
 
+          <!-- 候选导入 TechStack(缺口3) -->
+          @if (auth.can('interviews.write') && questions().length > 0) {
+            <div class="import-bar">
+              @if (!showCandidates()) {
+                <button mat-stroked-button color="primary" (click)="openCandidateImport()">
+                  <mat-icon>upload</mat-icon> 导入到 TechStack
+                </button>
+              } @else {
+                <mat-card class="panel candidate-panel">
+                  <mat-card-header>
+                    <mat-card-title>勾选导入 TechStack</mat-card-title>
+                    <mat-card-subtitle>
+                      已选 {{ selectedCandidates().length }} / {{ candidates().length }} ·
+                      重复条目会自动跳过
+                    </mat-card-subtitle>
+                  </mat-card-header>
+                  <mat-card-content>
+                    @if (candidatesLoading()) {
+                      <p class="muted">加载候选中…</p>
+                    } @else if (candidates().length === 0) {
+                      <p class="muted">没有可导入的问答。</p>
+                    } @else {
+                      <div class="row-actions" style="margin-bottom: 8px;">
+                        <button mat-button (click)="toggleAllCandidates(true)">全选</button>
+                        <button mat-button (click)="toggleAllCandidates(false)">全不选</button>
+                        <span class="spacer"></span>
+                        <button mat-stroked-button color="primary"
+                                (click)="importCandidates()"
+                                [disabled]="busy() !== null || selectedCandidates().length === 0">
+                          <mat-icon>check</mat-icon>
+                          确认导入 ({{ selectedCandidates().length }})
+                        </button>
+                        <button mat-button (click)="closeCandidateImport()">取消</button>
+                      </div>
+                      @for (c of candidates(); track c.questionId) {
+                        <div class="candidate" [class.unselected]="!c.selected">
+                          <div class="cand-head">
+                            <mat-checkbox [(ngModel)]="c.selected"></mat-checkbox>
+                            <span class="cand-cat">{{ c.editCategory }}</span>
+                            @if (c.gotStuck) {
+                              <span class="q-stuck"><mat-icon inline>sentiment_dissatisfied</mat-icon> 卡住了</span>
+                            }
+                          </div>
+                          <mat-form-field appearance="outline" class="wide">
+                            <mat-label>问题</mat-label>
+                            <textarea matInput rows="2" [(ngModel)]="c.editText"></textarea>
+                          </mat-form-field>
+                          <div class="form-grid">
+                            <mat-form-field appearance="outline">
+                              <mat-label>分类</mat-label>
+                              <mat-select [(ngModel)]="c.editCategory">
+                                @for (cat of questionCategories; track cat) {
+                                  <mat-option [value]="cat">{{ cat }}</mat-option>
+                                }
+                              </mat-select>
+                            </mat-form-field>
+                            <mat-form-field appearance="outline">
+                              <mat-label>答案 / 要点</mat-label>
+                              <textarea matInput rows="2" [(ngModel)]="c.editAnswer"
+                                        placeholder="留空则不带答案导入"></textarea>
+                            </mat-form-field>
+                          </div>
+                        </div>
+                        <mat-divider></mat-divider>
+                      }
+                    }
+                  </mat-card-content>
+                </mat-card>
+              }
+            </div>
+          }
+
           @if (questions().length === 0) {
             <mat-card class="panel empty-panel">
               <mat-icon>question_answer</mat-icon>

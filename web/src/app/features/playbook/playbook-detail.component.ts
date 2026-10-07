@@ -20,7 +20,8 @@ import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion, InterviewRound, InterviewStatus, InterviewWeakness
+  AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
+  InterviewRound, InterviewStatus, InterviewWeakness, QuestionCandidate
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -561,6 +562,85 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
         this.load(false);
       },
       error: (e: Error) => this.snack.open(e.message, '关闭', { duration: 5000 })
+    });
+  }
+
+  // ------------------------------------------------------------ 候选导入 TechStack(缺口3)
+
+  readonly showCandidates = signal(false);
+  readonly candidates = signal<QuestionCandidate[]>([]);
+  readonly candidatesLoading = signal(false);
+
+  readonly selectedCandidates = computed(() => this.candidates().filter((c) => c.selected));
+
+  openCandidateImport(): void {
+    this.showCandidates.set(true);
+    this.candidatesLoading.set(true);
+    this.api.get<QuestionCandidate[]>(`/api/interviews/${this.id()}/question-candidates`).subscribe({
+      next: (list) => {
+        // 默认全选;编辑草稿预填当前值
+        for (const c of list) {
+          c.selected = true;
+          c.editText = c.questionText;
+          c.editAnswer = c.myAnswerText ?? c.recommendedAnswer ?? '';
+          c.editCategory = c.category ?? 'Technical';
+        }
+        this.candidates.set(list);
+        this.candidatesLoading.set(false);
+      },
+      error: (e: Error) => {
+        this.candidatesLoading.set(false);
+        this.snack.open(e.message, '关闭', { duration: 5000 });
+      }
+    });
+  }
+
+  closeCandidateImport(): void {
+    this.showCandidates.set(false);
+    this.candidates.set([]);
+  }
+
+  toggleAllCandidates(select: boolean): void {
+    this.candidates.update((list) => list.map((c) => ({ ...c, selected: select })));
+  }
+
+  importCandidates(): void {
+    const sel = this.selectedCandidates();
+    if (sel.length === 0) {
+      this.snack.open('请至少勾选一条', '关闭', { duration: 3000 });
+      return;
+    }
+    const e = this.entry();
+    this.busy.set('candidates');
+    this.api.post<{ created: number; skipped: number; total: number }>(
+      '/api/knowledge/import-candidates',
+      {
+        entryId: this.id(),
+        company: e?.companyName ?? null,
+        date: e?.interviewDate ?? null,
+        roundNo: e?.roundNo ?? null,
+        roundStage: null,
+        applicationId: null,
+        items: sel.map((c) => ({
+          title: (c.editText ?? c.questionText).slice(0, 80),
+          topic: c.editCategory ?? 'Technical',
+          question: c.editText ?? c.questionText,
+          difficulty: c.difficulty ?? 3,
+          importance: c.gotStuck ? 4 : 3,
+          betterAnswer: c.editAnswer || null,
+          clientKey: c.questionId
+        }))
+      }).subscribe({
+      next: (r) => {
+        this.busy.set(null);
+        this.closeCandidateImport();
+        this.snack.open(
+          `导入完成:新增 ${r.created} 条,跳过重复 ${r.skipped} 条`, '关闭', { duration: 4000 });
+      },
+      error: (err: Error) => {
+        this.busy.set(null);
+        this.snack.open(err.message, '关闭', { duration: 6000 });
+      }
     });
   }
 

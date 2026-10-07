@@ -1,6 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -108,7 +109,7 @@ const DETAIL_BLOCKS: DetailBlock[] = [
   selector: 'app-techstack',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, MatCardModule, MatIconModule, MatButtonModule,
+    CommonModule, FormsModule, RouterLink, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatMenuModule
   ],

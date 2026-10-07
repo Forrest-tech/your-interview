@@ -74,13 +74,13 @@
         <div class="view-toggle" role="group" [attr.aria-label]="t('tracker.viewMode')">
           <button mat-button type="button" class="view-btn"
                   [class.active]="viewMode() === 'board'"
-                  (click)="viewMode.set('board')"
+                  (click)="setViewMode('board')"
                   [matTooltip]="t('tracker.boardView')">
             <mat-icon>view_kanban</mat-icon>
           </button>
           <button mat-button type="button" class="view-btn"
                   [class.active]="viewMode() === 'list'"
-                  (click)="viewMode.set('list')"
+                  (click)="setViewMode('list')"
                   [matTooltip]="t('tracker.listView')">
             <mat-icon>view_list</mat-icon>
           </button>

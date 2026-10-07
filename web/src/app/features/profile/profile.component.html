@@ -162,6 +162,24 @@
         </mat-card-content>
       </mat-card>
 
+      <!-- 我的简历:存一份,备战材料生成时自动带入 -->
+      <mat-card class="resume-card">
+        <mat-card-header>
+          <mat-card-title>{{ t('profile.resumeTitle') }}</mat-card-title>
+          <mat-card-subtitle>{{ t('profile.resumeHint') }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('profile.resumeLabel') }}</mat-label>
+            <textarea matInput rows="8" [(ngModel)]="resumeDraft"
+                      [placeholder]="t('profile.resumePh')"></textarea>
+          </mat-form-field>
+          <button mat-raised-button color="primary" class="full" (click)="saveResume()">
+            {{ t('common.save') }}
+          </button>
+        </mat-card-content>
+      </mat-card>
+
       <!-- ★ 2026-09-27(Forrest):录音存到本机哪个文件夹,在这里选 -->
       <mat-card class="storage">
         <mat-card-header>

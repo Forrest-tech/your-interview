@@ -292,8 +292,20 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
   tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
 
-  /** 看板/列表视图切换(Simplify 模式)。 */
-  readonly viewMode = signal<'board' | 'list'>('board');
+  /** 看板/列表视图切换(Simplify 模式)。默认 list,刷新后从 localStorage 恢复。 */
+  readonly viewMode = signal<'board' | 'list'>(
+    ((): 'board' | 'list' => {
+      try {
+        const v = localStorage.getItem('yi-tracker-view');
+        return v === 'board' ? 'board' : 'list';
+      } catch { return 'list'; }
+    })()
+  );
+
+  setViewMode(m: 'board' | 'list'): void {
+    this.viewMode.set(m);
+    try { localStorage.setItem('yi-tracker-view', m); } catch { /* 忽略 */ }
+  }
 
   /** 隐藏的列(用户点了列头的眼睛图标)。 */
   private readonly hiddenCols = signal<Set<ApplicationStatus>>(new Set());
@@ -539,9 +551,38 @@ export class TrackerComponent implements OnInit, AfterViewInit {
 
   /** 筛选条件走服务端 —— 数据量大时前端过滤会漏数据,所以 search/status 都进 query。 */
   readonly search = signal('');
-  readonly statusFilter = signal<ApplicationStatus | null>(null);
+  readonly statusFilter = signal<ApplicationStatus | null>(
+    ((): ApplicationStatus | null => {
+      try {
+        return (localStorage.getItem('yi-tracker-status') as ApplicationStatus) || null;
+      } catch { return null; }
+    })()
+  );
   /** 排序键直接对齐后端 sortBy(updated/applied/appliedAsc/company/deadline)。 */
-  readonly sort = signal<string>('updated');
+  readonly sort = signal<string>(
+    ((): string => {
+      try {
+        return localStorage.getItem('yi-tracker-sort') || 'updated';
+      } catch { return 'updated'; }
+    })()
+  );
+
+  setStatusFilter(s: ApplicationStatus | null): void {
+    this.statusFilter.set(s);
+    try {
+      if (s) localStorage.setItem('yi-tracker-status', s);
+      else localStorage.removeItem('yi-tracker-status');
+    } catch { /* 忽略 */ }
+    this.page.set(1);
+    this.reload();
+  }
+
+  setSort(s: string): void {
+    this.sort.set(s);
+    try { localStorage.setItem('yi-tracker-sort', s); } catch { /* 忽略 */ }
+    this.page.set(1);
+    this.reload();
+  }
 
   readonly stats = signal<TrackerStats | null>(null);
 
@@ -627,23 +668,23 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   }
 
   toggleStatusFilter(s: ApplicationStatus): void {
-    this.statusFilter.set(this.statusFilter() === s ? null : s);
-    this.page.set(1);
-    this.load();
+    this.setStatusFilter(this.statusFilter() === s ? null : s);
   }
 
   onSortChange(v: string): void {
-    this.sort.set(v);
-    this.page.set(1);
-    this.load();
+    this.setSort(v);
   }
 
   clearFilters(): void {
     this.search.set('');
     this.statusFilter.set(null);
     this.sort.set('updated');
+    try {
+      localStorage.removeItem('yi-tracker-status');
+      localStorage.setItem('yi-tracker-sort', 'updated');
+    } catch { /* 忽略 */ }
     this.page.set(1);
-    this.load();
+    this.reload();
   }
 
   goPage(p: number): void {

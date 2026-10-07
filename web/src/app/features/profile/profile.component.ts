@@ -10,6 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { ApiClient } from '../../core/api/api-client';
 import { PracticeApi, StorageSettingDto } from '../../core/api/practice-api.service';
@@ -56,6 +57,7 @@ export class ProfileComponent implements OnInit {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
+  private readonly snack = inject(MatSnackBar);
   t = (key: string): string => this.i18n.t(key);
   /** 带占位符的词条(模板只能访问公开成员,所以包一层)。 */
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
@@ -123,6 +125,28 @@ export class ProfileComponent implements OnInit {
   readonly savingPrefs = signal(false);
   langDraft = 'zh';
   tzDraft = 'America/Toronto';
+
+  /** 我的简历(localStorage,备战材料生成时自动带入)。 */
+  resumeDraft = '';
+  private readonly resumeKey = 'yi-my-resume';
+
+  saveResume(): void {
+    try {
+      localStorage.setItem(this.resumeKey, this.resumeDraft);
+      this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2500 });
+    } catch {
+      this.snack.open(this.t('profile.resumeSaveFailed'), this.t('common.close'), { duration: 3000 });
+    }
+  }
+
+  /** 供备战材料对话框调用:取存好的简历。 */
+  static getSavedResume(): string {
+    try {
+      return localStorage.getItem('yi-my-resume') ?? '';
+    } catch {
+      return '';
+    }
+  }
 
   /** 常用时区。用户已存的值不在列表里时(历史数据/手动改库)动态补一项,不丢值。 */
   readonly tzOptions = computed<TzOption[]>(() => {
@@ -267,6 +291,9 @@ export class ProfileComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    try {
+      this.resumeDraft = localStorage.getItem(this.resumeKey) ?? '';
+    } catch { /* 忽略 */ }
   }
 
   load(): void {

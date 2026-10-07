@@ -338,10 +338,15 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   generateGuidance(): void {
     // 弹出输入对话框:收集 JD/简历/面经/自定义要求
+    // 简历从 My Account 自动带入,JD 从条目自动带入
+    let savedResume = '';
+    try {
+      savedResume = localStorage.getItem('yi-my-resume') ?? '';
+    } catch { /* 忽略 */ }
     const dialogRef = this.dialog.open(GuidanceInputDialogComponent, {
       data: {
         jdText: this.entry()?.jdText ?? '',
-        resumeText: '',
+        resumeText: savedResume,
         interviewExperiences: '',
         customRequirements: ''
       },

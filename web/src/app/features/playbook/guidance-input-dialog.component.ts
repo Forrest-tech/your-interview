@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { RouterLink } from '@angular/router';
 import { I18nService } from '../../core/i18n/i18n.service';
 
 export interface GuidanceInputData {
@@ -22,7 +23,7 @@ export interface GuidanceInputData {
   standalone: true,
   imports: [
     FormsModule, MatButtonModule, MatDialogModule,
-    MatFormFieldModule, MatInputModule
+    MatFormFieldModule, MatInputModule, RouterLink
   ],
   template: `
     <h2 mat-dialog-title>{{ t('pb.guidance.inputTitle') }}</h2>
@@ -33,22 +34,36 @@ export interface GuidanceInputData {
         <mat-label>{{ t('pb.guidance.inputJd') }}</mat-label>
         <textarea matInput rows="5" [(ngModel)]="data.jdText"
                   [placeholder]="t('pb.guidance.inputJdPh')"></textarea>
+        @if (!data.jdText?.trim()) {
+          <mat-hint>
+            {{ t('pb.guidance.noJd') }}
+            <a routerLink="/tracker" (click)="close()">{{ t('pb.guidance.goTracker') }}</a>
+          </mat-hint>
+        }
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('pb.guidance.inputResume') }}</mat-label>
         <textarea matInput rows="5" [(ngModel)]="data.resumeText"
                   [placeholder]="t('pb.guidance.inputResumePh')"></textarea>
+        @if (!data.resumeText?.trim()) {
+          <mat-hint>
+            {{ t('pb.guidance.noResume') }}
+            <a routerLink="/profile" (click)="close()">{{ t('pb.guidance.goProfile') }}</a>
+          </mat-hint>
+        } @else {
+          <mat-hint>{{ t('pb.guidance.resumeFromProfile') }}</mat-hint>
+        }
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>{{ t('pb.guidance.inputExperiences') }}</mat-label>
+        <mat-label>{{ t('pb.guidance.inputExperiences') }} ({{ t('common.optional') }})</mat-label>
         <textarea matInput rows="4" [(ngModel)]="data.interviewExperiences"
                   [placeholder]="t('pb.guidance.inputExperiencesPh')"></textarea>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>{{ t('pb.guidance.inputCustom') }}</mat-label>
+        <mat-label>{{ t('pb.guidance.inputCustom') }} ({{ t('common.optional') }})</mat-label>
         <textarea matInput rows="3" [(ngModel)]="data.customRequirements"
                   [placeholder]="t('pb.guidance.inputCustomPh')"></textarea>
       </mat-form-field>
@@ -69,6 +84,11 @@ export interface GuidanceInputData {
 })
 export class GuidanceInputDialogComponent {
   readonly data = inject<GuidanceInputData>(MAT_DIALOG_DATA);
+  private readonly dialogRef = inject(MatDialogRef<GuidanceInputDialogComponent>);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
+
+  close(): void {
+    this.dialogRef.close(null);
+  }
 }

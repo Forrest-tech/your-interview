@@ -1,9 +1,9 @@
 <div class="page">
   <header class="page-head">
     <div>
-      <h2>实战机经</h2>
+      <h2>{{ t('nav.playbook') }}</h2>
       <p class="sub">
-        一场面试一条记录:先传录音/转写文本,再跑分析拿到六维与短板。
+        {{ t('pb.subtitle') }}
       </p>
     </div>
     <div class="head-actions">
@@ -26,10 +26,10 @@
     <mat-card class="err-card">
       <mat-icon>error_outline</mat-icon>
       <div>
-        <strong>加载失败</strong>
+        <strong>{{ t('common.loadFailed') }}</strong>
         <p>{{ error() }}</p>
       </div>
-      <button mat-stroked-button (click)="load()">重试</button>
+      <button mat-stroked-button (click)="load()">{{ t('common.retry') }}</button>
     </mat-card>
   }
 
@@ -38,23 +38,23 @@
     <section class="metrics">
       <mat-card class="metric">
         <div class="metric-val">{{ s.totalEntries }}</div>
-        <div class="metric-label">总场次</div>
+        <div class="metric-label">{{ t('pb.stat.total') }}</div>
       </mat-card>
       <mat-card class="metric">
         <div class="metric-val">{{ s.analyzed }}</div>
-        <div class="metric-label">已分析</div>
+        <div class="metric-label">{{ t('pb.stat.analyzed') }}</div>
       </mat-card>
       <mat-card class="metric">
         <div class="metric-val">{{ s.pendingAnalysis }}</div>
-        <div class="metric-label">待分析</div>
+        <div class="metric-label">{{ t('pb.stat.pending') }}</div>
       </mat-card>
       <mat-card class="metric">
         <div class="metric-val">{{ s.averageOverallScore ?? '—' }}</div>
-        <div class="metric-label">平均总分</div>
+        <div class="metric-label">{{ t('pb.stat.avgScore') }}</div>
       </mat-card>
       <mat-card class="metric highlight">
         <div class="metric-val">{{ s.totalWeaknesses }}</div>
-        <div class="metric-label">累计短板</div>
+        <div class="metric-label">{{ t('pb.stat.weaknesses') }}</div>
       </mat-card>
     </section>
   }
@@ -63,29 +63,29 @@
   <mat-card class="filters">
     <div class="filter-row">
       <mat-form-field appearance="outline">
-        <mat-label>公司</mat-label>
+        <mat-label>{{ t('pb.filter.company') }}</mat-label>
         <mat-select [(ngModel)]="companyFilter" (selectionChange)="applyFilter()">
-          <mat-option value="">全部公司</mat-option>
+          <mat-option value="">{{ t('pb.filter.allCompanies') }}</mat-option>
           @for (c of companies(); track c.companyId) {
             <mat-option [value]="c.companyName">
-              {{ c.companyName }}（{{ c.entryCount }} 场）
+              {{ c.companyName }} ({{ tn('pb.filter.companyCount', c.entryCount) }})
             </mat-option>
           }
         </mat-select>
       </mat-form-field>
 
       <mat-form-field appearance="outline">
-        <mat-label>状态</mat-label>
+        <mat-label>{{ t('pb.filter.status') }}</mat-label>
         <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilter()">
-          <mat-option value="">全部状态</mat-option>
+          <mat-option value="">{{ t('pb.filter.allStatuses') }}</mat-option>
           @for (o of statusOptions; track o.value) {
-            <mat-option [value]="o.value">{{ o.label }}</mat-option>
+            <mat-option [value]="o.value">{{ statusLabel(o.value) }}</mat-option>
           }
         </mat-select>
       </mat-form-field>
 
       <button mat-button (click)="resetFilter()">
-        <mat-icon>filter_alt_off</mat-icon> 清除筛选
+        <mat-icon>filter_alt_off</mat-icon> {{ t('common.clearFilter') }}
       </button>
     </div>
   </mat-card>
@@ -94,11 +94,11 @@
   @if (!loading() && entries().length === 0) {
     <mat-card class="empty-card">
       <mat-icon>inbox</mat-icon>
-      <h3>还没有机经记录</h3>
-      <p>面试完趁记忆还热,先把这一场建下来,再补录音或转写文本。</p>
+      <h3>{{ t('pb.empty.title') }}</h3>
+      <p>{{ t('pb.empty.msg') }}</p>
       @if (auth.can('interviews.write')) {
         <button mat-flat-button color="primary" (click)="openDialog()">
-          <mat-icon>add</mat-icon> 新建第一条
+          <mat-icon>add</mat-icon> {{ t('pb.empty.create') }}
         </button>
       }
     </mat-card>
@@ -119,7 +119,7 @@
 
         <mat-card-content>
           <div class="meta">
-            <span><mat-icon inline>repeat</mat-icon> 第 {{ e.roundNo }} 轮</span>
+            <span><mat-icon inline>repeat</mat-icon> {{ tn('pb.round', e.roundNo) }}</span>
             @if (e.interviewDate) {
               <span><mat-icon inline>event</mat-icon> {{ e.interviewDate }}</span>
             }
@@ -132,12 +132,12 @@
           <div class="score-row">
             <div class="overall" [class]="scoreClass(e.overallScore)">
               <span class="val">{{ e.overallScore ?? '—' }}</span>
-              <span class="lbl">总分</span>
+              <span class="lbl">{{ t('dim.overall') }}</span>
             </div>
             <div class="dims">
               @for (d of dims(e); track d.key) {
                 <div class="dim">
-                  <span class="dim-lbl">{{ d.label }}</span>
+                  <span class="dim-lbl">{{ t(d.labelKey) }}</span>
                   <span class="dim-val" [class]="scoreClass(d.value)">{{ d.value ?? '—' }}</span>
                 </div>
               }
@@ -149,14 +149,14 @@
             <span [title]="t('playbook.weakCount')"><mat-icon inline>report_problem</mat-icon> {{ e.weaknessCount ?? 0 }}</span>
             <span [title]="t('playbook.assetCount')"><mat-icon inline>attach_file</mat-icon> {{ e.assetCount ?? 0 }}</span>
             @if (e.hasTranscript) {
-              <span class="has-transcript"><mat-icon inline>check_circle</mat-icon> 已转写</span>
+              <span class="has-transcript"><mat-icon inline>check_circle</mat-icon> {{ t('pb.card.transcribed') }}</span>
             }
           </div>
         </mat-card-content>
 
         <mat-card-actions>
           <a mat-button color="primary" [routerLink]="['/playbook', e.id]">
-            <mat-icon>open_in_new</mat-icon> 查看复盘
+            <mat-icon>open_in_new</mat-icon> {{ t('pb.card.viewReview') }}
           </a>
           <span class="spacer"></span>
           @if (auth.can('interviews.delete')) {
@@ -172,11 +172,11 @@
   @if (total() > 0) {
     <div class="pager">
       <button mat-stroked-button [disabled]="!canPrev()" (click)="prevPage()">
-        <mat-icon>chevron_left</mat-icon> 上一页
+        <mat-icon>chevron_left</mat-icon> {{ t('common.prevPage') }}
       </button>
-      <span class="pager-info">第 {{ page() }} / {{ totalPages() }} 页 · 共 {{ total() }} 条</span>
+      <span class="pager-info">{{ pagerInfo() }}</span>
       <button mat-stroked-button [disabled]="!canNext()" (click)="nextPage()">
-        下一页 <mat-icon>chevron_right</mat-icon>
+        {{ t('common.nextPage') }} <mat-icon>chevron_right</mat-icon>
       </button>
     </div>
   }
@@ -187,75 +187,75 @@
     <div class="overlay" (click)="closeDialog()">
       <mat-card class="dialog" (click)="$event.stopPropagation()">
         <mat-card-header>
-          <mat-card-title>新建机经条目</mat-card-title>
-          <mat-card-subtitle>先记下公司、岗位、轮次与日期,材料和问答可以稍后补</mat-card-subtitle>
+          <mat-card-title>{{ t('pb.dialog.title') }}</mat-card-title>
+          <mat-card-subtitle>{{ t('pb.dialog.sub') }}</mat-card-subtitle>
         </mat-card-header>
 
         <mat-card-content>
           <div class="form-grid">
             <mat-form-field appearance="outline">
-              <mat-label>公司名 *</mat-label>
+              <mat-label>{{ t('pb.form.companyName') }}</mat-label>
               <input matInput [(ngModel)]="form.companyName" placeholder="Geotab" />
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>岗位 *</mat-label>
+              <mat-label>{{ t('pb.form.role') }}</mat-label>
               <input matInput [(ngModel)]="form.role" placeholder="Senior .NET Developer" />
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>第几轮</mat-label>
+              <mat-label>{{ t('pb.form.roundNo') }}</mat-label>
               <input matInput type="number" min="1" max="20" [(ngModel)]="form.roundNo" />
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>面试日期</mat-label>
+              <mat-label>{{ t('pb.form.interviewDate') }}</mat-label>
               <input matInput type="date" [(ngModel)]="form.interviewDate" />
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>形式</mat-label>
+              <mat-label>{{ t('pb.form.interviewFormat') }}</mat-label>
               <mat-select [(ngModel)]="form.interviewFormat">
-                <mat-option value="">未指定</mat-option>
-                @for (f of formatOptions; track f) {
-                  <mat-option [value]="f">{{ f }}</mat-option>
+                <mat-option value="">{{ t('pb.form.formatUnspecified') }}</mat-option>
+                @for (f of formatOptions; track f.value) {
+                  <mat-option [value]="f.value">{{ t(f.labelKey) }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>面试官</mat-label>
-              <input matInput [(ngModel)]="form.interviewers" placeholder="姓名/职位" />
+              <mat-label>{{ t('pb.form.interviewers') }}</mat-label>
+              <input matInput [(ngModel)]="form.interviewers" [placeholder]="t('pb.form.interviewersPh')" />
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>地点</mat-label>
-              <input matInput [(ngModel)]="form.location" placeholder="线上 / 多伦多办公室" />
+              <mat-label>{{ t('pb.form.location') }}</mat-label>
+              <input matInput [(ngModel)]="form.location" [placeholder]="t('pb.form.locationPh')" />
             </mat-form-field>
           </div>
 
           <mat-form-field appearance="outline" class="wide">
-            <mat-label>JD 摘要</mat-label>
+            <mat-label>{{ t('pb.form.jdSummary') }}</mat-label>
             <textarea matInput rows="2" [(ngModel)]="form.jdSummary"
-                      placeholder="岗位要求的关键词,便于后续对比"></textarea>
+                      [placeholder]="t('pb.form.jdSummaryPh')"></textarea>
           </mat-form-field>
 
           <mat-form-field appearance="outline" class="wide">
-            <mat-label>JD 原文</mat-label>
+            <mat-label>{{ t('pb.form.jdText') }}</mat-label>
             <textarea matInput rows="3" [(ngModel)]="form.jdText"
-                      placeholder="可整段粘贴招聘页面内容"></textarea>
+                      [placeholder]="t('pb.form.jdTextPh')"></textarea>
           </mat-form-field>
 
           <mat-form-field appearance="outline" class="wide">
-            <mat-label>公司背景</mat-label>
+            <mat-label>{{ t('pb.form.companyProfile') }}</mat-label>
             <textarea matInput rows="2" [(ngModel)]="form.companyProfile"
-                      placeholder="规模/行业/技术栈,便于以后回忆"></textarea>
+                      [placeholder]="t('pb.form.companyProfilePh')"></textarea>
           </mat-form-field>
 
           <mat-form-field appearance="outline" class="wide">
-            <mat-label>备注</mat-label>
+            <mat-label>{{ t('pb.form.notes') }}</mat-label>
             <textarea matInput rows="2" [(ngModel)]="form.notes"
-                      placeholder="现场感受、面试官关注点等"></textarea>
+                      [placeholder]="t('pb.form.notesPh')"></textarea>
           </mat-form-field>
 
           @if (formError()) {
@@ -264,9 +264,9 @@
         </mat-card-content>
 
         <mat-card-actions class="dialog-actions">
-          <button mat-button (click)="closeDialog()" [disabled]="saving()">取消</button>
+          <button mat-button (click)="closeDialog()" [disabled]="saving()">{{ t('common.cancel') }}</button>
           <button mat-flat-button color="primary" (click)="save()" [disabled]="saving()">
-            @if (saving()) { 保存中… } @else { 创建并进入 }
+            @if (saving()) { {{ t('pb.dialog.saving') }} } @else { {{ t('pb.dialog.created') }} }
           </button>
         </mat-card-actions>
       </mat-card>

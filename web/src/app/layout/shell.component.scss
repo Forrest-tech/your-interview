@@ -280,9 +280,11 @@
 /* ------------------------------------------------------------
    满屏页面(/practice 等)专用:不要外层滚动条,也不要底部留白。
    /practice 自带内部滚动区,页脚紧贴视口底即可。
+   app-tracker 同理:页头/指标/筛选固定,只有看板区自己滚。
    ------------------------------------------------------------ */
 .content:has(> app-ai-practice),
-.content:has(> .practice-page) {
+.content:has(> .practice-page),
+.content:has(> app-tracker) {
   padding: 0;
   overflow: hidden;            /* 内部自己滚,外层不滚 */
 }

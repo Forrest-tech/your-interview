@@ -173,6 +173,28 @@ mat-form-field { width: 100%; }
 }
 .list-row:hover { box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1); }
 
+/* 需要跟进:左边橙色条 + 标题旁感叹号徽标 */
+.list-row.followup { border-left: 3px solid #f59e0b; }
+.followup-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.lr-wait {
+  font-size: 11px;
+  color: #999;
+  margin-left: 8px;
+}
+
 .lr-logo {
   flex: 0 0 56px;
   width: 56px;

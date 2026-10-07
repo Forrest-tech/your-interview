@@ -337,6 +337,21 @@ export class TrackerComponent implements OnInit, AfterViewInit {
       this.pipelineStages.indexOf(stage);
   }
 
+  /** 投递后等待天数(用于跟进提醒)。 */
+  daysWaiting(app: Application): number | null {
+    if (!app.appliedDate) return null;
+    const ms = Date.now() - new Date(app.appliedDate).getTime();
+    return Math.max(0, Math.floor(ms / 86400000));
+  }
+
+  /** 是否需要跟进:到了 nextFollowUpAt,或投递超过 14 天无进展。 */
+  needsFollowUp(app: Application): boolean {
+    if (['Offer', 'Accepted', 'Rejected', 'Withdrawn', 'Ghosted'].includes(app.status)) return false;
+    if (app.nextFollowUpAt && new Date(app.nextFollowUpAt).getTime() <= Date.now()) return true;
+    const d = this.daysWaiting(app);
+    return d !== null && d >= 14;
+  }
+
   /**
    * 卡片/列表行上的快速改状态(Simplify 模式):乐观更新本地,失败回滚。
    * 后端 PUT 要求全量 payload,这里用当前对象的值拼。

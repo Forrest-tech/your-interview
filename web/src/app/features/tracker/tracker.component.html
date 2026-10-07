@@ -213,7 +213,7 @@
   @if (viewMode() === 'list') {
   <div class="list-view" id="status">
     @for (a of items(); track a.id) {
-      <div class="list-row" (click)="openDetail(a)">
+      <div class="list-row" (click)="openDetail(a)" [class.followup]="needsFollowUp(a)">
         <div class="lr-logo">
           @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
             <img [src]="a.companyLogoUrl" [alt]="a.companyName"
@@ -225,13 +225,21 @@
           }
         </div>
         <div class="lr-info">
-          <div class="lr-title">{{ a.role }}</div>
+          <div class="lr-title">
+            {{ a.role }}
+            @if (needsFollowUp(a)) {
+              <span class="followup-badge" [matTooltip]="t('tracker.followupHint')">!</span>
+            }
+          </div>
           <div class="lr-sub">
             <span class="lr-company"><mat-icon>business</mat-icon>{{ a.companyName }}</span>
           </div>
           <div class="lr-sub">
             @if (a.location) {
               <span class="lr-loc"><mat-icon>place</mat-icon>{{ a.location }}</span>
+            }
+            @if (daysWaiting(a); as dw) {
+              <span class="lr-wait">{{ dw }}d</span>
             }
           </div>
         </div>

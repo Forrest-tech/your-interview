@@ -87,7 +87,10 @@ export class ShellComponent {
    * 用 startsWith 而不是 === :/practice 及其子路径(如 /practice?x=1 已由
    * urlAfterRedirects 去掉 query)统一对待,避免日后加子路由时页脚又冒出来。
    */
-  readonly showFooter = computed(() => !this.url().startsWith('/practice'));
+  /** 页脚:全部隐藏(2026-10-07 Forrest 要求)。
+      成熟应用模式(Tracker/Notion/Linear):功能页不放页脚,
+      只在公开落地页放简单版权。本应用无公开落地页,故全部隐藏。 */
+  readonly showFooter = computed(() => false);
 
   /** 头像占位字母。 */
   readonly initial = computed(() => {

@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -280,7 +280,7 @@ export class ApplicationDialogComponent {
   templateUrl: './tracker.component.html',
   styleUrl: './tracker.component.scss'
 })
-export class TrackerComponent implements OnInit {
+export class TrackerComponent implements OnInit, AfterViewInit {
   private readonly api = inject(ApiClient);
   private readonly trackerApi = inject(TrackerApi);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
@@ -291,11 +291,25 @@ export class TrackerComponent implements OnInit {
 
   /** 看板横向滚动:macOS 默认隐藏滚动条,显式左右按钮保证可发现。 */
   private readonly boardEl = viewChild<ElementRef<HTMLElement>>('board');
+  private readonly canLeft = signal(false);
+  private readonly canRight = signal(false);
+  canScrollLeft = this.canLeft.asReadonly();
+  canScrollRight = this.canRight.asReadonly();
+
   scrollBoard(dir: 1 | -1): void {
     const el = this.boardEl()?.nativeElement;
     if (!el) return;
     // 一次滚一列半(列宽 250-300 + 间距 12)
     el.scrollBy({ left: dir * 450, behavior: 'smooth' });
+  }
+
+  /** 滚动时更新按钮显隐:到左头隐藏左按钮,到右头隐藏右按钮。 */
+  onBoardScroll(): void {
+    const el = this.boardEl()?.nativeElement;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    this.canLeft.set(el.scrollLeft > 8);
+    this.canRight.set(el.scrollLeft < max - 8);
   }
 
   /** 名称首字母头像(看板卡 + 详情页共用)。 */
@@ -371,6 +385,11 @@ export class TrackerComponent implements OnInit {
   ngOnInit(): void {
     this.load();
     this.loadStats();
+  }
+
+  ngAfterViewInit(): void {
+    // 初次渲染后计算滚动按钮显隐(列数>可视区时才显示右按钮)
+    setTimeout(() => this.onBoardScroll(), 100);
   }
 
   // ------------------------------ 数据加载 ------------------------------

@@ -118,10 +118,11 @@
 
   <div class="board-wrap">
     <button mat-icon-button class="board-nav left" type="button"
-            (click)="scrollBoard(-1)" [attr.aria-label]="t('tracker.scrollLeft')">
+            (click)="scrollBoard(-1)" [attr.aria-label]="t('tracker.scrollLeft')"
+            [class.hidden]="!canScrollLeft()">
       <mat-icon>chevron_left</mat-icon>
     </button>
-    <div class="board" #board>
+    <div class="board" #board (scroll)="onBoardScroll()">
       @for (col of columns(); track col.status) {
       <section class="column">
         <header class="col-head" [class]="statusClass(col.status)">
@@ -204,7 +205,8 @@
     }
     </div>
     <button mat-icon-button class="board-nav right" type="button"
-            (click)="scrollBoard(1)" [attr.aria-label]="t('tracker.scrollRight')">
+            (click)="scrollBoard(1)" [attr.aria-label]="t('tracker.scrollRight')"
+            [class.hidden]="!canScrollRight()">
       <mat-icon>chevron_right</mat-icon>
     </button>
   </div>

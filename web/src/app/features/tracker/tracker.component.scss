@@ -79,32 +79,38 @@ mat-form-field { width: 100%; }
 
 /* ---------- 看板:唯一滚动区 ---------- */
 
-/* 外层包住看板 + 左右滚动按钮 */
+/* 外层包住看板 + 左右滚动按钮(按钮绝对定位,不挤占看板宽度) */
 .board-wrap {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
+  min-width: 0;
   position: relative;
 }
 
-/* 左右滚动按钮:macOS 默认隐藏滚动条时保证可发现横滚 */
+/* 左右滚动按钮:悬浮在看板边缘;到头时自动隐藏 */
 .board-nav {
-  flex: 0 0 auto;
-  align-self: center;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   z-index: 2;
+  opacity: 1;
+  transition: opacity 200ms ease;
+}
+.board-nav.left { left: 4px; }
+.board-nav.right { right: 4px; }
+.board-nav.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 .board-nav:hover { background: #f5f5f5; }
 .board-nav mat-icon { color: rgba(0, 0, 0, 0.6); }
 
 .board {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;               /* flex 子项允许收缩到内容区高度内 */
+  width: 100%;
+  height: 100%;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(250px, 300px);

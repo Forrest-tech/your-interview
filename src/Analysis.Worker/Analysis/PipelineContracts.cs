@@ -64,7 +64,12 @@ public sealed record SpeechMetrics(
     /// <summary>低分词(<60)占比。</summary>
     double LowScoreWordRatio,
     /// <summary>读错的专业术语。</summary>
-    IReadOnlyList<WordPronunciation> ProblemWords);
+    IReadOnlyList<WordPronunciation> ProblemWords,
+    /// <summary>
+    /// 结构骨架标记(缺口4补齐,2026-10-07):检出的分点/转折/收尾标记 → 次数。
+    /// 有标记 = 在尝试结构化表达;全空 = 全程平铺直叙。
+    /// </summary>
+    Dictionary<string, int>? StructureMarkers = null);
 
 /// <summary>一阶段的结果 —— 带成功/失败,让管线能"部分成功"地报错。</summary>
 public sealed record StageResult(string Stage, bool Success, string? Error, double ElapsedMs);

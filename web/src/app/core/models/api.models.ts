@@ -313,6 +313,8 @@ export interface SpeechMetrics {
   pronunciationAccuracy: number;
   lowScoreWordRatio: number;
   problemWords?: ProblemWord[];
+  /** 结构骨架标记(缺口4补齐):标记 → 出现次数。 */
+  structureMarkers?: Record<string, number>;
 }
 
 /** 问答候选(缺口3):勾选导入 TechStack。 */

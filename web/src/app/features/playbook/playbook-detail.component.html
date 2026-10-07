@@ -208,6 +208,54 @@
                     }
                   </div>
                 }
+
+                @if (structureMarkerEntries(e.speechMetrics).length > 0) {
+                  <h4 class="sub-title">结构骨架标记</h4>
+                  <p class="muted" style="margin-bottom:6px;">检出分点/转折/收尾标记 {{ structureMarkerEntries(e.speechMetrics).length }} 类 —— 有标记说明在尝试结构化表达</p>
+                  <div class="filler-list">
+                    @for (m of structureMarkerEntries(e.speechMetrics); track m[0]) {
+                      <span class="filler-chip ok">{{ m[0] }} × {{ m[1] }}</span>
+                    }
+                  </div>
+                } @else if (e.speechMetrics.wordCount > 0) {
+                  <h4 class="sub-title">结构骨架标记</h4>
+                  <p class="muted">全程未检出分点/转折/收尾标记 —— 表达偏平铺直叙，建议刻意练习 "First… Second… Third…" 和 trade-off 收尾。</p>
+                }
+              </mat-card-content>
+            </mat-card>
+          }
+
+          <!-- 问答切题度(缺口4补齐):问题 vs 回答对照,答非所问预警 -->
+          @if (questions().length > 0) {
+            <mat-card class="panel">
+              <mat-card-header>
+                <mat-card-title>问答切题度</mat-card-title>
+                <mat-card-subtitle>问题 vs 回答对照 —— 卡壳 / 诊断存疑的标出来</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                @for (q of questions(); track q.id) {
+                  <div class="relevance" [class.warn]="q.gotStuck">
+                    <div class="rel-head">
+                      <span class="q-seq">Q{{ q.sequence }}</span>
+                      @if (q.category) { <span class="q-cat">{{ q.category }}</span> }
+                      @if (q.gotStuck) {
+                        <span class="q-stuck"><mat-icon inline>warning</mat-icon> 卡壳{{ q.stuckReason ? '：' + q.stuckReason : '' }}</span>
+                      } @else {
+                        <span class="rel-ok"><mat-icon inline>check_circle</mat-icon> 作答流畅</span>
+                      }
+                    </div>
+                    <p class="rel-q"><strong>问：</strong>{{ q.questionText }}</p>
+                    @if (q.myAnswerText) {
+                      <p class="rel-a"><strong>答：</strong>{{ q.myAnswerText.length > 120 ? (q.myAnswerText | slice:0:120) + '…' : q.myAnswerText }}</p>
+                    } @else {
+                      <p class="rel-a muted">（未记录回答）</p>
+                    }
+                    @if (q.assessment) {
+                      <p class="rel-assess"><mat-icon inline>insights</mat-icon> {{ q.assessment }}</p>
+                    }
+                  </div>
+                  <mat-divider></mat-divider>
+                }
               </mat-card-content>
             </mat-card>
           }

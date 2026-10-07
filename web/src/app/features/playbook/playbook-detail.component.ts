@@ -278,6 +278,12 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     return Object.entries(d).sort((a, b) => b[1] - a[1]);
   }
 
+  /** 结构骨架标记 → [标记, 次数][],按次数降序。 */
+  structureMarkerEntries(m: SpeechMetrics): [string, number][] {
+    const d = m.structureMarkers ?? {};
+    return Object.entries(d).sort((a, b) => b[1] - a[1]);
+  }
+
   selectGuidanceVersionById(id: string): void {
     const v = this.guidanceVersions().find((x) => x.id === id);
     if (v) this.selectGuidanceVersion(v);

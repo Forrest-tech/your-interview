@@ -683,3 +683,30 @@ mat-progress-bar {
     &.warn { background: #fdecea; color: #b3261e; }
   }
 }
+
+/* 问答切题度(缺口4补齐) */
+.relevance {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #fafafa;
+  border-left: 3px solid #2e7d32;
+
+  &.warn { border-left-color: #c62828; }
+
+  .rel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+
+    .rel-ok { color: #2e7d32; display: inline-flex; align-items: center; gap: 3px; }
+  }
+  .rel-q, .rel-a { margin: 4px 0; font-size: 13px; line-height: 1.6; }
+  .rel-assess {
+    margin: 6px 0 0; font-size: 12px; color: #5c6bc0;
+    display: flex; align-items: flex-start; gap: 4px;
+  }
+}
+.filler-chip.ok { background: #e8f5e9; color: #2e7d32; }

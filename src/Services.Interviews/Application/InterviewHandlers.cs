@@ -57,7 +57,8 @@ public sealed record SpeechMetricsDto(
     double AverageSentenceLength, int ShortSentenceCount, int FillerWordCount,
     Dictionary<string, int>? FillerWordBreakdown, int SelfRepetitionCount,
     int LongPauseCount, double TotalSilenceSeconds, double PronunciationAccuracy,
-    double LowScoreWordRatio, List<ProblemWordDto>? ProblemWords);
+    double LowScoreWordRatio, List<ProblemWordDto>? ProblemWords,
+    Dictionary<string, int>? StructureMarkers = null);
 
 public sealed record ProblemWordDto(
     string Word, double AccuracyScore, double? FluencyScore,

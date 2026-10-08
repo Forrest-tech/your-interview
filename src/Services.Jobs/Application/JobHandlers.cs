@@ -103,12 +103,13 @@ public sealed record UpdateCompanyCommand(Guid Id, string Name, string? Website,
 public sealed record DeleteCompanyCommand(Guid Id) : IRequest<Result>;
 
 public sealed record CreateApplicationCommand(Guid CompanyId, string Role, string? Location, string? Link,
-    string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Priority = null)
+    string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Priority = null,
+    DateOnly? AppliedDate = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateApplicationCommand(Guid Id, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority,
-    DateOnly? Deadline)
+    DateOnly? Deadline, DateOnly? AppliedDate = null)
     : IRequest<Result>;
 
 public sealed record ChangeApplicationStatusCommand(Guid Id, string Status, string? Note, string? RejectionReason)
@@ -438,6 +439,9 @@ public sealed class CreateApplicationCommandHandler(JobsDbContext db)
         var app = new JobApplication(request.CompanyId, request.Role, request.Location, request.Link,
             request.Salary, request.WorkMode, request.Source, request.JdSummary);
 
+        if (request.AppliedDate.HasValue)
+            app.SetAppliedDate(request.AppliedDate);
+
         if (!string.IsNullOrWhiteSpace(request.Priority)
             && Enum.TryParse<Priority>(request.Priority, true, out var p))
             app.SetPriority(p);
@@ -459,6 +463,8 @@ public sealed class UpdateApplicationCommandHandler(JobsDbContext db)
         a.UpdateDetails(request.Role, request.Location, request.Link, request.Salary,
             request.WorkMode, request.Source, request.JdSummary, request.Notes);
         a.SetDeadline(request.Deadline);
+        if (request.AppliedDate.HasValue)
+            a.SetAppliedDate(request.AppliedDate);
         if (!string.IsNullOrWhiteSpace(request.Priority)
             && Enum.TryParse<Priority>(request.Priority, true, out var p))
             a.SetPriority(p);

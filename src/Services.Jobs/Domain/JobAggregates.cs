@@ -220,6 +220,8 @@ public sealed class JobApplication : AuditableAggregateRoot
         ChangeStatus(ApplicationStatus.Applied, note ?? "已投递");
     }
 
+    public void SetAppliedDate(DateOnly? date) => AppliedDate = date;
+
     public void UpdateDetails(string role, string? location, string? link, string? salary,
         string? workMode, string? source, string? jdSummary, string? notes)
     {

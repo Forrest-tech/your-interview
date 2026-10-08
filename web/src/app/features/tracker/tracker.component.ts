@@ -16,7 +16,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { Router } from '@angular/router';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
-import { catchError, forkJoin, of, type Observable } from 'rxjs';
+import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { TrackerApi } from '../../core/api/tracker-api.service';
@@ -33,7 +33,16 @@ const STATUS_ORDER: ApplicationStatus[] = [
  * 新建对话框允许直接设置的初始状态(只能是从 Saved 合法流转出去的那几个;
  * 其余状态(面试中/Offer 等)需要走正式的状态流转,不能在新建时越级设置)。
  */
-const CREATE_STATUS_OPTIONS: ApplicationStatus[] = ['Saved', 'Applied', 'Paused', 'Rejected'];
+const CREATE_STATUS_OPTIONS: ApplicationStatus[] = ['Saved', 'Applied', 'Screen', 'Interview', 'Paused', 'Rejected'];
+
+/** 从 Saved 走到目标状态的合法路径(后端状态机不允许越级)。 */
+const STATUS_PATH_FROM_SAVED: Record<string, ApplicationStatus[]> = {
+  'Applied': ['Applied'],
+  'Screen': ['Applied', 'Screen'],
+  'Interview': ['Applied', 'Screen', 'Interview'],
+  'Paused': ['Paused'],
+  'Rejected': ['Rejected'],
+};
 
 /**
  * 投递表单的可编辑形状。
@@ -731,7 +740,8 @@ export class TrackerComponent implements OnInit, AfterViewInit {
           workMode: null,
           source: null,
           jdSummary: null,
-          priority: form.priority || null
+          priority: form.priority || null,
+          appliedDate: form.appliedDate || null
         }).subscribe({
           next: (app) => this.afterCreate(app, form),
           error: (e: Error) => this.notify(e.message, true)
@@ -741,13 +751,17 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     });
   }
 
-  /** 建完投递后,补齐初始状态(仅合法流转)/备注/外联留言,再刷新看板。 */
+  /** 建完投递后,补齐初始状态(走合法路径逐步流转)/备注/外联留言,再刷新看板。 */
   private afterCreate(app: Application, form: ApplicationForm): void {
     const tasks: Observable<unknown>[] = [];
-    if (form.status !== 'Saved') {
-      // 非法流转(如越级设成面试中)会被后端 409 拦下 —— 静默忽略,保持 Saved。
-      tasks.push(this.api.post<void>(`/api/jobs/applications/${app.id}/status`,
-        { status: form.status, note: this.t('tracker.historyCreated') }).pipe(catchError(() => of(null))));
+    const path = STATUS_PATH_FROM_SAVED[form.status] ?? [];
+    if (path.length > 0) {
+      // 按路径逐步流转(如 Saved→Applied→Screen→Interview),每步都是后端允许的合法流转
+      const steps$: Observable<unknown>[] = path.map((s) =>
+        this.api.post<void>(`/api/jobs/applications/${app.id}/status`,
+          { status: s, note: this.t('tracker.historyCreated') }).pipe(catchError(() => of(null)))
+      );
+      tasks.push(concat(...steps$));
     }
     if (form.notes) {
       tasks.push(this.updateAppPayload(app.id, form).pipe(catchError(() => of(null))));
@@ -788,6 +802,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
       jdSummary: null,
       notes: form.notes || null,
       priority: form.priority || null,
+      appliedDate: form.appliedDate || null,
       deadline: null
     });
   }

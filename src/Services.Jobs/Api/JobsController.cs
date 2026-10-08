@@ -110,7 +110,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public async Task<IResult> UpdateApplication(Guid id, [FromBody] UpdateApplicationBody body, CancellationToken ct)
     {
         var r = await sender.Send(new UpdateApplicationCommand(id, body.Role, body.Location, body.Link,
-            body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline), ct);
+            body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline,
+            body.AppliedDate), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -297,7 +298,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public sealed record UpdateCompanyBody(string Name, string? Website, string? Industry, string? Location,
         string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted);
     public sealed record UpdateApplicationBody(string Role, string? Location, string? Link, string? Salary,
-        string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority, DateOnly? Deadline);
+        string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority, DateOnly? Deadline,
+        DateOnly? AppliedDate);
     public sealed record ChangeStatusBody(string Status, string? Note, string? RejectionReason);
     /// <summary>JD 全文提交。空串由领域方法归一为 null。</summary>
     public sealed record JdContentBody(string? JdText, string? JdSourceUrl);

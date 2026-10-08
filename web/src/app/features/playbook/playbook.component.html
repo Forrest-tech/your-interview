@@ -33,6 +33,36 @@
     </mat-card>
   }
 
+  <!-- 全局 upcoming:未来 30 天所有面试轮次(日历视图)。后端 404/失败时静默不渲染。 -->
+  @if (upcomingRounds().length > 0) {
+    <mat-card class="panel upcoming-global">
+      <mat-card-header>
+        <mat-card-title>
+          <mat-icon>event_upcoming</mat-icon> {{ t('pb.upcoming.title') }}
+        </mat-card-title>
+        <mat-card-subtitle>{{ t('pb.upcoming.sub') }}</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        @for (r of upcomingRounds(); track r.roundId) {
+          <div class="upcoming-row" (click)="goToRound(r)">
+            <mat-icon>event</mat-icon>
+            <span class="up-when">{{ r.scheduledDate }}{{ r.scheduledTime ? ' ' + r.scheduledTime : '' }}</span>
+            <span class="up-name">{{ r.companyName }} · {{ r.role }} · {{ tn('pb.round', r.order) }} {{ r.stage }}</span>
+            @if (r.interviewers) {
+              <span class="up-meta">{{ r.interviewers }}</span>
+            }
+            @if (r.meetingLink) {
+              <a mat-stroked-button [href]="r.meetingLink" target="_blank"
+                 (click)="$event.stopPropagation()">
+                <mat-icon>videocam</mat-icon> {{ t('pb.round.join') }}
+              </a>
+            }
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
+
   <!-- 统计条:stats 端点失败时整块不渲染,不留空壳 -->
   @if (stats(); as s) {
     <section class="metrics" id="overview">

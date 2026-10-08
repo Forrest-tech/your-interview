@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -51,6 +51,7 @@ export class MockComponent implements OnInit {
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
 
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
 
@@ -91,6 +92,17 @@ export class MockComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    // 从 Playbook 带上下文跳过来(?company=&role=):预填标题并自动打开新建对话框。
+    const company = this.route.snapshot.queryParamMap.get('company')?.trim();
+    const role = this.route.snapshot.queryParamMap.get('role')?.trim();
+    if (company || role) {
+      this.form = this.emptyForm();
+      this.form.title = [company, role].filter(Boolean).join(' - ');
+      this.form.mode = 'CompanyStyle';
+      this.form.topic = role ?? '';
+      this.formError.set(null);
+      this.dialogOpen.set(true);
+    }
   }
 
   load(): void {

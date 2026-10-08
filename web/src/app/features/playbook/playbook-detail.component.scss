@@ -844,6 +844,14 @@ mat-progress-bar {
   border-radius: 4px;
   padding: 8px;
 }
+.add-row textarea {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+  font-family: inherit;
+  resize: vertical;
+}
 .email-row {
   display: flex;
   align-items: flex-start;

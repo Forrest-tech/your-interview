@@ -36,6 +36,15 @@ public sealed record RoundDto(
     Guid Id, int Order, string Stage, DateOnly? ScheduledDate, string? Interviewers,
     string? Format, string? Location, string Outcome, string? Notes, string? Feedback);
 
+/// <summary>全局 upcoming:跨所有条目的未来轮次,带公司/职位上下文,供日历视图用。</summary>
+public sealed record UpcomingRoundDto(
+    Guid RoundId, Guid EntryId, string CompanyName, string Role,
+    int Order, string Stage, DateOnly? ScheduledDate, string? ScheduledTime,
+    string? Interviewers, string? Format, string? Location,
+    string? MeetingLink, string Outcome);
+
+public sealed record GetUpcomingRoundsQuery(int Days = 30) : IRequest<Result<List<UpcomingRoundDto>>>;
+
 public sealed record GuidanceMaterialDto(
     Guid Id, int Version, string ContentMarkdown, string Model,
     DateTimeOffset GeneratedAt, int? PromptTokens, int? CompletionTokens);
@@ -140,9 +149,10 @@ public sealed record AnalysisJobDto(
 // ============================ 命令 ============================
 
 public sealed record CreateEntryCommand(
-    Guid CompanyId, string CompanyName, string Role, Guid? JobApplicationId = null,
+    Guid? CompanyId, string CompanyName, string Role, Guid? JobApplicationId = null,
     string? CompanyProfile = null, string? JdText = null, string? JdSummary = null,
-    string? InterviewFormat = null, string? Interviewers = null, DateOnly? InterviewDate = null)
+    string? InterviewFormat = null, string? Interviewers = null, DateOnly? InterviewDate = null,
+    string? Location = null, string? Notes = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateEntryCommand(
@@ -606,15 +616,30 @@ public sealed class CreateEntryCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result<Guid>> Handle(CreateEntryCommand request, CancellationToken ct)
     {
-        var entry = new InterviewEntry(request.CompanyId, request.CompanyName, request.Role,
+        // CompanyId 可空:Tracker 一键创建时只知道公司名,按名复用已有公司的 Id,
+        // 找不到则生成新的 —— 避免 Guid.Empty 导致公司树聚合错乱。
+        var companyId = request.CompanyId;
+        if (companyId is null || companyId == Guid.Empty)
+        {
+            var existing = await db.Entries.AsNoTracking()
+                .Where(x => x.CompanyName == request.CompanyName)
+                .Select(x => x.CompanyId)
+                .FirstOrDefaultAsync(ct);
+            companyId = existing == Guid.Empty ? Guid.NewGuid() : existing;
+        }
+
+        var entry = new InterviewEntry(companyId.Value, request.CompanyName, request.Role,
             request.JobApplicationId);
 
         if (request.CompanyProfile is not null || request.JdText is not null
-            || request.Interviewers is not null || request.InterviewDate is not null)
+            || request.JdSummary is not null || request.Interviewers is not null
+            || request.InterviewDate is not null || request.Location is not null
+            || request.Notes is not null)
         {
             entry.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,
                 request.JdText, request.JdSummary, 1, request.InterviewDate,
-                request.InterviewFormat, request.Interviewers, null, null, null);
+                request.InterviewFormat, request.Interviewers, request.Location, null,
+                request.Notes);
         }
 
         db.Entries.Add(entry);
@@ -943,6 +968,33 @@ public sealed class AddRoundCommandHandler(InterviewsDbContext db)
         var r = e.AddRound(request.Stage);
         await db.SaveChangesAsync(ct);
         return Result.Success(r.Id);
+    }
+}
+
+/// <summary>全局 upcoming:未来 N 天内所有条目的轮次,按日期排序,供日历视图用。</summary>
+public sealed class GetUpcomingRoundsQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetUpcomingRoundsQuery, Result<List<UpcomingRoundDto>>>
+{
+    public async Task<Result<List<UpcomingRoundDto>>> Handle(
+        GetUpcomingRoundsQuery request, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var limit = today.AddDays(request.Days);
+
+        var rows = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Rounds, (e, r) => new { e, r })
+            .Where(x => x.r.ScheduledDate != null
+                && x.r.ScheduledDate >= today
+                && x.r.ScheduledDate <= limit)
+            .OrderBy(x => x.r.ScheduledDate).ThenBy(x => x.r.ScheduledTime)
+            .Select(x => new UpcomingRoundDto(
+                x.r.Id, x.e.Id, x.e.CompanyName, x.e.Role,
+                x.r.Order, x.r.Stage, x.r.ScheduledDate, x.r.ScheduledTime,
+                x.r.Interviewers, x.r.Format, x.r.Location,
+                x.r.MeetingLink, x.r.Outcome.ToString()))
+            .ToListAsync(ct);
+
+        return Result.Success(rows);
     }
 }
 

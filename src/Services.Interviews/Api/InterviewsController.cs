@@ -248,6 +248,15 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>全局 upcoming:未来 30 天内所有条目的轮次(日历视图用)。</summary>
+    [HttpGet("rounds/upcoming")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> UpcomingRounds([FromQuery] int days = 30, CancellationToken ct = default)
+    {
+        var r = await sender.Send(new GetUpcomingRoundsQuery(days), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>轮次:新增一轮(Order 自动递增)。</summary>
     [HttpPost("{id:guid}/rounds")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]

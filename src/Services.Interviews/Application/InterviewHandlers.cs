@@ -36,6 +36,15 @@ public sealed record RoundDto(
     Guid Id, int Order, string Stage, DateOnly? ScheduledDate, string? Interviewers,
     string? Format, string? Location, string Outcome, string? Notes, string? Feedback);
 
+/// <summary>全局 upcoming:跨所有条目的未来轮次,带公司/职位上下文,供日历视图用。</summary>
+public sealed record UpcomingRoundDto(
+    Guid RoundId, Guid EntryId, string CompanyName, string Role,
+    int Order, string Stage, DateOnly? ScheduledDate, string? ScheduledTime,
+    string? Interviewers, string? Format, string? Location,
+    string? MeetingLink, string Outcome);
+
+public sealed record GetUpcomingRoundsQuery(int Days = 30) : IRequest<Result<List<UpcomingRoundDto>>>;
+
 public sealed record GuidanceMaterialDto(
     Guid Id, int Version, string ContentMarkdown, string Model,
     DateTimeOffset GeneratedAt, int? PromptTokens, int? CompletionTokens);
@@ -140,9 +149,10 @@ public sealed record AnalysisJobDto(
 // ============================ 命令 ============================
 
 public sealed record CreateEntryCommand(
-    Guid CompanyId, string CompanyName, string Role, Guid? JobApplicationId = null,
+    Guid? CompanyId, string CompanyName, string Role, Guid? JobApplicationId = null,
     string? CompanyProfile = null, string? JdText = null, string? JdSummary = null,
-    string? InterviewFormat = null, string? Interviewers = null, DateOnly? InterviewDate = null)
+    string? InterviewFormat = null, string? Interviewers = null, DateOnly? InterviewDate = null,
+    string? Location = null, string? Notes = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateEntryCommand(
@@ -606,15 +616,30 @@ public sealed class CreateEntryCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result<Guid>> Handle(CreateEntryCommand request, CancellationToken ct)
     {
-        var entry = new InterviewEntry(request.CompanyId, request.CompanyName, request.Role,
+        // CompanyId 可空:Tracker 一键创建时只知道公司名,按名复用已有公司的 Id,
+        // 找不到则生成新的 —— 避免 Guid.Empty 导致公司树聚合错乱。
+        var companyId = request.CompanyId;
+        if (companyId is null || companyId == Guid.Empty)
+        {
+            var existing = await db.Entries.AsNoTracking()
+                .Where(x => x.CompanyName == request.CompanyName)
+                .Select(x => x.CompanyId)
+                .FirstOrDefaultAsync(ct);
+            companyId = existing == Guid.Empty ? Guid.NewGuid() : existing;
+        }
+
+        var entry = new InterviewEntry(companyId.Value, request.CompanyName, request.Role,
             request.JobApplicationId);
 
         if (request.CompanyProfile is not null || request.JdText is not null
-            || request.Interviewers is not null || request.InterviewDate is not null)
+            || request.JdSummary is not null || request.Interviewers is not null
+            || request.InterviewDate is not null || request.Location is not null
+            || request.Notes is not null)
         {
             entry.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,
                 request.JdText, request.JdSummary, 1, request.InterviewDate,
-                request.InterviewFormat, request.Interviewers, null, null, null);
+                request.InterviewFormat, request.Interviewers, request.Location, null,
+                request.Notes);
         }
 
         db.Entries.Add(entry);
@@ -943,6 +968,215 @@ public sealed class AddRoundCommandHandler(InterviewsDbContext db)
         var r = e.AddRound(request.Stage);
         await db.SaveChangesAsync(ct);
         return Result.Success(r.Id);
+    }
+}
+
+/// <summary>全局 upcoming:未来 N 天内所有条目的轮次,按日期排序,供日历视图用。</summary>
+public sealed class GetUpcomingRoundsQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetUpcomingRoundsQuery, Result<List<UpcomingRoundDto>>>
+{
+    public async Task<Result<List<UpcomingRoundDto>>> Handle(
+        GetUpcomingRoundsQuery request, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var limit = today.AddDays(request.Days);
+
+        var rows = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Rounds, (e, r) => new { e, r })
+            .Where(x => x.r.ScheduledDate != null
+                && x.r.ScheduledDate >= today
+                && x.r.ScheduledDate <= limit)
+            .OrderBy(x => x.r.ScheduledDate).ThenBy(x => x.r.ScheduledTime)
+            .Select(x => new UpcomingRoundDto(
+                x.r.Id, x.e.Id, x.e.CompanyName, x.e.Role,
+                x.r.Order, x.r.Stage, x.r.ScheduledDate, x.r.ScheduledTime,
+                x.r.Interviewers, x.r.Format, x.r.Location,
+                x.r.MeetingLink, x.r.Outcome.ToString()))
+            .ToListAsync(ct);
+
+        return Result.Success(rows);
+    }
+}
+
+/// <summary>轮次通过概率:基于用户历史同 stage 轮次的通过率 + 本轮准备度信号。</summary>
+public sealed record PassProbabilityDto(
+    int Probability,           // 0-100
+    int SampleSize,            // 历史样本数
+    int PassedCount,
+    string Stage,
+    List<string> Factors);     // 影响因素说明
+
+public sealed record GetRoundPassProbabilityQuery(Guid RoundId) : IRequest<Result<PassProbabilityDto>>;
+
+public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetRoundPassProbabilityQuery, Result<PassProbabilityDto>>
+{
+    public async Task<Result<PassProbabilityDto>> Handle(
+        GetRoundPassProbabilityQuery request, CancellationToken ct)
+    {
+        // 找到本轮,取其 stage
+        var round = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Rounds, (e, r) => new { e, r })
+            .Where(x => x.r.Id == request.RoundId)
+            .Select(x => new { x.r.Stage, RoundId = x.r.Id })
+            .FirstOrDefaultAsync(ct);
+        if (round is null) return Result.Failure<PassProbabilityDto>(Error.NotFound("Round"));
+
+        // 历史同 stage 轮次:只算有定论的 (Passed / Rejected)
+        var history = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Rounds)
+            .Where(r => r.Stage == round.Stage
+                && r.Id != round.RoundId
+                && (r.Outcome == InterviewRoundOutcome.Passed
+                    || r.Outcome == InterviewRoundOutcome.Rejected))
+            .ToListAsync(ct);
+
+        var factors = new List<string>();
+        int baseProb;
+        int historyCount = history.Count;
+        if (historyCount == 0)
+        {
+            // 无历史数据:中性 50%,提示多攒数据
+            baseProb = 50;
+            factors.Add("暂无同类型轮次历史,按 50% 中性估算");
+        }
+        else
+        {
+            var passed = history.Count(r => r.Outcome == InterviewRoundOutcome.Passed);
+            baseProb = (int)Math.Round(100.0 * passed / historyCount);
+            factors.Add($"历史同类轮次 {passed}/{historyCount} 通过");
+        }
+
+        // 准备度信号:本轮的准备越充分,微调概率
+        var target = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Rounds, (e, r) => new { e, r })
+            .Where(x => x.r.Id == request.RoundId)
+            .Select(x => new
+            {
+                x.r.PrepQuestionsJson,
+                x.r.Transcript,
+                x.r.RecordingUrl,
+                x.r.EmailsJson,
+                x.r.Notes,
+                x.r.Feedback
+            })
+            .FirstOrDefaultAsync(ct);
+
+        int adjustment = 0;
+        if (target is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(target.PrepQuestionsJson)
+                && target.PrepQuestionsJson != "[]")
+            { adjustment += 5; factors.Add("已准备面试问题清单 +5%"); }
+
+            if (!string.IsNullOrWhiteSpace(target.Notes))
+            { adjustment += 3; factors.Add("有轮次笔记 +3%"); }
+
+            if (!string.IsNullOrWhiteSpace(target.EmailsJson)
+                && target.EmailsJson != "[]")
+            { adjustment += 2; factors.Add("已关联 scheduling 邮件 +2%"); }
+        }
+
+        // 查本轮所属条目的 Q&A 积累情况
+        var entry = await db.Entries.AsNoTracking()
+            .Where(e => e.Rounds.Any(r => r.Id == request.RoundId))
+            .Select(e => new { e.Id, QaCount = e.Questions.Count })
+            .FirstOrDefaultAsync(ct);
+        if (entry is not null)
+        {
+            if (entry.QaCount > 0)
+            { adjustment += Math.Min(5, entry.QaCount); factors.Add($"已积累 {entry.QaCount} 条 Q&A +{Math.Min(5, entry.QaCount)}%"); }
+        }
+
+        var prob = Math.Clamp(baseProb + adjustment, 5, 95);
+        var passedTotal = history.Count(r => r.Outcome == InterviewRoundOutcome.Passed);
+        return Result.Success(new PassProbabilityDto(
+            prob, historyCount, passedTotal,
+            round.Stage, factors));
+    }
+}
+
+/// <summary>整单 offer 概率:漏斗模型 —— 走到当前轮次的人,历史上有多少拿到 offer。</summary>
+public sealed record OfferProbabilityDto(
+    int Probability,           // 0-100
+    int SampleSize,            // 走到当前轮次的历史样本数
+    int OfferCount,            // 其中拿到 offer 的
+    int CurrentRound,          // 当前第几轮
+    List<string> Factors);
+
+public sealed record GetOfferProbabilityQuery(Guid EntryId) : IRequest<Result<OfferProbabilityDto>>;
+
+public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetOfferProbabilityQuery, Result<OfferProbabilityDto>>
+{
+    public async Task<Result<OfferProbabilityDto>> Handle(
+        GetOfferProbabilityQuery request, CancellationToken ct)
+    {
+        // 当前条目:第几轮(按 rounds 数量)
+        var current = await db.Entries.AsNoTracking()
+            .Where(e => e.Id == request.EntryId)
+            .Select(e => new { RoundCount = e.Rounds.Count, e.Result })
+            .FirstOrDefaultAsync(ct);
+        if (current is null) return Result.Failure<OfferProbabilityDto>(Error.NotFound("Entry"));
+
+        int currentRound = Math.Max(1, current.RoundCount);
+        var factors = new List<string>();
+
+        // 历史漏斗:走到 >= 当前轮次 且已有定论的条目
+        var history = await db.Entries.AsNoTracking()
+            .Where(e => e.Id != request.EntryId
+                && e.Rounds.Count >= currentRound
+                && (e.Result == "Passed" || e.Result == "Rejected"))
+            .Select(e => e.Result)
+            .ToListAsync(ct);
+
+        int baseProb;
+        if (history.Count == 0)
+        {
+            baseProb = 50;
+            factors.Add($"暂无走到第 {currentRound} 轮的历史数据,按 50% 中性估算");
+        }
+        else
+        {
+            var offers = history.Count(r => r == "Passed");
+            baseProb = (int)Math.Round(100.0 * offers / history.Count);
+            factors.Add($"历史走到第 {currentRound} 轮的 {offers}/{history.Count} 拿到 offer");
+        }
+
+        // 准备度:整单的 Q&A、轮次准备完整度微调
+        var prep = await db.Entries.AsNoTracking()
+            .Where(e => e.Id == request.EntryId)
+            .Select(e => new
+            {
+                QaCount = e.Questions.Count,
+                RoundPrepDone = e.Rounds.Count(r =>
+                    r.PrepQuestionsJson != null && r.PrepQuestionsJson != "[]")
+            })
+            .FirstOrDefaultAsync(ct);
+
+        int adjustment = 0;
+        if (prep is not null)
+        {
+            if (prep.QaCount >= 5)
+            { adjustment += 5; factors.Add($"Q&A 积累 {prep.QaCount} 条 +5%"); }
+            if (prep.RoundPrepDone > 0)
+            {
+                int prepBonus = 3 * Math.Min(3, prep.RoundPrepDone);
+                adjustment += prepBonus;
+                factors.Add($"{prep.RoundPrepDone} 轮有准备清单 +{prepBonus}%");
+            }
+        }
+
+        // 越往后的轮次,基础概率自然越高(已经筛掉了前面的人)
+        int funnelBonus = Math.Min(15, (currentRound - 1) * 5);
+        if (funnelBonus > 0)
+        { adjustment += funnelBonus; factors.Add($"已走到第 {currentRound} 轮,漏斗加成 +{funnelBonus}%"); }
+
+        var prob = Math.Clamp(baseProb + adjustment, 5, 95);
+        return Result.Success(new OfferProbabilityDto(
+            prob, history.Count,
+            history.Count(r => r == "Passed"),
+            currentRound, factors));
     }
 }
 

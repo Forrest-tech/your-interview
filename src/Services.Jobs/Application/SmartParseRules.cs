@@ -119,7 +119,7 @@ public static class JdPasteParser
     private static readonly Regex SalarySingle = new(
         @"(?<cur>[$€£]|USD|CAD|US\$|C\$)\s*(?<lo>\d{2,3})\s*[kK]\b", Opts);
     private static readonly Regex LocationCityState = new(
-        @"\b(?<city>[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)?)\s*,\s*(?<region>[A-Z]{2}|[A-Z][a-zA-Z]+)\b", RegexOptions.Compiled);
+        @"\b(?<city>[A-Z][a-zA-Z]+(?:[ ][A-Z][a-zA-Z]+)?)[ ]*,[ ]*(?<region>[A-Z]{2}|[A-Z][a-zA-Z]+)\b", RegexOptions.Compiled);
     private static readonly Regex UrlAnywhere = new(@"https?://\S+", Opts);
     private static readonly Regex EmailAnywhere = new(@"[\w.+-]+@[\w-]+\.[\w.]+", Opts);
 
@@ -186,6 +186,13 @@ public static class JdPasteParser
         role ??= Labeled(lines, "职位", "岗位", "Role", "Title", "Position", "Job Title")
               ?? GuessRole(lines);
         if (role is not null) conf.TryAdd("role", 75);
+
+        // 公司名兜底:role 下一行常常是无标签的公司名
+        if (company is null && role is not null)
+        {
+            company = CompanyAfterRole(lines, role);
+            if (company is not null) conf.TryAdd("company", 60);
+        }
 
         var location = Labeled(lines, "地点", "Location", "办公地点", "工作地点");
         if (location is null)
@@ -398,6 +405,31 @@ public static class JdPasteParser
         return null;
     }
 
+    /// <summary>
+    /// 公司名兜底:很多 JD 第一行是岗位、第二行是公司名(无标签)。
+    /// 找到 role 行,取其下一行 —— 长度合理、不含岗位关键词、不是地点/薪资行。
+    /// </summary>
+    private static string? CompanyAfterRole(IList<string> lines, string? role)
+    {
+        if (role is null) return null;
+        var idx = -1;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (lines[i].Contains(role, StringComparison.OrdinalIgnoreCase)) { idx = i; break; }
+        }
+        if (idx < 0 || idx + 1 >= lines.Count) return null;
+        var cand = lines[idx + 1].Trim();
+        // 排除:太长、含岗位关键词、是地点/薪资/标签行
+        if (cand.Length is < 2 or > 60) return null;
+        if (RoleWords.IsMatch(cand)) return null;
+        if (cand.Contains(':')) return null;
+        if (SalaryRange.IsMatch(cand) || SalarySingle.IsMatch(cand)) return null;
+        if (LocationCityState.IsMatch(cand)) return null;
+        // 排除纯描述句(太长或含动词开头)
+        if (cand.Split(' ').Length > 6) return null;
+        return cand;
+    }
+
     private static string? GuessRole(IEnumerable<string> lines)
     {
         foreach (var line in lines)
@@ -405,8 +437,17 @@ public static class JdPasteParser
             if (line.Length > 120) continue;
             if (RoleWords.IsMatch(line))
             {
-                // 剥掉常见的地点/薪资尾巴,只留岗位主体
-                var v = Regex.Replace(line, @"[（(].*?[)）]", string.Empty).Trim();
+                // 剥掉括号尾巴:只去掉"地点/模式"类,技术限定语(如 Node.js/TypeScript)保留。
+                // 规则:括号里含技术词/岗位词 → 是限定语,保留;否则是地点/模式尾巴,去掉。
+                var v = Regex.Replace(line, @"[（(]([^()]*?)[)）]", m =>
+                {
+                    var inner = m.Groups[1].Value;
+                    if (TechKeywords.Any(kw => inner.Contains(kw, StringComparison.OrdinalIgnoreCase)))
+                        return m.Value;
+                    if (RoleWords.IsMatch(inner))
+                        return m.Value;
+                    return string.Empty;
+                }).Trim();
                 v = Regex.Replace(v, @"[|\-–—]\s*(remote|hybrid|onsite|on-site).*$", string.Empty,
                     RegexOptions.IgnoreCase).Trim();
                 if (v.Length is >= 3 and <= 80) return v;

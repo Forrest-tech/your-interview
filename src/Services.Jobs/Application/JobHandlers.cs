@@ -104,7 +104,7 @@ public sealed record DeleteCompanyCommand(Guid Id) : IRequest<Result>;
 
 public sealed record CreateApplicationCommand(Guid CompanyId, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Priority = null,
-    DateOnly? AppliedDate = null)
+    DateOnly? AppliedDate = null, string? Status = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateApplicationCommand(Guid Id, string Role, string? Location, string? Link,
@@ -445,6 +445,15 @@ public sealed class CreateApplicationCommandHandler(JobsDbContext db)
         if (!string.IsNullOrWhiteSpace(request.Priority)
             && Enum.TryParse<Priority>(request.Priority, true, out var p))
             app.SetPriority(p);
+
+        // CSV 导入等场景允许指定初始状态(默认 Saved)。用 ChangeStatus 走状态机,非法流转会被拒。
+        if (!string.IsNullOrWhiteSpace(request.Status)
+            && Enum.TryParse<ApplicationStatus>(request.Status, true, out var st)
+            && st != app.Status)
+        {
+            if (app.CanTransitionTo(st))
+                app.ChangeStatus(st, "CSV import");
+        }
 
         db.Applications.Add(app);
         await db.SaveChangesAsync(ct);

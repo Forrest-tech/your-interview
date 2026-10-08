@@ -25,7 +25,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
-  InterviewRound, InterviewStatus, InterviewWeakness, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
+  InterviewRound, InterviewStatus, InterviewWeakness, OfferProbability, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -181,6 +181,44 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly weaknesses = computed(() => this.entry()?.weaknesses ?? []);
   readonly assets = computed(() => this.entry()?.assets ?? []);
   readonly rounds = computed(() => this.entry()?.rounds ?? []);
+
+  /** 每轮的通过概率(roundId -> PassProbability),懒加载。 */
+  readonly passProbs = signal<Record<string, PassProbability>>({});
+
+  /** 加载所有真实轮次(非 synthetic)的通过概率。 */
+  loadPassProbabilities(): void {
+    for (const r of this.displayRounds()) {
+      if (!r.id || r.id.startsWith('__synthetic') || this.passProbs()[r.id]) continue;
+      this.api.get<PassProbability>(`/api/interviews/rounds/${r.id}/pass-probability`)
+        .pipe(catchError(() => of(null)))
+        .subscribe((p) => {
+          if (p) this.passProbs.update((m) => ({ ...m, [r.id]: p }));
+        });
+    }
+  }
+
+  /** 取某轮的概率(未加载时返回 null)。 */
+  passProbFor(roundId: string): PassProbability | null {
+    return this.passProbs()[roundId] ?? null;
+  }
+
+  /** 概率颜色:>=70 绿,40-69 黄,<40 红。 */
+  probColor(p: number): string {
+    if (p >= 70) return '#2e7d32';
+    if (p >= 40) return '#f9a825';
+    return '#c62828';
+  }
+
+  /** 整单 offer 概率(漏斗模型),头部显示。 */
+  readonly offerProb = signal<OfferProbability | null>(null);
+
+  loadOfferProbability(): void {
+    const id = this.id();
+    if (!id) return;
+    this.api.get<OfferProbability>(`/api/interviews/${id}/offer-probability`)
+      .pipe(catchError(() => of(null)))
+      .subscribe((p) => this.offerProb.set(p));
+  }
 
   /** Rounds tab 显示用:有显式 rounds 就用,没有就从 entry 基本信息合成一个 Round 1 —— 不让 tab 空着。 */
   readonly displayRounds = computed(() => {
@@ -509,6 +547,10 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       this.loading.set(false);
       return;
     }
+    // 支持 ?tab=rounds 从全局 upcoming 跳进来直达轮次页签
+    if (this.route.snapshot.queryParamMap.get('tab') === 'rounds') {
+      this.selectedTab.set(1);
+    }
     this.load();
     this.loadPastedMaterial();
 
@@ -587,6 +629,10 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
           this.fillEditForm(d);
           this.editLoaded = true;
         }
+        // 加载各轮次通过概率
+        this.loadPassProbabilities();
+        // 加载整单 offer 概率
+        this.loadOfferProbability();
       },
       error: (e: Error) => {
         this.error.set(e.message);
@@ -931,6 +977,89 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     const emails = this.getRoundEmails(r);
     emails.splice(idx, 1);
     this.saveRoundField(r, { emailsJson: JSON.stringify(emails) });
+  }
+
+  /** 工作区内直接保存录音链接 + 文稿(不用进编辑表单)。 */
+  saveRoundTranscript(r: InterviewRound, recordingUrl: string, transcript: string): void {
+    const url = recordingUrl.trim();
+    const text = transcript.trim();
+    if (!url && !text) {
+      this.snack.open(this.t('pb.round.transcriptEmpty'), this.t('common.close'), { duration: 3000 });
+      return;
+    }
+    const tag = 'transcript-' + r.id;
+    this.busy.set(tag);
+    const body = {
+      stage: r.stage,
+      scheduledDate: r.scheduledDate || null,
+      interviewers: r.interviewers || null,
+      format: r.format || null,
+      location: r.location || null,
+      outcome: r.outcome,
+      notes: r.notes || null,
+      feedback: r.feedback || null,
+      meetingLink: r.meetingLink || null,
+      scheduledTime: r.scheduledTime || null,
+      prepQuestionsJson: r.prepQuestionsJson || null,
+      emailsJson: r.emailsJson || null,
+      transcript: text || null,
+      recordingUrl: url || null
+    };
+    this.api.put<void>(`/api/interviews/${this.id()}/rounds/${r.id}`, body).subscribe({
+      next: () => {
+        if (this.busy() === tag) this.busy.set(null);
+        this.snack.open(this.t('pb.round.transcriptSaved'), this.t('common.close'), { duration: 3000 });
+        this.load(false);
+      },
+      error: (e: Error) => {
+        if (this.busy() === tag) this.busy.set(null);
+        this.snack.open(e.message, this.t('common.close'), { duration: 4000 });
+      }
+    });
+  }
+
+  /** 合成轮次 → 创建正式轮次,把条目上的日期/面试官/形式/地点带过去。 */
+  convertSyntheticToReal(): void {
+    const e = this.entry();
+    if (!e || this.busy()) return;
+    this.busy.set('round');
+    this.api.post<{ id: string }>(`/api/interviews/${this.id()}/rounds`, {
+      stage: 'Technical'
+    }).subscribe({
+      next: (created) => {
+        // 第二步:把条目基本信息回填到新轮次
+        this.api.put<void>(`/api/interviews/${this.id()}/rounds/${created.id}`, {
+          stage: 'Technical',
+          scheduledDate: e.interviewDate || null,
+          interviewers: e.interviewers || null,
+          format: e.interviewFormat || null,
+          location: e.location || null,
+          outcome: 'Pending',
+          notes: null,
+          feedback: null,
+          meetingLink: null,
+          scheduledTime: null,
+          prepQuestionsJson: null,
+          emailsJson: null,
+          transcript: null,
+          recordingUrl: null
+        }).subscribe({
+          next: () => {
+            this.busy.set(null);
+            this.snack.open(this.t('pb.round.converted'), this.t('common.close'), { duration: 3000 });
+            this.load(false);
+          },
+          error: (err: Error) => {
+            this.busy.set(null);
+            this.snack.open(err.message, this.t('common.close'), { duration: 5000 });
+          }
+        });
+      },
+      error: (err: Error) => {
+        this.busy.set(null);
+        this.snack.open(err.message, this.t('common.close'), { duration: 5000 });
+      }
+    });
   }
 
   /** 保存 round 单个字段(不经过编辑草稿,直接 PUT)。 */

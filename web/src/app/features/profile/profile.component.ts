@@ -271,10 +271,6 @@ export class ProfileComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    try {
-      this.resumeDraft = localStorage.getItem(this.resumeKey) ?? '';
-      this.refreshResumePreview();
-    } catch { /* 忽略 */ }
   }
 
   load(): void {

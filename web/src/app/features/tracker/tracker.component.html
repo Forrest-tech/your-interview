@@ -14,6 +14,10 @@
       <button mat-stroked-button (click)="exportCsv()" [matTooltip]="t('tracker.exportCsv')">
         <mat-icon>download</mat-icon>{{ t('tracker.exportCsv') }}
       </button>
+      <button mat-stroked-button (click)="csvFile.click()" [matTooltip]="t('tracker.importCsv')">
+        <mat-icon>upload</mat-icon>{{ t('tracker.importCsv') }}
+      </button>
+      <input #csvFile type="file" hidden accept=".csv" (change)="importCsv($event)">
       <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
@@ -195,7 +199,7 @@
             [class.hidden]="!canScrollLeft()">
       <mat-icon>chevron_left</mat-icon>
     </button>
-    <div class="board" #board (scroll)="onBoardScroll()">
+    <div class="board" #board (scroll)="onBoardScroll()" cdkDropListGroup>
       @for (col of columns(); track col.status) {
       <section class="column">
         <header class="col-head">
@@ -208,9 +212,13 @@
           <span class="col-name">{{ col.label }} ({{ col.items.length }})</span>
         </header>
 
-        <div class="col-body">
+        <div class="col-body"
+             cdkDropList
+             [cdkDropListData]="col.items"
+             (cdkDropListDropped)="onCardDrop($event, col.status)">
           @for (a of col.items; track a.id) {
-            <mat-card class="app-card" (click)="openDetail(a)"
+            <mat-card class="app-card" cdkDrag [cdkDragData]="a"
+                      (click)="openDetail(a)"
                       tabindex="0" role="button"
                       [attr.aria-label]="a.companyName + ' ' + a.role"
                       (keydown.enter)="openDetail(a)" (keydown.space)="openDetail(a); $event.preventDefault()">

@@ -361,3 +361,27 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 .entry[tabindex] {
   cursor: pointer;
 }
+
+/* Simplify 模式:投递详情右侧抽屉(代替居中弹窗) */
+.detail-drawer-panel {
+  border-radius: 0 !important;
+  margin: 0 !important;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18) !important;
+
+  .mat-mdc-dialog-container {
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    border-radius: 0 !important;
+  }
+
+  /* 抽屉滑入动画 */
+  animation: drawerSlideIn 0.25s ease-out;
+}
+
+@keyframes drawerSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}

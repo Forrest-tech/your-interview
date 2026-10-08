@@ -14,7 +14,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { InterviewEntry, InterviewStatus, Paged } from '../../core/models/api.models';
+import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -100,6 +100,9 @@ export class PlaybookComponent implements OnInit {
   readonly companies = signal<CompanySummary[]>([]);
   readonly stats = signal<InterviewStats | null>(null);
 
+  /** 全局 upcoming:未来 30 天所有条目的轮次(日历视图)。旁路,失败留空。 */
+  readonly upcomingRounds = signal<UpcomingRound[]>([]);
+
   /** 服务端过滤条件(改动后重查,不做本地过滤 —— 数据量会增长)。 */
   companyFilter = '';
   statusFilter = '';
@@ -140,6 +143,19 @@ export class PlaybookComponent implements OnInit {
     this.load();
     this.loadCompanies();
     this.loadStats();
+    this.loadUpcoming();
+  }
+
+  /** 全局 upcoming 轮次:后端聚合,失败时静默留空(不挡主列表)。 */
+  private loadUpcoming(): void {
+    this.api.get<UpcomingRound[]>('/api/interviews/rounds/upcoming', { days: 30 })
+      .pipe(catchError(() => of([] as UpcomingRound[])))
+      .subscribe((list) => this.upcomingRounds.set(list ?? []));
+  }
+
+  /** 跳到条目详情的 Rounds tab。 */
+  goToRound(r: UpcomingRound): void {
+    this.router.navigate(['/playbook', r.entryId], { queryParams: { tab: 'rounds' } });
   }
 
   // ---------------------------------------------------------------- 数据加载

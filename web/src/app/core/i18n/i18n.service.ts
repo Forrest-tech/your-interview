@@ -1485,6 +1485,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.tab.questions': { zh: '问答 ({n})', en: 'Q&A ({n})', fr: 'Questions ({n})' },
   'pb.tab.assets': { zh: '材料 ({n})', en: 'Assets ({n})', fr: 'Documents ({n})' },
   'pb.tab.guidance': { zh: '指导材料', en: 'Guidance', fr: 'Guide' },
+  'pb.overview.basicTitle': { zh: '基本信息', en: 'Basic info', fr: 'Infos de base' },
   'pb.overview.aiSummary': { zh: 'AI 总评', en: 'AI summary', fr: 'Synthèse IA' },
   'pb.overview.aiSummarySub': { zh: '这场面试的整体判断与最该改的地方', en: 'Overall judgement of this interview and what to fix first', fr: 'Jugement global de cet entretien et ce qu’il faut corriger en priorité' },
   'pb.overview.noAnalysis': { zh: '还没有分析结果。上传录音或粘贴转写文本后点击「触发分析」。', en: 'No analysis results yet. Upload a recording or paste a transcript, then click "Run analysis".', fr: 'Aucun résultat d’analyse. Importez un enregistrement ou collez une transcription, puis cliquez sur « Lancer l’analyse ».' },

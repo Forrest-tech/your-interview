@@ -181,6 +181,24 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly weaknesses = computed(() => this.entry()?.weaknesses ?? []);
   readonly assets = computed(() => this.entry()?.assets ?? []);
   readonly rounds = computed(() => this.entry()?.rounds ?? []);
+
+  /** Rounds tab 显示用:有显式 rounds 就用,没有就从 entry 基本信息合成一个 Round 1 —— 不让 tab 空着。 */
+  readonly displayRounds = computed(() => {
+    const rs = this.rounds();
+    if (rs.length > 0) return rs;
+    const e = this.entry();
+    if (!e) return rs;
+    // 合成 Round 1:用 entry 上的轮次/日期/面试官/结果
+    return [{
+      id: '__synthetic_r1',
+      order: e.roundNo ?? 1,
+      stage: '',
+      outcome: e.result ?? '',
+      scheduledDate: e.interviewDate ?? '',
+      interviewers: e.interviewers ?? '',
+      notes: '',
+    }];
+  });
   readonly audioAssets = computed(() =>
     this.assets().filter((a) => (a.kind ?? '').toLowerCase() === 'audio'));
 

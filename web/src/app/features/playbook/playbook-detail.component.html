@@ -106,6 +106,37 @@
       <!-- ============ 概览 ============ -->
       <mat-tab [label]="t('sub.overview')">
         <div class="tab-body">
+          <!-- 基本信息(只读):公司/角色/轮次/日期/JD 等,不用去 Edit tab 看 -->
+          <mat-card class="panel">
+            <mat-card-header>
+              <mat-card-title>{{ t('pb.overview.basicTitle') }}</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="basic-grid">
+                <div><dt>{{ t('pb.form.companyName') }}</dt><dd>{{ e.companyName || '—' }}</dd></div>
+                <div><dt>{{ t('pb.form.role') }}</dt><dd>{{ e.role || '—' }}</dd></div>
+                <div><dt>{{ t('pb.form.roundNo') }}</dt><dd>{{ e.roundNo || '—' }}</dd></div>
+                <div><dt>{{ t('pb.form.interviewDate') }}</dt><dd>{{ e.interviewDate || '—' }}</dd></div>
+                <div><dt>{{ t('pb.form.interviewFormat') }}</dt><dd>{{ e.interviewFormat || '—' }}</dd></div>
+                <div><dt>{{ t('pb.form.interviewers') }}</dt><dd>{{ e.interviewers || '—' }}</dd></div>
+                <div><dt>{{ t('pb.form.location') }}</dt><dd>{{ e.location || '—' }}</dd></div>
+                <div><dt>{{ t('pb.edit.resultLabel') }}</dt><dd>{{ e.result || '—' }}</dd></div>
+              </div>
+              @if (e.jdSummary) {
+                <div class="basic-block"><dt>{{ t('pb.form.jdSummary') }}</dt><dd class="prose">{{ e.jdSummary }}</dd></div>
+              }
+              @if (e.jdText) {
+                <div class="basic-block"><dt>{{ t('pb.form.jdText') }}</dt><dd class="prose">{{ e.jdText }}</dd></div>
+              }
+              @if (e.companyProfile) {
+                <div class="basic-block"><dt>{{ t('pb.form.companyProfile') }}</dt><dd class="prose">{{ e.companyProfile }}</dd></div>
+              }
+              @if (e.notes) {
+                <div class="basic-block"><dt>{{ t('pb.form.notes') }}</dt><dd class="prose">{{ e.notes }}</dd></div>
+              }
+            </mat-card-content>
+          </mat-card>
+
           @if (e.analysisSummary) {
             <mat-card class="panel">
               <mat-card-header>
@@ -333,14 +364,16 @@
                     <input matInput [(ngModel)]="weaknessForm.title"
                            [placeholder]="t('pb.weakness.titlePh')" />
                   </mat-form-field>
-                  <mat-form-field appearance="outline" class="wide">
-                    <mat-label>{{ t('pb.weakness.detailLabel') }}</mat-label>
-                    <textarea matInput rows="2" [(ngModel)]="weaknessForm.detail"></textarea>
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="wide">
-                    <mat-label>{{ t('pb.weakness.evidenceLabel') }}</mat-label>
-                    <textarea matInput rows="2" [(ngModel)]="weaknessForm.evidence"></textarea>
-                  </mat-form-field>
+                  <div class="form-grid-2">
+                    <mat-form-field appearance="outline">
+                      <mat-label>{{ t('pb.weakness.detailLabel') }}</mat-label>
+                      <textarea matInput rows="2" [(ngModel)]="weaknessForm.detail"></textarea>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline">
+                      <mat-label>{{ t('pb.weakness.evidenceLabel') }}</mat-label>
+                      <textarea matInput rows="2" [(ngModel)]="weaknessForm.evidence"></textarea>
+                    </mat-form-field>
+                  </div>
                   <mat-form-field appearance="outline" class="wide">
                     <mat-label>{{ t('pb.weakness.suggestionLabel') }}</mat-label>
                     <textarea matInput rows="2" [(ngModel)]="weaknessForm.suggestion"></textarea>
@@ -357,7 +390,7 @@
       </mat-tab>
 
       <!-- ============ 轮次(缺口1:一家公司多轮) ============ -->
-      <mat-tab [label]="tn('pb.tab.rounds', rounds().length)">
+      <mat-tab [label]="tn('pb.tab.rounds', displayRounds().length)">
         <div class="tab-body">
           <mat-card class="panel">
             <mat-card-header>
@@ -365,10 +398,10 @@
               <mat-card-subtitle>{{ t('pb.round.sub') }}</mat-card-subtitle>
             </mat-card-header>
             <mat-card-content>
-              @if (rounds().length === 0) {
+              @if (displayRounds().length === 0) {
                 <p class="muted">{{ t('pb.round.empty') }}</p>
               } @else {
-                @for (r of rounds(); track r.id) {
+                @for (r of displayRounds(); track r.id) {
                   <div class="round">
                     <div class="round-head">
                       <span class="round-order">{{ tn('pb.round', r.order) }}</span>

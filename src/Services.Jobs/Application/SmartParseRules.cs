@@ -187,6 +187,13 @@ public static class JdPasteParser
               ?? GuessRole(lines);
         if (role is not null) conf.TryAdd("role", 75);
 
+        // 公司名兜底:role 下一行常常是无标签的公司名
+        if (company is null && role is not null)
+        {
+            company = CompanyAfterRole(lines, role);
+            if (company is not null) conf.TryAdd("company", 60);
+        }
+
         var location = Labeled(lines, "地点", "Location", "办公地点", "工作地点");
         if (location is null)
         {
@@ -396,6 +403,31 @@ public static class JdPasteParser
             if (m.Success) return m.Groups[1].Value.Trim();
         }
         return null;
+    }
+
+    /// <summary>
+    /// 公司名兜底:很多 JD 第一行是岗位、第二行是公司名(无标签)。
+    /// 找到 role 行,取其下一行 —— 长度合理、不含岗位关键词、不是地点/薪资行。
+    /// </summary>
+    private static string? CompanyAfterRole(IList<string> lines, string? role)
+    {
+        if (role is null) return null;
+        var idx = -1;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (lines[i].Contains(role, StringComparison.OrdinalIgnoreCase)) { idx = i; break; }
+        }
+        if (idx < 0 || idx + 1 >= lines.Count) return null;
+        var cand = lines[idx + 1].Trim();
+        // 排除:太长、含岗位关键词、是地点/薪资/标签行
+        if (cand.Length is < 2 or > 60) return null;
+        if (RoleWords.IsMatch(cand)) return null;
+        if (cand.Contains(':')) return null;
+        if (SalaryRange.IsMatch(cand) || SalarySingle.IsMatch(cand)) return null;
+        if (LocationCityState.IsMatch(cand)) return null;
+        // 排除纯描述句(太长或含动词开头)
+        if (cand.Split(' ').Length > 6) return null;
+        return cand;
     }
 
     private static string? GuessRole(IEnumerable<string> lines)

@@ -9,6 +9,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -286,7 +287,7 @@ export class ApplicationDialogComponent {
     CommonModule, FormsModule, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatDividerModule,
-    MatSelectModule, MatMenuModule
+    MatSelectModule, MatMenuModule, DragDropModule
   ],
   templateUrl: './tracker.component.html',
   styleUrl: './tracker.component.scss'
@@ -432,6 +433,16 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     });
   }
 
+  /**
+   * 看板拖拽(Simplify 对等功能):卡片拖到另一列 = 改状态。
+   * 复用 quickChangeStatus 的乐观更新 + 失败回滚语义。
+   */
+  onCardDrop(event: CdkDragDrop<Application[]>, targetStatus: ApplicationStatus): void {
+    const app = event.item.data as Application;
+    if (!app || app.status === targetStatus) return;
+    this.quickChangeStatus(app, targetStatus);
+  }
+
   /** 导出 CSV(Simplify 对等功能):当前筛选下的所有投递。 */
   exportCsv(): void {
     const rows = this.items();
@@ -461,6 +472,87 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     link.download = `applications-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  /** 导入 CSV(Simplify 对等功能):与 exportCsv 格式互通,逐行创建投递。 */
+  importCsv(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result ?? '').replace(/^\uFEFF/, '');
+        const rows = this.parseCsvRows(text);
+        if (rows.length < 2) {
+          this.snack.open(this.t('tracker.importEmpty'), this.t('common.close'), { duration: 3000 });
+          return;
+        }
+        // 第一行是表头,跳过。列顺序与 exportCsv 一致:
+        // Company, Role, Location, Status, Priority, Applied Date, Salary, Link, Notes
+        const dataRows = rows.slice(1).filter(r => r.some(c => c.trim()));
+        let created = 0, failed = 0;
+        const total = dataRows.length;
+        if (total === 0) {
+          this.snack.open(this.t('tracker.importEmpty'), this.t('common.close'), { duration: 3000 });
+          return;
+        }
+        for (const r of dataRows) {
+          const body = {
+            companyName: (r[0] ?? '').trim(),
+            role: (r[1] ?? '').trim(),
+            location: (r[2] ?? '').trim() || null,
+            priority: (r[4] ?? '').trim() || 'Medium',
+            appliedDate: (r[5] ?? '').trim() || null,
+            salary: (r[6] ?? '').trim() || null,
+            link: (r[7] ?? '').trim() || null,
+            notes: (r[8] ?? '').trim() || null,
+          };
+          if (!body.companyName || !body.role) { failed++; this.checkImportDone(++created + failed, total, created, failed); continue; }
+          this.api.post('/api/jobs/applications', body).subscribe({
+            next: () => { created++; this.checkImportDone(created + failed, total, created, failed); },
+            error: () => { failed++; this.checkImportDone(created + failed, total, created, failed); }
+          });
+        }
+      } catch {
+        this.snack.open(this.t('tracker.importFailed'), this.t('common.close'), { duration: 4000 });
+      }
+      input.value = '';
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  private checkImportDone(done: number, total: number, created: number, failed: number): void {
+    if (done >= total) {
+      this.reload();
+      const msg = this.tf('tracker.importDone', { c: created, f: failed });
+      this.snack.open(msg, this.t('common.close'), { duration: 4000 });
+    }
+  }
+
+  /** 最小 CSV 解析器:处理引号转义(""),逗号分隔。 */
+  private parseCsvRows(text: string): string[][] {
+    const rows: string[][] = [];
+    let row: string[] = [], field = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.some(x => x.trim())) rows.push(row);
+        row = [];
+      } else field += c;
+    }
+    if (field || row.length > 0) { row.push(field); rows.push(row); }
+    return rows;
   }
 
   /** 备战:从投递一键创建 Playbook 面试条目,JD/公司/职位自动带入。 */
@@ -932,9 +1024,15 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   }
 
   openDetail(app: Application): void {
+    // Simplify 模式:右侧抽屉(不是居中弹窗),看板在左侧保持可见。
     this.dialog.open(ApplicationDetailDialogComponent, {
       data: app,
-      maxWidth: '680px',
+      width: '480px',
+      maxWidth: '92vw',
+      height: '100vh',
+      maxHeight: '100vh',
+      position: { right: '0', top: '0' },
+      panelClass: 'detail-drawer-panel',
       autoFocus: false
     });
   }
@@ -1052,24 +1150,24 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       </div>
 
       <dl class="fields">
-        <div><dt>{{ t('tracker.dLocation') }}</dt><dd>{{ app.location || '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dSalary') }}</dt><dd>{{ app.salary || '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dAppliedDate') }}</dt><dd>{{ app.appliedDate || '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dOutreachMsg') }}</dt><dd>{{ app.outreachMessage || '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dLocation') }}</dt><dd>{{ detail.location || '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dSalary') }}</dt><dd>{{ detail.salary || '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dAppliedDate') }}</dt><dd>{{ detail.appliedDate || '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dOutreachMsg') }}</dt><dd>{{ detail.outreachMessage || '—' }}</dd></div>
         <div><dt>{{ t('tracker.dResumeMatch') }}</dt>
-          <dd>{{ app.resumeScore != null ? tn('tracker.dScoreUnit', app.resumeScore) : '—' }}</dd></div>
+          <dd>{{ detail.resumeScore != null ? tn('tracker.dScoreUnit', detail.resumeScore) : '—' }}</dd></div>
         <div><dt>{{ t('tracker.dPassRate') }}</dt>
-          <dd>{{ app.passRateEstimate ? app.passRateEstimate : '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dCreatedAt') }}</dt><dd>{{ app.createdAt | date: 'yyyy-MM-dd HH:mm' }}</dd></div>
+          <dd>{{ detail.passRateEstimate ? detail.passRateEstimate : '—' }}</dd></div>
+        <div><dt>{{ t('tracker.dCreatedAt') }}</dt><dd>{{ detail.createdAt | date: 'yyyy-MM-dd HH:mm' }}</dd></div>
         <div><dt>{{ t('tracker.dUpdatedAt') }}</dt>
-          <dd>{{ app.updatedAt ? (app.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd></div>
+          <dd>{{ detail.updatedAt ? (detail.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd></div>
       </dl>
 
-      @if (app.jdSummary) {
+      @if (detail.jdSummary) {
         <mat-divider></mat-divider>
         <section>
           <h4>{{ t('tracker.dJdSummary') }}</h4>
-          <p class="pre">{{ app.jdSummary }}</p>
+          <p class="pre">{{ detail.jdSummary }}</p>
         </section>
       }
 
@@ -1224,10 +1322,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 
           @if (jdExpanded()) {
             <div class="jd-full">
-              <p class="pre">{{ app.jdText }}</p>
+              <p class="pre">{{ detail.jdText }}</p>
             </div>
           } @else {
-            <p class="pre jd-peek">{{ app.jdText.slice(0, 220) }}…</p>
+            <p class="pre jd-peek">{{ detail.jdText.slice(0, 220) }}…</p>
           }
         </section>
       }

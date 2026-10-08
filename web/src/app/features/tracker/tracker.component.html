@@ -41,7 +41,35 @@
       <div class="metric-val">{{ statOffer() }}</div>
       <div class="metric-label">{{ t('dash.offer') }}</div>
     </mat-card>
+    <!-- Simplify 对标:每周目标 -->
+    <mat-card class="metric goal" (click)="promptGoal()" [matTooltip]="t('tracker.goalTip')"
+              tabindex="0" role="button" (keydown.enter)="promptGoal()">
+      <div class="metric-val">{{ weeklyApplied() }}<span class="goal-of">/{{ weeklyGoal() }}</span></div>
+      <div class="metric-label">{{ t('tracker.weeklyGoal') }}</div>
+      <mat-progress-bar mode="determinate" [value]="weeklyPct()"></mat-progress-bar>
+    </mat-card>
   </section>
+
+  <!-- Simplify 对标:转化漏斗 -->
+  @if (hasFunnelData()) {
+  <section class="funnel">
+    <div class="funnel-title">{{ t('tracker.funnel') }}</div>
+    <div class="funnel-bars">
+      @for (f of funnel(); track f.status) {
+        <div class="f-row">
+          <span class="f-label">{{ f.label }}</span>
+          <div class="f-track">
+            <div class="f-fill" [style.width.%]="f.widthPct"></div>
+          </div>
+          <span class="f-count">{{ f.count }}</span>
+          @if (f.rate < 100) {
+            <span class="f-rate">{{ f.rate }}%</span>
+          }
+        </div>
+      }
+    </div>
+  </section>
+  }
 
   <!-- 筛选区 -->
   <mat-card class="filters">
@@ -117,6 +145,14 @@
             {{ statusLabel(s) }} ({{ stats()?.byStatus?.[s] ?? 0 }})
           </mat-chip>
         }
+        <!-- Simplify 对标:stale 筛选 -->
+        @if (staleCount() > 0) {
+          <mat-chip class="fchip stale-chip" [highlighted]="showStaleOnly()"
+                    (click)="toggleStaleOnly()">
+            <mat-icon>history</mat-icon>
+            {{ t('tracker.stale') }} ({{ staleCount() }})
+          </mat-chip>
+        }
       </mat-chip-set>
     </mat-card-content>
   </mat-card>
@@ -190,6 +226,11 @@
                 @if (a.location) {
                   <div class="company"><mat-icon>place</mat-icon>{{ a.location }}</div>
                 }
+                @if (staleIds().has(a.id)) {
+                  <span class="stale-badge" [matTooltip]="t('tracker.staleHint')">
+                    <mat-icon>history</mat-icon>{{ t('tracker.stale') }}
+                  </span>
+                }
               </div>
             </mat-card>
           }
@@ -212,7 +253,7 @@
   <!-- 列表视图:横向一行 = logo | 职位信息 | pipeline stepper | 状态下拉 -->
   @if (viewMode() === 'list') {
   <div class="list-view" id="status">
-    @for (a of items(); track a.id) {
+    @for (a of displayItems(); track a.id) {
       <div class="list-row" (click)="openDetail(a)" [class.followup]="needsFollowUp(a)">
         <div class="lr-logo">
           @if (logoUrl(a) && !logoBrokenCard(a.id)) {
@@ -229,6 +270,11 @@
             {{ a.role }}
             @if (needsFollowUp(a)) {
               <span class="followup-badge" [matTooltip]="t('tracker.followupHint')">!</span>
+            }
+            @if (staleIds().has(a.id)) {
+              <span class="stale-badge" [matTooltip]="t('tracker.staleHint')">
+                <mat-icon>history</mat-icon>{{ t('tracker.stale') }}
+              </span>
             }
           </div>
           <div class="lr-sub">

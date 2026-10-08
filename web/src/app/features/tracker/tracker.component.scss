@@ -37,12 +37,12 @@ mat-card { border-radius: 8px; }
 .metrics {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -51,6 +51,48 @@ mat-card { border-radius: 8px; }
 .metric-label { font-size: 12px; opacity: 0.55; margin-top: 4px; }
 .metric.highlight { background: rgba(76, 175, 80, 0.1); }
 .metric.highlight .metric-val { color: #2e7d32; }
+
+/* Simplify 对标:每周目标卡片(可点击改目标) */
+.metric.goal { cursor: pointer; background: rgba(43, 89, 255, 0.06); }
+.metric.goal:hover { background: rgba(43, 89, 255, 0.12); }
+.metric.goal .goal-of { font-size: 15px; font-weight: 400; opacity: 0.55; }
+.metric.goal mat-progress-bar { margin-top: 8px; }
+
+/* Simplify 对标:转化漏斗 */
+.funnel {
+  flex: 0 0 auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.funnel-title { font-size: 13px; font-weight: 600; opacity: 0.6; margin-bottom: 10px; }
+.funnel-bars { display: flex; flex-direction: column; gap: 6px; }
+.f-row { display: flex; align-items: center; gap: 10px; }
+.f-label { width: 90px; flex: 0 0 auto; font-size: 13px; }
+.f-track {
+  flex: 1 1 auto; height: 18px; border-radius: 9px;
+  background: rgba(0,0,0,0.06); overflow: hidden;
+}
+.f-fill {
+  height: 100%; border-radius: 9px;
+  background: linear-gradient(90deg, #2b59ff, #6a8dff);
+  transition: width 0.4s ease;
+}
+.f-count { width: 36px; text-align: right; font-weight: 700; font-size: 14px; }
+.f-rate { width: 44px; font-size: 12px; opacity: 0.55; }
+
+/* Simplify 对标:stale 徽标 */
+.stale-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 600; color: #b7791f;
+  background: rgba(255, 193, 7, 0.16); border-radius: 10px;
+  padding: 2px 8px; margin-top: 4px;
+}
+.stale-badge mat-icon { font-size: 13px; width: 13px; height: 13px; }
+.stale-chip { border-color: rgba(255, 193, 7, 0.5); }
+.stale-chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
 
 /* ---------- 筛选 ---------- */
 

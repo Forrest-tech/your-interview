@@ -314,7 +314,7 @@
                 <div class="add-block">
                   <mat-divider></mat-divider>
                   <h4 class="add-title">{{ t('pb.weakness.addTitle') }}</h4>
-                  <div class="form-grid">
+                  <div class="form-grid-2">
                     <mat-form-field appearance="outline">
                       <mat-label>{{ t('pb.weakness.category') }}</mat-label>
                       <mat-select [(ngModel)]="weaknessForm.category">
@@ -994,15 +994,15 @@
               </mat-form-field>
               <mat-form-field appearance="outline" class="wide">
                 <mat-label>{{ t('pb.form.jdText') }}</mat-label>
-                <textarea matInput rows="4" [(ngModel)]="editForm.jdText"></textarea>
+                <textarea matInput rows="3" [(ngModel)]="editForm.jdText"></textarea>
               </mat-form-field>
               <mat-form-field appearance="outline" class="wide">
                 <mat-label>{{ t('pb.form.companyProfile') }}</mat-label>
-                <textarea matInput rows="3" [(ngModel)]="editForm.companyProfile"></textarea>
+                <textarea matInput rows="2" [(ngModel)]="editForm.companyProfile"></textarea>
               </mat-form-field>
               <mat-form-field appearance="outline" class="wide">
                 <mat-label>{{ t('pb.form.notes') }}</mat-label>
-                <textarea matInput rows="3" [(ngModel)]="editForm.notes"></textarea>
+                <textarea matInput rows="2" [(ngModel)]="editForm.notes"></textarea>
               </mat-form-field>
 
               @if (auth.can('interviews.write')) {

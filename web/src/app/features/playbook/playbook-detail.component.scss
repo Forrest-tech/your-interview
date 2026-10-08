@@ -192,6 +192,11 @@
   flex-direction: column;
   gap: 16px;
   padding: 16px 0;
+  /* 内容区独立滚动:页面整体不滚,只有 tab 内容区有滚动条 */
+  max-height: calc(100vh - 320px);
+  min-height: 200px;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
 .tab-intro {

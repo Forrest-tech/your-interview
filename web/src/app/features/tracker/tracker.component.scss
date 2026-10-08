@@ -568,3 +568,24 @@ mat-form-field { width: 100%; }
 .app-card:active {
   cursor: grabbing;
 }
+
+/* P0-2:详情加载失败时的过期数据警告条 */
+.stale-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff8e1;
+  border: 1px solid #ffcc02;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #7a5c00;
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    color: #f9a825;
+  }
+}

@@ -1140,6 +1140,12 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     </h2>
 
     <mat-dialog-content class="detail-body">
+      @if (loadError()) {
+        <div class="stale-warning">
+          <mat-icon>warning</mat-icon>
+          <span>{{ t('tracker.detailStale') }}</span>
+        </div>
+      }
       <div class="tabs">
         <button class="tab" [class.active]="detailTab() === 'overview'"
                 (click)="switchTab('overview')">{{ t('tracker.dOverview') }}</button>
@@ -1693,6 +1699,9 @@ export class ApplicationDetailDialogComponent {
    */
   readonly full = signal<Application | null>(null);
 
+  /** P0-2:详情加载失败标记 —— 显示"数据可能过期"警告,而不是静默用旧数据。 */
+  readonly loadError = signal(false);
+
   /** 模板统一读这里:详情没回来前用列表项兜底。 */
   get detail(): Application { return this.full() ?? this.app; }
 
@@ -1747,7 +1756,7 @@ export class ApplicationDetailDialogComponent {
     // 全量详情:列表项不带轮次/历史/拒因,打开后以服务端为准替换(M1.5)
     this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
       next: (a) => this.full.set(a),
-      error: () => { /* 拉不到就用列表项兜底 */ }
+      error: () => { this.loadError.set(true); /* P0-2:不再静默,模板显示过期警告 */ }
     });
 
     // 公司情报:Application 只带 companyId,要单独查

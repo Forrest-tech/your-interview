@@ -755,6 +755,7 @@ const DICT: Record<string, Record<Lang, string>> = {
 
   // ---------- 投递跟踪 · 详情弹窗 ----------
   'tracker.dOverview': { zh: '概览', en: 'Overview', fr: 'Aperçu' },
+  'tracker.detailStale': { zh: '详情加载失败,显示的可能是旧数据', en: 'Failed to load details — data may be outdated', fr: 'Données possiblement obsolètes' },
   'tracker.dPriority': { zh: '优先级', en: 'Priority', fr: 'Priorité' },
   'tracker.dNeedNetwork': { zh: '需先建立人脉', en: 'Network first', fr: 'Réseauter d’abord' },
   'tracker.dRejectReason': { zh: '拒因:', en: 'Rejection reason:', fr: 'Motif du refus :' },

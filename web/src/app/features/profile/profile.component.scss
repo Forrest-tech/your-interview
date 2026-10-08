@@ -324,3 +324,26 @@ mat-card { border-radius: 8px; }
   margin-top: 4px;
   padding-left: 34px;
 }
+
+.saved-resume {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.saved-resume-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  mat-icon { color: #1a73e8; }
+  .saved-name { font-weight: 500; }
+  .saved-date { margin-left: auto; color: #888; font-size: 12px; }
+}
+.saved-preview {
+  margin: 0;
+  color: #555;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}

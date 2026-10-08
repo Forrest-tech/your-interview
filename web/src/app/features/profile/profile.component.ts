@@ -129,14 +129,41 @@ export class ProfileComponent implements OnInit {
   /** 我的简历(localStorage,备战材料生成时自动带入)。 */
   resumeDraft = '';
   resumeFileName = signal('');
+  savedResumePreview = signal('');
+  savedResumeDate = signal('');
   private readonly resumeKey = 'yi-my-resume';
+  private readonly resumeMetaKey = 'yi-my-resume-meta';
 
   saveResume(): void {
     try {
       localStorage.setItem(this.resumeKey, this.resumeDraft);
+      const meta = JSON.stringify({
+        fileName: this.resumeFileName() || '',
+        savedAt: new Date().toISOString()
+      });
+      localStorage.setItem(this.resumeMetaKey, meta);
+      this.refreshResumePreview();
       this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2500 });
     } catch {
       this.snack.open(this.t('profile.resumeSaveFailed'), this.t('common.close'), { duration: 3000 });
+    }
+  }
+
+  private refreshResumePreview(): void {
+    try {
+      const text = localStorage.getItem(this.resumeKey) ?? '';
+      const metaRaw = localStorage.getItem(this.resumeMetaKey);
+      const meta = metaRaw ? JSON.parse(metaRaw) : {};
+      if (text.trim()) {
+        this.savedResumePreview.set(text.slice(0, 300) + (text.length > 300 ? '...' : ''));
+        this.savedResumeDate.set(meta.savedAt ? new Date(meta.savedAt).toLocaleDateString() : '');
+        if (meta.fileName) this.resumeFileName.set(meta.fileName);
+      } else {
+        this.savedResumePreview.set('');
+        this.savedResumeDate.set('');
+      }
+    } catch {
+      this.savedResumePreview.set('');
     }
   }
 
@@ -339,6 +366,7 @@ export class ProfileComponent implements OnInit {
     this.load();
     try {
       this.resumeDraft = localStorage.getItem(this.resumeKey) ?? '';
+      this.refreshResumePreview();
     } catch { /* 忽略 */ }
   }
 

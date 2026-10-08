@@ -1052,6 +1052,15 @@ const DICT: Record<string, Record<Lang, string>> = {
     fr: 'Enregistrées dans votre compte — valables partout'
   },
   'profile.timezone': { zh: '时区', en: 'Time zone', fr: 'Fuseau horaire' },
+  'prof.tzToronto': { zh: '多伦多 (EST/EDT)', en: 'Toronto (EST/EDT)', fr: 'Toronto (EST/EDT)' },
+  'prof.tzVancouver': { zh: '温哥华 (PST/PDT)', en: 'Vancouver (PST/PDT)', fr: 'Vancouver (PST/PDT)' },
+  'prof.tzNewYork': { zh: '纽约 (EST/EDT)', en: 'New York (EST/EDT)', fr: 'New York (EST/EDT)' },
+  'prof.tzLosAngeles': { zh: '洛杉矶 (PST/PDT)', en: 'Los Angeles (PST/PDT)', fr: 'Los Angeles (PST/PDT)' },
+  'prof.tzLondon': { zh: '伦敦 (GMT/BST)', en: 'London (GMT/BST)', fr: 'Londres (GMT/BST)' },
+  'prof.tzParis': { zh: '巴黎 (CET/CEST)', en: 'Paris (CET/CEST)', fr: 'Paris (CET/CEST)' },
+  'prof.tzShanghai': { zh: '上海 (CST)', en: 'Shanghai (CST)', fr: 'Shanghai (CST)' },
+  'prof.tzHongKong': { zh: '香港 (HKT)', en: 'Hong Kong (HKT)', fr: 'Hong Kong (HKT)' },
+  'prof.tzTokyo': { zh: '东京 (JST)', en: 'Tokyo (JST)', fr: 'Tokyo (JST)' },
   'profile.tzHint': {
     zh: '注册与登录时间按此时区显示',
     en: 'Dates are shown in this zone',
@@ -1673,6 +1682,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'profile.resumeExtracted': { zh: '已提取文字,请检查后保存', en: 'Text extracted, review and save', fr: 'Texte extrait' },
   'profile.resumeExtractFailed': { zh: '提取失败,请手动粘贴', en: 'Extraction failed, please paste manually', fr: 'Échec d\'extraction' },
   'profile.resumeDocxHint': { zh: 'Word 请打开复制全文粘贴到下方', en: 'For Word, copy-paste the text below', fr: 'Copier-coller le texte' },
+  'profile.resumeSavedLabel': { zh: '已保存的简历', en: 'Saved resume', fr: 'CV enregistré' },
   'pb.guidance.historyLabel': { zh: '历史版本', en: 'Version history', fr: 'Historique des versions' },
   'pb.guidance.empty': { zh: '还没有指导材料。点击「生成指导材料」,AI 会根据 JD、公司介绍、历史问答、短板和六维诊断生成一份备战文档。', en: 'No guidance yet. Click "Generate guidance" — the AI will build a prep document from the JD, company profile, past Q&A, weaknesses and the six-dimension diagnosis.', fr: 'Aucun guide. Cliquez sur « Générer le guide » — l’IA rédigera un document de préparation à partir de l’offre, du profil de l’entreprise, des Q&R passées, des faiblesses et du diagnostic en six dimensions.' },
   'pb.guidance.confirmGenerate': { zh: '生成新版本指导材料?会调用 AI,可能需要几十秒。', en: 'Generate a new version of the guidance? It calls the AI and may take tens of seconds.', fr: 'Générer une nouvelle version du guide ? Cela appelle l’IA et peut prendre des dizaines de secondes.' },

@@ -503,6 +503,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
             companyName: (r[0] ?? '').trim(),
             role: (r[1] ?? '').trim(),
             location: (r[2] ?? '').trim() || null,
+            status: this.parseStatusLabel((r[3] ?? '').trim()),
             priority: (r[4] ?? '').trim() || 'Medium',
             appliedDate: (r[5] ?? '').trim() || null,
             salary: (r[6] ?? '').trim() || null,
@@ -531,8 +532,23 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     }
   }
 
-  /** 最小 CSV 解析器:处理引号转义(""),逗号分隔。 */
-  private parseCsvRows(text: string): string[][] {
+  /**
+   * CSV 状态列回填:导出时写的是本地化标签(如"已投递"/"Applied"),
+   * 导入时反查回状态 key。认不出就回退 'Saved',不让整行失败。
+   */
+  private parseStatusLabel(label: string): string {
+    if (!label) return 'Saved';
+    const keys = ['Saved', 'Applied', 'Screen', 'Interview', 'Offer', 'Rejected', 'Paused', 'Withdrawn', 'Accepted', 'Ghosted'];
+    // 直接是 key(如英文 CSV 手工编辑)就直接用
+    if (keys.includes(label)) return label;
+    // 反查本地化标签
+    for (const k of keys) {
+      if (this.i18n.t('status.' + k) === label) return k;
+    }
+    return 'Saved';
+  }
+
+  /** 最小 CSV 解析器:处理引号转义(""),逗号分隔。 */  private parseCsvRows(text: string): string[][] {
     const rows: string[][] = [];
     let row: string[] = [], field = '', inQuotes = false;
     for (let i = 0; i < text.length; i++) {

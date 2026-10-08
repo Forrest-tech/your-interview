@@ -422,6 +422,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("EmailsJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Feedback")
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
@@ -441,6 +444,10 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("MeetingLink")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
@@ -453,13 +460,27 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("PrepQuestionsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RecordingUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<DateOnly?>("ScheduledDate")
                         .HasColumnType("date");
+
+                    b.Property<string>("ScheduledTime")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<string>("Stage")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Transcript")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 

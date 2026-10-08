@@ -392,6 +392,32 @@
       <!-- ============ 轮次(缺口1:一家公司多轮) ============ -->
       <mat-tab [label]="tn('pb.tab.rounds', displayRounds().length)">
         <div class="tab-body">
+          <!-- Upcoming 面试提醒 -->
+          @if (upcomingRounds().length > 0) {
+            <mat-card class="panel upcoming-panel">
+              <mat-card-header>
+                <mat-card-title>{{ t('pb.round.upcoming') }}</mat-card-title>
+              </mat-card-header>
+              <mat-card-content>
+                @for (r of upcomingRounds(); track r.id) {
+                  <div class="upcoming-row">
+                    <mat-icon>event</mat-icon>
+                    <span class="up-name">{{ tn('pb.round', r.order) }} · {{ r.stage }}</span>
+                    <span class="up-when">{{ r.scheduledDate }} {{ r.scheduledTime }}</span>
+                    @if (r.meetingLink) {
+                      <a mat-stroked-button [href]="r.meetingLink" target="_blank">
+                        <mat-icon>videocam</mat-icon> {{ t('pb.round.join') }}
+                      </a>
+                    }
+                    <button mat-icon-button (click)="downloadIcs(r)" [title]="t('pb.round.addToCal')">
+                      <mat-icon>calendar_add_on</mat-icon>
+                    </button>
+                  </div>
+                }
+              </mat-card-content>
+            </mat-card>
+          }
+
           <mat-card class="panel">
             <mat-card-header>
               <mat-card-title>{{ t('pb.round.title') }}</mat-card-title>
@@ -402,28 +428,121 @@
                 <p class="muted">{{ t('pb.round.empty') }}</p>
               } @else {
                 @for (r of displayRounds(); track r.id) {
-                  <div class="round">
-                    <div class="round-head">
+                  <div class="round-card" [class.expanded]="isRoundExpanded(r)">
+                    <div class="round-head" (click)="toggleRoundExpand(r)">
+                      <mat-icon class="exp-icon">{{ isRoundExpanded(r) ? 'expand_less' : 'expand_more' }}</mat-icon>
                       <span class="round-order">{{ tn('pb.round', r.order) }}</span>
                       <span class="round-stage">{{ r.stage }}</span>
                       <span class="round-outcome">{{ roundOutcomeLabelFor(r.outcome) }}</span>
                       @if (r.scheduledDate) {
-                        <span class="round-date">{{ r.scheduledDate }}</span>
+                        <span class="round-date">{{ r.scheduledDate }}{{ r.scheduledTime ? ' ' + r.scheduledTime : '' }}</span>
+                      }
+                      @if (r.meetingLink) {
+                        <a mat-stroked-button class="join-btn" [href]="r.meetingLink" target="_blank"
+                           (click)="$event.stopPropagation()">
+                          <mat-icon>videocam</mat-icon> {{ t('pb.round.join') }}
+                        </a>
                       }
                       <span class="spacer"></span>
-                      @if (auth.can('interviews.write')) {
-                        @if (!isEditingRound(r)) {
-                          <button mat-icon-button (click)="editRound(r)" [title]="t('common.edit')">
-                            <mat-icon>edit</mat-icon>
-                          </button>
-                        }
-                        @if (auth.can('interviews.delete')) {
-                          <button mat-icon-button (click)="removeRound(r)" [title]="t('common.delete')">
-                            <mat-icon>close</mat-icon>
-                          </button>
-                        }
+                      @if (auth.can('interviews.write') && !isEditingRound(r)) {
+                        <button mat-icon-button (click)="editRound(r); $event.stopPropagation()" [title]="t('common.edit')">
+                          <mat-icon>edit</mat-icon>
+                        </button>
+                      }
+                      @if (auth.can('interviews.delete') && !r.id.startsWith('__synthetic')) {
+                        <button mat-icon-button (click)="removeRound(r); $event.stopPropagation()" [title]="t('common.delete')">
+                          <mat-icon>close</mat-icon>
+                        </button>
                       }
                     </div>
+
+                    @if (isRoundExpanded(r) && !isEditingRound(r)) {
+                      <div class="round-workspace">
+                        <div class="round-actions">
+                          <button mat-stroked-button (click)="downloadIcs(r)">
+                            <mat-icon>calendar_add_on</mat-icon> {{ t('pb.round.addToCal') }}
+                          </button>
+                          <button mat-stroked-button (click)="goToGuidance()">
+                            <mat-icon>auto_stories</mat-icon> {{ t('pb.round.viewGuidance') }}
+                          </button>
+                        </div>
+
+                        <div class="ws-section">
+                          <h4><mat-icon>checklist</mat-icon> {{ t('pb.round.prepTitle') }}</h4>
+                          @for (q of getPrepQuestions(r); track $index) {
+                            <div class="prep-row">
+                              <mat-checkbox [checked]="q.checked" (change)="togglePrepQuestion(r, $index)">
+                                <span [class.done]="q.checked">{{ q.text }}</span>
+                              </mat-checkbox>
+                              <button mat-icon-button (click)="removePrepQuestion(r, $index)">
+                                <mat-icon>close</mat-icon>
+                              </button>
+                            </div>
+                          }
+                          @if (auth.can('interviews.write')) {
+                            <div class="add-row">
+                              <input #prepInput [placeholder]="t('pb.round.prepPh')"
+                                     (keyup.enter)="addPrepQuestion(r, prepInput.value); prepInput.value=''">
+                              <button mat-icon-button (click)="addPrepQuestion(r, prepInput.value); prepInput.value=''">
+                                <mat-icon>add</mat-icon>
+                              </button>
+                            </div>
+                          }
+                        </div>
+
+                        <div class="ws-section">
+                          <h4><mat-icon>mail</mat-icon> {{ t('pb.round.emailsTitle') }}</h4>
+                          @for (em of getRoundEmails(r); track $index) {
+                            <div class="email-row">
+                              <div class="email-main">
+                                <span class="email-subject">{{ em.subject }}</span>
+                                <span class="email-meta">{{ em.from }} · {{ em.date }}</span>
+                                @if (em.snippet) { <p class="email-snippet">{{ em.snippet }}</p> }
+                              </div>
+                              <button mat-icon-button (click)="removeRoundEmail(r, $index)">
+                                <mat-icon>close</mat-icon>
+                              </button>
+                            </div>
+                          }
+                          @if (auth.can('interviews.write')) {
+                            <div class="add-email">
+                              <input #emSub [placeholder]="t('pb.round.emailSubPh')">
+                              <input #emFrom [placeholder]="t('pb.round.emailFromPh')">
+                              <input #emSnip [placeholder]="t('pb.round.emailSnipPh')">
+                              <button mat-stroked-button (click)="addRoundEmail(r, emSub.value, emFrom.value, emSnip.value); emSub.value=''; emFrom.value=''; emSnip.value=''">
+                                <mat-icon>add</mat-icon> {{ t('common.add') }}
+                              </button>
+                            </div>
+                          }
+                        </div>
+
+                        @if (r.transcript || r.recordingUrl) {
+                          <div class="ws-section">
+                            <h4><mat-icon>mic</mat-icon> {{ t('pb.round.transcriptTitle') }}</h4>
+                            @if (r.recordingUrl) {
+                              <p><a [href]="r.recordingUrl" target="_blank">{{ t('pb.round.recording') }}</a></p>
+                            }
+                            @if (r.transcript) {
+                              <p class="prose transcript">{{ r.transcript }}</p>
+                            }
+                          </div>
+                        }
+
+                        @if (r.notes || r.feedback || r.interviewers) {
+                          <div class="ws-section">
+                            @if (r.interviewers) {
+                              <p class="round-line"><strong>{{ t('pb.round.interviewersLabel') }}</strong> {{ r.interviewers }}</p>
+                            }
+                            @if (r.notes) { <p class="round-line">{{ r.notes }}</p> }
+                            @if (r.feedback) {
+                              <blockquote class="wk-evidence">
+                                <strong>{{ t('pb.round.feedback') }}</strong><span>{{ r.feedback }}</span>
+                              </blockquote>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
 
                     @if (isEditingRound(r)) {
                       <div class="form-grid">
@@ -448,6 +567,10 @@
                           <input matInput type="date" [(ngModel)]="roundDrafts[r.id].scheduledDate" />
                         </mat-form-field>
                         <mat-form-field appearance="outline">
+                          <mat-label>{{ t('pb.round.timeLabel') }}</mat-label>
+                          <input matInput type="time" [(ngModel)]="roundDrafts[r.id].scheduledTime" />
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
                           <mat-label>{{ t('pb.round.formatLabel') }}</mat-label>
                           <mat-select [(ngModel)]="roundDrafts[r.id].format">
                             <mat-option value="">—</mat-option>
@@ -455,6 +578,11 @@
                             <mat-option value="Video">Video</mat-option>
                             <mat-option value="Onsite">Onsite</mat-option>
                           </mat-select>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline">
+                          <mat-label>{{ t('pb.round.meetingLinkLabel') }}</mat-label>
+                          <input matInput [(ngModel)]="roundDrafts[r.id].meetingLink"
+                                 [placeholder]="t('pb.round.meetingLinkPh')" />
                         </mat-form-field>
                       </div>
                       <mat-form-field appearance="outline" class="wide">
@@ -474,6 +602,14 @@
                         <mat-label>{{ t('pb.round.feedbackLabel') }}</mat-label>
                         <textarea matInput rows="2" [(ngModel)]="roundDrafts[r.id].feedback"></textarea>
                       </mat-form-field>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>{{ t('pb.round.transcriptLabel') }}</mat-label>
+                        <textarea matInput rows="4" [(ngModel)]="roundDrafts[r.id].transcript"></textarea>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="wide">
+                        <mat-label>{{ t('pb.round.recordingLabel') }}</mat-label>
+                        <input matInput [(ngModel)]="roundDrafts[r.id].recordingUrl" />
+                      </mat-form-field>
                       <div class="row-actions">
                         <button mat-stroked-button color="primary" (click)="saveRound(r)"
                                 [disabled]="busy() !== null">
@@ -481,25 +617,6 @@
                         </button>
                         <button mat-button (click)="cancelEditRound(r)">{{ t('common.cancel') }}</button>
                       </div>
-                    } @else {
-                      @if (r.interviewers) {
-                        <p class="round-line"><strong>{{ t('pb.round.interviewersLabel') }}</strong> {{ r.interviewers }}</p>
-                      }
-                      @if (r.format || r.location) {
-                        <p class="round-line">
-                          @if (r.format) { <span>{{ r.format }}</span> }
-                          @if (r.format && r.location) { <span> · </span> }
-                          @if (r.location) { <span>{{ r.location }}</span> }
-                        </p>
-                      }
-                      @if (r.notes) {
-                        <p class="round-line">{{ r.notes }}</p>
-                      }
-                      @if (r.feedback) {
-                        <blockquote class="wk-evidence">
-                          <strong>{{ t('pb.round.feedback') }}</strong><span>{{ r.feedback }}</span>
-                        </blockquote>
-                      }
                     }
                   </div>
                   <mat-divider></mat-divider>

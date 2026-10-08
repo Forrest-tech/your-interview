@@ -732,6 +732,24 @@ public sealed class InterviewRound : Entity
 
     public string? Feedback { get; private set; }
 
+    /// <summary>会议链接(Teams/Zoom 等)。</summary>
+    public string? MeetingLink { get; private set; }
+
+    /// <summary>面试时间(HH:mm),与 ScheduledDate 配合。</summary>
+    public string? ScheduledTime { get; private set; }
+
+    /// <summary>备考问题清单 JSON:[{text, checked}]。</summary>
+    public string? PrepQuestionsJson { get; private set; }
+
+    /// <summary>相关邮件 JSON:[{subject, from, date, snippet}]。</summary>
+    public string? EmailsJson { get; private set; }
+
+    /// <summary>面试录音文稿。</summary>
+    public string? Transcript { get; private set; }
+
+    /// <summary>录音文件 URL。</summary>
+    public string? RecordingUrl { get; private set; }
+
     internal void Update(string stage, DateOnly? scheduledDate, string? interviewers,
         string? format, string? location, InterviewRoundOutcome outcome,
         string? notes, string? feedback)
@@ -744,6 +762,18 @@ public sealed class InterviewRound : Entity
         Outcome = outcome;
         Notes = notes;
         Feedback = feedback;
+    }
+
+    /// <summary>更新轮次扩展信息(会议链接/时间/备考/邮件/文稿/录音)。</summary>
+    internal void UpdateDetails(string? meetingLink, string? scheduledTime,
+        string? prepQuestionsJson, string? emailsJson, string? transcript, string? recordingUrl)
+    {
+        MeetingLink = meetingLink;
+        ScheduledTime = scheduledTime;
+        PrepQuestionsJson = prepQuestionsJson;
+        EmailsJson = emailsJson;
+        Transcript = transcript;
+        RecordingUrl = recordingUrl;
     }
 
     /// <summary>只记结果,不动其它字段 —— 结果回写不该清掉已填的时间/面试官/形式。</summary>

@@ -271,6 +271,24 @@ export interface InterviewRound {
   outcome: string;
   notes?: string;
   feedback?: string;
+  meetingLink?: string;
+  scheduledTime?: string;
+  prepQuestionsJson?: string;
+  emailsJson?: string;
+  transcript?: string;
+  recordingUrl?: string;
+}
+
+export interface PrepQuestion {
+  text: string;
+  checked: boolean;
+}
+
+export interface RoundEmail {
+  subject: string;
+  from: string;
+  date: string;
+  snippet: string;
 }
 
 export interface GuidanceMaterial {

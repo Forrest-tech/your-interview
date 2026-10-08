@@ -266,7 +266,8 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     {
         var r = await sender.Send(new UpdateRoundCommand(id, roundId, body.Stage, body.ScheduledDate,
             body.Interviewers, body.Format, body.Location, body.Outcome ?? "Pending",
-            body.Notes, body.Feedback), ct);
+            body.Notes, body.Feedback, body.MeetingLink, body.ScheduledTime,
+            body.PrepQuestionsJson, body.EmailsJson, body.Transcript, body.RecordingUrl), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -450,7 +451,10 @@ public sealed record AddRoundBody(string? Stage = null);
 
 public sealed record UpdateRoundBody(
     string Stage, DateOnly? ScheduledDate, string? Interviewers, string? Format,
-    string? Location, string? Outcome, string? Notes, string? Feedback);
+    string? Location, string? Outcome, string? Notes, string? Feedback,
+    string? MeetingLink = null, string? ScheduledTime = null,
+    string? PrepQuestionsJson = null, string? EmailsJson = null,
+    string? Transcript = null, string? RecordingUrl = null);
 
 public sealed record UpdateQuestionBody(
     string QuestionText, string? MyAnswerText, string Category, int Difficulty,

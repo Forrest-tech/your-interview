@@ -177,6 +177,12 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.Location).HasMaxLength(300);
             e.Property(x => x.Notes).HasMaxLength(20000);
             e.Property(x => x.Feedback).HasMaxLength(20000);
+            e.Property(x => x.MeetingLink).HasMaxLength(2000);
+            e.Property(x => x.ScheduledTime).HasMaxLength(10);
+            e.Property(x => x.PrepQuestionsJson).HasColumnType("text");
+            e.Property(x => x.EmailsJson).HasColumnType("text");
+            e.Property(x => x.Transcript).HasColumnType("text");
+            e.Property(x => x.RecordingUrl).HasMaxLength(2000);
             e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Order }).IsUnique();

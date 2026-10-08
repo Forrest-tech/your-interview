@@ -25,7 +25,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
-  InterviewRound, InterviewStatus, InterviewWeakness, QuestionCandidate, SpeechMetrics
+  InterviewRound, InterviewStatus, InterviewWeakness, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -198,6 +198,15 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       interviewers: e.interviewers ?? '',
       notes: '',
     }];
+  });
+
+  /** 未来 14 天内的面试(按日期排序),显示在 Rounds tab 顶部。 */
+  readonly upcomingRounds = computed(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const limit = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
+    return this.displayRounds()
+      .filter(r => r.scheduledDate && r.scheduledDate >= today && r.scheduledDate <= limit)
+      .sort((a, b) => (a.scheduledDate ?? '').localeCompare(b.scheduledDate ?? ''));
   });
   readonly audioAssets = computed(() =>
     this.assets().filter((a) => (a.kind ?? '').toLowerCase() === 'audio'));
@@ -859,6 +868,133 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     return r.id in this.roundDrafts;
   }
 
+  /** 展开的 round(工作区模式):一次只展开一个。 */
+  expandedRoundId = signal<string | null>(null);
+
+  toggleRoundExpand(r: InterviewRound): void {
+    this.expandedRoundId.set(this.expandedRoundId() === r.id ? null : r.id);
+  }
+
+  isRoundExpanded(r: InterviewRound): boolean {
+    return this.expandedRoundId() === r.id;
+  }
+
+  /** 备考问题清单:从 JSON 解析。 */
+  getPrepQuestions(r: InterviewRound): PrepQuestion[] {
+    try {
+      return r.prepQuestionsJson ? JSON.parse(r.prepQuestionsJson) : [];
+    } catch { return []; }
+  }
+
+  /** 邮件列表:从 JSON 解析。 */
+  getRoundEmails(r: InterviewRound): RoundEmail[] {
+    try {
+      return r.emailsJson ? JSON.parse(r.emailsJson) : [];
+    } catch { return []; }
+  }
+
+  /** 切换备考问题勾选,立即保存。 */
+  togglePrepQuestion(r: InterviewRound, idx: number): void {
+    const qs = this.getPrepQuestions(r);
+    if (idx < 0 || idx >= qs.length) return;
+    qs[idx].checked = !qs[idx].checked;
+    this.saveRoundField(r, { prepQuestionsJson: JSON.stringify(qs) });
+  }
+
+  /** 添加备考问题。 */
+  addPrepQuestion(r: InterviewRound, text: string): void {
+    const t = text.trim();
+    if (!t) return;
+    const qs = this.getPrepQuestions(r);
+    qs.push({ text: t, checked: false });
+    this.saveRoundField(r, { prepQuestionsJson: JSON.stringify(qs) });
+  }
+
+  /** 删除备考问题。 */
+  removePrepQuestion(r: InterviewRound, idx: number): void {
+    const qs = this.getPrepQuestions(r);
+    qs.splice(idx, 1);
+    this.saveRoundField(r, { prepQuestionsJson: JSON.stringify(qs) });
+  }
+
+  /** 添加邮件(粘贴)。 */
+  addRoundEmail(r: InterviewRound, subject: string, from: string, snippet: string): void {
+    const s = subject.trim();
+    if (!s) return;
+    const emails = this.getRoundEmails(r);
+    emails.push({ subject: s, from: from.trim(), date: new Date().toISOString().slice(0, 10), snippet: snippet.trim() });
+    this.saveRoundField(r, { emailsJson: JSON.stringify(emails) });
+  }
+
+  /** 删除邮件。 */
+  removeRoundEmail(r: InterviewRound, idx: number): void {
+    const emails = this.getRoundEmails(r);
+    emails.splice(idx, 1);
+    this.saveRoundField(r, { emailsJson: JSON.stringify(emails) });
+  }
+
+  /** 保存 round 单个字段(不经过编辑草稿,直接 PUT)。 */
+  private saveRoundField(r: InterviewRound, patch: Partial<InterviewRound>): void {
+    const body = {
+      stage: r.stage,
+      scheduledDate: r.scheduledDate || null,
+      interviewers: r.interviewers || null,
+      format: r.format || null,
+      location: r.location || null,
+      outcome: r.outcome,
+      notes: r.notes || null,
+      feedback: r.feedback || null,
+      meetingLink: r.meetingLink || null,
+      scheduledTime: r.scheduledTime || null,
+      prepQuestionsJson: r.prepQuestionsJson || null,
+      emailsJson: r.emailsJson || null,
+      transcript: r.transcript || null,
+      recordingUrl: r.recordingUrl || null,
+      ...patch
+    };
+    this.api.put<void>(`/api/interviews/${this.id()}/rounds/${r.id}`, body).subscribe({
+      next: () => this.load(false),
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 4000 })
+    });
+  }
+
+  /** 生成 .ics 日历文件下载。 */
+  downloadIcs(r: InterviewRound): void {
+    const e = this.entry();
+    const title = `${e?.companyName ?? ''} - ${e?.role ?? ''} - Round ${r.order}`;
+    const date = (r.scheduledDate ?? '').replace(/-/g, '');
+    const time = (r.scheduledTime ?? '09:00').replace(':', '');
+    const dtStart = date ? `${date}T${time}00` : '';
+    // 默认 1 小时
+    const endH = String(Number(time.slice(0, 2)) + 1).padStart(2, '0');
+    const dtEnd = date ? `${date}T${endH}${time.slice(2)}00` : '';
+    const lines = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//YourInterview//Round//EN',
+      'BEGIN:VEVENT',
+      `UID:round-${r.id}@your-interview`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      dtStart ? `DTSTART:${dtStart}` : '',
+      dtEnd ? `DTEND:${dtEnd}` : '',
+      `SUMMARY:${title}`,
+      r.meetingLink ? `DESCRIPTION:Join: ${r.meetingLink}` : '',
+      r.meetingLink ? `URL:${r.meetingLink}` : '',
+      r.interviewers ? `DESCRIPTION:Interviewers: ${r.interviewers}` : '',
+      'END:VEVENT', 'END:VCALENDAR'
+    ].filter(Boolean);
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `round-${r.order}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /** 跳到 Guidance tab。 */
+  goToGuidance(): void {
+    this.selectedTab.set(2); // Guidance 是第 3 个 tab
+  }
+
   saveRound(r: InterviewRound): void {
     const d = this.roundDrafts[r.id];
     if (!d) return;
@@ -871,7 +1007,13 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       location: d.location || null,
       outcome: d.outcome,
       notes: d.notes || null,
-      feedback: d.feedback || null
+      feedback: d.feedback || null,
+      meetingLink: d.meetingLink || null,
+      scheduledTime: d.scheduledTime || null,
+      prepQuestionsJson: d.prepQuestionsJson || null,
+      emailsJson: d.emailsJson || null,
+      transcript: d.transcript || null,
+      recordingUrl: d.recordingUrl || null
     }).subscribe({
       next: () => {
         this.busy.set(null);

@@ -1326,7 +1326,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
               <p class="pre">{{ detail.jdText }}</p>
             </div>
           } @else {
-            <p class="pre jd-peek">{{ detail.jdText.slice(0, 220) }}…</p>
+            <p class="pre jd-peek">{{ detail.jdText?.slice(0, 220) }}…</p>
           }
         </section>
       }

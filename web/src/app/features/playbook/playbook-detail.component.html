@@ -26,6 +26,12 @@
           <h2>{{ e.companyName }}</h2>
           <span class="role">{{ e.role }}</span>
           <span class="chip" [class]="statusClass(e.status)">{{ statusLabel(e.status) }}</span>
+          @if (offerProb(); as op) {
+            <span class="prob-badge offer-prob" [style.color]="probColor(op.probability)"
+                  [title]="op.factors.join('\n')">
+              <mat-icon inline>trending_up</mat-icon> {{ op.probability }}%
+            </span>
+          }
         </div>
         <div class="head-meta">
           <span><mat-icon inline>repeat</mat-icon> {{ tn('pb.round', e.roundNo) }}</span>

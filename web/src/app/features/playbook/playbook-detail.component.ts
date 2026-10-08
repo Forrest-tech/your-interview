@@ -25,7 +25,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
-  InterviewRound, InterviewStatus, InterviewWeakness, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
+  InterviewRound, InterviewStatus, InterviewWeakness, OfferProbability, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -207,6 +207,17 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     if (p >= 70) return '#2e7d32';
     if (p >= 40) return '#f9a825';
     return '#c62828';
+  }
+
+  /** 整单 offer 概率(漏斗模型),头部显示。 */
+  readonly offerProb = signal<OfferProbability | null>(null);
+
+  loadOfferProbability(): void {
+    const id = this.id();
+    if (!id) return;
+    this.api.get<OfferProbability>(`/api/interviews/${id}/offer-probability`)
+      .pipe(catchError(() => of(null)))
+      .subscribe((p) => this.offerProb.set(p));
   }
 
   /** Rounds tab 显示用:有显式 rounds 就用,没有就从 entry 基本信息合成一个 Round 1 —— 不让 tab 空着。 */
@@ -620,6 +631,8 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
         }
         // 加载各轮次通过概率
         this.loadPassProbabilities();
+        // 加载整单 offer 概率
+        this.loadOfferProbability();
       },
       error: (e: Error) => {
         this.error.set(e.message);

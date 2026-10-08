@@ -310,6 +310,15 @@ export interface PassProbability {
   factors: string[];
 }
 
+/** 整单 offer 概率:漏斗模型。 */
+export interface OfferProbability {
+  probability: number;
+  sampleSize: number;
+  offerCount: number;
+  currentRound: number;
+  factors: string[];
+}
+
 export interface RoundEmail {
   subject: string;
   from: string;

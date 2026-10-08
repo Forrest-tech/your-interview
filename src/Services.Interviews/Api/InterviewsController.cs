@@ -266,6 +266,15 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>整单 offer 概率:漏斗模型。</summary>
+    [HttpGet("{id:guid}/offer-probability")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> OfferProbability(Guid id, CancellationToken ct = default)
+    {
+        var r = await sender.Send(new GetOfferProbabilityQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>轮次:新增一轮(Order 自动递增)。</summary>
     [HttpPost("{id:guid}/rounds")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]

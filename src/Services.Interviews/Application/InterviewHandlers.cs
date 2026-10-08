@@ -1096,6 +1096,90 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
     }
 }
 
+/// <summary>整单 offer 概率:漏斗模型 —— 走到当前轮次的人,历史上有多少拿到 offer。</summary>
+public sealed record OfferProbabilityDto(
+    int Probability,           // 0-100
+    int SampleSize,            // 走到当前轮次的历史样本数
+    int OfferCount,            // 其中拿到 offer 的
+    int CurrentRound,          // 当前第几轮
+    List<string> Factors);
+
+public sealed record GetOfferProbabilityQuery(Guid EntryId) : IRequest<Result<OfferProbabilityDto>>;
+
+public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetOfferProbabilityQuery, Result<OfferProbabilityDto>>
+{
+    public async Task<Result<OfferProbabilityDto>> Handle(
+        GetOfferProbabilityQuery request, CancellationToken ct)
+    {
+        // 当前条目:第几轮(按 rounds 数量)
+        var current = await db.Entries.AsNoTracking()
+            .Where(e => e.Id == request.EntryId)
+            .Select(e => new { RoundCount = e.Rounds.Count, e.Result })
+            .FirstOrDefaultAsync(ct);
+        if (current is null) return Result.Failure<OfferProbabilityDto>(Error.NotFound("Entry"));
+
+        int currentRound = Math.Max(1, current.RoundCount);
+        var factors = new List<string>();
+
+        // 历史漏斗:走到 >= 当前轮次 且已有定论的条目
+        var history = await db.Entries.AsNoTracking()
+            .Where(e => e.Id != request.EntryId
+                && e.Rounds.Count >= currentRound
+                && (e.Result == "Passed" || e.Result == "Rejected"))
+            .Select(e => e.Result)
+            .ToListAsync(ct);
+
+        int baseProb;
+        if (history.Count == 0)
+        {
+            baseProb = 50;
+            factors.Add($"暂无走到第 {currentRound} 轮的历史数据,按 50% 中性估算");
+        }
+        else
+        {
+            var offers = history.Count(r => r == "Passed");
+            baseProb = (int)Math.Round(100.0 * offers / history.Count);
+            factors.Add($"历史走到第 {currentRound} 轮的 {offers}/{history.Count} 拿到 offer");
+        }
+
+        // 准备度:整单的 Q&A、轮次准备完整度微调
+        var prep = await db.Entries.AsNoTracking()
+            .Where(e => e.Id == request.EntryId)
+            .Select(e => new
+            {
+                QaCount = e.Questions.Count,
+                RoundPrepDone = e.Rounds.Count(r =>
+                    r.PrepQuestionsJson != null && r.PrepQuestionsJson != "[]")
+            })
+            .FirstOrDefaultAsync(ct);
+
+        int adjustment = 0;
+        if (prep is not null)
+        {
+            if (prep.QaCount >= 5)
+            { adjustment += 5; factors.Add($"Q&A 积累 {prep.QaCount} 条 +5%"); }
+            if (prep.RoundPrepDone > 0)
+            {
+                int prepBonus = 3 * Math.Min(3, prep.RoundPrepDone);
+                adjustment += prepBonus;
+                factors.Add($"{prep.RoundPrepDone} 轮有准备清单 +{prepBonus}%");
+            }
+        }
+
+        // 越往后的轮次,基础概率自然越高(已经筛掉了前面的人)
+        int funnelBonus = Math.Min(15, (currentRound - 1) * 5);
+        if (funnelBonus > 0)
+        { adjustment += funnelBonus; factors.Add($"已走到第 {currentRound} 轮,漏斗加成 +{funnelBonus}%"); }
+
+        var prob = Math.Clamp(baseProb + adjustment, 5, 95);
+        return Result.Success(new OfferProbabilityDto(
+            prob, history.Count,
+            history.Count(r => r == "Passed"),
+            currentRound, factors));
+    }
+}
+
 public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
     : IRequestHandler<UpdateRoundCommand, Result>
 {

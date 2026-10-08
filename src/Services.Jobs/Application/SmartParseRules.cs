@@ -119,7 +119,7 @@ public static class JdPasteParser
     private static readonly Regex SalarySingle = new(
         @"(?<cur>[$€£]|USD|CAD|US\$|C\$)\s*(?<lo>\d{2,3})\s*[kK]\b", Opts);
     private static readonly Regex LocationCityState = new(
-        @"\b(?<city>[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)?)\s*,\s*(?<region>[A-Z]{2}|[A-Z][a-zA-Z]+)\b", RegexOptions.Compiled);
+        @"\b(?<city>[A-Z][a-zA-Z]+(?:[ ][A-Z][a-zA-Z]+)?)[ ]*,[ ]*(?<region>[A-Z]{2}|[A-Z][a-zA-Z]+)\b", RegexOptions.Compiled);
     private static readonly Regex UrlAnywhere = new(@"https?://\S+", Opts);
     private static readonly Regex EmailAnywhere = new(@"[\w.+-]+@[\w-]+\.[\w.]+", Opts);
 
@@ -437,8 +437,17 @@ public static class JdPasteParser
             if (line.Length > 120) continue;
             if (RoleWords.IsMatch(line))
             {
-                // 剥掉常见的地点/薪资尾巴,只留岗位主体
-                var v = Regex.Replace(line, @"[（(].*?[)）]", string.Empty).Trim();
+                // 剥掉括号尾巴:只去掉"地点/模式"类,技术限定语(如 Node.js/TypeScript)保留。
+                // 规则:括号里含技术词/岗位词 → 是限定语,保留;否则是地点/模式尾巴,去掉。
+                var v = Regex.Replace(line, @"[（(]([^()]*?)[)）]", m =>
+                {
+                    var inner = m.Groups[1].Value;
+                    if (TechKeywords.Any(kw => inner.Contains(kw, StringComparison.OrdinalIgnoreCase)))
+                        return m.Value;
+                    if (RoleWords.IsMatch(inner))
+                        return m.Value;
+                    return string.Empty;
+                }).Trim();
                 v = Regex.Replace(v, @"[|\-–—]\s*(remote|hybrid|onsite|on-site).*$", string.Empty,
                     RegexOptions.IgnoreCase).Trim();
                 if (v.Length is >= 3 and <= 80) return v;

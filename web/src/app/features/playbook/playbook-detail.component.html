@@ -457,6 +457,14 @@
                     </div>
 
                     @if (isRoundExpanded(r) && !isEditingRound(r)) {
+                      @if (r.id.startsWith('__synthetic')) {
+                        <div class="round-workspace">
+                          <p class="muted">{{ t('pb.round.syntheticHint') }}</p>
+                          @if (r.interviewers) {
+                            <p class="round-line"><strong>{{ t('pb.round.interviewersLabel') }}</strong> {{ r.interviewers }}</p>
+                          }
+                        </div>
+                      } @else {
                       <div class="round-workspace">
                         <div class="round-actions">
                           <button mat-stroked-button (click)="downloadIcs(r)">
@@ -542,6 +550,7 @@
                           </div>
                         }
                       </div>
+                      } <!-- end non-synthetic -->
                     }
 
                     @if (isEditingRound(r)) {

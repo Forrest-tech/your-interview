@@ -1606,6 +1606,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.round.meetingLinkPh': { zh: 'Teams / Zoom 链接', en: 'Teams / Zoom URL', fr: 'URL Teams/Zoom' },
   'pb.round.transcriptLabel': { zh: '面试文稿', en: 'Transcript', fr: 'Transcription' },
   'pb.round.recordingLabel': { zh: '录音链接', en: 'Recording URL', fr: 'URL' },
+  'pb.round.syntheticHint': { zh: '这是从条目基本信息合成的轮次。点击下方"新增轮次"创建正式轮次,即可使用备考清单、邮件等完整功能。', en: 'Synthetic round from entry info. Add a real round below for the full workspace.', fr: 'Tour synthétique.' },
   'pb.round.confirmDelete': { zh: '删除第 {n} 轮?', en: 'Delete round {n}?', fr: 'Supprimer le tour {n} ?' },
   'pb.round.stageLabel': { zh: '阶段', en: 'Stage', fr: 'Étape' },
   'pb.round.resultLabel': { zh: '结果', en: 'Outcome', fr: 'Résultat' },

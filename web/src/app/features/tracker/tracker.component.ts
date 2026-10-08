@@ -573,8 +573,9 @@ export class TrackerComponent implements OnInit, AfterViewInit {
 
 /** 备战:从投递一键创建 Playbook 面试条目,JD/公司/职位/投递关联自动带入。 */  prepareInterview(app: Application, event: Event): void {
     event.stopPropagation();
-    // 后端按公司名自动复用 CompanyId;jobApplicationId 建立回链,避免孤儿条目。
+    // 直接传 companyId,避免后端按名复用时找不到而生成随机 ID 导致孤儿条目。
     this.api.post<{ id: string }>('/api/interviews', {
+      companyId: app.companyId,
       companyName: app.companyName,
       role: app.role,
       jobApplicationId: app.id,

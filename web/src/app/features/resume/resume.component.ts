@@ -168,12 +168,10 @@ export class ResumeComponent implements OnInit {
 
   private async extractPdfText(file: File): Promise<string> {
     const pdfjs = await import('pdfjs-dist');
-    // pdf.js v4+ 需要配置 worker,否则 getDocument 会失败
-    // 用 CDN worker,避免打包问题
+    // pdf.js v4+ 需要 worker:用本地打包的 assets,比 CDN 可靠
     const pdfjsAny = pdfjs as any;
     if (pdfjsAny.GlobalWorkerOptions && !pdfjsAny.GlobalWorkerOptions.workerSrc) {
-      pdfjsAny.GlobalWorkerOptions.workerSrc =
-        `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsAny.version}/build/pdf.worker.min.mjs`;
+      pdfjsAny.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.mjs';
     }
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsAny.getDocument({ data: buf }).promise;

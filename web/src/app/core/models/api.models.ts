@@ -284,6 +284,23 @@ export interface PrepQuestion {
   checked: boolean;
 }
 
+/** 全局 upcoming 轮次(日历视图):跨所有面试条目。 */
+export interface UpcomingRound {
+  roundId: string;
+  entryId: string;
+  companyName: string;
+  role: string;
+  order: number;
+  stage: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  interviewers?: string;
+  format?: string;
+  location?: string;
+  meetingLink?: string;
+  outcome: string;
+}
+
 export interface RoundEmail {
   subject: string;
   from: string;

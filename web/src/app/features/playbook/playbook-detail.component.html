@@ -463,6 +463,12 @@
                           @if (r.interviewers) {
                             <p class="round-line"><strong>{{ t('pb.round.interviewersLabel') }}</strong> {{ r.interviewers }}</p>
                           }
+                          @if (auth.can('interviews.write')) {
+                            <button mat-stroked-button color="primary" (click)="convertSyntheticToReal()"
+                                    [disabled]="busy() !== null">
+                              <mat-icon>add_task</mat-icon> {{ t('pb.round.convertToReal') }}
+                            </button>
+                          }
                         </div>
                       } @else {
                       <div class="round-workspace">
@@ -524,17 +530,47 @@
                           }
                         </div>
 
-                        @if (r.transcript || r.recordingUrl) {
-                          <div class="ws-section">
-                            <h4><mat-icon>mic</mat-icon> {{ t('pb.round.transcriptTitle') }}</h4>
+                        <div class="ws-section">
+                          <h4><mat-icon>mic</mat-icon> {{ t('pb.round.transcriptTitle') }}</h4>
+                          @if (r.transcript || r.recordingUrl) {
                             @if (r.recordingUrl) {
                               <p><a [href]="r.recordingUrl" target="_blank">{{ t('pb.round.recording') }}</a></p>
                             }
                             @if (r.transcript) {
                               <p class="prose transcript">{{ r.transcript }}</p>
                             }
-                          </div>
-                        }
+                            @if (auth.can('interviews.write')) {
+                              <div class="add-row">
+                                <input #recUrlEdit [value]="r.recordingUrl ?? ''" [placeholder]="t('pb.round.recordingPh')">
+                              </div>
+                              <div class="add-row">
+                                <textarea #transcriptEdit rows="3" [placeholder]="t('pb.round.transcriptPh')">{{ r.transcript ?? '' }}</textarea>
+                              </div>
+                              <button mat-stroked-button color="primary"
+                                      (click)="saveRoundTranscript(r, recUrlEdit.value, transcriptEdit.value)"
+                                      [disabled]="busy() !== null">
+                                <mat-icon>save</mat-icon> {{ t('common.save') }}
+                              </button>
+                            }
+                          } @else {
+                            @if (auth.can('interviews.write')) {
+                              <p class="muted">{{ t('pb.round.transcriptEmptyHint') }}</p>
+                              <div class="add-row">
+                                <input #recUrlNew [placeholder]="t('pb.round.recordingPh')">
+                              </div>
+                              <div class="add-row">
+                                <textarea #transcriptNew rows="3" [placeholder]="t('pb.round.transcriptPh')"></textarea>
+                              </div>
+                              <button mat-stroked-button color="primary"
+                                      (click)="saveRoundTranscript(r, recUrlNew.value, transcriptNew.value)"
+                                      [disabled]="busy() !== null">
+                                <mat-icon>save</mat-icon> {{ t('common.save') }}
+                              </button>
+                            } @else {
+                              <p class="muted">—</p>
+                            }
+                          }
+                        </div>
 
                         @if (r.notes || r.feedback || r.interviewers) {
                           <div class="ws-section">

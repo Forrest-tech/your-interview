@@ -463,15 +463,17 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     URL.revokeObjectURL(url);
   }
 
-  /** 备战:从投递一键创建 Playbook 面试条目,JD/公司/职位自动带入。 */
+  /** 备战:从投递一键创建 Playbook 面试条目,JD/公司/职位/投递关联自动带入。 */
   prepareInterview(app: Application, event: Event): void {
     event.stopPropagation();
+    // 后端按公司名自动复用 CompanyId;jobApplicationId 建立回链,避免孤儿条目。
     this.api.post<{ id: string }>('/api/interviews', {
       companyName: app.companyName,
       role: app.role,
+      jobApplicationId: app.id,
       location: app.location || null,
-      jdText: (app as any).jdText || null,
-      jdSummary: (app as any).jdSummary || null,
+      jdText: app.jdText || null,
+      jdSummary: app.jdSummary || null,
       notes: `从 Tracker 一键创建 (${new Date().toISOString().slice(0, 10)})`
     }).subscribe({
       next: (r) => {

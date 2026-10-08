@@ -8,6 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { ApiClient } from '../../core/api/api-client';
 
 /**
  * 简历配置页(独立页面,不再放在 profile/account 里)。
@@ -31,6 +32,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 export class ResumeComponent implements OnInit {
   private readonly i18n = inject(I18nService);
   private readonly snack = inject(MatSnackBar);
+  private readonly api = inject(ApiClient);
 
   readonly t = (key: string): string => this.i18n.t(key);
 
@@ -47,23 +49,48 @@ export class ResumeComponent implements OnInit {
     // 有已存简历时,把全文载入编辑框,方便直接改。
     try {
       const text = localStorage.getItem(this.resumeKey) ?? '';
-      if (text.trim()) this.resumeDraft = text;
+      if (text.trim()) {
+        this.resumeDraft = text;
+      } else {
+        // localStorage 为空时,从后端拉(用户可能在别处存过)
+        this.api.get<{ resumeText: string | null }>('/api/jobs/resume-text').subscribe({
+          next: (r) => {
+            if (r.resumeText?.trim()) {
+              this.resumeDraft = r.resumeText;
+              try { localStorage.setItem(this.resumeKey, r.resumeText); } catch { /* 忽略 */ }
+              this.refreshResumePreview();
+            }
+          },
+          error: () => { /* 后端没简历就保持空,不阻断 */ }
+        });
+      }
     } catch { /* 忽略 */ }
   }
 
   saveResume(): void {
+    const text = this.resumeDraft;
     try {
-      localStorage.setItem(this.resumeKey, this.resumeDraft);
+      localStorage.setItem(this.resumeKey, text);
       const meta = JSON.stringify({
         fileName: this.resumeFileName() || '',
         savedAt: new Date().toISOString()
       });
       localStorage.setItem(this.resumeMetaKey, meta);
       this.refreshResumePreview();
-      this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2500 });
     } catch {
       this.snack.open(this.t('profile.resumeSaveFailed'), this.t('common.close'), { duration: 3000 });
+      return;
     }
+    // 同步到后端 —— 求职信生成、简历匹配都从这里读
+    this.api.put('/api/jobs/resume-text', { resumeText: text }).subscribe({
+      next: () => {
+        this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2500 });
+      },
+      error: () => {
+        // 后端同步失败:localStorage 已存,提示用户但不算失败
+        this.snack.open(this.t('profile.resumeSavedLocalOnly'), this.t('common.close'), { duration: 4000 });
+      }
+    });
   }
 
   clearResume(): void {
@@ -74,7 +101,11 @@ export class ResumeComponent implements OnInit {
     this.resumeDraft = '';
     this.resumeFileName.set('');
     this.refreshResumePreview();
-    this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2000 });
+    // 同步清空后端
+    this.api.put('/api/jobs/resume-text', { resumeText: '' }).subscribe({
+      next: () => this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2000 }),
+      error: () => this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2000 })
+    });
   }
 
   private refreshResumePreview(): void {
@@ -137,8 +168,15 @@ export class ResumeComponent implements OnInit {
 
   private async extractPdfText(file: File): Promise<string> {
     const pdfjs = await import('pdfjs-dist');
+    // pdf.js v4+ 需要配置 worker,否则 getDocument 会失败
+    // 用 CDN worker,避免打包问题
+    const pdfjsAny = pdfjs as any;
+    if (pdfjsAny.GlobalWorkerOptions && !pdfjsAny.GlobalWorkerOptions.workerSrc) {
+      pdfjsAny.GlobalWorkerOptions.workerSrc =
+        `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsAny.version}/build/pdf.worker.min.mjs`;
+    }
     const buf = await file.arrayBuffer();
-    const pdf = await (pdfjs as any).getDocument({ data: buf }).promise;
+    const pdf = await pdfjsAny.getDocument({ data: buf }).promise;
     const parts: string[] = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);

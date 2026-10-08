@@ -1715,6 +1715,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'profile.resumeLabel': { zh: '简历全文', en: 'Resume text', fr: 'Texte du CV' },
   'profile.resumePh': { zh: '粘贴简历全文...', en: 'Paste your full resume...', fr: 'Coller votre CV...' },
   'profile.resumeSaved': { zh: '简历已保存', en: 'Resume saved', fr: 'CV enregistré' },
+  'profile.resumeSavedLocalOnly': { zh: '简历已保存在本地,但同步到服务器失败', en: 'Saved locally, but sync to server failed', fr: 'Enregistré localement, sync échouée' },
   'profile.resumeSaveFailed': { zh: '保存失败', en: 'Save failed', fr: 'Échec' },
   'profile.resumeUpload': { zh: '上传简历文件', en: 'Upload resume file', fr: 'Téléverser CV' },
   'profile.resumeExtractHint': { zh: '支持 txt/md 直接读取,PDF 自动提取文字,Word 请复制粘贴', en: 'txt/md read directly, PDF auto-extracted', fr: 'txt/md direct, PDF extrait' },

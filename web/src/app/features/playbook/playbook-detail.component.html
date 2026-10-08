@@ -434,6 +434,12 @@
                       <span class="round-order">{{ tn('pb.round', r.order) }}</span>
                       <span class="round-stage">{{ r.stage }}</span>
                       <span class="round-outcome">{{ roundOutcomeLabelFor(r.outcome) }}</span>
+                      @if (passProbFor(r.id); as prob) {
+                        <span class="prob-badge" [style.color]="probColor(prob.probability)"
+                              [title]="prob.factors.join('\n')">
+                          {{ prob.probability }}%
+                        </span>
+                      }
                       @if (r.scheduledDate) {
                         <span class="round-date">{{ r.scheduledDate }}{{ r.scheduledTime ? ' ' + r.scheduledTime : '' }}</span>
                       }

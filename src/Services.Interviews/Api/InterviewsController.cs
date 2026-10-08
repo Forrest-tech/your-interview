@@ -257,6 +257,15 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>轮次通过概率:基于历史同 stage 通过率 + 准备度。</summary>
+    [HttpGet("rounds/{roundId:guid}/pass-probability")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> RoundPassProbability(Guid roundId, CancellationToken ct = default)
+    {
+        var r = await sender.Send(new GetRoundPassProbabilityQuery(roundId), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>轮次:新增一轮(Order 自动递增)。</summary>
     [HttpPost("{id:guid}/rounds")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]

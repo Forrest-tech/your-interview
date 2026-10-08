@@ -301,6 +301,15 @@ export interface UpcomingRound {
   outcome: string;
 }
 
+/** 轮次通过概率:基于历史同 stage 通过率 + 准备度信号。 */
+export interface PassProbability {
+  probability: number;
+  sampleSize: number;
+  passedCount: number;
+  stage: string;
+  factors: string[];
+}
+
 export interface RoundEmail {
   subject: string;
   from: string;

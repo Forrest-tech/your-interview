@@ -998,6 +998,104 @@ public sealed class GetUpcomingRoundsQueryHandler(InterviewsDbContext db)
     }
 }
 
+/// <summary>轮次通过概率:基于用户历史同 stage 轮次的通过率 + 本轮准备度信号。</summary>
+public sealed record PassProbabilityDto(
+    int Probability,           // 0-100
+    int SampleSize,            // 历史样本数
+    int PassedCount,
+    string Stage,
+    List<string> Factors);     // 影响因素说明
+
+public sealed record GetRoundPassProbabilityQuery(Guid RoundId) : IRequest<Result<PassProbabilityDto>>;
+
+public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetRoundPassProbabilityQuery, Result<PassProbabilityDto>>
+{
+    public async Task<Result<PassProbabilityDto>> Handle(
+        GetRoundPassProbabilityQuery request, CancellationToken ct)
+    {
+        // 找到本轮,取其 stage
+        var round = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Rounds, (e, r) => new { e, r })
+            .Where(x => x.r.Id == request.RoundId)
+            .Select(x => new { x.r.Stage, RoundId = x.r.Id })
+            .FirstOrDefaultAsync(ct);
+        if (round is null) return Result.Failure<PassProbabilityDto>(Error.NotFound("Round"));
+
+        // 历史同 stage 轮次:只算有定论的 (Passed / Rejected)
+        var history = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Rounds)
+            .Where(r => r.Stage == round.Stage
+                && r.Id != round.RoundId
+                && (r.Outcome == InterviewRoundOutcome.Passed
+                    || r.Outcome == InterviewRoundOutcome.Rejected))
+            .ToListAsync(ct);
+
+        var factors = new List<string>();
+        int baseProb;
+        int historyCount = history.Count;
+        if (historyCount == 0)
+        {
+            // 无历史数据:中性 50%,提示多攒数据
+            baseProb = 50;
+            factors.Add("暂无同类型轮次历史,按 50% 中性估算");
+        }
+        else
+        {
+            var passed = history.Count(r => r.Outcome == InterviewRoundOutcome.Passed);
+            baseProb = (int)Math.Round(100.0 * passed / historyCount);
+            factors.Add($"历史同类轮次 {passed}/{historyCount} 通过");
+        }
+
+        // 准备度信号:本轮的准备越充分,微调概率
+        var target = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Rounds, (e, r) => new { e, r })
+            .Where(x => x.r.Id == request.RoundId)
+            .Select(x => new
+            {
+                x.r.PrepQuestionsJson,
+                x.r.Transcript,
+                x.r.RecordingUrl,
+                x.r.EmailsJson,
+                x.r.Notes,
+                x.r.Feedback
+            })
+            .FirstOrDefaultAsync(ct);
+
+        int adjustment = 0;
+        if (target is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(target.PrepQuestionsJson)
+                && target.PrepQuestionsJson != "[]")
+            { adjustment += 5; factors.Add("已准备面试问题清单 +5%"); }
+
+            if (!string.IsNullOrWhiteSpace(target.Notes))
+            { adjustment += 3; factors.Add("有轮次笔记 +3%"); }
+
+            if (!string.IsNullOrWhiteSpace(target.EmailsJson)
+                && target.EmailsJson != "[]")
+            { adjustment += 2; factors.Add("已关联 scheduling 邮件 +2%"); }
+        }
+
+        // 查本轮所属条目的 Q&A 积累情况
+        var entry = await db.Entries.AsNoTracking()
+            .Where(e => e.Rounds.Any(r => r.Id == request.RoundId))
+            .Select(e => new { e.Id, QaCount = e.Questions.Count })
+            .FirstOrDefaultAsync(ct);
+        if (entry is not null)
+        {
+            if (entry.QaCount > 0)
+            { adjustment += Math.Min(5, entry.QaCount); factors.Add($"已积累 {entry.QaCount} 条 Q&A +{Math.Min(5, entry.QaCount)}%"); }
+        }
+
+        var prob = Math.Clamp(baseProb + adjustment, 5, 95);
+        var passedTotal = history.Count(r => r.Outcome == InterviewRoundOutcome.Passed);
+        return Result.Success(new PassProbabilityDto(
+            prob, historyCount, passedTotal,
+            round.Stage, factors));
+    }
+}
+
 public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
     : IRequestHandler<UpdateRoundCommand, Result>
 {

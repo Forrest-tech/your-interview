@@ -899,3 +899,14 @@ mat-progress-bar {
 .upcoming-row:last-child { border-bottom: none; }
 .up-name { font-weight: 500; }
 .up-when { color: #666; margin-left: auto; }
+
+/* 通过概率徽章 */
+.prob-badge {
+  font-weight: 700;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.06);
+  cursor: help;
+  white-space: nowrap;
+}

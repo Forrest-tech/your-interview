@@ -25,7 +25,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
-  InterviewRound, InterviewStatus, InterviewWeakness, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
+  InterviewRound, InterviewStatus, InterviewWeakness, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -181,6 +181,33 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly weaknesses = computed(() => this.entry()?.weaknesses ?? []);
   readonly assets = computed(() => this.entry()?.assets ?? []);
   readonly rounds = computed(() => this.entry()?.rounds ?? []);
+
+  /** 每轮的通过概率(roundId -> PassProbability),懒加载。 */
+  readonly passProbs = signal<Record<string, PassProbability>>({});
+
+  /** 加载所有真实轮次(非 synthetic)的通过概率。 */
+  loadPassProbabilities(): void {
+    for (const r of this.displayRounds()) {
+      if (!r.id || r.id.startsWith('__synthetic') || this.passProbs()[r.id]) continue;
+      this.api.get<PassProbability>(`/api/interviews/rounds/${r.id}/pass-probability`)
+        .pipe(catchError(() => of(null)))
+        .subscribe((p) => {
+          if (p) this.passProbs.update((m) => ({ ...m, [r.id]: p }));
+        });
+    }
+  }
+
+  /** 取某轮的概率(未加载时返回 null)。 */
+  passProbFor(roundId: string): PassProbability | null {
+    return this.passProbs()[roundId] ?? null;
+  }
+
+  /** 概率颜色:>=70 绿,40-69 黄,<40 红。 */
+  probColor(p: number): string {
+    if (p >= 70) return '#2e7d32';
+    if (p >= 40) return '#f9a825';
+    return '#c62828';
+  }
 
   /** Rounds tab 显示用:有显式 rounds 就用,没有就从 entry 基本信息合成一个 Round 1 —— 不让 tab 空着。 */
   readonly displayRounds = computed(() => {
@@ -591,6 +618,8 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
           this.fillEditForm(d);
           this.editLoaded = true;
         }
+        // 加载各轮次通过概率
+        this.loadPassProbabilities();
       },
       error: (e: Error) => {
         this.error.set(e.message);

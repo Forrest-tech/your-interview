@@ -419,19 +419,9 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     app.status = status;
     this.items.set([...this.items()]);
 
-    this.api.put<void>(`/api/jobs/applications/${app.id}`, {
-      role: app.role,
-      location: app.location || null,
-      link: app.link || null,
-      salary: app.salary || null,
-      workMode: null,
-      source: null,
-      jdSummary: null,
-      notes: app.notes || null,
-      priority: app.priority || null,
-      deadline: app.deadline || null,
-      status
-    }).subscribe({
+    // 状态流转走专门的 /status 接口(后端状态机校验合法流转),
+    // 不能塞进 PUT body —— UpdateApplicationBody 没有 Status 字段,会被静默忽略。
+    this.api.post<void>(`/api/jobs/applications/${app.id}/status`, { status }).subscribe({
       next: () => this.loadStats(),
       error: () => {
         // 回滚

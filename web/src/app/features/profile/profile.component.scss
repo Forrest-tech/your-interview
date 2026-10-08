@@ -347,3 +347,26 @@ mat-card { border-radius: 8px; }
   line-height: 1.5;
   white-space: pre-wrap;
 }
+
+/* 简历入口卡片(简历已移至独立 /resume 页面) */
+.resume-link-card {
+  margin-bottom: 16px;
+}
+.resume-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0 !important;
+
+  mat-icon {
+    color: #1a73e8;
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+  }
+  .resume-link-text {
+    flex: 1;
+    .resume-link-title { font-weight: 500; }
+    .resume-link-hint { font-size: 12px; color: #888; }
+  }
+}

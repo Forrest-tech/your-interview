@@ -1,0 +1,51 @@
+<div class="resume-page">
+  <div class="page-head">
+    <h1>{{ t('profile.resumeTitle') }}</h1>
+    <p class="hint">{{ t('profile.resumeHint') }}</p>
+  </div>
+
+  <mat-card class="resume-card">
+    @if (savedResumePreview()) {
+      <div class="saved-resume">
+        <div class="saved-resume-head">
+          <mat-icon>description</mat-icon>
+          <span class="saved-name">{{ resumeFileName() || t('profile.resumeSavedLabel') }}</span>
+          @if (savedResumeDate()) {
+            <span class="saved-date">{{ savedResumeDate() }}</span>
+          }
+        </div>
+        <p class="saved-preview">{{ savedResumePreview() }}</p>
+      </div>
+    }
+
+    <div class="resume-upload-row">
+      <button mat-stroked-button (click)="resumeFile.click()">
+        <mat-icon>upload_file</mat-icon> {{ t('profile.resumeUpload') }}
+      </button>
+      <input #resumeFile type="file" hidden
+             accept=".txt,.md,.pdf,.docx,.doc"
+             (change)="onResumeFile($event)">
+      @if (resumeFileName() && !savedResumePreview()) {
+        <span class="file-name">{{ resumeFileName() }}</span>
+      }
+      <span class="extract-hint">{{ t('profile.resumeExtractHint') }}</span>
+    </div>
+
+    <mat-form-field appearance="outline" class="resume-field">
+      <mat-label>{{ t('profile.resumeLabel') }}</mat-label>
+      <textarea matInput rows="16" [(ngModel)]="resumeDraft"
+                [placeholder]="t('profile.resumePh')"></textarea>
+    </mat-form-field>
+
+    <div class="actions">
+      <button mat-raised-button color="primary" (click)="saveResume()">
+        <mat-icon>save</mat-icon> {{ t('common.save') }}
+      </button>
+      @if (savedResumePreview()) {
+        <button mat-button color="warn" (click)="clearResume()">
+          <mat-icon>delete</mat-icon> {{ t('common.delete') }}
+        </button>
+      }
+    </div>
+  </mat-card>
+</div>

@@ -57,6 +57,7 @@ export class ShellComponent {
     { path: '/practice',   labelKey: 'nav.practice',   icon: 'model_training' },
     { path: '/mock',       labelKey: 'nav.mock',       icon: 'record_voice_over' },
     { path: '/analytics',  labelKey: 'nav.analytics',  icon: 'query_stats' },
+    { path: '/resume',     labelKey: 'nav.resume',     icon: 'description' },
   ];
 
   /** 按权限过滤后的导航项 —— 没权限的模块根本不显示,不靠点了才报 403。 */

@@ -32,6 +32,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'nav.techstack': { zh: '技术栈', en: 'Tech Stack', fr: 'Technologies' },
   'nav.mock': { zh: 'AI 实战模拟', en: 'AI Mock', fr: 'Simulation IA' },
   'nav.analytics': { zh: '数据分析', en: 'Analytics', fr: 'Analytique' },
+  'nav.resume': { zh: '简历', en: 'Resume', fr: 'CV' },
   'nav.admin': { zh: '管理后台', en: 'Admin', fr: 'Administration' },
 
   // ---------- 账户 / 通用动作 ----------
@@ -1708,6 +1709,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'profile.resumeExtractFailed': { zh: '提取失败,请手动粘贴', en: 'Extraction failed, please paste manually', fr: 'Échec d\'extraction' },
   'profile.resumeDocxHint': { zh: 'Word 请打开复制全文粘贴到下方', en: 'For Word, copy-paste the text below', fr: 'Copier-coller le texte' },
   'profile.resumeSavedLabel': { zh: '已保存的简历', en: 'Saved resume', fr: 'CV enregistré' },
+  'profile.resumeGo': { zh: '去配置', en: 'Configure', fr: 'Configurer' },
   'pb.guidance.historyLabel': { zh: '历史版本', en: 'Version history', fr: 'Historique des versions' },
   'pb.guidance.empty': { zh: '还没有指导材料。点击「生成指导材料」,AI 会根据 JD、公司介绍、历史问答、短板和六维诊断生成一份备战文档。', en: 'No guidance yet. Click "Generate guidance" — the AI will build a prep document from the JD, company profile, past Q&A, weaknesses and the six-dimension diagnosis.', fr: 'Aucun guide. Cliquez sur « Générer le guide » — l’IA rédigera un document de préparation à partir de l’offre, du profil de l’entreprise, des Q&R passées, des faiblesses et du diagnostic en six dimensions.' },
   'pb.guidance.confirmGenerate': { zh: '生成新版本指导材料?会调用 AI,可能需要几十秒。', en: 'Generate a new version of the guidance? It calls the AI and may take tens of seconds.', fr: 'Générer une nouvelle version du guide ? Cela appelle l’IA et peut prendre des dizaines de secondes.' },

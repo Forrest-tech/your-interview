@@ -162,45 +162,15 @@
         </mat-card-content>
       </mat-card>
 
-      <!-- 我的简历:存一份,备战材料生成时自动带入 -->
-      <mat-card class="resume-card">
-        <mat-card-header>
-          <mat-card-title>{{ t('profile.resumeTitle') }}</mat-card-title>
-          <mat-card-subtitle>{{ t('profile.resumeHint') }}</mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content>
-          @if (savedResumePreview()) {
-            <div class="saved-resume">
-              <div class="saved-resume-head">
-                <mat-icon>description</mat-icon>
-                <span class="saved-name">{{ resumeFileName() || t('profile.resumeSavedLabel') }}</span>
-                @if (savedResumeDate()) {
-                  <span class="saved-date">{{ savedResumeDate() }}</span>
-                }
-              </div>
-              <p class="saved-preview">{{ savedResumePreview() }}</p>
-            </div>
-          }
-          <div class="resume-upload-row">
-            <button mat-stroked-button (click)="resumeFile.click()">
-              <mat-icon>upload_file</mat-icon> {{ t('profile.resumeUpload') }}
-            </button>
-            <input #resumeFile type="file" hidden
-                   accept=".pdf,.txt,.md,.docx"
-                   (change)="onResumeFile($event)">
-            @if (resumeFileName() && !savedResumePreview()) {
-              <span class="file-name">{{ resumeFileName() }}</span>
-            }
+      <!-- 简历已移至独立页面 /resume,这里只留入口 -->
+      <mat-card class="resume-link-card">
+        <mat-card-content class="resume-link">
+          <mat-icon>description</mat-icon>
+          <div class="resume-link-text">
+            <div class="resume-link-title">{{ t('profile.resumeTitle') }}</div>
+            <div class="resume-link-hint">{{ t('profile.resumeHint') }}</div>
           </div>
-          <mat-form-field appearance="outline" class="full">
-            <mat-label>{{ t('profile.resumeLabel') }}</mat-label>
-            <textarea matInput rows="8" [(ngModel)]="resumeDraft"
-                      [placeholder]="t('profile.resumePh')"></textarea>
-            <mat-hint>{{ t('profile.resumeExtractHint') }}</mat-hint>
-          </mat-form-field>
-          <button mat-raised-button color="primary" class="full" (click)="saveResume()">
-            {{ t('common.save') }}
-          </button>
+          <a mat-stroked-button routerLink="/resume">{{ t('profile.resumeGo') }}</a>
         </mat-card-content>
       </mat-card>
 

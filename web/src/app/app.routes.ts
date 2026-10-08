@@ -76,6 +76,11 @@ export const routes: Routes = [
           import('./features/profile/profile.component').then((m) => m.ProfileComponent)
       },
       {
+        path: 'resume',
+        loadComponent: () =>
+          import('./features/resume/resume.component').then((m) => m.ResumeComponent)
+      },
+      {
         // AI / Azure 语音设置 —— /practice 的「TTS 引擎 → 前往配置 ↗」落点。
         // 2026-09-15 第六轮新增:此前该路由不存在,点过去会 404。
         path: 'account/ai-setting',

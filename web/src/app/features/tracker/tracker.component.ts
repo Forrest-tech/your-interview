@@ -588,7 +588,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   /** 看板列:按固定状态顺序分组,空组仍保留占位符,好让用户看到"这一列现在是空的"。 */
   readonly columns = computed(() => {
     this.i18n.lang(); // 建立对语言 signal 的依赖,切换语言时重算列标签
-    const all = this.items();
+    const all = this.displayItems();
     const only = this.statusFilter();
     const hidden = this.hiddenCols();
     const statuses = (only ? [only] : this.statusOrder).filter(s => !hidden.has(s));
@@ -604,6 +604,101 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   readonly statActive = computed(() => this.stats()?.activeCount ?? 0);
   readonly statInterview = computed(() => this.stats()?.interviewCount ?? 0);
   readonly statOffer = computed(() => this.stats()?.offerCount ?? 0);
+
+  // ------------------------------ Simplify 对标:stale 检测 ------------------------------
+  /** 超过多少天无更新算 stale(Simplify 模式:早期阶段 14 天无进展标黄)。 */
+  private static readonly STALE_DAYS = 14;
+  private static readonly STALE_STATUSES: ApplicationStatus[] = ['Applied', 'Screen', 'Interview'];
+
+  /** 单个投递是否 stale:活跃阶段 + updatedAt 超过 14 天。 */
+  isStale(a: Application): boolean {
+    if (!TrackerComponent.STALE_STATUSES.includes(a.status)) return false;
+    const u = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    if (!u) return false;
+    return Date.now() - u > TrackerComponent.STALE_DAYS * 86400_000;
+  }
+
+  /** 当前列表里的 stale 投递(算一次,模板里复用,避免每行重复算)。 */
+  readonly staleIds = computed(() => {
+    const s = new Set<string>();
+    for (const a of this.items()) if (this.isStale(a)) s.add(a.id);
+    return s;
+  });
+  readonly staleCount = computed(() => this.staleIds().size);
+  readonly showStaleOnly = signal(false);
+  toggleStaleOnly(): void { this.showStaleOnly.set(!this.showStaleOnly()); }
+
+  /** 展示用列表:stale 筛选打开时只显示 stale(客户端过滤,不打后端)。 */
+  readonly displayItems = computed(() => {
+    const all = this.items();
+    return this.showStaleOnly() ? all.filter(a => this.staleIds().has(a.id)) : all;
+  });
+
+  /** 点击每周目标卡片:用原生 prompt 改数字(简单直接,比再开一个 dialog 轻)。 */
+  promptGoal(): void {
+    const cur = this.weeklyGoal();
+    const raw = window.prompt(this.i18n.t('tracker.goalPrompt'), String(cur));
+    if (raw === null) return;
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n > 0) this.setWeeklyGoal(n);
+  }
+
+  // ------------------------------ Simplify 对标:每周目标 ------------------------------
+  private static readonly GOAL_KEY = 'yi-tracker-weekly-goal';
+  /** 每周投递目标,默认 5(Simplify 默认值)。 */
+  readonly weeklyGoal = signal<number>(TrackerComponent.readGoal());
+  private static readGoal(): number {
+    try {
+      const v = parseInt(localStorage.getItem(TrackerComponent.GOAL_KEY) ?? '5', 10);
+      return Number.isFinite(v) && v > 0 && v <= 100 ? v : 5;
+    } catch { return 5; }
+  }
+  setWeeklyGoal(n: number): void {
+    const v = Math.max(1, Math.min(100, Math.round(n) || 5));
+    this.weeklyGoal.set(v);
+    try { localStorage.setItem(TrackerComponent.GOAL_KEY, String(v)); } catch { /* 忽略 */ }
+  }
+
+  /** 本周一 00:00(本地)。 */
+  private static weekStart(): Date {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    const dow = (d.getDay() + 6) % 7; // 周一=0
+    d.setDate(d.getDate() - dow);
+    return d;
+  }
+  /** 本周已投递数:appliedDate 落在本周一之后(含今天)。 */
+  readonly weeklyApplied = computed(() => {
+    const start = TrackerComponent.weekStart().getTime();
+    let n = 0;
+    for (const a of this.items()) {
+      const ad = a.appliedDate ? new Date(a.appliedDate).getTime() : 0;
+      if (ad >= start) n++;
+    }
+    return n;
+  });
+  readonly weeklyPct = computed(() => {
+    const g = this.weeklyGoal();
+    return g > 0 ? Math.min(100, Math.round((this.weeklyApplied() / g) * 100)) : 0;
+  });
+
+  // ------------------------------ Simplify 对标:转化漏斗 ------------------------------
+  readonly funnel = computed(() => {
+    const by = this.stats()?.byStatus ?? {};
+    const stages: ApplicationStatus[] = ['Applied', 'Screen', 'Interview', 'Offer', 'Accepted'];
+    const counts = stages.map(s => by[s] ?? 0);
+    const max = Math.max(1, ...counts);
+    return stages.map((s, i) => ({
+      status: s,
+      label: this.i18n.t('status.' + s),
+      count: counts[i],
+      // 相对上一阶段的转化率(第一阶段恒 100%)
+      rate: i === 0 ? 100 : (counts[i - 1] > 0 ? Math.round((counts[i] / counts[i - 1]) * 100) : 0),
+      widthPct: Math.round((counts[i] / max) * 100)
+    }));
+  });
+  /** 漏斗是否有数据(模板里不能写箭头函数,用 computed 包一层)。 */
+  readonly hasFunnelData = computed(() => this.funnel().some(f => f.count > 0));
 
   ngOnInit(): void {
     this.load();
@@ -677,6 +772,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   clearFilters(): void {
     this.search.set('');
     this.statusFilter.set(null);
+    this.showStaleOnly.set(false);
     this.sort.set('updated');
     try {
       localStorage.removeItem('yi-tracker-status');

@@ -788,6 +788,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dClConfirm': { zh: '标记为已确认', en: 'Mark as confirmed', fr: 'Marquer comme confirmée' },
   'tracker.dClEmpty': { zh: '还没有求职信。点上面的按钮,基于你的简历与该岗位 JD 生成一封。', en: 'No cover letter yet. Use the button above to generate one from your resume and this JD.', fr: 'Aucune lettre pour le moment. Utilisez le bouton ci-dessus pour en générer une.' },
   'tracker.dJdFull': { zh: 'JD 全文', en: 'Full JD', fr: 'Offre complète' },
+  'tracker.dJdEmpty': { zh: '还没有 JD 全文。点右边的编辑按钮粘贴进去。', en: 'No JD text yet. Click the edit button to paste it in.', fr: 'Aucun texte pour le moment. Cliquez sur le bouton de modification pour le coller.' },
   'tracker.dJdChars': { zh: '{n} 字符', en: '{n} chars', fr: '{n} caractères' },
   'tracker.dViewPosting': { zh: '查看原始发布页', en: 'View original posting', fr: 'Voir l’annonce d’origine' },
   'tracker.dCompanyIntel': { zh: '公司情报', en: 'Company intel', fr: 'Infos entreprise' },

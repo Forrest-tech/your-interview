@@ -1187,13 +1187,30 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           <dd>{{ detail.updatedAt ? (detail.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd></div>
       </dl>
 
-      @if (detail.jdSummary) {
-        <mat-divider></mat-divider>
-        <section>
-          <h4>{{ t('tracker.dJdSummary') }}</h4>
-          <p class="pre">{{ detail.jdSummary }}</p>
-        </section>
-      }
+      <mat-divider></mat-divider>
+      <section>
+        <h4 class="fold-head">
+          <span>{{ t('tracker.dJdSummary') }}</span>
+          <button mat-icon-button (click)="jdSummaryEditing() ? cancelEditJdSummary() : startEditJdSummary()"
+                  [matTooltip]="t('common.edit')" class="edit-btn">
+            <mat-icon>{{ jdSummaryEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </h4>
+        @if (jdSummaryEditing()) {
+          <textarea matInput class="cl-editor" rows="8" [(ngModel)]="jdSummaryDraft"
+                    [placeholder]="t('tracker.dJdSummary')"></textarea>
+          <div class="cl-actions save-row">
+            <button mat-flat-button color="primary" (click)="saveJdSummary()"
+                    [disabled]="jdSummarySaving()">
+              @if (jdSummarySaving()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
+              {{ t('common.save') }}
+            </button>
+            <button mat-button (click)="cancelEditJdSummary()">{{ t('common.cancel') }}</button>
+          </div>
+        } @else {
+          <p class="pre">{{ detail.jdSummary || '—' }}</p>
+        }
+      </section>
 
       <!-- 匹配分析(纯关键词,不调 AI)-->
       @if (match(); as m) {
@@ -1328,22 +1345,41 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         }
       </section>
 
-      <!-- JD 全文(默认折叠:可达 40000 字符)-->
-      @if (app.jdText) {
-        <mat-divider></mat-divider>
-        <section>
-          <h4 class="fold-head" (click)="jdExpanded.set(!jdExpanded())">
+      <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
+      <mat-divider></mat-divider>
+      <section>
+        <h4 class="fold-head">
+          <span (click)="jdTextEditing() ? null : jdExpanded.set(!jdExpanded())" style="display:flex;align-items:center;cursor:pointer;">
             <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
             <span>{{ t('tracker.dJdFull') }}</span>
-            <span class="fold-len">{{ tn('tracker.dJdChars', app.jdText.length) }}</span>
-          </h4>
+            @if (detail.jdText) {
+              <span class="fold-len">{{ tn('tracker.dJdChars', detail.jdText.length) }}</span>
+            }
+          </span>
+          <button mat-icon-button
+                  (click)="$event.stopPropagation(); jdTextEditing() ? cancelEditJdText() : startEditJdText()"
+                  [matTooltip]="t('common.edit')" class="edit-btn">
+            <mat-icon>{{ jdTextEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </h4>
 
-          @if (app.jdSourceUrl) {
-            <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
-              <mat-icon>link</mat-icon>{{ t('tracker.dViewPosting') }}
-            </a>
-          }
+        @if (app.jdSourceUrl) {
+          <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
+            <mat-icon>link</mat-icon>{{ t('tracker.dViewPosting') }}
+          </a>
+        }
 
+        @if (jdTextEditing()) {
+          <textarea matInput class="cl-editor" rows="16" [(ngModel)]="jdTextDraft"
+                    [placeholder]="t('tracker.dJdFull')"></textarea>
+          <div class="cl-actions save-row">
+            <button mat-flat-button color="primary" (click)="saveJdText()"
+                    [disabled]="jdTextSaving()">
+              {{ t('common.save') }}
+            </button>
+            <button mat-button (click)="cancelEditJdText()">{{ t('common.cancel') }}</button>
+          </div>
+        } @else if (detail.jdText) {
           @if (jdExpanded()) {
             <div class="jd-full">
               <p class="pre">{{ detail.jdText }}</p>
@@ -1351,8 +1387,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           } @else {
             <p class="pre jd-peek">{{ detail.jdText?.slice(0, 220) }}…</p>
           }
-        </section>
-      }
+        } @else {
+          <p class="cl-empty">{{ t('tracker.dJdEmpty') }}</p>
+        }
+      </section>
 
       <!-- 公司情报 -->
       @if (company()?.profile) {
@@ -1368,13 +1406,29 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </section>
       }
 
-      @if (app.notes) {
-        <mat-divider></mat-divider>
-        <section>
-          <h4>{{ t('tracker.dNotes') }}</h4>
-          <p class="pre">{{ app.notes }}</p>
-        </section>
-      }
+      <mat-divider></mat-divider>
+      <section>
+        <h4 class="fold-head">
+          <span>{{ t('tracker.dNotes') }}</span>
+          <button mat-icon-button (click)="notesEditing() ? cancelEditNotes() : startEditNotes()"
+                  [matTooltip]="t('common.edit')" class="edit-btn">
+            <mat-icon>{{ notesEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </h4>
+        @if (notesEditing()) {
+          <textarea matInput class="cl-editor" rows="8" [(ngModel)]="notesDraft"
+                    [placeholder]="t('tracker.dNotes')"></textarea>
+          <div class="cl-actions save-row">
+            <button mat-flat-button color="primary" (click)="saveNotes()"
+                    [disabled]="notesSaving()">
+              {{ t('common.save') }}
+            </button>
+            <button mat-button (click)="cancelEditNotes()">{{ t('common.cancel') }}</button>
+          </div>
+        } @else {
+          <p class="pre">{{ detail.notes || '—' }}</p>
+        }
+      </section>
 
       @if ((detail.history?.length ?? 0) > 0) {
         <mat-divider></mat-divider>
@@ -1585,6 +1639,12 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     .fold-head:hover { opacity: 0.75; }
     .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .fold-len { margin-left: auto; font-size: 11.5px; opacity: 0.45; font-weight: 400; }
+    /* 2026-10-08:条目编辑按钮 —— 标题行右侧的小编辑图标 */
+    .edit-btn { width: 28px; height: 28px; line-height: 28px; margin-left: auto; opacity: 0.55; }
+    .edit-btn:hover { opacity: 1; }
+    .edit-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    h4.fold-head .edit-btn { margin-left: auto; }
+    h4.fold-head span:first-child { display: flex; align-items: center; }
     .jd-full { max-height: 340px; overflow-y: auto; padding-right: 6px; }
     .jd-peek { opacity: 0.65; }
     .src-link {
@@ -1934,6 +1994,124 @@ export class ApplicationDetailDialogComponent {
   switchTab(tab: 'overview' | 'comms'): void {
     this.detailTab.set(tab);
     if (tab === 'comms') this.loadCommunications();
+  }
+
+  // ---------------------------- 条目编辑(2026-10-08) ----------------------------
+  // 详情弹窗之前是纯只读 —— Notes/JD 全文/JD 摘要都改不了。
+  // 后端早就有 PUT /api/jobs/applications/{id} 和 PUT .../jd,前端只是没暴露。
+
+  /** Notes 编辑态。 */
+  readonly notesEditing = signal(false);
+  notesDraft = '';
+  readonly notesSaving = signal(false);
+
+  /** JD 摘要编辑态。 */
+  readonly jdSummaryEditing = signal(false);
+  jdSummaryDraft = '';
+  readonly jdSummarySaving = signal(false);
+
+  /** JD 全文编辑态(走独立的 /jd 端点,不碰其他字段)。 */
+  readonly jdTextEditing = signal(false);
+  jdTextDraft = '';
+  readonly jdTextSaving = signal(false);
+
+  startEditNotes(): void {
+    this.notesDraft = this.detail.notes ?? '';
+    this.notesEditing.set(true);
+  }
+
+  cancelEditNotes(): void {
+    this.notesEditing.set(false);
+  }
+
+  saveNotes(): void {
+    const d = this.detail;
+    this.notesSaving.set(true);
+    this.api.put(`/api/jobs/applications/${this.app.id}`, {
+      role: d.role, location: d.location, link: d.link, salary: d.salary,
+      jdSummary: d.jdSummary,
+      notes: this.notesDraft.trim() || null, priority: d.priority,
+      deadline: d.deadline, appliedDate: d.appliedDate,
+    }).subscribe({
+      next: () => {
+        this.notesSaving.set(false);
+        this.notesEditing.set(false);
+        this.refreshDetail();
+        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
+      },
+      error: (err) => {
+        this.notesSaving.set(false);
+        alert(this.readError(err));
+      }
+    });
+  }
+
+  startEditJdSummary(): void {
+    this.jdSummaryDraft = this.detail.jdSummary ?? '';
+    this.jdSummaryEditing.set(true);
+  }
+
+  cancelEditJdSummary(): void {
+    this.jdSummaryEditing.set(false);
+  }
+
+  saveJdSummary(): void {
+    const d = this.detail;
+    this.jdSummarySaving.set(true);
+    this.api.put(`/api/jobs/applications/${this.app.id}`, {
+      role: d.role, location: d.location, link: d.link, salary: d.salary,
+      jdSummary: this.jdSummaryDraft.trim() || null, notes: d.notes,
+      priority: d.priority, deadline: d.deadline, appliedDate: d.appliedDate,
+    }).subscribe({
+      next: () => {
+        this.jdSummarySaving.set(false);
+        this.jdSummaryEditing.set(false);
+        this.refreshDetail();
+        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
+      },
+      error: (err) => {
+        this.jdSummarySaving.set(false);
+        alert(this.readError(err));
+      }
+    });
+  }
+
+  startEditJdText(): void {
+    this.jdTextDraft = this.detail.jdText ?? '';
+    this.jdTextEditing.set(true);
+    // 编辑时自动展开全文
+    this.jdExpanded.set(true);
+  }
+
+  cancelEditJdText(): void {
+    this.jdTextEditing.set(false);
+  }
+
+  saveJdText(): void {
+    this.jdTextSaving.set(true);
+    this.api.put(`/api/jobs/applications/${this.app.id}/jd`, {
+      jdText: this.jdTextDraft.trim() || null,
+      jdSourceUrl: this.detail.jdSourceUrl ?? null,
+    }).subscribe({
+      next: () => {
+        this.jdTextSaving.set(false);
+        this.jdTextEditing.set(false);
+        this.refreshDetail();
+        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
+      },
+      error: (err) => {
+        this.jdTextSaving.set(false);
+        alert(this.readError(err));
+      }
+    });
+  }
+
+  /** 保存后重新拉详情,保证弹窗里显示的是最新数据。 */
+  private refreshDetail(): void {
+    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
+      next: (a) => this.full.set(a),
+      error: () => { this.loadError.set(true); }
+    });
   }
 
   // ---------------------------- 沟通记录 ----------------------------

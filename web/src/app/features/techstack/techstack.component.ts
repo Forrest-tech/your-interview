@@ -482,12 +482,22 @@ export class TechStackComponent implements OnInit {
     else if (key === 'commonMistakes') payload['commonMistakesJson'] = this.linesToJson(text);
     else payload[key] = text || null;
 
-    this.api.put<KnowledgeItem>(`/api/knowledge/${item.id}`, payload).subscribe({
-      next: (updated) => {
+    // 后端 PUT 成功返回 204 No Content(无 body),本地直接用 payload 更新,不依赖返回体。
+    this.api.put<void>(`/api/knowledge/${item.id}`, payload).subscribe({
+      next: () => {
         this.savingBlock.set(false);
         this.editingBlock.set(null);
         this.editDraft = '';
         this.notify(this.t('ts.updated'));
+        const updated: KnowledgeItem = {
+          ...item,
+          question: payload['question'] as string | undefined,
+          conceptExplanation: payload['conceptExplanation'] as string | undefined,
+          keyPointsJson: payload['keyPointsJson'] as string | undefined,
+          commonMistakesJson: payload['commonMistakesJson'] as string | undefined,
+          myAnswer: payload['myAnswer'] as string | undefined,
+          betterAnswer: payload['betterAnswer'] as string | undefined,
+        };
         this.selected.set(updated);
         this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
       },

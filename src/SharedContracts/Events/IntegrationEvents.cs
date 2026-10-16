@@ -13,13 +13,14 @@ public sealed record InterviewRecordingUploaded(
     string? Language = "en-US"
 ) : IntegrationEvent;
 
-/// <summary>Analysis.Worker:分析管线完成 → 回写结果 + 通知前端。</summary>
+/// <summary>Analysis.Worker:分析管线完成 → 回写结果 + 通知前端。
+/// PronunciationScore 可空:文本模式(无音频)下发音未测量。</summary>
 public sealed record InterviewAnalysisCompleted(
     Guid InterviewSessionId,
     Guid AssetId,
     Guid UserId,
     string ReportPath,
-    int PronunciationScore,
+    int? PronunciationScore,
     int StructureScore,
     int FluencyScore
 ) : IntegrationEvent;

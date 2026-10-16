@@ -180,6 +180,20 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 读取转写稿 —— 供 Analysis.Worker 文本模式(粘贴文本、无音频)取文本。
+    /// 返回 { fullText, segmentsJson }:segmentsJson 优先解析,为空/非法时用 fullText 切分。
+    /// </summary>
+    [HttpGet("{id:guid}/assets/{assetId:guid}/transcript")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> GetTranscript(Guid id, Guid assetId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetTranscriptQuery(id, assetId), ct);
+        return r.IsSuccess
+            ? Results.Ok(new { fullText = r.Value.FullText, segmentsJson = r.Value.SegmentsJson })
+            : r.ToProblemDetails();
+    }
+
     // ---------------- 分析流水线 ----------------
 
     /// <summary>触发六维分析(校验通过后发集成事件给 Analysis.Worker)。</summary>
@@ -463,7 +477,7 @@ public sealed record AttachAssetBody(
 public sealed record TranscriptBody(string FullText, string? SegmentsJson = null);
 
 public sealed record ApplyAnalysisBody(
-    int Overall, int Pronunciation, int Fluency, int Structure, int TechnicalDepth, int Relevance,
+    int Overall, int? Pronunciation, int Fluency, int Structure, int TechnicalDepth, int Relevance,
     string? Summary = null, List<QuestionDraft>? Questions = null,
     List<WeaknessDraft>? Weaknesses = null,
     System.Text.Json.JsonElement? SpeechMetrics = null,

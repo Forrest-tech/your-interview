@@ -319,7 +319,7 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     /// 回写 AI 分析结果。这是整条流水线的终点:
     /// 六维分入聚合根,逐题诊断入 Questions,短板入 Weaknesses。
     /// </summary>
-    public void ApplyAnalysis(int overall, int pronunciation, int fluency, int structure,
+    public void ApplyAnalysis(int overall, int? pronunciation, int fluency, int structure,
         int technicalDepth, int relevance, string? summary,
         IEnumerable<QuestionDraft>? questions = null,
         IEnumerable<WeaknessDraft>? weaknesses = null,

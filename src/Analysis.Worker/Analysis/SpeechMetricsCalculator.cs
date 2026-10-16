@@ -44,7 +44,8 @@ public static class SpeechMetricsCalculator
         s.Speaker == "CANDIDATE" || s.Speaker == "UNKNOWN";
 
     public static SpeechMetrics Calculate(IReadOnlyList<TranscriptSegment> segments,
-        IReadOnlyList<WordPronunciation> pronunciations, double durationSeconds)
+        IReadOnlyList<WordPronunciation> pronunciations, double durationSeconds,
+        bool hasAudio = true)
     {
         // 只统计"我"说的部分 —— 面试官的话不该算进我的语速与句长
         var mySegments = segments.Where(IsMine).ToList();
@@ -163,7 +164,8 @@ public static class SpeechMetricsCalculator
             PronunciationAccuracy: Math.Round(accuracy, 1),
             LowScoreWordRatio: Math.Round(lowScoreRatio, 1),
             ProblemWords: [.. problemWords, .. nonTermProblems],
-            StructureMarkers: markers);
+            StructureMarkers: markers,
+            HasAudio: hasAudio);
     }
 
     /// <summary>

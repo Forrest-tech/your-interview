@@ -7,32 +7,36 @@ namespace YourInterview.Analysis.Worker.Analysis;
 /// <summary>
 /// 六维评分 —— 与 SharedContracts.Analysis.AnalysisScores 保持同构。
 /// 放在 Worker 本地是为了让管线能独立测试(不必引用整个契约项目)。
+/// Pronunciation 可空:文本模式(粘贴文本、无音频)下发音无从测量,记 null
+/// 且不参与总分与最弱维度判定。
 /// </summary>
-public sealed record DimensionScores(int Pronunciation, int Fluency, int SentenceIntegrity,
+public sealed record DimensionScores(int? Pronunciation, int Fluency, int SentenceIntegrity,
     int Structure, int TechnicalDepth, int Relevance)
 {
     /// <summary>
-    /// 加权总分。权重反映"对拿到 offer 的实际影响":
-    /// 技术深度与结构权重最高 —— 这是历次复盘得出的排序
-    /// (发音 92.8 分却没过的案例说明:发音不是决定性变量)。
+    /// 总分 = 非空维度的算术平均(四舍五入)。文本模式下发音为 null,
+    /// 总分即其余五维的平均 —— 不让"测不到"拉低总分。
     /// </summary>
-    public int Overall => (int)Math.Round(
-        TechnicalDepth * 0.28 +
-        Structure * 0.22 +
-        Relevance * 0.18 +
-        Fluency * 0.14 +
-        SentenceIntegrity * 0.10 +
-        Pronunciation * 0.08);
+    public int Overall
+    {
+        get
+        {
+            var vals = new int?[] { Pronunciation, Fluency, SentenceIntegrity,
+                Structure, TechnicalDepth, Relevance }
+                .Where(v => v.HasValue).Select(v => v!.Value).ToArray();
+            return vals.Length == 0 ? 0 : (int)Math.Round(vals.Average());
+        }
+    }
 
-    /// <summary>最弱的一维 —— 决定下一步该练什么。</summary>
+    /// <summary>最弱的一维 —— 决定下一步该练什么(null 维度不参与)。</summary>
     public string WeakestDimension()
     {
-        var all = new (string Name, int Score)[]
+        var all = new (string Name, int? Score)[]
         {
             ("发音", Pronunciation), ("流利度", Fluency), ("语句完整性", SentenceIntegrity),
             ("结构", Structure), ("技术深度", TechnicalDepth), ("相关性", Relevance)
         };
-        return all.OrderBy(x => x.Score).First().Name;
+        return all.Where(x => x.Score.HasValue).OrderBy(x => x.Score).First().Name;
     }
 }
 
@@ -68,6 +72,15 @@ public sealed class AnalysisPipeline(IEnumerable<IPipelineStage> stages,
 
         var state = new PipelineState();
         var sw = Stopwatch.StartNew();
+
+        // 文本模式:调用方(Consumer)已从粘贴文本播种分段 ——
+        // 直接填入 state,音频阶段(Prepare/Transcribe)的 CanRun 会因无音频自动跳过。
+        if (context.SeedSegments is { Count: > 0 } seeds)
+        {
+            state.Segments.AddRange(seeds);
+            state.FullTranscript = string.Join(" ", seeds.Select(s => s.Text));
+            logger.LogInformation("文本模式:已播种 {Count} 个分段,跳过音频阶段", seeds.Count);
+        }
 
         foreach (var stage in ordered)
         {

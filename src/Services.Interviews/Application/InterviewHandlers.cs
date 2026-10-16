@@ -211,7 +211,7 @@ public sealed class BeginTranscriptionCommandHandler(InterviewsDbContext db)
 public sealed record RequestAnalysisCommand(Guid EntryId) : IRequest<Result>;
 
 public sealed record ApplyAnalysisCommand(
-    Guid EntryId, int Overall, int Pronunciation, int Fluency, int Structure,
+    Guid EntryId, int Overall, int? Pronunciation, int Fluency, int Structure,
     int TechnicalDepth, int Relevance, string? Summary,
     List<QuestionDraft>? Questions, List<WeaknessDraft>? Weaknesses,
     string? SpeechMetricsJson = null,
@@ -793,6 +793,27 @@ public sealed class GetAssetAudioQueryHandler(
 
         return Result.Success((stream,
             a.ContentType ?? "application/octet-stream", a.FileName));
+    }
+}
+
+/// <summary>读取转写稿(供 Analysis.Worker 文本模式取粘贴文本)。</summary>
+public sealed record GetTranscriptQuery(Guid EntryId, Guid AssetId)
+    : IRequest<Result<TranscriptPayload>>;
+
+public sealed record TranscriptPayload(string? FullText, string? SegmentsJson);
+
+public sealed class GetTranscriptQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetTranscriptQuery, Result<TranscriptPayload>>
+{
+    public async Task<Result<TranscriptPayload>> Handle(GetTranscriptQuery request,
+        CancellationToken ct)
+    {
+        var e = await db.Entries.AsNoTracking().Include(x => x.Assets)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<TranscriptPayload>(Error.NotFound("面试条目"));
+        var a = e.Assets.FirstOrDefault(x => x.Id == request.AssetId);
+        if (a is null) return Result.Failure<TranscriptPayload>(Error.NotFound("材料"));
+        return Result.Success(new TranscriptPayload(a.TranscriptText, a.TranscriptSegmentsJson));
     }
 }
 

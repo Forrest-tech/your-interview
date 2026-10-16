@@ -159,7 +159,9 @@ public sealed class InterviewAnalysisCompletedConsumer(AnalyticsDbContext db,
 {
     protected override async Task Handle(InterviewAnalysisCompleted m, CancellationToken ct)
     {
-        await UpsertAbilityAsync(m.UserId, "pronunciation", m.PronunciationScore, "interview", ct);
+        // 文本模式下发音为 null:跳过,不拿"没测到"污染能力画像
+        if (m.PronunciationScore.HasValue)
+            await UpsertAbilityAsync(m.UserId, "pronunciation", m.PronunciationScore.Value, "interview", ct);
         await UpsertAbilityAsync(m.UserId, "structure", m.StructureScore, "interview", ct);
         await UpsertAbilityAsync(m.UserId, "fluency", m.FluencyScore, "interview", ct);
 

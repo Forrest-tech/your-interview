@@ -33,11 +33,20 @@ public sealed class InterviewAnalysisRequestedConsumer(
         // 路径是**相对**存储根的(interviews 与本 Worker 挂同一个卷);
         // 没带的老消息/纯文本条目才走兜底推导 —— 那条链路本来就是坏的,别再依赖。
         var sourcePath = ResolveSourcePath(m.StoragePath, m.InterviewEntryId, config);
+
+        // R01:粘贴文本路径 —— 无音频文件时,不直接失败,而是尝试从转写文本播种分段。
+        // (事件自带 TranscriptText 优先,其次调 Interviews API 查 asset 的转写稿)
+        List<TranscriptSegment>? seedSegments = null;
         if (!File.Exists(sourcePath))
         {
-            logger.LogWarning("找不到源文件 {Path},报告失败", sourcePath);
-            await ReportFailureAsync(m, $"找不到录音文件:{sourcePath}", ct);
-            return;
+            seedSegments = await TryLoadTranscriptSegmentsAsync(m, ct);
+            if (seedSegments is not { Count: > 0 })
+            {
+                logger.LogWarning("找不到源文件 {Path} 且无可用的粘贴文本,报告失败", sourcePath);
+                await ReportFailureAsync(m, $"找不到录音文件:{sourcePath},且该条目没有可分析的粘贴文本", ct);
+                return;
+            }
+            logger.LogInformation("无音频文件,走粘贴文本路径:播种 {Count} 个分段", seedSegments.Count);
         }
 
         // 工作目录同样锚定到仓库根(RootDirectory 优先),避免相对路径随 CWD 漂移。
@@ -52,7 +61,8 @@ public sealed class InterviewAnalysisRequestedConsumer(
                 string.IsNullOrWhiteSpace(workRootCfg) ? "storage/analysis" : workRootCfg!);
         var workDir = Path.Combine(workRoot, m.InterviewEntryId.ToString());
 
-        var ctx = new PipelineContext(m.InterviewEntryId, m.AssetId, m.UserId, sourcePath, workDir);
+        var ctx = new PipelineContext(m.InterviewEntryId, m.AssetId, m.UserId, sourcePath, workDir,
+            SeedSegments: seedSegments);
 
         try
         {
@@ -175,6 +185,86 @@ public sealed class InterviewAnalysisRequestedConsumer(
     }
 
     /// <summary>
+    /// 文本模式:从转写文本播种分段。
+    /// 两段式:① 事件自带的 TranscriptText(目前 dispatcher 恒为 null,留作未来/手工触发);
+    /// ② 调 Interviews API 查 asset 的转写稿(segmentsJson 优先,退回 fullText 切分)。
+    /// 都拿不到返回 null,调用方按失败上报。
+    /// </summary>
+    private async Task<List<TranscriptSegment>?> TryLoadTranscriptSegmentsAsync(
+        InterviewAnalysisRequested m, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(m.TranscriptText))
+        {
+            var segs = TranscriptSegmentBuilder.SplitText(m.TranscriptText);
+            if (segs.Count > 0) return segs;
+        }
+
+        var baseUrl = config["Services:Interviews"] ?? "http://127.0.0.1:5264";
+        var http = httpFactory.CreateClient("interviews");
+        try
+        {
+            var (fullText, segmentsJson) = await FetchTranscriptAsync(http, baseUrl, m, ct);
+            var parsed = TranscriptSegmentBuilder.TryParseSegmentsJson(segmentsJson);
+            if (parsed is { Count: > 0 }) return parsed;
+            if (!string.IsNullOrWhiteSpace(fullText))
+            {
+                var split = TranscriptSegmentBuilder.SplitText(fullText);
+                if (split.Count > 0) return split;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "获取粘贴文本失败:条目 {EntryId}", m.InterviewEntryId);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 查有转写稿的 asset 并取其文本。优先事件里的 AssetId(若有转写稿),
+    /// 否则取第一个 HasTranscript 的 asset。
+    /// </summary>
+    private async Task<(string? FullText, string? SegmentsJson)> FetchTranscriptAsync(
+        HttpClient http, string baseUrl, InterviewAnalysisRequested m, CancellationToken ct)
+    {
+        using var entryReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}");
+        if (!await tokens.AuthorizeAsync(entryReq, ct)) return (null, null);
+        using var entryResp = await http.SendAsync(entryReq, ct);
+        if (!entryResp.IsSuccessStatusCode) return (null, null);
+
+        var entryJson = await entryResp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        if (!entryJson.TryGetProperty("assets", out var assets)) return (null, null);
+
+        Guid? assetId = null;
+        foreach (var a in assets.EnumerateArray())
+        {
+            var hasTranscript = a.TryGetProperty("hasTranscript", out var h) &&
+                h.ValueKind == JsonValueKind.True;
+            if (!hasTranscript) continue;
+            if (a.TryGetProperty("id", out var id) && Guid.TryParse(id.GetString(), out var g))
+            {
+                assetId = g;
+                // 事件里的 AssetId 优先(人工指定的材料)
+                if (g == m.AssetId) break;
+            }
+        }
+        if (assetId is null) return (null, null);
+
+        using var tReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/assets/{assetId}/transcript");
+        if (!await tokens.AuthorizeAsync(tReq, ct)) return (null, null);
+        using var tResp = await http.SendAsync(tReq, ct);
+        if (!tResp.IsSuccessStatusCode) return (null, null);
+
+        var tJson = await tResp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        var fullText = tJson.TryGetProperty("fullText", out var ft) &&
+            ft.ValueKind == JsonValueKind.String ? ft.GetString() : null;
+        var segmentsJson = tJson.TryGetProperty("segmentsJson", out var sj) &&
+            sj.ValueKind == JsonValueKind.String ? sj.GetString() : null;
+        return (fullText, segmentsJson);
+    }
+
+    /// <summary>
     /// 回写分析结果到 Interviews 服务。
     ///
     /// 六维分数从 DimensionScores 直接映射 ——
@@ -283,6 +373,14 @@ public sealed class InterviewAnalysisRequestedConsumer(
         var assetId = await ResolveAssetIdAsync(http, baseUrl, m, ct);
         if (assetId is null)
         {
+            // 文本模式:没有音频材料是正常的 —— 转写文本已存在,条目已在 Analyzing,
+            // 这里不需要做转写稿回写与状态推进,直接返回等 WriteBack。
+            if (artifact.Metrics is { HasAudio: false })
+            {
+                logger.LogInformation("文本模式:跳过转写稿回写与状态推进(条目 {EntryId} 已在分析中)",
+                    m.InterviewEntryId);
+                return;
+            }
             logger.LogError("条目 {EntryId} 找不到音频材料,无法推进状态", m.InterviewEntryId);
             return;
         }
@@ -364,9 +462,16 @@ public sealed class InterviewAnalysisRequestedConsumer(
     private static string BuildSummary(AnalysisArtifact artifact, DimensionScores s)
     {
         var m = artifact.Metrics!;
-        return $"音频 {m.DurationSeconds / 60:F1} 分钟,共 {m.WordCount} 词。" +
+        // 文本模式:无音频时长,发音未测量 —— 措辞必须诚实,不能写"音频 X 分钟"
+        var head = m.HasAudio
+            ? $"音频 {m.DurationSeconds / 60:F1} 分钟,共 {m.WordCount} 词。"
+            : $"文本模式(无音频),共 {m.WordCount} 词,发音未测量。";
+        var tail = m.HasAudio
+            ? $"填充词 {m.FillerWordCount} 次,发音准确度 {m.PronunciationAccuracy:F0}。"
+            : $"填充词 {m.FillerWordCount} 次。";
+        return head +
                $"语速 {m.WordsPerMinute:F0} wpm,平均句长 {m.AverageSentenceLength:F1} 词," +
-               $"填充词 {m.FillerWordCount} 次,发音准确度 {m.PronunciationAccuracy:F0}。" +
+               tail +
                $"最弱维度:{s.WeakestDimension()}。";
     }
 
@@ -486,13 +591,15 @@ public sealed class InterviewAnalysisCompletedConsumer(
         var analyticsUrl = config["Services:Analytics"] ?? "http://127.0.0.1:5267";
         var http = httpFactory.CreateClient("analytics");
 
-        foreach (var (dim, score) in new[]
+        foreach (var (dim, score) in new (string, int?)[]
                  {
                      ("pronunciation", m.PronunciationScore),
                      ("structure", m.StructureScore),
                      ("fluency", m.FluencyScore)
                  })
         {
+            // 文本模式下发音为 null:跳过上报,不拿"没测到"污染雷达图
+            if (!score.HasValue) continue;
             try
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post,
@@ -502,7 +609,7 @@ public sealed class InterviewAnalysisCompletedConsumer(
                     {
                         userId = m.UserId,
                         dimension = dim,
-                        score,
+                        score = score.Value,
                         source = "interview"
                     })
                 };

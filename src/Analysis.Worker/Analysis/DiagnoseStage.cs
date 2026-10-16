@@ -45,12 +45,17 @@ public sealed class DiagnoseStage(ILogger<DiagnoseStage> logger) : IPipelineStag
     internal static DimensionScores Score(SpeechMetrics m)
     {
         // ---------- 发音 ----------
+        // 文本模式(无音频):发音无从测量,记 null,不参与总分与最弱维度。
         // 直接用 Azure 的准确度均分。历史数据:母语者约 90+,瓶颈很少在这里。
-        var pronunciation = (int)Math.Round(m.PronunciationAccuracy);
+        int? pronunciation = null;
+        if (m.HasAudio)
+        {
+            var p = (int)Math.Round(m.PronunciationAccuracy);
 
-        // 术语读错要额外扣 —— 它们对"专业可信度"的伤害远大于普通词
-        var termPenalty = m.ProblemWords.Count(w => w.AccuracyScore < 60) * 2;
-        pronunciation = Math.Clamp(pronunciation - termPenalty, 0, 100);
+            // 术语读错要额外扣 —— 它们对"专业可信度"的伤害远大于普通词
+            var termPenalty = m.ProblemWords.Count(w => w.AccuracyScore < 60) * 2;
+            pronunciation = Math.Clamp(p - termPenalty, 0, 100);
+        }
 
         // ---------- 流利度 ----------
         // 从 90 分起扣:填充词、自我重复、长停顿、语速异常
@@ -175,7 +180,9 @@ public sealed class DiagnoseStage(ILogger<DiagnoseStage> logger) : IPipelineStag
         sb.AppendLine();
         sb.AppendLine($"- 面试条目:`{context.InterviewEntryId}`");
         sb.AppendLine($"- 分析时间:{DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm} UTC");
-        sb.AppendLine($"- 音频时长:{m.DurationSeconds:F0} 秒({m.DurationSeconds / 60:F1} 分钟)");
+        sb.AppendLine(m.HasAudio
+            ? $"- 音频时长:{m.DurationSeconds:F0} 秒({m.DurationSeconds / 60:F1} 分钟)"
+            : $"- 文本模式:无音频,按粘贴文本分析(时长为按 150wpm 估算,约 {m.DurationSeconds:F0} 秒)");
         sb.AppendLine();
 
         sb.AppendLine("## 一句话结论");
@@ -187,7 +194,9 @@ public sealed class DiagnoseStage(ILogger<DiagnoseStage> logger) : IPipelineStag
         sb.AppendLine();
         sb.AppendLine("| 维度 | 分数 | 说明 |");
         sb.AppendLine("|---|---|---|");
-        sb.AppendLine($"| 发音 | {scores.Pronunciation} | 术语读错 {m.ProblemWords.Count} 个 |");
+        sb.AppendLine(scores.Pronunciation.HasValue
+            ? $"| 发音 | {scores.Pronunciation} | 术语读错 {m.ProblemWords.Count} 个 |"
+            : "| 发音 | N/A | 文本模式无音频,未测量 |");
         sb.AppendLine($"| 流利度 | {scores.Fluency} | 填充词 {m.FillerWordCount} 次 / 长停顿 {m.LongPauseCount} 次 |");
         sb.AppendLine($"| 语句完整性 | {scores.SentenceIntegrity} | 平均句长 {m.AverageSentenceLength:F1} 词 |");
         sb.AppendLine($"| 结构 | {scores.Structure} | 骨架证据不足(见下方说明) |");
@@ -204,8 +213,11 @@ public sealed class DiagnoseStage(ILogger<DiagnoseStage> logger) : IPipelineStag
         sb.AppendLine($"- 过短句(<5 词):{m.ShortSentenceCount} 条");
         sb.AppendLine($"- 自我重复:{m.SelfRepetitionCount} 次");
         sb.AppendLine($"- 停顿总时长:{m.TotalSilenceSeconds:F1} 秒");
-        sb.AppendLine($"- 发音准确度均分:{m.PronunciationAccuracy:F1}");
-        sb.AppendLine($"- 低分词(<60)占比:{m.LowScoreWordRatio:F1}%");
+        if (m.HasAudio)
+        {
+            sb.AppendLine($"- 发音准确度均分:{m.PronunciationAccuracy:F1}");
+            sb.AppendLine($"- 低分词(<60)占比:{m.LowScoreWordRatio:F1}%");
+        }
         sb.AppendLine();
 
         if (m.FillerWordBreakdown.Count > 0)
@@ -217,7 +229,7 @@ public sealed class DiagnoseStage(ILogger<DiagnoseStage> logger) : IPipelineStag
             sb.AppendLine();
         }
 
-        if (m.ProblemWords.Count > 0)
+        if (m.HasAudio && m.ProblemWords.Count > 0)
         {
             sb.AppendLine("### 发音问题词");
             sb.AppendLine();
@@ -247,7 +259,7 @@ public sealed class DiagnoseStage(ILogger<DiagnoseStage> logger) : IPipelineStag
         sb.AppendLine();
         sb.AppendLine("- **结构(S)**:判断结构好坏需要看到面试官的问题。仅凭音频无法确知「回答有没有对上题」,所以这一维封顶 75 分,分数偏低代表「证据不足」而非「一定很差」。");
         sb.AppendLine("- **技术深度(T)**:术语密度只能说明「在技术语境里说话」,不能证明「说对了」。");
-        sb.AppendLine("- **说话人分离**:用文本长度启发式推断(面试官问句短、候选人回答长)。若一轮里面试官做了长篇铺垫,标签可能错位。");
+        sb.AppendLine("- **说话人分离**:文本中的「面试官:/我:」等标记会被解析为说话人;无标记时整段视为候选人发言。若转写稿里混杂了面试官的长篇铺垫且无标记,部分指标会受影响 —— 粘贴文本时建议保留说话人标记。");
         sb.AppendLine();
         sb.AppendLine("要拿到真正准确的结构与技术深度评分,需要**结合面试官问题**做分析 ——");
         sb.AppendLine("这正是「实战机经」模块手工录入问答的价值所在。");
@@ -260,7 +272,8 @@ public sealed class DiagnoseStage(ILogger<DiagnoseStage> logger) : IPipelineStag
         var weakest = s.WeakestDimension();
 
         // 发音高但其它维度低,是最常见的画像 —— 要明确指出"不是发音问题"
-        if (s.Pronunciation >= 85 && s.Structure < 60)
+        // (文本模式下发音为 null,直接跳过这一条)
+        if (s.Pronunciation is >= 85 && s.Structure < 60)
             return $"发音不是瓶颈(准确度 {m.PronunciationAccuracy:F0}),真正拖后腿的是**{weakest}**。" +
                    "把注意力从口音移到「怎么组织答案」上,收益会大得多。";
 

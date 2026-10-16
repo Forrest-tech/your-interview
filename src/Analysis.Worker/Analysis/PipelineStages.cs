@@ -353,7 +353,8 @@ public sealed class MeasureStage(AzureSpeechClient speech, ILogger<MeasureStage>
     private const int MaxAssessmentSeconds = 200;
 
     public bool CanRun(PipelineContext context, PipelineState state) =>
-        state.NormalizedWavPath is not null && state.Segments.Count > 0;
+        state.Segments.Count > 0 &&
+        (state.NormalizedWavPath is not null || context.SeedSegments is { Count: > 0 });
 
     public async Task<PipelineState> ExecuteAsync(PipelineContext context, PipelineState state,
         CancellationToken ct)
@@ -361,6 +362,20 @@ public sealed class MeasureStage(AzureSpeechClient speech, ILogger<MeasureStage>
         var sw = Stopwatch.StartNew();
         try
         {
+            // 文本模式(粘贴文本、无音频):跳过发音评估,只算文本指标。
+            // 时间戳是按 150wpm 估算合成的,发音/停顿精度不如音频模式 ——
+            // 这是诚实边界,报告里会注明。
+            if (state.NormalizedWavPath is null)
+            {
+                var totalSeconds = state.Segments.Max(s => s.EndSeconds);
+                state.Metrics = SpeechMetricsCalculator.Calculate(
+                    state.Segments, [], totalSeconds, hasAudio: false);
+                state.Stages.Add(new StageResult(Name, true, null, sw.Elapsed.TotalMilliseconds));
+                logger.LogInformation("指标完成(文本模式,无发音评估):{Count} 段,估计时长 {Secs:F0}s",
+                    state.Segments.Count, totalSeconds);
+                return state;
+            }
+
             // 候选人口径(与 SpeechMetricsCalculator 一致:UNKNOWN 视为候选人;全无则回退全部分段)
             var candidateSegments = state.Segments
                 .Where(s => s.Speaker == "CANDIDATE" || s.Speaker == "UNKNOWN")

@@ -19,7 +19,12 @@ public sealed record PipelineContext(
     Guid UserId,
     string SourceFilePath,
     string WorkingDirectory,
-    string Language = "en-US");
+    string Language = "en-US",
+    /// <summary>
+    /// 粘贴文本预播种的分段(文本模式)。有值时管线跳过音频阶段
+    /// (Prepare/Transcribe 的 CanRun 本来就要求音频文件),直接从文本算指标。
+    /// </summary>
+    IReadOnlyList<TranscriptSegment>? SeedSegments = null);
 
 /// <summary>转写出来的一段话。</summary>
 public sealed record TranscriptSegment(
@@ -70,7 +75,12 @@ public sealed record SpeechMetrics(
     /// 结构骨架标记(缺口4补齐,2026-10-07):检出的分点/转折/收尾标记 → 次数。
     /// 有标记 = 在尝试结构化表达;全空 = 全程平铺直叙。
     /// </summary>
-    Dictionary<string, int>? StructureMarkers = null);
+    Dictionary<string, int>? StructureMarkers = null,
+    /// <summary>
+    /// 是否有音频。文本模式(粘贴文本)下为 false:发音相关指标无意义,
+    /// 诊断时发音维度记为 null(不参与总分)。
+    /// </summary>
+    bool HasAudio = true);
 
 /// <summary>一阶段的结果 —— 带成功/失败,让管线能"部分成功"地报错。</summary>
 public sealed record StageResult(string Stage, bool Success, string? Error, double ElapsedMs);

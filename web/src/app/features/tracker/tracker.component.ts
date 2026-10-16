@@ -777,16 +777,39 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     d.setDate(d.getDate() - dow);
     return d;
   }
-  /** 本周已投递数:appliedDate 落在本周一之后(含今天)。 */
-  readonly weeklyApplied = computed(() => {
+  /** 本周已投递数(全量):items() 只是当前页的分页切片,翻页/筛选后会算错。
+   *  这里按 200/页(后端 pageSize 上限)逐页拉全量,再按 appliedDate 计数。
+   *  "本周"定义与旧逻辑一致:本地时间周一 00:00 起(含今天)。 */
+  readonly weeklyAppliedCount = signal(0);
+
+  private loadWeeklyApplied(): void {
     const start = TrackerComponent.weekStart().getTime();
-    let n = 0;
-    for (const a of this.items()) {
-      const ad = a.appliedDate ? new Date(a.appliedDate).getTime() : 0;
-      if (ad >= start) n++;
-    }
-    return n;
-  });
+    const pageSize = 200;
+    const fetchPage = (page: number, acc: Application[]): void => {
+      this.api.get<Paged<Application>>('/api/jobs/applications', {
+        page, pageSize, sortBy: 'updated'
+      }).subscribe({
+        next: (r) => {
+          const all = acc.concat(r.items ?? []);
+          if (page < (r.totalPages ?? 1)) {
+            fetchPage(page + 1, all);
+          } else {
+            let n = 0;
+            for (const a of all) {
+              const ad = a.appliedDate ? new Date(a.appliedDate).getTime() : 0;
+              if (ad >= start) n++;
+            }
+            this.weeklyAppliedCount.set(n);
+          }
+        },
+        error: () => { /* 统计失败就保留旧值,列表本身不受影响 */ }
+      });
+    };
+    fetchPage(1, []);
+  }
+
+  /** 本周已投递数:appliedDate 落在本周一之后(含今天)。全量统计,见 loadWeeklyApplied。 */
+  readonly weeklyApplied = computed(() => this.weeklyAppliedCount());
   readonly weeklyPct = computed(() => {
     const g = this.weeklyGoal();
     return g > 0 ? Math.min(100, Math.round((this.weeklyApplied() / g) * 100)) : 0;
@@ -811,8 +834,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   readonly hasFunnelData = computed(() => this.funnel().some(f => f.count > 0));
 
   ngOnInit(): void {
-    this.load();
-    this.loadStats();
+    this.reload();
   }
 
   ngAfterViewInit(): void {
@@ -857,6 +879,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   reload(): void {
     this.load();
     this.loadStats();
+    this.loadWeeklyApplied();
   }
 
   // ------------------------------ 筛选交互 ------------------------------

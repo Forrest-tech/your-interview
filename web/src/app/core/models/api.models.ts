@@ -214,6 +214,8 @@ export interface InterviewEntry {
   analysisSummary?: string;
   /** 客观声学指标(缺口4):Worker 回写,字段与后端 SpeechMetricsDto 对应。 */
   speechMetrics?: SpeechMetrics;
+  /** 计分文本(2026-10-15):被标为候选人发言的分段拼接,前端复盘面板展示供肉眼验证。 */
+  candidateTranscript?: string;
   failureReason?: string;
   // 六维
   overallScore?: number;

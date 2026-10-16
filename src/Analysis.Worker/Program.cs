@@ -33,6 +33,7 @@ builder.Services.AddSerilog((sp, cfg) => cfg
 builder.Services.AddSingleton<AzureSpeechClient>();
 builder.Services.AddSingleton<IPipelineStage, AudioPrepareStage>();
 builder.Services.AddSingleton<IPipelineStage, TranscribeStage>();
+builder.Services.AddSingleton<IPipelineStage, SpeakerLabelStage>();
 builder.Services.AddSingleton<IPipelineStage, MeasureStage>();
 builder.Services.AddSingleton<IPipelineStage, DiagnoseStage>();
 builder.Services.AddSingleton<AnalysisPipeline>();

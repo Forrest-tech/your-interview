@@ -187,6 +187,19 @@
             </mat-card-content>
           </mat-card>
 
+          <!-- 计分文本(2026-10-15):被标为候选人发言的文本,供肉眼验证说话人分离 -->
+          @if (e.candidateTranscript) {
+            <mat-card class="panel">
+              <mat-card-header>
+                <mat-card-title>{{ t('pb.overview.scoredText') }}</mat-card-title>
+                <mat-card-subtitle>{{ t('pb.overview.scoredTextSub') }}</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <p class="prose">{{ e.candidateTranscript }}</p>
+              </mat-card-content>
+            </mat-card>
+          }
+
           <!-- 客观声学指标(缺口4):可测量的数字,不是主观打分 -->
           @if (e.speechMetrics) {
             <mat-card class="panel">

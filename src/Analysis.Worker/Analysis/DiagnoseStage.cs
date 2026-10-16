@@ -24,27 +24,9 @@ public sealed class DiagnoseStage(ILogger<DiagnoseStage> logger) : IPipelineStag
         var m = state.Metrics!;
         var scores = Score(m);
 
-        // ---------- 说话人分离(声学启发式) ----------
-        // 面试官的话通常更短、更少；候选人话更多。
-        // 用"文本长度占比"作为代理指标 —— 粗糙但对面试场景足够（面试官问、候选人答）。
-        var ordered = state.Segments.OrderBy(s => s.StartSeconds).ToList();
-        if (ordered.Count > 0)
-        {
-            var totalWords = ordered.Sum(s => SpeechMetricsCalculator.TokenizeWords(s.Text).Count);
-            var running = 0;
-            foreach (var seg in ordered)
-            {
-                var w = SpeechMetricsCalculator.TokenizeWords(seg.Text).Count;
-                running += w;
-
-                // 话最多的一方是候选人。短问句(词数少)倾向判定为面试官。
-                var speaker = w <= 12 && running < totalWords * 0.5 ? "INTERVIEWER" : "CANDIDATE";
-                var idx = state.Segments.IndexOf(seg);
-                if (idx >= 0)
-                    state.Segments[idx] = seg with { Speaker = speaker };
-            }
-        }
-
+        // 说话人标注已由上游 SpeakerLabelStage 完成(Transcribe 之后、Measure 之前):
+        // marker 解析 / 可信标签保留 / 无 marker 全文候选人。这里只按现有标签拼接,
+        // 不再做任何重写 —— 之前的文本长度启发式(前半段短句=面试官)已被证明错得离谱。
         state.InterviewerTranscript = string.Join(" ",
             state.Segments.Where(s => s.Speaker == "INTERVIEWER").Select(s => s.Text));
         state.CandidateTranscript = string.Join(" ",

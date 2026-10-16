@@ -204,7 +204,8 @@ public sealed class InterviewAnalysisRequestedConsumer(
             summary = BuildSummary(artifact, scores),
             questions = Array.Empty<object>(),   // 问题清单需要面试官问题,由人工/后续分析补
             weaknesses = BuildWeaknesses(artifact, scores),
-            speechMetrics = artifact.Metrics   // 缺口4:客观声学指标回写入库,前端展示
+            speechMetrics = artifact.Metrics,  // 缺口4:客观声学指标回写入库,前端展示
+            candidateTranscript = artifact.CandidateTranscript // 2026-10-15:计分文本,前端复盘面板展示
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post,

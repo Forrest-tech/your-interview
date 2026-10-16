@@ -199,12 +199,12 @@ public sealed class AudioPrepareStage(ILogger<AudioPrepareStage> logger) : IPipe
 }
 
 /// <summary>
-/// 阶段 2:分段转写 + 说话人分离。
+/// 阶段 2:分段转写。
 ///
-/// 说话人分离用**声学方法**(基频 f0 聚类)而不是 Azure 的 diarization ——
-/// 因为 Free F0 层的 conversation 端点不提供 diarization。
-/// 方法:逐段估 f0,男声约 85-180Hz、女声约 165-255Hz,
-/// 用中位数 + 能量门限避免被谐波误导(单帧自相关很容易失败,这是实测教训)。
+/// 注意:说话人分离不在这里做。Free F0 层的 conversation 端点不提供 diarization,
+/// 所有分段的 Speaker 初始为 UNKNOWN,由下游 SpeakerLabelStage 统一标注
+/// (文本 marker 解析 / 可信标签保留 / 无 marker 全文候选人)。
+/// 之前 DiagnoseStage 里的文本长度启发式已被移除 —— 它错得离谱,见 SpeakerLabelStage 注释。
 /// </summary>
 public sealed class TranscribeStage(AzureSpeechClient speech,
     IConfiguration config, ILogger<TranscribeStage> logger) : IPipelineStage

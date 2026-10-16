@@ -81,7 +81,7 @@ public sealed record InterviewEntryDto(
     string Status, string? FailureReason, DateTimeOffset? TranscribedAt, DateTimeOffset? AnalyzedAt,
     int? OverallScore, int? PronunciationScore, int? FluencyScore, int? StructureScore,
     int? TechnicalDepthScore, int? RelevanceScore, string? AnalysisSummary,
-    SpeechMetricsDto? SpeechMetrics,
+    SpeechMetricsDto? SpeechMetrics, string? CandidateTranscript,
     int AssetCount, int QuestionCount, int WeaknessCount, int RoundCount,
     List<AssetDto> Assets, List<QuestionDto> Questions, List<WeaknessDto> Weaknesses,
     List<RoundDto> Rounds,
@@ -214,7 +214,8 @@ public sealed record ApplyAnalysisCommand(
     Guid EntryId, int Overall, int Pronunciation, int Fluency, int Structure,
     int TechnicalDepth, int Relevance, string? Summary,
     List<QuestionDraft>? Questions, List<WeaknessDraft>? Weaknesses,
-    string? SpeechMetricsJson = null) : IRequest<Result>;
+    string? SpeechMetricsJson = null,
+    string? CandidateTranscript = null) : IRequest<Result>;
 
 public sealed record MarkEntryFailedCommand(Guid EntryId, string Reason) : IRequest<Result>;
 
@@ -388,7 +389,7 @@ public static class InterviewMappingExtensions
         e.Status.ToString(), e.FailureReason, e.TranscribedAt, e.AnalyzedAt,
         e.OverallScore, e.PronunciationScore, e.FluencyScore, e.StructureScore,
         e.TechnicalDepthScore, e.RelevanceScore, e.AnalysisSummary,
-        ParseSpeechMetrics(e.SpeechMetricsJson),
+        ParseSpeechMetrics(e.SpeechMetricsJson), e.CandidateTranscript,
         e.Assets.Count, e.Questions.Count, e.Weaknesses.Count, e.Rounds.Count,
         e.Assets.OrderBy(x => x.UploadedAt).Select(x => x.ToDto()).ToList(),
         e.Questions.OrderBy(x => x.Sequence).Select(x => x.ToDto()).ToList(),
@@ -854,7 +855,8 @@ public sealed class ApplyAnalysisCommandHandler(InterviewsDbContext db)
         {
             e.ApplyAnalysis(request.Overall, request.Pronunciation, request.Fluency,
                 request.Structure, request.TechnicalDepth, request.Relevance, request.Summary,
-                request.Questions, request.Weaknesses, request.SpeechMetricsJson);
+                request.Questions, request.Weaknesses, request.SpeechMetricsJson,
+                request.CandidateTranscript);
             // 分析结果回写 = 流水线终点:同事务关单
             await db.StageCloseOpenJobsAsync(request.EntryId, AnalysisJobStatus.Succeeded, null, ct);
             await db.SaveChangesAsync(ct);

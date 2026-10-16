@@ -57,7 +57,7 @@ public sealed class AnalysisPipeline(IEnumerable<IPipelineStage> stages,
         Directory.CreateDirectory(context.WorkingDirectory);
 
         // 按 Name 显式排序,不依赖 DI 注入顺序 —— 阶段顺序是业务约束,不能碰运气
-        var ordered = new[] { "Prepare", "Transcribe", "Measure", "Diagnose" }
+        var ordered = new[] { "Prepare", "Transcribe", "SpeakerLabel", "Measure", "Diagnose" }
             .Select(name => stages.FirstOrDefault(s => s.Name == name))
             .Where(s => s is not null)
             .Select(s => s!)

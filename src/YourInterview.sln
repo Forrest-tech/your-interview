@@ -27,6 +27,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.Gate
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.AiGateway", "Services.AiGateway\YourInterview.Services.AiGateway.csproj", "{CE75BC97-8FEA-4AD4-B02E-8AC2A7A4C773}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Analysis.Worker.Tests", "Analysis.Worker.Tests\YourInterview.Analysis.Worker.Tests.csproj", "{821F6510-DCEA-49E8-BF6F-E3A26DE2DDF7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -84,5 +86,9 @@ Global
 		{CE75BC97-8FEA-4AD4-B02E-8AC2A7A4C773}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CE75BC97-8FEA-4AD4-B02E-8AC2A7A4C773}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CE75BC97-8FEA-4AD4-B02E-8AC2A7A4C773}.Release|Any CPU.Build.0 = Release|Any CPU
+		{821F6510-DCEA-49E8-BF6F-E3A26DE2DDF7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{821F6510-DCEA-49E8-BF6F-E3A26DE2DDF7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{821F6510-DCEA-49E8-BF6F-E3A26DE2DDF7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{821F6510-DCEA-49E8-BF6F-E3A26DE2DDF7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

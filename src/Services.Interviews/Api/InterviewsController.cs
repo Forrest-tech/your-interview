@@ -202,7 +202,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
             : null;
         var r = await sender.Send(new ApplyAnalysisCommand(id, body.Overall, body.Pronunciation,
             body.Fluency, body.Structure, body.TechnicalDepth, body.Relevance, body.Summary,
-            body.Questions, body.Weaknesses, metricsJson), ct);
+            body.Questions, body.Weaknesses, metricsJson, body.CandidateTranscript), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -466,7 +466,8 @@ public sealed record ApplyAnalysisBody(
     int Overall, int Pronunciation, int Fluency, int Structure, int TechnicalDepth, int Relevance,
     string? Summary = null, List<QuestionDraft>? Questions = null,
     List<WeaknessDraft>? Weaknesses = null,
-    System.Text.Json.JsonElement? SpeechMetrics = null);
+    System.Text.Json.JsonElement? SpeechMetrics = null,
+    string? CandidateTranscript = null);
 
 public sealed record FailureBody(string Reason);
 

@@ -6,9 +6,10 @@ namespace YourInterview.Analysis.Worker.Analysis;
 /// 这些类型刻意与 SharedContracts.Analysis 的六维契约保持同构 ——
 /// Worker 只负责"把音频变成数字",业务怎么用这些数字由各服务决定。
 ///
-/// 管线四阶段(每阶段都能单独重跑,这是排障的关键):
+/// 管线五阶段(每阶段都能单独重跑,这是排障的关键):
 ///   1. Prepare   —— 音频转成 Azure 要的 WAV PCM 16k 单声道
-///   2. Transcribe—— 分段转写 + 说话人分离
+///   2. Transcribe—— 分段转写(说话人标签初始为 UNKNOWN)
+///   2.5 SpeakerLabel —— 说话人标注:文本 marker 解析 / 可信标签保留 / 无 marker 全文候选人
 ///   3. Measure   —— 客观声学指标(语速/填充词/发音准确度)
 ///   4. Diagnose  —— 汇总成六维评分 + 问题清单
 /// </summary>

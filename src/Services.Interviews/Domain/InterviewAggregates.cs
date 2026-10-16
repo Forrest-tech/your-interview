@@ -165,6 +165,12 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     /// </summary>
     public string? SpeechMetricsJson { get; private set; }
 
+    /// <summary>
+    /// 计分文本(2026-10-15):被 SpeakerLabelStage 标为 CANDIDATE 的分段拼接。
+    /// 前端复盘面板展示,供用户肉眼验证说话人分离是否正确。
+    /// </summary>
+    public string? CandidateTranscript { get; private set; }
+
     public IReadOnlyCollection<InterviewAsset> Assets => _assets.AsReadOnly();
     public IReadOnlyCollection<InterviewQuestion> Questions => _questions.AsReadOnly();
     public IReadOnlyCollection<InterviewWeakness> Weaknesses => _weaknesses.AsReadOnly();
@@ -317,7 +323,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         int technicalDepth, int relevance, string? summary,
         IEnumerable<QuestionDraft>? questions = null,
         IEnumerable<WeaknessDraft>? weaknesses = null,
-        string? speechMetricsJson = null)
+        string? speechMetricsJson = null,
+        string? candidateTranscript = null)
     {
         OverallScore = overall;
         PronunciationScore = pronunciation;
@@ -329,6 +336,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         // 指标 JSON 可空:老 Worker/手动回写可能不带
         if (!string.IsNullOrWhiteSpace(speechMetricsJson))
             SpeechMetricsJson = speechMetricsJson;
+        // 计分文本可空:老 Worker 不带时不覆盖已有值
+        if (!string.IsNullOrWhiteSpace(candidateTranscript))
+            CandidateTranscript = candidateTranscript;
 
         if (questions is not null)
         {

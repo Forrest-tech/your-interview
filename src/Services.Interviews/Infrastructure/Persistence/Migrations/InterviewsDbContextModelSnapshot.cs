@@ -91,6 +91,46 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.ToTable("analysis_jobs", "interviews");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.GeneratedMaterial", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CompletionTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentMarkdown")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InterviewEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("PromptTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InterviewEntryId");
+
+                    b.HasIndex("InterviewEntryId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("guidance_materials", "interviews");
+                });
+
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewAsset", b =>
                 {
                     b.Property<Guid>("Id")
@@ -176,11 +216,11 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
 
-                    b.Property<string>("SpeechMetricsJson")
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset?>("AnalyzedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CandidateTranscript")
+                        .HasColumnType("text");
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid");
@@ -257,6 +297,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
 
                     b.Property<int>("RoundNo")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SpeechMetricsJson")
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -362,60 +405,6 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.ToTable("questions", "interviews");
                 });
 
-            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewWeakness", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Detail")
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
-
-                    b.Property<string>("Evidence")
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
-
-                    b.Property<Guid>("InterviewEntryId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("OccurrenceCount")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Severity")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SourceType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Suggestion")
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Category");
-
-                    b.HasIndex("InterviewEntryId");
-
-                    b.ToTable("weaknesses", "interviews");
-                });
-
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewRound", b =>
                 {
                     b.Property<Guid>("Id")
@@ -492,46 +481,68 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.ToTable("rounds", "interviews");
                 });
 
-            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.GeneratedMaterial", b =>
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewWeakness", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ContentMarkdown")
+                    b.Property<string>("Category")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
-                    b.Property<int?>("CompletionTokens")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("GeneratedAt")
+                    b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("Evidence")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
 
                     b.Property<Guid>("InterviewEntryId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Model")
+                    b.Property<int>("OccurrenceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceType")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
-                    b.Property<int?>("PromptTokens")
-                        .HasColumnType("integer");
+                    b.Property<string>("Suggestion")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
 
-                    b.Property<int>("Version")
-                        .HasColumnType("integer");
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Category");
+
                     b.HasIndex("InterviewEntryId");
 
-                    b.HasIndex("InterviewEntryId", "Version")
-                        .IsUnique();
-
-                    b.ToTable("guidance_materials", "interviews");
+                    b.ToTable("weaknesses", "interviews");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.GeneratedMaterial", b =>
+                {
+                    b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
+                        .WithMany("Materials")
+                        .HasForeignKey("InterviewEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
 
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewAsset", b =>
                 {
@@ -551,15 +562,6 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewWeakness", b =>
-                {
-                    b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
-                        .WithMany("Weaknesses")
-                        .HasForeignKey("InterviewEntryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewRound", b =>
                 {
                     b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
@@ -569,10 +571,10 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.GeneratedMaterial", b =>
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewWeakness", b =>
                 {
                     b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
-                        .WithMany("Materials")
+                        .WithMany("Weaknesses")
                         .HasForeignKey("InterviewEntryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -582,9 +584,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                 {
                     b.Navigation("Assets");
 
-                    b.Navigation("Questions");
-
                     b.Navigation("Materials");
+
+                    b.Navigation("Questions");
 
                     b.Navigation("Rounds");
 

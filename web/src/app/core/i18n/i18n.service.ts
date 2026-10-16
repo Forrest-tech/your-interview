@@ -1800,7 +1800,6 @@ const DICT: Record<string, Record<Lang, string>> = {
   'ts.stage.SystemDesign': { zh: '系统设计', en: 'System design', fr: 'Conception de système' },
   'ts.stage.Behavioral': { zh: '行为面', en: 'Behavioral', fr: 'Comportemental' },
   'ts.stage.Final': { zh: '终面', en: 'Final', fr: 'Final' },
-  'ts.dialog.editTitle': { zh: '编辑技术栈条目', en: 'Edit knowledge entry', fr: 'Modifier l’entrée' },
   'ts.dialog.title': { zh: '新增技术栈条目', en: 'New knowledge entry', fr: 'Nouvelle entrée' },
   'ts.dialog.titleLabel': { zh: '标题 *', en: 'Title *', fr: 'Titre *' },
   'ts.dialog.titlePh': { zh: '如 Clean Architecture / 依赖注入', en: 'e.g. Clean Architecture / dependency injection', fr: 'p. ex. Clean Architecture / injection de dépendances' },

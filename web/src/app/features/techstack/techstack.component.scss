@@ -307,6 +307,33 @@ mat-form-field { width: 100%; }
 
 .block-hint { font-size: 11.5px; opacity: 0.42; margin-left: 2px; }
 
+/* 行内编辑:铅笔 → 文本框 → 保存/取消 */
+.block-head .spacer { flex: 1; }
+.blk-edit {
+  width: 28px; height: 28px; line-height: 28px;
+  opacity: 0.45;
+}
+.blk-edit:hover { opacity: 1; }
+.blk-edit mat-icon { font-size: 16px; width: 16px; height: 16px; color: #555; }
+.blk-editor {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.72;
+  padding: 10px 12px;
+  border: 1px solid rgba(63, 81, 181, 0.35);
+  border-radius: 8px;
+  resize: vertical;
+}
+.blk-editor:focus { outline: none; border-color: #3f51b5; }
+.blk-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .block-text {
   margin: 0;
   font-size: 13.5px;

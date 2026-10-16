@@ -218,9 +218,6 @@
               <mat-icon>check_circle_outline</mat-icon> {{ t('ts.detail.logReview') }}
               <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
             </button>
-            <button mat-stroked-button (click)="openEdit(it)">
-              <mat-icon>edit</mat-icon> {{ t('common.edit') }}
-            </button>
             <mat-menu #reviewMenu="matMenu" class="app-menu">
               <!-- 四档直接对应 SM-2 的 Again/Hard/Good/Easy:
                    档位决定下次间隔怎么算,所以必须让用户选,不能写死。 -->
@@ -236,22 +233,41 @@
           </div>
         </div>
 
-        <!-- 来源反查(需求 6.4.4):这题是哪家公司、第几轮、哪一场问住的 -->
+        <!-- 内容块:AI 解析后自动填充;每块可点铅笔行内改 wording -->
         <div class="detail-body">
           @for (b of blocks; track b.key) {
-            @if (blockText(it, b.key)) {
+            @if (blockText(it, b.key) || editingBlock() === b.key) {
               <section class="block">
                 <header class="block-head">
                   <mat-icon>{{ b.icon }}</mat-icon>
                   <span class="block-label">{{ t(b.labelKey) }}</span>
                   <span class="block-hint">{{ t(b.hintKey) }}</span>
+                  <span class="spacer"></span>
+                  @if (editingBlock() !== b.key) {
+                    <button mat-icon-button class="blk-edit" (click)="startBlockEdit(it, b.key)"
+                            [matTooltip]="t('common.edit')">
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                  }
                 </header>
-                <p class="block-text">{{ blockText(it, b.key) }}</p>
+                @if (editingBlock() === b.key) {
+                  <textarea matInput class="blk-editor" rows="6"
+                            [(ngModel)]="editDraft"></textarea>
+                  <div class="blk-edit-actions">
+                    <button mat-button (click)="cancelBlockEdit()">{{ t('common.cancel') }}</button>
+                    <button mat-flat-button color="primary" (click)="saveBlockEdit(it, b.key)"
+                            [disabled]="savingBlock()">
+                      {{ t('common.save') }}
+                    </button>
+                  </div>
+                } @else {
+                  <p class="block-text">{{ blockText(it, b.key) }}</p>
+                }
               </section>
             }
           }
 
-          @if (allBlocksEmpty(it)) {
+          @if (allBlocksEmpty(it) && !editingBlock()) {
             <p class="empty">{{ t('ts.blocks.empty') }}</p>
           }
         </div>

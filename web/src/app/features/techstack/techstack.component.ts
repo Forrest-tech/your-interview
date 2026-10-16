@@ -22,7 +22,7 @@ import { KnowledgeItem, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged } fr
 import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
-import { KnowledgeDialogComponent, KnowledgeDialogData, KnowledgeForm } from './knowledge-dialog.component';
+import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 
 /** 熟练度等级顺序 —— 用于展示顺序、进度和"提升一级"的目标值。 */
@@ -438,24 +438,79 @@ export class TechStackComponent implements OnInit {
     });
   }
 
-  /** 编辑条目:对话框预填已有内容,保存走 PUT。 */
-  openEdit(item: KnowledgeItem): void {
-    const ref = this.dialog.open(KnowledgeDialogComponent, {
-      autoFocus: 'first-tabbable',
-      data: { item } as KnowledgeDialogData
+  /** 行内编辑:当前正在改哪一块(key),null = 没在改。 */
+  readonly editingBlock = signal<string | null>(null);
+  /** 行内编辑的草稿文本。 */
+  editDraft = '';
+  readonly savingBlock = signal(false);
+
+  /** 开始行内改一块:把当前值填进文本框(JSON 数组转回"一行一条")。 */
+  startBlockEdit(item: KnowledgeItem, key: string): void {
+    if (key === 'keyPoints' || key === 'commonMistakes') {
+      const json = key === 'keyPoints' ? item.keyPointsJson : item.commonMistakesJson;
+      this.editDraft = this.jsonToLines(json);
+    } else {
+      const v = (item as unknown as Record<string, unknown>)[key];
+      this.editDraft = typeof v === 'string' ? v : '';
+    }
+    this.editingBlock.set(key);
+  }
+
+  cancelBlockEdit(): void {
+    this.editingBlock.set(null);
+    this.editDraft = '';
+  }
+
+  /** 保存一块:只改这一个字段,走 PUT 全量更新。 */
+  saveBlockEdit(item: KnowledgeItem, key: string): void {
+    const text = this.editDraft.trim();
+    this.savingBlock.set(true);
+    const payload: Record<string, unknown> = {
+      title: item.title,
+      topic: item.topic,
+      question: item.question ?? null,
+      conceptExplanation: item.conceptExplanation ?? null,
+      keyPointsJson: item.keyPointsJson ?? null,
+      commonMistakesJson: item.commonMistakesJson ?? null,
+      myAnswer: item.myAnswer ?? null,
+      betterAnswer: item.betterAnswer ?? null,
+      difficulty: item.difficulty,
+      importance: item.importance,
+    };
+    // 覆盖被改的字段
+    if (key === 'keyPoints') payload['keyPointsJson'] = this.linesToJson(text);
+    else if (key === 'commonMistakes') payload['commonMistakesJson'] = this.linesToJson(text);
+    else payload[key] = text || null;
+
+    this.api.put<KnowledgeItem>(`/api/knowledge/${item.id}`, payload).subscribe({
+      next: (updated) => {
+        this.savingBlock.set(false);
+        this.editingBlock.set(null);
+        this.editDraft = '';
+        this.notify(this.t('ts.updated'));
+        this.selected.set(updated);
+        this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
+      },
+      error: (e: Error) => {
+        this.savingBlock.set(false);
+        this.notify(e.message, true);
+      }
     });
-    ref.afterClosed().subscribe((payload?: Record<string, unknown> | null) => {
-      if (!payload) return;
-      this.api.put<KnowledgeItem>(`/api/knowledge/${item.id}`, payload).subscribe({
-        next: (updated) => {
-          this.notify(this.t('ts.updated'));
-          // 用返回的最新数据刷新选中项与列表行
-          this.selected.set(updated);
-          this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
-        },
-        error: (e: Error) => this.notify(e.message, true)
-      });
-    });
+  }
+
+  /** "一行一条"转 JSON 数组;空给 null。 */
+  private linesToJson(text: string): string | null {
+    const lines = text.split('\n').map((x) => x.trim()).filter((x) => x.length > 0);
+    return lines.length > 0 ? JSON.stringify(lines) : null;
+  }
+
+  /** JSON 数组转回"一行一条"。 */
+  private jsonToLines(json?: string | null): string {
+    if (!json) return '';
+    try {
+      const arr = JSON.parse(json);
+      return Array.isArray(arr) ? arr.join('\n') : '';
+    } catch { return ''; }
   }
 
   // ------------------------------ 复习动作 ------------------------------

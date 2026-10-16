@@ -150,6 +150,7 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.FollowUpQuestionsJson).HasMaxLength(8000);
             e.Property(x => x.MissedPointsJson).HasMaxLength(8000);
             e.Property(x => x.Category).HasConversion<string>().HasMaxLength(30);
+            e.Property(x => x.Mastery).HasDefaultValue(0);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Sequence });
         });

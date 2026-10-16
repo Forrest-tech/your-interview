@@ -418,6 +418,15 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Touch();
     }
 
+    /// <summary>设置题目掌握度(A1):0=待练,1=练习中,2=已掌握,3=还卡壳。</summary>
+    public void SetQuestionMastery(Guid questionId, int mastery)
+    {
+        var q = _questions.FirstOrDefault(x => x.Id == questionId)
+            ?? throw new InvalidOperationException("问题不存在");
+        q.SetMastery(mastery);
+        Touch();
+    }
+
     /// <summary>新增一轮。Order 自动取 max+1,调用方可显式指定 Stage。</summary>
     public InterviewRound AddRound(string stage = "Technical")
     {
@@ -609,6 +618,9 @@ public sealed class InterviewQuestion : Entity
     public QuestionCategory Category { get; private set; }
     public int Difficulty { get; private set; }
 
+    /// <summary>掌握度(A1):0=待练,1=练习中,2=已掌握,3=还卡壳。默认 0。</summary>
+    public int Mastery { get; private set; }
+
     /// <summary>诊断:这个回答好/坏在哪。</summary>
     public string? Assessment { get; private set; }
 
@@ -659,6 +671,14 @@ public sealed class InterviewQuestion : Entity
         WeaknessTagsJson = weaknessTagsJson;
         FollowUpQuestionsJson = followUpsJson;
         MissedPointsJson = missedPointsJson;
+    }
+
+    /// <summary>设置掌握度(A1)。越界直接抛 —— 调用方(Handler)应先做参数校验转 400。</summary>
+    internal void SetMastery(int mastery)
+    {
+        if (mastery is < 0 or > 3)
+            throw new InvalidOperationException("掌握度只能是 0-3(0=待练,1=练习中,2=已掌握,3=还卡壳)");
+        Mastery = mastery;
     }
 }
 

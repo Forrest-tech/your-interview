@@ -262,6 +262,16 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>A1:设置题目掌握度(0=待练,1=练习中,2=已掌握,3=还卡壳)。</summary>
+    [HttpPut("{id:guid}/questions/{questionId:guid}/mastery")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> SetQuestionMastery(Guid id, Guid questionId,
+        [FromBody] SetQuestionMasteryBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateQuestionMasteryCommand(id, questionId, body.Mastery), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     /// <summary>全局 upcoming:未来 30 天内所有条目的轮次(日历视图用)。</summary>
     [HttpGet("rounds/upcoming")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
@@ -505,3 +515,7 @@ public sealed record UpdateQuestionBody(
 public sealed record AddWeaknessBody(
     string Category, string Title, string? Detail = null, string? Evidence = null,
     int Severity = 3, string? Suggestion = null);
+
+/// <summary>A1:body { mastery: int }。</summary>
+public sealed record SetQuestionMasteryBody(int Mastery);
+

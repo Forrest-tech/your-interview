@@ -25,7 +25,7 @@ public sealed record QuestionDto(
     Guid Id, int Sequence, string QuestionText, string? MyAnswerText, string Category,
     int Difficulty, string? Assessment, bool GotStuck, string? StuckReason,
     string? RecommendedAnswer, double? AskedAtSeconds, string? WeaknessTagsJson,
-    string? FollowUpQuestionsJson, string? MissedPointsJson);
+    string? FollowUpQuestionsJson, string? MissedPointsJson, int Mastery = 0);
 
 public sealed record WeaknessDto(
     Guid Id, string Category, string Title, string? Detail, string? Evidence,
@@ -230,6 +230,12 @@ public sealed record UpdateQuestionCommand(
 
 public sealed record RemoveQuestionCommand(Guid EntryId, Guid QuestionId) : IRequest<Result>;
 
+// ============================ Playbook 重做(A1–A7/F3):命令与查询 ============================
+
+/// <summary>A1:设置题目掌握度(0=待练,1=练习中,2=已掌握,3=还卡壳)。</summary>
+public sealed record UpdateQuestionMasteryCommand(Guid EntryId, Guid QuestionId, int Mastery)
+    : IRequest<Result>;
+
 // ============================ 轮次(缺口1) ============================
 
 public sealed record AddRoundCommand(
@@ -350,6 +356,20 @@ public sealed class AddWeaknessCommandValidator : AbstractValidator<AddWeaknessC
     }
 }
 
+// ============================ Playbook 重做(A1–A7)校验器 ============================
+
+public sealed class UpdateQuestionMasteryCommandValidator
+    : AbstractValidator<UpdateQuestionMasteryCommand>
+{
+    public UpdateQuestionMasteryCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.QuestionId).NotEmpty();
+        RuleFor(x => x.Mastery).InclusiveBetween(0, 3)
+            .WithMessage("掌握度只能是 0-3(0=待练,1=练习中,2=已掌握,3=还卡壳)");
+    }
+}
+
 // ============================ 映射(扩展方法,和 Jobs 服务保持一致风格) ============================
 
 public static class InterviewMappingExtensions
@@ -364,7 +384,10 @@ public static class InterviewMappingExtensions
     public static QuestionDto ToDto(this InterviewQuestion q) => new(
         q.Id, q.Sequence, q.QuestionText, q.MyAnswerText, q.Category.ToString(), q.Difficulty,
         q.Assessment, q.GotStuck, q.StuckReason, q.RecommendedAnswer, q.AskedAtSeconds,
-        q.WeaknessTagsJson, q.FollowUpQuestionsJson, q.MissedPointsJson);
+        q.WeaknessTagsJson, q.FollowUpQuestionsJson, q.MissedPointsJson, q.Mastery);
+
+    public static ActionDto ToDto(this InterviewAction a) => new(
+        a.Id, a.Title, a.Detail, a.DueDate, a.IsDone, a.CreatedAt);
 
     public static WeaknessDto ToDto(this InterviewWeakness w) => new(
         w.Id, w.Category.ToString(), w.Title, w.Detail, w.Evidence, w.Severity, w.Suggestion,
@@ -1461,3 +1484,29 @@ public sealed class ListQuestionCandidatesQueryHandler(InterviewsDbContext db)
         return Result.Success<IReadOnlyList<QuestionCandidateDto>>(list);
     }
 }
+
+// ============================ Playbook 重做(A1–A7):Handler ============================
+
+/// <summary>A1:设置题目掌握度。</summary>
+public sealed class UpdateQuestionMasteryCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<UpdateQuestionMasteryCommand, Result>
+{
+    public async Task<Result> Handle(UpdateQuestionMasteryCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Questions)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        try
+        {
+            e.SetQuestionMastery(request.QuestionId, request.Mastery);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+

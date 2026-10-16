@@ -1,4 +1,4 @@
-import { Component, inject, input, output, signal } from '@angular/core';
+import { Component, inject, model, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -7,10 +7,9 @@ import { I18nService } from '../../core/i18n/i18n.service';
 /**
  * "I'm not a robot" human-verification checkbox (reCAPTCHA-style).
  *
- * This is a CLIENT-SIDE UI gate only: click → brief spinner → green check.
- * It does NOT provide real bot protection. For production-grade protection,
- * wire up Cloudflare Turnstile or Google reCAPTCHA (needs site keys) and
- * verify the token server-side.
+ * CLIENT-SIDE UI gate only: click → brief spinner → green check.
+ * Deterministic: no random failures, no parent round-trip timing issues
+ * (uses model() two-way binding so state is local and immediate).
  *
  * Usage:
  *   <app-human-check [(verified)]="humanOk" />
@@ -21,7 +20,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
   standalone: true,
   imports: [CommonModule, MatIconModule, MatProgressSpinnerModule],
   template: `
-    <div class="hc" [class.hc-verified]="verified()" [class.hc-error]="failed()"
+    <div class="hc" [class.hc-verified]="verified()"
          role="checkbox" [attr.aria-checked]="verified()"
          [attr.aria-label]="t('auth.humanCheckLabel')"
          tabindex="0" (click)="verify()" (keydown.enter)="verify()" (keydown.space)="verify(); $event.preventDefault()">
@@ -30,19 +29,11 @@ import { I18nService } from '../../core/i18n/i18n.service';
           <mat-spinner diameter="22" strokeWidth="3"></mat-spinner>
         } @else if (verified()) {
           <mat-icon class="hc-check">check</mat-icon>
-        } @else if (failed()) {
-          <mat-icon class="hc-x">close</mat-icon>
         } @else {
           <span class="hc-empty"></span>
         }
       </span>
-      <span class="hc-label">
-        @if (failed()) {
-          {{ t('auth.humanCheckRetry') }}
-        } @else {
-          {{ t('auth.humanCheckLabel') }}
-        }
-      </span>
+      <span class="hc-label">{{ t('auth.humanCheckLabel') }}</span>
       <span class="hc-brand">
         <mat-icon class="hc-shield">shield</mat-icon>
         <span class="hc-brand-text">{{ t('auth.humanCheckBrand') }}</span>
@@ -92,20 +83,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
       justify-content: center;
       margin: -2px;
     }
-    .hc-x {
-      color: #fff;
-      background: #c62828;
-      border-radius: 2px;
-      font-size: 20px;
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: -2px;
-    }
     .hc-verified .hc-box { border-color: #2e7d32; }
-    .hc-error .hc-box { border-color: #c62828; }
     .hc-label {
       flex: 1;
       font-size: 14px;
@@ -136,41 +114,27 @@ export class HumanCheckComponent {
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
 
-  /** Two-way bound verification state. */
-  readonly verified = input(false);
-  readonly verifiedChange = output<boolean>();
+  /** Two-way bound verification state (model = local, immediate, no parent round-trip). */
+  readonly verified = model(false);
 
   readonly checking = signal(false);
-  readonly failed = signal(false);
 
   /**
-   * Simulated verification: brief spinner, then pass.
-   * ~5% random "failure" to mimic real challenge behavior —
-   * user just clicks again to retry.
+   * Click → short spinner (400ms, just for affordance) → verified.
+   * Deterministic: always succeeds. Double-clicks while spinning are ignored.
    */
   verify(): void {
     if (this.verified() || this.checking()) return;
     this.checking.set(true);
-    this.failed.set(false);
-
-    // 600–1200ms "challenge" delay, then resolve.
-    const delay = 600 + Math.random() * 600;
     setTimeout(() => {
       this.checking.set(false);
-      if (Math.random() < 0.05) {
-        // Rare simulated failure — user retries with one click.
-        this.failed.set(true);
-        this.verifiedChange.emit(false);
-      } else {
-        this.verifiedChange.emit(true);
-      }
-    }, delay);
+      this.verified.set(true);
+    }, 400);
   }
 
   /** Parent calls this to reset (e.g. after a failed login attempt). */
   reset(): void {
-    this.verifiedChange.emit(false);
-    this.failed.set(false);
+    this.verified.set(false);
     this.checking.set(false);
   }
 }

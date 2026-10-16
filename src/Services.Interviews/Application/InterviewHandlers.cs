@@ -281,6 +281,13 @@ public sealed record DeleteActionCommand(Guid EntryId, Guid ActionId) : IRequest
 public sealed record GetAnalysisTrendQuery(Guid EntryId)
     : IRequest<Result<IReadOnlyList<AnalysisTrendPointDto>>>;
 
+/// <summary>A4:该题在其它面试中的回答版本(归一化题干精确匹配)。</summary>
+public sealed record GetQuestionHistoryQuery(Guid EntryId, Guid QuestionId)
+    : IRequest<Result<IReadOnlyList<QuestionHistoryDto>>>;
+
+/// <summary>A5:全局技术覆盖图谱(按 Category 聚合)。</summary>
+public sealed record GetCoverageQuery : IRequest<Result<IReadOnlyList<CoverageCategoryDto>>>;
+
 // ============================ 轮次(缺口1) ============================
 
 public sealed record AddRoundCommand(

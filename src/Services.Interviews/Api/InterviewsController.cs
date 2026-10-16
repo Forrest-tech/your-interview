@@ -326,6 +326,24 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>A4:该题在其它面试中的回答版本(归一化题干精确匹配,排除自己)。</summary>
+    [HttpGet("{id:guid}/questions/{questionId:guid}/history")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> QuestionHistory(Guid id, Guid questionId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetQuestionHistoryQuery(id, questionId), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>A5:全局技术覆盖图谱 —— 按 Category 聚合全部问答。</summary>
+    [HttpGet("coverage")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> Coverage(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetCoverageQuery(), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>全局 upcoming:未来 30 天内所有条目的轮次(日历视图用)。</summary>
     [HttpGet("rounds/upcoming")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]

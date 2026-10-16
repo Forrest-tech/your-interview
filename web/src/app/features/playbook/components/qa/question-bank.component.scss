@@ -1,0 +1,191 @@
+.qa-bank {
+  padding: 16px;
+}
+
+// ---------- 顶部聚合头 ----------
+.qa-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  .stat {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+
+    .num {
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.2;
+      .star { color: #f9a825; font-size: 20px; }
+    }
+    .label { font-size: 12px; opacity: 0.65; margin-top: 2px; }
+
+    &.has-stuck .num { color: #d32f2f; }
+  }
+}
+
+// ---------- 题型分布条 ----------
+.qa-dist {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+
+  .dist-title { font-size: 12px; opacity: 0.65; margin-bottom: 8px; }
+
+  .dist-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    &:last-child { margin-bottom: 0; }
+
+    .dist-name { width: 72px; flex-shrink: 0; font-size: 13px; }
+    .dist-bar {
+      flex: 1;
+      height: 8px;
+      background: rgba(0, 0, 0, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+      .fill {
+        height: 100%;
+        background: #42a5f5;
+        border-radius: 4px;
+        transition: width 0.3s;
+      }
+    }
+    .dist-count { width: 48px; text-align: right; font-size: 12px; opacity: 0.7; }
+  }
+}
+
+// ---------- 筛选条 ----------
+.qa-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+
+  .f-label { font-size: 13px; opacity: 0.65; }
+
+  mat-chip.clickable { cursor: pointer; }
+
+  .cat-select { width: 150px; }
+  .showing { margin-left: auto; font-size: 12px; opacity: 0.6; }
+}
+
+// ---------- 逐题卡片 ----------
+.q-card {
+  margin: 12px 0;
+  padding: 14px 16px;
+
+  .q-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+
+    .cat-chip { flex-shrink: 0; }
+    .q-text { flex: 1; margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; }
+    .q-diff { color: #f9a825; letter-spacing: 1px; white-space: nowrap; }
+  }
+
+  .q-sec {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(0, 0, 0, 0.12);
+
+    .sec-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+
+      &.neutral { color: rgba(0, 0, 0, 0.55); font-weight: 500; }
+      &.warn { color: #d32f2f; }
+
+      .mini-btn { margin-left: auto; }
+    }
+
+    .pre { white-space: pre-wrap; margin: 0; line-height: 1.6; }
+    .muted { opacity: 0.55; margin: 0; font-size: 13px; }
+    .small { font-size: 12px; }
+    .err { color: #d32f2f; font-size: 13px; }
+  }
+
+  .stuck-reason {
+    background: rgba(211, 47, 47, 0.05);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  .history-sec {
+    .history { margin-top: 6px; }
+
+    .h-item {
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+
+      .h-meta {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .pre { white-space: pre-wrap; margin: 0; font-size: 13px; line-height: 1.6; }
+    }
+  }
+}
+
+// ---------- 掌握度徽章:灰待练 / 蓝练习中 / 绿已掌握 / 红卡壳 ----------
+.mastery-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 28px;
+  min-width: 64px;
+
+  &.m0 { color: #616161; border-color: #9e9e9e; }
+  &.m1 { color: #1565c0; border-color: #42a5f5; background: rgba(66, 165, 245, 0.08); }
+  &.m2 { color: #2e7d32; border-color: #66bb6a; background: rgba(102, 187, 106, 0.08); }
+  &.m3 { color: #c62828; border-color: #ef5350; background: rgba(239, 83, 80, 0.08); }
+
+  &.mini {
+    border: 1px solid currentColor;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+    line-height: 1.6;
+    margin-left: 6px;
+  }
+}
+
+// ---------- 新增题目 ----------
+.add-wrap { margin-top: 16px; }
+
+.add-card {
+  margin-top: 10px;
+  padding: 14px 16px;
+
+  .add-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    .diff-field { width: 130px; }
+  }
+}
+
+.full { width: 100%; }
+.edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+.center { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 24px; }
+.error-block { flex-direction: column; color: #d32f2f; }
+.muted-block { flex-direction: column; opacity: 0.6; text-align: center; }

@@ -601,6 +601,7 @@ public sealed class GetEntryQueryHandler(InterviewsDbContext db)
             .Include(x => x.Questions)
             .Include(x => x.Weaknesses)
             .Include(x => x.Actions)
+            .Include(x => x.Rounds)
             .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
 
         return e is null

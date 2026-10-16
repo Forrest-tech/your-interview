@@ -272,6 +272,49 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    // ---------------- 待办事项 Next actions(A2) ----------------
+
+    /// <summary>A2:待办列表(未完成在前)。</summary>
+    [HttpGet("{id:guid}/actions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListActions(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListActionsQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>A2:新增待办。</summary>
+    [HttpPost("{id:guid}/actions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> CreateAction(Guid id, [FromBody] CreateActionBody body,
+        CancellationToken ct)
+    {
+        var r = await sender.Send(new CreateActionCommand(id, body.Title, body.Detail,
+            body.DueDate), ct);
+        return r.IsSuccess
+            ? Results.Created($"/api/interviews/{id}/actions/{r.Value}", new { id = r.Value })
+            : r.ToProblemDetails();
+    }
+
+    /// <summary>A2:部分更新待办(null 字段不动)。</summary>
+    [HttpPatch("{id:guid}/actions/{actionId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> UpdateAction(Guid id, Guid actionId,
+        [FromBody] UpdateActionBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateActionCommand(id, actionId, body.Title,
+            body.IsDone, body.DueDate), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    [HttpDelete("{id:guid}/actions/{actionId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> DeleteAction(Guid id, Guid actionId, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteActionCommand(id, actionId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     /// <summary>全局 upcoming:未来 30 天内所有条目的轮次(日历视图用)。</summary>
     [HttpGet("rounds/upcoming")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
@@ -518,4 +561,12 @@ public sealed record AddWeaknessBody(
 
 /// <summary>A1:body { mastery: int }。</summary>
 public sealed record SetQuestionMasteryBody(int Mastery);
+
+/// <summary>A2:POST body { title, detail?, dueDate? }。</summary>
+public sealed record CreateActionBody(
+    string Title, string? Detail = null, DateTimeOffset? DueDate = null);
+
+/// <summary>A2:PATCH body { isDone?, title?, dueDate? }(null 字段不动)。</summary>
+public sealed record UpdateActionBody(
+    string? Title = null, bool? IsDone = null, DateTimeOffset? DueDate = null);
 

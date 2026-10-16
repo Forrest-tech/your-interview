@@ -106,6 +106,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     private readonly List<InterviewWeakness> _weaknesses = [];
     private readonly List<InterviewRound> _rounds = [];
     private readonly List<GeneratedMaterial> _materials = [];
+    private readonly List<InterviewAction> _actions = [];
+    private readonly List<AnalysisSnapshot> _snapshots = [];
 
     private InterviewEntry() { }
 
@@ -176,6 +178,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public IReadOnlyCollection<InterviewWeakness> Weaknesses => _weaknesses.AsReadOnly();
     public IReadOnlyCollection<InterviewRound> Rounds => _rounds.AsReadOnly();
     public IReadOnlyCollection<GeneratedMaterial> Materials => _materials.AsReadOnly();
+    public IReadOnlyCollection<InterviewAction> Actions => _actions.AsReadOnly();
+    public IReadOnlyCollection<AnalysisSnapshot> Snapshots => _snapshots.AsReadOnly();
 
     /// <summary>
     /// 合法流转表。集中定义,避免散落在各处 if-else。
@@ -451,6 +455,40 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         var r = _rounds.FirstOrDefault(x => x.Id == roundId)
             ?? throw new InvalidOperationException("轮次不存在");
         _rounds.Remove(r);
+        Touch();
+    }
+
+    // ============================ 待办事项(Next actions,A2) ============================
+
+    /// <summary>新增待办。可由 AI 分析自动生成,也可手工添加。</summary>
+    public InterviewAction AddAction(string title, string? detail, DateTimeOffset? dueDate)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            throw new InvalidOperationException("待办标题不能为空");
+        var a = new InterviewAction(Id, title.Trim(), detail, dueDate);
+        _actions.Add(a);
+        Touch();
+        return a;
+    }
+
+    /// <summary>
+    /// 部分更新待办:null 的字段保持不动(清 dueDate 暂不支持 ——
+    /// 传 null 即"不动",这是 PATCH 的保守语义)。
+    /// </summary>
+    public void UpdateAction(Guid actionId, string? title, bool? isDone, DateTimeOffset? dueDate)
+    {
+        var a = _actions.FirstOrDefault(x => x.Id == actionId)
+            ?? throw new InvalidOperationException("待办不存在");
+        a.Update(title, dueDate);
+        if (isDone.HasValue) a.SetDone(isDone.Value);
+        Touch();
+    }
+
+    public void RemoveAction(Guid actionId)
+    {
+        var a = _actions.FirstOrDefault(x => x.Id == actionId)
+            ?? throw new InvalidOperationException("待办不存在");
+        _actions.Remove(a);
         Touch();
     }
 
@@ -862,6 +900,54 @@ public sealed class GeneratedMaterial : Entity
     }
 }
 
+/// <summary>
+/// 待办事项 / Next actions(A2)。
+/// AI 分析可自动生成 3~5 条,用户也可手工增删;F2 报告底部与 F5 总览共用同一份数据。
+/// </summary>
+public sealed class InterviewAction : Entity
+{
+    private InterviewAction() { }
+
+    internal InterviewAction(Guid interviewEntryId, string title, string? detail,
+        DateTimeOffset? dueDate)
+    {
+        InterviewEntryId = interviewEntryId;
+        Title = title;
+        Detail = detail;
+        DueDate = dueDate;
+        IsDone = false;
+        CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Guid InterviewEntryId { get; private set; }
+
+    /// <summary>待办标题。</summary>
+    public string Title { get; private set; } = string.Empty;
+
+    /// <summary>补充说明。</summary>
+    public string? Detail { get; private set; }
+
+    /// <summary>截止时间(可空)。</summary>
+    public DateTimeOffset? DueDate { get; private set; }
+
+    public bool IsDone { get; private set; }
+
+    public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>部分更新:null 的字段保持不动(聚合根 UpdateAction 保证只传要改的)。</summary>
+    internal void Update(string? title, DateTimeOffset? dueDate)
+    {
+        if (!string.IsNullOrWhiteSpace(title)) Title = title.Trim();
+        DueDate = dueDate;
+    }
+
+    internal void SetDone(bool isDone) => IsDone = isDone;
+}
+
+/// <summary>
+/// 分析快照(A3):每次分析成功回写记一条,形成"一条面试多次分析"的时间序列。
+/// 趋势曲线(较上次 ↑/↓n 分)与 F2 页顶结论区的数据源。
+/// </summary>
 // ============================ 领域事件 ============================
 
 public sealed record InterviewEntryCreatedDomainEvent(Guid EntryId, Guid CompanyId,

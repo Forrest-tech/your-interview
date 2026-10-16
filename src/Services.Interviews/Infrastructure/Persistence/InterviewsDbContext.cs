@@ -21,6 +21,12 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
     public DbSet<InterviewRound> Rounds => Set<InterviewRound>();
     public DbSet<GeneratedMaterial> GuidanceMaterials => Set<GeneratedMaterial>();
 
+    /// <summary>待办事项(A2)。</summary>
+    public DbSet<InterviewAction> Actions => Set<InterviewAction>();
+
+    /// <summary>分析快照(A3):每次分析成功回写记一条。</summary>
+    public DbSet<AnalysisSnapshot> AnalysisSnapshots => Set<AnalysisSnapshot>();
+
     /// <summary>分析任务台账(发件箱)。派发器与回写端点共用。</summary>
     public DbSet<AnalysisJob> AnalysisJobs => Set<AnalysisJob>();
 
@@ -105,6 +111,10 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Materials).WithOne().HasForeignKey(m => m.InterviewEntryId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Actions).WithOne().HasForeignKey(a => a.InterviewEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Snapshots).WithOne().HasForeignKey(s => s.InterviewEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // 集合用字段访问模式 + 只读暴露,保证外部不能绕过领域方法直接改集合(封装不变量)
             e.Metadata.FindNavigation(nameof(InterviewEntry.Assets))!
@@ -116,6 +126,10 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Metadata.FindNavigation(nameof(InterviewEntry.Rounds))!
                 .SetPropertyAccessMode(PropertyAccessMode.Field);
             e.Metadata.FindNavigation(nameof(InterviewEntry.Materials))!
+                .SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindNavigation(nameof(InterviewEntry.Actions))!
+                .SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindNavigation(nameof(InterviewEntry.Snapshots))!
                 .SetPropertyAccessMode(PropertyAccessMode.Field);
         });
 
@@ -198,6 +212,25 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.Model).HasMaxLength(200).IsRequired();
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Version }).IsUnique();
+        });
+
+        b.Entity<InterviewAction>(e =>
+        {
+            e.ToTable("actions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Title).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Detail).HasMaxLength(8000);
+            e.HasIndex(x => x.InterviewEntryId);
+        });
+
+        b.Entity<AnalysisSnapshot>(e =>
+        {
+            e.ToTable("analysis_snapshots");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.DimensionsJson).HasColumnType("text");
+            e.Property(x => x.SummaryBulletsJson).HasColumnType("text");
+            e.HasIndex(x => x.InterviewEntryId);
+            e.HasIndex(x => new { x.InterviewEntryId, x.CreatedAt });
         });
 
         b.Entity<AnalysisJob>(e =>

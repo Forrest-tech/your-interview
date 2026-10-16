@@ -85,7 +85,9 @@ public sealed record InterviewEntryDto(
     int AssetCount, int QuestionCount, int WeaknessCount, int RoundCount,
     List<AssetDto> Assets, List<QuestionDto> Questions, List<WeaknessDto> Weaknesses,
     List<RoundDto> Rounds,
-    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
+    string? QuestionsToAskJson = null, int ActionCount = 0,
+    List<ActionDto>? Actions = null);
 
 public sealed record InterviewEntryListItemDto(
     Guid Id, Guid CompanyId, string CompanyName, string Role, int RoundNo,
@@ -120,6 +122,29 @@ public sealed record InterviewStatsDto(
 public sealed record CategoryCountDto(string Category, int Count, double? AverageSeverity = null);
 
 public sealed record TrendPointDto(DateOnly Date, int Score, string CompanyName);
+
+// ============================ Playbook 重做(A1–A7/F3)DTO ============================
+
+/// <summary>A2 待办事项。</summary>
+public sealed record ActionDto(
+    Guid Id, string Title, string? Detail, DateTimeOffset? DueDate, bool IsDone,
+    DateTimeOffset CreatedAt);
+
+/// <summary>A3 分析趋势点:trend 端点只返回这三个字段(按时间 asc)。</summary>
+public sealed record AnalysisTrendPointDto(Guid Id, DateTimeOffset CreatedAt, int? OverallScore);
+
+/// <summary>A4 某题在其它面试中的回答版本。</summary>
+public sealed record QuestionHistoryDto(
+    Guid InterviewId, string CompanyName, string Role, DateOnly? InterviewDate,
+    string? MyAnswerText, int Mastery);
+
+/// <summary>A5 全局技术覆盖:按 Category 聚合。</summary>
+public sealed record CoverageCategoryDto(
+    string Category, int AskedCount, int StuckCount, int MasteredCount, List<string> Interviews);
+
+/// <summary>A7 轮次邮件时间线条目 —— JSON 键与前端契约一致:{from,subject,date,snippet}。</summary>
+public sealed record RoundEmailItem(
+    string? From, string? Subject, string? Date, string? Snippet);
 
 // ============================ 查询 ============================
 
@@ -235,6 +260,22 @@ public sealed record RemoveQuestionCommand(Guid EntryId, Guid QuestionId) : IReq
 /// <summary>A1:设置题目掌握度(0=待练,1=练习中,2=已掌握,3=还卡壳)。</summary>
 public sealed record UpdateQuestionMasteryCommand(Guid EntryId, Guid QuestionId, int Mastery)
     : IRequest<Result>;
+
+/// <summary>A2:待办列表。</summary>
+public sealed record ListActionsQuery(Guid EntryId) : IRequest<Result<IReadOnlyList<ActionDto>>>;
+
+/// <summary>A2:新增待办。</summary>
+public sealed record CreateActionCommand(
+    Guid EntryId, string Title, string? Detail = null, DateTimeOffset? DueDate = null)
+    : IRequest<Result<Guid>>;
+
+/// <summary>A2:部分更新待办(null 字段不动)。</summary>
+public sealed record UpdateActionCommand(
+    Guid EntryId, Guid ActionId, string? Title = null, bool? IsDone = null,
+    DateTimeOffset? DueDate = null) : IRequest<Result>;
+
+/// <summary>A2:删除待办。</summary>
+public sealed record DeleteActionCommand(Guid EntryId, Guid ActionId) : IRequest<Result>;
 
 // ============================ 轮次(缺口1) ============================
 
@@ -370,6 +411,27 @@ public sealed class UpdateQuestionMasteryCommandValidator
     }
 }
 
+public sealed class CreateActionCommandValidator : AbstractValidator<CreateActionCommand>
+{
+    public CreateActionCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.Title).NotEmpty().MaximumLength(500)
+            .WithMessage("待办标题不能为空且不超过 500 字");
+        RuleFor(x => x.Detail).MaximumLength(8000);
+    }
+}
+
+public sealed class UpdateActionCommandValidator : AbstractValidator<UpdateActionCommand>
+{
+    public UpdateActionCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.ActionId).NotEmpty();
+        RuleFor(x => x.Title).MaximumLength(500).When(x => x.Title is not null);
+    }
+}
+
 // ============================ 映射(扩展方法,和 Jobs 服务保持一致风格) ============================
 
 public static class InterviewMappingExtensions
@@ -502,6 +564,7 @@ public sealed class GetEntryQueryHandler(InterviewsDbContext db)
             .Include(x => x.Assets)
             .Include(x => x.Questions)
             .Include(x => x.Weaknesses)
+            .Include(x => x.Actions)
             .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
 
         return e is null
@@ -1500,6 +1563,91 @@ public sealed class UpdateQuestionMasteryCommandHandler(InterviewsDbContext db)
         try
         {
             e.SetQuestionMastery(request.QuestionId, request.Mastery);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+
+/// <summary>A2:待办列表 —— 未完成在前,同组按创建时间 asc。</summary>
+public sealed class ListActionsQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<ListActionsQuery, Result<IReadOnlyList<ActionDto>>>
+{
+    public async Task<Result<IReadOnlyList<ActionDto>>> Handle(ListActionsQuery request,
+        CancellationToken ct)
+    {
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        if (!exists) return Result.Failure<IReadOnlyList<ActionDto>>(Error.NotFound("面试条目"));
+
+        var list = await db.Actions.AsNoTracking()
+            .Where(a => a.InterviewEntryId == request.EntryId)
+            .OrderBy(a => a.IsDone).ThenBy(a => a.CreatedAt)
+            .Select(a => new ActionDto(a.Id, a.Title, a.Detail, a.DueDate, a.IsDone, a.CreatedAt))
+            .ToListAsync(ct);
+        return Result.Success<IReadOnlyList<ActionDto>>(list);
+    }
+}
+
+public sealed class CreateActionCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<CreateActionCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(CreateActionCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Actions)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
+
+        try
+        {
+            var a = e.AddAction(request.Title, request.Detail, request.DueDate);
+            await db.SaveChangesAsync(ct);
+            return Result.Success(a.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure<Guid>(Error.Validation("Action.Invalid", ex.Message));
+        }
+    }
+}
+
+public sealed class UpdateActionCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<UpdateActionCommand, Result>
+{
+    public async Task<Result> Handle(UpdateActionCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Actions)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        try
+        {
+            e.UpdateAction(request.ActionId, request.Title, request.IsDone, request.DueDate);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}
+
+public sealed class DeleteActionCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<DeleteActionCommand, Result>
+{
+    public async Task<Result> Handle(DeleteActionCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Actions)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        try
+        {
+            e.RemoveAction(request.ActionId);
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }

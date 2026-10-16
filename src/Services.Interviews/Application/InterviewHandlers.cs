@@ -288,6 +288,10 @@ public sealed record GetQuestionHistoryQuery(Guid EntryId, Guid QuestionId)
 /// <summary>A5:全局技术覆盖图谱(按 Category 聚合)。</summary>
 public sealed record GetCoverageQuery : IRequest<Result<IReadOnlyList<CoverageCategoryDto>>>;
 
+/// <summary>A7:整体替换某轮次的邮件时间线。</summary>
+public sealed record UpdateRoundEmailsCommand(
+    Guid EntryId, Guid RoundId, List<RoundEmailItem> Emails) : IRequest<Result>;
+
 // ============================ 轮次(缺口1) ============================
 
 public sealed record AddRoundCommand(
@@ -335,14 +339,14 @@ public sealed class UpdateEntryCommandValidator : AbstractValidator<UpdateEntryC
 
 public sealed class AttachAssetCommandValidator : AbstractValidator<AttachAssetCommand>
 {
-    private static readonly string[] AllowedKinds = ["Audio", "Transcript", "Notes"];
+    private static readonly string[] AllowedKinds = ["Audio", "Transcript", "Notes", "Text"];
 
     public AttachAssetCommandValidator()
     {
         RuleFor(x => x.EntryId).NotEmpty();
         RuleFor(x => x.FileName).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Kind).Must(k => AllowedKinds.Contains(k, StringComparer.OrdinalIgnoreCase))
-            .WithMessage("材料类型只能是 Audio / Transcript / Notes");
+            .WithMessage("材料类型只能是 Audio / Transcript / Notes / Text");
         // 文本类材料必须有内容 —— 这条规则挡掉了"传了个空的 Transcript"
         RuleFor(x => x.TranscriptText)
             .NotEmpty()
@@ -440,6 +444,23 @@ public sealed class UpdateActionCommandValidator : AbstractValidator<UpdateActio
         RuleFor(x => x.EntryId).NotEmpty();
         RuleFor(x => x.ActionId).NotEmpty();
         RuleFor(x => x.Title).MaximumLength(500).When(x => x.Title is not null);
+    }
+}
+
+public sealed class UpdateRoundEmailsCommandValidator : AbstractValidator<UpdateRoundEmailsCommand>
+{
+    public UpdateRoundEmailsCommandValidator()
+    {
+        RuleFor(x => x.EntryId).NotEmpty();
+        RuleFor(x => x.RoundId).NotEmpty();
+        RuleFor(x => x.Emails).NotNull().WithMessage("emails 不能为空");
+        RuleForEach(x => x.Emails).ChildRules(email =>
+        {
+            email.RuleFor(e => e.From).MaximumLength(500);
+            email.RuleFor(e => e.Subject).MaximumLength(1000);
+            email.RuleFor(e => e.Date).MaximumLength(100);
+            email.RuleFor(e => e.Snippet).MaximumLength(4000);
+        });
     }
 }
 
@@ -1779,3 +1800,28 @@ public sealed class GetCoverageQueryHandler(InterviewsDbContext db)
     }
 }
 
+/// <summary>A7:整体替换某轮次的邮件时间线(写入 InterviewRound.EmailsJson)。</summary>
+public sealed class UpdateRoundEmailsCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<UpdateRoundEmailsCommand, Result>
+{
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+
+    public async Task<Result> Handle(UpdateRoundEmailsCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.Include(x => x.Rounds)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        try
+        {
+            var json = JsonSerializer.Serialize(request.Emails, JsonOpts);
+            e.SetRoundEmails(request.RoundId, json);
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(Error.NotFound(ex.Message));
+        }
+    }
+}

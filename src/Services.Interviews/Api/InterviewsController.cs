@@ -135,8 +135,20 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         if (body is null)
             return Results.Problem(title: "请求体为空", statusCode: StatusCodes.Status400BadRequest);
 
-        var jr = await sender.Send(new AttachAssetCommand(id, body.Kind, body.FileName,
-            body.ContentType, body.SizeBytes, body.StoragePath, body.BlobUrl, body.TranscriptText,
+        // A6:纯文本资产 —— body 带 textContent 时按 Kind=Text 登记(粘贴文本按钮走这条)。
+        // 文本内容直接就是转写稿,不走 STT;文件名缺省为 pasted-text.txt。
+        var kind = body.Kind;
+        var transcriptText = body.TranscriptText;
+        var fileName = body.FileName;
+        if (!string.IsNullOrWhiteSpace(body.TextContent))
+        {
+            kind = nameof(AssetKind.Text);
+            transcriptText = body.TextContent;
+            if (string.IsNullOrWhiteSpace(fileName)) fileName = "pasted-text.txt";
+        }
+
+        var jr = await sender.Send(new AttachAssetCommand(id, kind, fileName,
+            body.ContentType, body.SizeBytes, body.StoragePath, body.BlobUrl, transcriptText,
             body.TranscriptSegmentsJson, body.DurationSeconds, body.SourceLanguage ?? "en",
             body.Sha256), ct);
         return jr.IsSuccess
@@ -402,6 +414,19 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// A7:整体替换某轮次的邮件时间线 —— body { emails: [{from, subject, date, snippet}] },
+    /// 写入 InterviewRound.EmailsJson。传空数组即清空。
+    /// </summary>
+    [HttpPut("{id:guid}/rounds/{roundId:guid}/emails")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> UpdateRoundEmails(Guid id, Guid roundId,
+        [FromBody] UpdateRoundEmailsBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateRoundEmailsCommand(id, roundId, body.Emails), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     /// <summary>指导材料:手动触发 AI 生成新版本(版本号自动 +1)。</summary>
     [HttpPost("{id:guid}/guidance/generate")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
@@ -548,13 +573,13 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
 public sealed record UpdateEntryBody(
     string CompanyName, string Role, string? CompanyProfile, string? JdText, string? JdSummary,
     int RoundNo, DateOnly? InterviewDate, string? InterviewFormat, string? Interviewers,
-    string? Location, string? Result, string? Notes);
+    string? Location, string? Result, string? Notes, string? QuestionsToAskJson = null);
 
 public sealed record AttachAssetBody(
     string Kind, string FileName, string? ContentType = null, long SizeBytes = 0,
     string? StoragePath = null, string? BlobUrl = null, string? TranscriptText = null,
     string? TranscriptSegmentsJson = null, double? DurationSeconds = null,
-    string? SourceLanguage = null, string? Sha256 = null);
+    string? SourceLanguage = null, string? Sha256 = null, string? TextContent = null);
 
 public sealed record TranscriptBody(string FullText, string? SegmentsJson = null);
 
@@ -599,3 +624,5 @@ public sealed record CreateActionBody(
 public sealed record UpdateActionBody(
     string? Title = null, bool? IsDone = null, DateTimeOffset? DueDate = null);
 
+/// <summary>A7:body { emails: [{from, subject, date, snippet}] }。</summary>
+public sealed record UpdateRoundEmailsBody(List<RoundEmailItem> Emails);

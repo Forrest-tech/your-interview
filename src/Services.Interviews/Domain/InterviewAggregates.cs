@@ -33,7 +33,9 @@ public enum AssetKind
     /// <summary>已有转写文本(比如会议软件导出的字幕)。</summary>
     Transcript,
     /// <summary>自己写的面试纪要,不需要 STT,直接进分析。</summary>
-    Notes
+    Notes,
+    /// <summary>粘贴的纯文本(A6):不需要 STT,直接进分析。</summary>
+    Text
 }
 
 /// <summary>
@@ -246,7 +248,7 @@ public sealed class InterviewEntry : AuditableAggregateRoot
             blobUrl, durationSeconds, sourceLanguage, sha256);
 
         // 文本类材料直接就是"已转写"状态,不需要走 STT
-        if (kind is AssetKind.Transcript or AssetKind.Notes)
+        if (kind is AssetKind.Transcript or AssetKind.Notes or AssetKind.Text)
         {
             if (string.IsNullOrWhiteSpace(transcriptText))
                 throw new InvalidOperationException("文本类材料必须提供内容");
@@ -455,6 +457,15 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         var r = _rounds.FirstOrDefault(x => x.Id == roundId)
             ?? throw new InvalidOperationException("轮次不存在");
         _rounds.Remove(r);
+        Touch();
+    }
+
+    /// <summary>写入轮次的邮件时间线(A7):整体替换 EmailsJson。</summary>
+    public void SetRoundEmails(Guid roundId, string? emailsJson)
+    {
+        var r = _rounds.FirstOrDefault(x => x.Id == roundId)
+            ?? throw new InvalidOperationException("轮次不存在");
+        r.UpdateEmails(emailsJson);
         Touch();
     }
 
@@ -858,6 +869,9 @@ public sealed class InterviewRound : Entity
 
     /// <summary>只记结果,不动其它字段 —— 结果回写不该清掉已填的时间/面试官/形式。</summary>
     internal void RecordOutcome(InterviewRoundOutcome outcome) => Outcome = outcome;
+
+    /// <summary>整体替换邮件时间线(A7)。传 null/空数组即清空。</summary>
+    internal void UpdateEmails(string? emailsJson) => EmailsJson = emailsJson;
 }
 
 /// <summary>轮次结果。存库用字符串,见 DbContext 配置。</summary>

@@ -20,6 +20,13 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog } from '@angular/material/dialog';
 import { SubnavService } from '../../layout/subnav.service';
 import { GuidanceInputDialogComponent } from './guidance-input-dialog.component';
+import { QuestionBankComponent } from './components/qa/question-bank.component';
+import { CoverageMiniComponent } from './components/qa/coverage-mini.component';
+import { AnalysisReportComponent } from './components/analysis/analysis-report.component';
+import { OverviewWidgetsComponent } from './components/analysis/overview-widgets.component';
+import { PrepBriefComponent } from './components/brief/brief.component';
+import { RoundsTimelineComponent } from './components/brief/rounds-timeline.component';
+import { PlaybookHeaderComponent } from './components/brief/playbook-header.component';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -68,7 +75,9 @@ interface QuestionForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatTabsModule, MatFormFieldModule, MatInputModule,
-    MatSelectModule, MatCheckboxModule, MatSnackBarModule, MatDividerModule, MatTooltipModule
+    MatSelectModule, MatCheckboxModule, MatSnackBarModule, MatDividerModule, MatTooltipModule,
+    QuestionBankComponent, CoverageMiniComponent, AnalysisReportComponent, OverviewWidgetsComponent,
+    PrepBriefComponent, RoundsTimelineComponent, PlaybookHeaderComponent
   ],
   templateUrl: './playbook-detail.component.html',
   styleUrl: './playbook-detail.component.scss'
@@ -87,7 +96,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   private readonly subnav = inject(SubnavService);
   readonly auth = inject(AuthService);
 
-  /** 当前选中的 tab(0=Overview, 3=Questions, 4=Assets, 5=Edit)。 */
+  /** 当前选中的 tab(0=Overview, 1=Rounds, 2=Guidance, 3=Questions, 4=Analysis, 5=Assets, 6=Edit)。 */
   readonly selectedTab = signal(0);
   /** 手工补录问答表单是否展开(默认收起)。 */
   readonly showAddQuestion = signal(false);

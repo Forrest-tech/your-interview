@@ -236,39 +236,35 @@
         <!-- 内容块:AI 解析后自动填充;每块可点铅笔行内改 wording -->
         <div class="detail-body">
           @for (b of blocks; track b.key) {
-            @if (blockText(it, b.key) || editingBlock() === b.key) {
-              <section class="block">
-                <header class="block-head">
-                  <mat-icon>{{ b.icon }}</mat-icon>
-                  <span class="block-label">{{ t(b.labelKey) }}</span>
-                  <span class="block-hint">{{ t(b.hintKey) }}</span>
-                  <span class="spacer"></span>
-                  @if (editingBlock() !== b.key) {
-                    <button mat-icon-button class="blk-edit" (click)="startBlockEdit(it, b.key)"
-                            [matTooltip]="t('common.edit')">
-                      <mat-icon>edit</mat-icon>
-                    </button>
-                  }
-                </header>
-                @if (editingBlock() === b.key) {
-                  <textarea matInput class="blk-editor" rows="6"
-                            [(ngModel)]="editDraft"></textarea>
-                  <div class="blk-edit-actions">
-                    <button mat-button (click)="cancelBlockEdit()">{{ t('common.cancel') }}</button>
-                    <button mat-flat-button color="primary" (click)="saveBlockEdit(it, b.key)"
-                            [disabled]="savingBlock()">
-                      {{ t('common.save') }}
-                    </button>
-                  </div>
-                } @else {
-                  <p class="block-text">{{ blockText(it, b.key) }}</p>
+            <section class="block" [class.block-empty]="!blockText(it, b.key) && editingBlock() !== b.key">
+              <header class="block-head">
+                <mat-icon>{{ b.icon }}</mat-icon>
+                <span class="block-label">{{ t(b.labelKey) }}</span>
+                <span class="block-hint">{{ t(b.hintKey) }}</span>
+                <span class="spacer"></span>
+                @if (editingBlock() !== b.key) {
+                  <button mat-icon-button class="blk-edit" (click)="startBlockEdit(it, b.key)"
+                          [matTooltip]="t('common.edit')">
+                    <mat-icon>edit</mat-icon>
+                  </button>
                 }
-              </section>
-            }
-          }
-
-          @if (allBlocksEmpty(it) && !editingBlock()) {
-            <p class="empty">{{ t('ts.blocks.empty') }}</p>
+              </header>
+              @if (editingBlock() === b.key) {
+                <textarea matInput class="blk-editor" rows="6"
+                          [(ngModel)]="editDraft"></textarea>
+                <div class="blk-edit-actions">
+                  <button mat-button (click)="cancelBlockEdit()">{{ t('common.cancel') }}</button>
+                  <button mat-flat-button color="primary" (click)="saveBlockEdit(it, b.key)"
+                          [disabled]="savingBlock()">
+                    {{ t('common.save') }}
+                  </button>
+                </div>
+              } @else if (blockText(it, b.key)) {
+                <p class="block-text">{{ blockText(it, b.key) }}</p>
+              } @else {
+                <p class="block-empty-hint">{{ t('ts.block.emptyHint') }}</p>
+              }
+            </section>
           }
         </div>
       } @else {

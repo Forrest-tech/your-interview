@@ -25,7 +25,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
-  InterviewRound, InterviewStatus, InterviewWeakness, OfferProbability, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
+  InterviewRound, InterviewStatus, OfferProbability, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -47,16 +47,6 @@ interface QuestionForm {
   gotStuck: boolean;
   stuckReason: string;
   recommendedAnswer: string;
-}
-
-/** 手工新增短板的表单。 */
-interface WeaknessForm {
-  category: string;
-  title: string;
-  detail: string;
-  evidence: string;
-  suggestion: string;
-  severity: number;
 }
 
 /**
@@ -125,10 +115,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   ];
 
   readonly questionCategories = ['Technical', 'SystemDesign', 'Behavioral', 'Coding', 'Culture', 'Other'];
-  readonly weaknessCategories = [
-    'Pronunciation', 'Fluency', 'Structure', 'TechnicalDepth', 'Relevance',
-    'SentenceIntegrity', 'Communication', 'Other'
-  ];
 
   /** 轮次阶段 / 结果选项 —— 与后端 InterviewRoundOutcome / Stage 约定一致。 */
   readonly roundStages = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
@@ -148,7 +134,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   // 表单模型(非 signal —— 它们只在提交那一刻被读,不需要触发变更检测)
   questionForm: QuestionForm = this.emptyQuestionForm();
-  weaknessForm: WeaknessForm = this.emptyWeaknessForm();
 
   /**
    * 表单复位工厂。
@@ -159,12 +144,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     return {
       questionText: '', myAnswerText: '', assessment: '', category: '',
       difficulty: 3, gotStuck: false, stuckReason: '', recommendedAnswer: ''
-    };
-  }
-
-  private emptyWeaknessForm(): WeaknessForm {
-    return {
-      category: '', title: '', detail: '', evidence: '', suggestion: '', severity: 3
     };
   }
   transcriptDrafts: Record<string, string> = {};
@@ -178,7 +157,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   editLoaded = false;
 
   readonly questions = computed(() => this.entry()?.questions ?? []);
-  readonly weaknesses = computed(() => this.entry()?.weaknesses ?? []);
   readonly assets = computed(() => this.entry()?.assets ?? []);
   readonly rounds = computed(() => this.entry()?.rounds ?? []);
 
@@ -1169,50 +1147,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ---------------------------------------------------------------- 短板
-
-  addWeakness(): void {
-    if (!this.weaknessForm.title.trim()) {
-      this.snack.open(this.t('pb.weakness.titleRequired'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
-
-    this.busy.set('weakness');
-    const body = {
-      category: this.weaknessForm.category || 'Other',
-      title: this.weaknessForm.title.trim(),
-      detail: this.weaknessForm.detail || null,
-      evidence: this.weaknessForm.evidence || null,
-      severity: this.weaknessForm.severity || 3,
-      suggestion: this.weaknessForm.suggestion || null
-    };
-
-    this.api.post<{ id: string }>(`/api/interviews/${this.id()}/weaknesses`, body).subscribe({
-      next: () => {
-        this.busy.set(null);
-        this.weaknessForm = this.emptyWeaknessForm();
-        this.snack.open(this.t('pb.weakness.added'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => {
-        this.busy.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-      }
-    });
-  }
-
-  removeWeakness(w: InterviewWeakness): void {
-    if (!confirm(this.t('pb.weakness.confirmDelete').replace('{title}', w.title))) return;
-
-    this.api.delete<void>(`/api/interviews/${this.id()}/weaknesses/${w.id}`).subscribe({
-      next: () => {
-        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
-    });
-  }
-
   // ---------------------------------------------------------------- 编辑
 
   private fillEditForm(d: InterviewDetail): void {
@@ -1293,12 +1227,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     if (score >= 75) return 'good';
     if (score >= 55) return 'mid';
     return 'bad';
-  }
-
-  severityClass(sev: number): string {
-    if (sev >= 4) return 'bad';
-    if (sev >= 3) return 'mid';
-    return 'low';
   }
 
   humanSize(bytes: number): string {

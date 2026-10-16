@@ -82,10 +82,6 @@
         <div class="metric-val">{{ s.averageOverallScore ?? '—' }}</div>
         <div class="metric-label">{{ t('pb.stat.avgScore') }}</div>
       </mat-card>
-      <mat-card class="metric highlight">
-        <div class="metric-val">{{ s.totalWeaknesses }}</div>
-        <div class="metric-label">{{ t('pb.stat.weaknesses') }}</div>
-      </mat-card>
     </section>
   }
 
@@ -176,7 +172,6 @@
 
           <div class="counts">
             <span [title]="t('playbook.qaCount')"><mat-icon inline>help_outline</mat-icon> {{ e.questionCount ?? 0 }}</span>
-            <span [title]="t('playbook.weakCount')"><mat-icon inline>report_problem</mat-icon> {{ e.weaknessCount ?? 0 }}</span>
             <span [title]="t('playbook.assetCount')"><mat-icon inline>attach_file</mat-icon> {{ e.assetCount ?? 0 }}</span>
             @if (e.hasTranscript) {
               <span class="has-transcript"><mat-icon inline>check_circle</mat-icon> {{ t('pb.card.transcribed') }}</span>

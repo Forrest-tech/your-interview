@@ -97,7 +97,8 @@ export class QuestionBankComponent {
     // 父组件 entry 加载/刷新/轮询时同步题目;本地增删改成功后先 patch 本地信号,
     // 再经 changed 输出通知父组件重拉(回来的数据与本地一致,覆盖无风险)。
     // 回答草稿 editingId/answerDrafts 存放在独立信号中,不受同步影响。
-    effect(() => { this.questions.set(this.questionsInput()); });
+    // allowSignalWrites:effect 内写 signal 需显式允许(否则 NG0600)。
+    effect(() => { this.questions.set(this.questionsInput()); }, { allowSignalWrites: true });
   }
 
   // ---------------- 顶部聚合头 ----------------

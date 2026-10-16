@@ -20,7 +20,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeItem, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged } from '../../core/models/api.models';
 import {
-  KnowledgeSourceCompany, KnowledgeSourceTrail, KnowledgeDuplicateGroup
+  KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
 import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
@@ -170,7 +170,6 @@ export class TechStackComponent implements OnInit {
   /** 来源公司清单。接口不可用时为 null,整条筛选行隐藏而不是显示空选项。 */
   readonly sourceCompanies = signal<KnowledgeSourceCompany[] | null>(null);
   /** 当前选中条目的来源反查结果。 */
-  readonly trail = signal<KnowledgeSourceTrail | null>(null);
   /** 重复条目组数(0 = 无重复,入口隐藏)。 */
   readonly duplicateGroups = signal<KnowledgeDuplicateGroup[]>([]);
 
@@ -387,24 +386,10 @@ export class TechStackComponent implements OnInit {
 
   select(item: KnowledgeItem): void {
     this.selected.set(item);
-    this.loadTrail(item.id);
   }
 
   isSelected(item: KnowledgeItem): boolean {
     return this.selected()?.id === item.id;
-  }
-
-  /**
-   * 反查当前条目的来源(需求 6.4.4)。
-   * 失败不留旧值 —— 换条目时残留上一题的来源是最难察觉的一类错。
-   */
-  loadTrail(id: string): void {
-    this.trail.set(null);
-    this.api.get<KnowledgeSourceTrail>(`/api/knowledge/${id}/trail`)
-      .pipe(catchError(() => of(null)))
-      .subscribe((t) => {
-        if (t && this.selected()?.id === id) this.trail.set(t);
-      });
   }
 
   /** 来源标记文案。没有来源信息时返回 null。 */
@@ -432,20 +417,6 @@ export class TechStackComponent implements OnInit {
   /** 来源标记 tooltip:不可跳转。 */
   sourceFromTooltip(src: string): string {
     return this.i18n.t('ts.source.from').replace('{src}', src);
-  }
-
-  /** 同场面试题默认收起,点标题展开。 */
-  readonly siblingsOpen = signal(false);
-
-  /** 跳回来源:同一场面试一起进来的题,点一下就切过去 —— 反查的落点在"能跳转"。 */
-  selectSibling(id: string): void {
-    const hit = this.items().find((i) => i.id === id);
-    if (hit) { this.select(hit); return; }
-    // 不在当前页(被筛掉)时直接取详情再选中
-    this.api.get<KnowledgeItem>(`/api/knowledge/${id}`).subscribe({
-      next: (it) => { this.selected.set(it); this.loadTrail(it.id); },
-      error: (e: Error) => this.notify(e.message, true)
-    });
   }
 
   openCreate(): void {

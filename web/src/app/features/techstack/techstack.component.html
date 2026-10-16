@@ -234,41 +234,6 @@
         </div>
 
         <!-- 来源反查(需求 6.4.4):这题是哪家公司、第几轮、哪一场问住的 -->
-        @if (trail(); as tr) {
-          @if (tr.company || tr.date || tr.roundNo || tr.entryId) {
-            <mat-card class="trail">
-              <div class="trail-head">
-                <mat-icon>history_edu</mat-icon>
-                <span class="trail-title">{{ t('ts.trail.title') }}</span>
-                @if (tr.roundStage) { <span class="trail-stage">{{ tr.roundStage }}</span> }
-              </div>
-              <div class="trail-body">
-                @if (tr.company) { <span class="trail-item">{{ t('ts.trail.company').replace('{v}', tr.company) }}</span> }
-                @if (tr.roundNo) { <span class="trail-item">{{ tn('pb.round', tr.roundNo) }}</span> }
-                @if (tr.date) { <span class="trail-item">{{ t('ts.trail.date').replace('{v}', tr.date) }}</span> }
-              </div>
-              @if (tr.siblings.length > 0) {
-                <div class="trail-siblings">
-                  <button class="trail-sub-toggle" (click)="siblingsOpen.set(!siblingsOpen())">
-                    <mat-icon>{{ siblingsOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    <span class="trail-sub">{{ tn('ts.trail.siblings', tr.siblings.length) }}</span>
-                  </button>
-                  @if (siblingsOpen()) {
-                    @for (s of tr.siblings; track s.id) {
-                      <button class="sib" (click)="selectSibling(s.id)">
-                        <span class="sib-title">{{ s.title }}</span>
-                        <span class="li-mastery" [class]="masteryClass(s.mastery)">
-                          {{ masteryLabel(s.mastery) }}
-                        </span>
-                      </button>
-                    }
-                  }
-                </div>
-              }
-            </mat-card>
-          }
-        }
-
         <div class="detail-body">
           @for (b of blocks; track b.key) {
             @if (blockText(it, b.key)) {

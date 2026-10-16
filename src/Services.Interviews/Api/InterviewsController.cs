@@ -315,6 +315,17 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    // ---------------- 分析快照趋势(A3) ----------------
+
+    /// <summary>A3:分析趋势 —— 该条目的快照按时间 asc,只返回 id/createdAt/overallScore。</summary>
+    [HttpGet("{id:guid}/analysis/trend")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> AnalysisTrend(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetAnalysisTrendQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>全局 upcoming:未来 30 天内所有条目的轮次(日历视图用)。</summary>
     [HttpGet("rounds/upcoming")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]

@@ -277,6 +277,10 @@ public sealed record UpdateActionCommand(
 /// <summary>A2:删除待办。</summary>
 public sealed record DeleteActionCommand(Guid EntryId, Guid ActionId) : IRequest<Result>;
 
+/// <summary>A3:分析趋势(按时间 asc 的快照列表)。</summary>
+public sealed record GetAnalysisTrendQuery(Guid EntryId)
+    : IRequest<Result<IReadOnlyList<AnalysisTrendPointDto>>>;
+
 // ============================ 轮次(缺口1) ============================
 
 public sealed record AddRoundCommand(
@@ -955,7 +959,8 @@ public sealed class ApplyAnalysisCommandHandler(InterviewsDbContext db)
     public async Task<Result> Handle(ApplyAnalysisCommand request, CancellationToken ct)
     {
         var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
-            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .Include(x => x.Weaknesses).Include(x => x.Snapshots)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -964,6 +969,13 @@ public sealed class ApplyAnalysisCommandHandler(InterviewsDbContext db)
                 request.Structure, request.TechnicalDepth, request.Relevance, request.Summary,
                 request.Questions, request.Weaknesses, request.SpeechMetricsJson,
                 request.CandidateTranscript);
+            // A3:每次分析成功回写记一条快照 —— 趋势曲线与"较上次"对比的数据源。
+            // DimensionsJson 存 6 维可空分数;Summary 按句切成 3~5 条一句话结论。
+            e.AddAnalysisSnapshot(request.Overall,
+                PlaybookText.BuildDimensionsJson(request.Overall, request.Pronunciation,
+                    request.Fluency, request.Structure, request.TechnicalDepth,
+                    request.Relevance),
+                PlaybookText.SummaryToBulletsJson(request.Summary));
             // 分析结果回写 = 流水线终点:同事务关单
             await db.StageCloseOpenJobsAsync(request.EntryId, AnalysisJobStatus.Succeeded, null, ct);
             await db.SaveChangesAsync(ct);
@@ -1655,6 +1667,108 @@ public sealed class DeleteActionCommandHandler(InterviewsDbContext db)
         {
             return Result.Failure(Error.NotFound(ex.Message));
         }
+    }
+}
+
+/// <summary>A3:分析趋势 —— 该条目的快照按时间 asc,只返回 id/createdAt/overallScore。</summary>
+public sealed class GetAnalysisTrendQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetAnalysisTrendQuery, Result<IReadOnlyList<AnalysisTrendPointDto>>>
+{
+    public async Task<Result<IReadOnlyList<AnalysisTrendPointDto>>> Handle(
+        GetAnalysisTrendQuery request, CancellationToken ct)
+    {
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        if (!exists)
+            return Result.Failure<IReadOnlyList<AnalysisTrendPointDto>>(Error.NotFound("面试条目"));
+
+        var list = await db.AnalysisSnapshots.AsNoTracking()
+            .Where(s => s.InterviewEntryId == request.EntryId)
+            .OrderBy(s => s.CreatedAt)
+            .Select(s => new AnalysisTrendPointDto(s.Id, s.CreatedAt, s.OverallScore))
+            .ToListAsync(ct);
+        return Result.Success<IReadOnlyList<AnalysisTrendPointDto>>(list);
+    }
+}
+
+/// <summary>
+/// A4:该题在其它面试中的回答版本。
+/// 匹配规则:v1 只做归一化(小写去标点去空白)后的精确相等,不做语义相似(按 spec)。
+/// 归一化函数进不了 SQL 翻译,先拉候选行再内存过滤 —— 问答表是用户个人数据,量级可控。
+/// </summary>
+public sealed class GetQuestionHistoryQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetQuestionHistoryQuery, Result<IReadOnlyList<QuestionHistoryDto>>>
+{
+    public async Task<Result<IReadOnlyList<QuestionHistoryDto>>> Handle(
+        GetQuestionHistoryQuery request, CancellationToken ct)
+    {
+        var target = await db.Questions.AsNoTracking()
+            .Where(q => q.Id == request.QuestionId && q.InterviewEntryId == request.EntryId)
+            .Select(q => q.QuestionText)
+            .FirstOrDefaultAsync(ct);
+        if (target is null)
+            return Result.Failure<IReadOnlyList<QuestionHistoryDto>>(Error.NotFound("问题"));
+
+        var normalized = PlaybookText.NormalizeQuestionText(target);
+        if (string.IsNullOrEmpty(normalized))
+            return Result.Success<IReadOnlyList<QuestionHistoryDto>>([]);
+
+        var rows = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Questions, (e, q) => new { e, q })
+            .Where(x => x.q.Id != request.QuestionId)
+            .Select(x => new
+            {
+                InterviewId = x.e.Id,
+                x.e.CompanyName,
+                x.e.Role,
+                x.e.InterviewDate,
+                x.q.QuestionText,
+                x.q.MyAnswerText,
+                x.q.Mastery
+            })
+            .ToListAsync(ct);
+
+        var list = rows
+            .Where(x => PlaybookText.NormalizeQuestionText(x.QuestionText) == normalized)
+            .OrderByDescending(x => x.InterviewDate ?? DateOnly.MinValue)
+            .Select(x => new QuestionHistoryDto(x.InterviewId, x.CompanyName, x.Role,
+                x.InterviewDate, x.MyAnswerText, x.Mastery))
+            .ToList();
+        return Result.Success<IReadOnlyList<QuestionHistoryDto>>(list);
+    }
+}
+
+/// <summary>
+/// A5:全局技术覆盖图谱 —— 按 Category 聚合全部问答。
+/// askedCount=被问次数,stuckCount=卡壳数,masteredCount=已掌握数(Mastery==2),
+/// interviews=出过该类题的公司名(去重,按字母序)。
+/// </summary>
+public sealed class GetCoverageQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetCoverageQuery, Result<IReadOnlyList<CoverageCategoryDto>>>
+{
+    public async Task<Result<IReadOnlyList<CoverageCategoryDto>>> Handle(
+        GetCoverageQuery request, CancellationToken ct)
+    {
+        var rows = await db.Entries.AsNoTracking()
+            .SelectMany(e => e.Questions, (e, q) => new
+            {
+                Category = q.Category.ToString(),
+                q.GotStuck,
+                q.Mastery,
+                e.CompanyName
+            })
+            .ToListAsync(ct);
+
+        var list = rows
+            .GroupBy(x => x.Category)
+            .Select(g => new CoverageCategoryDto(
+                g.Key,
+                g.Count(),
+                g.Count(x => x.GotStuck),
+                g.Count(x => x.Mastery == 2),
+                g.Select(x => x.CompanyName).Distinct().OrderBy(c => c).ToList()))
+            .OrderByDescending(x => x.AskedCount)
+            .ToList();
+        return Result.Success<IReadOnlyList<CoverageCategoryDto>>(list);
     }
 }
 

@@ -492,6 +492,18 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Touch();
     }
 
+    // ============================ 分析快照(A3) ============================
+
+    /// <summary>记一条分析快照:每次分析成功回写时调用,趋势曲线与"较上次"对比的数据源。</summary>
+    public AnalysisSnapshot AddAnalysisSnapshot(int? overallScore, string? dimensionsJson,
+        string? summaryBulletsJson)
+    {
+        var s = new AnalysisSnapshot(Id, overallScore, dimensionsJson, summaryBulletsJson);
+        _snapshots.Add(s);
+        Touch();
+        return s;
+    }
+
     /// <summary>新增一份指导材料,版本号自动取 max+1。</summary>
     public GeneratedMaterial AddMaterial(string contentMarkdown, string model,
         int? promptTokens = null, int? completionTokens = null)
@@ -948,6 +960,40 @@ public sealed class InterviewAction : Entity
 /// 分析快照(A3):每次分析成功回写记一条,形成"一条面试多次分析"的时间序列。
 /// 趋势曲线(较上次 ↑/↓n 分)与 F2 页顶结论区的数据源。
 /// </summary>
+public sealed class AnalysisSnapshot : Entity
+{
+    private AnalysisSnapshot() { }
+
+    internal AnalysisSnapshot(Guid interviewEntryId, int? overallScore,
+        string? dimensionsJson, string? summaryBulletsJson)
+    {
+        InterviewEntryId = interviewEntryId;
+        OverallScore = overallScore;
+        DimensionsJson = dimensionsJson;
+        SummaryBulletsJson = summaryBulletsJson;
+        CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Guid InterviewEntryId { get; private set; }
+
+    /// <summary>
+    /// 总分,可空:文本模式(粘贴文本、无音频)下发音未测量,极端情况下可能无总分。
+    /// 当前 Worker 总是算出总分(非空维度的均值),这里留可空是给未来/手工回写留余地。
+    /// </summary>
+    public int? OverallScore { get; private set; }
+
+    /// <summary>
+    /// 六维分数 JSON:{overall,pronunciation,fluency,structure,technicalDepth,relevance}。
+    /// 各维度可空(如文本模式的 pronunciation 为 null),前端按"未测量"展示。
+    /// </summary>
+    public string? DimensionsJson { get; private set; }
+
+    /// <summary>3~5 条一句话结论的 JSON 数组(由回写时的 Summary 句子切分得到)。</summary>
+    public string? SummaryBulletsJson { get; private set; }
+
+    public DateTimeOffset CreatedAt { get; private set; }
+}
+
 // ============================ 领域事件 ============================
 
 public sealed record InterviewEntryCreatedDomainEvent(Guid EntryId, Guid CompanyId,

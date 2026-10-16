@@ -77,7 +77,8 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     {
         var r = await sender.Send(new UpdateEntryCommand(id, body.CompanyName, body.Role,
             body.CompanyProfile, body.JdText, body.JdSummary, body.RoundNo, body.InterviewDate,
-            body.InterviewFormat, body.Interviewers, body.Location, body.Result, body.Notes), ct);
+            body.InterviewFormat, body.Interviewers, body.Location, body.Result, body.Notes,
+            body.QuestionsToAskJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 

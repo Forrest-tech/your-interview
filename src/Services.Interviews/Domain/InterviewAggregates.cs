@@ -139,6 +139,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     /// <summary>JD 要点摘要(自己或 AI 提炼)。</summary>
     public string? JdSummary { get; private set; }
 
+    /// <summary>"我要问面试官的问题"JSON 数组(F3):[{text, checked?}]。</summary>
+    public string? QuestionsToAskJson { get; private set; }
+
     // ---------- 面试场次信息 ----------
     public int RoundNo { get; private set; } = 1;
     public DateOnly? InterviewDate { get; private set; }
@@ -208,7 +211,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
 
     public void UpdateBasicInfo(string companyName, string role, string? companyProfile,
         string? jdText, string? jdSummary, int roundNo, DateOnly? interviewDate,
-        string? interviewFormat, string? interviewers, string? location, string? result, string? notes)
+        string? interviewFormat, string? interviewers, string? location, string? result, string? notes,
+        string? questionsToAskJson = null)
     {
         // 面试结果首次填写或变更(M1.5):关联了 Tracker 申请才发回写事件。
         // 空值/没变化/没关联都不发 —— 别让每次编辑都触发下游同步。
@@ -228,6 +232,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Location = location;
         Result = result;
         Notes = notes;
+        // 可选字段:null = 本次没带,不覆盖已有值 —— 避免旧前端/旧调用把清单清空。
+        if (questionsToAskJson is not null)
+            QuestionsToAskJson = questionsToAskJson;
         Touch();
 
         if (outcomeRecorded)

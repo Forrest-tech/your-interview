@@ -183,7 +183,8 @@ public sealed record CreateEntryCommand(
 public sealed record UpdateEntryCommand(
     Guid Id, string CompanyName, string Role, string? CompanyProfile, string? JdText,
     string? JdSummary, int RoundNo, DateOnly? InterviewDate, string? InterviewFormat,
-    string? Interviewers, string? Location, string? Result, string? Notes) : IRequest<Result>;
+    string? Interviewers, string? Location, string? Result, string? Notes,
+    string? QuestionsToAskJson = null) : IRequest<Result>;
 
 public sealed record DeleteEntryCommand(Guid Id) : IRequest<Result>;
 
@@ -512,7 +513,10 @@ public static class InterviewMappingExtensions
         e.Questions.OrderBy(x => x.Sequence).Select(x => x.ToDto()).ToList(),
         e.Weaknesses.OrderByDescending(x => x.Severity).Select(x => x.ToDto()).ToList(),
         e.Rounds.OrderBy(x => x.Order).Select(x => x.ToDto()).ToList(),
-        e.CreatedAt, e.UpdatedAt);
+        e.CreatedAt, e.UpdatedAt,
+        e.QuestionsToAskJson, e.Actions.Count,
+        e.Actions.OrderBy(x => x.IsDone).ThenBy(x => x.CreatedAt)
+            .Select(x => x.ToDto()).ToList());
 
     /// <summary>指标 JSON 反序列化:坏数据/缺字段时返回 null,前端按"无指标"处理。</summary>
     private static SpeechMetricsDto? ParseSpeechMetrics(string? json)
@@ -778,7 +782,7 @@ public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
         e.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,
             request.JdText, request.JdSummary, request.RoundNo, request.InterviewDate,
             request.InterviewFormat, request.Interviewers, request.Location, request.Result,
-            request.Notes);
+            request.Notes, request.QuestionsToAskJson);
 
         await db.SaveChangesAsync(ct);
         return Result.Success();

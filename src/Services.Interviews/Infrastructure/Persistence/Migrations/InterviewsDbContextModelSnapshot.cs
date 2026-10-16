@@ -91,6 +91,36 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.ToTable("analysis_jobs", "interviews");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.AnalysisSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DimensionsJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("InterviewEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("OverallScore")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SummaryBulletsJson")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InterviewEntryId");
+
+                    b.HasIndex("InterviewEntryId", "CreatedAt");
+
+                    b.ToTable("analysis_snapshots", "interviews");
+                });
+
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.GeneratedMaterial", b =>
                 {
                     b.Property<Guid>("Id")
@@ -129,6 +159,40 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .IsUnique();
 
                     b.ToTable("guidance_materials", "interviews");
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewAction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<DateTimeOffset?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InterviewEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDone")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InterviewEntryId");
+
+                    b.ToTable("actions", "interviews");
                 });
 
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewAsset", b =>
@@ -283,6 +347,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<int?>("PronunciationScore")
                         .HasColumnType("integer");
 
+                    b.Property<string>("QuestionsToAskJson")
+                        .HasColumnType("text");
+
                     b.Property<int?>("RelevanceScore")
                         .HasColumnType("integer");
 
@@ -367,6 +434,11 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
 
                     b.Property<Guid>("InterviewEntryId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Mastery")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<string>("MissedPointsJson")
                         .HasMaxLength(8000)
@@ -535,10 +607,28 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.ToTable("weaknesses", "interviews");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.AnalysisSnapshot", b =>
+                {
+                    b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
+                        .WithMany("Snapshots")
+                        .HasForeignKey("InterviewEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.GeneratedMaterial", b =>
                 {
                     b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
                         .WithMany("Materials")
+                        .HasForeignKey("InterviewEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewAction", b =>
+                {
+                    b.HasOne("YourInterview.Services.Interviews.Domain.InterviewEntry", null)
+                        .WithMany("Actions")
                         .HasForeignKey("InterviewEntryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -582,6 +672,8 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
 
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.InterviewEntry", b =>
                 {
+                    b.Navigation("Actions");
+
                     b.Navigation("Assets");
 
                     b.Navigation("Materials");
@@ -589,6 +681,8 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Navigation("Questions");
 
                     b.Navigation("Rounds");
+
+                    b.Navigation("Snapshots");
 
                     b.Navigation("Weaknesses");
                 });

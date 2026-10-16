@@ -286,6 +286,7 @@
 .content:has(> .practice-page),
 .content:has(> app-tracker),
 .content:has(> app-playbook),
+.content:has(> app-playbook-detail),
 .content:has(> app-techstack) {
   padding: 0;
   overflow: hidden;            /* 内部自己滚,外层不滚 */

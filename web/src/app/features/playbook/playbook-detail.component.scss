@@ -4,10 +4,11 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 4px;
-  /* 页面整体定高、不出现外层滚动条;只有 tab 内容区独立滚动 */
-  height: calc(100vh - 120px);
+  padding: 16px 20px;
+  /* 页面整体占满内容区、不出现外层滚动条;只有 tab 内容区独立滚动 */
+  height: 100%;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .back {

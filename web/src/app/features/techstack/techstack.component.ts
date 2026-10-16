@@ -519,7 +519,7 @@ export class TechStackComponent implements OnInit {
     const payload: Record<string, unknown> = {
       title: item.title,
       topic: item.topic,
-      question: item.question ?? null,
+      question: item.question ?? '',
       conceptExplanation: item.conceptExplanation ?? null,
       keyPointsJson: item.keyPointsJson ?? null,
       commonMistakesJson: item.commonMistakesJson ?? null,

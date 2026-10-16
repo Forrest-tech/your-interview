@@ -34,7 +34,8 @@ public sealed record WeaknessDto(
 
 public sealed record RoundDto(
     Guid Id, int Order, string Stage, DateOnly? ScheduledDate, string? Interviewers,
-    string? Format, string? Location, string Outcome, string? Notes, string? Feedback);
+    string? Format, string? Location, string Outcome, string? Notes, string? Feedback,
+    string? MeetingLink, string? ScheduledTime, string? EmailsJson, string? Transcript);
 
 /// <summary>全局 upcoming:跨所有条目的未来轮次,带公司/职位上下文,供日历视图用。</summary>
 public sealed record UpcomingRoundDto(
@@ -499,7 +500,8 @@ public static class InterviewMappingExtensions
 
     public static RoundDto ToDto(this InterviewRound r) => new(
         r.Id, r.Order, r.Stage, r.ScheduledDate, r.Interviewers, r.Format, r.Location,
-        r.Outcome.ToString(), r.Notes, r.Feedback);
+        r.Outcome.ToString(), r.Notes, r.Feedback,
+        r.MeetingLink, r.ScheduledTime, r.EmailsJson, r.Transcript);
 
     public static GuidanceMaterialDto ToDto(this GeneratedMaterial m) => new(
         m.Id, m.Version, m.ContentMarkdown, m.Model, m.GeneratedAt,

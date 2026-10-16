@@ -33,9 +33,9 @@
     </mat-card>
   }
 
-  <!-- 未完成的练习优先展示:这是用户此刻最可能想点的 -->
+  <!-- 未完成的练习优先展示:这是用户此刻最可能想点的(子导航"概览"锚点目标) -->
   @if (inProgress().length > 0) {
-    <section class="section">
+    <section class="section" id="overview">
       <h3 class="section-title">{{ t('mock.continuePracticing') }}</h3>
       <div class="grid">
         @for (s of inProgress(); track s.id) {

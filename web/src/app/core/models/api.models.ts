@@ -445,6 +445,8 @@ export interface KnowledgeItem {
   easinessFactor?: number;
   repetitionStreak?: number;
   conceptExplanation?: string;
+  myAnswer?: string;
+  betterAnswer?: string;
   keyPointsJson?: string;
   commonMistakesJson?: string;
   referencesJson?: string;

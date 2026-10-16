@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -9,6 +9,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
 import { I18nService } from '../../core/i18n/i18n.service';
+import type { KnowledgeItem } from '../../core/models/api.models';
+
+/** 编辑时传入已有条目;新增时传 null/不传。 */
+export interface KnowledgeDialogData {
+  item?: KnowledgeItem | null;
+}
 
 /** 新增条目的表单模型(仅本对话框内部使用)。 */
 export interface KnowledgeForm {
@@ -18,6 +24,10 @@ export interface KnowledgeForm {
   conceptExplanation: string;
   keyPoints: string;
   commonMistakes: string;
+  /** 我面试时实际的答案。 */
+  myAnswer: string;
+  /** 推荐的标准答案/更好的答法。 */
+  betterAnswer: string;
   difficulty: number;
   importance: number;
   /** 来源公司(可选)。填了就标成"来自实战机经",为反查留线索。 */
@@ -45,7 +55,7 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
     MatInputModule, MatSelectModule, MatButtonModule, MatIconModule
   ],
   template: `
-    <h2 mat-dialog-title>{{ t('ts.dialog.title') }}</h2>
+    <h2 mat-dialog-title>{{ t(isEdit ? 'ts.dialog.editTitle' : 'ts.dialog.title') }}</h2>
 
     <mat-dialog-content class="dlg">
       <mat-form-field appearance="outline" class="full">
@@ -83,6 +93,18 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
         <mat-label>{{ t('ts.dialog.mistakesLabel') }}</mat-label>
         <textarea matInput name="commonMistakes" [(ngModel)]="form.commonMistakes" rows="3"
                   [placeholder]="t('ts.dialog.mistakesPh')"></textarea>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('ts.block.myAnswer') }}</mat-label>
+        <textarea matInput name="myAnswer" [(ngModel)]="form.myAnswer" rows="4"
+                  [placeholder]="t('ts.block.myAnswerHint')"></textarea>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('ts.block.betterAnswer') }}</mat-label>
+        <textarea matInput name="betterAnswer" [(ngModel)]="form.betterAnswer" rows="4"
+                  [placeholder]="t('ts.block.betterAnswerHint')"></textarea>
       </mat-form-field>
 
       <div class="src-box">
@@ -154,7 +176,11 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
 export class KnowledgeDialogComponent {
   private readonly ref = inject(MatDialogRef<KnowledgeDialogComponent>);
   private readonly i18n = inject(I18nService);
+  private readonly data = inject<KnowledgeDialogData>(MAT_DIALOG_DATA, { optional: true });
   t = (key: string): string => this.i18n.t(key);
+
+  /** 编辑模式:传入了已有条目。 */
+  readonly isEdit = !!this.data?.item;
 
   readonly stages = ROUND_STAGES;
   /** 轮次类型 → 本地化标签(找不到键时回退英文枚举)。 */
@@ -164,11 +190,42 @@ export class KnowledgeDialogComponent {
     return translated !== key ? translated : s;
   }
 
-  form: KnowledgeForm = {
-    title: '', topic: '', question: '', conceptExplanation: '',
-    keyPoints: '', commonMistakes: '', difficulty: 3, importance: 3,
-    sourceCompanyName: '', sourceRoundNo: null, sourceRoundStage: null, sourceDate: null
-  };
+  form: KnowledgeForm = this.buildForm();
+
+  /** 新增给空表单;编辑把已有条目反填回去(JSON 数组转回"一行一条")。 */
+  private buildForm(): KnowledgeForm {
+    const it = this.data?.item;
+    if (!it) {
+      return {
+        title: '', topic: '', question: '', conceptExplanation: '',
+        keyPoints: '', commonMistakes: '', myAnswer: '', betterAnswer: '',
+        difficulty: 3, importance: 3,
+        sourceCompanyName: '', sourceRoundNo: null, sourceRoundStage: null, sourceDate: null
+      };
+    }
+    return {
+      title: it.title ?? '',
+      topic: it.topic ?? '',
+      question: it.question ?? '',
+      conceptExplanation: it.conceptExplanation ?? '',
+      keyPoints: this.fromJsonList(it.keyPointsJson),
+      commonMistakes: this.fromJsonList(it.commonMistakesJson),
+      myAnswer: it.myAnswer ?? '',
+      betterAnswer: it.betterAnswer ?? '',
+      difficulty: it.difficulty ?? 3,
+      importance: it.importance ?? 3,
+      sourceCompanyName: '', sourceRoundNo: null, sourceRoundStage: null, sourceDate: null
+    };
+  }
+
+  /** 后端存的 JSON 数组转回"一行一条"纯文本。 */
+  private fromJsonList(json?: string | null): string {
+    if (!json) return '';
+    try {
+      const arr = JSON.parse(json);
+      return Array.isArray(arr) ? arr.join('\n') : '';
+    } catch { return ''; }
+  }
 
   /** 标题和分类是后端必填项,前端先挡一道,避免白跑一次 400。 */
   canSubmit(): boolean {
@@ -190,6 +247,8 @@ export class KnowledgeDialogComponent {
       conceptExplanation: this.form.conceptExplanation.trim() || null,
       keyPointsJson: this.toJsonList(this.form.keyPoints),
       commonMistakesJson: this.toJsonList(this.form.commonMistakes),
+      myAnswer: this.form.myAnswer.trim() || null,
+      betterAnswer: this.form.betterAnswer.trim() || null,
       difficulty: Number(this.form.difficulty) || 3,
       importance: Number(this.form.importance) || 3,
       // 填了公司名才算"来自实战机经";没填就是我自己主动录入的

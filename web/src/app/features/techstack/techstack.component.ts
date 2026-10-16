@@ -22,7 +22,7 @@ import { KnowledgeItem, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged } fr
 import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
-import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
+import { KnowledgeDialogComponent, KnowledgeDialogData, KnowledgeForm } from './knowledge-dialog.component';
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 
 /** 熟练度等级顺序 —— 用于展示顺序、进度和"提升一级"的目标值。 */
@@ -77,7 +77,9 @@ const DETAIL_BLOCKS: DetailBlock[] = [
   { key: 'question', labelKey: 'ts.block.question', icon: 'help_outline', hintKey: 'ts.block.questionHint' },
   { key: 'conceptExplanation', labelKey: 'ts.block.conceptExplanation', icon: 'menu_book', hintKey: 'ts.block.conceptExplanationHint' },
   { key: 'keyPoints', labelKey: 'ts.block.keyPoints', icon: 'lightbulb_outline', hintKey: 'ts.block.keyPointsHint' },
-  { key: 'commonMistakes', labelKey: 'ts.block.commonMistakes', icon: 'warning_amber', hintKey: 'ts.block.commonMistakesHint' }
+  { key: 'commonMistakes', labelKey: 'ts.block.commonMistakes', icon: 'warning_amber', hintKey: 'ts.block.commonMistakesHint' },
+  { key: 'myAnswer', labelKey: 'ts.block.myAnswer', icon: 'record_voice_over', hintKey: 'ts.block.myAnswerHint' },
+  { key: 'betterAnswer', labelKey: 'ts.block.betterAnswer', icon: 'stars', hintKey: 'ts.block.betterAnswerHint' }
 ];
 
 /**
@@ -430,6 +432,26 @@ export class TechStackComponent implements OnInit {
           this.page.set(1);
           this.reload();
           this.loadTopics();
+        },
+        error: (e: Error) => this.notify(e.message, true)
+      });
+    });
+  }
+
+  /** 编辑条目:对话框预填已有内容,保存走 PUT。 */
+  openEdit(item: KnowledgeItem): void {
+    const ref = this.dialog.open(KnowledgeDialogComponent, {
+      autoFocus: 'first-tabbable',
+      data: { item } as KnowledgeDialogData
+    });
+    ref.afterClosed().subscribe((payload?: Record<string, unknown> | null) => {
+      if (!payload) return;
+      this.api.put<KnowledgeItem>(`/api/knowledge/${item.id}`, payload).subscribe({
+        next: (updated) => {
+          this.notify(this.t('ts.updated'));
+          // 用返回的最新数据刷新选中项与列表行
+          this.selected.set(updated);
+          this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
         },
         error: (e: Error) => this.notify(e.message, true)
       });

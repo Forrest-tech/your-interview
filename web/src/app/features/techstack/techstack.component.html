@@ -5,6 +5,18 @@
       <p class="sub">{{ t('ts.sub') }}</p>
     </div>
     <div class="head-actions">
+      @if (editing()) {
+        <span class="sel-count">{{ tn('ts.list.selected', batchIds().length) }}</span>
+        <button mat-stroked-button color="warn" (click)="deleteSelected()"
+                [disabled]="batchIds().length === 0">
+          <mat-icon>delete</mat-icon>
+          {{ t('common.delete') }}
+        </button>
+      }
+      <button mat-stroked-button (click)="toggleEdit()" [color]="editing() ? 'primary' : undefined">
+        <mat-icon>{{ editing() ? 'done' : 'edit' }}</mat-icon>
+        {{ t(editing() ? 'common.done' : 'common.edit') }}
+      </button>
       @if (duplicateGroups().length > 0) {
         <button mat-stroked-button class="dup-btn" (click)="openDuplicates()">
           <mat-icon>content_copy</mat-icon>
@@ -154,8 +166,13 @@
         }
 
         @for (it of items(); track it.id) {
-          <button class="list-item" [class.active]="isSelected(it)" (click)="select(it)">
+          <button class="list-item" [class.active]="isSelected(it) && !editing()"
+                  [class.batch-selected]="isBatchSelected(it.id)"
+                  (click)="editing() ? toggleBatchSelect(it.id, $event) : select(it)">
             <div class="li-top">
+              @if (editing()) {
+                <mat-checkbox class="batch-check" [checked]="isBatchSelected(it.id)"></mat-checkbox>
+              }
               <span class="li-term">{{ it.title }}</span>
               <span class="li-mastery" [class]="masteryClass(it.mastery)">
                 {{ masteryLabel(it.mastery) }}

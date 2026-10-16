@@ -1728,6 +1728,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.round.interviewersPh': { zh: '如: David Castelino (Sr SWE)', en: 'e.g. David Castelino (Sr SWE)', fr: 'p. ex. David Castelino (Sr SWE)' },
   'ts.sub': { zh: '每个概念九块拆解:从一句话直觉到面试话术', en: 'Every concept in nine blocks: from a one-line intuition to interview phrasing', fr: 'Chaque notion en neuf blocs : d’une intuition en une phrase au discours d’entretien' },
   'ts.duplicates': { zh: '重复 {n}', en: '{n} duplicates', fr: '{n} doublons' },
+  'ts.list.selected': { zh: '已选 {n} 条', en: '{n} selected', fr: '{n} sélectionné(s)' },
+  'ts.list.confirmDeleteBatch': { zh: '确认删除选中的 {n} 条技术条目?\n{names}\n删除后不可恢复。', en: 'Delete the {n} selected entries?\n{names}\nThis cannot be undone.', fr: 'Supprimer les {n} entrées sélectionnées ?\n{names}\nIrréversible.' },
   'ts.buckets.title': { zh: '熟练度分布', en: 'Mastery distribution', fr: 'Répartition de la maîtrise' },
   'ts.buckets.total': { zh: '共 {n} 个条目', en: '{n} items', fr: '{n} éléments' },
   'ts.filter.searchLabel': { zh: '搜索术语 / 释义', en: 'Search terms / definitions', fr: 'Rechercher terme / définition' },

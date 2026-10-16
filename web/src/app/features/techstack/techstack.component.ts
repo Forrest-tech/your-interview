@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { forkJoin } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -10,6 +11,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -98,7 +100,7 @@ const DETAIL_BLOCKS: DetailBlock[] = [
   imports: [
     CommonModule, FormsModule, RouterLink, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
-    MatDialogModule, MatTooltipModule, MatSnackBarModule, MatMenuModule
+    MatDialogModule, MatTooltipModule, MatSnackBarModule, MatMenuModule, MatCheckboxModule
   ],
   templateUrl: './techstack.component.html',
   styleUrl: './techstack.component.scss'
@@ -392,6 +394,55 @@ export class TechStackComponent implements OnInit {
 
   isSelected(item: KnowledgeItem): boolean {
     return this.selected()?.id === item.id;
+  }
+
+  // ------------------------------ 批量编辑(删除) ------------------------------
+
+  /** 右上角"编辑":进入/退出批量管理模式。退出时清空已选项。 */
+  readonly editing = signal(false);
+  readonly batchIds = signal<string[]>([]);
+
+  toggleEdit(): void {
+    const next = !this.editing();
+    this.editing.set(next);
+    if (!next) this.batchIds.set([]);
+  }
+
+  isBatchSelected(id: string): boolean {
+    return this.batchIds().includes(id);
+  }
+
+  /** 编辑模式下点条目 = 勾选/取消勾选,不打开详情。 */
+  toggleBatchSelect(id: string, ev: Event): void {
+    if (!this.editing()) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    this.batchIds.update(list =>
+      list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
+  }
+
+  /** 批量删除:逐个调删除接口(后端暂无批量接口),完成后退出编辑模式并刷新。 */
+  deleteSelected(): void {
+    const ids = this.batchIds();
+    if (ids.length === 0) return;
+    const names = this.items().filter(e => ids.includes(e.id))
+      .map(e => e.title).join('、');
+    const ok = confirm(
+      this.t('ts.list.confirmDeleteBatch')
+        .replace('{n}', String(ids.length))
+        .replace('{names}', names));
+    if (!ok) return;
+
+    forkJoin(ids.map(id => this.api.delete<void>(`/api/knowledge/${id}`))).subscribe({
+      next: () => {
+        this.notify(this.t('ts.deleted'));
+        this.editing.set(false);
+        this.batchIds.set([]);
+        this.selected.set(null);
+        this.reload();
+      },
+      error: (e: Error) => this.notify(e.message, true)
+    });
   }
 
   /** 来源标记文案。没有来源信息时返回 null。 */

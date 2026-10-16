@@ -168,6 +168,26 @@ mat-form-field { width: 100%; }
 
 .list-item + .list-item { margin-top: 2px; }
 
+/* 批量编辑模式:勾选项高亮 + 复选框 */
+.list-item.batch-selected {
+  background: rgba(63, 81, 181, 0.08);
+  box-shadow: inset 2px 0 0 #3f51b5;
+}
+.batch-check {
+  margin-right: 8px;
+  pointer-events: none; /* 点整行切换,checkbox 只做展示 */
+}
+.list-item .li-top {
+  display: flex;
+  align-items: center;
+}
+.sel-count {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.6);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
 .li-top { display: flex; align-items: center; gap: 8px; }
 
 .li-term {

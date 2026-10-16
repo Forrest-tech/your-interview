@@ -78,3 +78,20 @@
 - B8 weeklyApplied：已修（逐页拉全量再计数）✅
 - B9 Mock 锚点：已修（`id="overview"` 接上）✅
 - B1/B3/B7：等用户手动验证；代码侧：Q&A 删除已换 MatDialog，B7 疑似项在新路径上已消除 ✅
+
+---
+
+## Round 2 复验（2026-10-16，分支 rabbit/playbook-redesign @ bae2d5c，独立执行）
+
+- **P0 粘贴文本资产**：PASS —— Assets tab 有"粘贴文本"按钮（`pasteTextAsset()`）；`PasteTextDialogComponent` 存在（textarea + `[disabled]="!text.trim()"` 空禁用确认）；确认后调 `POST /api/interviews/{id}/assets` body `{ textContent }`；成功后 `this.load(false)` 刷新；i18n `pb.asset.paste*`（pasteText/pasteTitle/pasteHint/pasteLabel/pastePlaceholder/create/textSaved）在 zh/en（及 fr）齐全。
+- **P1 next-actions 无原生 confirm**：PASS —— `next-actions.component.ts` 内 `confirm(` 出现 0 次；删除走 `MatDialog` + `QaConfirmDialogComponent`（danger 样式二次确认）。
+- **P2a 死代码清理**：PASS —— detail TS 中 `addQuestion/removeQuestion/QuestionForm/questionForm/emptyQuestionForm/totalWeaknesses/weaknessCount/InterviewWeakness/weaknesses` 残留 0；`.weakness` 样式 0；`pb.weakness.*` i18n 0；`InterviewDetail.weaknesses`（api.models）0；后端三个 weaknesses 路由（GET/POST/DELETE `{id}/weaknesses`）已删，Controller 内无路由残留。
+  - 观察项（非阻塞）：`InterviewHandlers.cs` 内 `AddWeaknessCommand/RemoveWeaknessCommand` 及其 validator、handler（1396/1414行）仍在，已不可达（无路由调用），可找机会清掉。
+- **P2b question-bank changed 输出**：PASS —— `changed = output<void>()`（61行）；删除成功后 emit（307行）、新增成功后经 `afterAdd()` emit（377行）；父模板绑定 `(changed)="onQuestionBankChanged()"`（detail html 492行）；父 handler 调 `this.load(false)` 刷新。
+
+**独立复跑**：
+- `dotnet build src/YourInterview.sln`：Build succeeded，0 error
+- `/tmp/testrunner`：PASS=98 FAIL=0
+- `npx ng build`（web）：exit=0
+
+**结论：可合 main。**

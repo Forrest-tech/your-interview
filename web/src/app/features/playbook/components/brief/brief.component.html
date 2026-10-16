@@ -1,0 +1,200 @@
+<div class="brief">
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  @if (error()) {
+    <mat-card class="err-card">
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>{{ t('common.loadFailed') }}</strong>
+        <p>{{ error() }}</p>
+      </div>
+      <button mat-stroked-button (click)="ngOnInit()">{{ t('common.retry') }}</button>
+    </mat-card>
+  }
+
+  @if (!loading() && entry(); as e) {
+    <!-- ① 倒计时条 -->
+    <mat-card class="countdown">
+      <div class="cd-main">
+        <mat-icon class="cd-icon">event_upcoming</mat-icon>
+        <div class="cd-text">
+          <div class="cd-title">{{ t('pb.br.countdown.title') }}</div>
+          @if (countdown(); as c) {
+            <div class="cd-detail">
+              <strong>{{ fmt('pb.round', { n: c.order }) }} · {{ stageLabel(c.stage) }}</strong>
+              <span class="cd-date">{{ c.date }}</span>
+              @if (c.format) { <span class="cd-meta">{{ c.format }}</span> }
+              @if (c.location) { <span class="cd-meta">{{ c.location }}</span> }
+            </div>
+          } @else {
+            <div class="cd-detail dim">{{ t('pb.br.countdown.none') }}</div>
+          }
+        </div>
+      </div>
+      <div class="cd-side">
+        <span class="cd-days">{{ countdownLabel() }}</span>
+        @if (countdown()?.meetingLink) {
+          <a mat-flat-button color="primary" [href]="countdown()!.meetingLink" target="_blank">
+            <mat-icon>videocam</mat-icon> {{ t('pb.br.countdown.join') }}
+          </a>
+        }
+      </div>
+    </mat-card>
+
+    <!-- ② 公司研究 -->
+    <mat-card class="section">
+      <mat-card-header>
+        <mat-card-title><mat-icon inline>business</mat-icon> {{ t('pb.br.company.title') }}</mat-card-title>
+        <span class="spacer"></span>
+        @if (!editingProfile()) {
+          <button mat-button (click)="openProfileEdit()">
+            <mat-icon>edit</mat-icon> {{ t('pb.br.company.edit') }}
+          </button>
+        }
+      </mat-card-header>
+      <mat-card-content>
+        @if (editingProfile()) {
+          <mat-form-field appearance="outline" class="wide">
+            <textarea matInput rows="5" [(ngModel)]="profileDraft"></textarea>
+          </mat-form-field>
+          <div class="row-actions">
+            <button mat-button (click)="editingProfile.set(false)" [disabled]="busy() === 'profile'">
+              {{ t('common.cancel') }}
+            </button>
+            <button mat-flat-button color="primary" (click)="saveProfile()" [disabled]="busy() === 'profile'">
+              {{ t('common.save') }}
+            </button>
+          </div>
+        } @else {
+          @if (e.companyProfile) {
+            <p class="profile-text">{{ e.companyProfile }}</p>
+          } @else {
+            <p class="dim">{{ t('pb.br.company.empty') }}</p>
+          }
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <!-- ③ JD 关键词 -->
+    <mat-card class="section">
+      <mat-card-header>
+        <mat-card-title><mat-icon inline>key</mat-icon> {{ t('pb.br.kw.title') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (keywords().length > 0) {
+          <div class="kw-cloud">
+            @for (k of keywords(); track k.word) {
+              <mark class="kw" [title]="fmt('pb.br.kw.times', { n: k.count })">{{ k.word }}</mark>
+            }
+          </div>
+        } @else {
+          <p class="dim">{{ t('pb.br.kw.empty') }}</p>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <!-- ④ 必答题 Top5 -->
+    <mat-card class="section">
+      <mat-card-header>
+        <mat-card-title><mat-icon inline>quiz</mat-icon> {{ t('pb.br.top5.title') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (top5().length > 0) {
+          <div class="top5">
+            @for (q of top5(); track q.id) {
+              <div class="q-row">
+                <div class="q-main">
+                  <div class="q-text">
+                    @if (isStuck(q)) {
+                      <span class="stuck-tag">{{ t('pb.br.top5.stuckTag') }}</span>
+                    }
+                    {{ q.questionText }}
+                    @if (q.difficulty) {
+                      <span class="diff">{{ '★'.repeat(q.difficulty) }}</span>
+                    }
+                  </div>
+                  <div class="q-answer dim">{{ answerPreview(q) }}</div>
+                </div>
+                <button mat-stroked-button (click)="goQuestions()">
+                  <mat-icon>arrow_forward</mat-icon> {{ t('pb.br.top5.goQA') }}
+                </button>
+              </div>
+              @if (!$last) { <mat-divider></mat-divider> }
+            }
+          </div>
+        } @else {
+          <p class="dim">{{ t('pb.br.top5.empty') }}</p>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <!-- ⑤ 我要问面试官的问题 -->
+    <mat-card class="section">
+      <mat-card-header>
+        <mat-card-title><mat-icon inline>contact_support</mat-icon> {{ t('pb.br.ask.title') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (askList().length > 0) {
+          <ol class="ask-list">
+            @for (q of askList(); track $index) {
+              <li>
+                <span class="ask-text">{{ q }}</span>
+                <button mat-icon-button color="warn" (click)="removeAsk($index)" [title]="t('common.delete')">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </li>
+            }
+          </ol>
+        } @else {
+          <p class="dim">{{ t('pb.br.ask.empty') }}</p>
+        }
+        <div class="ask-add">
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>{{ t('pb.br.ask.addPh') }}</mat-label>
+            <input matInput [(ngModel)]="askDraft" (keyup.enter)="addAsk()" />
+          </mat-form-field>
+          <button mat-flat-button color="primary" (click)="addAsk()" [disabled]="!askDraft.trim() || busy() === 'ask'">
+            <mat-icon>add</mat-icon> {{ t('pb.br.ask.add') }}
+          </button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- ⑥ Checklist -->
+    <mat-card class="section">
+      <mat-card-header>
+        <mat-card-title><mat-icon inline>checklist</mat-icon> {{ t('pb.br.cl.title') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (checklist().length > 0) {
+          <div class="checklist">
+            @for (a of checklist(); track a.id) {
+              <div class="cl-row" [class.done]="a.isDone">
+                <mat-checkbox [checked]="a.isDone" (change)="toggleChecklist(a)">
+                  {{ a.title }}
+                </mat-checkbox>
+                <span class="spacer"></span>
+                <button mat-icon-button color="warn" (click)="removeChecklistItem(a)" [title]="t('common.delete')">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="dim">{{ t('pb.br.cl.empty') }}</p>
+          <button mat-stroked-button color="primary" (click)="generateDefaultChecklist()" [disabled]="busy() === 'checklist'">
+            <mat-icon>auto_awesome</mat-icon> {{ t('pb.br.cl.genDefault') }}
+          </button>
+        }
+        <div class="ask-add">
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>{{ t('pb.br.cl.addPh') }}</mat-label>
+            <input matInput [(ngModel)]="checklistDraft" (keyup.enter)="addChecklistItem()" />
+          </mat-form-field>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  }
+</div>

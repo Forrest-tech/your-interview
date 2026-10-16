@@ -1,0 +1,27 @@
+@if (entry(); as e) {
+  <mat-card class="hd">
+    <!-- 第一行：公司 + 职位 + 状态徽章 + 下一轮倒计时 -->
+    <div class="row1">
+      <div class="title">
+        <strong>{{ e.companyName }}</strong>
+        <span class="role">{{ e.role }}</span>
+        <span class="chip" [class]="statusClass(e.status)">{{ statusLabel(e.status) }}</span>
+      </div>
+      <div class="countdown">
+        <mat-icon inline>event_upcoming</mat-icon>
+        <span>{{ t('pb.br.hd.nextRound') }}：{{ countdownText() }}</span>
+      </div>
+    </div>
+    <!-- 第二行：recruiter + 上次联系时间 -->
+    <div class="row2">
+      <span class="contact">
+        <mat-icon inline>person</mat-icon>
+        {{ t('pb.br.hd.recruiter') }}：{{ contact()?.from || t('pb.br.hd.unknown') }}
+      </span>
+      <span class="contact">
+        <mat-icon inline>schedule</mat-icon>
+        {{ t('pb.br.hd.lastContact') }}：{{ contact()?.date || '—' }}
+      </span>
+    </div>
+  </mat-card>
+}

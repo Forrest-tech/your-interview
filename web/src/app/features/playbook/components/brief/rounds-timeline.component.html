@@ -1,0 +1,258 @@
+<div class="timeline">
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  @if (error()) {
+    <mat-card class="err-card">
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>{{ t('common.loadFailed') }}</strong>
+        <p>{{ error() }}</p>
+      </div>
+      <button mat-stroked-button (click)="load()">{{ t('common.retry') }}</button>
+    </mat-card>
+  }
+
+  @if (!loading()) {
+    <!-- 顶部“下一轮”卡片 -->
+    @if (nextRd(); as n) {
+      <mat-card class="next-card">
+        <div class="next-main">
+          <mat-icon class="next-icon">event_upcoming</mat-icon>
+          <div>
+            <div class="next-label">{{ t('pb.br.rounds.nextTitle') }}</div>
+            <div class="next-detail">
+              <strong>{{ fmt('pb.round', { n: n.order }) }} · {{ stageLabel(n.stage) }}</strong>
+              <span>{{ n.scheduledDate }}</span>
+              @if (daysLabel(n)) { <span class="days">{{ daysLabel(n) }}</span> }
+            </div>
+          </div>
+        </div>
+        <button mat-flat-button color="primary" (click)="goBrief()">
+          <mat-icon>auto_stories</mat-icon> {{ t('pb.br.rounds.goBrief') }}
+        </button>
+      </mat-card>
+    } @else {
+      <mat-card class="next-card empty">
+        <mat-icon>event_busy</mat-icon>
+        <span class="dim">{{ t('pb.br.rounds.noneUpcoming') }}</span>
+      </mat-card>
+    }
+
+    <!-- 垂直时间线 -->
+    <div class="tl-head">
+      <h3><mat-icon inline>timeline</mat-icon> {{ t('pb.br.rounds.timelineTitle') }}</h3>
+      <span class="spacer"></span>
+      <button mat-stroked-button (click)="showAdd.set(!showAdd())">
+        <mat-icon>add</mat-icon> {{ t('pb.br.rounds.addTitle') }}
+      </button>
+    </div>
+
+    @if (showAdd()) {
+      <mat-card class="add-card">
+        <mat-form-field appearance="outline">
+          <mat-label>{{ t('pb.br.rounds.stagePh') }}</mat-label>
+          <mat-select [(ngModel)]="newStage">
+            @for (s of stages; track s) {
+              <mat-option [value]="s">{{ stageLabel(s) }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <button mat-flat-button color="primary" (click)="addRound()" [disabled]="busy() === 'add'">
+          <mat-icon>add</mat-icon> {{ t('pb.br.rounds.add') }}
+        </button>
+      </mat-card>
+    }
+
+    @if (sortedRounds().length === 0) {
+      <p class="dim">{{ t('pb.br.rounds.empty') }}</p>
+    }
+
+    <div class="tl">
+      @for (r of sortedRounds(); track r.id) {
+        <div class="tl-item">
+          <div class="tl-dot" [class]="outcomeClass(r.outcome)"></div>
+          <mat-card class="tl-card">
+            <div class="tl-row-head">
+              <div class="tl-title">
+                <strong>{{ fmt('pb.round', { n: r.order }) }} · {{ stageLabel(r.stage) }}</strong>
+                @if (r.scheduledDate) {
+                  <span class="tl-date">{{ r.scheduledDate }}@if (r.scheduledTime) { {{ r.scheduledTime }} }</span>
+                }
+                @if (daysLabel(r)) { <span class="days">{{ daysLabel(r) }}</span> }
+              </div>
+              <span class="badge" [class]="outcomeClass(r.outcome)">{{ outcomeLabel(r.outcome) }}</span>
+            </div>
+
+            @if (!isEditing(r)) {
+              <div class="tl-meta">
+                @if (r.interviewers) {
+                  <span><mat-icon inline>people</mat-icon> {{ r.interviewers }}</span>
+                }
+                @if (r.format) {
+                  <span><mat-icon inline>laptop</mat-icon> {{ r.format }}</span>
+                }
+                @if (r.location) {
+                  <span><mat-icon inline>place</mat-icon> {{ r.location }}</span>
+                }
+                @if (r.meetingLink) {
+                  <a [href]="r.meetingLink" target="_blank" class="meet-link">
+                    <mat-icon inline>videocam</mat-icon> {{ t('pb.br.countdown.join') }}
+                  </a>
+                }
+              </div>
+              @if (r.feedback) {
+                <p class="tl-block"><span class="lbl">{{ t('pb.br.rounds.feedback') }}：</span>{{ r.feedback }}</p>
+              }
+              @if (r.notes) {
+                <p class="tl-block"><span class="lbl">{{ t('pb.br.rounds.notes') }}：</span>{{ r.notes }}</p>
+              }
+            } @else {
+              <!-- 行内编辑表单 -->
+              <div class="edit-grid">
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('pb.br.rounds.stagePh') }}</mat-label>
+                  <mat-select [(ngModel)]="editDrafts[r.id].stage">
+                    @for (s of stages; track s) {
+                      <mat-option [value]="s">{{ stageLabel(s) }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('pb.br.rounds.outcome') }}</mat-label>
+                  <mat-select [(ngModel)]="editDrafts[r.id].outcome">
+                    @for (o of outcomes; track o) {
+                      <mat-option [value]="o">{{ outcomeLabel(o) }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('pb.br.rounds.date') }}</mat-label>
+                  <input matInput type="date" [(ngModel)]="editDrafts[r.id].scheduledDate" />
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('pb.br.rounds.time') }}</mat-label>
+                  <input matInput [(ngModel)]="editDrafts[r.id].scheduledTime" placeholder="14:00" />
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('pb.br.rounds.interviewers') }}</mat-label>
+                  <input matInput [(ngModel)]="editDrafts[r.id].interviewers" />
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('pb.br.rounds.format') }}</mat-label>
+                  <input matInput [(ngModel)]="editDrafts[r.id].format" />
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('pb.br.rounds.location') }}</mat-label>
+                  <input matInput [(ngModel)]="editDrafts[r.id].location" />
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="wide">
+                  <mat-label>{{ t('pb.br.rounds.meetingLink') }}</mat-label>
+                  <input matInput [(ngModel)]="editDrafts[r.id].meetingLink" />
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="wide">
+                  <mat-label>{{ t('pb.br.rounds.feedback') }}</mat-label>
+                  <textarea matInput rows="2" [(ngModel)]="editDrafts[r.id].feedback"></textarea>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="wide">
+                  <mat-label>{{ t('pb.br.rounds.notes') }}</mat-label>
+                  <textarea matInput rows="2" [(ngModel)]="editDrafts[r.id].notes"></textarea>
+                </mat-form-field>
+              </div>
+              <div class="row-actions">
+                <button mat-button (click)="cancelEdit(r)">{{ t('common.cancel') }}</button>
+                <button mat-flat-button color="primary" (click)="saveEdit(r)"
+                        [disabled]="busy() === 'round-' + r.id">{{ t('common.save') }}</button>
+              </div>
+              <mat-divider></mat-divider>
+            }
+
+            <!-- 邮件时间线 -->
+            <div class="emails">
+              <div class="emails-head">
+                <span class="lbl"><mat-icon inline>mail</mat-icon> {{ t('pb.br.rounds.emailsTitle') }}</span>
+                <span class="spacer"></span>
+                <button mat-button (click)="emailEditorId() === r.id ? closeEmailEditor() : openEmailEditor(r)">
+                  <mat-icon>add</mat-icon> {{ t('pb.br.rounds.emailAdd') }}
+                </button>
+              </div>
+              @if (emailEditorId() === r.id) {
+                <div class="email-form">
+                  <mat-form-field appearance="outline">
+                    <mat-label>{{ t('pb.br.rounds.emailFromPh') }}</mat-label>
+                    <input matInput [(ngModel)]="emFrom" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>{{ t('pb.br.rounds.emailDatePh') }}</mat-label>
+                    <input matInput type="date" [(ngModel)]="emDate" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="wide">
+                    <mat-label>{{ t('pb.br.rounds.emailSubjectPh') }}</mat-label>
+                    <input matInput [(ngModel)]="emSubject" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="wide">
+                    <mat-label>{{ t('pb.br.rounds.emailSnippetPh') }}</mat-label>
+                    <input matInput [(ngModel)]="emSnippet" />
+                  </mat-form-field>
+                  <div class="row-actions">
+                    <button mat-button (click)="closeEmailEditor()">{{ t('common.cancel') }}</button>
+                    <button mat-flat-button color="primary" (click)="addEmail(r)"
+                            [disabled]="busy() === 'emails-' + r.id">{{ t('common.save') }}</button>
+                  </div>
+                </div>
+              }
+              @if (emailsOf(r).length > 0) {
+                <div class="email-list">
+                  @for (em of emailsOf(r); track $index) {
+                    <div class="email-row">
+                      <div class="email-main">
+                        <div class="email-top">
+                          <strong>{{ em.from || '—' }}</strong>
+                          <span class="dim">{{ em.date }}</span>
+                        </div>
+                        <div class="email-subject">{{ em.subject }}</div>
+                        @if (em.snippet) { <div class="email-snippet dim">{{ em.snippet }}</div> }
+                      </div>
+                      <button mat-icon-button color="warn" (click)="removeEmail(r, $index)"
+                              [title]="t('common.delete')">
+                        <mat-icon>delete_outline</mat-icon>
+                      </button>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="dim small">{{ t('pb.br.rounds.emailEmpty') }}</p>
+              }
+            </div>
+
+            <!-- Transcript 折叠 -->
+            @if (transcriptOf(r)) {
+              <div class="transcript">
+                <button mat-button (click)="toggleTranscript(r)">
+                  <mat-icon>{{ transcriptOpen() === r.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+                  {{ t('pb.br.rounds.transcriptTitle') }}
+                </button>
+                @if (transcriptOpen() === r.id) {
+                  <pre class="transcript-text">{{ transcriptOf(r) }}</pre>
+                }
+              </div>
+            }
+
+            @if (!isEditing(r)) {
+              <div class="tl-actions">
+                <button mat-button (click)="openEdit(r)">
+                  <mat-icon>edit</mat-icon> {{ t('pb.br.rounds.edit') }}
+                </button>
+                <span class="spacer"></span>
+                <button mat-icon-button color="warn" (click)="removeRound(r)" [title]="t('pb.br.rounds.delete')">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            }
+          </mat-card>
+        </div>
+      }
+    </div>
+  }
+</div>

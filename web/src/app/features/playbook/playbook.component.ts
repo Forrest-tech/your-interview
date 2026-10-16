@@ -16,6 +16,8 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
+import { BRIEF_I18N } from './components/brief/brief.i18n';
+import type { CoverageRow } from './components/brief/brief.models';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 /**
@@ -82,8 +84,24 @@ export class PlaybookComponent implements OnInit {
   private readonly api = inject(ApiClient);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
-  t = (key: string): string => this.i18n.t(key);
+  /**
+   * ★ F6（2026-10-16）：技术覆盖图谱文案走 brief/ 本地 BRIEF_I18N（key 前缀 pb.br.），
+   * 先查本地表再回退全局 service —— coordinator 并入全局字典后行为不变。
+   */
+  t = (key: string): string => {
+    const e = BRIEF_I18N[key];
+    if (e) {
+      const l = this.i18n.lang();
+      return e[l] ?? e.en ?? e.zh ?? key;
+    }
+    return this.i18n.t(key);
+  };
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
+  fmt = (key: string, params: Record<string, string | number>): string => {
+    let s = this.t(key);
+    for (const [k, v] of Object.entries(params)) s = s.replace(`{${k}}`, String(v));
+    return s;
+  };
 
   private readonly router = inject(Router);
   private readonly snack = inject(MatSnackBar);
@@ -102,6 +120,11 @@ export class PlaybookComponent implements OnInit {
 
   /** 全局 upcoming:未来 30 天所有条目的轮次(日历视图)。旁路,失败留空。 */
   readonly upcomingRounds = signal<UpcomingRound[]>([]);
+
+  /** F6 技术覆盖图谱:默认收起,展开时懒加载;失败静默留空。 */
+  readonly coverageOpen = signal(false);
+  readonly coverageLoading = signal(false);
+  readonly coverage = signal<CoverageRow[]>([]);
 
   /** 服务端过滤条件(改动后重查,不做本地过滤 —— 数据量会增长)。 */
   companyFilter = '';
@@ -195,6 +218,36 @@ export class PlaybookComponent implements OnInit {
     this.api.get<InterviewStats>('/api/interviews/stats')
       .pipe(catchError(() => of(null)))
       .subscribe((s) => this.stats.set(s));
+  }
+
+  // ---------------------------------------------------------------- F6 技术覆盖图谱
+
+  /** 折叠切换:首次展开时加载数据。 */
+  toggleCoverage(): void {
+    const open = !this.coverageOpen();
+    this.coverageOpen.set(open);
+    if (open && this.coverage().length === 0 && !this.coverageLoading()) {
+      this.loadCoverage();
+    }
+  }
+
+  private loadCoverage(): void {
+    this.coverageLoading.set(true);
+    this.api.get<CoverageRow[]>('/api/interviews/coverage')
+      .pipe(catchError(() => of([] as CoverageRow[])))
+      .subscribe((list) => {
+        this.coverage.set(list ?? []);
+        this.coverageLoading.set(false);
+      });
+  }
+
+  /** 掌握度小条:绿 mastered / 红 stuck，按 askedCount 占比。 */
+  covBar(c: CoverageRow): { masteredPct: number; stuckPct: number } {
+    const total = c.askedCount || 1;
+    return {
+      masteredPct: Math.round((c.masteredCount / total) * 100),
+      stuckPct: Math.round((c.stuckCount / total) * 100),
+    };
   }
 
   // ---------------------------------------------------------------- 筛选与翻页

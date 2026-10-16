@@ -1,0 +1,72 @@
+.brief {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 960px;
+}
+
+.spacer { flex: 1; }
+.dim { color: rgba(0, 0, 0, 0.54); }
+.wide { width: 100%; }
+
+/* ① 倒计时条 */
+.countdown {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-left: 4px solid #1976d2;
+  flex-wrap: wrap;
+}
+.cd-main { display: flex; align-items: center; gap: 12px; }
+.cd-icon { font-size: 36px; width: 36px; height: 36px; color: #1976d2; }
+.cd-title { font-size: 12px; color: rgba(0, 0, 0, 0.54); }
+.cd-detail { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-top: 4px; }
+.cd-date { font-weight: 600; }
+.cd-meta { font-size: 13px; color: rgba(0, 0, 0, 0.6); }
+.cd-side { display: flex; align-items: center; gap: 12px; }
+.cd-days { font-size: 20px; font-weight: 700; color: #c62828; white-space: nowrap; }
+
+/* 通用 section */
+.section mat-card-header { margin-bottom: 8px; }
+.section mat-card-title { display: flex; align-items: center; gap: 6px; font-size: 16px; }
+.profile-text { white-space: pre-wrap; line-height: 1.7; margin: 0; }
+.row-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* ③ 关键词云：黄底 mark */
+.kw-cloud { display: flex; flex-wrap: wrap; gap: 8px; }
+.kw {
+  background: #fff59d;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 13px;
+  cursor: default;
+  border: 1px solid #f0e68c;
+}
+
+/* ④ Top5 */
+.top5 { display: flex; flex-direction: column; gap: 4px; }
+.q-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; }
+.q-main { flex: 1; min-width: 0; }
+.q-text { font-weight: 500; line-height: 1.5; }
+.q-answer { font-size: 13px; margin-top: 4px; line-height: 1.5; }
+.stuck-tag {
+  background: #ffcdd2; color: #b71c1c;
+  font-size: 11px; border-radius: 4px; padding: 1px 6px; margin-right: 6px;
+}
+.diff { color: #f9a825; font-size: 12px; margin-left: 8px; white-space: nowrap; }
+
+/* ⑤ 问面试官 */
+.ask-list { margin: 0 0 12px; padding-left: 22px; }
+.ask-list li { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.ask-text { flex: 1; }
+.ask-add { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
+.ask-add .wide { flex: 1; }
+
+/* ⑥ Checklist */
+.checklist { display: flex; flex-direction: column; }
+.cl-row { display: flex; align-items: center; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+.cl-row.done mat-checkbox { text-decoration: line-through; color: rgba(0, 0, 0, 0.45); }
+
+.err-card { display: flex; gap: 12px; align-items: center; padding: 16px; }

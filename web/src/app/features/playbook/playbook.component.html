@@ -85,6 +85,54 @@
     </section>
   }
 
+  <!-- F6 技术覆盖图谱:默认收起,展开时懒加载 -->
+  <mat-card class="panel coverage">
+    <mat-card-header (click)="toggleCoverage()" class="cov-head">
+      <mat-card-title>
+        <mat-icon>hub</mat-icon> {{ t('pb.br.cov.title') }}
+      </mat-card-title>
+      <mat-card-subtitle>{{ t('pb.br.cov.sub') }}</mat-card-subtitle>
+      <span class="spacer"></span>
+      <button mat-icon-button [attr.aria-label]="t('common.collapse')">
+        <mat-icon>{{ coverageOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+    </mat-card-header>
+    @if (coverageOpen()) {
+      <mat-card-content>
+        @if (coverageLoading()) {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        } @else if (coverage().length === 0) {
+          <p class="cov-empty">{{ t('pb.br.cov.empty') }}</p>
+        } @else {
+          <div class="cov-rows">
+            @for (c of coverage(); track c.category) {
+              <div class="cov-row">
+                <span class="cov-cat">{{ c.category }}</span>
+                <span class="cov-asked">{{ fmt('pb.br.cov.askedTimes', { n: c.askedCount }) }}</span>
+                <div class="cov-bar" [title]="t('pb.br.cov.mastered') + ' ' + c.masteredCount + ' · ' + t('pb.br.cov.stuck') + ' ' + c.stuckCount">
+                  <span class="cov-mastered" [style.width.%]="covBar(c).masteredPct"></span>
+                  <span class="cov-stuck" [style.width.%]="covBar(c).stuckPct"></span>
+                </div>
+                <span class="cov-nums">
+                  <span class="n-ok">{{ c.masteredCount }}</span>/<span class="n-bad">{{ c.stuckCount }}</span>
+                </span>
+                <mat-chip-set class="cov-chips">
+                  @for (co of c.interviews; track co) {
+                    <mat-chip>{{ co }}</mat-chip>
+                  }
+                </mat-chip-set>
+              </div>
+            }
+          </div>
+          <div class="cov-legend">
+            <span class="lg"><span class="sw ok"></span>{{ t('pb.br.cov.mastered') }}</span>
+            <span class="lg"><span class="sw bad"></span>{{ t('pb.br.cov.stuck') }}</span>
+          </div>
+        }
+      </mat-card-content>
+    }
+  </mat-card>
+
   <!-- 过滤 -->
   <mat-card class="filters">
     <div class="filter-row">

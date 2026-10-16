@@ -118,7 +118,9 @@ public sealed class PlaybookTextTests
         s.InterviewEntryId.Should().Be(e.Id);
         s.OverallScore.Should().Be(78);
         s.DimensionsJson.Should().Contain("pronunciation");
-        s.SummaryBulletsJson.Should().Contain("第一句");
+        // SummaryBulletsJson 是 JSON 数组：反序列化后断言内容（System.Text.Json 默认转义非 ASCII，原文不会出现在 raw 字符串里）
+        var bullets = System.Text.Json.JsonSerializer.Deserialize<string[]>(s.SummaryBulletsJson!);
+        bullets.Should().Contain("第一句").And.Contain("第二句");
         s.CreatedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
         e.Snapshots.Should().ContainSingle().Which.Id.Should().Be(s.Id);
     }

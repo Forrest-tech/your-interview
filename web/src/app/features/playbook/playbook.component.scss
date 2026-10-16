@@ -407,3 +407,38 @@ mat-card-actions {
 .cov-legend .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .cov-legend .sw.ok { background: #2e7d32; }
 .cov-legend .sw.bad { background: #c62828; }
+
+/* 批量管理模式 */
+.edit-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+
+  .sel-count {
+    font-size: 14px;
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+.entry {
+  &.editing {
+    cursor: pointer;
+  }
+
+  &.selected {
+    outline: 2px solid #3f51b5;
+    outline-offset: -2px;
+    background: rgba(63, 81, 181, 0.04);
+  }
+
+  .sel-box {
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+}

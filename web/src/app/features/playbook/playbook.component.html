@@ -10,6 +10,12 @@
       <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
+      @if (auth.can('interviews.delete')) {
+        <button mat-stroked-button (click)="toggleEdit()" [color]="editing() ? 'primary' : undefined">
+          <mat-icon>{{ editing() ? 'done' : 'edit' }}</mat-icon>
+          {{ t(editing() ? 'common.done' : 'common.edit') }}
+        </button>
+      }
       @if (auth.can('interviews.write')) {
         <button mat-mini-fab color="primary" (click)="openDialog()" [matTooltip]="t('playbook.newEntry')">
           <mat-icon>add</mat-icon>
@@ -30,6 +36,21 @@
         <p>{{ error() }}</p>
       </div>
       <button mat-stroked-button (click)="load()">{{ t('common.retry') }}</button>
+    </mat-card>
+  }
+
+  <!-- 批量管理模式操作条:右上角"编辑"进入 -->
+  @if (editing()) {
+    <mat-card class="edit-bar">
+      <span class="sel-count">{{ tn('pb.list.selected', selectedIds().length) }}</span>
+      <span class="spacer"></span>
+      <button mat-stroked-button color="warn" (click)="deleteSelected()"
+              [disabled]="selectedIds().length === 0">
+        <mat-icon>delete_outline</mat-icon> {{ t('common.delete') }}
+      </button>
+      <button mat-flat-button color="primary" (click)="toggleEdit()">
+        {{ t('common.done') }}
+      </button>
     </mat-card>
   }
 
@@ -180,9 +201,17 @@
 
   <div class="grid">
     @for (e of entries(); track e.id) {
-      <mat-card class="entry" [routerLink]="['/playbook', e.id]">
+      <mat-card class="entry" [class.editing]="editing()" [class.selected]="isSelected(e.id)"
+                [routerLink]="editing() ? null : ['/playbook', e.id]"
+                (click)="toggleSelect(e.id, $event)">
         <mat-card-header>
           <div class="entry-head">
+            @if (editing()) {
+              <mat-checkbox [checked]="isSelected(e.id)"
+                            (click)="$event.stopPropagation()"
+                            (change)="toggleSelectById(e.id)"
+                            class="sel-box"></mat-checkbox>
+            }
             <div class="entry-title">
               <strong>{{ e.companyName }}</strong>
               <span class="role">{{ e.role }}</span>
@@ -228,15 +257,9 @@
         </mat-card-content>
 
         <mat-card-actions>
-          <a mat-button color="primary" [routerLink]="['/playbook', e.id]">
+          <a mat-button color="primary" [routerLink]="['/playbook', e.id]" (click)="$event.stopPropagation()">
             <mat-icon>open_in_new</mat-icon> {{ t('pb.card.viewReview') }}
           </a>
-          <span class="spacer"></span>
-          @if (auth.can('interviews.delete')) {
-            <button mat-icon-button color="warn" (click)="remove(e, $event)" [title]="t('common.delete')">
-              <mat-icon>delete_outline</mat-icon>
-            </button>
-          }
         </mat-card-actions>
       </mat-card>
     }

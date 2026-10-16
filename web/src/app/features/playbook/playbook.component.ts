@@ -11,7 +11,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { catchError, of } from 'rxjs';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { catchError, forkJoin, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
@@ -74,7 +75,7 @@ interface NewEntryForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule, MatTooltipModule
+    MatSnackBarModule, MatTooltipModule, MatCheckboxModule
   ],
   templateUrl: './playbook.component.html',
   styleUrl: './playbook.component.scss'
@@ -124,6 +125,10 @@ export class PlaybookComponent implements OnInit {
   readonly coverageOpen = signal(false);
   readonly coverageLoading = signal(false);
   readonly coverage = signal<CoverageRow[]>([]);
+
+  /** 批量管理模式:右上角"编辑"进入,卡片变多选,统一删除。 */
+  readonly editing = signal(false);
+  readonly selectedIds = signal<string[]>([]);
 
   /** 服务端过滤条件(改动后重查,不做本地过滤 —— 数据量会增长)。 */
   companyFilter = '';
@@ -331,22 +336,49 @@ export class PlaybookComponent implements OnInit {
 
   // ---------------------------------------------------------------- 删除
 
-  remove(entry: InterviewEntry, ev: Event): void {
-    // 卡片本身是链接,删除按钮必须阻止冒泡,否则点删除会先进详情页
+  /** 右上角"编辑":进入/退出批量管理模式。退出时清空已选项。 */
+  toggleEdit(): void {
+    const next = !this.editing();
+    this.editing.set(next);
+    if (!next) this.selectedIds.set([]);
+  }
+
+  isSelected(id: string): boolean {
+    return this.selectedIds().includes(id);
+  }
+
+  /** 编辑模式下点卡片 = 勾选/取消勾选,不跳转详情页。 */
+  toggleSelect(id: string, ev: Event): void {
+    if (!this.editing()) return;
     ev.preventDefault();
     ev.stopPropagation();
+    this.toggleSelectById(id);
+  }
 
+  toggleSelectById(id: string): void {
+    this.selectedIds.update(list =>
+      list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
+  }
+
+  /** 批量删除:逐个调删除接口(后端暂无批量接口),全部完成后退出编辑模式。 */
+  deleteSelected(): void {
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    const names = this.entries().filter(e => ids.includes(e.id))
+      .map(e => `${e.companyName}·${e.role}`).join('、');
     const ok = confirm(
-      this.t('pb.list.confirmDelete')
-        .replace('{company}', entry.companyName)
-        .replace('{role}', entry.role));
+      this.t('pb.list.confirmDeleteBatch')
+        .replace('{n}', String(ids.length))
+        .replace('{names}', names));
     if (!ok) return;
 
-    this.api.delete<void>(`/api/interviews/${entry.id}`).subscribe({
+    forkJoin(ids.map(id => this.api.delete<void>(`/api/interviews/${id}`))).subscribe({
       next: () => {
         this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
+        this.editing.set(false);
+        this.selectedIds.set([]);
         // 删掉当前页最后一条时页码可能越界,回退一页更自然
-        if (this.entries().length === 1 && this.page() > 1) this.page.update((p) => p - 1);
+        if (this.entries().length <= ids.length && this.page() > 1) this.page.update((p) => p - 1);
         this.load();
         this.loadStats();
       },

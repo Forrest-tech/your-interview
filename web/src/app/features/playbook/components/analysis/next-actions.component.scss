@@ -1,0 +1,179 @@
+.next-actions {
+  .na-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .na-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .na-icon {
+    color: #5c6bc0;
+  }
+
+  .na-count {
+    font-size: 12px;
+    color: #888;
+  }
+
+  .na-state {
+    padding: 12px 0;
+    color: #888;
+    font-size: 13px;
+
+    &.error {
+      color: #c62828;
+    }
+
+    &.done-all {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+  }
+
+  .na-add {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    .na-add-title {
+      flex: 1;
+    }
+
+    .na-add-date {
+      width: 170px;
+    }
+  }
+
+  .na-add-detail mat-form-field {
+    width: 100%;
+  }
+
+  .na-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+
+    &.done {
+      opacity: 0.75;
+    }
+  }
+
+  .na-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 8px 4px;
+    border-bottom: 1px solid #f0f0f0;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &.busy {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+  }
+
+  .na-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding-top: 9px;
+  }
+
+  .na-text {
+    font-size: 14px;
+    word-break: break-word;
+
+    &.struck {
+      text-decoration: line-through;
+      color: #999;
+    }
+  }
+
+  .na-detail {
+    display: block;
+    width: 100%;
+    font-size: 12px;
+    color: #888;
+  }
+
+  .na-due {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
+    color: #f9a825;
+
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  .na-ops {
+    display: flex;
+    flex-shrink: 0;
+
+    button {
+      width: 32px;
+      height: 32px;
+      line-height: 32px;
+
+      mat-icon {
+        font-size: 18px;
+      }
+    }
+  }
+
+  .na-edit {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+
+    .na-edit-input {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 8px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .na-edit-date {
+      padding: 6px 4px;
+      font-size: 13px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+  }
+
+  .na-done-label {
+    margin: 12px 0 0;
+    font-size: 12px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &.compact {
+    .na-title {
+      font-size: 15px;
+    }
+  }
+}

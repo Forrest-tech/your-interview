@@ -1,0 +1,36 @@
+<section class="overview-widgets">
+  <div class="ow-row">
+    <!-- 待办区:A2 未完成事项,可勾选(与 F2 报告底部同一份数据) -->
+    <mat-card class="ow-todo">
+      <mat-card-content>
+        <app-next-actions [entryId]="entryId()" [compact]="true"></app-next-actions>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- 最新复盘结论:最近快照的前 3 条 bullets -->
+    <mat-card class="ow-takeaways">
+      <mat-card-title>
+        <mat-icon>insights</mat-icon>{{ t('pb.an.latestTakeaways') }}
+      </mat-card-title>
+      <mat-card-content>
+        @if (loading()) {
+          <p class="ow-state">{{ t('pb.an.loading') }}</p>
+        } @else if (error()) {
+          <p class="ow-state error">
+            {{ error() }}
+            <button mat-button color="primary" (click)="reload()">{{ t('pb.an.retry') }}</button>
+          </p>
+        } @else if (takeaways().length > 0) {
+          <ul class="ow-bullets">
+            @for (b of takeaways(); track b) {
+              <li>{{ b }}</li>
+            }
+          </ul>
+          <p class="ow-date">{{ t('pb.an.analyzedAt') }}: {{ shortDate(latest()?.createdAt) }}</p>
+        } @else {
+          <p class="ow-state">{{ t('pb.an.noSnapshot') }}</p>
+        }
+      </mat-card-content>
+    </mat-card>
+  </div>
+</section>

@@ -1,0 +1,118 @@
+<section class="next-actions" [class.compact]="compact()">
+  <div class="na-head">
+    <h3 class="na-title">
+      <mat-icon class="na-icon">checklist</mat-icon>
+      {{ t('pb.an.nextActionsTitle') }}
+    </h3>
+    @if (!loading() && items().length > 0) {
+      <span class="na-count">{{ t('pb.an.openCount', { n: openItems().length }) }}</span>
+    }
+  </div>
+
+  @if (loading()) {
+    <p class="na-state">{{ t('pb.an.loading') }}</p>
+  } @else if (error()) {
+    <p class="na-state error">
+      {{ error() }}
+      <button mat-button color="primary" (click)="reload()">{{ t('pb.an.retry') }}</button>
+    </p>
+  } @else {
+    <!-- 新增表单(完整模式) -->
+    @if (!compact()) {
+      <div class="na-add">
+        <mat-form-field class="na-add-title" appearance="outline">
+          <input matInput [(ngModel)]="newTitle" [placeholder]="t('pb.an.addPlaceholder')"
+                 (keyup.enter)="add()" maxlength="200">
+        </mat-form-field>
+        <mat-form-field class="na-add-date" appearance="outline">
+          <mat-label>{{ t('pb.an.dueDate') }}</mat-label>
+          <input matInput type="date" [(ngModel)]="newDueDate">
+        </mat-form-field>
+        <button mat-flat-button color="primary" (click)="add()"
+                [disabled]="busyId() === 'new'">
+          <mat-icon>add</mat-icon>{{ t('pb.an.add') }}
+        </button>
+      </div>
+      <div class="na-add-detail">
+        <mat-form-field appearance="outline">
+          <input matInput [(ngModel)]="newDetail" [placeholder]="t('pb.an.detailPlaceholder')"
+                 (keyup.enter)="add()" maxlength="500">
+        </mat-form-field>
+      </div>
+    }
+
+    <!-- 未完成事项 -->
+    @if (openItems().length === 0 && doneItems().length === 0) {
+      <p class="na-state">{{ t('pb.an.noActions') }}</p>
+    }
+    <ul class="na-list">
+      @for (a of openItems(); track a.id) {
+        <li class="na-item" [class.busy]="busyId() === a.id">
+          <mat-checkbox [checked]="a.isDone" (change)="toggle(a)"
+                        [disabled]="busyId() === a.id" color="primary"></mat-checkbox>
+          <div class="na-body">
+            @if (editingId() === a.id) {
+              <div class="na-edit">
+                <input class="na-edit-input" [(ngModel)]="editTitle" maxlength="200">
+                <input class="na-edit-date" type="date" [(ngModel)]="editDueDate">
+                <button mat-icon-button color="primary" (click)="saveEdit(a)"
+                        [attr.aria-label]="t('pb.an.save')">
+                  <mat-icon>check</mat-icon>
+                </button>
+                <button mat-icon-button (click)="cancelEdit()"
+                        [attr.aria-label]="t('pb.an.cancel')">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+            } @else {
+              <span class="na-text">{{ a.title }}</span>
+              @if (a.detail) {
+                <span class="na-detail">{{ a.detail }}</span>
+              }
+            }
+            @if (a.dueDate && editingId() !== a.id) {
+              <span class="na-due">
+                <mat-icon>event</mat-icon>{{ dueLabel(a.dueDate) }}
+              </span>
+            }
+          </div>
+          @if (!compact() && editingId() !== a.id) {
+            <div class="na-ops">
+              <button mat-icon-button (click)="startEdit(a)" [attr.aria-label]="t('pb.an.edit')">
+                <mat-icon>edit</mat-icon>
+              </button>
+              <button mat-icon-button color="warn" (click)="remove(a)" [attr.aria-label]="t('pb.an.delete')">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+          }
+        </li>
+      }
+    </ul>
+
+    <!-- 已完成(完整模式才展示,紧凑模式只关心待办) -->
+    @if (!compact() && doneItems().length > 0) {
+      <p class="na-done-label">{{ t('pb.an.doneSection') }} ({{ doneItems().length }})</p>
+      <ul class="na-list done">
+        @for (a of doneItems(); track a.id) {
+          <li class="na-item" [class.busy]="busyId() === a.id">
+            <mat-checkbox [checked]="true" (change)="toggle(a)"
+                          [disabled]="busyId() === a.id" color="primary"></mat-checkbox>
+            <div class="na-body">
+              <span class="na-text struck">{{ a.title }}</span>
+            </div>
+            <div class="na-ops">
+              <button mat-icon-button color="warn" (click)="remove(a)" [attr.aria-label]="t('pb.an.delete')">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (compact() && openItems().length === 0) {
+      <p class="na-state done-all">{{ t('pb.an.allDone') }}</p>
+    }
+  }
+</section>

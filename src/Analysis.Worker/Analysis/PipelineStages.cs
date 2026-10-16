@@ -347,7 +347,9 @@ public sealed class MeasureStage(AzureSpeechClient speech, ILogger<MeasureStage>
 {
     public string Name => "Measure";
 
-    /// <summary>发音评估对音频长度敏感,只对前半段采样即可(省配额又足够代表)。</summary>
+    /// <summary>
+    /// 发音评估配额 —— 按**候选人音频**时长算(不是整段音频)。候选人部分超过 200s 就跳过逐词评估。
+    /// </summary>
     private const int MaxAssessmentSeconds = 200;
 
     public bool CanRun(PipelineContext context, PipelineState state) =>
@@ -359,20 +361,37 @@ public sealed class MeasureStage(AzureSpeechClient speech, ILogger<MeasureStage>
         var sw = Stopwatch.StartNew();
         try
         {
-            var reference = state.FullTranscript ?? string.Join(" ", state.Segments.Select(s => s.Text));
+            // 候选人口径(与 SpeechMetricsCalculator 一致:UNKNOWN 视为候选人;全无则回退全部分段)
+            var candidateSegments = state.Segments
+                .Where(s => s.Speaker == "CANDIDATE" || s.Speaker == "UNKNOWN")
+                .ToList();
+            if (candidateSegments.Count == 0) candidateSegments = state.Segments.ToList();
+
+            var candidateReference = string.Join(" ", candidateSegments.Select(s => s.Text));
+            var candidateSeconds = candidateSegments
+                .Sum(s => Math.Max(0, s.EndSeconds - s.StartSeconds));
 
             List<WordPronunciation> pronunciations = [];
             try
             {
-                if (state.DurationSeconds <= MaxAssessmentSeconds)
+                if (candidateSeconds is > 0 and <= MaxAssessmentSeconds)
                 {
-                    pronunciations = (await speech.AssessPronunciationAsync(
-                        state.NormalizedWavPath!, reference, context.Language, ct)).ToList();
+                    // 发音评估只吃候选人自己的音频 + 文本 ——
+                    // 用整段音频+双方文本评估,面试官说过的词会被算成候选人的"漏读/误读"。
+                    // 抽取失败(无 ffmpeg/ffmpeg 报错)则降级:跳过发音评估,不炸流水线。
+                    var candidateWav = await CandidateAudioExtractor.ExtractAsync(
+                        state.NormalizedWavPath!, candidateSegments, state.DurationSeconds,
+                        context.WorkingDirectory, logger, ct);
+                    if (candidateWav is not null)
+                    {
+                        pronunciations = (await speech.AssessPronunciationAsync(
+                            candidateWav, candidateReference, context.Language, ct)).ToList();
+                    }
                 }
                 else
                 {
-                    logger.LogInformation("音频超过 {Max}s,跳过逐词发音评估(省配额)",
-                        MaxAssessmentSeconds);
+                    logger.LogInformation("候选人音频 {Secs:F0}s 超出 {Max}s 配额,跳过逐词发音评估(省配额)",
+                        candidateSeconds, MaxAssessmentSeconds);
                 }
             }
             catch (Exception ex)

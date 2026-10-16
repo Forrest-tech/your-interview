@@ -36,13 +36,18 @@ public static class SpeechMetricsCalculator
         "idempotent", "outbox", "saga", "latency", "throughput", "scalability"
     ];
 
+    /// <summary>
+    /// 候选人口径:候选人自己说的 + 未标注的(兜底)。与 SpeakerLabelStage 的降级语义一致 ——
+    /// 标注失败时全文 CANDIDATE,这里同样不能丢文本。
+    /// </summary>
+    private static bool IsMine(TranscriptSegment s) =>
+        s.Speaker == "CANDIDATE" || s.Speaker == "UNKNOWN";
+
     public static SpeechMetrics Calculate(IReadOnlyList<TranscriptSegment> segments,
         IReadOnlyList<WordPronunciation> pronunciations, double durationSeconds)
     {
         // 只统计"我"说的部分 —— 面试官的话不该算进我的语速与句长
-        var mySegments = segments
-            .Where(s => s.Speaker == "CANDIDATE" || s.Speaker == "UNKNOWN")
-            .ToList();
+        var mySegments = segments.Where(IsMine).ToList();
 
         if (mySegments.Count == 0) mySegments = segments.ToList();
 
@@ -50,7 +55,10 @@ public static class SpeechMetricsCalculator
         var words = TokenizeWords(text);
         var wordCount = words.Count;
 
-        var minutes = durationSeconds / 60.0;
+        // 语速分母 = 候选人自己的说话时长(分段时长之和),不是整段音频时长 ——
+        // 否则面试官说得越多,候选人语速被拉得越低。DurationSeconds 字段保持整段时长不变。
+        var mySpeakingSeconds = mySegments.Sum(s => Math.Max(0, s.EndSeconds - s.StartSeconds));
+        var minutes = mySpeakingSeconds / 60.0;
         var wpm = minutes > 0.01 ? wordCount / minutes : 0;
 
         // ---------- 句长 ----------
@@ -94,13 +102,20 @@ public static class SpeechMetricsCalculator
                 selfRepetition++;
 
         // ---------- 停顿 ----------
-        // 用分段时间戳之间的间隙估算。>2 秒算长停顿
+        // 只算"我"自己的停顿:全序中相邻、且两段都是候选人发言时的间隙才算。
+        // 面试官提问 → 我回答之间的间隔不是"我的停顿",不能算;面试官说话时长更不能计入静音。
+        var hasMine = segments.Any(IsMine);
         var ordered = segments.OrderBy(s => s.StartSeconds).ToList();
         var longPauses = 0;
         var totalSilence = 0.0;
         for (var i = 0; i < ordered.Count - 1; i++)
         {
-            var gap = ordered[i + 1].StartSeconds - ordered[i].EndSeconds;
+            var a = ordered[i];
+            var b = ordered[i + 1];
+            // 一方是面试官 → 跳过(无候选人口径分段时回退为全量,与 mySegments 的 fallback 一致)
+            if (hasMine && !(IsMine(a) && IsMine(b))) continue;
+
+            var gap = b.StartSeconds - a.EndSeconds;
             if (gap > 0.3) totalSilence += gap;
             if (gap > 2.0) longPauses++;
         }

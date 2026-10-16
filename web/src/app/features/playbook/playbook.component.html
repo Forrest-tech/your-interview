@@ -11,6 +11,13 @@
         <mat-icon>refresh</mat-icon>
       </button>
       @if (auth.can('interviews.delete')) {
+        @if (editing()) {
+          <span class="sel-count">{{ tn('pb.list.selected', selectedIds().length) }}</span>
+          <button mat-stroked-button color="warn" (click)="deleteSelected()"
+                  [disabled]="selectedIds().length === 0">
+            <mat-icon>delete_outline</mat-icon> {{ t('common.delete') }}
+          </button>
+        }
         <button mat-stroked-button (click)="toggleEdit()" [color]="editing() ? 'primary' : undefined">
           <mat-icon>{{ editing() ? 'done' : 'edit' }}</mat-icon>
           {{ t(editing() ? 'common.done' : 'common.edit') }}
@@ -36,21 +43,6 @@
         <p>{{ error() }}</p>
       </div>
       <button mat-stroked-button (click)="load()">{{ t('common.retry') }}</button>
-    </mat-card>
-  }
-
-  <!-- 批量管理模式操作条:右上角"编辑"进入 -->
-  @if (editing()) {
-    <mat-card class="edit-bar">
-      <span class="sel-count">{{ tn('pb.list.selected', selectedIds().length) }}</span>
-      <span class="spacer"></span>
-      <button mat-stroked-button color="warn" (click)="deleteSelected()"
-              [disabled]="selectedIds().length === 0">
-        <mat-icon>delete_outline</mat-icon> {{ t('common.delete') }}
-      </button>
-      <button mat-flat-button color="primary" (click)="toggleEdit()">
-        {{ t('common.done') }}
-      </button>
     </mat-card>
   }
 

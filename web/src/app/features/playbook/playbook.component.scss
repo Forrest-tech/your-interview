@@ -408,21 +408,16 @@ mat-card-actions {
 .cov-legend .sw.ok { background: #2e7d32; }
 .cov-legend .sw.bad { background: #c62828; }
 
-/* 批量管理模式 */
-.edit-bar {
+/* 批量管理模式:操作收进右上角 header */
+.head-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  margin-bottom: 12px;
+  gap: 8px;
 
   .sel-count {
-    font-size: 14px;
+    font-size: 13px;
     color: rgba(0, 0, 0, 0.6);
-  }
-
-  .spacer {
-    flex: 1;
+    white-space: nowrap;
   }
 }
 

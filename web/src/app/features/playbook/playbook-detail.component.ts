@@ -20,6 +20,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog } from '@angular/material/dialog';
 import { SubnavService } from '../../layout/subnav.service';
 import { GuidanceInputDialogComponent } from './guidance-input-dialog.component';
+import { PasteTextDialogComponent } from './paste-text-dialog.component';
 import { QuestionBankComponent } from './components/qa/question-bank.component';
 import { CoverageMiniComponent } from './components/qa/coverage-mini.component';
 import { AnalysisReportComponent } from './components/analysis/analysis-report.component';
@@ -31,7 +32,7 @@ import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail, InterviewQuestion,
+  AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail,
   InterviewRound, InterviewStatus, OfferProbability, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
 } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -42,18 +43,6 @@ interface DimensionMeta {
   labelKey: string;
   hintKey: string;
   value?: number;
-}
-
-/** 手工新增问答的表单。 */
-interface QuestionForm {
-  questionText: string;
-  myAnswerText: string;
-  assessment: string;
-  category: string;
-  difficulty: number;
-  gotStuck: boolean;
-  stuckReason: string;
-  recommendedAnswer: string;
 }
 
 /**
@@ -98,8 +87,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   /** 当前选中的 tab(0=Overview, 1=Rounds, 2=Guidance, 3=Questions, 4=Analysis, 5=Assets, 6=Edit)。 */
   readonly selectedTab = signal(0);
-  /** 手工补录问答表单是否展开(默认收起)。 */
-  readonly showAddQuestion = signal(false);
 
   readonly id = signal('');
   readonly loading = signal(true);
@@ -141,20 +128,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   /** 新增轮次的阶段选择。 */
   newRoundStage = 'Technical';
 
-  // 表单模型(非 signal —— 它们只在提交那一刻被读,不需要触发变更检测)
-  questionForm: QuestionForm = this.emptyQuestionForm();
-
-  /**
-   * 表单复位工厂。
-   * 提交流程要"清空表单",如果直接写对象字面量,新增字段时必然漏改一处;
-   * 抽成工厂方法后只有这一个定义点,初始化和复位共用,不会漂移。
-   */
-  private emptyQuestionForm(): QuestionForm {
-    return {
-      questionText: '', myAnswerText: '', assessment: '', category: '',
-      difficulty: 3, gotStuck: false, stuckReason: '', recommendedAnswer: ''
-    };
-  }
   transcriptDrafts: Record<string, string> = {};
 
   /** 编辑表单:点「编辑」页签时用当前数据填充。 */
@@ -600,6 +573,11 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   // ---------------------------------------------------------------- 加载
 
+  /** 题库增删后立即刷新(计数等),不再等 15 秒轮询。 */
+  onQuestionBankChanged(): void {
+    this.load(false);
+  }
+
   load(showSpinner = true): void {
     if (showSpinner) this.loading.set(true);
     this.error.set(null);
@@ -710,6 +688,29 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       });
   }
 
+  /** 粘贴文本建资产(A6):对话框收文本 → POST { textContent } → Kind=Text 登记。 */
+  pasteTextAsset(): void {
+    const ref = this.dialog.open(PasteTextDialogComponent, { width: '640px' });
+    ref.afterClosed().subscribe((text: string | null) => {
+      if (!text) return;
+      this.busy.set('upload');
+      this.api.post<{ id: string }>(
+        `/api/interviews/${this.id()}/assets`,
+        { textContent: text })
+        .subscribe({
+          next: () => {
+            this.busy.set(null);
+            this.snack.open(this.t('pb.asset.textSaved'), this.t('common.close'), { duration: 4000 });
+            this.load(false);
+          },
+          error: (e: Error) => {
+            this.busy.set(null);
+            this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+          }
+        });
+    });
+  }
+
   /** 粘贴转写文本 → 回写该 material 的 transcript。 */
   saveTranscript(asset: InterviewAsset): void {
     const text = (this.transcriptDrafts[asset.id] ?? '').trim();
@@ -738,56 +739,6 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       });
   }
 
-  // ---------------------------------------------------------------- 问答
-
-  addQuestion(): void {
-    if (!this.questionForm.questionText.trim()) {
-      this.snack.open(this.t('pb.question.questionRequired'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
-
-    this.busy.set('question');
-    const body = {
-      questionText: this.questionForm.questionText.trim(),
-      myAnswerText: this.questionForm.myAnswerText || null,
-      assessment: this.questionForm.assessment || null,
-      category: this.questionForm.category || 'Technical',
-      difficulty: this.questionForm.difficulty || 3,
-      // 后端当前签名只消费前五个字段,这两个前端保留 —— 等后端补上即可生效,
-      // 不会因为多传字段被拒(ASP.NET 默认忽略未知属性)。
-      gotStuck: this.questionForm.gotStuck,
-      stuckReason: this.questionForm.stuckReason || null,
-      recommendedAnswer: this.questionForm.recommendedAnswer || null
-    };
-
-    this.api.post<{ id: string }>(`/api/interviews/${this.id()}/questions`, body).subscribe({
-      next: () => {
-        this.busy.set(null);
-        this.questionForm = this.emptyQuestionForm();
-        this.showAddQuestion.set(false);
-        this.snack.open(this.t('pb.question.added'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => {
-        this.busy.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-      }
-    });
-  }
-
-  removeQuestion(q: InterviewQuestion): void {
-    if (!confirm(this.t('pb.question.confirmDelete'))) return;
-
-    this.api.delete<void>(`/api/interviews/${this.id()}/questions/${q.id}`).subscribe({
-      next: () => {
-        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
-    });
-  }
-
-  // ------------------------------------------------------------ 候选导入 TechStack(缺口3)
 
   readonly showCandidates = signal(false);
   readonly candidates = signal<QuestionCandidate[]>([]);

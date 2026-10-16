@@ -39,7 +39,6 @@ interface InterviewStats {
   totalEntries: number;
   analyzed: number;
   pendingAnalysis: number;
-  totalWeaknesses: number;
   gotStuckQuestions: number;
   averageOverallScore?: number;
 }

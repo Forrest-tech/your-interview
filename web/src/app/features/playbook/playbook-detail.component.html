@@ -489,7 +489,7 @@
             </div>
           }
 
-          <app-question-bank [entryId]="id()"></app-question-bank>
+          <app-question-bank [entryId]="id()" (changed)="onQuestionBankChanged()"></app-question-bank>
         </div>
       </mat-tab>
 
@@ -517,6 +517,10 @@
                 <input type="file" accept="audio/*"
                        (change)="onFileSelected($event)"
                        [disabled]="busy() !== null" />
+                <button mat-stroked-button color="primary" (click)="pasteTextAsset()"
+                        [disabled]="busy() !== null" class="paste-btn">
+                  <mat-icon>content_paste</mat-icon> {{ t('pb.asset.pasteText') }}
+                </button>
               </mat-card-content>
             </mat-card>
           }

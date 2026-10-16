@@ -46,6 +46,7 @@ export const ANALYSIS_I18N: Record<string, { zh: string; en: string; fr?: string
   'pb.an.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
   'pb.an.delete': { zh: '删除', en: 'Delete', fr: 'Supprimer' },
   'pb.an.confirmDelete': { zh: '删除这条事项？', en: 'Delete this item?', fr: 'Supprimer cet élément ?' },
+  'pb.an.confirmDeleteTitle': { zh: '删除事项', en: 'Delete item', fr: 'Supprimer l’élément' },
   'pb.an.added': { zh: '已添加', en: 'Added', fr: 'Ajouté' },
   'pb.an.saved': { zh: '已保存', en: 'Saved', fr: 'Enregistré' },
   'pb.an.deleted': { zh: '已删除', en: 'Deleted', fr: 'Supprimé' },

@@ -226,7 +226,6 @@ export interface InterviewEntry {
   relevanceScore?: number;
   assetCount?: number;
   questionCount?: number;
-  weaknessCount?: number;
   hasTranscript?: boolean;
   createdAt: string;
   analyzedAt?: string;
@@ -247,19 +246,6 @@ export interface InterviewQuestion {
   followUpQuestionsJson?: string;
   weaknessTagsJson?: string;
   askedAtSeconds?: number;
-}
-
-export interface InterviewWeakness {
-  id: string;
-  category: string;
-  title: string;
-  detail?: string;
-  evidence?: string;
-  suggestion?: string;
-  severity: number;
-  sourceType?: string;
-  occurrenceCount: number;
-  createdAt?: string;
 }
 
 export interface InterviewRound {
@@ -414,7 +400,6 @@ export interface InterviewAsset {
 export interface InterviewDetail extends InterviewEntry {
   assets?: InterviewAsset[];
   questions?: InterviewQuestion[];
-  weaknesses?: InterviewWeakness[];
   rounds?: InterviewRound[];
 }
 

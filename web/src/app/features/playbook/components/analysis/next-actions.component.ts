@@ -7,17 +7,18 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
 import { ApiClient } from '../../../../core/api/api-client';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { analysisT } from './analysis.i18n';
 import { InterviewActionDto } from './analysis.models';
+import { QaConfirmDialogComponent } from '../qa/qa-confirm-dialog.component';
 
 /**
  * Next actions(A2) —— F2 报告底部 + F5 Overview 待办区共用同一份数据。
  *
  * compact 模式(供 Overview 用):只列未完成事项、可勾选,隐藏新增表单与删除按钮。
- * 完整模式:新增(标题+补充+截止日期)、勾选切换 isDone、行内编辑、删除(浏览器原生 confirm,
- * 与现有 playbook-detail 的删除行为保持一致)。
+ * 完整模式:新增(标题+补充+截止日期)、勾选切换 isDone、行内编辑、删除(MatDialog 二次确认)。
  */
 @Component({
   selector: 'app-next-actions',
@@ -34,6 +35,7 @@ export class NextActionsComponent implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly i18n = inject(I18nService);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
 
   readonly t = analysisT(this.i18n);
 
@@ -163,19 +165,31 @@ export class NextActionsComponent implements OnInit {
   }
 
   remove(a: InterviewActionDto): void {
-    if (!confirm(this.t('pb.an.confirmDelete'))) return;
     if (this.busyId()) return;
-    this.busyId.set(a.id);
-    this.api.delete<void>(`${this.base()}/${a.id}`).subscribe({
-      next: () => {
-        this.busyId.set(null);
-        this.snack.open(this.t('pb.an.deleted'), this.t('common.close'), { duration: 2500 });
-        this.items.update((list) => list.filter((x) => x.id !== a.id));
-      },
-      error: (e: Error) => {
-        this.busyId.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+    const ref = this.dialog.open(QaConfirmDialogComponent, {
+      width: '440px',
+      data: {
+        title: this.t('pb.an.confirmDeleteTitle'),
+        body: this.t('pb.an.confirmDelete'),
+        confirmText: this.t('pb.an.delete'),
+        cancelText: this.t('pb.an.cancel'),
+        danger: true
       }
+    });
+    ref.afterClosed().subscribe(ok => {
+      if (!ok) return;
+      this.busyId.set(a.id);
+      this.api.delete<void>(`${this.base()}/${a.id}`).subscribe({
+        next: () => {
+          this.busyId.set(null);
+          this.snack.open(this.t('pb.an.deleted'), this.t('common.close'), { duration: 2500 });
+          this.items.update((list) => list.filter((x) => x.id !== a.id));
+        },
+        error: (e: Error) => {
+          this.busyId.set(null);
+          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+        }
+      });
     });
   }
 

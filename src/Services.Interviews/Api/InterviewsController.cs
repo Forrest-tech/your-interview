@@ -496,37 +496,6 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
-    // ---------------- 短板 ----------------
-
-    /// <summary>短板清单(可按 category 过滤),复盘的第一入口。</summary>
-    [HttpGet("{id:guid}/weaknesses")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
-    public async Task<IResult> Weaknesses(Guid id, [FromQuery] string? category = null,
-        CancellationToken ct = default)
-    {
-        var r = await sender.Send(new ListWeaknessesQuery(id, category), ct);
-        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
-    }
-
-    [HttpPost("{id:guid}/weaknesses")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
-    public async Task<IResult> AddWeakness(Guid id, [FromBody] AddWeaknessBody body, CancellationToken ct)
-    {
-        var r = await sender.Send(new AddWeaknessCommand(id, body.Category, body.Title, body.Detail,
-            body.Evidence, body.Severity, body.Suggestion), ct);
-        return r.IsSuccess
-            ? Results.Created($"/api/interviews/{id}", new { id = r.Value })
-            : r.ToProblemDetails();
-    }
-
-    [HttpDelete("{id:guid}/weaknesses/{weaknessId:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsDelete)]
-    public async Task<IResult> RemoveWeakness(Guid id, Guid weaknessId, CancellationToken ct)
-    {
-        var r = await sender.Send(new RemoveWeaknessCommand(id, weaknessId), ct);
-        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
-    }
-
     // ---------------- 枚举字典(前端下拉框用) ----------------
 
     /// <summary>
@@ -618,10 +587,6 @@ public sealed record UpdateRoundBody(
 public sealed record UpdateQuestionBody(
     string QuestionText, string? MyAnswerText, string Category, int Difficulty,
     string? Assessment, bool GotStuck, string? StuckReason, string? RecommendedAnswer);
-
-public sealed record AddWeaknessBody(
-    string Category, string Title, string? Detail = null, string? Evidence = null,
-    int Severity = 3, string? Suggestion = null);
 
 /// <summary>A1:body { mastery: int }。</summary>
 public sealed record SetQuestionMasteryBody(int Mastery);

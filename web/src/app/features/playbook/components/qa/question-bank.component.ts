@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -57,6 +57,8 @@ interface NewQuestionForm {
 })
 export class QuestionBankComponent {
   readonly entryId = input.required<string>();
+  /** 增删题目后通知父组件立即刷新(如 tab 计数),不靠轮询等。 */
+  readonly changed = output<void>();
 
   private readonly api = inject(ApiClient);
   private readonly i18n = inject(I18nService);
@@ -302,6 +304,7 @@ export class QuestionBankComponent {
         next: () => {
           this.questions.update(list => list.filter(x => x.id !== q.id));
           this.snack.open(this.t('pb.qa.deleted'), this.t('common.close'), { duration: 2000 });
+          this.changed.emit();
         },
         error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
       });
@@ -371,6 +374,7 @@ export class QuestionBankComponent {
     this.showAdd.set(false);
     this.snack.open(this.t('pb.qa.added'), this.t('common.close'), { duration: 2000 });
     this.load(this.entryId());
+    this.changed.emit();
   }
 
   // ---------------- 展示小工具 ----------------

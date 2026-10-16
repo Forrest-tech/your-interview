@@ -133,6 +133,11 @@ public sealed record ActionDto(
 /// <summary>A3 分析趋势点:trend 端点只返回这三个字段(按时间 asc)。</summary>
 public sealed record AnalysisTrendPointDto(Guid Id, DateTimeOffset CreatedAt, int? OverallScore);
 
+/// <summary>A3 最新快照全文:latest 端点返回最近一次分析的完整快照(结论/维度)。</summary>
+public sealed record AnalysisSnapshotDto(
+    Guid Id, DateTimeOffset CreatedAt, int? OverallScore,
+    string? DimensionsJson, string? SummaryBulletsJson);
+
 /// <summary>A4 某题在其它面试中的回答版本。</summary>
 public sealed record QuestionHistoryDto(
     Guid InterviewId, string CompanyName, string Role, DateOnly? InterviewDate,
@@ -281,6 +286,10 @@ public sealed record DeleteActionCommand(Guid EntryId, Guid ActionId) : IRequest
 /// <summary>A3:分析趋势(按时间 asc 的快照列表)。</summary>
 public sealed record GetAnalysisTrendQuery(Guid EntryId)
     : IRequest<Result<IReadOnlyList<AnalysisTrendPointDto>>>;
+
+/// <summary>A3 最新快照:返回最近一条快照全文,没有快照时返回 null(前端显示"首次分析")。</summary>
+public sealed record GetLatestSnapshotQuery(Guid EntryId)
+    : IRequest<Result<AnalysisSnapshotDto?>>;
 
 /// <summary>A4:该题在其它面试中的回答版本(归一化题干精确匹配)。</summary>
 public sealed record GetQuestionHistoryQuery(Guid EntryId, Guid QuestionId)
@@ -1720,6 +1729,27 @@ public sealed class GetAnalysisTrendQueryHandler(InterviewsDbContext db)
             .Select(s => new AnalysisTrendPointDto(s.Id, s.CreatedAt, s.OverallScore))
             .ToListAsync(ct);
         return Result.Success<IReadOnlyList<AnalysisTrendPointDto>>(list);
+    }
+}
+
+/// <summary>A3 最新快照全文:按 CreatedAt desc 取第一条。</summary>
+public sealed class GetLatestSnapshotQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetLatestSnapshotQuery, Result<AnalysisSnapshotDto?>>
+{
+    public async Task<Result<AnalysisSnapshotDto?>> Handle(
+        GetLatestSnapshotQuery request, CancellationToken ct)
+    {
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        if (!exists)
+            return Result.Failure<AnalysisSnapshotDto?>(Error.NotFound("面试条目"));
+
+        var s = await db.AnalysisSnapshots.AsNoTracking()
+            .Where(x => x.InterviewEntryId == request.EntryId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new AnalysisSnapshotDto(
+                x.Id, x.CreatedAt, x.OverallScore, x.DimensionsJson, x.SummaryBulletsJson))
+            .FirstOrDefaultAsync(ct);
+        return Result.Success(s);
     }
 }
 

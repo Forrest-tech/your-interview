@@ -339,6 +339,15 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>A3:最新分析快照全文(结论 bullets + 维度 JSON)。无快照时返回 null。</summary>
+    [HttpGet("{id:guid}/analysis/latest")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> LatestSnapshot(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetLatestSnapshotQuery(id), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>A4:该题在其它面试中的回答版本(归一化题干精确匹配,排除自己)。</summary>
     [HttpGet("{id:guid}/questions/{questionId:guid}/history")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]

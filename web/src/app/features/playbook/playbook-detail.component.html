@@ -489,7 +489,7 @@
             </div>
           }
 
-          <app-question-bank [entryId]="id()" (changed)="onQuestionBankChanged()"></app-question-bank>
+          <app-question-bank [entryId]="id()" [questionsInput]="questions()" (changed)="onQuestionBankChanged()"></app-question-bank>
         </div>
       </mat-tab>
 

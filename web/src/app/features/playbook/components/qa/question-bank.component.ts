@@ -16,7 +16,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiClient } from '../../../../core/api/api-client';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import {
-  QaEntryDetail, QaHistoryItem, QaMastery, QaQuestion,
+  QaHistoryItem, QaMastery, QaQuestion,
   qaCategoryOf, qaIsSoftSkill, qaIsStuck, qaMasteryOf
 } from './qa.models';
 import { QA_I18N } from './qa.i18n';
@@ -57,6 +57,11 @@ interface NewQuestionForm {
 })
 export class QuestionBankComponent {
   readonly entryId = input.required<string>();
+  /**
+   * 父组件已加载的题目列表 —— 直接复用,不再单独发 GET /api/interviews/{id}。
+   * 原因:子组件的冗余请求曾因 auth 拦截器 401→刷新→重放竞态而悬挂,导致题库转圈。
+   */
+  readonly questionsInput = input<QaQuestion[]>([]);
   /** 增删题目后通知父组件立即刷新(如 tab 计数),不靠轮询等。 */
   readonly changed = output<void>();
 
@@ -79,7 +84,7 @@ export class QuestionBankComponent {
   readonly masteryOf = qaMasteryOf;
   readonly isSoftSkill = qaIsSoftSkill;
 
-  readonly loading = signal(true);
+  readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly questions = signal<QaQuestion[]>([]);
 
@@ -89,8 +94,10 @@ export class QuestionBankComponent {
   readonly categoryOptions = ['Technical', 'SystemDesign', 'Behavioral', 'Coding', 'Culture', 'Other'];
 
   constructor() {
-    // entryId 变化(或首次挂载)时重拉;load 内部只写不读的 signal,无循环。
-    effect(() => { this.load(this.entryId()); });
+    // 父组件 entry 加载/刷新/轮询时同步题目;本地增删改成功后先 patch 本地信号,
+    // 再经 changed 输出通知父组件重拉(回来的数据与本地一致,覆盖无风险)。
+    // 回答草稿 editingId/answerDrafts 存放在独立信号中,不受同步影响。
+    effect(() => { this.questions.set(this.questionsInput()); });
   }
 
   // ---------------- 顶部聚合头 ----------------
@@ -158,25 +165,11 @@ export class QuestionBankComponent {
   }
 
   // ---------------- 数据加载 ----------------
-
-  private load(id: string): void {
-    if (!id) { this.loading.set(false); return; }
-    this.loading.set(true);
-    this.error.set(null);
-    this.api.get<QaEntryDetail>(`/api/interviews/${id}`).subscribe({
-      next: d => {
-        this.questions.set(d?.questions ?? []);
-        this.loading.set(false);
-      },
-      error: (e: Error) => {
-        this.error.set(e.message);
-        this.loading.set(false);
-      }
-    });
-  }
+  // 注意:题目列表由父组件经 questionsInput 传入,本组件不再单独请求
+  // (曾因拦截器 401 刷新竞态导致请求悬挂)。增删改后经 changed 通知父组件重拉。
 
   retry(): void {
-    this.load(this.entryId());
+    this.changed.emit();
   }
 
   // ---------------- 掌握度徽章:点击循环 0→1→2→3→0 ----------------
@@ -373,7 +366,7 @@ export class QuestionBankComponent {
     this.newQ = this.emptyNewQ();
     this.showAdd.set(false);
     this.snack.open(this.t('pb.qa.added'), this.t('common.close'), { duration: 2000 });
-    this.load(this.entryId());
+    // 父组件重拉后经 questionsInput 同步回来,不再自己请求。
     this.changed.emit();
   }
 

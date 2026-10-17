@@ -191,8 +191,26 @@
     </mat-card>
   }
 
-  <div class="grid">
-    @for (e of entries(); track e.id) {
+  <!-- 进行中 / 已结束:两个平行区域 -->
+  @if (activeEntries().length > 0) {
+    <h3 class="section-title">{{ t('pb.section.active') }}</h3>
+    <div class="grid">
+      @for (e of activeEntries(); track e.id) {
+        <ng-container *ngTemplateOutlet="entryCard; context: { $implicit: e }"></ng-container>
+      }
+    </div>
+  }
+  @if (completedEntries().length > 0) {
+    <h3 class="section-title">{{ t('pb.section.completed') }}</h3>
+    <div class="grid completed">
+      @for (e of completedEntries(); track e.id) {
+        <ng-container *ngTemplateOutlet="entryCard; context: { $implicit: e }"></ng-container>
+      }
+    </div>
+  }
+
+  <!-- 条目卡片模板 -->
+  <ng-template #entryCard let-e>
       <mat-card class="entry" [class.editing]="editing()" [class.selected]="isSelected(e.id)"
                 [routerLink]="editing() ? null : ['/playbook', e.id]"
                 (click)="toggleSelect(e.id, $event)">
@@ -254,8 +272,7 @@
           </a>
         </mat-card-actions>
       </mat-card>
-    }
-  </div>
+  </ng-template>
 
   @if (total() > 0) {
     <div class="pager">

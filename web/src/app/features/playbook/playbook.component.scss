@@ -138,6 +138,18 @@
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
   align-content: start;
+  margin-bottom: 24px;
+}
+
+/* 进行中/已结束 分区标题 */
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 4px 0 12px;
+  padding-left: 2px;
+}
+/* 已结束的卡片稍微收敛 */
+.grid.completed .entry { opacity: 0.85; }
   padding: 2px 2px 16px;
 }
 

@@ -1437,6 +1437,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.filter.status': { zh: '状态', en: 'Status', fr: 'Statut' },
   'pb.filter.allStatuses': { zh: '全部状态', en: 'All statuses', fr: 'Tous les statuts' },
   'pb.empty.title': { zh: '还没有机经记录', en: 'No interview records yet', fr: 'Aucun dossier d’entretien' },
+  'pb.section.active': { zh: '进行中', en: 'In Progress', fr: 'En cours' },
+  'pb.section.completed': { zh: '已结束', en: 'Completed', fr: 'Terminé' },
   'pb.empty.msg': { zh: '面试完趁记忆还热,先把这一场建下来,再补录音或转写文本。', en: 'Right after an interview, log it while it’s fresh — then add the recording or transcript.', fr: 'Juste après un entretien, créez le dossier tant que c’est frais — ajoutez ensuite l’audio ou la transcription.' },
   'pb.empty.create': { zh: '新建第一条', en: 'Create the first one', fr: 'Créer le premier' },
   'pb.card.transcribed': { zh: '已转写', en: 'Transcribed', fr: 'Transcrit' },

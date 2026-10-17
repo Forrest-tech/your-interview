@@ -110,6 +110,14 @@ export class PlaybookComponent implements OnInit {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly entries = signal<InterviewEntry[]>([]);
+
+  /** 进行中:没有填最终结果的 */
+  readonly activeEntries = computed(() =>
+    this.entries().filter(e => !e.result || e.result.trim().length === 0));
+
+  /** 已结束:填了最终结果的(Offer/Rejected/Withdrawn 等) */
+  readonly completedEntries = computed(() =>
+    this.entries().filter(e => e.result && e.result.trim().length > 0));
   readonly total = signal(0);
   readonly page = signal(1);
   readonly pageSize = signal(12);

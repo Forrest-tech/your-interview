@@ -295,8 +295,23 @@
             </section>
           }
           @for (b of blocks; track b.key) {
-            <section class="block" [class.block-empty]="!blockText(it, b.key) && !detailEditing()"
-                     [class.answer-card]="b.key === 'question' || b.key === 'myAnswer' || b.key === 'betterAnswer'">
+            @if (b.key === 'question' || b.key === 'myAnswer' || b.key === 'betterAnswer') {
+              <!-- 问答三块:复用共享文档阅读器模块 -->
+              @if (!detailEditing()) {
+                <app-doc-viewer [title]="t(b.labelKey)" [content]="blockText(it, b.key)" />
+              } @else {
+                <section class="block">
+                  <header class="block-head">
+                    <mat-icon>{{ b.icon }}</mat-icon>
+                    <span class="block-label">{{ t(b.labelKey) }}</span>
+                    <span class="block-hint">{{ t(b.hintKey) }}</span>
+                  </header>
+                  <textarea matInput class="blk-editor" rows="6"
+                            [(ngModel)]="detailDraft.blocks[b.key]"></textarea>
+                </section>
+              }
+            } @else {
+            <section class="block" [class.block-empty]="!blockText(it, b.key) && !detailEditing()">
               <header class="block-head">
                 <mat-icon>{{ b.icon }}</mat-icon>
                 <span class="block-label">{{ t(b.labelKey) }}</span>
@@ -314,6 +329,7 @@
                 <p class="block-empty-hint">{{ t('ts.block.emptyHint') }}</p>
               }
             </section>
+            }
           }
           @if (parseSources(it).length > 0 || detailEditing()) {
             <section class="block source-block">

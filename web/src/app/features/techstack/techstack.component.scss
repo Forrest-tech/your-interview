@@ -423,21 +423,6 @@ mat-form-field { width: 100%; }
   cursor: default; /* GitHub 式:普通文本不闪 I-beam,选中复制照样可以 */
 }
 
-/* 问答三块(题干/我的回答/推荐答案):复用 AI Practice 阅读卡片样式 */
-.block.answer-card {
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.07);
-  padding: 24px 28px;
-  margin: 14px 0;
-}
-.block.answer-card .block-text {
-  font-size: 16.5px;
-  line-height: 1.85;
-}
-.block.answer-card .block-head { margin-bottom: 12px; }
-
 .block-empty-hint {
   cursor: default;
 }

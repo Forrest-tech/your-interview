@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { DocViewerComponent } from '../../shared/doc-viewer/doc-viewer.component';
 import { forkJoin } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
@@ -103,7 +104,7 @@ const DETAIL_BLOCKS: DetailBlock[] = [
     CommonModule, FormsModule, ReactiveFormsModule, RouterLink, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatMenuModule, MatCheckboxModule,
-    MatOptionModule, MatAutocompleteModule, MatSelectModule
+    MatOptionModule, MatAutocompleteModule, MatSelectModule, DocViewerComponent
   ],
   templateUrl: './techstack.component.html',
   styleUrl: './techstack.component.scss'

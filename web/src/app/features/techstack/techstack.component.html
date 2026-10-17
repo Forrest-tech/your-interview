@@ -300,8 +300,8 @@
                     <input matInput [formControl]="companySearchCtrl" [matAutocomplete]="companyAuto"
                            [placeholder]="t('ts.source.companySearchPh')" />
                     <mat-autocomplete #companyAuto="matAutocomplete" (optionSelected)="onCompanySelected($event.option.value)">
-                      @for (c of filteredCompanies(); track c.id) {
-                        <mat-option [value]="c">{{ c.name }}</mat-option>
+                      @for (c of filteredCompanies(); track c.companyId) {
+                        <mat-option [value]="c">{{ c.companyName }}</mat-option>
                       } @empty {
                         <mat-option disabled>{{ t('ts.source.companyEmpty') }}</mat-option>
                       }

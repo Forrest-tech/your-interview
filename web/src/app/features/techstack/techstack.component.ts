@@ -22,7 +22,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged, Company } from '../../core/models/api.models';
+import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged, PlaybookCompany } from '../../core/models/api.models';
 import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
@@ -532,29 +532,29 @@ export class TechStackComponent implements OnInit {
   newDetailSourceDate = '';
   /** 来源添加表单是否展开:默认只显示 chips + 添加按钮。 */
   readonly showDetailSourceForm = signal(false);
-  /** 来源公司下拉:Tracker 公司库(带搜索)。 */
+  /** 来源公司下拉:Playbook 备考中的公司(带搜索)。 */
   readonly companySearchCtrl = new FormControl('');
-  readonly trackerCompanies = signal<Company[]>([]);
+  readonly playbookCompanies = signal<PlaybookCompany[]>([]);
   readonly filteredCompanies = computed(() => {
     const q = (this.companySearchCtrl.value ?? '').trim().toLowerCase();
-    const list = this.trackerCompanies();
+    const list = this.playbookCompanies();
     if (!q) return list;
-    return list.filter((c) => c.name.toLowerCase().includes(q));
+    return list.filter((c) => c.companyName.toLowerCase().includes(q));
   });
 
-  /** 懒加载 Tracker 公司库(只加载一次)。 */
-  loadTrackerCompanies(): void {
-    if (this.trackerCompanies().length > 0) return;
-    this.api.get<Company[]>('/api/jobs/companies').subscribe({
-      next: (list) => this.trackerCompanies.set(list ?? []),
-      error: () => this.trackerCompanies.set([]),
+  /** 懒加载 Playbook 公司库(只加载一次)。 */
+  loadPlaybookCompanies(): void {
+    if (this.playbookCompanies().length > 0) return;
+    this.api.get<PlaybookCompany[]>('/api/interviews/companies').subscribe({
+      next: (list) => this.playbookCompanies.set(list ?? []),
+      error: () => this.playbookCompanies.set([]),
     });
   }
 
   /** 从下拉选中公司:只允许选库里的,不手动填。 */
-  onCompanySelected(c: Company): void {
-    this.newDetailSourceCompany = c.name;
-    this.companySearchCtrl.setValue(c.name, { emitEvent: false });
+  onCompanySelected(c: PlaybookCompany): void {
+    this.newDetailSourceCompany = c.companyName;
+    this.companySearchCtrl.setValue(c.companyName, { emitEvent: false });
   }
 
   /** 展开来源表单时重置搜索框并加载公司库。 */
@@ -564,7 +564,7 @@ export class TechStackComponent implements OnInit {
     if (next) {
       this.companySearchCtrl.setValue('');
       this.newDetailSourceCompany = '';
-      this.loadTrackerCompanies();
+      this.loadPlaybookCompanies();
     }
   }
 

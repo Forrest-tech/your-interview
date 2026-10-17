@@ -125,6 +125,13 @@ export interface Company {
   createdAt: string;
 }
 
+/** Playbook 公司聚合(后端 CompanySummaryDto 子集):备考中的公司。 */
+export interface PlaybookCompany {
+  companyId: string;
+  companyName: string;
+  entryCount: number;
+}
+
 /** 状态变更记录(与后端 StatusChangeDto 对齐:status/note/changedAt)。 */
 export interface StatusChange {
   status: string;

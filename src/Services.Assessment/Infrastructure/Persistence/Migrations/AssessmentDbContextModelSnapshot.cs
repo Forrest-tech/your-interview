@@ -229,6 +229,10 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LinkedSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 

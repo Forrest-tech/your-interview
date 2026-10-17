@@ -346,6 +346,18 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         return result.IsSuccess ? Results.Ok(new { saved = true }) : result.ToProblemDetails();
     }
 
+    /// <summary>设置/取消类别的数据源链接(如 "techstack")。null = 取消链接。</summary>
+    public sealed record SetCategoryLinkBody(string? LinkedSource);
+
+    [HttpPut("categories/{categoryId:guid}/link")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> SetCategoryLink(Guid categoryId, [FromBody] SetCategoryLinkBody body, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new SetCategoryLinkCommand(userId, categoryId, body.LinkedSource), ct);
+        return result.IsSuccess ? Results.Ok(new { saved = true }) : result.ToProblemDetails();
+    }
+
     /// <summary>删除类别;素材由数据库 SetNull 自动回"未分类",数据零丢失。</summary>
     [HttpDelete("categories/{categoryId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]

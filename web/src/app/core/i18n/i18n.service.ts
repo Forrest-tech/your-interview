@@ -138,6 +138,13 @@ const DICT: Record<string, Record<Lang, string>> = {
   //   该词条随之删除(面板靠工具按钮与树本身已足够表意)。
   'practice.emptyHint': { zh: '数据库里还没有素材。点上方按钮新建文件夹或文件，内容会直接存进数据库。', en: 'No materials in the database yet. Use the buttons above to create a folder or file; content is saved directly to the database.', fr: "Aucun document en base de données. Utilisez les boutons ci-dessus pour créer un dossier ou un fichier ; le contenu est enregistré directement dans la base." },
   'practice.treeLoading': { zh: '正在从数据库加载素材…', en: 'Loading materials from the database…', fr: 'Chargement des documents depuis la base…' },
+  'practice.tsLinked': { zh: '来自 Tech Stack(实时)', en: 'From Tech Stack (live)', fr: 'Depuis Tech Stack (en direct)' },
+  'practice.tsEmpty': { zh: 'Tech Stack 暂无分类', en: 'No Tech Stack categories yet', fr: 'Aucune catégorie Tech Stack' },
+  'practice.tsQuestion': { zh: '题目', en: 'Question', fr: 'Question' },
+  'practice.tsAnswer': { zh: '推荐答案', en: 'Recommended answer', fr: 'Réponse recommandée' },
+  'practice.tsEditIn': { zh: '在 Tech Stack 中编辑', en: 'Edit in Tech Stack', fr: 'Modifier dans Tech Stack' },
+  'practice.categoryLinkTs': { zh: '链接到 Tech Stack(实时视图)', en: 'Link to Tech Stack (live view)', fr: 'Lier à Tech Stack (vue en direct)' },
+  'practice.categoryUnlinkTs': { zh: '取消 Tech Stack 链接', en: 'Unlink from Tech Stack', fr: 'Délier de Tech Stack' },
   'practice.treeUnavailable': { zh: '无法连接服务端，素材未加载。为避免覆盖数据库里的真实数据，本次已禁止写入。请点击重试。', en: 'Cannot reach the server, materials were not loaded. To avoid overwriting real data in the database, writing is disabled. Please retry.', fr: "Serveur injoignable, documents non chargés. Pour éviter d'écraser les données réelles, l'écriture est désactivée. Veuillez réessayer." },
   'practice.retryLoad': { zh: '重试', en: 'Retry', fr: 'Réessayer' },
   'practice.noSelection': { zh: '未选择素材', en: 'No material selected', fr: 'Aucun document sélectionné' },

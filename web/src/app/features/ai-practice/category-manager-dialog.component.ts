@@ -74,6 +74,18 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
               </button>
             }
 
+            @if (c.linkedSource !== 'techstack') {
+              <button mat-icon-button (click)="toggleLink(c)"
+                      [matTooltip]="t('practice.categoryLinkTs')">
+                <mat-icon>link</mat-icon>
+              </button>
+            } @else {
+              <button mat-icon-button (click)="toggleLink(c)" class="linked"
+                      [matTooltip]="t('practice.categoryUnlinkTs')">
+                <mat-icon>link_off</mat-icon>
+              </button>
+            }
+
             @if (confirmDeleteId() === c.id) {
               <span class="confirm-text">{{ t('practice.categoryDelConfirm') }}</span>
               <button mat-icon-button class="del-yes" (click)="doDelete(c)">
@@ -306,6 +318,19 @@ export class CategoryManagerDialogComponent {
   // ---------- 删除(两步确认) ----------
   askDelete(c: PracticeCategoryDto): void {
     this.confirmDeleteId.set(c.id);
+  }
+
+  /** 切换 Tech Stack 链接(Notion linked view 模式) */
+  toggleLink(c: PracticeCategoryDto): void {
+    const target = c.linkedSource === 'techstack' ? null : 'techstack';
+    this.api.setCategoryLink(c.id, target).subscribe({
+      next: () => {
+        this.items.update(list => list.map(x =>
+          x.id === c.id ? { ...x, linkedSource: target } : x));
+        this.emitChanged();
+      },
+      error: (e) => this.notify(this.err(e))
+    });
   }
 
   doDelete(c: PracticeCategoryDto): void {

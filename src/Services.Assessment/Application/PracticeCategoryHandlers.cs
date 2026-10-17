@@ -21,7 +21,7 @@ namespace YourInterview.Services.Assessment.Application;
 // ============================================================
 
 /// <summary>与前端 PracticeCategory 形状对齐。</summary>
-public sealed record PracticeCategoryDto(Guid Id, string Name, int SortOrder);
+public sealed record PracticeCategoryDto(Guid Id, string Name, int SortOrder, string? LinkedSource);
 
 // ---------- 列表 ----------
 
@@ -51,10 +51,10 @@ public sealed class ListCategoriesQueryHandler(AssessmentDbContext db)
             };
             db.Categories.AddRange(seeded);
             await db.SaveChangesAsync(ct);
-            return seeded.Select(x => new PracticeCategoryDto(x.Id, x.Name, x.SortOrder)).ToList();
+            return seeded.Select(x => new PracticeCategoryDto(x.Id, x.Name, x.SortOrder, x.LinkedSource)).ToList();
         }
 
-        return list.Select(x => new PracticeCategoryDto(x.Id, x.Name, x.SortOrder)).ToList();
+        return list.Select(x => new PracticeCategoryDto(x.Id, x.Name, x.SortOrder, x.LinkedSource)).ToList();
     }
 }
 
@@ -89,7 +89,7 @@ public sealed class CreateCategoryCommandHandler(AssessmentDbContext db)
         var entity = new PracticeCategory(r.UserId, name, maxOrder + 1);
         db.Categories.Add(entity);
         await db.SaveChangesAsync(ct);
-        return Result.Success(new PracticeCategoryDto(entity.Id, entity.Name, entity.SortOrder));
+        return Result.Success(new PracticeCategoryDto(entity.Id, entity.Name, entity.SortOrder, entity.LinkedSource));
     }
 }
 
@@ -125,6 +125,29 @@ public sealed class RenameCategoryCommandHandler(AssessmentDbContext db)
 }
 
 // ---------- 排序 ----------
+
+/// <summary>设置/取消链接数据源(如 "techstack")。null = 取消链接。</summary>
+public sealed record SetCategoryLinkCommand(Guid UserId, Guid CategoryId, string? LinkedSource)
+    : MediatR.IRequest<Result<bool>>;
+
+public sealed class SetCategoryLinkCommandHandler(AssessmentDbContext db)
+    : MediatR.IRequestHandler<SetCategoryLinkCommand, Result<bool>>
+{
+    public async Task<Result<bool>> Handle(SetCategoryLinkCommand r, CancellationToken ct)
+    {
+        var entity = await db.Categories
+            .FirstOrDefaultAsync(x => x.UserId == r.UserId && x.Id == r.CategoryId, ct);
+        if (entity is null) return Result.Failure<bool>(Error.NotFound("category"));
+
+        try { entity.SetLinkedSource(r.LinkedSource); }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure<bool>(Error.Validation("category.link", ex.Message));
+        }
+        await db.SaveChangesAsync(ct);
+        return Result.Success(true);
+    }
+}
 
 /// <summary>按提交顺序整体重排。列表里没出现的类别排到最后(保持原有相对顺序)。</summary>
 public sealed record ReorderCategoriesCommand(Guid UserId, IReadOnlyList<Guid> OrderedIds)

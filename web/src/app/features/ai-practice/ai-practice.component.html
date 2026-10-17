@@ -46,7 +46,37 @@
            第二行:编辑(靠右),编辑中变 保存/取消 成对按钮,
            样式与右侧内容区的 edit/save 完全一致(白底细边框中性样式)。 -->
       <div class="tree-body">
-        @if (treeLoading()) {
+        @if (isTechStackLinked()) {
+          <!-- Tech Stack 实时视图(Notion linked view):分类/题目都从 Knowledge 实时查 -->
+          <div class="ts-linked-badge">
+            <mat-icon>link</mat-icon>
+            <span>{{ t('practice.tsLinked') }}</span>
+          </div>
+          @if (tsLoading() && tsTopics().length === 0) {
+            <p class="tree-status">{{ t('practice.treeLoading') }}</p>
+          } @else {
+            <div class="ts-tree">
+              @for (tp of tsTopics(); track tp.topic) {
+                <div class="ts-folder" (click)="loadTsItems(tp.topic)"
+                     [class.expanded]="tsExpandedTopic() === tp.topic">
+                  <mat-icon>{{ tsExpandedTopic() === tp.topic ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                  <span class="ts-folder-name">{{ tp.topic }}</span>
+                  <span class="ts-count">{{ tp.total }}</span>
+                </div>
+                @if (tsExpandedTopic() === tp.topic) {
+                  @for (item of tsItems(); track item.id) {
+                    <div class="ts-item" (click)="selectTsItem(item)"
+                         [class.selected]="tsSelected()?.id === item.id">
+                      <span class="ts-item-title">{{ item.question || item.title }}</span>
+                    </div>
+                  }
+                }
+              } @empty {
+                <p class="tree-status">{{ t('practice.tsEmpty') }}</p>
+              }
+            </div>
+          }
+        } @else if (treeLoading()) {
           <p class="tree-status">{{ t('practice.treeLoading') }}</p>
         } @else if (treeLoadFailed()) {
           <div class="tree-status is-error">
@@ -278,7 +308,25 @@
                       spellcheck="false"
                       [placeholder]="t('practice.placeholder')"></textarea>
           } @else {
-            @if (readonlyText()) {
+            @if (tsSelected(); as ts) {
+              <!-- Tech Stack 条目:题目 + 推荐答案(只读,Obsidian view-source 模式) -->
+              <div class="ts-detail">
+                <div class="ts-q">
+                  <span class="ts-label">{{ t('practice.tsQuestion') }}</span>
+                  <p>{{ ts.question || ts.title }}</p>
+                </div>
+                @if (ts.betterAnswer) {
+                  <div class="ts-a">
+                    <span class="ts-label">{{ t('practice.tsAnswer') }}</span>
+                    <p class="read-text">{{ ts.betterAnswer }}</p>
+                  </div>
+                }
+                <button mat-stroked-button (click)="editInTechStack()" class="ts-edit-btn">
+                  <mat-icon>open_in_new</mat-icon>
+                  {{ t('practice.tsEditIn') }}
+                </button>
+              </div>
+            } @else if (readonlyText()) {
               <!-- ★ 第十三轮(Forrest):标记属于素材本身,不再给正文涂色 -->
               <p class="read-text">{{ readonlyText() }}</p>
             } @else {

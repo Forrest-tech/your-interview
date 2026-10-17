@@ -36,6 +36,11 @@ public sealed class PracticeCategory
     public string Name { get; private set; } = string.Empty;
     /// <summary>下拉里的显示顺序,升序。排序弹窗拖完改的就是它。</summary>
     public int SortOrder { get; private set; }
+    /// <summary>
+    /// 链接的数据源(Notion linked view 模式)。null = 普通分类(自己的素材);
+    /// "techstack" = Tech Stack 的实时视图(分类/题目都从 Knowledge 服务实时查,不存副本)。
+    /// </summary>
+    public string? LinkedSource { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -49,6 +54,16 @@ public sealed class PracticeCategory
     public void SetSortOrder(int sortOrder)
     {
         SortOrder = sortOrder;
+        Touch();
+    }
+
+    /// <summary>设置/取消链接数据源。仅允许 null 或 "techstack"。</summary>
+    public void SetLinkedSource(string? source)
+    {
+        var s = string.IsNullOrWhiteSpace(source) ? null : source.Trim().ToLowerInvariant();
+        if (s != null && s != "techstack")
+            throw new ArgumentException("不支持的数据源", nameof(source));
+        LinkedSource = s;
         Touch();
     }
 

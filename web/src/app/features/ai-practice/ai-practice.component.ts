@@ -22,6 +22,8 @@ import { MaterialNode, MaterialTreeComponent } from '../../shared/material-tree/
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MaterialTransferDialogComponent } from './material-transfer-dialog.component';
 import { MaterialNodeDto, MaterialNodeIn, PracticeApi, PracticeCategoryDto } from '../../core/api/practice-api.service';
+import { KnowledgeItem, KnowledgeTopic, Paged } from '../../core/models/api.models';
+import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
 import {
@@ -158,6 +160,28 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *   类别列表加载回来后若发现存的 id 已被删除,回落"全部"(见 loadCategories)。
    */
   readonly categoryFilter = signal<string>(AiPracticeComponent.readStoredCategoryFilter());
+
+  // ---------- Tech Stack 实时视图(Notion linked view 模式) ----------
+  /**
+   * 当前选中的分类是否链接到 Tech Stack。
+   * 是 → 左树显示 Tech Stack 的实时分类/题目(从 Knowledge 服务查,不存副本);
+   * 否 → 显示练习自己的素材树。
+   */
+  readonly isTechStackLinked = computed(() => {
+    const f = this.categoryFilter();
+    if (f === 'all' || f === 'uncategorized') return false;
+    const cat = this.categories().find(c => c.id === f);
+    return cat?.linkedSource === 'techstack';
+  });
+  /** Tech Stack 的分类列表(实时从 Knowledge 取) */
+  readonly tsTopics = signal<KnowledgeTopic[]>([]);
+  /** Tech Stack 当前展开的分类 */
+  readonly tsExpandedTopic = signal<string | null>(null);
+  /** Tech Stack 当前分类下的条目 */
+  readonly tsItems = signal<KnowledgeItem[]>([]);
+  /** Tech Stack 当前选中的条目(右侧展示用) */
+  readonly tsSelected = signal<KnowledgeItem | null>(null);
+  readonly tsLoading = signal(false);
 
   /** 编辑态正文(仅编辑模式下可改)。 */
   readonly draft = signal('');
@@ -768,6 +792,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 后端访问层（素材树 / 录音 / 语音设置 / TTS）。 */
   private readonly practiceApi = inject(PracticeApi);
+  /** Knowledge API(Tech Stack 实时视图用) */
+  private readonly knowledgeApi = inject(ApiClient);
 
   /** 统一确认弹窗(保存/删除都要先过这一关,Forrest 2026-09-20)。 */
   private readonly dialog = inject(MatDialog);
@@ -1141,6 +1167,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       next: (list) => {
         this.categories.set(list ?? []);
         this.validateCategoryFilter();
+        // 若恢复的分类是 Tech Stack 链接,加载实时视图
+        if (this.isTechStackLinked()) {
+          this.loadTsTopics();
+        }
       },
       error: () => this.categories.set([])
     });
@@ -1164,6 +1194,58 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     try {
       localStorage.setItem(AiPracticeComponent.CATEGORY_FILTER_KEY, value);
     } catch { /* 隐私模式写不了,不影响本次会话 */ }
+    // Tech Stack 链接分类:切换时加载实时视图
+    this.tsSelected.set(null);
+    this.tsExpandedTopic.set(null);
+    this.tsItems.set([]);
+    if (this.isTechStackLinked()) {
+      this.loadTsTopics();
+    }
+  }
+
+  // ---------- Tech Stack 实时视图(Notion linked view 模式) ----------
+
+  /** 加载 Tech Stack 分类(从 Knowledge 实时查) */
+  loadTsTopics(): void {
+    if (!this.isTechStackLinked()) return;
+    this.tsLoading.set(true);
+    this.knowledgeApi.get<KnowledgeTopic[]>('/api/knowledge/topics').subscribe({
+      next: (list) => {
+        this.tsTopics.set((list ?? []).filter(t => t.topic).sort((a, b) => a.topic.localeCompare(b.topic)));
+        this.tsLoading.set(false);
+        if (this.tsTopics().length > 0 && !this.tsExpandedTopic()) {
+          this.loadTsItems(this.tsTopics()[0].topic);
+        }
+      },
+      error: () => { this.tsTopics.set([]); this.tsLoading.set(false); }
+    });
+  }
+
+  /** 加载某分类下的 Tech Stack 条目 */
+  loadTsItems(topic: string): void {
+    this.tsExpandedTopic.set(topic);
+    this.tsLoading.set(true);
+    this.knowledgeApi.get<Paged<KnowledgeItem>>('/api/knowledge', { topic, pageSize: 100 }).subscribe({
+      next: (res) => {
+        this.tsItems.set(res.items ?? []);
+        this.tsLoading.set(false);
+      },
+      error: () => { this.tsItems.set([]); this.tsLoading.set(false); }
+    });
+  }
+
+  /** 选中 Tech Stack 条目(右侧展示) */
+  selectTsItem(item: KnowledgeItem): void {
+    this.tsSelected.set(item);
+    this.selectedId.set(null);
+  }
+
+  /** 跳到 Tech Stack 编辑该条目(Obsidian "view source" 模式) */
+  editInTechStack(): void {
+    const item = this.tsSelected();
+    if (item) {
+      this.router.navigate(['/techstack'], { queryParams: { id: item.id } });
+    }
   }
 
   /**

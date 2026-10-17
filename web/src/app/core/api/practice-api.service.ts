@@ -55,6 +55,8 @@ export interface PracticeCategoryDto {
   id: string;
   name: string;
   sortOrder: number;
+  /** 链接的数据源: null=普通分类, "techstack"=Tech Stack 实时视图 */
+  linkedSource?: string | null;
 }
 
 // ---------- 录音 ----------
@@ -237,6 +239,11 @@ export class PracticeApi {
   /** 删除类别;其下素材由服务端自动归入"未分类"。 */
   deleteCategory(id: string): Observable<{ deleted: boolean }> {
     return this.api.delete<{ deleted: boolean }>(`${PracticeApi.BASE}/categories/${id}`);
+  }
+
+  /** 设置/取消类别的数据源链接(如 "techstack")。null = 取消链接。 */
+  setCategoryLink(id: string, linkedSource: string | null): Observable<{ saved: boolean }> {
+    return this.api.put<{ saved: boolean }>(`${PracticeApi.BASE}/categories/${id}/link`, { linkedSource });
   }
 
   /**

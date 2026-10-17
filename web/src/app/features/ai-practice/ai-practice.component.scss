@@ -3305,3 +3305,67 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 }
 
 
+
+/* ---------- Tech Stack 实时视图(Notion linked view) ---------- */
+.ts-linked-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin: 8px;
+  background: rgba(63, 81, 181, 0.08);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #3f51b5;
+}
+.ts-linked-badge mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+.ts-tree { padding: 4px 8px; }
+.ts-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.ts-folder:hover { background: rgba(0, 0, 0, 0.04); }
+.ts-folder mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(0,0,0,.45); }
+.ts-folder-name { flex: 1 1 auto; }
+.ts-count {
+  font-size: 11.5px;
+  color: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.ts-item {
+  padding: 7px 10px 7px 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.75);
+}
+.ts-item:hover { background: rgba(63, 81, 181, 0.06); }
+.ts-item.selected { background: rgba(63, 81, 181, 0.12); color: #3f51b5; }
+.ts-item-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 右侧 Tech Stack 条目详情 */
+.ts-detail { padding: 4px 0; }
+.ts-q, .ts-a { margin-bottom: 16px; }
+.ts-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3f51b5;
+  margin-bottom: 6px;
+}
+.ts-q p { font-size: 15px; font-weight: 500; margin: 0; }
+.ts-edit-btn { margin-top: 8px; }

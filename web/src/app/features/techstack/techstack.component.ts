@@ -388,8 +388,17 @@ export class TechStackComponent implements OnInit {
 
   // ------------------------------ 主从交互 ------------------------------
 
+  /** 选中条目:调详情接口拿全量字段(列表 DTO 不带内容块),再展示。 */
   select(item: KnowledgeItem): void {
+    // 先给个即时反馈,详情回来再换全量
     this.selected.set(item);
+    this.api.get<KnowledgeItem>(`/api/knowledge/${item.id}`).subscribe({
+      next: (full) => {
+        this.selected.set(full);
+        this.items.update(list => list.map((x) => x.id === full.id ? { ...x, ...full } : x));
+      },
+      error: (e: Error) => this.notify(e.message, true)
+    });
   }
 
   isSelected(item: KnowledgeItem): boolean {

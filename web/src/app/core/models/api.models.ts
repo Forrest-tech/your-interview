@@ -295,7 +295,7 @@ export interface PassProbability {
   sampleSize: number;
   passedCount: number;
   stage: string;
-  factors: string[];
+  factors: OfferFactor[];
 }
 
 /** 整单 offer 概率:漏斗模型。 */

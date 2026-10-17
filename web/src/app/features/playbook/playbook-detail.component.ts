@@ -182,23 +182,37 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   /** 概率因子 tooltip:按当前 locale 格式化后端返回的结构化因子。 */
   formatFactors(op: OfferProbability): string {
-    return op.factors.map((f) => {
-      switch (f.key) {
-        case 'no_history':
-          return this.t('pb.op.noHistory').replace('{r}', String(f.arg1));
-        case 'history_rate':
-          return this.t('pb.op.historyRate')
-            .replace('{r}', String(f.arg1)).replace('{o}', String(f.arg2)).replace('{t}', String(f.arg3));
-        case 'qa_bonus':
-          return this.t('pb.op.qaBonus').replace('{n}', String(f.arg1));
-        case 'prep_bonus':
-          return this.t('pb.op.prepBonus').replace('{n}', String(f.arg1)).replace('{b}', String(f.arg2));
-        case 'funnel_bonus':
-          return this.t('pb.op.funnelBonus').replace('{r}', String(f.arg1)).replace('{b}', String(f.arg2));
-        default:
-          return f.key;
-      }
-    }).join('\n');
+    return op.factors.map((f) => this.formatFactor(f)).join('\n');
+  }
+
+  formatFactor(f: { key: string; arg1: number; arg2: number; arg3: number }): string {
+    switch (f.key) {
+      case 'no_history':
+        return this.t('pb.op.noHistory').replace('{r}', String(f.arg1));
+      case 'history_rate':
+        return this.t('pb.op.historyRate')
+          .replace('{r}', String(f.arg1)).replace('{o}', String(f.arg2)).replace('{t}', String(f.arg3));
+      case 'qa_bonus':
+        return this.t('pb.op.qaBonus').replace('{n}', String(f.arg1));
+      case 'prep_bonus':
+        return this.t('pb.op.prepBonus').replace('{n}', String(f.arg1)).replace('{b}', String(f.arg2));
+      case 'funnel_bonus':
+        return this.t('pb.op.funnelBonus').replace('{r}', String(f.arg1)).replace('{b}', String(f.arg2));
+      case 'pp_no_history':
+        return this.t('pb.pp.noHistory');
+      case 'pp_history_rate':
+        return this.t('pb.pp.historyRate').replace('{o}', String(f.arg1)).replace('{t}', String(f.arg2));
+      case 'pp_prep_list':
+        return this.t('pb.pp.prepList');
+      case 'pp_has_notes':
+        return this.t('pb.pp.hasNotes');
+      case 'pp_has_email':
+        return this.t('pb.pp.hasEmail');
+      case 'pp_qa_accum':
+        return this.t('pb.pp.qaAccum').replace('{n}', String(f.arg1)).replace('{b}', String(f.arg2));
+      default:
+        return f.key;
+    }
   }
 
   /** Rounds tab 显示用:有显式 rounds 就用,没有就从 entry 基本信息合成一个 Round 1 —— 不让 tab 空着。 */

@@ -1169,7 +1169,7 @@ public sealed record PassProbabilityDto(
     int SampleSize,            // 历史样本数
     int PassedCount,
     string Stage,
-    List<string> Factors);     // 影响因素说明
+    List<OfferFactorDto> Factors);     // 影响因素说明(Key 由前端按 locale 格式化)
 
 public sealed record GetRoundPassProbabilityQuery(Guid RoundId) : IRequest<Result<PassProbabilityDto>>;
 
@@ -1196,20 +1196,20 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
                     || r.Outcome == InterviewRoundOutcome.Rejected))
             .ToListAsync(ct);
 
-        var factors = new List<string>();
+        var factors = new List<OfferFactorDto>();
         int baseProb;
         int historyCount = history.Count;
         if (historyCount == 0)
         {
             // 无历史数据:中性 50%,提示多攒数据
             baseProb = 50;
-            factors.Add("暂无同类型轮次历史,按 50% 中性估算");
+            factors.Add(new OfferFactorDto("pp_no_history"));
         }
         else
         {
             var passed = history.Count(r => r.Outcome == InterviewRoundOutcome.Passed);
             baseProb = (int)Math.Round(100.0 * passed / historyCount);
-            factors.Add($"历史同类轮次 {passed}/{historyCount} 通过");
+            factors.Add(new OfferFactorDto("pp_history_rate", passed, historyCount));
         }
 
         // 准备度信号:本轮的准备越充分,微调概率
@@ -1232,14 +1232,14 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
         {
             if (!string.IsNullOrWhiteSpace(target.PrepQuestionsJson)
                 && target.PrepQuestionsJson != "[]")
-            { adjustment += 5; factors.Add("已准备面试问题清单 +5%"); }
+            { adjustment += 5; factors.Add(new OfferFactorDto("pp_prep_list")); }
 
             if (!string.IsNullOrWhiteSpace(target.Notes))
-            { adjustment += 3; factors.Add("有轮次笔记 +3%"); }
+            { adjustment += 3; factors.Add(new OfferFactorDto("pp_has_notes")); }
 
             if (!string.IsNullOrWhiteSpace(target.EmailsJson)
                 && target.EmailsJson != "[]")
-            { adjustment += 2; factors.Add("已关联 scheduling 邮件 +2%"); }
+            { adjustment += 2; factors.Add(new OfferFactorDto("pp_has_email")); }
         }
 
         // 查本轮所属条目的 Q&A 积累情况
@@ -1250,7 +1250,7 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
         if (entry is not null)
         {
             if (entry.QaCount > 0)
-            { adjustment += Math.Min(5, entry.QaCount); factors.Add($"已积累 {entry.QaCount} 条 Q&A +{Math.Min(5, entry.QaCount)}%"); }
+            { adjustment += Math.Min(5, entry.QaCount); factors.Add(new OfferFactorDto("pp_qa_accum", entry.QaCount, Math.Min(5, entry.QaCount))); }
         }
 
         var prob = Math.Clamp(baseProb + adjustment, 5, 95);

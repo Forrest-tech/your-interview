@@ -278,10 +278,11 @@ export class TechStackComponent implements OnInit {
         // 从结果里推导主题,作为接口不可用时的兜底(合并而不是覆盖,避免筛选后选项变少)
         this.deriveTopics(list);
 
-        // 详情面板保持选中项;若该项已不在列表(被筛掉/删掉),退而选第一条
+        // 详情面板保持选中项;若该项已不在列表(被筛掉/删掉),退而选第一条(走 select 取全量详情)
         const cur = this.selected();
         if (!cur || !list.some((i) => i.id === cur.id)) {
-          this.selected.set(list.length > 0 ? list[0] : null);
+          if (list.length > 0) this.select(list[0]);
+          else this.selected.set(null);
         }
       },
       error: (e: Error) => {

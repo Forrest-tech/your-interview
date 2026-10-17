@@ -170,7 +170,7 @@ export class TechStackComponent implements OnInit {
 
   readonly search = signal('');
   readonly topic = signal<string | null>(null);
-  readonly mastery = signal<MasteryLevel | null>(null);
+  readonly mastery = signal<MasteryLevel | null>('New');
   /** 来源公司筛选(需求 6.4.4:按"这题来自哪家公司"反查)。 */
   readonly company = signal<string | null>(null);
 

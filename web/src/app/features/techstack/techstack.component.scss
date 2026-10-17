@@ -121,6 +121,7 @@ mat-card { border-radius: 8px; }
 /* ---------- 筛选 ---------- */
 
 .filters { margin-bottom: 12px; }
+.filters mat-card-content { padding-bottom: 8px; }
 .filter-row { display: flex; gap: 12px; }
 .search { flex: 1 1 auto; }
 mat-form-field { width: 100%; }

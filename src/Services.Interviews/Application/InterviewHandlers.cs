@@ -798,6 +798,16 @@ public sealed class CreateEntryCommandHandler(InterviewsDbContext db)
                 request.Notes);
         }
 
+        // 从 Tracker 建条目必须至少有一个 Round 实体,否则 Rounds tab 与 Basic info 不一致
+        var round = entry.AddRound();
+        if (request.InterviewDate is not null || request.InterviewFormat is not null
+            || request.Interviewers is not null || request.Location is not null)
+        {
+            entry.UpdateRound(round.Id, round.Stage, request.InterviewDate,
+                request.Interviewers, request.InterviewFormat, request.Location,
+                round.Outcome, null, null);
+        }
+
         db.Entries.Add(entry);
         await db.SaveChangesAsync(ct);
         return Result.Success(entry.Id);

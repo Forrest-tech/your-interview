@@ -241,13 +241,15 @@
 
             @if (!isEditing(r)) {
               <div class="tl-actions">
-                <button mat-button (click)="openEdit(r)">
-                  <mat-icon>edit</mat-icon> {{ t('pb.br.rounds.edit') }}
-                </button>
-                <span class="spacer"></span>
-                <button mat-icon-button color="warn" (click)="removeRound(r)" [title]="t('pb.br.rounds.delete')">
-                  <mat-icon>delete_outline</mat-icon>
-                </button>
+                @if (!isSynthetic(r)) {
+                  <button mat-button (click)="openEdit(r)">
+                    <mat-icon>edit</mat-icon> {{ t('pb.br.rounds.edit') }}
+                  </button>
+                  <span class="spacer"></span>
+                  <button mat-icon-button color="warn" (click)="removeRound(r)" [title]="t('pb.br.rounds.delete')">
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                }
               </div>
             }
           </mat-card>

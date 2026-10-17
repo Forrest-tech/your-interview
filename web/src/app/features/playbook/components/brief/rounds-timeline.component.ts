@@ -73,9 +73,14 @@ export class RoundsTimelineComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly busy = signal<string | null>(null);
   readonly rounds = signal<BriefRound[]>([]);
+  /** 合成轮次:库里无 Round 实体但 entry 有 RoundNo 时展示用(跟 tab 计数一致)。 */
+  readonly syntheticRound = signal<BriefRound | null>(null);
 
-  readonly sortedRounds = computed(() =>
-    [...this.rounds()].sort((a, b) => a.order - b.order));
+  readonly sortedRounds = computed(() => {
+    const syn = this.syntheticRound();
+    const list = syn ? [syn, ...this.rounds()] : [...this.rounds()];
+    return list.sort((a, b) => a.order - b.order);
+  });
   readonly nextRd = computed(() => nextRound(this.rounds()));
 
   readonly stages = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
@@ -89,6 +94,9 @@ export class RoundsTimelineComponent implements OnInit {
   // ---------------- 行内编辑 ----------------
   editDrafts: Record<string, RoundEditForm> = {};
   isEditing(r: BriefRound): boolean { return r.id in this.editDrafts; }
+
+  /** 合成轮次(老数据无 Round 实体时展示用):不可编辑/删除。 */
+  isSynthetic(r: BriefRound): boolean { return r.id === '__synthetic_r1'; }
 
   openEdit(r: BriefRound): void {
     const ex = this.extras[r.id] ?? {};
@@ -299,6 +307,19 @@ export class RoundsTimelineComponent implements OnInit {
             };
           }
           this.rounds.set(rs);
+          // 无真实轮次但 entry 有 RoundNo(老数据):合成一条展示用,跟 tab 计数的 displayRounds 保持一致
+          if (rs.length === 0 && e?.roundNo) {
+            this.syntheticRound.set({
+              id: '__synthetic_r1',
+              order: e.roundNo ?? 1,
+              stage: '',
+              outcome: e.result ?? '',
+              scheduledDate: e.interviewDate ?? '',
+              interviewers: e.interviewers ?? '',
+            } as BriefRound);
+          } else {
+            this.syntheticRound.set(null);
+          }
           this.loading.set(false);
         },
         error: (e: Error) => {

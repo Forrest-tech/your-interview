@@ -33,7 +33,9 @@ import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.comp
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 
 /** 熟练度等级顺序 —— 用于展示顺序、进度和"提升一级"的目标值。 */
-const MASTERY_ORDER: MasteryLevel[] = ['New', 'Learning', 'Familiar', 'Mastered'];
+const MASTERY_ORDER: MasteryLevel[] = ['New', 'Learning', 'Familiar', 'Mastered', 'NeedsReview'];
+/** 升级链(不含 NeedsReview,卡壳不是升级目标)。 */
+const PROMOTE_ORDER: MasteryLevel[] = ['New', 'Learning', 'Familiar', 'Mastered'];
 
 /** 复习结果档位 —— 必须与后端 RecordReviewCommandValidator 的允许值一致。 */
 type ReviewResultLabel = 'Again' | 'Hard' | 'Good' | 'Easy';
@@ -930,12 +932,12 @@ export class TechStackComponent implements OnInit {
 
   /** 提升一级熟练度。confidence 随用户自评传,默认给一个 0.7 的中庸值。 */
   promote(item: KnowledgeItem): void {
-    const idx = MASTERY_ORDER.indexOf(item.mastery);
-    if (idx < 0 || idx >= MASTERY_ORDER.length - 1) {
+    const idx = PROMOTE_ORDER.indexOf(item.mastery);
+    if (idx < 0 || idx >= PROMOTE_ORDER.length - 1) {
       this.notify(this.t('ts.promote.maxReached'));
       return;
     }
-    const next = MASTERY_ORDER[idx + 1];
+    const next = PROMOTE_ORDER[idx + 1];
     const ok = confirm(
       this.t('ts.promote.confirm')
         .replace('{title}', item.title)

@@ -71,20 +71,19 @@ interface DetailBlock {
 }
 
 /**
- * 九块知识卡片的正文区块。
- * 顺序刻意按"从直觉到应试"排列:先一句话直觉建立印象,最后才是面试话术。
- * 这个顺序就是复习时的阅读顺序。
+ * 知识卡片的正文区块。
+ * 顺序按用户要求:题干 → 我的回答 → 推荐答案 → 概念 → 要点 → 常见坑。
+ * 先看自己怎么答的,再看更好的说法,最后才是原理和要点。
  */
 const DETAIL_BLOCKS: DetailBlock[] = [
   // 后端存的是 title/question/conceptExplanation + 两个 JSON 数组,
-  // 不是八个独立正文字段。这里把 JSON 拆成"要点/常见坑"两块来展示,
-  // 复习时的阅读顺序:题干 → 概念 → 要点 → 常见坑。
+  // 不是八个独立正文字段。这里把 JSON 拆成"要点/常见坑"两块来展示。
   { key: 'question', labelKey: 'ts.block.question', icon: 'help_outline', hintKey: 'ts.block.questionHint' },
+  { key: 'myAnswer', labelKey: 'ts.block.myAnswer', icon: 'record_voice_over', hintKey: 'ts.block.myAnswerHint' },
+  { key: 'betterAnswer', labelKey: 'ts.block.betterAnswer', icon: 'stars', hintKey: 'ts.block.betterAnswerHint' },
   { key: 'conceptExplanation', labelKey: 'ts.block.conceptExplanation', icon: 'menu_book', hintKey: 'ts.block.conceptExplanationHint' },
   { key: 'keyPoints', labelKey: 'ts.block.keyPoints', icon: 'lightbulb_outline', hintKey: 'ts.block.keyPointsHint' },
-  { key: 'commonMistakes', labelKey: 'ts.block.commonMistakes', icon: 'warning_amber', hintKey: 'ts.block.commonMistakesHint' },
-  { key: 'myAnswer', labelKey: 'ts.block.myAnswer', icon: 'record_voice_over', hintKey: 'ts.block.myAnswerHint' },
-  { key: 'betterAnswer', labelKey: 'ts.block.betterAnswer', icon: 'stars', hintKey: 'ts.block.betterAnswerHint' }
+  { key: 'commonMistakes', labelKey: 'ts.block.commonMistakes', icon: 'warning_amber', hintKey: 'ts.block.commonMistakesHint' }
 ];
 
 /**

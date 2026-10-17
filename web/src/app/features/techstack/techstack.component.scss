@@ -361,7 +361,7 @@ mat-form-field { width: 100%; }
 }
 
 .block {
-  padding: 13px 0;
+  padding: 20px 0;
   border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
 }
 
@@ -370,30 +370,30 @@ mat-form-field { width: 100%; }
 .block-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 7px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .block-head mat-icon {
-  font-size: 17px;
-  width: 17px;
-  height: 17px;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
   color: #3f51b5;
   opacity: 0.8;
   flex: 0 0 auto;
 }
 
-.block-label { font-size: 13px; font-weight: 600; }
+.block-label { font-size: 15px; font-weight: 600; }
 
-.block-hint { font-size: 11.5px; opacity: 0.42; margin-left: 2px; }
+.block-hint { font-size: 12.5px; opacity: 0.42; margin-left: 2px; }
 
 /* 行内编辑器(详情统一编辑态) */
 .blk-editor {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
-  font-size: 13.5px;
-  line-height: 1.72;
+  font-size: 15px;
+  line-height: 1.8;
   padding: 10px 12px;
   border: 1px solid rgba(63, 81, 181, 0.35);
   border-radius: 8px;
@@ -416,8 +416,8 @@ mat-form-field { width: 100%; }
 
 .block-text {
   margin: 0;
-  font-size: 13.5px;
-  line-height: 1.72;
+  font-size: 15px;
+  line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-word;
   cursor: default; /* GitHub 式:普通文本不闪 I-beam,选中复制照样可以 */

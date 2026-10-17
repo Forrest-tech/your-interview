@@ -34,6 +34,7 @@ public sealed record KnowledgeListItemDto(
     int Difficulty, int Importance, int ReviewCount, DateTimeOffset? NextReviewAt,
     bool IsDue, string? SourceCompanyName, Guid? SourceInterviewEntryId, DateOnly? SourceDate,
     int? SourceRoundNo, string? SourceRoundStage, Guid? SourceJobApplicationId,
+    string? SourcesJson,
     DateTimeOffset CreatedAt);
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
@@ -263,7 +264,7 @@ public static class KnowledgeMappingExtensions
         k.Id, k.Title, k.Topic, k.SubTopic, k.Mastery.ToString(), k.Source.ToString(),
         k.Difficulty, k.Importance, k.ReviewCount, k.NextReviewAt, KnowledgeDue.IsDue(k, now),
         k.SourceCompanyName, k.SourceInterviewEntryId, k.SourceDate,
-        k.SourceRoundNo, k.SourceRoundStage, k.SourceJobApplicationId, k.CreatedAt);
+        k.SourceRoundNo, k.SourceRoundStage, k.SourceJobApplicationId, k.SourcesJson, k.CreatedAt);
 }
 
 // ============================ Handler:查询 ============================

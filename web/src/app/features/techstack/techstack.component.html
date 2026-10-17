@@ -181,13 +181,7 @@
             <div class="li-foot">
               <span class="li-topic">{{ it.topic }}</span>
               @if (sourceLabel(it); as src) {
-                @if (it.sourceInterviewEntryId) {
-                  <a class="li-src link" [routerLink]="['/playbook', it.sourceInterviewEntryId]"
-                     [matTooltip]="sourceJumpTooltip(src)"
-                     (click)="$event.stopPropagation()">{{ src }}</a>
-                } @else {
-                  <span class="li-src" [matTooltip]="sourceFromTooltip(src)">{{ src }}</span>
-                }
+                <span class="li-src" [matTooltip]="sourceFromTooltip(src)">{{ src }}</span>
               }
               <span class="li-review">{{ tn('ts.reviewCount', it.reviewCount) }}</span>
             </div>

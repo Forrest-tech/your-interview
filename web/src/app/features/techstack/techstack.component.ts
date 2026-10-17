@@ -465,11 +465,12 @@ export class TechStackComponent implements OnInit {
   /** 来源标记文案。没有来源信息时返回 null。 */
   sourceLabel(item: KnowledgeItem): string | null {
     if (item.source !== 'FromInterview') return null;
-    const parts: string[] = [];
-    if (item.sourceCompanyName) parts.push(item.sourceCompanyName);
-    if (item.sourceRoundNo) parts.push(this.i18n.tn('pb.round', item.sourceRoundNo));
-    if (item.sourceDate) parts.push(String(item.sourceDate).slice(0, 10));
-    return parts.length > 0 ? parts.join(' · ') : this.i18n.t('nav.playbook');
+    // 多来源:只显示公司名,不写轮次和日期
+    const names = this.parseSources(item)
+      .map((s) => s.companyName?.trim())
+      .filter((n): n is string => !!n);
+    if (names.length > 0) return names.join(' · ');
+    return this.i18n.t('nav.playbook');
   }
 
   /** 来源公司 chip 的 tooltip:"已掌握 3 / 待复习 2"。 */

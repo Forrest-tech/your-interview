@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
@@ -110,6 +111,8 @@ const DETAIL_BLOCKS: DetailBlock[] = [
 })
 export class TechStackComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
@@ -286,8 +289,13 @@ export class TechStackComponent implements OnInit {
         this.deriveTopics(list);
 
         // 详情面板保持选中项;若该项已不在列表(被筛掉/删掉),退而选第一条(走 select 取全量详情)
+        // 刷新恢复:URL 里有 id 参数时优先恢复该项
+        const urlId = this.route.snapshot.queryParamMap.get('id');
         const cur = this.selected();
-        if (!cur || !list.some((i) => i.id === cur.id)) {
+        if (urlId && list.some((i) => i.id === urlId)) {
+          const target = list.find((i) => i.id === urlId)!;
+          if (!cur || cur.id !== urlId) this.select(target);
+        } else if (!cur || !list.some((i) => i.id === cur.id)) {
           if (list.length > 0) this.select(list[0]);
           else this.selected.set(null);
         }
@@ -396,10 +404,16 @@ export class TechStackComponent implements OnInit {
 
   // ------------------------------ 主从交互 ------------------------------
 
-  /** 选中条目:调详情接口拿全量字段(列表 DTO 不带内容块),再展示。 */
+  /** 选中条目:调详情接口拿全量字段(列表 DTO 不带内容块),再展示。选中 id 同步到 URL,刷新保持。 */
   select(item: KnowledgeItem): void {
     // 先给个即时反馈,详情回来再换全量
     this.selected.set(item);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { id: item.id },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
     this.api.get<KnowledgeItem>(`/api/knowledge/${item.id}`).subscribe({
       next: (full) => {
         this.selected.set(full);
@@ -411,6 +425,16 @@ export class TechStackComponent implements OnInit {
 
   isSelected(item: KnowledgeItem): boolean {
     return this.selected()?.id === item.id;
+  }
+
+  /** 清除 URL 中的选中 id 参数。 */
+  private clearUrlId(): void {
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { id: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
   }
 
   // ------------------------------ 批量编辑(删除) ------------------------------
@@ -456,6 +480,7 @@ export class TechStackComponent implements OnInit {
         this.editing.set(false);
         this.batchIds.set([]);
         this.selected.set(null);
+        this.clearUrlId();
         this.reload();
       },
       error: (e: Error) => this.notify(e.message, true)

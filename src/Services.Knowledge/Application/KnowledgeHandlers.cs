@@ -315,9 +315,16 @@ public sealed class ListKnowledgeQueryHandler(KnowledgeDbContext db, TimeProvide
             q = q.Where(x => x.NextReviewAt == null || x.NextReviewAt <= now);
 
         // 按来源公司反查(需求 6.4.4):大小写不敏感 —— 公司名来自不同服务的录入,大小写不可控
+        // 新多来源 SourcesJson 也要查:JSON 里找 "companyName":"xxx"
         if (!string.IsNullOrWhiteSpace(request.Company))
-            q = q.Where(x => x.SourceCompanyName != null
-                          && x.SourceCompanyName.ToLower() == request.Company.Trim().ToLower());
+        {
+            var c = request.Company.Trim().ToLower();
+            var jsonPattern = "\"companyname\":\"" + c + "\"";
+            q = q.Where(x => (x.SourceCompanyName != null
+                          && x.SourceCompanyName.ToLower() == c)
+                      || (x.SourcesJson != null
+                          && x.SourcesJson.ToLower().Contains(jsonPattern)));
+        }
 
         // 按某一场面试反查
         if (request.EntryId is not null && request.EntryId != Guid.Empty)

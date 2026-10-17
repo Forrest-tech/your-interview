@@ -103,7 +103,7 @@ const DETAIL_BLOCKS: DetailBlock[] = [
     CommonModule, FormsModule, RouterLink, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatMenuModule, MatCheckboxModule,
-    MatOptionModule, MatAutocompleteModule
+    MatOptionModule, MatAutocompleteModule, MatSelectModule
   ],
   templateUrl: './techstack.component.html',
   styleUrl: './techstack.component.scss'

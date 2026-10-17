@@ -215,65 +215,42 @@
       @if (selected(); as it) {
         <div class="detail-head">
           <div class="dh-main">
-            @if (editingMeta()) {
+            @if (detailEditing()) {
               <mat-form-field class="meta-title-field" subscriptSizing="dynamic">
                 <mat-label>{{ t('ts.detail.titleLabel') }}</mat-label>
-                <input matInput [(ngModel)]="metaTitle" />
+                <input matInput [(ngModel)]="detailDraft.title" />
               </mat-form-field>
             } @else {
               <h3>{{ it.title }}</h3>
-              <mat-icon class="blk-edit always" (click)="startMetaEdit(it)">edit</mat-icon>
             }
           </div>
           <div class="dh-meta">
-            @if (editingMeta()) {
-              <mat-form-field class="meta-field" subscriptSizing="dynamic">
-                <mat-label>{{ t('ts.filter.topic') }}</mat-label>
-                <input matInput [(ngModel)]="metaTopic" [matAutocomplete]="topicAuto" />
-                <mat-autocomplete #topicAuto="matAutocomplete">
-                  @for (tp of topics(); track tp) {
-                    <mat-option [value]="tp">{{ tp }}</mat-option>
-                  }
-                </mat-autocomplete>
-              </mat-form-field>
-              <mat-form-field class="meta-field" subscriptSizing="dynamic">
-                <mat-label>{{ t('ts.detail.difficultyLabel') }}</mat-label>
-                <mat-select [(ngModel)]="metaDifficulty">
-                  @for (d of difficultyOptions; track d) {
-                    <mat-option [value]="d">{{ d }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field class="meta-field" subscriptSizing="dynamic">
-                <mat-label>{{ t('ts.detail.importanceLabel') }}</mat-label>
-                <mat-select [(ngModel)]="metaImportance">
-                  @for (d of difficultyOptions; track d) {
-                    <mat-option [value]="d">{{ d }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-              <button mat-button (click)="cancelMetaEdit()">{{ t('common.cancel') }}</button>
-              <button mat-flat-button color="primary" (click)="saveMetaEdit(it)"
-                      [disabled]="savingMeta() || !metaTitle.trim()">{{ t('common.save') }}</button>
-            } @else {
-              <span class="li-mastery" [class]="masteryClass(it.mastery)">
-                {{ masteryLabel(it.mastery) }}
-              </span>
-              <span class="dh-topic">{{ it.topic }}</span>
-              <span class="dh-topic">{{ tn('ts.detail.difficulty', it.difficulty) }}</span>
-              <span class="dh-topic">{{ tn('ts.detail.importance', it.importance) }}</span>
-            }
+            <span class="li-mastery" [class]="masteryClass(it.mastery)">
+              {{ masteryLabel(it.mastery) }}
+            </span>
+            <span class="dh-topic">{{ it.topic }}</span>
+            <span class="dh-topic">{{ tn('ts.detail.difficulty', it.difficulty) }}</span>
+            <span class="dh-topic">{{ tn('ts.detail.importance', it.importance) }}</span>
           </div>
           <div class="dh-actions">
-            <button mat-stroked-button color="primary"
-                    [disabled]="acting()" (click)="promote(it)">
-              <mat-icon>trending_up</mat-icon> {{ t('ts.detail.promote') }}
-            </button>
-            <button mat-stroked-button [disabled]="acting()"
-                    [matMenuTriggerFor]="reviewMenu">
-              <mat-icon>check_circle_outline</mat-icon> {{ t('ts.detail.logReview') }}
-              <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
-            </button>
+            @if (detailEditing()) {
+              <button mat-button (click)="cancelDetailEdit()">{{ t('common.cancel') }}</button>
+              <button mat-flat-button color="primary" (click)="saveDetailEdit(it)"
+                      [disabled]="savingDetail() || !detailDraft.title.trim()">{{ t('common.save') }}</button>
+            } @else {
+              <button mat-stroked-button (click)="enterDetailEdit(it)">
+                <mat-icon>edit</mat-icon> {{ t('common.edit') }}
+              </button>
+              <button mat-stroked-button color="primary"
+                      [disabled]="acting()" (click)="promote(it)">
+                <mat-icon>trending_up</mat-icon> {{ t('ts.detail.promote') }}
+              </button>
+              <button mat-stroked-button [disabled]="acting()"
+                      [matMenuTriggerFor]="reviewMenu">
+                <mat-icon>check_circle_outline</mat-icon> {{ t('ts.detail.logReview') }}
+                <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
+              </button>
+            }
             <mat-menu #reviewMenu="matMenu" class="app-menu">
               <!-- 四档直接对应 SM-2 的 Again/Hard/Good/Easy:
                    档位决定下次间隔怎么算,所以必须让用户选,不能写死。 -->
@@ -289,44 +266,44 @@
           </div>
         </div>
 
-        <!-- 内容块:AI 解析后自动填充;每块可点铅笔行内改 wording -->
+        <!-- 详情正文:查看态纯展示,编辑态统一改 -->
         <div class="detail-body">
           <!-- 多来源:哪几家公司问过这道题 -->
-          @if (parseSources(it).length > 0 || editingMeta()) {
+          @if (parseSources(it).length > 0 || detailEditing()) {
             <section class="block source-block">
               <header class="block-head">
                 <mat-icon>business</mat-icon>
                 <span class="block-label">{{ t('ts.source.title') }}</span>
                 <span class="block-hint">{{ t('ts.source.hint') }}</span>
               </header>
-              @if (editingMeta()) {
+              @if (detailEditing()) {
                 <div class="source-edit-list">
-                  @for (s of metaSources; track $index) {
+                  @for (s of detailDraft.sources; track $index) {
                     <mat-chip class="source-chip">
                       {{ sourceEntryLabel(s) }}
-                      <button matChipRemove (click)="removeMetaSource($index)">
+                      <button matChipRemove (click)="removeDetailSource($index)">
                         <mat-icon>cancel</mat-icon>
                       </button>
                     </mat-chip>
                   }
-                  @if (metaSources.length === 0) {
+                  @if (detailDraft.sources.length === 0) {
                     <span class="block-empty-hint">{{ t('ts.source.emptyHint') }}</span>
                   }
                 </div>
                 <div class="source-add-row">
                   <mat-form-field subscriptSizing="dynamic" class="src-field">
                     <mat-label>{{ t('ts.source.company') }}</mat-label>
-                    <input matInput [(ngModel)]="newSourceCompany" />
+                    <input matInput [(ngModel)]="newDetailSourceCompany" />
                   </mat-form-field>
                   <mat-form-field subscriptSizing="dynamic" class="src-field-sm">
                     <mat-label>{{ t('ts.source.round') }}</mat-label>
-                    <input matInput type="number" min="1" [(ngModel)]="newSourceRound" />
+                    <input matInput type="number" min="1" [(ngModel)]="newDetailSourceRound" />
                   </mat-form-field>
                   <mat-form-field subscriptSizing="dynamic" class="src-field-sm">
                     <mat-label>{{ t('ts.source.date') }}</mat-label>
-                    <input matInput type="date" [(ngModel)]="newSourceDate" />
+                    <input matInput type="date" [(ngModel)]="newDetailSourceDate" />
                   </mat-form-field>
-                  <button mat-stroked-button (click)="addMetaSource()">
+                  <button mat-stroked-button (click)="addDetailSource()">
                     <mat-icon>add</mat-icon>{{ t('ts.source.add') }}
                   </button>
                 </div>
@@ -339,27 +316,62 @@
               }
             </section>
           }
+          <!-- 分类/难度/重要度:正文中的行,编辑态可改 -->
+          @if (detailEditing()) {
+            <section class="block">
+              <header class="block-head">
+                <mat-icon>folder</mat-icon>
+                <span class="block-label">{{ t('ts.filter.topic') }}</span>
+              </header>
+              <mat-form-field class="detail-row-field" subscriptSizing="dynamic">
+                <input matInput [(ngModel)]="detailDraft.topic" [matAutocomplete]="topicAutoDetail" />
+                <mat-autocomplete #topicAutoDetail="matAutocomplete">
+                  @for (tp of topics(); track tp) {
+                    <mat-option [value]="tp">{{ tp }}</mat-option>
+                  }
+                </mat-autocomplete>
+              </mat-form-field>
+            </section>
+            <section class="block">
+              <header class="block-head">
+                <mat-icon>signal_cellular_alt</mat-icon>
+                <span class="block-label">{{ t('ts.detail.difficultyLabel') }}</span>
+              </header>
+              <mat-form-field class="detail-row-field" subscriptSizing="dynamic">
+                <mat-select [(ngModel)]="detailDraft.difficulty">
+                  @for (d of difficultyOptions; track d) {
+                    <mat-option [value]="d">{{ d }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </section>
+            <section class="block">
+              <header class="block-head">
+                <mat-icon>priority_high</mat-icon>
+                <span class="block-label">{{ t('ts.detail.importanceLabel') }}</span>
+              </header>
+              <mat-form-field class="detail-row-field" subscriptSizing="dynamic">
+                <mat-select [(ngModel)]="detailDraft.importance">
+                  @for (d of difficultyOptions; track d) {
+                    <mat-option [value]="d">{{ d }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </section>
+          }
           @for (b of blocks; track b.key) {
-            <section class="block" [class.block-empty]="!blockText(it, b.key) && editingBlock() !== b.key">
+            <section class="block" [class.block-empty]="!blockText(it, b.key) && !detailEditing()">
               <header class="block-head">
                 <mat-icon>{{ b.icon }}</mat-icon>
                 <span class="block-label">{{ t(b.labelKey) }}</span>
                 <span class="block-hint">{{ t(b.hintKey) }}</span>
-                <span class="spacer"></span>
-                @if (editingBlock() !== b.key) {
-                  <mat-icon class="blk-edit" (click)="startBlockEdit(it, b.key)">edit</mat-icon>
-                }
               </header>
-              @if (editingBlock() === b.key) {
+              @if (detailEditing()) {
                 <textarea matInput class="blk-editor" rows="6"
-                          [(ngModel)]="editDraft"></textarea>
-                <div class="blk-edit-actions">
-                  <button mat-button (click)="cancelBlockEdit()">{{ t('common.cancel') }}</button>
-                  <button mat-flat-button color="primary" (click)="saveBlockEdit(it, b.key)"
-                          [disabled]="savingBlock()">
-                    {{ t('common.save') }}
-                  </button>
-                </div>
+                          [(ngModel)]="detailDraft.blocks[b.key]"></textarea>
+                @if (b.key === 'keyPoints' || b.key === 'commonMistakes') {
+                  <p class="block-hint">{{ t('ts.block.onePerLine') }}</p>
+                }
               } @else if (blockText(it, b.key)) {
                 <p class="block-text">{{ blockText(it, b.key) }}</p>
               } @else {

@@ -1756,6 +1756,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'ts.source.add': { zh: '添加来源', en: 'Add source', fr: 'Ajouter une source' },
   'ts.source.hint': { zh: '哪些公司问过这道题', en: 'Companies that asked this', fr: 'Sociétés l’ayant demandé' },
   'ts.source.emptyHint': { zh: '暂无来源,可在下方添加', en: 'No sources yet, add one below', fr: 'Aucune source, ajoutez-en ci-dessous' },
+  'ts.block.onePerLine': { zh: '一行一条', en: 'One per line', fr: 'Un par ligne' },
   'ts.detail.importance': { zh: '重要度 {n}', en: 'Importance {n}', fr: 'Importance {n}' },
   'ts.detail.promote': { zh: '提升熟练度', en: 'Promote mastery', fr: 'Promouvoir la maîtrise' },
   'ts.detail.logReview': { zh: '记录复习', en: 'Log review', fr: 'Enregistrer une révision' },

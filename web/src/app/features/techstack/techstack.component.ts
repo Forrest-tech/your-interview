@@ -502,98 +502,29 @@ export class TechStackComponent implements OnInit {
     });
   }
 
-  /** 行内编辑:当前正在改哪一块(key),null = 没在改。 */
-  readonly editingBlock = signal<string | null>(null);
-  /** 行内编辑的草稿文本。 */
-  editDraft = '';
-  readonly savingBlock = signal(false);
-
-  /** 开始行内改一块:把当前值填进文本框(JSON 数组转回"一行一条")。 */
-  startBlockEdit(item: KnowledgeItem, key: string): void {
-    if (key === 'keyPoints' || key === 'commonMistakes') {
-      const json = key === 'keyPoints' ? item.keyPointsJson : item.commonMistakesJson;
-      this.editDraft = this.jsonToLines(json);
-    } else {
-      const v = (item as unknown as Record<string, unknown>)[key];
-      this.editDraft = typeof v === 'string' ? v : '';
-    }
-    this.editingBlock.set(key);
-  }
-
-  cancelBlockEdit(): void {
-    this.editingBlock.set(null);
-    this.editDraft = '';
-  }
-
-  /** 保存一块:只改这一个字段,走 PUT 全量更新。 */
-  saveBlockEdit(item: KnowledgeItem, key: string): void {
-    const text = this.editDraft.trim();
-    this.savingBlock.set(true);
-    const payload: Record<string, unknown> = {
-      title: item.title,
-      topic: item.topic,
-      question: item.question ?? '',
-      conceptExplanation: item.conceptExplanation ?? null,
-      keyPointsJson: item.keyPointsJson ?? null,
-      commonMistakesJson: item.commonMistakesJson ?? null,
-      myAnswer: item.myAnswer ?? null,
-      betterAnswer: item.betterAnswer ?? null,
-      difficulty: item.difficulty,
-      importance: item.importance,
-    };
-    // 覆盖被改的字段
-    if (key === 'keyPoints') payload['keyPointsJson'] = this.linesToJson(text);
-    else if (key === 'commonMistakes') payload['commonMistakesJson'] = this.linesToJson(text);
-    else payload[key] = text || null;
-
-    // 后端 PUT 成功返回 204 No Content(无 body),本地直接用 payload 更新,不依赖返回体。
-    this.api.put<void>(`/api/knowledge/${item.id}`, payload).subscribe({
-      next: () => {
-        this.savingBlock.set(false);
-        this.editingBlock.set(null);
-        this.editDraft = '';
-        this.notify(this.t('ts.updated'));
-        const updated: KnowledgeItem = {
-          ...item,
-          question: payload['question'] as string | undefined,
-          conceptExplanation: payload['conceptExplanation'] as string | undefined,
-          keyPointsJson: payload['keyPointsJson'] as string | undefined,
-          commonMistakesJson: payload['commonMistakesJson'] as string | undefined,
-          myAnswer: payload['myAnswer'] as string | undefined,
-          betterAnswer: payload['betterAnswer'] as string | undefined,
-        };
-        this.selected.set(updated);
-        this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
-      },
-      error: (e: Error) => {
-        this.savingBlock.set(false);
-        this.notify(e.message, true);
-      }
-    });
-  }
-
   /** "一行一条"转 JSON 数组;空给 null。 */
   private linesToJson(text: string): string | null {
     const lines = text.split('\n').map((x) => x.trim()).filter((x) => x.length > 0);
     return lines.length > 0 ? JSON.stringify(lines) : null;
   }
 
-  // ------------------------------ 元数据行内编辑 ------------------------------
+  // ------------------------------ 详情统一编辑模式 ------------------------------
 
-  /** 是否正在改标题/分类/难度/重要度。 */
-  readonly editingMeta = signal(false);
-  readonly savingMeta = signal(false);
-  metaTitle = '';
-  metaTopic = '';
-  metaDifficulty = 3;
-  metaImportance = 3;
-  readonly difficultyOptions = [1, 2, 3, 4, 5];
-  /** 元数据编辑中的多来源列表。 */
-  metaSources: KnowledgeSourceEntry[] = [];
-  /** 新增来源的表单。 */
-  newSourceCompany = '';
-  newSourceRound: number | null = null;
-  newSourceDate = '';
+  /** 详情是否处于编辑态。右上角 Edit 进入,Save/Cancel 退出。 */
+  readonly detailEditing = signal(false);
+  readonly savingDetail = signal(false);
+  /** 编辑态下所有字段的草稿。 */
+  detailDraft: {
+    title: string;
+    topic: string;
+    difficulty: number;
+    importance: number;
+    sources: KnowledgeSourceEntry[];
+    blocks: Record<string, string>;
+  } = { title: '', topic: '', difficulty: 3, importance: 3, sources: [], blocks: {} };
+  newDetailSourceCompany = '';
+  newDetailSourceRound: number | null = null;
+  newDetailSourceDate = '';
 
   /** 解析条目的多来源;没有则从单来源字段回退构造一条。 */
   parseSources(item: KnowledgeItem): KnowledgeSourceEntry[] {
@@ -627,82 +558,104 @@ export class TechStackComponent implements OnInit {
     return parts.join(' · ') || this.t('ts.source.unknown');
   }
 
-  startMetaEdit(item: KnowledgeItem): void {
-    this.metaTitle = item.title;
-    this.metaTopic = item.topic;
-    this.metaDifficulty = item.difficulty;
-    this.metaImportance = item.importance;
-    this.metaSources = this.parseSources(item);
-    this.newSourceCompany = '';
-    this.newSourceRound = null;
-    this.newSourceDate = '';
-    this.editingMeta.set(true);
+  /** 进入详情编辑:把当前值全部填进草稿。 */
+  enterDetailEdit(item: KnowledgeItem): void {
+    const blocks: Record<string, string> = {};
+    for (const b of this.blocks) {
+      if (b.key === 'keyPoints' || b.key === 'commonMistakes') {
+        const json = b.key === 'keyPoints' ? item.keyPointsJson : item.commonMistakesJson;
+        blocks[b.key] = this.jsonToLines(json);
+      } else {
+        const v = (item as unknown as Record<string, unknown>)[b.key];
+        blocks[b.key] = typeof v === 'string' ? v : '';
+      }
+    }
+    this.detailDraft = {
+      title: item.title,
+      topic: item.topic,
+      difficulty: item.difficulty,
+      importance: item.importance,
+      sources: this.parseSources(item),
+      blocks,
+    };
+    this.newDetailSourceCompany = '';
+    this.newDetailSourceRound = null;
+    this.newDetailSourceDate = '';
+    this.detailEditing.set(true);
   }
 
-  cancelMetaEdit(): void {
-    this.editingMeta.set(false);
+  cancelDetailEdit(): void {
+    this.detailEditing.set(false);
   }
 
-  /** 元数据编辑中:添加一条来源。 */
-  addMetaSource(): void {
-    const company = this.newSourceCompany.trim();
-    if (!company && this.newSourceRound == null && !this.newSourceDate) return;
-    this.metaSources = [...this.metaSources, {
+  /** 详情编辑中:添加一条来源。 */
+  addDetailSource(): void {
+    const company = this.newDetailSourceCompany.trim();
+    if (!company && this.newDetailSourceRound == null && !this.newDetailSourceDate) return;
+    this.detailDraft.sources = [...this.detailDraft.sources, {
       companyName: company || undefined,
-      roundNo: this.newSourceRound ?? undefined,
-      date: this.newSourceDate || undefined,
+      roundNo: this.newDetailSourceRound ?? undefined,
+      date: this.newDetailSourceDate || undefined,
     }];
-    this.newSourceCompany = '';
-    this.newSourceRound = null;
-    this.newSourceDate = '';
+    this.newDetailSourceCompany = '';
+    this.newDetailSourceRound = null;
+    this.newDetailSourceDate = '';
   }
 
-  /** 元数据编辑中:删除一条来源。 */
-  removeMetaSource(idx: number): void {
-    this.metaSources = this.metaSources.filter((_, i) => i !== idx);
+  /** 详情编辑中:删除一条来源。 */
+  removeDetailSource(idx: number): void {
+    this.detailDraft.sources = this.detailDraft.sources.filter((_, i) => i !== idx);
   }
 
-  /** 保存元数据:标题/分类/难度/重要度,走 PUT 全量更新(内容块原样带回)。 */
-  saveMetaEdit(item: KnowledgeItem): void {
-    const title = this.metaTitle.trim();
+  /** 保存详情编辑:所有字段一次 PUT。 */
+  saveDetailEdit(item: KnowledgeItem): void {
+    const title = this.detailDraft.title.trim();
     if (!title) return;
-    this.savingMeta.set(true);
+    this.savingDetail.set(true);
+    const d = this.detailDraft;
     const payload: Record<string, unknown> = {
       title,
-      topic: this.metaTopic.trim() || item.topic,
-      question: item.question ?? '',
-      conceptExplanation: item.conceptExplanation ?? null,
-      keyPointsJson: item.keyPointsJson ?? null,
-      commonMistakesJson: item.commonMistakesJson ?? null,
-      myAnswer: item.myAnswer ?? null,
-      betterAnswer: item.betterAnswer ?? null,
-      difficulty: this.metaDifficulty,
-      importance: this.metaImportance,
-      sourcesJson: this.metaSources.length > 0 ? JSON.stringify(this.metaSources) : null,
+      topic: d.topic.trim() || item.topic,
+      question: d.blocks['question'] ?? '',
+      conceptExplanation: d.blocks['conceptExplanation'] || null,
+      keyPointsJson: this.linesToJson(d.blocks['keyPoints'] ?? ''),
+      commonMistakesJson: this.linesToJson(d.blocks['commonMistakes'] ?? ''),
+      myAnswer: d.blocks['myAnswer'] || null,
+      betterAnswer: d.blocks['betterAnswer'] || null,
+      difficulty: d.difficulty,
+      importance: d.importance,
+      sourcesJson: d.sources.length > 0 ? JSON.stringify(d.sources) : null,
     };
     this.api.put<void>(`/api/knowledge/${item.id}`, payload).subscribe({
       next: () => {
-        this.savingMeta.set(false);
-        this.editingMeta.set(false);
+        this.savingDetail.set(false);
+        this.detailEditing.set(false);
         this.notify(this.t('ts.updated'));
         const updated: KnowledgeItem = {
           ...item,
           title,
-          topic: this.metaTopic.trim() || item.topic,
-          difficulty: this.metaDifficulty,
-          importance: this.metaImportance,
-          sourcesJson: this.metaSources.length > 0 ? JSON.stringify(this.metaSources) : undefined,
+          topic: d.topic.trim() || item.topic,
+          difficulty: d.difficulty,
+          importance: d.importance,
+          question: d.blocks['question'] ?? '',
+          conceptExplanation: d.blocks['conceptExplanation'] || undefined,
+          keyPointsJson: this.linesToJson(d.blocks['keyPoints'] ?? '') ?? undefined,
+          commonMistakesJson: this.linesToJson(d.blocks['commonMistakes'] ?? '') ?? undefined,
+          myAnswer: d.blocks['myAnswer'] || undefined,
+          betterAnswer: d.blocks['betterAnswer'] || undefined,
+          sourcesJson: d.sources.length > 0 ? JSON.stringify(d.sources) : undefined,
         };
         this.selected.set(updated);
         this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
         this.loadTopics();
       },
       error: (e: Error) => {
-        this.savingMeta.set(false);
+        this.savingDetail.set(false);
         this.notify(e.message, true);
       }
     });
   }
+
 
   /** JSON 数组转回"一行一条"。 */
   private jsonToLines(json?: string | null): string {

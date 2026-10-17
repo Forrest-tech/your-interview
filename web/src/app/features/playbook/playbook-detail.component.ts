@@ -33,8 +33,10 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail,
-  InterviewRound, InterviewStatus, OfferProbability, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
+  InterviewRound, InterviewStatus, KnowledgeItem, MasteryLevel, OfferProbability,
+  Paged, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
 } from '../../core/models/api.models';
+import { QaQuestion } from './components/qa/qa.models';
 import { AuthService } from '../../core/auth/auth.service';
 
 /** 六维显示用的元数据 —— 顺序即评测报告里的推荐阅读顺序。 */
@@ -139,6 +141,41 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   editLoaded = false;
 
   readonly questions = computed(() => this.entry()?.questions ?? []);
+
+  /** Q&A 页签用的题目:从 Knowledge(Tech Stack)取,Tech Stack 是唯一数据源 */
+  readonly knowledgeQuestions = signal<QaQuestion[]>([]);
+
+  /** 从 Knowledge 加载本条目的题目(按 entryId 筛选 SourcesJson) */
+  private loadKnowledgeQuestions(): void {
+    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', { entryId: this.id(), pageSize: 100 })
+      .subscribe({
+        next: (res) => {
+          const items = res.items ?? [];
+          this.knowledgeQuestions.set(items.map((k, i) => ({
+            id: k.id,
+            sequence: i + 1,
+            questionText: k.question || k.title,
+            myAnswerText: k.myAnswer ?? null,
+            recommendedAnswer: k.betterAnswer ?? null,
+            category: k.topic ?? null,
+            difficulty: k.difficulty ?? null,
+            mastery: this.masteryToNumber(k.mastery),
+          } as QaQuestion)));
+        },
+        error: () => this.knowledgeQuestions.set([])
+      });
+  }
+
+  /** MasteryLevel 字符串 → QA 用的数字(0=待练,1=练习中,2=已掌握,3=卡壳) */
+  private masteryToNumber(m: MasteryLevel | undefined): number {
+    switch (m) {
+      case 'Learning': return 1;
+      case 'Familiar':
+      case 'Mastered': return 2;
+      case 'NeedsReview': return 3;
+      default: return 0;  // New
+    }
+  }
   readonly assets = computed(() => this.entry()?.assets ?? []);
   readonly rounds = computed(() => this.entry()?.rounds ?? []);
 
@@ -618,6 +655,7 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     this.error.set(null);
     this.loadJobs();
     this.loadGuidance();
+    this.loadKnowledgeQuestions();
 
     this.api.get<InterviewDetail>(`/api/interviews/${this.id()}`).subscribe({
       next: (d) => {

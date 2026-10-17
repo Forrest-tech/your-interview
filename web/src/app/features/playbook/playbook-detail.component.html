@@ -283,7 +283,7 @@
           }
 
           <!-- 问答切题度(缺口4补齐):问题 vs 回答对照,答非所问预警 -->
-          @if (questions().length > 0) {
+          @if (knowledgeQuestions().length > 0) {
             <mat-card class="panel">
               <mat-card-header>
                 <mat-card-title>{{ t('pb.relevance.title') }}</mat-card-title>
@@ -412,7 +412,7 @@
       </mat-tab>
 
       <!-- ============ 问答(核心价值区) ============ -->
-      <mat-tab [label]="tn('pb.tab.questions', questions().length)">
+      <mat-tab [label]="tn('pb.tab.questions', knowledgeQuestions().length)">
         <div class="tab-body">
           <p class="tab-intro">
             {{ t('pb.question.intro') }}
@@ -489,7 +489,7 @@
             </div>
           }
 
-          <app-question-bank [entryId]="id()" [questionsInput]="questions()" (changed)="onQuestionBankChanged()"></app-question-bank>
+          <app-question-bank [entryId]="id()" [questionsInput]="knowledgeQuestions()" (changed)="onQuestionBankChanged()"></app-question-bank>
         </div>
       </mat-tab>
 

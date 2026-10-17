@@ -330,9 +330,9 @@
                   </button>
                 </div>
               } @else {
-                <div class="source-chip-list">
+                <div class="source-text-list">
                   @for (s of parseSources(it); track $index) {
-                    <mat-chip class="source-chip">{{ sourceEntryLabel(s) }}</mat-chip>
+                    <span class="source-text">{{ sourceEntryLabel(s) }}</span>
                   }
                 </div>
               }

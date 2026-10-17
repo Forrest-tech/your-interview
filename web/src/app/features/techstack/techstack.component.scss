@@ -10,7 +10,14 @@
 }
 
 /* 多来源 */
-.source-chip-list, .source-edit-list {
+.source-text-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+}
+.source-text { font-size: 13px; color: #555; }
+.source-edit-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

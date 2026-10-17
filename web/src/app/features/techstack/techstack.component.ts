@@ -581,8 +581,10 @@ export class TechStackComponent implements OnInit {
 
   /** 轮次下拉显示:Round 1 · Technical · 2026-10-07 */
   roundOptionLabel(r: PlaybookCompanyRound): string {
-    const date = r.scheduledDate ?? this.t('ts.source.noDate');
-    return `Round ${r.order} · ${r.stage} · ${date}`;
+    const parts = [`Round ${r.order}`];
+    if (r.stage) parts.push(r.stage);
+    parts.push(r.scheduledDate ?? this.t('ts.source.noDate'));
+    return parts.join(' · ');
   }
 
   /** 展开来源表单时重置搜索框并加载公司库。 */

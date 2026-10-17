@@ -662,6 +662,22 @@ public sealed class GetCompanyRoundsQueryHandler(InterviewsDbContext db)
             .ThenBy(r => r.Order)
             .Select(r => new CompanyRoundDto(r.Id, r.Order, r.Stage, r.ScheduledDate))
             .ToListAsync(ct);
+
+        // 老数据兜底:有条目但无 Round 实体时,按 entry 的 RoundNo/日期合成一条
+        if (rounds.Count == 0)
+        {
+            var fallback = await db.Entries.AsNoTracking()
+                .Where(e => e.CompanyId == request.CompanyId)
+                .OrderByDescending(e => e.InterviewDate ?? DateOnly.MinValue)
+                .Select(e => new { e.RoundNo, e.InterviewDate })
+                .FirstOrDefaultAsync(ct);
+            if (fallback is not null)
+            {
+                rounds.Add(new CompanyRoundDto(
+                    Guid.Empty, fallback.RoundNo, string.Empty, fallback.InterviewDate));
+            }
+        }
+
         return Result.Success<IReadOnlyList<CompanyRoundDto>>(rounds);
     }
 }

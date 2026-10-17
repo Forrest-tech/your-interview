@@ -180,6 +180,27 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       .subscribe((p) => this.offerProb.set(p));
   }
 
+  /** 概率因子 tooltip:按当前 locale 格式化后端返回的结构化因子。 */
+  formatFactors(op: OfferProbability): string {
+    return op.factors.map((f) => {
+      switch (f.key) {
+        case 'no_history':
+          return this.t('pb.op.noHistory').replace('{r}', String(f.arg1));
+        case 'history_rate':
+          return this.t('pb.op.historyRate')
+            .replace('{r}', String(f.arg1)).replace('{o}', String(f.arg2)).replace('{t}', String(f.arg3));
+        case 'qa_bonus':
+          return this.t('pb.op.qaBonus').replace('{n}', String(f.arg1));
+        case 'prep_bonus':
+          return this.t('pb.op.prepBonus').replace('{n}', String(f.arg1)).replace('{b}', String(f.arg2));
+        case 'funnel_bonus':
+          return this.t('pb.op.funnelBonus').replace('{r}', String(f.arg1)).replace('{b}', String(f.arg2));
+        default:
+          return f.key;
+      }
+    }).join('\n');
+  }
+
   /** Rounds tab 显示用:有显式 rounds 就用,没有就从 entry 基本信息合成一个 Round 1 —— 不让 tab 空着。 */
   readonly displayRounds = computed(() => {
     const rs = this.rounds();

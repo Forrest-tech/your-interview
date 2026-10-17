@@ -34,11 +34,13 @@
         </div>
       </div>
       <div class="cd-side">
-        <span class="cd-days">{{ countdownLabel() }}</span>
-        @if (countdown()?.meetingLink) {
-          <a mat-flat-button color="primary" [href]="countdown()!.meetingLink" target="_blank">
-            <mat-icon>videocam</mat-icon> {{ t('pb.br.countdown.join') }}
-          </a>
+        @if (countdown(); as c) {
+          <span class="cd-days">{{ countdownLabel() }}</span>
+          @if (c.meetingLink) {
+            <a mat-flat-button color="primary" [href]="c.meetingLink" target="_blank">
+              <mat-icon>videocam</mat-icon> {{ t('pb.br.countdown.join') }}
+            </a>
+          }
         }
       </div>
     </mat-card>

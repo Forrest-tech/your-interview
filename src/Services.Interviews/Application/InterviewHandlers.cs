@@ -1267,7 +1267,10 @@ public sealed record OfferProbabilityDto(
     int SampleSize,            // 走到当前轮次的历史样本数
     int OfferCount,            // 其中拿到 offer 的
     int CurrentRound,          // 当前第几轮
-    List<string> Factors);
+    List<OfferFactorDto> Factors);
+
+/// <summary>概率因子:Key 由前端按 locale 格式化,避免后端硬编码中文。</summary>
+public sealed record OfferFactorDto(string Key, int Arg1 = 0, int Arg2 = 0, int Arg3 = 0);
 
 public sealed record GetOfferProbabilityQuery(Guid EntryId) : IRequest<Result<OfferProbabilityDto>>;
 
@@ -1285,7 +1288,7 @@ public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
         if (current is null) return Result.Failure<OfferProbabilityDto>(Error.NotFound("Entry"));
 
         int currentRound = Math.Max(1, current.RoundCount);
-        var factors = new List<string>();
+        var factors = new List<OfferFactorDto>();
 
         // 历史漏斗:走到 >= 当前轮次 且已有定论的条目
         var history = await db.Entries.AsNoTracking()
@@ -1299,13 +1302,13 @@ public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
         if (history.Count == 0)
         {
             baseProb = 50;
-            factors.Add($"暂无走到第 {currentRound} 轮的历史数据,按 50% 中性估算");
+            factors.Add(new OfferFactorDto("no_history", currentRound));
         }
         else
         {
             var offers = history.Count(r => r == "Passed");
             baseProb = (int)Math.Round(100.0 * offers / history.Count);
-            factors.Add($"历史走到第 {currentRound} 轮的 {offers}/{history.Count} 拿到 offer");
+            factors.Add(new OfferFactorDto("history_rate", currentRound, offers, history.Count));
         }
 
         // 准备度:整单的 Q&A、轮次准备完整度微调
@@ -1323,19 +1326,19 @@ public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
         if (prep is not null)
         {
             if (prep.QaCount >= 5)
-            { adjustment += 5; factors.Add($"Q&A 积累 {prep.QaCount} 条 +5%"); }
+            { adjustment += 5; factors.Add(new OfferFactorDto("qa_bonus", prep.QaCount)); }
             if (prep.RoundPrepDone > 0)
             {
                 int prepBonus = 3 * Math.Min(3, prep.RoundPrepDone);
                 adjustment += prepBonus;
-                factors.Add($"{prep.RoundPrepDone} 轮有准备清单 +{prepBonus}%");
+                factors.Add(new OfferFactorDto("prep_bonus", prep.RoundPrepDone, prepBonus));
             }
         }
 
         // 越往后的轮次,基础概率自然越高(已经筛掉了前面的人)
         int funnelBonus = Math.Min(15, (currentRound - 1) * 5);
         if (funnelBonus > 0)
-        { adjustment += funnelBonus; factors.Add($"已走到第 {currentRound} 轮,漏斗加成 +{funnelBonus}%"); }
+        { adjustment += funnelBonus; factors.Add(new OfferFactorDto("funnel_bonus", currentRound, funnelBonus)); }
 
         var prob = Math.Clamp(baseProb + adjustment, 5, 95);
         return Result.Success(new OfferProbabilityDto(

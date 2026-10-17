@@ -28,7 +28,7 @@
           <span class="chip" [class]="statusClass(e.status)">{{ statusLabel(e.status) }}</span>
           @if (offerProb(); as op) {
             <span class="prob-badge offer-prob" [style.color]="probColor(op.probability)"
-                  [title]="op.factors.join('\n')">
+                  [title]="formatFactors(op)">
               <mat-icon inline>trending_up</mat-icon> {{ op.probability }}%
             </span>
           }

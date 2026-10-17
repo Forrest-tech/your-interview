@@ -112,7 +112,11 @@
     }
 
     @if (compact() && openItems().length === 0) {
-      <p class="na-state done-all">{{ t('pb.an.allDone') }}</p>
+      @if (doneItems().length > 0) {
+        <p class="na-state done-all">{{ t('pb.an.allDone') }}</p>
+      } @else {
+        <p class="na-state">{{ t('pb.an.noActions') }}</p>
+      }
     }
   }
 </section>

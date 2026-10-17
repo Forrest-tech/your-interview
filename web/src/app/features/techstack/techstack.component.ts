@@ -30,7 +30,7 @@ import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.comp
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 
 /** 熟练度等级顺序 —— 用于展示顺序、进度和"提升一级"的目标值。 */
-const MASTERY_ORDER: MasteryLevel[] = ['New', 'Learning', 'Familiar', 'Proficient', 'Mastered'];
+const MASTERY_ORDER: MasteryLevel[] = ['New', 'Learning', 'Familiar', 'Mastered'];
 
 /** 复习结果档位 —— 必须与后端 RecordReviewCommandValidator 的允许值一致。 */
 type ReviewResultLabel = 'Again' | 'Hard' | 'Good' | 'Easy';
@@ -206,8 +206,8 @@ export class TechStackComponent implements OnInit {
       { level: 'New' as MasteryLevel, count: m.get('New') ?? 0, pct: 0 },
       { level: 'Learning' as MasteryLevel, count: m.get('Learning') ?? 0, pct: 0 },
       { level: 'Familiar' as MasteryLevel, count: m.get('Familiar') ?? 0, pct: 0 },
-      { level: 'Proficient' as MasteryLevel, count: m.get('Proficient') ?? 0, pct: 0 },
-      { level: 'Mastered' as MasteryLevel, count: m.get('Mastered') ?? 0, pct: 0 }
+      { level: 'Mastered' as MasteryLevel, count: m.get('Mastered') ?? 0, pct: 0 },
+      { level: 'NeedsReview' as MasteryLevel, count: m.get('NeedsReview') ?? 0, pct: 0 }
     ];
     const denom = b.totalItems > 0 ? b.totalItems : rows.reduce((s, r) => s + r.count, 0);
     return rows.map((r) => ({

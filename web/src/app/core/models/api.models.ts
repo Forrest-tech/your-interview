@@ -299,12 +299,18 @@ export interface PassProbability {
 }
 
 /** 整单 offer 概率:漏斗模型。 */
+export interface OfferFactor {
+  key: string;
+  arg1: number;
+  arg2: number;
+  arg3: number;
+}
 export interface OfferProbability {
   probability: number;
   sampleSize: number;
   offerCount: number;
   currentRound: number;
-  factors: string[];
+  factors: OfferFactor[];
 }
 
 export interface RoundEmail {
@@ -419,7 +425,7 @@ export interface AnalysisJob {
 
 // ============================ 技术栈(Knowledge) ============================
 
-export type MasteryLevel = 'New' | 'Learning' | 'Familiar' | 'Proficient' | 'Mastered';
+export type MasteryLevel = 'New' | 'Learning' | 'Familiar' | 'Mastered' | 'NeedsReview';
 
 /**
  * 技术栈条目 —— 字段名严格对齐后端 KnowledgeHandlers 实际返回。

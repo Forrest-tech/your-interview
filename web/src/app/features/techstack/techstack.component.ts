@@ -575,6 +575,69 @@ export class TechStackComponent implements OnInit {
     return lines.length > 0 ? JSON.stringify(lines) : null;
   }
 
+  // ------------------------------ 元数据行内编辑 ------------------------------
+
+  /** 是否正在改标题/分类/难度/重要度。 */
+  readonly editingMeta = signal(false);
+  readonly savingMeta = signal(false);
+  metaTitle = '';
+  metaTopic = '';
+  metaDifficulty = 3;
+  metaImportance = 3;
+  readonly difficultyOptions = [1, 2, 3, 4, 5];
+
+  startMetaEdit(item: KnowledgeItem): void {
+    this.metaTitle = item.title;
+    this.metaTopic = item.topic;
+    this.metaDifficulty = item.difficulty;
+    this.metaImportance = item.importance;
+    this.editingMeta.set(true);
+  }
+
+  cancelMetaEdit(): void {
+    this.editingMeta.set(false);
+  }
+
+  /** 保存元数据:标题/分类/难度/重要度,走 PUT 全量更新(内容块原样带回)。 */
+  saveMetaEdit(item: KnowledgeItem): void {
+    const title = this.metaTitle.trim();
+    if (!title) return;
+    this.savingMeta.set(true);
+    const payload: Record<string, unknown> = {
+      title,
+      topic: this.metaTopic.trim() || item.topic,
+      question: item.question ?? '',
+      conceptExplanation: item.conceptExplanation ?? null,
+      keyPointsJson: item.keyPointsJson ?? null,
+      commonMistakesJson: item.commonMistakesJson ?? null,
+      myAnswer: item.myAnswer ?? null,
+      betterAnswer: item.betterAnswer ?? null,
+      difficulty: this.metaDifficulty,
+      importance: this.metaImportance,
+    };
+    this.api.put<void>(`/api/knowledge/${item.id}`, payload).subscribe({
+      next: () => {
+        this.savingMeta.set(false);
+        this.editingMeta.set(false);
+        this.notify(this.t('ts.updated'));
+        const updated: KnowledgeItem = {
+          ...item,
+          title,
+          topic: this.metaTopic.trim() || item.topic,
+          difficulty: this.metaDifficulty,
+          importance: this.metaImportance,
+        };
+        this.selected.set(updated);
+        this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
+        this.loadTopics();
+      },
+      error: (e: Error) => {
+        this.savingMeta.set(false);
+        this.notify(e.message, true);
+      }
+    });
+  }
+
   /** JSON 数组转回"一行一条"。 */
   private jsonToLines(json?: string | null): string {
     if (!json) return '';

@@ -215,15 +215,53 @@
       @if (selected(); as it) {
         <div class="detail-head">
           <div class="dh-main">
-            <h3>{{ it.title }}</h3>
+            @if (editingMeta()) {
+              <mat-form-field class="meta-title-field" subscriptSizing="dynamic">
+                <mat-label>{{ t('ts.detail.titleLabel') }}</mat-label>
+                <input matInput [(ngModel)]="metaTitle" />
+              </mat-form-field>
+            } @else {
+              <h3>{{ it.title }}</h3>
+              <mat-icon class="blk-edit" (click)="startMetaEdit(it)">edit</mat-icon>
+            }
           </div>
           <div class="dh-meta">
-            <span class="li-mastery" [class]="masteryClass(it.mastery)">
-              {{ masteryLabel(it.mastery) }}
-            </span>
-            <span class="dh-topic">{{ it.topic }}</span>
-            <span class="dh-topic">{{ tn('ts.detail.difficulty', it.difficulty) }}</span>
-            <span class="dh-topic">{{ tn('ts.detail.importance', it.importance) }}</span>
+            @if (editingMeta()) {
+              <mat-form-field class="meta-field" subscriptSizing="dynamic">
+                <mat-label>{{ t('ts.filter.topic') }}</mat-label>
+                <mat-select [(ngModel)]="metaTopic">
+                  @for (tp of topics(); track tp) {
+                    <mat-option [value]="tp">{{ tp }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field class="meta-field" subscriptSizing="dynamic">
+                <mat-label>{{ t('ts.detail.difficultyLabel') }}</mat-label>
+                <mat-select [(ngModel)]="metaDifficulty">
+                  @for (d of difficultyOptions; track d) {
+                    <mat-option [value]="d">{{ d }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field class="meta-field" subscriptSizing="dynamic">
+                <mat-label>{{ t('ts.detail.importanceLabel') }}</mat-label>
+                <mat-select [(ngModel)]="metaImportance">
+                  @for (d of difficultyOptions; track d) {
+                    <mat-option [value]="d">{{ d }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <button mat-button (click)="cancelMetaEdit()">{{ t('common.cancel') }}</button>
+              <button mat-flat-button color="primary" (click)="saveMetaEdit(it)"
+                      [disabled]="savingMeta() || !metaTitle.trim()">{{ t('common.save') }}</button>
+            } @else {
+              <span class="li-mastery" [class]="masteryClass(it.mastery)">
+                {{ masteryLabel(it.mastery) }}
+              </span>
+              <span class="dh-topic">{{ it.topic }}</span>
+              <span class="dh-topic">{{ tn('ts.detail.difficulty', it.difficulty) }}</span>
+              <span class="dh-topic">{{ tn('ts.detail.importance', it.importance) }}</span>
+            }
           </div>
           <div class="dh-actions">
             <button mat-stroked-button color="primary"

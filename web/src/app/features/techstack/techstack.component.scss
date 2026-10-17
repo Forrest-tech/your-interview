@@ -270,6 +270,11 @@ mat-form-field { width: 100%; }
 
 .dh-main { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .dh-main h3 { margin: 0; font-size: 19px; font-weight: 600; }
+
+/* 元数据行内编辑 */
+.meta-title-field { flex: 1 1 280px; min-width: 200px; }
+.meta-field { width: 130px; }
+.dh-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dh-zh { font-size: 14px; opacity: 0.6; }
 
 .dh-meta {
@@ -343,6 +348,7 @@ mat-form-field { width: 100%; }
   flex-shrink: 0;
 }
 .block:hover .blk-edit { opacity: 0.55; }
+.dh-main:hover .blk-edit { opacity: 0.55; }
 .blk-edit:hover { opacity: 1 !important; color: #3f51b5; }
 .blk-editor {
   width: 100%;

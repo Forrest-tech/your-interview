@@ -1238,6 +1238,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   selectTsItem(item: KnowledgeItem): void {
     this.tsSelected.set(item);
     this.selectedId.set(null);
+    this.editing.set(false);
   }
 
   /** 跳到 Tech Stack 编辑该条目(Obsidian "view source" 模式) */

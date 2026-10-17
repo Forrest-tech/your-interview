@@ -293,6 +293,10 @@ mat-form-field { width: 100%; }
 .meta-title-field { flex: 1 1 280px; min-width: 200px; }
 .meta-field { width: 130px; }
 .dh-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* 可点的 badge:hover 给淡底提示可改 */
+.dh-topic.clickable { cursor: pointer; transition: background 120ms ease; }
+.dh-topic.clickable:hover { background: rgba(63, 81, 181, 0.12); }
 .dh-zh { font-size: 14px; opacity: 0.6; }
 
 .dh-meta {

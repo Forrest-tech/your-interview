@@ -258,9 +258,9 @@
               <span class="li-mastery" [class]="masteryClass(it.mastery)">
                 {{ masteryLabel(it.mastery) }}
               </span>
-              <span class="dh-topic">{{ it.topic }}</span>
-              <span class="dh-topic">{{ tn('ts.detail.difficulty', it.difficulty) }}</span>
-              <span class="dh-topic">{{ tn('ts.detail.importance', it.importance) }}</span>
+              <span class="dh-topic clickable" (click)="startMetaEdit(it)" [title]="t('common.edit')">{{ it.topic }}</span>
+              <span class="dh-topic clickable" (click)="startMetaEdit(it)" [title]="t('common.edit')">{{ tn('ts.detail.difficulty', it.difficulty) }}</span>
+              <span class="dh-topic clickable" (click)="startMetaEdit(it)" [title]="t('common.edit')">{{ tn('ts.detail.importance', it.importance) }}</span>
             }
           </div>
           <div class="dh-actions">

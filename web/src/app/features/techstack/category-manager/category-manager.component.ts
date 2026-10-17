@@ -58,10 +58,25 @@ export class CategoryManagerComponent {
     return n.length > 0 && this.categories().some(c => c.name.toLowerCase() === n);
   });
 
-  /** 新增分类:纯前端占位(无条目),真正落盘在条目使用时 */
+  /** 用户手动新增的空分类,存 localStorage(后端无分类表,空分类只活在前端) */
+  private loadCustom(): string[] {
+    try {
+      return JSON.parse(localStorage.getItem('ts.customCategories') ?? '[]');
+    } catch { return []; }
+  }
+  private saveCustom(names: string[]): void {
+    try { localStorage.setItem('ts.customCategories', JSON.stringify(names)); } catch { /* ignore */ }
+  }
+
+  /** 新增分类:0 条目的先放 localStorage,等有条目用它后自然转正 */
   addCategory(): void {
     const n = this.newName().trim();
     if (!n || this.newNameExists()) return;
+    const custom = this.loadCustom();
+    if (!custom.some(x => x.toLowerCase() === n.toLowerCase())) {
+      custom.push(n);
+      this.saveCustom(custom);
+    }
     this.categories.update(list => [...list, { name: n, count: 0 }]);
     this.newName.set('');
     this.changed = true;
@@ -131,9 +146,10 @@ export class CategoryManagerComponent {
       if (!confirm(msg)) return;
     }
     this.busy.set(true);
-    // 空分类(0 条目)是纯前端占位,直接移除
+    // 空分类(0 条目)是纯前端占位,直接移除,同时清 localStorage
     if (c.count === 0) {
       this.categories.update(list => list.filter(x => x.name !== c.name));
+      this.saveCustom(this.loadCustom().filter(x => x.toLowerCase() !== c.name.toLowerCase()));
       this.busy.set(false);
       this.changed = true;
       return;

@@ -198,6 +198,15 @@ export class TechStackComponent implements OnInit {
     for (const tp of this.topics()) {
       if (!counts.has(tp)) counts.set(tp, 0);
     }
+    // 加上用户手动建的空分类(localStorage)
+    try {
+      const custom: string[] = JSON.parse(localStorage.getItem('ts.customCategories') ?? '[]');
+      for (const n of custom) {
+        if (![...counts.keys()].some(k => k.toLowerCase() === n.toLowerCase())) {
+          counts.set(n, 0);
+        }
+      }
+    } catch { /* ignore */ }
     const dialogRef = this.dialog.open(CategoryManagerComponent, {
       width: '520px',
       data: {}

@@ -371,18 +371,11 @@ mat-form-field { width: 100%; }
   line-height: 1.72;
   white-space: pre-wrap;
   word-break: break-word;
+  cursor: default; /* GitHub 式:普通文本不闪 I-beam,选中复制照样可以 */
 }
 
-/* 有内容的块:整段可点进编辑,hover 给一个极淡的底表示可点 */
-.block-text.editable {
-  cursor: pointer;
-  border-radius: 6px;
-  padding: 2px 6px;
-  margin: -2px -6px;
-  transition: background 120ms ease;
-}
-.block-text.editable:hover {
-  background: rgba(63, 81, 181, 0.06);
+.block-empty-hint {
+  cursor: default;
 }
 
 .no-selection {

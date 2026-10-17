@@ -274,7 +274,7 @@
                   </button>
                 </div>
               } @else if (blockText(it, b.key)) {
-                <p class="block-text editable" (click)="startBlockEdit(it, b.key)">{{ blockText(it, b.key) }}</p>
+                <p class="block-text">{{ blockText(it, b.key) }}</p>
               } @else {
                 <p class="block-empty-hint">{{ t('ts.block.emptyHint') }}</p>
               }

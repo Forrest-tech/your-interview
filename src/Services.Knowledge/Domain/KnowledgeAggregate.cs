@@ -151,6 +151,13 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
         Touch();
     }
 
+    /// <summary>只更新我的回答(Playbook Q&A 页签用)。</summary>
+    public void SetMyAnswer(string? myAnswer)
+    {
+        MyAnswer = string.IsNullOrWhiteSpace(myAnswer) ? null : myAnswer;
+        Touch();
+    }
+
     public void UpdateDetails(string title, string topic, string? subTopic, string question,
         int difficulty, int importance, string? tagsJson, string? conceptExplanation,
         string? myAnswer, string? betterAnswer, string? keyPointsJson, string? commonMistakesJson,

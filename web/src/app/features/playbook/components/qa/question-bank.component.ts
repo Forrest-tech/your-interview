@@ -216,18 +216,11 @@ export class QuestionBankComponent {
   saveAnswer(q: QaQuestion): void {
     const draft = this.answerDrafts[q.id] ?? '';
     this.savingAnswer.set(true);
-    // PUT 契约(UpdateQuestionBody):全量字段,按当前值回填,只换 myAnswerText。
-    const body = {
-      questionText: q.questionText,
-      myAnswerText: draft.trim() ? draft : null,
-      category: qaCategoryOf(q),
-      difficulty: q.difficulty ?? 3,
-      assessment: q.assessment ?? null,
-      gotStuck: q.gotStuck ?? false,
-      stuckReason: q.stuckReason ?? null,
-      recommendedAnswer: q.recommendedAnswer ?? null
-    };
-    this.api.put<void>(`/api/interviews/${this.entryId()}/questions/${q.id}`, body).subscribe({
+    // Q&A 页签现在显示的是 Knowledge(Tech Stack) 数据,保存走 Knowledge 接口。
+    // PUT /api/knowledge/{id}/answer: 只更新 MyAnswer,不碰其他字段。
+    this.api.put<void>(`/api/knowledge/${q.id}/answer`, {
+      myAnswer: draft.trim() ? draft : null
+    }).subscribe({
       next: () => {
         this.savingAnswer.set(false);
         this.editingId.set(null);

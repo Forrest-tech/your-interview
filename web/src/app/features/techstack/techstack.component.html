@@ -65,9 +65,51 @@
     </mat-card>
   }
 
-  <!-- 筛选 -->
+  <!-- 筛选:可折叠 -->
   <mat-card class="filters">
     <mat-card-content>
+      <div class="filter-header">
+        <button mat-button class="filter-toggle" (click)="toggleFilters()"
+                [matTooltip]="filtersCollapsed() ? t('ts.filter.expand') : t('ts.filter.collapse')">
+          <mat-icon>{{ filtersCollapsed() ? 'expand_more' : 'expand_less' }}</mat-icon>
+          <span>{{ t('ts.filter.title') }}</span>
+          @if (activeFilterCount() > 0) {
+            <span class="filter-count">{{ activeFilterCount() }}</span>
+          }
+        </button>
+        @if (filtersCollapsed() && hasFilters()) {
+          <div class="active-chips">
+            @if (search().length > 0) {
+              <mat-chip class="achip" (removed)="clearOneFilter('search')">
+                “{{ search() }}”
+                <button matChipRemove><mat-icon>cancel</mat-icon></button>
+              </mat-chip>
+            }
+            @if (topic() !== null) {
+              <mat-chip class="achip" (removed)="clearOneFilter('topic')">
+                {{ topic() }}
+                <button matChipRemove><mat-icon>cancel</mat-icon></button>
+              </mat-chip>
+            }
+            @if (mastery() !== null) {
+              <mat-chip class="achip" (removed)="clearOneFilter('mastery')">
+                {{ masteryLabel(mastery()!) }}
+                <button matChipRemove><mat-icon>cancel</mat-icon></button>
+              </mat-chip>
+            }
+            @if (company() !== null) {
+              <mat-chip class="achip" (removed)="clearOneFilter('company')">
+                {{ company() }}
+                <button matChipRemove><mat-icon>cancel</mat-icon></button>
+              </mat-chip>
+            }
+          </div>
+        }
+        @if (filtersCollapsed() && hasFilters()) {
+          <button mat-button class="clear-btn" (click)="clearFilters()">{{ t('common.clearFilter') }}</button>
+        }
+      </div>
+      @if (!filtersCollapsed()) {
       <div class="filter-row">
         <mat-form-field appearance="outline" class="search">
           <mat-label>{{ t('ts.filter.searchLabel') }}</mat-label>
@@ -134,6 +176,7 @@
           </mat-chip-set>
         </div>
       }
+      } <!-- /@if (!filtersCollapsed()) -->
     </mat-card-content>
   </mat-card>
 

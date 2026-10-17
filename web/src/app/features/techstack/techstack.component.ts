@@ -174,6 +174,26 @@ export class TechStackComponent implements OnInit {
   readonly search = signal('');
   readonly topic = signal<string | null>(null);
   readonly mastery = signal<MasteryLevel | null>('New');
+
+  /** 筛选区折叠状态,记 localStorage */
+  readonly filtersCollapsed = signal(
+    typeof localStorage !== 'undefined' && localStorage.getItem('ts.filtersCollapsed') === '1');
+
+  toggleFilters(): void {
+    const v = !this.filtersCollapsed();
+    this.filtersCollapsed.set(v);
+    try { localStorage.setItem('ts.filtersCollapsed', v ? '1' : '0'); } catch { /* ignore */ }
+  }
+
+  /** 激活的筛选数量(用于折叠态的计数徽标) */
+  readonly activeFilterCount = computed(() => {
+    let n = 0;
+    if (this.search().length > 0) n++;
+    if (this.topic() !== null) n++;
+    if (this.mastery() !== null) n++;
+    if (this.company() !== null) n++;
+    return n;
+  });
   /** 来源公司筛选(需求 6.4.4:按"这题来自哪家公司"反查)。 */
   readonly company = signal<string | null>(null);
 
@@ -387,6 +407,16 @@ export class TechStackComponent implements OnInit {
     this.topic.set(null);
     this.mastery.set(null);
     this.company.set(null);
+    this.page.set(1);
+    this.load();
+  }
+
+  /** 单独清除某个筛选(折叠态 chips 用) */
+  clearOneFilter(kind: 'search' | 'topic' | 'mastery' | 'company'): void {
+    if (kind === 'search') this.search.set('');
+    if (kind === 'topic') this.topic.set(null);
+    if (kind === 'mastery') this.mastery.set(null);
+    if (kind === 'company') this.company.set(null);
     this.page.set(1);
     this.load();
   }

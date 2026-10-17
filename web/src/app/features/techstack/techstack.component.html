@@ -295,7 +295,8 @@
             </section>
           }
           @for (b of blocks; track b.key) {
-            <section class="block" [class.block-empty]="!blockText(it, b.key) && !detailEditing()">
+            <section class="block" [class.block-empty]="!blockText(it, b.key) && !detailEditing()"
+                     [class.answer-card]="b.key === 'question' || b.key === 'myAnswer' || b.key === 'betterAnswer'">
               <header class="block-head">
                 <mat-icon>{{ b.icon }}</mat-icon>
                 <span class="block-label">{{ t(b.labelKey) }}</span>

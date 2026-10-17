@@ -81,6 +81,13 @@ public sealed record GetSourceCompaniesQuery : IRequest<Result<IReadOnlyList<Sou
 public sealed record SourceCompanyDto(string Company, int Count, int MasteredCount,
     int DueCount, DateOnly? LastDate);
 
+/// <summary>SourcesJson 反序列化用(字段名与前端 KnowledgeSourceEntry 的 camelCase 对应)。</summary>
+internal sealed class SourceEntryJson
+{
+    public string? CompanyName { get; set; }
+    public string? Date { get; set; }
+}
+
 /// <summary>
 /// 反查单条知识点的来源(需求 6.4.4)。
 /// 除了自身来源信息,还带出"同一场面试一起导进来的其他题" ——
@@ -675,24 +682,66 @@ public sealed class GetSourceCompaniesQueryHandler(KnowledgeDbContext db, TimePr
         // 不同提供器对 DateOnly 的 Max() 支持不一致,为了一个"最后面试日期"
         // 去赌 SQL 翻译不值得;这里是个人规模的知识库(几百到几千条),内存聚合足够快。
         var rows = await db.Items.AsNoTracking()
-            .Where(x => x.SourceCompanyName != null && x.SourceCompanyName != string.Empty)
+            .Where(x => (x.SourceCompanyName != null && x.SourceCompanyName != string.Empty)
+                     || (x.SourcesJson != null && x.SourcesJson != string.Empty))
             .Select(x => new
             {
-                Company = x.SourceCompanyName!,
+                OldCompany = x.SourceCompanyName,
+                SourcesJson = x.SourcesJson,
                 Mastered = x.Mastery == MasteryLevel.Mastered,
                 Due = x.NextReviewAt == null || x.NextReviewAt <= now,
                 Date = x.SourceDate
             })
             .ToListAsync(ct);
 
-        var list = rows
-            .GroupBy(x => x.Company)
+        // 聚合老单来源 + 新多来源(SourcesJson) 的公司
+        var grouped = new Dictionary<string, List<(bool Mastered, bool Due, DateOnly? Date)>>(StringComparer.OrdinalIgnoreCase);
+        void Add(string company, bool mastered, bool due, DateOnly? date)
+        {
+            if (string.IsNullOrWhiteSpace(company)) return;
+            if (!grouped.TryGetValue(company.Trim(), out var list))
+            {
+                list = new List<(bool, bool, DateOnly?)>();
+                grouped[company.Trim()] = list;
+            }
+            list.Add((mastered, due, date));
+        }
+
+        foreach (var r in rows)
+        {
+            if (!string.IsNullOrWhiteSpace(r.OldCompany))
+                Add(r.OldCompany!, r.Mastered, r.Due, r.Date);
+            if (!string.IsNullOrWhiteSpace(r.SourcesJson))
+            {
+                try
+                {
+                    var sources = System.Text.Json.JsonSerializer.Deserialize<List<SourceEntryJson>>(r.SourcesJson,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (sources != null)
+                    {
+                        foreach (var s in sources)
+                        {
+                            if (!string.IsNullOrWhiteSpace(s.CompanyName))
+                            {
+                                DateOnly? d = null;
+                                if (!string.IsNullOrWhiteSpace(s.Date) && DateOnly.TryParse(s.Date, out var pd))
+                                    d = pd;
+                                Add(s.CompanyName!, r.Mastered, r.Due, d ?? r.Date);
+                            }
+                        }
+                    }
+                }
+                catch { /* 坏 JSON 跳过,不影响聚合 */ }
+            }
+        }
+
+        var list = grouped
             .Select(g => new SourceCompanyDto(
                 g.Key,
-                g.Count(),
-                g.Count(x => x.Mastered),
-                g.Count(x => x.Due),
-                g.Max(x => x.Date)))
+                g.Value.Count,
+                g.Value.Count(x => x.Mastered),
+                g.Value.Count(x => x.Due),
+                g.Value.Max(x => x.Date)))
             .OrderByDescending(r => r.Count)
             .ThenBy(r => r.Company, StringComparer.OrdinalIgnoreCase)
             .ToList();

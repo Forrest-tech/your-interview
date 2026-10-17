@@ -174,7 +174,7 @@ export class TechStackComponent implements OnInit {
 
   readonly search = signal('');
   readonly topic = signal<string | null>(null);
-  readonly mastery = signal<MasteryLevel | null>('New');
+  readonly mastery = signal<MasteryLevel | null>(null);
 
   /** 筛选区折叠状态,记 localStorage */
   readonly filtersCollapsed = signal(
@@ -221,12 +221,12 @@ export class TechStackComponent implements OnInit {
     });
   }
 
-  /** 激活的筛选数量(用于折叠态的计数徽标) — 默认的 To do 不算 */
+  /** 激活的筛选数量(用于折叠态的计数徽标) */
   readonly activeFilterCount = computed(() => {
     let n = 0;
     if (this.search().length > 0) n++;
     if (this.topic() !== null) n++;
-    if (this.mastery() !== null && this.mastery() !== 'New') n++;
+    if (this.mastery() !== null) n++;
     if (this.company() !== null) n++;
     return n;
   });
@@ -300,15 +300,14 @@ export class TechStackComponent implements OnInit {
     if (company) this.company.set(company);
   }
 
-  /** 筛选值同步到 URL(默认的 To do 不写入,保持 URL 干净) */
+  /** 筛选值同步到 URL */
   private syncFiltersToUrl(): void {
-    const m = this.mastery();
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
         search: this.search() || null,
         topic: this.topic(),
-        mastery: m === 'New' ? null : m,
+        mastery: this.mastery(),
         company: this.company(),
       },
       queryParamsHandling: 'merge',
@@ -472,21 +471,28 @@ export class TechStackComponent implements OnInit {
     this.load();
   }
 
+  selectMastery(m: MasteryLevel | null): void {
+    this.mastery.set(m);
+    this.page.set(1);
+    this.syncFiltersToUrl();
+    this.load();
+  }
+
   clearFilters(): void {
     this.search.set('');
     this.topic.set(null);
-    this.mastery.set('New');  // 默认选中 To do,不是全空
+    this.mastery.set(null);  // 回到 All
     this.company.set(null);
     this.page.set(1);
     this.syncFiltersToUrl();
     this.load();
   }
 
-  /** 单独清除某个筛选(折叠态 chips 用) — mastery 回到默认 To do */
+  /** 单独清除某个筛选(折叠态 chips 用) */
   clearOneFilter(kind: 'search' | 'topic' | 'mastery' | 'company'): void {
     if (kind === 'search') this.search.set('');
     if (kind === 'topic') this.topic.set(null);
-    if (kind === 'mastery') this.mastery.set('New');
+    if (kind === 'mastery') this.mastery.set(null);
     if (kind === 'company') this.company.set(null);
     this.page.set(1);
     this.syncFiltersToUrl();
@@ -495,7 +501,7 @@ export class TechStackComponent implements OnInit {
 
   hasFilters(): boolean {
     return this.search().length > 0 || this.topic() !== null
-        || (this.mastery() !== null && this.mastery() !== 'New') || this.company() !== null;
+        || this.mastery() !== null || this.company() !== null;
   }
 
   goPage(p: number): void {

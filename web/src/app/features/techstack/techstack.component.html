@@ -146,6 +146,9 @@
       <div class="chip-line">
         <span class="chip-label">{{ t('ts.filter.mastery') }}</span>
         <mat-chip-set>
+          <mat-chip class="fchip" [highlighted]="mastery() === null" (click)="selectMastery(null)">
+            {{ t('common.all') }}
+          </mat-chip>
           @for (m of masteryOrder; track m) {
             <mat-chip class="fchip" [class]="masteryClass(m)"
                       [highlighted]="mastery() === m" (click)="toggleMastery(m)">

@@ -324,12 +324,11 @@
                 <span class="block-label">{{ t('ts.filter.topic') }}</span>
               </header>
               <mat-form-field class="detail-row-field" subscriptSizing="dynamic">
-                <input matInput [(ngModel)]="detailDraft.topic" [matAutocomplete]="topicAutoDetail" />
-                <mat-autocomplete #topicAutoDetail="matAutocomplete">
+                <mat-select [(ngModel)]="detailDraft.topic">
                   @for (tp of topics(); track tp) {
                     <mat-option [value]="tp">{{ tp }}</mat-option>
                   }
-                </mat-autocomplete>
+                </mat-select>
               </mat-form-field>
             </section>
             <section class="block">

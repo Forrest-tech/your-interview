@@ -1,6 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DocViewerComponent } from '../../shared/doc-viewer/doc-viewer.component';
+import { CategoryManagerComponent } from './category-manager/category-manager.component';
 import { forkJoin } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
@@ -183,6 +184,32 @@ export class TechStackComponent implements OnInit {
     const v = !this.filtersCollapsed();
     this.filtersCollapsed.set(v);
     try { localStorage.setItem('ts.filtersCollapsed', v ? '1' : '0'); } catch { /* ignore */ }
+  }
+
+  /** 打开分类管理弹窗 */
+  openCategoryManager(): void {
+    // 按条目数统计分类
+    const counts = new Map<string, number>();
+    for (const it of this.items()) {
+      const tp = (it.topic || '').trim() || 'Uncategorized';
+      counts.set(tp, (counts.get(tp) ?? 0) + 1);
+    }
+    // 加上 topics 列表里但当前页没条目的(跨页)
+    for (const tp of this.topics()) {
+      if (!counts.has(tp)) counts.set(tp, 0);
+    }
+    const dialogRef = this.dialog.open(CategoryManagerComponent, {
+      width: '520px',
+      data: {}
+    });
+    dialogRef.componentInstance.categories.set(
+      [...counts.entries()].map(([name, count]) => ({ name, count })));
+    dialogRef.afterClosed().subscribe((changed) => {
+      if (changed) {
+        this.load();
+        this.loadBuckets();
+      }
+    });
   }
 
   /** 激活的筛选数量(用于折叠态的计数徽标) — 默认的 To do 不算 */

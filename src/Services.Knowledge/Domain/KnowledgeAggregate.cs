@@ -144,6 +144,13 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
 
     // ---------- 领域行为 ----------
 
+    /// <summary>仅改分类(分类管理用)。null/空 → "Uncategorized"。</summary>
+    public void SetTopic(string? topic)
+    {
+        Topic = string.IsNullOrWhiteSpace(topic) ? "Uncategorized" : topic.Trim();
+        Touch();
+    }
+
     public void UpdateDetails(string title, string topic, string? subTopic, string question,
         int difficulty, int importance, string? tagsJson, string? conceptExplanation,
         string? myAnswer, string? betterAnswer, string? keyPointsJson, string? commonMistakesJson,

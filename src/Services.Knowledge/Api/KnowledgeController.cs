@@ -153,6 +153,24 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>重命名分类:批量更新所有使用该分类的条目。</summary>
+    [HttpPut("topics/rename")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> RenameTopic([FromBody] RenameTopicBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new RenameTopicCommand(body.OldName, body.NewName), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>删除分类:名下条目的 topic 置空(变未分类),不删条目。</summary>
+    [HttpDelete("topics/{name}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> DeleteTopic(string name, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteTopicCommand(name), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>记录一次复习 —— 会按 SM-2 算法重算下次复习时间。</summary>
     [HttpPost("{id:guid}/review")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
@@ -214,6 +232,8 @@ public sealed record ImportBody(List<ImportKnowledgeRow> Items);
 
 /// <summary>合并重复条目请求体。</summary>
 public sealed record MergeBody(Guid KeepId, Guid MergeId);
+
+public sealed record RenameTopicBody(string OldName, string NewName);
 
 /// <summary>
 /// 机经候选题导入请求体。

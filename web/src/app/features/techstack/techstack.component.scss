@@ -167,6 +167,15 @@ mat-card { border-radius: 8px; }
   color: #3f51b5;
 }
 
+/* 分类管理按钮 */
+.manage-btn {
+  color: rgba(0, 0, 0, 0.45);
+  width: 32px;
+  height: 32px;
+}
+.manage-btn:hover { color: #3f51b5; background: rgba(63, 81, 181, 0.08); }
+.manage-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
 /* 筛选区底部:Clear filters 右对齐 */
 .filter-footer {
   display: flex;

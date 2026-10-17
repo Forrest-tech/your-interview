@@ -128,6 +128,12 @@ public sealed record UpdateKnowledgeCommand(
 
 public sealed record DeleteKnowledgeCommand(Guid Id) : IRequest<Result>;
 
+/// <summary>重命名分类:返回受影响的条目数。新名字已存在时即为合并。</summary>
+public sealed record RenameTopicCommand(string OldName, string NewName) : IRequest<Result<int>>;
+
+/// <summary>删除分类:名下条目的 Topic 置空。返回受影响的条目数。</summary>
+public sealed record DeleteTopicCommand(string Name) : IRequest<Result<int>>;
+
 public sealed record RecordReviewCommand(
     Guid Id, string Result, int? ConfidenceBefore = null, int? ConfidenceAfter = null,
     string? Note = null, int? DurationSeconds = null) : IRequest<Result<ReviewOutcomeDto>>;
@@ -543,6 +549,45 @@ public sealed class DeleteKnowledgeCommandHandler(KnowledgeDbContext db)
         k.MarkDeleted();
         await db.SaveChangesAsync(ct);
         return Result.Success();
+    }
+}
+
+public sealed class RenameTopicCommandHandler(KnowledgeDbContext db)
+    : IRequestHandler<RenameTopicCommand, Result<int>>
+{
+    public async Task<Result<int>> Handle(RenameTopicCommand request, CancellationToken ct)
+    {
+        var oldName = request.OldName?.Trim();
+        var newName = request.NewName?.Trim();
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+            return Result.Failure<int>(Error.Validation("Topic.Empty", "分类名不能为空"));
+        if (oldName.Equals(newName, StringComparison.OrdinalIgnoreCase))
+            return Result.Success(0);
+
+        var items = await db.Items
+            .Where(x => x.Topic != null && x.Topic.ToLower() == oldName.ToLower())
+            .ToListAsync(ct);
+        foreach (var k in items) k.SetTopic(newName);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(items.Count);
+    }
+}
+
+public sealed class DeleteTopicCommandHandler(KnowledgeDbContext db)
+    : IRequestHandler<DeleteTopicCommand, Result<int>>
+{
+    public async Task<Result<int>> Handle(DeleteTopicCommand request, CancellationToken ct)
+    {
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return Result.Failure<int>(Error.Validation("Topic.Empty", "分类名不能为空"));
+
+        var items = await db.Items
+            .Where(x => x.Topic != null && x.Topic.ToLower() == name.ToLower())
+            .ToListAsync(ct);
+        foreach (var k in items) k.SetTopic(null);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(items.Count);
     }
 }
 

@@ -1,0 +1,60 @@
+<h2 mat-dialog-title>{{ t('ts.cat.title') }}</h2>
+
+<mat-dialog-content class="cat-content">
+  <!-- 新增 -->
+  <div class="add-row">
+    <mat-form-field subscriptSizing="dynamic" class="add-field">
+      <mat-label>{{ t('ts.cat.newPh') }}</mat-label>
+      <input matInput [ngModel]="newName()" (ngModelChange)="newName.set($event)"
+             (keyup.enter)="addCategory()" [disabled]="busy()">
+    </mat-form-field>
+    <button mat-raised-button color="primary" (click)="addCategory()"
+            [disabled]="!newName().trim() || newNameExists() || busy()">
+      {{ t('ts.cat.add') }}
+    </button>
+  </div>
+  @if (newNameExists()) {
+    <p class="warn">{{ t('ts.cat.exists') }}</p>
+  }
+  @if (error()) {
+    <p class="warn">{{ error() }}</p>
+  }
+
+  <!-- 列表 -->
+  <div class="cat-list">
+    @for (c of sorted(); track c.name) {
+      <div class="cat-row">
+        @if (editingName() === c.name) {
+          <mat-form-field subscriptSizing="dynamic" class="rename-field">
+            <input matInput [ngModel]="editDraft()" (ngModelChange)="editDraft.set($event)"
+                   (keyup.enter)="confirmRename(c)" (keyup.escape)="cancelRename()" #renameInput>
+          </mat-form-field>
+          <button mat-icon-button (click)="confirmRename(c)" [disabled]="busy()"
+                  [matTooltip]="t('ts.cat.save')">
+            <mat-icon>check</mat-icon>
+          </button>
+          <button mat-icon-button (click)="cancelRename()" [disabled]="busy()"
+                  [matTooltip]="t('common.cancel')">
+            <mat-icon>close</mat-icon>
+          </button>
+        } @else {
+          <button class="cat-name" (click)="startRename(c)" [matTooltip]="t('ts.cat.renameHint')">
+            {{ c.name }}
+          </button>
+          <span class="cat-count">{{ c.count }}</span>
+          <span class="spacer"></span>
+          <button mat-icon-button class="del-btn" (click)="deleteCategory(c)" [disabled]="busy()"
+                  [matTooltip]="t('ts.cat.delete')">
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        }
+      </div>
+    } @empty {
+      <p class="empty">{{ t('ts.cat.empty') }}</p>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()">{{ t('common.done') }}</button>
+</mat-dialog-actions>

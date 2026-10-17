@@ -140,6 +140,10 @@
         @if (topicSource() === 'derived' && topics().length > 0) {
           <span class="chip-note" [matTooltip]="t('techstack.topicDerived')">{{ t('ts.topic.derived') }}</span>
         }
+        <button mat-icon-button (click)="openCategoryManager()"
+                [matTooltip]="t('ts.cat.manage')" class="manage-btn">
+          <mat-icon>settings</mat-icon>
+        </button>
       </div>
 
       <div class="chip-line">

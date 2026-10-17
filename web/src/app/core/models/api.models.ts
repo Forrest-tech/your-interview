@@ -135,6 +135,7 @@ export interface PlaybookCompany {
 /** 公司轮次(后端 CompanyRoundDto):Tech Stack 来源选择用。 */
 export interface PlaybookCompanyRound {
   roundId: string;
+  entryId: string;
   order: number;
   stage: string;
   scheduledDate?: string;
@@ -502,6 +503,7 @@ export interface KnowledgeSourceEntry {
   roundStage?: string;
   date?: string;
   interviewEntryId?: string;
+  roundId?: string;
   jobApplicationId?: string;
 }
 

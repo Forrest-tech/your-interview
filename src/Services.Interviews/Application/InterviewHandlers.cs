@@ -163,7 +163,7 @@ public sealed record GetEntryQuery(Guid Id) : IRequest<Result<InterviewEntryDto>
 public sealed record GetCompanySummariesQuery : IRequest<Result<IReadOnlyList<CompanySummaryDto>>>;
 
 /// <summary>某公司的全部轮次(跨该公司的所有面试条目,按时间排序)。供 Tech Stack 来源选择用。</summary>
-public sealed record CompanyRoundDto(Guid RoundId, int Order, string Stage, DateOnly? ScheduledDate);
+public sealed record CompanyRoundDto(Guid RoundId, Guid EntryId, int Order, string Stage, DateOnly? ScheduledDate);
 public sealed record GetCompanyRoundsQuery(Guid CompanyId) : IRequest<Result<IReadOnlyList<CompanyRoundDto>>>;
 
 public sealed record GetInterviewStatsQuery : IRequest<Result<InterviewStatsDto>>;
@@ -657,10 +657,10 @@ public sealed class GetCompanyRoundsQueryHandler(InterviewsDbContext db)
     {
         var rounds = await db.Entries.AsNoTracking()
             .Where(e => e.CompanyId == request.CompanyId)
-            .SelectMany(e => e.Rounds)
-            .OrderBy(r => r.ScheduledDate ?? DateOnly.MaxValue)
-            .ThenBy(r => r.Order)
-            .Select(r => new CompanyRoundDto(r.Id, r.Order, r.Stage, r.ScheduledDate))
+            .SelectMany(e => e.Rounds, (e, r) => new { EntryId = e.Id, Round = r })
+            .OrderBy(x => x.Round.ScheduledDate ?? DateOnly.MaxValue)
+            .ThenBy(x => x.Round.Order)
+            .Select(x => new CompanyRoundDto(x.Round.Id, x.EntryId, x.Round.Order, x.Round.Stage, x.Round.ScheduledDate))
             .ToListAsync(ct);
 
         // 老数据兜底:有条目但无 Round 实体时,按 entry 的 RoundNo/日期合成一条
@@ -669,12 +669,12 @@ public sealed class GetCompanyRoundsQueryHandler(InterviewsDbContext db)
             var fallback = await db.Entries.AsNoTracking()
                 .Where(e => e.CompanyId == request.CompanyId)
                 .OrderByDescending(e => e.InterviewDate ?? DateOnly.MinValue)
-                .Select(e => new { e.RoundNo, e.InterviewDate })
+                .Select(e => new { e.Id, e.RoundNo, e.InterviewDate })
                 .FirstOrDefaultAsync(ct);
             if (fallback is not null)
             {
                 rounds.Add(new CompanyRoundDto(
-                    Guid.Empty, fallback.RoundNo, string.Empty, fallback.InterviewDate));
+                    Guid.Empty, fallback.Id, fallback.RoundNo, string.Empty, fallback.InterviewDate));
             }
         }
 

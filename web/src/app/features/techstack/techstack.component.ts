@@ -539,6 +539,7 @@ export class TechStackComponent implements OnInit {
   readonly selectedCompanyId = signal<string | null>(null);
   readonly companyRounds = signal<PlaybookCompanyRound[]>([]);
   readonly selectedRoundId = signal<string | null>(null);
+  readonly selectedEntryId = signal<string | null>(null);
   readonly filteredCompanies = computed(() => {
     const q = (this.companySearchCtrl.value ?? '').trim().toLowerCase();
     const list = this.playbookCompanies();
@@ -561,6 +562,7 @@ export class TechStackComponent implements OnInit {
     this.companySearchCtrl.setValue(c.companyName, { emitEvent: false });
     this.selectedCompanyId.set(c.companyId);
     this.selectedRoundId.set(null);
+    this.selectedEntryId.set(null);
     this.newDetailSourceRound = null;
     this.newDetailSourceDate = '';
     this.companyRounds.set([]);
@@ -575,6 +577,7 @@ export class TechStackComponent implements OnInit {
     this.selectedRoundId.set(roundId);
     const r = this.companyRounds().find((x) => x.roundId === roundId);
     if (!r) return;
+    this.selectedEntryId.set(r.entryId);
     this.newDetailSourceRound = r.order;
     this.newDetailSourceDate = r.scheduledDate ?? '';
   }
@@ -656,6 +659,7 @@ export class TechStackComponent implements OnInit {
     this.companySearchCtrl.setValue('', { emitEvent: false });
     this.selectedCompanyId.set(null);
     this.selectedRoundId.set(null);
+    this.selectedEntryId.set(null);
     this.companyRounds.set([]);
     this.showDetailSourceForm.set(false);
     this.detailEditing.set(true);
@@ -673,6 +677,8 @@ export class TechStackComponent implements OnInit {
       companyName: company || undefined,
       roundNo: this.newDetailSourceRound ?? undefined,
       date: this.newDetailSourceDate || undefined,
+      interviewEntryId: this.selectedEntryId() ?? undefined,
+      roundId: this.selectedRoundId() ?? undefined,
     }];
     this.newDetailSourceCompany = '';
     this.newDetailSourceRound = null;
@@ -680,6 +686,7 @@ export class TechStackComponent implements OnInit {
     this.companySearchCtrl.setValue('', { emitEvent: false });
     this.selectedCompanyId.set(null);
     this.selectedRoundId.set(null);
+    this.selectedEntryId.set(null);
     this.companyRounds.set([]);
   }
 

@@ -17,6 +17,8 @@
   margin-top: 8px;
 }
 .source-text { font-size: 13px; color: #555; }
+.source-text.link { color: #1565c0; text-decoration: underline; cursor: pointer; }
+.source-text.link:hover { color: #0d47a1; }
 .source-edit-list {
   display: flex;
   flex-wrap: wrap;

@@ -319,7 +319,12 @@
               } @else {
                 <div class="source-text-list">
                   @for (s of parseSources(it); track $index) {
-                    <span class="source-text">{{ sourceEntryLabel(s) }}</span>
+                    @if (s.interviewEntryId) {
+                      <a class="source-text link" [routerLink]="['/playbook', s.interviewEntryId]"
+                         [queryParams]="{ tab: 'rounds' }">{{ sourceEntryLabel(s) }}</a>
+                    } @else {
+                      <span class="source-text">{{ sourceEntryLabel(s) }}</span>
+                    }
                   }
                 </div>
               }

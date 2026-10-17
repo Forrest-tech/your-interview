@@ -260,10 +260,7 @@
                 <span class="block-hint">{{ t(b.hintKey) }}</span>
                 <span class="spacer"></span>
                 @if (editingBlock() !== b.key) {
-                  <button mat-icon-button class="blk-edit" (click)="startBlockEdit(it, b.key)"
-                          [matTooltip]="t('common.edit')">
-                    <mat-icon>edit</mat-icon>
-                  </button>
+                  <mat-icon class="blk-edit" (click)="startBlockEdit(it, b.key)">edit</mat-icon>
                 }
               </header>
               @if (editingBlock() === b.key) {

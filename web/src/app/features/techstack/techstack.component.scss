@@ -327,14 +327,18 @@ mat-form-field { width: 100%; }
 
 .block-hint { font-size: 11.5px; opacity: 0.42; margin-left: 2px; }
 
-/* 行内编辑:铅笔 → 文本框 → 保存/取消 */
-.block-head .spacer { flex: 1; }
+/* 行内编辑:GitHub/Notion 式 — 铅笔平时隐藏,hover 整块才半透明显形,无按钮底/无 tooltip */
 .blk-edit {
-  width: 28px; height: 28px; line-height: 28px;
-  opacity: 0.45;
+  font-size: 16px; width: 16px; height: 16px;
+  color: #888;
+  opacity: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 120ms ease, color 120ms ease;
+  flex-shrink: 0;
 }
-.blk-edit:hover { opacity: 1; }
-.blk-edit mat-icon { font-size: 16px; width: 16px; height: 16px; color: #555; }
+.block:hover .blk-edit { opacity: 0.55; }
+.blk-edit:hover { opacity: 1 !important; color: #3f51b5; }
 .blk-editor {
   width: 100%;
   box-sizing: border-box;

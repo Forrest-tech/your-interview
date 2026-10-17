@@ -69,7 +69,11 @@ mat-card { border-radius: 8px; }
 
 /* ---------- 熟练度分布 ---------- */
 
-.buckets { margin-bottom: 12px; }
+.buckets-inline {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
 
 .buckets-head {
   display: flex;

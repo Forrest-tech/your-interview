@@ -45,33 +45,30 @@
   </header>
 
   @if (!reviewMode()) {
-  <!-- 熟练度分布:接口失败时整块隐藏,不显示误导性的全 0 -->
-  @if (buckets()) {
-    <mat-card class="buckets">
-      <mat-card-content>
-        <div class="buckets-head">
-          <span class="buckets-title">{{ t('ts.buckets.title') }}</span>
-          <span class="buckets-total">{{ tn('ts.buckets.total', buckets()?.totalItems ?? 0) }}</span>
-        </div>
-        <div class="bucket-row">
-          @for (b of bucketRows(); track b.level) {
-            <div class="bucket" [class]="'b-' + b.level.toLowerCase()">
-              <div class="bucket-top">
-                <span class="bucket-label">{{ masteryLabel(b.level) }}</span>
-                <span class="bucket-count">{{ b.count }}</span>
-              </div>
-              <div class="bar"><div class="bar-fill" [style.width.%]="b.pct"></div></div>
-              <div class="bucket-pct">{{ b.pct }}%</div>
-            </div>
-          }
-        </div>
-      </mat-card-content>
-    </mat-card>
-  }
-
   <!-- 筛选:可折叠 -->
   <mat-card class="filters">
     <mat-card-content>
+      <!-- 熟练度分布:折叠进筛选区 -->
+      @if (buckets()) {
+        <div class="buckets-inline">
+          <div class="buckets-head">
+            <span class="buckets-title">{{ t('ts.buckets.title') }}</span>
+            <span class="buckets-total">{{ tn('ts.buckets.total', buckets()?.totalItems ?? 0) }}</span>
+          </div>
+          <div class="bucket-row">
+            @for (b of bucketRows(); track b.level) {
+              <div class="bucket" [class]="'b-' + b.level.toLowerCase()">
+                <div class="bucket-top">
+                  <span class="bucket-label">{{ masteryLabel(b.level) }}</span>
+                  <span class="bucket-count">{{ b.count }}</span>
+                </div>
+                <div class="bar"><div class="bar-fill" [style.width.%]="b.pct"></div></div>
+                <div class="bucket-pct">{{ b.pct }}%</div>
+              </div>
+            }
+          </div>
+        </div>
+      }
       <div class="filter-header">
         <button mat-button class="filter-toggle" (click)="toggleFilters()"
                 [matTooltip]="filtersCollapsed() ? t('ts.filter.expand') : t('ts.filter.collapse')">

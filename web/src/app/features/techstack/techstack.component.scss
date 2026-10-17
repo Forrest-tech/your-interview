@@ -227,16 +227,35 @@ mat-form-field { width: 100%; }
 
 .split {
   display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 360px) 8px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  gap: 12px;
+  gap: 0;
   flex: 1 1 auto;
   min-height: 0;
 }
 
 @media (max-width: 900px) {
   .split { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; flex: none; }
+  .split-handle { display: none; }
 }
+
+/* 拖拽手柄 */
+.split-handle {
+  cursor: col-resize;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  position: relative;
+}
+.split-handle::after {
+  content: '';
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.15s;
+  margin: 8px 0;
+}
+.split-handle:hover::after { background: rgba(63, 81, 181, 0.35); }
 
 /* ---------- 左:列表 ---------- */
 

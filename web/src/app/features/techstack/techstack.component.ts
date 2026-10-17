@@ -180,6 +180,36 @@ export class TechStackComponent implements OnInit {
   readonly filtersCollapsed = signal(
     typeof localStorage !== 'undefined' && localStorage.getItem('ts.filtersCollapsed') === '1');
 
+  /** 左列表宽度(可拖拽,记 localStorage) */
+  readonly listWidth = signal(
+    (() => {
+      try {
+        const v = parseInt(localStorage.getItem('ts.listWidth') ?? '', 10);
+        return v >= 220 && v <= 600 ? v : 340;
+      } catch { return 340; }
+    })());
+
+  startListResize(ev: MouseEvent): void {
+    ev.preventDefault();
+    const startX = ev.clientX;
+    const startW = this.listWidth();
+    const onMove = (e: MouseEvent) => {
+      const next = startW + (e.clientX - startX);
+      this.listWidth.set(Math.min(600, Math.max(220, next)));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try { localStorage.setItem('ts.listWidth', String(this.listWidth())); } catch { /* ignore */ }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
+
   toggleFilters(): void {
     const v = !this.filtersCollapsed();
     this.filtersCollapsed.set(v);

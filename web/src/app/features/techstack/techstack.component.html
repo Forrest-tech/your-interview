@@ -200,7 +200,7 @@
     </mat-card>
   }
 
-  <div class="split" id="concepts">
+  <div class="split" id="concepts" [style.grid-template-columns]="listWidth() + 'px 8px minmax(0, 1fr)'">
     <!-- 左:条目列表 -->
     <mat-card class="list-pane">
       <div class="list-head">
@@ -252,6 +252,9 @@
         </div>
       }
     </mat-card>
+
+    <!-- 拖拽手柄:调整左列表宽度 -->
+    <div class="split-handle" (mousedown)="startListResize($event)"></div>
 
     <!-- 右:九块详情 -->
     <mat-card class="detail-pane">

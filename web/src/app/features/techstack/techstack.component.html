@@ -17,6 +17,10 @@
         <mat-icon>{{ editing() ? 'done' : 'edit' }}</mat-icon>
         {{ t(editing() ? 'common.done' : 'common.edit') }}
       </button>
+      <button mat-icon-button (click)="openCategoryManager()"
+              [matTooltip]="t('ts.cat.manage')">
+        <mat-icon>category</mat-icon>
+      </button>
       @if (duplicateGroups().length > 0) {
         <button mat-stroked-button class="dup-btn" (click)="openDuplicates()">
           <mat-icon>content_copy</mat-icon>
@@ -140,10 +144,6 @@
         @if (topicSource() === 'derived' && topics().length > 0) {
           <span class="chip-note" [matTooltip]="t('techstack.topicDerived')">{{ t('ts.topic.derived') }}</span>
         }
-        <button mat-icon-button (click)="openCategoryManager()"
-                [matTooltip]="t('ts.cat.manage')" class="manage-btn">
-          <mat-icon>settings</mat-icon>
-        </button>
       </div>
 
       <div class="chip-line">

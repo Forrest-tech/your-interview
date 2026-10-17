@@ -373,6 +373,18 @@ mat-form-field { width: 100%; }
   word-break: break-word;
 }
 
+/* 有内容的块:整段可点进编辑,hover 给一个极淡的底表示可点 */
+.block-text.editable {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  transition: background 120ms ease;
+}
+.block-text.editable:hover {
+  background: rgba(63, 81, 181, 0.06);
+}
+
 .no-selection {
   display: flex;
   flex-direction: column;

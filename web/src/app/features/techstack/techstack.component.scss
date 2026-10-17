@@ -288,7 +288,15 @@ mat-form-field { width: 100%; }
 
 /* ---------- 右:详情 ---------- */
 
-.detail-pane { padding: 0; }
+.detail-pane {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  /* 60px 顶栏 + 页面上下 padding + 页头/筛选区:卡片永不撑出视口,超出部分走 body 内部滚动 */
+  max-height: calc(100vh - 280px);
+}
 
 .detail-head {
   padding: 16px 20px 14px;
@@ -333,8 +341,9 @@ mat-form-field { width: 100%; }
 }
 
 .detail-body {
-  padding: 6px 20px 24px;
-  max-height: calc(100vh - 340px);
+  padding: 6px 20px 32px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 

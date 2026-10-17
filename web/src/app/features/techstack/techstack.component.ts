@@ -240,6 +240,7 @@ export class TechStackComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.restoreFiltersFromUrl();
     this.load();
     this.loadBuckets();
     this.loadSources();
@@ -247,6 +248,35 @@ export class TechStackComponent implements OnInit {
     // 来源公司搜索框:输了字但没从下拉选,清空已选公司,避免张冠李戴
     this.companySearchCtrl.valueChanges.subscribe((v) => {
       if ((v ?? '').trim() !== this.newDetailSourceCompany) this.newDetailSourceCompany = '';
+    });
+  }
+
+  /** 从 URL 恢复筛选值(mastery 默认为 'New',URL 里没有时保持默认) */
+  private restoreFiltersFromUrl(): void {
+    const qp = this.route.snapshot.queryParamMap;
+    const search = qp.get('search');
+    const topic = qp.get('topic');
+    const mastery = qp.get('mastery');
+    const company = qp.get('company');
+    if (search) this.search.set(search);
+    if (topic) this.topic.set(topic);
+    if (mastery) this.mastery.set(mastery as MasteryLevel);
+    if (company) this.company.set(company);
+  }
+
+  /** 筛选值同步到 URL(默认的 To do 不写入,保持 URL 干净) */
+  private syncFiltersToUrl(): void {
+    const m = this.mastery();
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        search: this.search() || null,
+        topic: this.topic(),
+        mastery: m === 'New' ? null : m,
+        company: this.company(),
+      },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
     });
   }
 
@@ -366,6 +396,7 @@ export class TechStackComponent implements OnInit {
   selectCompany(c: string | null): void {
     this.company.set(this.company() === c ? null : c);
     this.page.set(1);
+    this.syncFiltersToUrl();
     this.load();
   }
 
@@ -387,18 +418,21 @@ export class TechStackComponent implements OnInit {
 
   onSearchEnter(): void {
     this.page.set(1);
+    this.syncFiltersToUrl();
     this.load();
   }
 
   selectTopic(t: string | null): void {
     this.topic.set(t);
     this.page.set(1);
+    this.syncFiltersToUrl();
     this.load();
   }
 
   toggleMastery(m: MasteryLevel): void {
     this.mastery.set(this.mastery() === m ? null : m);
     this.page.set(1);
+    this.syncFiltersToUrl();
     this.load();
   }
 
@@ -408,6 +442,7 @@ export class TechStackComponent implements OnInit {
     this.mastery.set('New');  // 默认选中 To do,不是全空
     this.company.set(null);
     this.page.set(1);
+    this.syncFiltersToUrl();
     this.load();
   }
 
@@ -418,6 +453,7 @@ export class TechStackComponent implements OnInit {
     if (kind === 'mastery') this.mastery.set('New');
     if (kind === 'company') this.company.set(null);
     this.page.set(1);
+    this.syncFiltersToUrl();
     this.load();
   }
 

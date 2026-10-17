@@ -9,6 +9,11 @@
   padding: 24px 28px 16px;
 }
 
+/* 页面级:只读区永不显示文本插入符(闪烁竖线);真正的 input/textarea 不受影响 */
+.page :not(input):not(textarea):not([contenteditable="true"]) {
+  caret-color: transparent;
+}
+
 .page-head {
   display: flex;
   align-items: flex-start;
@@ -372,12 +377,10 @@ mat-form-field { width: 100%; }
   white-space: pre-wrap;
   word-break: break-word;
   cursor: default; /* GitHub 式:普通文本不闪 I-beam,选中复制照样可以 */
-  caret-color: transparent; /* 永远不显示文本插入符(闪烁竖线) */
 }
 
 .block-empty-hint {
   cursor: default;
-  caret-color: transparent;
 }
 
 .no-selection {

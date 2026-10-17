@@ -513,6 +513,7 @@ export class TechStackComponent implements OnInit {
   /** 详情是否处于编辑态。右上角 Edit 进入,Save/Cancel 退出。 */
   readonly detailEditing = signal(false);
   readonly savingDetail = signal(false);
+  readonly difficultyOptions = [1, 2, 3, 4, 5];
   /** 编辑态下所有字段的草稿。 */
   detailDraft: {
     title: string;

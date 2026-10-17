@@ -1777,7 +1777,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'ts.block.keyPoints': { zh: '关键要点', en: 'Key points', fr: 'Points clés' },
   'ts.block.keyPointsHint': { zh: '答题必须覆盖的点', en: 'Points your answer must cover', fr: 'Points à couvrir dans la réponse' },
   'ts.block.commonMistakes': { zh: '常见误区', en: 'Common mistakes', fr: 'Erreurs fréquentes' },
-  'ts.block.emptyHint': { zh: '还没内容,点右上角铅笔填写', en: 'Empty — click the pencil to fill in', fr: 'Vide — cliquez sur le crayon pour remplir' },
+  'ts.block.emptyHint': { zh: '还没内容,点右上角 Edit 填写', en: 'Empty — click Edit (top-right) to fill in', fr: 'Vide — cliquez sur Edit en haut à droite' },
   'ts.block.commonMistakesHint': { zh: '容易被追问打穿的地方', en: 'Where follow-ups can trip you up', fr: 'Où les questions de suivi peuvent vous piéger' },
   'ts.block.myAnswer': { zh: '我面试时的答案', en: 'My interview answer', fr: 'Ma réponse en entretien' },
   'ts.block.myAnswerHint': { zh: '当时实际怎么答的', en: 'How I actually answered', fr: 'Comment j’ai réellement répondu' },

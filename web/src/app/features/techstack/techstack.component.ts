@@ -218,15 +218,20 @@ export class TechStackComponent implements OnInit {
 
   /** 打开分类管理弹窗 */
   openCategoryManager(): void {
-    // 按条目数统计分类
+    // 用 topics 接口的全量计数,不用当前页条目(分页会导致计数错)
     const counts = new Map<string, number>();
-    for (const it of this.items()) {
-      const tp = (it.topic || '').trim() || 'Uncategorized';
-      counts.set(tp, (counts.get(tp) ?? 0) + 1);
+    for (const t of this.topicDetails()) {
+      if (t.topic) counts.set(t.topic, t.total ?? 0);
     }
-    // 加上 topics 列表里但当前页没条目的(跨页)
-    for (const tp of this.topics()) {
-      if (!counts.has(tp)) counts.set(tp, 0);
+    // 兜底:接口不可用时从当前页推导
+    if (counts.size === 0) {
+      for (const it of this.items()) {
+        const tp = (it.topic || '').trim() || 'Uncategorized';
+        counts.set(tp, (counts.get(tp) ?? 0) + 1);
+      }
+      for (const tp of this.topics()) {
+        if (!counts.has(tp)) counts.set(tp, 0);
+      }
     }
     // 加上用户手动建的空分类(localStorage)
     try {
@@ -273,6 +278,8 @@ export class TechStackComponent implements OnInit {
 
   /** 主题列表:接口优先,404/失败则从当前页条目里推导 —— 至少让筛选可用。 */
   readonly topics = signal<string[]>([]);
+  /** topics 接口的全量数据(含 total 计数),供分类管理用 */
+  readonly topicDetails = signal<KnowledgeTopic[]>([]);
   readonly topicSource = signal<'api' | 'derived'>('api');
 
   /** 熟练度分布:接口失败为 null,此时整条分布栏隐藏而不是显示全 0(全 0 是误导)。 */
@@ -430,8 +437,9 @@ export class TechStackComponent implements OnInit {
       .pipe(catchError(() => of(null)))
       .subscribe((list) => {
         if (list && Array.isArray(list) && list.length > 0) {
-          // 后端返回 {topic,total,...},这里只取名字喂给筛选器
+          // 后端返回 {topic,total,...},名字喂筛选器,全量对象留给分类管理计数
           this.topics.set(list.map((t) => t.topic).filter(Boolean).sort());
+          this.topicDetails.set(list);
           this.topicSource.set('api');
         } else if (this.topics().length === 0) {
           this.topicSource.set('derived');

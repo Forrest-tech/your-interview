@@ -22,7 +22,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged, PlaybookCompany } from '../../core/models/api.models';
+import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged, PlaybookCompany, PlaybookCompanyRound } from '../../core/models/api.models';
 import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
@@ -535,6 +535,9 @@ export class TechStackComponent implements OnInit {
   /** 来源公司下拉:Playbook 备考中的公司(带搜索)。 */
   readonly companySearchCtrl = new FormControl('');
   readonly playbookCompanies = signal<PlaybookCompany[]>([]);
+  readonly selectedCompanyId = signal<string | null>(null);
+  readonly companyRounds = signal<PlaybookCompanyRound[]>([]);
+  readonly selectedRoundId = signal<string | null>(null);
   readonly filteredCompanies = computed(() => {
     const q = (this.companySearchCtrl.value ?? '').trim().toLowerCase();
     const list = this.playbookCompanies();
@@ -551,10 +554,34 @@ export class TechStackComponent implements OnInit {
     });
   }
 
-  /** 从下拉选中公司:只允许选库里的,不手动填。 */
+  /** 从下拉选中公司:只允许选库里的,不手动填;同时加载该公司的轮次。 */
   onCompanySelected(c: PlaybookCompany): void {
     this.newDetailSourceCompany = c.companyName;
     this.companySearchCtrl.setValue(c.companyName, { emitEvent: false });
+    this.selectedCompanyId.set(c.companyId);
+    this.selectedRoundId.set(null);
+    this.newDetailSourceRound = null;
+    this.newDetailSourceDate = '';
+    this.companyRounds.set([]);
+    this.api.get<PlaybookCompanyRound[]>(`/api/interviews/companies/${c.companyId}/rounds`).subscribe({
+      next: (list) => this.companyRounds.set(list ?? []),
+      error: () => this.companyRounds.set([]),
+    });
+  }
+
+  /** 选中轮次:日期自动带出,不手动填。 */
+  onRoundSelected(roundId: string): void {
+    this.selectedRoundId.set(roundId);
+    const r = this.companyRounds().find((x) => x.roundId === roundId);
+    if (!r) return;
+    this.newDetailSourceRound = r.order;
+    this.newDetailSourceDate = r.scheduledDate ?? '';
+  }
+
+  /** 轮次下拉显示:Round 1 · Technical · 2026-10-07 */
+  roundOptionLabel(r: PlaybookCompanyRound): string {
+    const date = r.scheduledDate ?? this.t('ts.source.noDate');
+    return `Round ${r.order} · ${r.stage} · ${date}`;
   }
 
   /** 展开来源表单时重置搜索框并加载公司库。 */
@@ -623,6 +650,10 @@ export class TechStackComponent implements OnInit {
     this.newDetailSourceCompany = '';
     this.newDetailSourceRound = null;
     this.newDetailSourceDate = '';
+    this.companySearchCtrl.setValue('', { emitEvent: false });
+    this.selectedCompanyId.set(null);
+    this.selectedRoundId.set(null);
+    this.companyRounds.set([]);
     this.showDetailSourceForm.set(false);
     this.detailEditing.set(true);
   }
@@ -643,6 +674,10 @@ export class TechStackComponent implements OnInit {
     this.newDetailSourceCompany = '';
     this.newDetailSourceRound = null;
     this.newDetailSourceDate = '';
+    this.companySearchCtrl.setValue('', { emitEvent: false });
+    this.selectedCompanyId.set(null);
+    this.selectedRoundId.set(null);
+    this.companyRounds.set([]);
   }
 
   /** 详情编辑中:删除一条来源。 */

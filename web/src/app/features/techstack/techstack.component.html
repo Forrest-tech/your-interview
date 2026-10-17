@@ -307,16 +307,22 @@
                       }
                     </mat-autocomplete>
                   </mat-form-field>
-                  <mat-form-field subscriptSizing="dynamic" class="src-field-sm">
+                  <mat-form-field subscriptSizing="dynamic" class="src-field">
                     <mat-label>{{ t('ts.source.round') }}</mat-label>
-                    <input matInput type="number" min="1" [(ngModel)]="newDetailSourceRound" />
+                    <mat-select [disabled]="!selectedCompanyId()" [value]="selectedRoundId()" (selectionChange)="onRoundSelected($event.value)">
+                      @for (r of companyRounds(); track r.roundId) {
+                        <mat-option [value]="r.roundId">{{ roundOptionLabel(r) }}</mat-option>
+                      } @empty {
+                        <mat-option disabled>{{ t('ts.source.roundEmpty') }}</mat-option>
+                      }
+                    </mat-select>
                   </mat-form-field>
                   <mat-form-field subscriptSizing="dynamic" class="src-field-sm">
                     <mat-label>{{ t('ts.source.date') }}</mat-label>
-                    <input matInput type="date" [(ngModel)]="newDetailSourceDate" />
+                    <input matInput [value]="newDetailSourceDate || t('ts.source.noDate')" disabled />
                   </mat-form-field>
-                  <button mat-stroked-button (click)="addDetailSource()">
-                    <mat-icon>add</mat-icon>{{ t('ts.source.add') }}
+                  <button mat-stroked-button (click)="addDetailSource()" [disabled]="!newDetailSourceCompany">
+                    <mat-icon>check</mat-icon>{{ t('ts.source.confirm') }}
                   </button>
                 </div>
                 }

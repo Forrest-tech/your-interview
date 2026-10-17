@@ -162,6 +162,10 @@ public sealed record GetEntryQuery(Guid Id) : IRequest<Result<InterviewEntryDto>
 
 public sealed record GetCompanySummariesQuery : IRequest<Result<IReadOnlyList<CompanySummaryDto>>>;
 
+/// <summary>某公司的全部轮次(跨该公司的所有面试条目,按时间排序)。供 Tech Stack 来源选择用。</summary>
+public sealed record CompanyRoundDto(Guid RoundId, int Order, string Stage, DateOnly? ScheduledDate);
+public sealed record GetCompanyRoundsQuery(Guid CompanyId) : IRequest<Result<IReadOnlyList<CompanyRoundDto>>>;
+
 public sealed record GetInterviewStatsQuery : IRequest<Result<InterviewStatsDto>>;
 
 public sealed record ListWeaknessesQuery(Guid EntryId, string? Category = null)
@@ -642,6 +646,23 @@ public sealed class GetCompanySummariesQueryHandler(InterviewsDbContext db)
 
         return Result.Success<IReadOnlyList<CompanySummaryDto>>(
             rows.OrderByDescending(r => r.LatestInterviewDate ?? DateOnly.MinValue).ToList());
+    }
+}
+
+public sealed class GetCompanyRoundsQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetCompanyRoundsQuery, Result<IReadOnlyList<CompanyRoundDto>>>
+{
+    public async Task<Result<IReadOnlyList<CompanyRoundDto>>> Handle(
+        GetCompanyRoundsQuery request, CancellationToken ct)
+    {
+        var rounds = await db.Entries.AsNoTracking()
+            .Where(e => e.CompanyId == request.CompanyId)
+            .SelectMany(e => e.Rounds)
+            .OrderBy(r => r.ScheduledDate ?? DateOnly.MaxValue)
+            .ThenBy(r => r.Order)
+            .Select(r => new CompanyRoundDto(r.Id, r.Order, r.Stage, r.ScheduledDate))
+            .ToListAsync(ct);
+        return Result.Success<IReadOnlyList<CompanyRoundDto>>(rounds);
     }
 }
 

@@ -50,6 +50,15 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>某公司的全部轮次(供 Tech Stack 来源选择:选轮次自动带日期)。</summary>
+    [HttpGet("companies/{companyId:guid}/rounds")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> CompanyRounds(Guid companyId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetCompanyRoundsQuery(companyId), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>总览统计:状态分布、六维均分、短板 Top 类别、进步曲线。</summary>
     [HttpGet("stats")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]

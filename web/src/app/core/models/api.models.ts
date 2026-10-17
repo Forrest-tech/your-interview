@@ -132,6 +132,14 @@ export interface PlaybookCompany {
   entryCount: number;
 }
 
+/** 公司轮次(后端 CompanyRoundDto):Tech Stack 来源选择用。 */
+export interface PlaybookCompanyRound {
+  roundId: string;
+  order: number;
+  stage: string;
+  scheduledDate?: string;
+}
+
 /** 状态变更记录(与后端 StatusChangeDto 对齐:status/note/changedAt)。 */
 export interface StatusChange {
   status: string;

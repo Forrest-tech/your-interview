@@ -311,6 +311,7 @@ export class TechStackComponent implements OnInit {
     this.loadBuckets();
     this.loadSources();
     this.loadDuplicates();
+    this.loadTopics();
     // 来源公司搜索框:输了字但没从下拉选,清空已选公司,避免张冠李戴
     this.companySearchCtrl.valueChanges.subscribe((v) => {
       if ((v ?? '').trim() !== this.newDetailSourceCompany) this.newDetailSourceCompany = '';

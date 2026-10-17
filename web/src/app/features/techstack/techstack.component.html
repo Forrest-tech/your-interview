@@ -263,6 +263,57 @@
         <!-- 详情正文:查看态纯展示,编辑态统一改 -->
         <div class="detail-body">
           <!-- 多来源:哪几家公司问过这道题 -->
+          <!-- 分类/难度/重要度:编辑态一行三个下拉 -->
+          @if (detailEditing()) {
+            <section class="block">
+              <div class="detail-meta-row">
+                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
+                  <mat-label>{{ t('ts.filter.topic') }}</mat-label>
+                  <mat-select [(ngModel)]="detailDraft.topic">
+                    @for (tp of topics(); track tp) {
+                      <mat-option [value]="tp">{{ tp }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
+                  <mat-label>{{ t('ts.detail.difficultyLabel') }}</mat-label>
+                  <mat-select [(ngModel)]="detailDraft.difficulty">
+                    @for (d of difficultyOptions; track d) {
+                      <mat-option [value]="d">{{ d }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
+                  <mat-label>{{ t('ts.detail.importanceLabel') }}</mat-label>
+                  <mat-select [(ngModel)]="detailDraft.importance">
+                    @for (d of difficultyOptions; track d) {
+                      <mat-option [value]="d">{{ d }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
+            </section>
+          }
+          @for (b of blocks; track b.key) {
+            <section class="block" [class.block-empty]="!blockText(it, b.key) && !detailEditing()">
+              <header class="block-head">
+                <mat-icon>{{ b.icon }}</mat-icon>
+                <span class="block-label">{{ t(b.labelKey) }}</span>
+                <span class="block-hint">{{ t(b.hintKey) }}</span>
+              </header>
+              @if (detailEditing()) {
+                <textarea matInput class="blk-editor" rows="6"
+                          [(ngModel)]="detailDraft.blocks[b.key]"></textarea>
+                @if (b.key === 'keyPoints' || b.key === 'commonMistakes') {
+                  <p class="block-hint">{{ t('ts.block.onePerLine') }}</p>
+                }
+              } @else if (blockText(it, b.key)) {
+                <p class="block-text">{{ blockText(it, b.key) }}</p>
+              } @else {
+                <p class="block-empty-hint">{{ t('ts.block.emptyHint') }}</p>
+              }
+            </section>
+          }
           @if (parseSources(it).length > 0 || detailEditing()) {
             <section class="block source-block">
               <header class="block-head">
@@ -327,57 +378,6 @@
                     }
                   }
                 </div>
-              }
-            </section>
-          }
-          <!-- 分类/难度/重要度:编辑态一行三个下拉 -->
-          @if (detailEditing()) {
-            <section class="block">
-              <div class="detail-meta-row">
-                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
-                  <mat-label>{{ t('ts.filter.topic') }}</mat-label>
-                  <mat-select [(ngModel)]="detailDraft.topic">
-                    @for (tp of topics(); track tp) {
-                      <mat-option [value]="tp">{{ tp }}</mat-option>
-                    }
-                  </mat-select>
-                </mat-form-field>
-                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
-                  <mat-label>{{ t('ts.detail.difficultyLabel') }}</mat-label>
-                  <mat-select [(ngModel)]="detailDraft.difficulty">
-                    @for (d of difficultyOptions; track d) {
-                      <mat-option [value]="d">{{ d }}</mat-option>
-                    }
-                  </mat-select>
-                </mat-form-field>
-                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
-                  <mat-label>{{ t('ts.detail.importanceLabel') }}</mat-label>
-                  <mat-select [(ngModel)]="detailDraft.importance">
-                    @for (d of difficultyOptions; track d) {
-                      <mat-option [value]="d">{{ d }}</mat-option>
-                    }
-                  </mat-select>
-                </mat-form-field>
-              </div>
-            </section>
-          }
-          @for (b of blocks; track b.key) {
-            <section class="block" [class.block-empty]="!blockText(it, b.key) && !detailEditing()">
-              <header class="block-head">
-                <mat-icon>{{ b.icon }}</mat-icon>
-                <span class="block-label">{{ t(b.labelKey) }}</span>
-                <span class="block-hint">{{ t(b.hintKey) }}</span>
-              </header>
-              @if (detailEditing()) {
-                <textarea matInput class="blk-editor" rows="6"
-                          [(ngModel)]="detailDraft.blocks[b.key]"></textarea>
-                @if (b.key === 'keyPoints' || b.key === 'commonMistakes') {
-                  <p class="block-hint">{{ t('ts.block.onePerLine') }}</p>
-                }
-              } @else if (blockText(it, b.key)) {
-                <p class="block-text">{{ blockText(it, b.key) }}</p>
-              } @else {
-                <p class="block-empty-hint">{{ t('ts.block.emptyHint') }}</p>
               }
             </section>
           }

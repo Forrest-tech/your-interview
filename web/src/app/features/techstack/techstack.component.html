@@ -289,7 +289,7 @@
                   @if (detailDraft.sources.length === 0) {
                     <span class="block-empty-hint">{{ t('ts.source.emptyHint') }}</span>
                   }
-                  <button mat-button (click)="showDetailSourceForm.set(!showDetailSourceForm())">
+                  <button mat-button (click)="toggleSourceForm()">
                     <mat-icon>add</mat-icon>{{ t('ts.source.add') }}
                   </button>
                 </div>
@@ -297,7 +297,15 @@
                 <div class="source-add-row">
                   <mat-form-field subscriptSizing="dynamic" class="src-field">
                     <mat-label>{{ t('ts.source.company') }}</mat-label>
-                    <input matInput [(ngModel)]="newDetailSourceCompany" />
+                    <input matInput [formControl]="companySearchCtrl" [matAutocomplete]="companyAuto"
+                           [placeholder]="t('ts.source.companySearchPh')" />
+                    <mat-autocomplete #companyAuto="matAutocomplete" (optionSelected)="onCompanySelected($event.option.value)">
+                      @for (c of filteredCompanies(); track c.id) {
+                        <mat-option [value]="c">{{ c.name }}</mat-option>
+                      } @empty {
+                        <mat-option disabled>{{ t('ts.source.companyEmpty') }}</mat-option>
+                      }
+                    </mat-autocomplete>
                   </mat-form-field>
                   <mat-form-field subscriptSizing="dynamic" class="src-field-sm">
                     <mat-label>{{ t('ts.source.round') }}</mat-label>

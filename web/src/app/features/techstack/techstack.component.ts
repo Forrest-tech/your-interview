@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { forkJoin } from 'rxjs';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
@@ -22,7 +22,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged } from '../../core/models/api.models';
+import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged, Company } from '../../core/models/api.models';
 import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
@@ -100,7 +100,7 @@ const DETAIL_BLOCKS: DetailBlock[] = [
   selector: 'app-techstack',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, RouterLink, MatCardModule, MatIconModule, MatButtonModule,
+    CommonModule, FormsModule, ReactiveFormsModule, RouterLink, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatMenuModule, MatCheckboxModule,
     MatOptionModule, MatAutocompleteModule, MatSelectModule
@@ -221,6 +221,10 @@ export class TechStackComponent implements OnInit {
     this.loadBuckets();
     this.loadSources();
     this.loadDuplicates();
+    // 来源公司搜索框:输了字但没从下拉选,清空已选公司,避免张冠李戴
+    this.companySearchCtrl.valueChanges.subscribe((v) => {
+      if ((v ?? '').trim() !== this.newDetailSourceCompany) this.newDetailSourceCompany = '';
+    });
   }
 
   /** 来源公司清单属于可选增强(老库没有来源字段时为空),失败静默降级。 */
@@ -528,6 +532,41 @@ export class TechStackComponent implements OnInit {
   newDetailSourceDate = '';
   /** 来源添加表单是否展开:默认只显示 chips + 添加按钮。 */
   readonly showDetailSourceForm = signal(false);
+  /** 来源公司下拉:Tracker 公司库(带搜索)。 */
+  readonly companySearchCtrl = new FormControl('');
+  readonly trackerCompanies = signal<Company[]>([]);
+  readonly filteredCompanies = computed(() => {
+    const q = (this.companySearchCtrl.value ?? '').trim().toLowerCase();
+    const list = this.trackerCompanies();
+    if (!q) return list;
+    return list.filter((c) => c.name.toLowerCase().includes(q));
+  });
+
+  /** 懒加载 Tracker 公司库(只加载一次)。 */
+  loadTrackerCompanies(): void {
+    if (this.trackerCompanies().length > 0) return;
+    this.api.get<Company[]>('/api/jobs/companies').subscribe({
+      next: (list) => this.trackerCompanies.set(list ?? []),
+      error: () => this.trackerCompanies.set([]),
+    });
+  }
+
+  /** 从下拉选中公司:只允许选库里的,不手动填。 */
+  onCompanySelected(c: Company): void {
+    this.newDetailSourceCompany = c.name;
+    this.companySearchCtrl.setValue(c.name, { emitEvent: false });
+  }
+
+  /** 展开来源表单时重置搜索框并加载公司库。 */
+  toggleSourceForm(): void {
+    const next = !this.showDetailSourceForm();
+    this.showDetailSourceForm.set(next);
+    if (next) {
+      this.companySearchCtrl.setValue('');
+      this.newDetailSourceCompany = '';
+      this.loadTrackerCompanies();
+    }
+  }
 
   /** 解析条目的多来源;没有则从单来源字段回退构造一条。 */
   parseSources(item: KnowledgeItem): KnowledgeSourceEntry[] {

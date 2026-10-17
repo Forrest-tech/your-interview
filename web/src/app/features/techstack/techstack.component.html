@@ -317,10 +317,6 @@
                       }
                     </mat-select>
                   </mat-form-field>
-                  <mat-form-field subscriptSizing="dynamic" class="src-field-sm">
-                    <mat-label>{{ t('ts.source.date') }}</mat-label>
-                    <input matInput [value]="newDetailSourceDate || t('ts.source.noDate')" disabled />
-                  </mat-form-field>
                   <button mat-stroked-button (click)="addDetailSource()" [disabled]="!newDetailSourceCompany">
                     <mat-icon>check</mat-icon>{{ t('ts.source.confirm') }}
                   </button>

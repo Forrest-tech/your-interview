@@ -450,6 +450,7 @@ export interface KnowledgeItem {
   keyPointsJson?: string;
   commonMistakesJson?: string;
   referencesJson?: string;
+  sourcesJson?: string;
   isDue?: boolean;
   dueInDays?: number | null;
   reviewLogs?: KnowledgeReviewLog[];
@@ -471,6 +472,16 @@ export interface KnowledgeItem {
   sourceJobApplicationId?: string | null;
   /** 导入幂等键(由导入方生成,重复导入靠它判重)。 */
   importKey?: string | null;
+}
+
+/** 多来源条目(JSON 数组元素):{公司,轮次号,轮次类型,日期,机经条目ID,投递ID} */
+export interface KnowledgeSourceEntry {
+  companyName?: string;
+  roundNo?: number;
+  roundStage?: string;
+  date?: string;
+  interviewEntryId?: string;
+  jobApplicationId?: string;
 }
 
 /** 来源公司汇总(GET /api/knowledge/sources)。 */

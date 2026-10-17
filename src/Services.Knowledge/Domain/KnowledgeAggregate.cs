@@ -86,6 +86,12 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
     public Guid? SourceJobApplicationId { get; private set; }
 
     /// <summary>
+    /// 多来源(JSON 数组)。一道题可能被多家公司问到,单来源字段只保留首个(兼容老数据),
+    /// 完整列表存这里。每条: {companyName, roundNo, roundStage, date, interviewEntryId, jobApplicationId}。
+    /// </summary>
+    public string? SourcesJson { get; private set; }
+
+    /// <summary>
     /// 导入幂等键。由导入方为每条候选题生成的稳定键(如 "entry:{guid}:q:3"),
     /// 重复导入同一批候选时靠它识别"这条已经进来过了"。
     /// 为什么不用 title+topic 凑:题目在导入前可被用户原地改过标题,
@@ -141,7 +147,7 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
     public void UpdateDetails(string title, string topic, string? subTopic, string question,
         int difficulty, int importance, string? tagsJson, string? conceptExplanation,
         string? myAnswer, string? betterAnswer, string? keyPointsJson, string? commonMistakesJson,
-        string? followUpsJson)
+        string? followUpsJson, string? sourcesJson = null)
     {
         if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException("知识点标题不能为空", nameof(title));
         Title = title.Trim();
@@ -157,6 +163,14 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
         KeyPointsJson = keyPointsJson;
         CommonMistakesJson = commonMistakesJson;
         FollowUpsJson = followUpsJson;
+        if (sourcesJson is not null) SourcesJson = sourcesJson;
+        Touch();
+    }
+
+    /// <summary>设置多来源(JSON 数组)。传 null 则清空。同步更新单来源字段为首个来源(兼容老读法)。</summary>
+    public void SetSources(string? sourcesJson)
+    {
+        SourcesJson = sourcesJson;
         Touch();
     }
 

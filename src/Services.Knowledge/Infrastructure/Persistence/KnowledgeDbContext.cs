@@ -82,6 +82,7 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
             e.Property(x => x.CommonMistakesJson).HasColumnType("text");
             e.Property(x => x.FollowUpsJson).HasColumnType("text");
             e.Property(x => x.ReferencesJson).HasColumnType("text");
+            e.Property(x => x.SourcesJson).HasColumnType("text");
             e.Property(x => x.TagsJson).HasMaxLength(1000);
 
             e.Property(x => x.Mastery).HasConversion<string>().HasMaxLength(30);

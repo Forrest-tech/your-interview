@@ -9,6 +9,24 @@
   padding: 24px 28px 16px;
 }
 
+/* 多来源 */
+.source-chip-list, .source-edit-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.source-chip { font-size: 12.5px; }
+.source-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.src-field { width: 160px; }
+.src-field-sm { width: 110px; }
+
 /* 页面级:只读区永不显示文本插入符(闪烁竖线);真正的 input/textarea 不受影响 */
 .page :not(input):not(textarea):not([contenteditable="true"]) {
   caret-color: transparent;

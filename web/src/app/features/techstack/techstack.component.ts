@@ -21,7 +21,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { KnowledgeItem, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged } from '../../core/models/api.models';
+import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged } from '../../core/models/api.models';
 import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
@@ -587,17 +587,78 @@ export class TechStackComponent implements OnInit {
   metaDifficulty = 3;
   metaImportance = 3;
   readonly difficultyOptions = [1, 2, 3, 4, 5];
+  /** 元数据编辑中的多来源列表。 */
+  metaSources: KnowledgeSourceEntry[] = [];
+  /** 新增来源的表单。 */
+  newSourceCompany = '';
+  newSourceRound: number | null = null;
+  newSourceDate = '';
+
+  /** 解析条目的多来源;没有则从单来源字段回退构造一条。 */
+  parseSources(item: KnowledgeItem): KnowledgeSourceEntry[] {
+    if (item.sourcesJson) {
+      try {
+        const arr = JSON.parse(item.sourcesJson);
+        if (Array.isArray(arr)) return arr as KnowledgeSourceEntry[];
+      } catch { /* 忽略,回退 */ }
+    }
+    // 回退:单来源字段
+    if (item.sourceCompanyName || item.sourceInterviewEntryId) {
+      return [{
+        companyName: item.sourceCompanyName ?? undefined,
+        roundNo: item.sourceRoundNo ?? undefined,
+        roundStage: item.sourceRoundStage ?? undefined,
+        date: item.sourceDate ?? undefined,
+        interviewEntryId: item.sourceInterviewEntryId ?? undefined,
+        jobApplicationId: item.sourceJobApplicationId ?? undefined,
+      }];
+    }
+    return [];
+  }
+
+  /** 多来源显示文案:公司 · Round N · 日期。 */
+  sourceEntryLabel(s: KnowledgeSourceEntry): string {
+    const parts: string[] = [];
+    if (s.companyName) parts.push(s.companyName);
+    if (s.roundNo) parts.push(`Round ${s.roundNo}`);
+    else if (s.roundStage) parts.push(s.roundStage);
+    if (s.date) parts.push(s.date);
+    return parts.join(' · ') || this.t('ts.source.unknown');
+  }
 
   startMetaEdit(item: KnowledgeItem): void {
     this.metaTitle = item.title;
     this.metaTopic = item.topic;
     this.metaDifficulty = item.difficulty;
     this.metaImportance = item.importance;
+    this.metaSources = this.parseSources(item);
+    this.newSourceCompany = '';
+    this.newSourceRound = null;
+    this.newSourceDate = '';
     this.editingMeta.set(true);
   }
 
   cancelMetaEdit(): void {
     this.editingMeta.set(false);
+  }
+
+  /** 元数据编辑中:添加一条来源。 */
+  addMetaSource(): void {
+    const company = this.newSourceCompany.trim();
+    if (!company && this.newSourceRound == null && !this.newSourceDate) return;
+    this.metaSources = [...this.metaSources, {
+      companyName: company || undefined,
+      roundNo: this.newSourceRound ?? undefined,
+      date: this.newSourceDate || undefined,
+    }];
+    this.newSourceCompany = '';
+    this.newSourceRound = null;
+    this.newSourceDate = '';
+  }
+
+  /** 元数据编辑中:删除一条来源。 */
+  removeMetaSource(idx: number): void {
+    this.metaSources = this.metaSources.filter((_, i) => i !== idx);
   }
 
   /** 保存元数据:标题/分类/难度/重要度,走 PUT 全量更新(内容块原样带回)。 */
@@ -616,6 +677,7 @@ export class TechStackComponent implements OnInit {
       betterAnswer: item.betterAnswer ?? null,
       difficulty: this.metaDifficulty,
       importance: this.metaImportance,
+      sourcesJson: this.metaSources.length > 0 ? JSON.stringify(this.metaSources) : null,
     };
     this.api.put<void>(`/api/knowledge/${item.id}`, payload).subscribe({
       next: () => {
@@ -628,6 +690,7 @@ export class TechStackComponent implements OnInit {
           topic: this.metaTopic.trim() || item.topic,
           difficulty: this.metaDifficulty,
           importance: this.metaImportance,
+          sourcesJson: this.metaSources.length > 0 ? JSON.stringify(this.metaSources) : undefined,
         };
         this.selected.set(updated);
         this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));

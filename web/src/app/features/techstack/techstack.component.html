@@ -290,6 +290,54 @@
 
         <!-- 内容块:AI 解析后自动填充;每块可点铅笔行内改 wording -->
         <div class="detail-body">
+          <!-- 多来源:哪几家公司问过这道题 -->
+          @if (parseSources(it).length > 0 || editingMeta()) {
+            <section class="block source-block">
+              <header class="block-head">
+                <mat-icon>business</mat-icon>
+                <span class="block-label">{{ t('ts.source.title') }}</span>
+                <span class="block-hint">{{ t('ts.source.hint') }}</span>
+              </header>
+              @if (editingMeta()) {
+                <div class="source-edit-list">
+                  @for (s of metaSources; track $index) {
+                    <mat-chip class="source-chip">
+                      {{ sourceEntryLabel(s) }}
+                      <button matChipRemove (click)="removeMetaSource($index)">
+                        <mat-icon>cancel</mat-icon>
+                      </button>
+                    </mat-chip>
+                  }
+                  @if (metaSources.length === 0) {
+                    <span class="block-empty-hint">{{ t('ts.source.emptyHint') }}</span>
+                  }
+                </div>
+                <div class="source-add-row">
+                  <mat-form-field subscriptSizing="dynamic" class="src-field">
+                    <mat-label>{{ t('ts.source.company') }}</mat-label>
+                    <input matInput [(ngModel)]="newSourceCompany" />
+                  </mat-form-field>
+                  <mat-form-field subscriptSizing="dynamic" class="src-field-sm">
+                    <mat-label>{{ t('ts.source.round') }}</mat-label>
+                    <input matInput type="number" min="1" [(ngModel)]="newSourceRound" />
+                  </mat-form-field>
+                  <mat-form-field subscriptSizing="dynamic" class="src-field-sm">
+                    <mat-label>{{ t('ts.source.date') }}</mat-label>
+                    <input matInput type="date" [(ngModel)]="newSourceDate" />
+                  </mat-form-field>
+                  <button mat-stroked-button (click)="addMetaSource()">
+                    <mat-icon>add</mat-icon>{{ t('ts.source.add') }}
+                  </button>
+                </div>
+              } @else {
+                <div class="source-chip-list">
+                  @for (s of parseSources(it); track $index) {
+                    <mat-chip class="source-chip">{{ sourceEntryLabel(s) }}</mat-chip>
+                  }
+                </div>
+              }
+            </section>
+          }
           @for (b of blocks; track b.key) {
             <section class="block" [class.block-empty]="!blockText(it, b.key) && editingBlock() !== b.key">
               <header class="block-head">

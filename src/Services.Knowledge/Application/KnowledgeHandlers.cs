@@ -24,6 +24,7 @@ public sealed record KnowledgeItemDto(
     double EasinessFactor, int RepetitionStreak, int? LastIntervalDays,
     string? ConceptExplanation, string? MyAnswer, string? BetterAnswer,
     string? KeyPointsJson, string? CommonMistakesJson, string? FollowUpsJson, string? ReferencesJson,
+    string? SourcesJson,
     bool IsDue, int DueInDays,
     List<ReviewLogDto> ReviewLogs, List<RelationDto> Relations,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
@@ -115,7 +116,7 @@ public sealed record UpdateKnowledgeCommand(
     Guid Id, string Title, string Topic, string? SubTopic, string Question,
     int Difficulty, int Importance, string? TagsJson, string? ConceptExplanation,
     string? MyAnswer, string? BetterAnswer, string? KeyPointsJson, string? CommonMistakesJson,
-    string? FollowUpsJson, string? ReferencesJson) : IRequest<Result>;
+    string? FollowUpsJson, string? ReferencesJson, string? SourcesJson = null) : IRequest<Result>;
 
 public sealed record DeleteKnowledgeCommand(Guid Id) : IRequest<Result>;
 
@@ -251,6 +252,7 @@ public static class KnowledgeMappingExtensions
             Math.Round(k.EasinessFactor, 2), k.RepetitionStreak, k.LastIntervalDays,
             k.ConceptExplanation, k.MyAnswer, k.BetterAnswer,
             k.KeyPointsJson, k.CommonMistakesJson, k.FollowUpsJson, k.ReferencesJson,
+            k.SourcesJson,
             KnowledgeDue.IsDue(k, now), dueInDays,
             k.ReviewLogs.OrderByDescending(l => l.ReviewedAt).Select(l => l.ToDto()).ToList(),
             k.Relations.Select(r => r.ToDto()).ToList(),
@@ -507,7 +509,8 @@ public sealed class UpdateKnowledgeCommandHandler(KnowledgeDbContext db)
         k.UpdateDetails(request.Title, request.Topic, request.SubTopic, request.Question,
             request.Difficulty, request.Importance, request.TagsJson,
             request.ConceptExplanation, request.MyAnswer, request.BetterAnswer,
-            request.KeyPointsJson, request.CommonMistakesJson, request.FollowUpsJson);
+            request.KeyPointsJson, request.CommonMistakesJson, request.FollowUpsJson,
+            request.SourcesJson);
         ReferenceApplier.ApplyReferences(k, request.ReferencesJson);
 
         await db.SaveChangesAsync(ct);

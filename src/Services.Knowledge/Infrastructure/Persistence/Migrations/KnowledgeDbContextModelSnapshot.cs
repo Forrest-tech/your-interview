@@ -119,6 +119,9 @@ namespace YourInterview.Services.Knowledge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)");
 
+                    b.Property<string>("SourcesJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("SubTopic")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");

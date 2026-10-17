@@ -141,7 +141,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
         var r = await sender.Send(new UpdateKnowledgeCommand(id, body.Title, body.Topic,
             body.SubTopic, body.Question, body.Difficulty, body.Importance, body.TagsJson,
             body.ConceptExplanation, body.MyAnswer, body.BetterAnswer, body.KeyPointsJson,
-            body.CommonMistakesJson, body.FollowUpsJson, body.ReferencesJson), ct);
+            body.CommonMistakesJson, body.FollowUpsJson, body.ReferencesJson, body.SourcesJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -200,7 +200,8 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
 public sealed record UpdateKnowledgeBody(
     string Title, string Topic, string? SubTopic, string Question, int Difficulty, int Importance,
     string? TagsJson, string? ConceptExplanation, string? MyAnswer, string? BetterAnswer,
-    string? KeyPointsJson, string? CommonMistakesJson, string? FollowUpsJson, string? ReferencesJson);
+    string? KeyPointsJson, string? CommonMistakesJson, string? FollowUpsJson, string? ReferencesJson,
+    string? SourcesJson = null);
 
 public sealed record ReviewBody(string Result, int? ConfidenceBefore = null,
     int? ConfidenceAfter = null, string? Note = null, int? DurationSeconds = null);

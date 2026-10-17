@@ -166,6 +166,13 @@ mat-card { border-radius: 8px; }
   background: rgba(63, 81, 181, 0.1);
   color: #3f51b5;
 }
+
+/* 筛选区底部:Clear filters 右对齐 */
+.filter-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
 .filter-row { display: flex; gap: 12px; }
 .search { flex: 1 1 auto; }
 mat-form-field { width: 100%; }

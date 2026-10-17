@@ -11,6 +11,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatOptionModule } from '@angular/material/core';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatMenuModule } from '@angular/material/menu';
@@ -102,7 +103,7 @@ const DETAIL_BLOCKS: DetailBlock[] = [
     CommonModule, FormsModule, RouterLink, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatMenuModule, MatCheckboxModule,
-    MatOptionModule
+    MatOptionModule, MatAutocompleteModule
   ],
   templateUrl: './techstack.component.html',
   styleUrl: './techstack.component.scss'

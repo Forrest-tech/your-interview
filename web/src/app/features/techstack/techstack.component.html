@@ -229,11 +229,12 @@
             @if (editingMeta()) {
               <mat-form-field class="meta-field" subscriptSizing="dynamic">
                 <mat-label>{{ t('ts.filter.topic') }}</mat-label>
-                <mat-select [(ngModel)]="metaTopic">
+                <input matInput [(ngModel)]="metaTopic" [matAutocomplete]="topicAuto" />
+                <mat-autocomplete #topicAuto="matAutocomplete">
                   @for (tp of topics(); track tp) {
                     <mat-option [value]="tp">{{ tp }}</mat-option>
                   }
-                </mat-select>
+                </mat-autocomplete>
               </mat-form-field>
               <mat-form-field class="meta-field" subscriptSizing="dynamic">
                 <mat-label>{{ t('ts.detail.difficultyLabel') }}</mat-label>

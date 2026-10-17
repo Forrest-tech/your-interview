@@ -289,7 +289,11 @@
                   @if (detailDraft.sources.length === 0) {
                     <span class="block-empty-hint">{{ t('ts.source.emptyHint') }}</span>
                   }
+                  <button mat-button (click)="showDetailSourceForm.set(!showDetailSourceForm())">
+                    <mat-icon>add</mat-icon>{{ t('ts.source.add') }}
+                  </button>
                 </div>
+                @if (showDetailSourceForm()) {
                 <div class="source-add-row">
                   <mat-form-field subscriptSizing="dynamic" class="src-field">
                     <mat-label>{{ t('ts.source.company') }}</mat-label>
@@ -307,6 +311,7 @@
                     <mat-icon>add</mat-icon>{{ t('ts.source.add') }}
                   </button>
                 </div>
+                }
               } @else {
                 <div class="source-text-list">
                   @for (s of parseSources(it); track $index) {
@@ -316,46 +321,35 @@
               }
             </section>
           }
-          <!-- 分类/难度/重要度:正文中的行,编辑态可改 -->
+          <!-- 分类/难度/重要度:编辑态一行三个下拉 -->
           @if (detailEditing()) {
             <section class="block">
-              <header class="block-head">
-                <mat-icon>folder</mat-icon>
-                <span class="block-label">{{ t('ts.filter.topic') }}</span>
-              </header>
-              <mat-form-field class="detail-row-field" subscriptSizing="dynamic">
-                <mat-select [(ngModel)]="detailDraft.topic">
-                  @for (tp of topics(); track tp) {
-                    <mat-option [value]="tp">{{ tp }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-            </section>
-            <section class="block">
-              <header class="block-head">
-                <mat-icon>signal_cellular_alt</mat-icon>
-                <span class="block-label">{{ t('ts.detail.difficultyLabel') }}</span>
-              </header>
-              <mat-form-field class="detail-row-field" subscriptSizing="dynamic">
-                <mat-select [(ngModel)]="detailDraft.difficulty">
-                  @for (d of difficultyOptions; track d) {
-                    <mat-option [value]="d">{{ d }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-            </section>
-            <section class="block">
-              <header class="block-head">
-                <mat-icon>priority_high</mat-icon>
-                <span class="block-label">{{ t('ts.detail.importanceLabel') }}</span>
-              </header>
-              <mat-form-field class="detail-row-field" subscriptSizing="dynamic">
-                <mat-select [(ngModel)]="detailDraft.importance">
-                  @for (d of difficultyOptions; track d) {
-                    <mat-option [value]="d">{{ d }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
+              <div class="detail-meta-row">
+                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
+                  <mat-label>{{ t('ts.filter.topic') }}</mat-label>
+                  <mat-select [(ngModel)]="detailDraft.topic">
+                    @for (tp of topics(); track tp) {
+                      <mat-option [value]="tp">{{ tp }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
+                  <mat-label>{{ t('ts.detail.difficultyLabel') }}</mat-label>
+                  <mat-select [(ngModel)]="detailDraft.difficulty">
+                    @for (d of difficultyOptions; track d) {
+                      <mat-option [value]="d">{{ d }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
+                  <mat-label>{{ t('ts.detail.importanceLabel') }}</mat-label>
+                  <mat-select [(ngModel)]="detailDraft.importance">
+                    @for (d of difficultyOptions; track d) {
+                      <mat-option [value]="d">{{ d }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
             </section>
           }
           @for (b of blocks; track b.key) {

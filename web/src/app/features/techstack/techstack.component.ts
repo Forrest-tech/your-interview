@@ -526,6 +526,8 @@ export class TechStackComponent implements OnInit {
   newDetailSourceCompany = '';
   newDetailSourceRound: number | null = null;
   newDetailSourceDate = '';
+  /** 来源添加表单是否展开:默认只显示 chips + 添加按钮。 */
+  readonly showDetailSourceForm = signal(false);
 
   /** 解析条目的多来源;没有则从单来源字段回退构造一条。 */
   parseSources(item: KnowledgeItem): KnowledgeSourceEntry[] {
@@ -582,6 +584,7 @@ export class TechStackComponent implements OnInit {
     this.newDetailSourceCompany = '';
     this.newDetailSourceRound = null;
     this.newDetailSourceDate = '';
+    this.showDetailSourceForm.set(false);
     this.detailEditing.set(true);
   }
 

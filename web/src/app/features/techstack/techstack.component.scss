@@ -36,10 +36,19 @@
 
 /* 详情编辑态:正文中的元数据行(分类/难度/重要度) */
 .detail-row-field { width: 100%; max-width: 420px; margin-top: 8px; }
+/* 编辑态:分类/难度/重要度一行三个下拉 */
+.detail-meta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.detail-meta-field { flex: 1 1 150px; min-width: 130px; }
 
-/* 页面级:只读区永不显示文本插入符(闪烁竖线);真正的 input/textarea 不受影响 */
+/* 页面级:只读区永不显示文本插入符(闪烁竖线);真正的 input/textarea 不受影响.
+   注意 caret-color 可继承,必须给输入元素显式设回 auto,否则它们会从父级继承 transparent */
 .page :not(input):not(textarea):not([contenteditable="true"]) {
   caret-color: transparent;
+}
+.page input,
+.page textarea,
+.page [contenteditable="true"] {
+  caret-color: auto;
 }
 
 .page-head {

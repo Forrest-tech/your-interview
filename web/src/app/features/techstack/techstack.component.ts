@@ -185,12 +185,12 @@ export class TechStackComponent implements OnInit {
     try { localStorage.setItem('ts.filtersCollapsed', v ? '1' : '0'); } catch { /* ignore */ }
   }
 
-  /** 激活的筛选数量(用于折叠态的计数徽标) */
+  /** 激活的筛选数量(用于折叠态的计数徽标) — 默认的 To do 不算 */
   readonly activeFilterCount = computed(() => {
     let n = 0;
     if (this.search().length > 0) n++;
     if (this.topic() !== null) n++;
-    if (this.mastery() !== null) n++;
+    if (this.mastery() !== null && this.mastery() !== 'New') n++;
     if (this.company() !== null) n++;
     return n;
   });
@@ -405,17 +405,17 @@ export class TechStackComponent implements OnInit {
   clearFilters(): void {
     this.search.set('');
     this.topic.set(null);
-    this.mastery.set(null);
+    this.mastery.set('New');  // 默认选中 To do,不是全空
     this.company.set(null);
     this.page.set(1);
     this.load();
   }
 
-  /** 单独清除某个筛选(折叠态 chips 用) */
+  /** 单独清除某个筛选(折叠态 chips 用) — mastery 回到默认 To do */
   clearOneFilter(kind: 'search' | 'topic' | 'mastery' | 'company'): void {
     if (kind === 'search') this.search.set('');
     if (kind === 'topic') this.topic.set(null);
-    if (kind === 'mastery') this.mastery.set(null);
+    if (kind === 'mastery') this.mastery.set('New');
     if (kind === 'company') this.company.set(null);
     this.page.set(1);
     this.load();
@@ -423,7 +423,7 @@ export class TechStackComponent implements OnInit {
 
   hasFilters(): boolean {
     return this.search().length > 0 || this.topic() !== null
-        || this.mastery() !== null || this.company() !== null;
+        || (this.mastery() !== null && this.mastery() !== 'New') || this.company() !== null;
   }
 
   goPage(p: number): void {

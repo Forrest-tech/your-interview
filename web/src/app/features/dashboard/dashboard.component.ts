@@ -1,6 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
@@ -149,4 +149,11 @@ export class DashboardComponent implements OnInit {
     if (!iso) return '';
     return iso.slice(0, 10);
   }
+
+  /** ★ #16:弱项一键刷题 → 跳 Tech Stack 按主题过滤。 */
+  drillWeakness(dimension: string): void {
+    this.router.navigate(['/tech-stack'], { queryParams: { topic: dimension } });
+  }
+
+  private readonly router = inject(Router);
 }

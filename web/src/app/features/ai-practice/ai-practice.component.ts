@@ -13,6 +13,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSliderModule } from '@angular/material/slider';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
@@ -101,7 +102,7 @@ type MarkColor = 'none' | 'orange' | 'red' | 'green';
   imports: [
     CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule,
     MatFormFieldModule, MatInputModule, MatSelectModule, MatDividerModule,
-    MatSliderModule, MatSlideToggleModule, MatMenuModule,
+    MatSliderModule, MatSlideToggleModule, MatMenuModule, MatProgressBarModule,
     MaterialTreeComponent
   ],
   templateUrl: './ai-practice.component.html',

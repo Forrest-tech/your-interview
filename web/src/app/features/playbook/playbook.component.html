@@ -68,7 +68,7 @@
             <p><b>A:</b> {{ story.action }}</p>
             <p><b>R:</b> {{ story.result }}</p>
             <div class="star-actions">
-              <button mat-button (click)="editingStory.set({...story})">编辑</button>
+              <button mat-button (click)="editStory(story)">编辑</button>
               <button mat-button color="warn" (click)="deleteStory(story.id)">删除</button>
             </div>
           </mat-expansion-panel>

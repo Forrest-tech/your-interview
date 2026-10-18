@@ -74,17 +74,17 @@
             <mat-form-field class="full">
               <mat-label>被问了什么 (每行一条)</mat-label>
               <textarea matInput rows="4" [ngModel]="debriefForm().questions"
-                        (ngModelChange)="debriefForm.set({...debriefForm(), questions: $event})"></textarea>
+                        (ngModelChange)="updateDebrief('questions', $event)"></textarea>
             </mat-form-field>
             <mat-form-field>
               <mat-label>自评 (1-5)</mat-label>
               <input matInput type="number" min="1" max="5" [ngModel]="debriefForm().rating"
-                     (ngModelChange)="debriefForm.set({...debriefForm(), rating: $event})" />
+                     (ngModelChange)="updateDebrief('rating', $event)" />
             </mat-form-field>
             <mat-form-field class="full">
               <mat-label>卡住的点 (每行一条,可一键转复习卡)</mat-label>
               <textarea matInput rows="3" [ngModel]="debriefForm().stuck"
-                        (ngModelChange)="debriefForm.set({...debriefForm(), stuck: $event})"></textarea>
+                        (ngModelChange)="updateDebrief('stuck', $event)"></textarea>
             </mat-form-field>
             <div class="debrief-actions">
               <button mat-raised-button color="primary" (click)="saveDebrief()">保存复盘</button>

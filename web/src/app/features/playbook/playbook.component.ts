@@ -476,6 +476,9 @@ export class PlaybookComponent implements OnInit {
       id: 's' + Date.now(), title: '', situation: '', task: '', action: '', result: '', tags: ''
     });
   }
+  editStory(s: StarStory): void {
+    this.editingStory.set({ ...s });
+  }
   saveStory(s: StarStory): void {
     if (!s.title.trim()) return;
     const list = this.loadStarStories();

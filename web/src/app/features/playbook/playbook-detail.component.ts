@@ -1332,6 +1332,10 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     localStorage.setItem(`pb.debrief.${id}`, JSON.stringify(this.debriefForm()));
     this.showDebrief.set(false);
   }
+  updateDebrief(field: 'questions' | 'rating' | 'stuck', value: any): void {
+    const cur = this.debriefForm();
+    this.debriefForm.set({ ...cur, [field]: value });
+  }
   /** ★ #17:卡点一键转 Tech Stack 复习卡 */
   async stuckToCards(): Promise<void> {
     const stuck = this.debriefForm().stuck.trim();

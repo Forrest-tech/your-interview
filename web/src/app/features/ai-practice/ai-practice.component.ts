@@ -1749,6 +1749,42 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     audio.onended = () => URL.revokeObjectURL(url);
   }
 
+  /** ★ #3:Orai 模式 — 一次只给一个最关键的改进点。 */
+  readonly oneFix = computed(() => {
+    const sc = this.activeTake()?.score;
+    if (!sc) return null;
+    const fs = this.fillerStats();
+    // 优先级:填充词 > 流利度 > 准确度 > 发音 > 完整度
+    if (fs && fs.perMinute > 3) {
+      return {
+        icon: 'graphic_eq',
+        title: '减少填充词',
+        detail: `检测到 ${fs.count} 个填充词 (${fs.perMinute}/分钟)。下次在想词时停顿 1 秒,而不是说 "um"。点击橙色词回放。`
+      };
+    }
+    const dims = [
+      { key: 'fluencyScore', label: '流利度', val: sc.fluencyScore },
+      { key: 'accuracyScore', label: '准确度', val: sc.accuracyScore },
+      { key: 'pronScore', label: '发音', val: sc.pronScore },
+      { key: 'completenessScore', label: '完整度', val: sc.completenessScore },
+    ].filter(d => d.val != null) as { key: string; label: string; val: number }[];
+    if (!dims.length) return null;
+    dims.sort((a, b) => a.val - b.val);
+    const weakest = dims[0];
+    if (weakest.val >= 85) return null; // 都不错,不打扰
+    const fixes: Record<string, string> = {
+      fluencyScore: '语速不均。试着用 2 倍速听一遍自己的录音,标记卡顿处,重录时在这些地方刻意放慢。',
+      accuracyScore: '个别词发音不准。点击下方红色波浪线词,看音标,跟读 3 遍。',
+      pronScore: '整体发音需加强。每天跟读 5 分钟,重点模仿语调起伏。',
+      completenessScore: '内容不完整。有漏读的词,对照原文检查。',
+    };
+    return {
+      icon: 'tips_and_updates',
+      title: `优先改进:${weakest.label} (${weakest.val.toFixed(0)}分)`,
+      detail: fixes[weakest.key] ?? '继续练习。'
+    };
+  });
+
   /** 在历史列表里点"查看报告"：把该条设为当前作品并弹到结果区。 */
   focusTake(id: string): void {
     this.activeTakeId.set(id);

@@ -586,6 +586,17 @@
             @if (reportOpen()) {
               <div class="result-wrap">
 
+                <!-- ★ #3:Orai 模式 — 一次只给一个最关键的改进点 -->
+                @if (oneFix(); as fix) {
+                  <section class="one-fix-banner">
+                    <mat-icon>{{ fix.icon }}</mat-icon>
+                    <div>
+                      <div class="one-fix-title">{{ fix.title }}</div>
+                      <div class="one-fix-detail">{{ fix.detail }}</div>
+                    </div>
+                  </section>
+                }
+
                 <!-- ★ 第三十一轮(Forrest 指定):音频波形移入评分报告内部。
                      位置 = 总分胶囊之后、Recognition 之前。
                      数据源就是本报告的这条录音(activeTake 的 id),

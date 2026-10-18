@@ -51,6 +51,9 @@
           <div class="ts-linked-badge">
             <mat-icon>link</mat-icon>
             <span>{{ t('practice.tsLinked') }}</span>
+            <button mat-icon-button (click)="unlinkTechStack()" [matTooltip]="t('practice.tsUnlink')" class="ts-unlink-btn">
+              <mat-icon>link_off</mat-icon>
+            </button>
           </div>
           @if (tsLoading() && tsTopics().length === 0) {
             <p class="tree-status">{{ t('practice.treeLoading') }}</p>

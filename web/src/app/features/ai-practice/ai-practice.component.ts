@@ -1249,6 +1249,25 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** 解链 Tech Stack 分类,恢复原来的材料树 */
+  unlinkTechStack(): void {
+    const catId = this.categoryFilter();
+    if (!catId || catId === 'all') return;
+    this.practiceApi.setCategoryLink(catId, null).subscribe({
+      next: () => {
+        // 刷新分类列表,linkedSource 清掉后自动切回材料树
+        this.practiceApi.getCategories().subscribe({
+          next: (cats) => this.categories.set(cats),
+          error: () => {}
+        });
+        this.tsSelected.set(null);
+        this.tsTopics.set([]);
+        this.tsItems.set([]);
+      },
+      error: (e: Error) => this.toast(e.message)
+    });
+  }
+
   /**
    * ★ 第九轮(Forrest):类别管理与导入导出**合并成一个弹窗的三个页签**。
    * 两个工具栏入口(menu 的 tune 图标 = 类别页签,import_export 图标 = 导出页签)

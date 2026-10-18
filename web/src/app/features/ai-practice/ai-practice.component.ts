@@ -210,9 +210,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 已保存的正文快照(退出编辑/保存时写入)。 */
   private readonly saved = signal('');
 
-  readonly selectedNode = computed(() =>
-    this.findFile(this.nodes(), this.selectedId())
-  );
+  readonly selectedNode = computed(() => {
+    const id = this.selectedId();
+    if (!id) return null;
+    // ★ From Tech:实时条目活在 fromTechNodes() 里(id 带 ts: 前缀),
+    //   右侧标题必须去那棵树里找,否则永远 null → 显示 "No material selected"。
+    const tree = id.startsWith('ts:') ? this.fromTechNodes() : this.nodes();
+    return this.findFile(tree, id);
+  });
 
   /**
    * 当前条目所属【父文件夹名称】(第二十二轮:顶部路径用文件夹名替代题号)。
@@ -231,9 +236,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    *
    * 找不到父文件夹时只显示素材名(不留 "undefined -" 这种脏字符)。
    */
-  readonly parentFolderName = computed(() =>
-    this.findParentFolderName(this.nodes(), this.selectedId(), null)
-  );
+  readonly parentFolderName = computed(() => {
+    const id = this.selectedId();
+    if (!id) return null;
+    // ★ 同上:from-tech 的父文件夹(即 Topic)也在 fromTechNodes() 里找,
+    //   否则标题丢 "Topic - 条目名" 的前缀,和其它分类不一致。
+    const tree = id.startsWith('ts:') ? this.fromTechNodes() : this.nodes();
+    return this.findParentFolderName(tree, id, null);
+  });
 
   /** 只读态显示的正文。 */
   readonly readonlyText = computed(() => this.saved());

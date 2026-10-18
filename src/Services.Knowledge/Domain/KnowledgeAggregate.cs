@@ -165,6 +165,13 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
         Touch();
     }
 
+    /// <summary>只更新题目(AI Practice From Tech 重命名写回用)。</summary>
+    public void SetQuestion(string? question)
+    {
+        Question = string.IsNullOrWhiteSpace(question) ? "" : question;
+        Touch();
+    }
+
     public void UpdateDetails(string title, string topic, string? subTopic, string question,
         int difficulty, int importance, string? tagsJson, string? conceptExplanation,
         string? myAnswer, string? betterAnswer, string? keyPointsJson, string? commonMistakesJson,

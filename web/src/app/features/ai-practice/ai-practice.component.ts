@@ -912,13 +912,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** From Tech:把编辑后的推荐答案写回 Knowledge(同一份数据) */
   private saveFromTechToKnowledge(after?: () => void): void {
-    const updates: { kid: string; content: string }[] = [];
+    const updates: { kid: string; name: string; content: string }[] = [];
     const walk = (nodes: MaterialNode[]) => {
       for (const n of nodes) {
         if (!n.folder && n.id.startsWith('ts:item:')) {
           const kid = (n as any)._kid as string;
           if (kid) {
-            updates.push({ kid, content: n.content || '' });
+            updates.push({ kid, name: n.name, content: n.content || '' });
           }
         }
         if (n.children) walk(n.children);
@@ -931,8 +931,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       after?.();
       return;
     }
-    // 逐个 PUT 到 Knowledge
-    let pending = updates.length;
+    // 逐个 PUT 到 Knowledge(改名→question,内容→betterAnswer)
+    let pending = updates.length * 2;
     let failed = 0;
     const done = () => {
       pending--;
@@ -941,6 +941,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
           this.treeDirty.set(false);
           this.treeEditing.set(false);
           this.toast(this.t('dialog.saveDone'));
+          // 重载 From Tech 树,确保与 Knowledge 一致
+          this.loadTsTopics();
         } else {
           this.treeError.set(this.t('practice.tsSavePartial'));
         }
@@ -948,6 +950,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       }
     };
     for (const u of updates) {
+      this.knowledgeApi.put<void>(`/api/knowledge/${u.kid}/question`, {
+        question: u.name || null
+      }).subscribe({
+        next: () => done(),
+        error: () => { failed++; done(); }
+      });
       this.knowledgeApi.put<void>(`/api/knowledge/${u.kid}/better-answer`, {
         betterAnswer: u.content || null
       }).subscribe({
@@ -962,11 +970,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 进入编辑模式:先拍快照,取消时可完整恢复。 */
   startTreeEdit(): void {
     if (this.treeLoadFailed()) return;
-    // From Tech:虚拟树结构只读(镜像 Knowledge),不允许结构编辑
-    if (this.isFromTechSelected()) {
-      this.toast(this.t('practice.tsReadonlyTree'));
-      return;
-    }
     this.treeSnapshot = JSON.parse(JSON.stringify(this.nodes())) as MaterialNode[];
     this.treeDeletedSinceSave = false;
     this.treeEditing.set(true);
@@ -1851,8 +1854,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   onTreeChange(next: MaterialNode[]): void {
-    // From Tech:虚拟树结构只读,忽略结构变更
-    if (this.isFromTechSelected()) return;
     this.nodes.set([...next]);
     // 树变了 → 标记未保存,驱动侧栏「保存修改」按钮亮起
     this.treeDirty.set(true);

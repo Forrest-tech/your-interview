@@ -21,6 +21,10 @@
               [matTooltip]="t('ts.cat.manage')">
         <mat-icon>category</mat-icon>
       </button>
+      <button mat-icon-button (click)="openTrash()"
+              [matTooltip]="t('ts.trash.title')">
+        <mat-icon>delete_outline</mat-icon>
+      </button>
       @if (duplicateGroups().length > 0) {
         <button mat-stroked-button class="dup-btn" (click)="openDuplicates()">
           <mat-icon>content_copy</mat-icon>
@@ -43,6 +47,32 @@
       </button>
     </div>
   </header>
+
+  @if (trashMode()) {
+    <!-- ★ 回收站 -->
+    <mat-card class="trash-panel">
+      <mat-card-header>
+        <mat-card-title>{{ t('ts.trash.title') }}</mat-card-title>
+        <span class="spacer"></span>
+        <button mat-button (click)="closeTrash()">{{ t('common.close') }}</button>
+      </mat-card-header>
+      <mat-card-content>
+        @if (trashItems().length === 0) {
+          <p class="empty">{{ t('ts.trash.empty') }}</p>
+        } @else {
+          @for (item of trashItems(); track item.id) {
+            <div class="trash-item">
+              <span class="trash-title">{{ item.title }}</span>
+              <button mat-stroked-button color="primary" (click)="restoreItem(item.id)">
+                <mat-icon>restore</mat-icon>
+                {{ t('ts.trash.restore') }}
+              </button>
+            </div>
+          }
+        }
+      </mat-card-content>
+    </mat-card>
+  }
 
   @if (!reviewMode()) {
   <!-- 筛选:可折叠 -->

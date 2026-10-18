@@ -29,10 +29,11 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
         [FromQuery] string? source = null, [FromQuery] string? tag = null,
         [FromQuery] string? search = null, [FromQuery] bool dueOnly = false,
         [FromQuery] string? company = null, [FromQuery] Guid? entryId = null,
+        [FromQuery] bool includeDeleted = false,
         CancellationToken ct = default)
     {
         var r = await sender.Send(new ListKnowledgeQuery(page, pageSize, topic, mastery, source,
-            tag, search, dueOnly, company, entryId), ct);
+            tag, search, dueOnly, company, entryId, includeDeleted), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -194,6 +195,15 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     public async Task<IResult> Delete(Guid id, CancellationToken ct)
     {
         var r = await sender.Send(new DeleteKnowledgeCommand(id), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>恢复已删除的知识点 (软删除恢复)。</summary>
+    [HttpPost("{id:guid}/restore")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> Restore(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new RestoreKnowledgeCommand(id), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 

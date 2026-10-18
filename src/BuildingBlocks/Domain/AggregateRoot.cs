@@ -24,4 +24,5 @@ public abstract class AuditableAggregateRoot : AggregateRoot
 
     public void Touch() => UpdatedAt = DateTimeOffset.UtcNow;
     public void MarkDeleted() { IsDeleted = true; Touch(); }
+    public void Restore() { IsDeleted = false; Touch(); }
 }

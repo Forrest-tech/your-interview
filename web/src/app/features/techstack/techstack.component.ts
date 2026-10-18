@@ -141,6 +141,9 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 是否进入"今日复习"专注模式:进入后隐藏列表/筛选,改走闪卡队列。 */
   readonly reviewMode = signal(false);
+  /** ★ 回收站模式:显示已删除的卡片,可恢复。 */
+  readonly trashMode = signal(false);
+  readonly trashItems = signal<KnowledgeItem[]>([]);
   /** ★ #5:重做模式 (Anki-for-LeetCode 模式:只看题,重做/重讲,pass/fail)。 */
   readonly resoleMode = signal<boolean>(
     localStorage.getItem('ts.resoleMode') === '1');
@@ -668,6 +671,34 @@ export class TechStackComponent implements OnInit, OnDestroy {
         this.selected.set(null);
         this.clearUrlId();
         this.reload();
+      },
+      error: (e: Error) => this.notify(e.message, true)
+    });
+  }
+
+  /** ★ 进入回收站:加载已删除的卡片。 */
+  openTrash(): void {
+    this.trashMode.set(true);
+    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', {
+      page: 1, pageSize: 100, includeDeleted: true
+    }).subscribe({
+      next: (p) => this.trashItems.set(p.items ?? []),
+      error: (e: Error) => this.notify(e.message, true)
+    });
+  }
+
+  /** ★ 退出回收站。 */
+  closeTrash(): void {
+    this.trashMode.set(false);
+    this.trashItems.set([]);
+  }
+
+  /** ★ 从回收站恢复卡片。 */
+  restoreItem(id: string): void {
+    this.api.post<void>(`/api/knowledge/${id}/restore`, {}).subscribe({
+      next: () => {
+        this.notify(this.t('ts.trash.restored'));
+        this.openTrash(); // 刷新回收站列表
       },
       error: (e: Error) => this.notify(e.message, true)
     });

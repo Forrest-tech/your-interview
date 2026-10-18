@@ -64,7 +64,7 @@ public sealed record DuePlanDto(DateOnly Date, List<KnowledgeListItemDto> Items)
 public sealed record ListKnowledgeQuery(
     int Page = 1, int PageSize = 20, string? Topic = null, string? Mastery = null,
     string? Source = null, string? Tag = null, string? Search = null, bool DueOnly = false,
-    string? Company = null, Guid? EntryId = null)
+    string? Company = null, Guid? EntryId = null, bool IncludeDeleted = false)
     : IRequest<Result<PagedResult<KnowledgeListItemDto>>>;
 
 public sealed record GetKnowledgeItemQuery(Guid Id) : IRequest<Result<KnowledgeItemDto>>;
@@ -139,6 +139,7 @@ public sealed record UpdateQuestionCommand(Guid Id, string? Question) : IRequest
 public sealed record UpdateFromTechCommand(Guid Id, string? Question, string? BetterAnswer) : IRequest<Result>;
 
 public sealed record DeleteKnowledgeCommand(Guid Id) : IRequest<Result>;
+public sealed record RestoreKnowledgeCommand(Guid Id) : IRequest<Result>;
 
 /// <summary>重命名分类:返回受影响的条目数。新名字已存在时即为合并。</summary>
 public sealed record RenameTopicCommand(string OldName, string NewName) : IRequest<Result<int>>;
@@ -306,6 +307,9 @@ public sealed class ListKnowledgeQueryHandler(KnowledgeDbContext db, TimeProvide
         var size = request.PageSize is < 1 or > 200 ? 20 : request.PageSize;
 
         var q = db.Items.AsNoTracking().AsQueryable();
+
+        if (request.IncludeDeleted)
+            q = q.IgnoreQueryFilters().Where(x => x.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(request.Topic))
             q = q.Where(x => x.Topic == request.Topic);
@@ -560,6 +564,20 @@ public sealed class DeleteKnowledgeCommandHandler(KnowledgeDbContext db)
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
         k.MarkDeleted();
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public sealed class RestoreKnowledgeCommandHandler(KnowledgeDbContext db)
+    : IRequestHandler<RestoreKnowledgeCommand, Result>
+{
+    public async Task<Result> Handle(RestoreKnowledgeCommand request, CancellationToken ct)
+    {
+        var k = await db.Items.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (k is null) return Result.Failure(Error.NotFound("知识点"));
+        k.Restore();
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }

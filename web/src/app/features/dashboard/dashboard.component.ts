@@ -8,12 +8,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ApiClient } from '../../core/api/api-client';
-import { ActionCenter, Application, ApplicationStatus, Dashboard } from '../../core/models/api.models';
+import { ActionCenter, Application, ApplicationStatus, Dashboard, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 
 /** 行动中心卡片。 */
 interface ActionCard {
-  kind: 'followup' | 'deadline' | 'weak' | 'pipeline';
+  kind: 'followup' | 'deadline' | 'weak' | 'pipeline' | 'upcoming';
   icon: string;
   titleKey: string;
   count: number;
@@ -44,6 +44,8 @@ export class DashboardComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly dashboard = signal<Dashboard | null>(null);
   readonly actionCenter = signal<ActionCenter | null>(null);
+  /** ★ 即将到来的面试轮次。 */
+  readonly upcomingRounds = signal<UpcomingRound[]>([]);
 
   readonly weakest = computed(() => {
     const radar = this.dashboard()?.radar ?? [];
@@ -65,6 +67,10 @@ export class DashboardComponent implements OnInit {
     const out: ActionCard[] = [];
     if (ac.followUps.length > 0) {
       out.push({ kind: 'followup', icon: 'notifications_active', titleKey: 'dash.followUpsDue', count: ac.followUps.length, link: '/tracker', ctaKey: 'dash.goHandle' });
+    }
+    // ★ 即将到来的面试:最高优先级
+    if (this.upcomingRounds().length > 0) {
+      out.push({ kind: 'upcoming', icon: 'event', titleKey: 'dash.upcomingRounds', count: this.upcomingRounds().length, link: '/playbook', ctaKey: 'dash.goPrepare' });
     }
     if (ac.deadlines.length > 0) {
       out.push({ kind: 'deadline', icon: 'event_busy', titleKey: 'dash.deadlinesSoon', count: ac.deadlines.length, link: '/tracker', ctaKey: 'dash.goHandle' });
@@ -89,7 +95,7 @@ export class DashboardComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    let pending = 2;
+    let pending = 3;
     const done = () => { if (--pending === 0) this.loading.set(false); };
 
     this.api.get<ActionCenter>('/api/jobs/action-center').subscribe({
@@ -99,6 +105,12 @@ export class DashboardComponent implements OnInit {
 
     this.api.get<Dashboard>('/api/analytics/dashboard').subscribe({
       next: (d) => { this.dashboard.set(d); done(); },
+      error: () => done()
+    });
+
+    // ★ 即将到来的面试轮次
+    this.api.get<UpcomingRound[]>('/api/interviews/rounds/upcoming', { days: 30 }).subscribe({
+      next: (list) => { this.upcomingRounds.set(list ?? []); done(); },
       error: () => done()
     });
   }

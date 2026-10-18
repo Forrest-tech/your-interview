@@ -80,6 +80,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   // ---------- 行动中心(M4) ----------
   'dash.actionCenter': { zh: '行动中心 · 今天该做什么', en: 'Action Center · What to do today', fr: 'Centre d’action · Que faire aujourd’hui' },
   'dash.followUpsDue': { zh: '待跟进', en: 'Follow-ups due', fr: 'Suivis à faire' },
+  'dash.upcomingRounds': { zh: '即将面试', en: 'Upcoming interviews', fr: 'Entretiens à venir' },
+  'dash.goPrepare': { zh: '去准备', en: 'Prepare', fr: 'Préparer' },
   'dash.deadlinesSoon': { zh: '临近截止', en: 'Deadlines approaching', fr: 'Échéances proches' },
   'dash.weakAreas': { zh: '能力短板', en: 'Weak areas', fr: 'Points faibles' },
   'dash.pipeline': { zh: '投递漏斗', en: 'Pipeline', fr: 'Pipeline' },

@@ -66,6 +66,28 @@
                     </li>
                   }
                 </ul>
+              } @else if (c.kind === 'upcoming') {
+                <ul class="ac-items">
+                  @for (r of upcomingRounds(); track r.roundId) {
+                    <li>
+                      <span class="ac-avatar" [style.background]="avatarColor(r.companyName)">
+                        {{ companyInitials(r.companyName) }}
+                      </span>
+                      <span class="ac-item-main">
+                        <span class="ac-item-title">{{ r.companyName }} · {{ r.role }}</span>
+                        <span class="ac-item-sub">
+                          第 {{ r.order }} 轮 · {{ r.stage }}
+                          @if (r.scheduledDate) { · {{ r.scheduledDate }} }
+                          @if (r.scheduledTime) { {{ r.scheduledTime }} }
+                          @if (r.format) { · {{ r.format }} }
+                        </span>
+                      </span>
+                      <a mat-icon-button [routerLink]="['/playbook', r.entryId]" matTooltip="去准备">
+                        <mat-icon>arrow_forward</mat-icon>
+                      </a>
+                    </li>
+                  }
+                </ul>
               } @else if (c.kind === 'deadline') {
                 <ul class="ac-items">
                   @for (a of ac.deadlines; track a.id) {

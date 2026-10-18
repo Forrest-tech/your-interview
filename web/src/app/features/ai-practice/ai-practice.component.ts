@@ -1305,6 +1305,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         tree.sort((a, b) => a.name.localeCompare(b.name));
         this.nodes.set(tree);
         this.tsLoading.set(false);
+        // 切换到 From Tech 时,默认选中第一个节点的第一个内容
+        const first = this.firstFile(tree);
+        if (first) {
+          // 展开第一个文件夹
+          const firstFolder = tree[0];
+          if (firstFolder?.folder) {
+            firstFolder.expanded = true;
+          }
+          this.selectFile(first);
+        }
       }
     };
     for (const tp of topics) {

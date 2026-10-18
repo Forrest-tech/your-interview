@@ -139,6 +139,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.emptyHint': { zh: '数据库里还没有素材。点上方按钮新建文件夹或文件，内容会直接存进数据库。', en: 'No materials in the database yet. Use the buttons above to create a folder or file; content is saved directly to the database.', fr: "Aucun document en base de données. Utilisez les boutons ci-dessus pour créer un dossier ou un fichier ; le contenu est enregistré directement dans la base." },
   'practice.treeLoading': { zh: '正在从数据库加载素材…', en: 'Loading materials from the database…', fr: 'Chargement des documents depuis la base…' },
   'practice.tsLinked': { zh: '来自 Tech Stack(实时)', en: 'From Tech Stack (live)', fr: 'Depuis Tech Stack (en direct)' },
+  'practice.fromTech': { zh: 'From Tech(实时)', en: 'From Tech (live)', fr: 'Depuis Tech (en direct)' },
   'practice.tsUnlink': { zh: '取消链接,恢复材料树', en: 'Unlink, restore materials', fr: 'Délier, restaurer les matériaux' },
   'practice.tsEmpty': { zh: 'Tech Stack 暂无分类', en: 'No Tech Stack categories yet', fr: 'Aucune catégorie Tech Stack' },
   'practice.tsQuestion': { zh: '题目', en: 'Question', fr: 'Question' },

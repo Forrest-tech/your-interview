@@ -3320,6 +3320,29 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 }
 .ts-linked-badge mat-icon { font-size: 16px; width: 16px; height: 16px; }
 
+/* From Tech 区(叠加在材料树下方,不替换原树) */
+.from-tech-section {
+  margin-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: 4px;
+}
+.from-tech-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #3f51b5;
+  user-select: none;
+}
+.from-tech-header:hover { background: rgba(63, 81, 181, 0.06); }
+.from-tech-header mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.from-tech-header .ft-icon { font-size: 16px; width: 16px; height: 16px; }
+.from-tech-header .ft-title { flex: 1; }
+
 .ts-tree { padding: 4px 8px; }
 .ts-folder {
   display: flex;

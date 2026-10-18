@@ -46,40 +46,7 @@
            第二行:编辑(靠右),编辑中变 保存/取消 成对按钮,
            样式与右侧内容区的 edit/save 完全一致(白底细边框中性样式)。 -->
       <div class="tree-body">
-        @if (isTechStackLinked()) {
-          <!-- Tech Stack 实时视图(Notion linked view):分类/题目都从 Knowledge 实时查 -->
-          <div class="ts-linked-badge">
-            <mat-icon>link</mat-icon>
-            <span>{{ t('practice.tsLinked') }}</span>
-            <button mat-icon-button (click)="unlinkTechStack()" [matTooltip]="t('practice.tsUnlink')" class="ts-unlink-btn">
-              <mat-icon>link_off</mat-icon>
-            </button>
-          </div>
-          @if (tsLoading() && tsTopics().length === 0) {
-            <p class="tree-status">{{ t('practice.treeLoading') }}</p>
-          } @else {
-            <div class="ts-tree">
-              @for (tp of tsTopics(); track tp.topic) {
-                <div class="ts-folder" (click)="loadTsItems(tp.topic)"
-                     [class.expanded]="tsExpandedTopic() === tp.topic">
-                  <mat-icon>{{ tsExpandedTopic() === tp.topic ? 'expand_more' : 'chevron_right' }}</mat-icon>
-                  <span class="ts-folder-name">{{ tp.topic }}</span>
-                  <span class="ts-count">{{ tp.total }}</span>
-                </div>
-                @if (tsExpandedTopic() === tp.topic) {
-                  @for (item of tsItems(); track item.id) {
-                    <div class="ts-item" (click)="selectTsItem(item)"
-                         [class.selected]="tsSelected()?.id === item.id">
-                      <span class="ts-item-title">{{ item.question || item.title }}</span>
-                    </div>
-                  }
-                }
-              } @empty {
-                <p class="tree-status">{{ t('practice.tsEmpty') }}</p>
-              }
-            </div>
-          }
-        } @else if (treeLoading()) {
+        @if (treeLoading()) {
           <p class="tree-status">{{ t('practice.treeLoading') }}</p>
         } @else if (treeLoadFailed()) {
           <div class="tree-status is-error">
@@ -105,6 +72,44 @@
             (saveRequest)="saveTree()"
             (cancelRequest)="cancelTreeEdit()">
           </app-material-tree>
+
+          <!-- From Tech:Tech Stack 实时内容(叠加,不替换原树) -->
+          @if (showFromTech()) {
+            <div class="from-tech-section">
+              <div class="from-tech-header" (click)="toggleFromTech()">
+                <mat-icon>{{ fromTechOpen() ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                <mat-icon class="ft-icon">link</mat-icon>
+                <span class="ft-title">{{ t('practice.fromTech') }}</span>
+                <span class="ts-count">{{ tsTopics().length }}</span>
+              </div>
+              @if (fromTechOpen()) {
+                @if (tsLoading() && tsTopics().length === 0) {
+                  <p class="tree-status">{{ t('practice.treeLoading') }}</p>
+                } @else {
+                  <div class="ts-tree">
+                    @for (tp of tsTopics(); track tp.topic) {
+                      <div class="ts-folder" (click)="loadTsItems(tp.topic)"
+                           [class.expanded]="tsExpandedTopic() === tp.topic">
+                        <mat-icon>{{ tsExpandedTopic() === tp.topic ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                        <span class="ts-folder-name">{{ tp.topic }}</span>
+                        <span class="ts-count">{{ tp.total }}</span>
+                      </div>
+                      @if (tsExpandedTopic() === tp.topic) {
+                        @for (item of tsItems(); track item.id) {
+                          <div class="ts-item" (click)="selectTsItem(item)"
+                               [class.selected]="tsSelected()?.id === item.id">
+                            <span class="ts-item-title">{{ item.question || item.title }}</span>
+                          </div>
+                        }
+                      }
+                    } @empty {
+                      <p class="tree-status">{{ t('practice.tsEmpty') }}</p>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          }
         }
       </div>
     }

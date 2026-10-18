@@ -173,6 +173,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     const cat = this.categories().find(c => c.id === f);
     return cat?.linkedSource === 'techstack';
   });
+  /** From Tech 区是否显示(Tech Stack 分类选中时显示,不替换原树) */
+  readonly showFromTech = computed(() => {
+    const f = this.categoryFilter();
+    if (f === 'all' || f === 'uncategorized') return false;
+    const cat = this.categories().find(c => c.id === f);
+    // Tech Stack 分类,或已链接的分类,都显示 From Tech 区
+    return cat?.name?.toLowerCase().includes('tech stack') || cat?.linkedSource === 'techstack';
+  });
+  /** From Tech 区展开/折叠 */
+  readonly fromTechOpen = signal(true);
   /** Tech Stack 的分类列表(实时从 Knowledge 取) */
   readonly tsTopics = signal<KnowledgeTopic[]>([]);
   /** Tech Stack 当前展开的分类 */
@@ -182,6 +192,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** Tech Stack 当前选中的条目(右侧展示用) */
   readonly tsSelected = signal<KnowledgeItem | null>(null);
   readonly tsLoading = signal(false);
+
+  toggleFromTech(): void {
+    this.fromTechOpen.update(v => !v);
+  }
 
   /** 编辑态正文(仅编辑模式下可改)。 */
   readonly draft = signal('');
@@ -1167,8 +1181,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       next: (list) => {
         this.categories.set(list ?? []);
         this.validateCategoryFilter();
-        // 若恢复的分类是 Tech Stack 链接,加载实时视图
-        if (this.isTechStackLinked()) {
+        // 若当前分类显示 From Tech 区,加载实时数据
+        if (this.showFromTech()) {
           this.loadTsTopics();
         }
       },
@@ -1194,20 +1208,20 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     try {
       localStorage.setItem(AiPracticeComponent.CATEGORY_FILTER_KEY, value);
     } catch { /* 隐私模式写不了,不影响本次会话 */ }
-    // Tech Stack 链接分类:切换时加载实时视图
+    // From Tech 区:切换分类时加载 Tech Stack 实时数据
     this.tsSelected.set(null);
     this.tsExpandedTopic.set(null);
     this.tsItems.set([]);
-    if (this.isTechStackLinked()) {
+    if (this.showFromTech()) {
       this.loadTsTopics();
     }
   }
 
-  // ---------- Tech Stack 实时视图(Notion linked view 模式) ----------
+  // ---------- From Tech:Tech Stack 实时内容(叠加模式) ----------
 
   /** 加载 Tech Stack 分类(从 Knowledge 实时查) */
   loadTsTopics(): void {
-    if (!this.isTechStackLinked()) return;
+    if (!this.showFromTech()) return;
     this.tsLoading.set(true);
     this.knowledgeApi.get<KnowledgeTopic[]>('/api/knowledge/topics').subscribe({
       next: (list) => {

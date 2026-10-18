@@ -962,6 +962,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 进入编辑模式:先拍快照,取消时可完整恢复。 */
   startTreeEdit(): void {
     if (this.treeLoadFailed()) return;
+    // From Tech:虚拟树结构只读(镜像 Knowledge),不允许结构编辑
+    if (this.isFromTechSelected()) {
+      this.toast(this.t('practice.tsReadonlyTree'));
+      return;
+    }
     this.treeSnapshot = JSON.parse(JSON.stringify(this.nodes())) as MaterialNode[];
     this.treeDeletedSinceSave = false;
     this.treeEditing.set(true);
@@ -1846,6 +1851,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   onTreeChange(next: MaterialNode[]): void {
+    // From Tech:虚拟树结构只读,忽略结构变更
+    if (this.isFromTechSelected()) return;
     this.nodes.set([...next]);
     // 树变了 → 标记未保存,驱动侧栏「保存修改」按钮亮起
     this.treeDirty.set(true);

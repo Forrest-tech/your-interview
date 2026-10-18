@@ -141,6 +141,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.tsLinked': { zh: '来自 Tech Stack(实时)', en: 'From Tech Stack (live)', fr: 'Depuis Tech Stack (en direct)' },
   'practice.fromTech': { zh: 'From Tech(实时)', en: 'From Tech (live)', fr: 'Depuis Tech (en direct)' },
   'practice.tsSavePartial': { zh: '部分保存失败,请重试', en: 'Partial save failed, please retry', fr: 'Échec partiel, réessayez' },
+  'practice.tsReadonlyTree': { zh: 'From Tech 结构只读,请去 Tech Stack 修改分类和题目', en: 'From Tech structure is read-only, edit in Tech Stack', fr: 'Structure en lecture seule, modifiez dans Tech Stack' },
   'practice.tsUnlink': { zh: '取消链接,恢复材料树', en: 'Unlink, restore materials', fr: 'Délier, restaurer les matériaux' },
   'practice.tsEmpty': { zh: 'Tech Stack 暂无分类', en: 'No Tech Stack categories yet', fr: 'Aucune catégorie Tech Stack' },
   'practice.tsQuestion': { zh: '题目', en: 'Question', fr: 'Question' },

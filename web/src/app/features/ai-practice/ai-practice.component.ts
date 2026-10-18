@@ -1829,6 +1829,24 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly followUpQuestion = signal<string | null>(null);
   readonly followUpLoading = signal(false);
 
+  /** ★ 打通:AI Practice 低分 → 创建 Tech Stack 复习卡。 */
+  async addToReview(): Promise<void> {
+    const question = this.customQuestion() || this.currentText();
+    if (!question.trim()) return;
+    const take = this.activeTake();
+    const transcript = (take as any)?.transcript ?? '';
+    try {
+      await this.knowledgeApi.post('/api/knowledge', {
+        title: question.slice(0, 60),
+        question: question,
+        betterAnswer: transcript.slice(0, 1000),
+        topic: 'AI Practice',
+        category: '口语练习',
+        mastery: 'ToDo'
+      }).toPromise();
+    } catch { /* 静默失败,不打断流程 */ }
+  }
+
   async generateFollowUp(): Promise<void> {
     const take = this.activeTake();
     if (!take || this.followUpLoading()) return;
@@ -1892,7 +1910,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // 否则 findFile 在空树上永远找不到,会错误地跳到第一个素材。
     // 恢复选中项的逻辑移到 afterTreeReady(),由加载回调触发。
     this.restoreTree();
+    // ★ 打通:从 Playbook 带题目过来 (?q=...),设为本次练习题。
+    const q = this.route.snapshot.queryParamMap.get('q');
+    if (q) this.customQuestion.set(q);
   }
+
+  /** ★ 打通:外部带入的自定义练习题 (如从 Playbook 跳过来)。 */
+  readonly customQuestion = signal<string | null>(null);
 
   /** 从 localStorage 取上次选中的素材 id。 */
   private readStoredMaterialId(): string | null {

@@ -150,9 +150,15 @@ export class DashboardComponent implements OnInit {
     return iso.slice(0, 10);
   }
 
-  /** ★ #16:弱项一键刷题 → 跳 Tech Stack 按主题过滤。 */
+  /** ★ #16:弱项一键刷题 → 口语类去 AI Practice,知识类去 Tech Stack。 */
   drillWeakness(dimension: string): void {
-    this.router.navigate(['/tech-stack'], { queryParams: { topic: dimension } });
+    const speaking = ['pronunciation', 'fluency', 'sentenceintegrity', 'pron', 'flu'];
+    const d = dimension.toLowerCase().replace(/[^a-z]/g, '');
+    if (speaking.some(s => d.includes(s))) {
+      this.router.navigate(['/ai-practice']);
+    } else {
+      this.router.navigate(['/tech-stack'], { queryParams: { topic: dimension } });
+    }
   }
 
   private readonly router = inject(Router);

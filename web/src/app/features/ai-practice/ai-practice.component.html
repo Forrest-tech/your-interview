@@ -269,6 +269,16 @@
         <!-- 纯英文待读正文(★ 内部严禁任何操作按钮/标记) -->
         <div class="text-box">
 
+          <!-- ★ 打通:从 Playbook 带过来的题目 -->
+          @if (customQuestion(); as cq) {
+            <div class="custom-q-banner">
+              <mat-icon>forum</mat-icon>
+              <span>练习题: {{ cq }}</span>
+              <button mat-icon-button (click)="customQuestion.set(null)" matTooltip="清除">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
 
           <!-- 正文:编辑态 = 文本域;只读态 = 无衬线正文(18px / 1.8) -->
           @if (editing()) {
@@ -594,6 +604,10 @@
                       <div class="one-fix-title">{{ fix.title }}</div>
                       <div class="one-fix-detail">{{ fix.detail }}</div>
                     </div>
+                    <!-- ★ 打通:低分 → 建 Tech Stack 复习卡 -->
+                    <button mat-button (click)="addToReview()">
+                      <mat-icon>school</mat-icon> 加入复习
+                    </button>
                   </section>
                 }
 

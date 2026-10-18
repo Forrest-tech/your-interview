@@ -1163,6 +1163,14 @@ export class TechStackComponent implements OnInit {
     this.loadBuckets();
   }
 
+  /** ★ 打通:Tech Stack 卡片 → AI Practice 口语练习。 */
+  practiceCard(item: KnowledgeItem): void {
+    const q = item.question || item.title;
+    this.router.navigate(['/ai-practice'], {
+      queryParams: { q: q.slice(0, 200) }
+    });
+  }
+
   /**
    * 翻答案:列表 DTO 不含答案正文(概念/要点/更好答案),
    * 这里按 id 拉详情,只用于展示,不写入队列条目。

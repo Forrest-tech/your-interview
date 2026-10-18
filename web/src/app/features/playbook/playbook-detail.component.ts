@@ -1351,4 +1351,11 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       }).toPromise().catch(() => null);
     }
   }
+
+  /** ★ 打通:Playbook 题目 → AI Practice 口语练习。 */
+  practiceQuestion(q: { questionText: string }): void {
+    this.router.navigate(['/ai-practice'], {
+      queryParams: { q: q.questionText.slice(0, 200) }
+    });
+  }
 }

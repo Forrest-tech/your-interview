@@ -364,6 +364,10 @@
                 <mat-icon>check_circle_outline</mat-icon> {{ t('ts.detail.logReview') }}
                 <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
               </button>
+              <!-- ★ 打通:去 AI Practice 练这张卡 -->
+              <button mat-stroked-button (click)="practiceCard(it)">
+                <mat-icon>mic</mat-icon> 口语练习
+              </button>
             }
             <mat-menu #reviewMenu="matMenu" class="app-menu">
               <!-- 四档直接对应 SM-2 的 Again/Hard/Good/Easy:

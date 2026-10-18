@@ -354,6 +354,10 @@
                     @if (q.assessment) {
                       <p class="rel-assess"><mat-icon inline>insights</mat-icon> {{ q.assessment }}</p>
                     }
+                    <!-- ★ 打通:去 AI Practice 练这道题 -->
+                    <button mat-button (click)="practiceQuestion(q)">
+                      <mat-icon>mic</mat-icon> 口语练习
+                    </button>
                   </div>
                   <mat-divider></mat-divider>
                 }

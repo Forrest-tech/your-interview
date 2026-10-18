@@ -21,6 +21,18 @@ import { BRIEF_I18N } from './components/brief/brief.i18n';
 import type { CoverageRow } from './components/brief/brief.models';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatExpansionModule } from '@angular/material/expansion';
+
+/** ★ #13:STAR 故事 */
+export interface StarStory {
+  id: string;
+  title: string;
+  situation: string;
+  task: string;
+  action: string;
+  result: string;
+  tags: string;
+}
 /**
  * 「公司聚合」—— 对应后端 CompanySummaryDto。
  * 只声明用到的字段:TS 是结构化类型,后端多给字段不影响编译。
@@ -75,7 +87,7 @@ interface NewEntryForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule, MatTooltipModule, MatCheckboxModule
+    MatSnackBarModule, MatTooltipModule, MatCheckboxModule, MatExpansionModule
   ],
   templateUrl: './playbook.component.html',
   styleUrl: './playbook.component.scss'
@@ -444,5 +456,46 @@ export class PlaybookComponent implements OnInit {
       interviewFormat: '', interviewers: '', location: '',
       jdText: '', jdSummary: '', companyProfile: '', notes: ''
     };
+  }
+
+  // ★ #13:STAR 故事库 (localStorage)
+  readonly starStories = signal<StarStory[]>(this.loadStarStories());
+  readonly showStarBank = signal(false);
+  readonly editingStory = signal<StarStory | null>(null);
+
+  private loadStarStories(): StarStory[] {
+    try { return JSON.parse(localStorage.getItem('pb.starStories') || '[]'); }
+    catch { return []; }
+  }
+  private saveStarStories(list: StarStory[]): void {
+    localStorage.setItem('pb.starStories', JSON.stringify(list));
+    this.starStories.set(list);
+  }
+  newStory(): void {
+    this.editingStory.set({
+      id: 's' + Date.now(), title: '', situation: '', task: '', action: '', result: '', tags: ''
+    });
+  }
+  saveStory(s: StarStory): void {
+    if (!s.title.trim()) return;
+    const list = this.loadStarStories();
+    const idx = list.findIndex(x => x.id === s.id);
+    if (idx >= 0) list[idx] = s; else list.push(s);
+    this.saveStarStories(list);
+    this.editingStory.set(null);
+  }
+  deleteStory(id: string): void {
+    if (!confirm('删除这个故事?')) return;
+    this.saveStarStories(this.loadStarStories().filter(x => x.id !== id));
+  }
+  /** ★ #13:按 JD 关键词推荐故事 */
+  recommendStories(jdText: string): StarStory[] {
+    if (!jdText) return this.starStories();
+    const jd = jdText.toLowerCase();
+    return [...this.starStories()].sort((a, b) => {
+      const score = (s: StarStory) => s.tags.toLowerCase().split(/[,，\s]+/)
+        .filter(t => t && jd.includes(t)).length;
+      return score(b) - score(a);
+    });
   }
 }

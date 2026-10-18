@@ -28,8 +28,57 @@
           <mat-icon>add</mat-icon>
         </button>
       }
+      <!-- ★ #13:STAR 故事库 -->
+      <button mat-stroked-button (click)="showStarBank.set(!showStarBank())">
+        <mat-icon>auto_stories</mat-icon> STAR ({{ starStories().length }})
+      </button>
     </div>
   </header>
+
+  <!-- ★ #13:STAR 故事库面板 -->
+  @if (showStarBank()) {
+    <mat-card class="star-bank">
+      <mat-card-header>
+        <mat-card-title>STAR 故事库</mat-card-title>
+        <button mat-stroked-button (click)="newStory()"><mat-icon>add</mat-icon> 新故事</button>
+      </mat-card-header>
+      <mat-card-content>
+        @if (editingStory(); as s) {
+          <div class="star-edit">
+            <mat-form-field><mat-label>标题</mat-label><input matInput [(ngModel)]="s.title" /></mat-form-field>
+            <mat-form-field><mat-label>Situation 背景</mat-label><textarea matInput rows="2" [(ngModel)]="s.situation"></textarea></mat-form-field>
+            <mat-form-field><mat-label>Task 任务</mat-label><textarea matInput rows="2" [(ngModel)]="s.task"></textarea></mat-form-field>
+            <mat-form-field><mat-label>Action 行动</mat-label><textarea matInput rows="3" [(ngModel)]="s.action"></textarea></mat-form-field>
+            <mat-form-field><mat-label>Result 结果</mat-label><textarea matInput rows="2" [(ngModel)]="s.result"></textarea></mat-form-field>
+            <mat-form-field><mat-label>标签 (逗号分隔,用于 JD 匹配)</mat-label><input matInput [(ngModel)]="s.tags" placeholder="leadership, conflict, 微服务" /></mat-form-field>
+            <div class="star-edit-actions">
+              <button mat-raised-button color="primary" (click)="saveStory(s)">保存</button>
+              <button mat-button (click)="editingStory.set(null)">取消</button>
+            </div>
+          </div>
+        }
+        @for (story of starStories(); track story.id) {
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>{{ story.title }}</mat-panel-title>
+              <mat-panel-description>{{ story.tags }}</mat-panel-description>
+            </mat-expansion-panel-header>
+            <p><b>S:</b> {{ story.situation }}</p>
+            <p><b>T:</b> {{ story.task }}</p>
+            <p><b>A:</b> {{ story.action }}</p>
+            <p><b>R:</b> {{ story.result }}</p>
+            <div class="star-actions">
+              <button mat-button (click)="editingStory.set({...story})">编辑</button>
+              <button mat-button color="warn" (click)="deleteStory(story.id)">删除</button>
+            </div>
+          </mat-expansion-panel>
+        }
+        @if (starStories().length === 0 && !editingStory()) {
+          <p class="empty-hint">还没有故事。点"新故事"添加你的行为面素材。</p>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
 
   @if (loading()) {
     <mat-progress-bar mode="indeterminate"></mat-progress-bar>

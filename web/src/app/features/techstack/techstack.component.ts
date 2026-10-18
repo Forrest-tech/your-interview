@@ -1107,6 +1107,7 @@ export class TechStackComponent implements OnInit {
         this.reviewDone.set(false);
         this.reviewCurrent.set(null);
         this.reviewMode.set(true);
+        if (this.examMode()) this.startExamTimer(); // ★ #20
       },
       error: (e: Error) => {
         this.reviewLoading.set(false);
@@ -1115,9 +1116,49 @@ export class TechStackComponent implements OnInit {
     });
   }
 
+  /** ★ #20:考试模式 (倒计时器)。 */
+  readonly examMode = signal<boolean>(
+    localStorage.getItem('ts.examMode') === '1');
+  readonly examMinutes = signal<number>(
+    parseInt(localStorage.getItem('ts.examMinutes') || '60', 10));
+  readonly examTimeLeft = signal<number>(0);
+  private examTimer: ReturnType<typeof setInterval> | null = null;
+
+  toggleExamMode(): void {
+    const v = !this.examMode();
+    this.examMode.set(v);
+    localStorage.setItem('ts.examMode', v ? '1' : '0');
+  }
+  setExamMinutes(m: number): void {
+    this.examMinutes.set(m);
+    localStorage.setItem('ts.examMinutes', String(m));
+  }
+  startExamTimer(): void {
+    this.stopExamTimer();
+    this.examTimeLeft.set(this.examMinutes() * 60);
+    this.examTimer = setInterval(() => {
+      const left = this.examTimeLeft() - 1;
+      this.examTimeLeft.set(Math.max(0, left));
+      if (left <= 0) this.stopExamTimer();
+    }, 1000);
+  }
+  stopExamTimer(): void {
+    if (this.examTimer) {
+      clearInterval(this.examTimer);
+      this.examTimer = null;
+    }
+  }
+  readonly examTimeText = computed(() => {
+    const s = this.examTimeLeft();
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  });
+
   /** 退出会话:回到列表,并刷新 dueToday 计数(刚复习过的会退出队列)。 */
   exitReview(): void {
     this.reviewMode.set(false);
+    this.stopExamTimer(); // ★ #20
     this.reviewCurrent.set(null);
     this.loadBuckets();
   }

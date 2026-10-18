@@ -1258,6 +1258,26 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         <div><dt>{{ t('tracker.dOutreachMsg') }}</dt><dd>{{ detail.outreachMessage || '—' }}</dd></div>
         <div><dt>{{ t('tracker.dResumeMatch') }}</dt>
           <dd>{{ detail.resumeScore != null ? tn('tracker.dScoreUnit', detail.resumeScore) : '—' }}</dd></div>
+        <!-- ★ #7:关键词差距清单 -->
+        @if (match(); as m) {
+          <div class="kw-gap">
+            <dt>关键词差距 ({{ m.missing.length }} 缺失)</dt>
+            <dd>
+              @if (m.missing.length === 0) {
+                <span class="kw-ok">✓ 简历覆盖了 JD 的全部技术关键词</span>
+              } @else {
+                <div class="kw-list">
+                  @for (k of m.missing; track k) {
+                    <span class="kw-missing">{{ k }}</span>
+                  }
+                </div>
+                <div class="kw-hit">
+                  已覆盖: @for (k of m.hit; track k) { <span class="kw-hit-item">{{ k }}</span> }
+                </div>
+              }
+            </dd>
+          </div>
+        }
         <div><dt>{{ t('tracker.dPassRate') }}</dt>
           <dd>{{ detail.passRateEstimate ? detail.passRateEstimate : '—' }}</dd></div>
         <div><dt>{{ t('tracker.dCreatedAt') }}</dt><dd>{{ detail.createdAt | date: 'yyyy-MM-dd HH:mm' }}</dd></div>

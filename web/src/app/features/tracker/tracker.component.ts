@@ -65,13 +65,16 @@ export interface ApplicationForm {
   outreachMessage: string;
   /** ★ #6:投递的文档版本 (如 "Forrest_Lin_Resume_Corpay.pdf")。存 notes 前缀。 */
   sentDocuments: string;
+  /** 职位描述 JD,供关键词提取和备战计划使用。 */
+  jdText: string;
 }
 
 function emptyForm(): ApplicationForm {
   return {
     companyName: '', role: '', location: '', salary: '',
     status: 'Applied', priority: 'Medium', appliedDate: todayIso(), link: '',
-    notes: '', needsConnectFirst: false, outreachMessage: '', sentDocuments: ''
+    notes: '', needsConnectFirst: false, outreachMessage: '', sentDocuments: '',
+    jdText: ''
   };
 }
 
@@ -1237,7 +1240,8 @@ function fromApplication(a: Application): ApplicationForm {
     notes: m ? notes.slice(m[0].length) : notes,
     needsConnectFirst: a.needsConnectFirst ?? false,
     outreachMessage: a.outreachMessage ?? '',
-    sentDocuments: m ? m[1] : ''
+    sentDocuments: m ? m[1] : '',
+    jdText: a.jdText ?? ''
   };
 }
 

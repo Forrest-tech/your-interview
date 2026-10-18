@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DocViewerComponent } from '../../shared/doc-viewer/doc-viewer.component';
 import { CategoryManagerComponent } from './category-manager/category-manager.component';
@@ -31,6 +31,7 @@ import {
 } from '../../core/models/api.models';
 import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
+import { SubnavService } from '../../layout/subnav.service';
 
 /** 熟练度等级顺序 —— 用于展示顺序、进度和"提升一级"的目标值。 */
 const MASTERY_ORDER: MasteryLevel[] = ['New', 'Learning', 'Familiar', 'Mastered', 'NeedsReview'];
@@ -112,10 +113,11 @@ const DETAIL_BLOCKS: DetailBlock[] = [
   templateUrl: './techstack.component.html',
   styleUrl: './techstack.component.scss'
 })
-export class TechStackComponent implements OnInit {
+export class TechStackComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly subnav = inject(SubnavService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
@@ -338,6 +340,24 @@ export class TechStackComponent implements OnInit {
     this.loadSources();
     this.loadDuplicates();
     this.loadTopics();
+    // ★ 子导航:按模式显示可用项 —— 列表模式显示 Concepts/Due review,
+    //   复习模式显示 Exit review。解决默认锚点在隐藏 DOM 上失效的问题。
+    this.subnav.register('/tech-stack', [
+      {
+        key: 'ts:concepts',
+        labelKey: 'sub.concepts',
+        icon: 'account_tree',
+        active: () => !this.reviewMode(),
+        action: () => { if (this.reviewMode()) this.exitReview(); }
+      },
+      {
+        key: 'ts:due',
+        labelKey: 'sub.dueReview',
+        icon: 'schedule',
+        active: () => this.reviewMode(),
+        action: () => { if (!this.reviewMode()) this.startReview(); }
+      }
+    ]);
     // 来源公司搜索框:输了字但没从下拉选,清空已选公司,避免张冠李戴
     this.companySearchCtrl.valueChanges.subscribe((v) => {
       if ((v ?? '').trim() !== this.newDetailSourceCompany) this.newDetailSourceCompany = '';
@@ -1330,5 +1350,9 @@ export class TechStackComponent implements OnInit {
   nextReviewLabel(item: KnowledgeItem): string {
     if (!item.nextReviewAt) return this.t('ts.detail.notScheduled');
     return this.t('ts.detail.nextReview').replace('{date}', item.nextReviewAt.slice(0, 10));
+  }
+
+  ngOnDestroy(): void {
+    this.subnav.unregister('/tech-stack');
   }
 }

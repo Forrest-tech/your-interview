@@ -79,17 +79,13 @@ export class SubnavService {
       ];
     }
     if (path.startsWith('/admin')) {
-      return [
-        this.anchor('sub.users', 'people_outline', 'users'),
-        this.anchor('sub.roles', 'badge', 'roles'),
-        this.anchor('sub.audit', 'history', 'audit')
-      ];
+      // ★ 2026-10-18:移除坏掉的锚点 —— 模板里没有对应的 id,点了没反应。
+      //   有需要时由 admin 页面自己 register。
+      return [];
     }
     if (path.startsWith('/analytics')) {
-      return [
-        this.anchor('sub.overview', 'radar', 'overview'),
-        this.anchor('sub.concepts', 'bar_chart', 'distribution')
-      ];
+      // ★ 2026-10-18:同上,移除坏掉的锚点。
+      return [];
     }
 
     // 总览 / 其它:没有页面级子功能,左侧栏不渲染

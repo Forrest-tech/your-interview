@@ -611,8 +611,8 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     this.subnav.register('/playbook/' + id, [
       tab(0, 'sub.overview', 'dashboard'),
       tab(3, 'sub.questions', 'forum'),
-      tab(4, 'sub.assets', 'folder_open'),
-      tab(5, 'sub.edit', 'edit_note')
+      tab(5, 'sub.assets', 'folder_open'),
+      tab(6, 'sub.edit', 'edit_note')
     ]);
   }
 

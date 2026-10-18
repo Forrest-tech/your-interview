@@ -663,6 +663,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.scrollLeft': { zh: '向左滚动', en: 'Scroll left', fr: 'Défiler vers la gauche' },
   'tracker.scrollRight': { zh: '向右滚动', en: 'Scroll right', fr: 'Défiler vers la droite' },
   'tracker.viewMode': { zh: '视图模式', en: 'View mode', fr: "Mode d'affichage" },
+  'tracker.noResults': { zh: '暂无投递记录', en: 'No applications yet', fr: 'Aucune candidature' },
   'tracker.boardView': { zh: '看板视图', en: 'Board view', fr: 'Vue tableau' },
   'tracker.listView': { zh: '列表视图', en: 'List view', fr: 'Vue liste' },
   'tracker.columns': { zh: '列', en: 'Columns', fr: 'Colonnes' },

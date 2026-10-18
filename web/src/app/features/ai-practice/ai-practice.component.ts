@@ -1361,7 +1361,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
           const items = res.items ?? [];
           folder.children = items.map(k => ({
             id: `ts:item:${k.id}`,
-            name: k.question || k.title,
+            name: k.title || k.question,
             folder: false,
             content: k.betterAnswer || k.conceptExplanation || '',
             // 存原始 Knowledge ID 以便保存时写回

@@ -611,7 +611,7 @@ public sealed class UpdateFromTechCommandHandler(KnowledgeDbContext db)
     {
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
-        k.SetQuestion(request.Question);
+        k.SetTitle(request.Question);
         k.SetBetterAnswer(request.BetterAnswer);
         await db.SaveChangesAsync(ct);
         return Result.Success();

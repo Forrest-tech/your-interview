@@ -82,7 +82,7 @@ interface DetailBlock {
 const DETAIL_BLOCKS: DetailBlock[] = [
   // 后端存的是 title/question/conceptExplanation + 两个 JSON 数组,
   // 不是八个独立正文字段。这里把 JSON 拆成"要点/常见坑"两块来展示。
-  { key: 'question', labelKey: 'ts.block.question', icon: 'help_outline', hintKey: 'ts.block.questionHint' },
+  // ★ 2026-10-18(Forrest):去掉 question 块 —— Title 已在顶部显示,冗余。
   { key: 'myAnswer', labelKey: 'ts.block.myAnswer', icon: 'record_voice_over', hintKey: 'ts.block.myAnswerHint' },
   { key: 'betterAnswer', labelKey: 'ts.block.betterAnswer', icon: 'stars', hintKey: 'ts.block.betterAnswerHint' },
   { key: 'conceptExplanation', labelKey: 'ts.block.conceptExplanation', icon: 'menu_book', hintKey: 'ts.block.conceptExplanationHint' },

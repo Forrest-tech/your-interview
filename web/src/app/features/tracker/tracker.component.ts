@@ -423,7 +423,11 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     // 状态流转走专门的 /status 接口(后端状态机校验合法流转),
     // 不能塞进 PUT body —— UpdateApplicationBody 没有 Status 字段,会被静默忽略。
     this.api.post<void>(`/api/jobs/applications/${app.id}/status`, { status }).subscribe({
-      next: () => this.loadStats(),
+      next: () => {
+        this.loadStats();
+        // ★ #2:卡片进入 Interview → 从 JD 自动生成备战计划
+        if (status === 'Interview') this.maybeGeneratePrepPlan(app);
+      },
       error: () => {
         // 回滚
         app.status = prev;
@@ -431,6 +435,40 @@ export class TrackerComponent implements OnInit, AfterViewInit {
         this.snack.open(this.t('tracker.statusChangeFailed'), this.t('common.close'), { duration: 3000 });
       }
     });
+  }
+
+  /** ★ #2:从 JD 提取技术关键词,生成面试备战清单。 */
+  private static readonly TECH_KEYWORDS = [
+    'C#', '.NET', 'ASP.NET', 'Entity Framework', 'EF Core', 'WPF', 'Blazor',
+    'Java', 'Spring', 'Spring Boot', 'Python', 'Django', 'Flask',
+    'JavaScript', 'TypeScript', 'React', 'Angular', 'Vue', 'Node.js',
+    'SQL', 'SQL Server', 'PostgreSQL', 'MySQL', 'MongoDB', 'Redis',
+    'Azure', 'AWS', 'Docker', 'Kubernetes', 'Microservices', 'REST', 'GraphQL',
+    'Git', 'CI/CD', 'Agile', 'Scrum', 'Design Patterns', 'System Design'
+  ];
+
+  private maybeGeneratePrepPlan(app: Application): void {
+    const jd = app.jdText || app.jdSummary || '';
+    if (!jd.trim()) return;
+    const found = TrackerComponent.TECH_KEYWORDS.filter(k =>
+      jd.toLowerCase().includes(k.toLowerCase()));
+    const plan = [
+      `公司: ${app.companyName} — ${app.role}`,
+      '',
+      '技术关键词 (从 JD 提取):',
+      ...found.map(k => `  • ${k}`),
+      '',
+      '建议准备:',
+      '  1. 针对每个关键词准备 1 个项目实例',
+      '  2. 在 Tech Stack 里复习相关条目',
+      '  3. 用 AI Practice 做一次模拟问答',
+    ];
+    // 用 confirm 对话框展示,简单直接
+    const msg = plan.join('\n');
+    if (confirm(`🎯 面试备战计划已生成\n\n${msg}\n\n是否在 Playbook 创建该公司的备战条目?`)) {
+      // TODO: 跳转到 Playbook 创建条目
+      this.router.navigate(['/playbook'], { queryParams: { company: app.companyName } });
+    }
   }
 
   /**

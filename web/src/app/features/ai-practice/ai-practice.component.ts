@@ -1737,6 +1737,22 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     };
   });
 
+  /** ★ #15:语速分析 (WPM + 评价)。 */
+  readonly speechPace = computed(() => {
+    const sc = this.activeTake()?.score;
+    if (!sc?.words?.length) return null;
+    const wordCount = sc.words.length;
+    const minutes = (sc.billedSeconds ?? 60) / 60;
+    if (minutes <= 0) return null;
+    const wpm = Math.round(wordCount / minutes);
+    let verdict: string;
+    let level: 'slow' | 'good' | 'fast';
+    if (wpm < 110) { verdict = '偏慢'; level = 'slow'; }
+    else if (wpm <= 160) { verdict = '适中'; level = 'good'; }
+    else { verdict = '偏快'; level = 'fast'; }
+    return { wpm, verdict, level, wordCount };
+  });
+
   /** ★ #1:点击填充词 → 从该时间戳回放音频。 */
   replayAt(offsetMs: number): void {
     const rec = this.activeTake();

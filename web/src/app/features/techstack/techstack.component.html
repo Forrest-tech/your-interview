@@ -387,6 +387,14 @@
                 <mat-icon>{{ b.icon }}</mat-icon>
                 <span class="block-label">{{ t(b.labelKey) }}</span>
                 <span class="block-hint">{{ t(b.hintKey) }}</span>
+                <!-- ★ #8:一键转为闪卡 -->
+                @if (!detailEditing() && blockText(it, b.key)) {
+                  <button mat-icon-button class="flashcard-btn"
+                          matTooltip="转为闪卡 (加入复习队列)"
+                          (click)="makeFlashcard(b.key)">
+                    <mat-icon>style</mat-icon>
+                  </button>
+                }
               </header>
               @if (detailEditing()) {
                 <textarea matInput class="blk-editor" rows="6"

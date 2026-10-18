@@ -1199,7 +1199,31 @@ export class TechStackComponent implements OnInit {
     this.reviewCurrent.set(null);
   }
 
-  /** 后端返回完整对象时就地替换,返回空则只刷新列表,避免详情面板显示旧值。 */
+  /** ★ #8:从当前块创建闪卡 (RemNote 模式:选中内容一键变卡片)。 */
+  makeFlashcard(blockKey: string): void {
+    const item = this.selected();
+    if (!item) return;
+    const content = this.blockText(item, blockKey);
+    if (!content.trim()) { this.notify('该块无内容'); return; }
+    // 用块内容的前 60 字作标题,全文作问题
+    const title = content.trim().slice(0, 60) + (content.length > 60 ? '…' : '');
+    this.api.post<KnowledgeItem>('/api/knowledge', {
+      title: `🃏 ${title}`,
+      topic: item.topic,
+      question: content,
+      conceptExplanation: '',
+      keyPointsJson: '[]',
+      commonMistakesJson: '[]',
+      difficulty: 3,
+      importance: 3
+    }).subscribe({
+      next: () => {
+        this.notify('闪卡已创建,加入复习队列');
+        this.reload();
+      },
+      error: (e: Error) => this.notify(e.message, true)
+    });
+  }
   private applyUpdate(updated: KnowledgeItem | null, id: string): void {
     if (updated && updated.id) {
       this.items.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));

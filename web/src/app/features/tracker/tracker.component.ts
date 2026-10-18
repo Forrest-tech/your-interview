@@ -1,4 +1,4 @@
-import { Component, OnInit, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -20,6 +20,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { SubnavService } from '../../layout/subnav.service';
 import { TrackerApi } from '../../core/api/tracker-api.service';
 import { Application, ApplicationStatus, AnswerTemplate, Communication, CommunicationType, Company, Paged, TrackerStats } from '../../core/models/api.models';
 import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
@@ -310,10 +311,11 @@ export class ApplicationDialogComponent {
   templateUrl: './tracker.component.html',
   styleUrl: './tracker.component.scss'
 })
-export class TrackerComponent implements OnInit, AfterViewInit {
+export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly api = inject(ApiClient);
   private readonly trackerApi = inject(TrackerApi);
   private readonly router = inject(Router);
+  private readonly subnav = inject(SubnavService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
@@ -992,6 +994,36 @@ export class TrackerComponent implements OnInit, AfterViewInit {
   ngOnInit(): void {
     this.reload();
     this.loadGhosting(); // ★ #18
+    // ★ 子导航:有实际功能 —— Status 切看板, List 切列表, Overview 滚到指标区
+    this.subnav.register('/tracker', [
+      {
+        key: 'tracker:status',
+        labelKey: 'sub.status',
+        icon: 'view_kanban',
+        active: () => this.viewMode() === 'board',
+        action: () => this.setViewMode('board')
+      },
+      {
+        key: 'tracker:list',
+        labelKey: 'sub.list',
+        icon: 'list',
+        active: () => this.viewMode() === 'list',
+        action: () => this.setViewMode('list')
+      },
+      {
+        key: 'tracker:overview',
+        labelKey: 'sub.overview',
+        icon: 'insights',
+        action: () => {
+          const el = document.getElementById('overview');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    ]);
+  }
+
+  ngOnDestroy(): void {
+    this.subnav.unregister('/tracker');
   }
 
   ngAfterViewInit(): void {

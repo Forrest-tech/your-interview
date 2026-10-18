@@ -116,6 +116,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'sub.concepts': { zh: '概念条目', en: 'Concepts', fr: 'Concepts' },
   'sub.dueReview': { zh: '待复习', en: 'Due review', fr: 'À réviser' },
   'sub.status': { zh: '状态', en: 'Status', fr: 'Statut' },
+  'sub.list': { zh: '列表', en: 'List', fr: 'Liste' },
   'sub.users': { zh: '用户', en: 'Users', fr: 'Utilisateurs' },
   'sub.roles': { zh: '角色', en: 'Roles', fr: 'Rôles' },
   'sub.audit': { zh: '审计日志', en: 'Audit log', fr: 'Journal d’audit' },

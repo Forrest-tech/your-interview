@@ -51,10 +51,8 @@ export class SubnavService {
       ];
     }
     if (path.startsWith('/tracker')) {
-      return [
-        this.anchor('sub.status', 'view_kanban', 'status'),
-        this.anchor('sub.overview', 'insights', 'overview')
-      ];
+      // ★ 2026-10-18:Tracker 自己 register 有实际功能的子导航,这里返回空
+      return [];
     }
     if (path.startsWith('/tech-stack')) {
       return [

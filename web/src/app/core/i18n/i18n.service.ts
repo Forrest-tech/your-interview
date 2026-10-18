@@ -2170,6 +2170,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.br.rounds.prepQPh': { zh: '每行一个问题', en: 'One question per line', fr: 'Une question par ligne' },
   'pb.br.rounds.checklistTitle': { zh: '准备清单', en: 'Prep checklist', fr: 'Liste de préparation' },
   'pb.br.rounds.checklistPh': { zh: '每行一项,用 [x] 标记完成', en: 'One item per line, [x] for done', fr: 'Un élément par ligne, [x] pour terminé' },
+  'pb.br.rounds.recordingUrlPh': { zh: '录音文件链接', en: 'Recording URL', fr: 'URL d\'enregistrement' },
   'pb.br.rounds.transcriptEmpty': { zh: '暂无转写稿', en: 'No transcript yet', fr: 'No transcript yet' },
   'pb.br.rounds.edit': { zh: '编辑', en: 'Edit', fr: 'Edit' },
   'pb.br.rounds.delete': { zh: '删除', en: 'Delete', fr: 'Delete' },

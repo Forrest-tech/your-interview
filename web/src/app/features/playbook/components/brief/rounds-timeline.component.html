@@ -262,11 +262,26 @@
 
             <!-- ★ 录音 -->
             <div class="recording">
-              <span class="lbl"><mat-icon inline>mic</mat-icon> {{ t('pb.br.rounds.recordingTitle') }}</span>
+              <div class="rec-head">
+                <span class="lbl"><mat-icon inline>mic</mat-icon> {{ t('pb.br.rounds.recordingTitle') }}</span>
+                <button mat-button (click)="toggleRecording(r)">
+                  <mat-icon>{{ recordingOpen() === r.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+                  {{ t(recordingOpen() === r.id ? 'common.collapse' : 'common.edit') }}
+                </button>
+              </div>
               @if (r.recordingUrl) {
                 <audio controls [src]="r.recordingUrl"></audio>
               } @else {
                 <span class="dim small">{{ t('pb.br.rounds.noRecording') }}</span>
+              }
+              @if (recordingOpen() === r.id) {
+                <mat-form-field appearance="outline" class="wide">
+                  <mat-label>{{ t('pb.br.rounds.recordingUrlPh') }}</mat-label>
+                  <input matInput [(ngModel)]="recordingDraft[r.id]" placeholder="https://…">
+                </mat-form-field>
+                <button mat-flat-button color="primary" (click)="saveRecording(r)">
+                  {{ t('common.save') }}
+                </button>
               }
             </div>
 

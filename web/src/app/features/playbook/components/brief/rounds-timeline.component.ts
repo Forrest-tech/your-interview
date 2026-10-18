@@ -11,6 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { ApiClient } from '../../../../core/api/api-client';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import type { BriefEntry, BriefRound, RoundEmailItem } from './brief.models';
@@ -54,6 +55,7 @@ interface RoundEditForm {
     MatCardModule, MatButtonModule, MatIconModule, MatChipsModule,
     MatFormFieldModule, MatInputModule, MatSelectModule,
     MatProgressBarModule, MatSnackBarModule, MatDividerModule,
+    MatCheckboxModule,
   ],
   templateUrl: './rounds-timeline.component.html',
   styleUrl: './rounds-timeline.component.scss',
@@ -260,6 +262,22 @@ export class RoundsTimelineComponent implements OnInit {
     this.transcriptOpen.set(this.transcriptOpen() === r.id ? null : r.id);
   }
 
+  /** ★ 录音 */
+  readonly recordingOpen = signal<string | null>(null);
+  recordingDraft: Record<string, string> = {};
+  toggleRecording(r: BriefRound): void {
+    if (this.recordingOpen() === r.id) {
+      this.recordingOpen.set(null);
+    } else {
+      this.recordingDraft[r.id] = r.recordingUrl ?? '';
+      this.recordingOpen.set(r.id);
+    }
+  }
+  saveRecording(r: BriefRound): void {
+    this.updateRoundDetails(r, { recordingUrl: this.recordingDraft[r.id] || null });
+    this.recordingOpen.set(null);
+  }
+
   /** ★ 面前问题 */
   readonly prepQOpen = signal<string | null>(null);
   prepQDraft: Record<string, string> = {};
@@ -405,6 +423,7 @@ export class RoundsTimelineComponent implements OnInit {
               transcript: r.transcript ?? cur.transcript,
               prepQuestionsJson: r.prepQuestionsJson ?? cur.prepQuestionsJson,
               recordingUrl: r.recordingUrl ?? cur.recordingUrl,
+              checklistJson: (r as any).checklistJson ?? cur.checklistJson,
             };
           }
           this.rounds.set(rs);

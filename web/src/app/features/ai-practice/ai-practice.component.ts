@@ -1936,6 +1936,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 用户仍能看到"未保存"状态与具体原因,不会误以为存住了。
    */
   private persistQuiet(force = false): void {
+    // From Tech:虚拟树不走 Practice API(内容编辑已在 saveEdit 直接写回 Knowledge)。
+    if (this.isFromTechSelected()) {
+      this.treeDirty.set(false);
+      return;
+    }
     // ★ 第三十七轮 严重 Bug 修复(Forrest 报「新建文件夹+素材+内容,保存后刷新就丢」)。
     //
     // 真根因:并发【整树覆盖保存】互相踩踏。
@@ -2090,6 +2095,23 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // 内容变了,旧评分作废 —— 参考文本变了,旧分数不再对应这份文本
     const t = this.activeTake();
     if (t) this.recorder.clearScore(t.id);
+
+    // From Tech:内容直接写回 Knowledge,不走 Practice API
+    if (id.startsWith('ts:item:')) {
+      const kid = (target as any)?._kid as string;
+      if (kid) {
+        this.knowledgeApi.put<void>(`/api/knowledge/${kid}/better-answer`, {
+          betterAnswer: text || null
+        }).subscribe({
+          next: () => this.toast(this.t('dialog.saveDone')),
+          error: (e) => this.toast(this.errText(e))
+        });
+      }
+      // ★ 2026-09-20(Forrest 第三十六轮):正文变了 → 示范朗读音频必须作废重建。
+      this.destroyTtsAudio();
+      this.rebuildTts();
+      return;
+    }
 
     // ★ 关键修复:真正落到数据库。
     //   persistQuiet 内部会标记 treeDirty、失败回置并在成功后回读对齐 GUID,

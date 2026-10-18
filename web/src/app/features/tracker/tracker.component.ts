@@ -63,13 +63,15 @@ export interface ApplicationForm {
   needsConnectFirst: boolean;
   /** 对应后端 OutreachMessage(外联留言,如"已发 LinkedIn 私信")。 */
   outreachMessage: string;
+  /** ★ #6:投递的文档版本 (如 "Forrest_Lin_Resume_Corpay.pdf")。存 notes 前缀。 */
+  sentDocuments: string;
 }
 
 function emptyForm(): ApplicationForm {
   return {
     companyName: '', role: '', location: '', salary: '',
     status: 'Applied', priority: 'Medium', appliedDate: todayIso(), link: '',
-    notes: '', needsConnectFirst: false, outreachMessage: ''
+    notes: '', needsConnectFirst: false, outreachMessage: '', sentDocuments: ''
   };
 }
 
@@ -158,6 +160,13 @@ function todayIso(): string {
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('tracker.fLink') }}</mat-label>
         <input matInput name="link" [(ngModel)]="form.link" placeholder="https://...">
+      </mat-form-field>
+
+      <!-- ★ #6:投递文档版本 -->
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>投递文档 (如 Forrest_Lin_Resume_Corpay.pdf)</mat-label>
+        <input matInput name="sentDocuments" [(ngModel)]="form.sentDocuments"
+               placeholder="记录本次投递用的简历/求职信文件名">
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
@@ -1049,6 +1058,10 @@ export class TrackerComponent implements OnInit, AfterViewInit {
 
   /** 把表单字段拼成 UpdateApplication 所需的完整负载(后端要求全量)。 */
   private updateAppPayload(id: string, form: ApplicationForm): Observable<unknown> {
+    // ★ #6:文档版本存入 notes 前缀 [DOCS:...]
+    const notes = form.sentDocuments?.trim()
+      ? `[DOCS:${form.sentDocuments.trim()}] ${form.notes || ''}`.trim()
+      : (form.notes || null);
     return this.api.put<void>(`/api/jobs/applications/${id}`, {
       role: form.role,
       location: form.location || null,
@@ -1057,7 +1070,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
       workMode: null,
       source: null,
       jdSummary: null,
-      notes: form.notes || null,
+      notes: notes,
       priority: form.priority || null,
       appliedDate: form.appliedDate || null,
       deadline: null
@@ -1147,6 +1160,9 @@ export class TrackerComponent implements OnInit, AfterViewInit {
 
 /** Application → 表单形状。缺省值就地补,让编辑弹窗不出现 undefined。 */
 function fromApplication(a: Application): ApplicationForm {
+  const notes = a.notes ?? '';
+  // ★ #6:从 notes 提取 [DOCS:...] 标记的文档版本
+  const m = notes.match(/^\[DOCS:([^\]]+)\]\s*/);
   return {
     companyName: a.companyName ?? '',
     role: a.role ?? '',
@@ -1156,9 +1172,10 @@ function fromApplication(a: Application): ApplicationForm {
     priority: a.priority ?? 'Medium',
     appliedDate: (a.appliedDate ?? '').slice(0, 10) || todayIso(),
     link: a.link ?? '',
-    notes: a.notes ?? '',
+    notes: m ? notes.slice(m[0].length) : notes,
     needsConnectFirst: a.needsConnectFirst ?? false,
-    outreachMessage: a.outreachMessage ?? ''
+    outreachMessage: a.outreachMessage ?? '',
+    sentDocuments: m ? m[1] : ''
   };
 }
 

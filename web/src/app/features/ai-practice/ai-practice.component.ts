@@ -1266,6 +1266,18 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.tsSelected.set(null);
     this.tsExpandedTopic.set(null);
     this.tsItems.set([]);
+    // 切换分类:清除旧选中(含 URL 参数),强制选中新分类的第一个文件
+    this.selectedId.set(null);
+    try {
+      localStorage.removeItem('active_practice_material_id');
+    } catch { /* 忽略 */ }
+    // 清 URL 里的 materialId,避免 afterTreeReady 按旧 ID 恢复
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { materialId: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
     if (this.isFromTechSelected()) {
       this.loadTsTopics();
     } else {
@@ -1323,7 +1335,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         name: tp.topic,
         folder: true,
         expanded: false,
-        children: []
+        children: [],
+        categoryId: '__fromTech'
       };
       tree.push(folder);
       this.knowledgeApi.get<Paged<KnowledgeItem>>('/api/knowledge', { topic: tp.topic, pageSize: 100 }).subscribe({
@@ -1335,7 +1348,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
             folder: false,
             content: k.betterAnswer || k.conceptExplanation || '',
             // 存原始 Knowledge ID 以便保存时写回
-            sortOrder: 0
+            sortOrder: 0,
+            categoryId: '__fromTech'
           } as MaterialNode & { _kid?: string }));
           // 把 Knowledge ID 藏在 id 里,保存时解析
           folder.children.forEach((c, i) => {

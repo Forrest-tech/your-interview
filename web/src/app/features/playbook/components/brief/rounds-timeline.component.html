@@ -213,7 +213,8 @@
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="wide">
                     <mat-label>{{ t('pb.br.rounds.emailSnippetPh') }}</mat-label>
-                    <input matInput [(ngModel)]="emSnippet" />
+                    <textarea matInput [(ngModel)]="emSnippet" rows="6"
+                      placeholder="粘贴完整邮件内容…"></textarea>
                   </mat-form-field>
                   <div class="row-actions">
                     <button mat-button (click)="closeEmailEditor()">{{ t('common.cancel') }}</button>
@@ -258,6 +259,68 @@
                 }
               </div>
             }
+
+            <!-- ★ 录音 -->
+            <div class="recording">
+              <span class="lbl"><mat-icon inline>mic</mat-icon> {{ t('pb.br.rounds.recordingTitle') }}</span>
+              @if (r.recordingUrl) {
+                <audio controls [src]="r.recordingUrl"></audio>
+              } @else {
+                <span class="dim small">{{ t('pb.br.rounds.noRecording') }}</span>
+              }
+            </div>
+
+            <!-- ★ 面前问题 -->
+            <div class="prep-questions">
+              <div class="pq-head">
+                <span class="lbl"><mat-icon inline>quiz</mat-icon> {{ t('pb.br.rounds.prepQTitle') }}</span>
+                <button mat-button (click)="togglePrepQ(r)">
+                  <mat-icon>{{ prepQOpen() === r.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+                  {{ t(prepQOpen() === r.id ? 'common.collapse' : 'common.edit') }}
+                </button>
+              </div>
+              @if (prepQOpen() === r.id) {
+                <mat-form-field appearance="outline" class="wide">
+                  <mat-label>{{ t('pb.br.rounds.prepQPh') }}</mat-label>
+                  <textarea matInput [(ngModel)]="prepQDraft[r.id]" rows="5"></textarea>
+                </mat-form-field>
+                <button mat-flat-button color="primary" (click)="savePrepQ(r)">
+                  {{ t('common.save') }}
+                </button>
+              } @else if (prepQuestionsOf(r).length > 0) {
+                <ul>
+                  @for (q of prepQuestionsOf(r); track $index) {
+                    <li>{{ q }}</li>
+                  }
+                </ul>
+              }
+            </div>
+
+            <!-- ★ 准备清单 -->
+            <div class="checklist">
+              <div class="cl-head">
+                <span class="lbl"><mat-icon inline>checklist</mat-icon> {{ t('pb.br.rounds.checklistTitle') }}</span>
+                <button mat-button (click)="toggleChecklist(r)">
+                  <mat-icon>{{ checklistOpen() === r.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+                  {{ t(checklistOpen() === r.id ? 'common.collapse' : 'common.edit') }}
+                </button>
+              </div>
+              @if (checklistOpen() === r.id) {
+                <mat-form-field appearance="outline" class="wide">
+                  <mat-label>{{ t('pb.br.rounds.checklistPh') }}</mat-label>
+                  <textarea matInput [(ngModel)]="checklistDraft[r.id]" rows="5"></textarea>
+                </mat-form-field>
+                <button mat-flat-button color="primary" (click)="saveChecklist(r)">
+                  {{ t('common.save') }}
+                </button>
+              } @else {
+                @for (item of checklistOf(r); track $index) {
+                  <mat-checkbox [checked]="item.done" (change)="toggleCheckItem(r, $index)">
+                    {{ item.text }}
+                  </mat-checkbox>
+                }
+              }
+            </div>
 
             @if (!isEditing(r)) {
               <div class="tl-actions">

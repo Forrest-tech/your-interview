@@ -260,6 +260,97 @@ export class RoundsTimelineComponent implements OnInit {
     this.transcriptOpen.set(this.transcriptOpen() === r.id ? null : r.id);
   }
 
+  /** ★ 面前问题 */
+  readonly prepQOpen = signal<string | null>(null);
+  prepQDraft: Record<string, string> = {};
+  togglePrepQ(r: BriefRound): void {
+    if (this.prepQOpen() === r.id) {
+      this.prepQOpen.set(null);
+    } else {
+      this.prepQDraft[r.id] = this.prepQuestionsOf(r).join('\n');
+      this.prepQOpen.set(r.id);
+    }
+  }
+  prepQuestionsOf(r: BriefRound): string[] {
+    const json = r.prepQuestionsJson ?? this.extras[r.id]?.prepQuestionsJson;
+    if (!json) return [];
+    try {
+      const arr = JSON.parse(json);
+      return Array.isArray(arr) ? arr : [];
+    } catch { return json.split('\n').filter((s: string) => s.trim()); }
+  }
+  savePrepQ(r: BriefRound): void {
+    const lines = (this.prepQDraft[r.id] || '').split('\n').map(s => s.trim()).filter(s => s);
+    this.updateRoundDetails(r, { prepQuestionsJson: JSON.stringify(lines) });
+    this.prepQOpen.set(null);
+  }
+
+  /** ★ 准备清单 */
+  readonly checklistOpen = signal<string | null>(null);
+  checklistDraft: Record<string, string> = {};
+  toggleChecklist(r: BriefRound): void {
+    if (this.checklistOpen() === r.id) {
+      this.checklistOpen.set(null);
+    } else {
+      this.checklistDraft[r.id] = this.checklistOf(r).map(i => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n');
+      this.checklistOpen.set(r.id);
+    }
+  }
+  checklistOf(r: BriefRound): { text: string; done: boolean }[] {
+    const json = (r as any).checklistJson ?? this.extras[r.id]?.checklistJson;
+    if (!json) return [];
+    try {
+      const arr = JSON.parse(json);
+      if (Array.isArray(arr)) return arr;
+    } catch { /* fallthrough */ }
+    // 纯文本每行一项
+    return json.split('\n').map((s: string) => s.trim()).filter((s: string) => s)
+      .map((text: string) => ({ text, done: false }));
+  }
+  saveChecklist(r: BriefRound): void {
+    const items = (this.checklistDraft[r.id] || '').split('\n').map(s => s.trim()).filter(s => s)
+      .map(line => {
+        const m = line.match(/^\[x\]\s*(.*)/i);
+        if (m) return { text: m[1], done: true };
+        const m2 = line.match(/^\[\s?\]\s*(.*)/);
+        return { text: m2 ? m2[1] : line, done: false };
+      });
+    this.updateRoundDetails(r, { checklistJson: JSON.stringify(items) });
+    this.checklistOpen.set(null);
+  }
+  toggleCheckItem(r: BriefRound, idx: number): void {
+    const items = this.checklistOf(r);
+    items[idx].done = !items[idx].done;
+    this.updateRoundDetails(r, { checklistJson: JSON.stringify(items) });
+  }
+
+  /** 通用:更新轮次详情字段。 */
+  private updateRoundDetails(r: BriefRound, patch: Record<string, unknown>): void {
+    const ex = this.extras[r.id] ?? {};
+    const body = {
+      stage: r.stage,
+      scheduledDate: r.scheduledDate ?? null,
+      interviewers: r.interviewers ?? null,
+      format: r.format ?? null,
+      location: r.location ?? null,
+      outcome: r.outcome ?? 'Pending',
+      notes: (r as any).notes ?? null,
+      feedback: (r as any).feedback ?? null,
+      meetingLink: ex.meetingLink ?? (r as any).meetingLink ?? null,
+      scheduledTime: ex.scheduledTime ?? (r as any).scheduledTime ?? null,
+      prepQuestionsJson: ex.prepQuestionsJson ?? (r as any).prepQuestionsJson ?? null,
+      emailsJson: ex.emailsJson ?? (r as any).emailsJson ?? null,
+      transcript: ex.transcript ?? (r as any).transcript ?? null,
+      recordingUrl: ex.recordingUrl ?? (r as any).recordingUrl ?? null,
+      checklistJson: (ex as any).checklistJson ?? (r as any).checklistJson ?? null,
+      ...patch,
+    };
+    this.api.put(`/api/interviews/${this.entryId()}/rounds/${r.id}`, body).subscribe({
+      next: () => { this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2000 }); this.load(); },
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 }),
+    });
+  }
+
   transcriptOf(r: BriefRound): string {
     return r.transcript ?? this.extras[r.id]?.transcript ?? '';
   }

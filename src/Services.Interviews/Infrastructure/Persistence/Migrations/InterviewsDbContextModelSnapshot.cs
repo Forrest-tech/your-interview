@@ -528,6 +528,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("ChecklistJson")
+                        .HasColumnType("text");
+
                     b.Property<DateOnly?>("ScheduledDate")
                         .HasColumnType("date");
 

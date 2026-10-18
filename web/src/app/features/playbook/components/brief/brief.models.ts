@@ -38,6 +38,7 @@ export interface BriefRound {
   transcript?: string;
   prepQuestionsJson?: string;
   recordingUrl?: string;
+  checklistJson?: string;
 }
 
 /** GET /api/interviews/{id} 的子集 —— 只声明 Brief 用到的字段。 */

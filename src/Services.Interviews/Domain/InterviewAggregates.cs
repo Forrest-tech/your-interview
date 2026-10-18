@@ -848,6 +848,9 @@ public sealed class InterviewRound : Entity
     /// <summary>录音文件 URL。</summary>
     public string? RecordingUrl { get; private set; }
 
+    /// <summary>准备清单 JSON:[{text, done}]。</summary>
+    public string? ChecklistJson { get; private set; }
+
     internal void Update(string stage, DateOnly? scheduledDate, string? interviewers,
         string? format, string? location, InterviewRoundOutcome outcome,
         string? notes, string? feedback)
@@ -862,9 +865,10 @@ public sealed class InterviewRound : Entity
         Feedback = feedback;
     }
 
-    /// <summary>更新轮次扩展信息(会议链接/时间/备考/邮件/文稿/录音)。</summary>
+    /// <summary>更新轮次扩展信息(会议链接/时间/备考/邮件/文稿/录音/清单)。</summary>
     internal void UpdateDetails(string? meetingLink, string? scheduledTime,
-        string? prepQuestionsJson, string? emailsJson, string? transcript, string? recordingUrl)
+        string? prepQuestionsJson, string? emailsJson, string? transcript, string? recordingUrl,
+        string? checklistJson = null)
     {
         MeetingLink = meetingLink;
         ScheduledTime = scheduledTime;
@@ -872,6 +876,7 @@ public sealed class InterviewRound : Entity
         EmailsJson = emailsJson;
         Transcript = transcript;
         RecordingUrl = recordingUrl;
+        if (checklistJson != null) ChecklistJson = checklistJson;
     }
 
     /// <summary>只记结果,不动其它字段 —— 结果回写不该清掉已填的时间/面试官/形式。</summary>

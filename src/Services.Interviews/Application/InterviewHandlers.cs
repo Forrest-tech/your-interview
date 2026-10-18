@@ -319,7 +319,8 @@ public sealed record UpdateRoundCommand(
     string? Format, string? Location, string Outcome, string? Notes,
     string? Feedback, string? MeetingLink = null, string? ScheduledTime = null,
     string? PrepQuestionsJson = null, string? EmailsJson = null,
-    string? Transcript = null, string? RecordingUrl = null) : IRequest<Result>;
+    string? Transcript = null, string? RecordingUrl = null,
+    string? ChecklistJson = null) : IRequest<Result>;
 
 public sealed record RemoveRoundCommand(Guid EntryId, Guid RoundId) : IRequest<Result>;
 
@@ -1421,7 +1422,7 @@ public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
                 request.Format, request.Location, outcome, request.Notes, request.Feedback);
             var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
             round?.UpdateDetails(request.MeetingLink, request.ScheduledTime, request.PrepQuestionsJson,
-                request.EmailsJson, request.Transcript, request.RecordingUrl);
+                request.EmailsJson, request.Transcript, request.RecordingUrl, request.ChecklistJson);
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }

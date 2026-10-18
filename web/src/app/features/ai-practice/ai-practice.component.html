@@ -53,6 +53,32 @@
             <p>{{ t('practice.treeUnavailable') }}</p>
             <button mat-stroked-button (click)="reloadTree()">{{ t('practice.retryLoad') }}</button>
           </div>
+        } @else if (isFromTechSelected()) {
+          <!-- From Tech:下拉选 "from Tech" 时显示 Tech Stack 实时内容 -->
+          @if (tsLoading() && tsTopics().length === 0) {
+            <p class="tree-status">{{ t('practice.treeLoading') }}</p>
+          } @else {
+            <div class="ts-tree">
+              @for (tp of tsTopics(); track tp.topic) {
+                <div class="ts-folder" (click)="loadTsItems(tp.topic)"
+                     [class.expanded]="tsExpandedTopic() === tp.topic">
+                  <mat-icon>{{ tsExpandedTopic() === tp.topic ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                  <span class="ts-folder-name">{{ tp.topic }}</span>
+                  <span class="ts-count">{{ tp.total }}</span>
+                </div>
+                @if (tsExpandedTopic() === tp.topic) {
+                  @for (item of tsItems(); track item.id) {
+                    <div class="ts-item" (click)="selectTsItem(item)"
+                         [class.selected]="tsSelected()?.id === item.id">
+                      <span class="ts-item-title">{{ item.question || item.title }}</span>
+                    </div>
+                  }
+                }
+              } @empty {
+                <p class="tree-status">{{ t('practice.tsEmpty') }}</p>
+              }
+            </div>
+          }
         } @else {
           <app-material-tree
             [nodes]="nodes()"
@@ -62,6 +88,7 @@
             [emptyHint]="t('practice.emptyHint')"
             [categories]="categories()"
             [categoryFilter]="categoryFilter()"
+            [showFromTechOption]="true"
             (categorySelect)="onCategoryFilterChange($event)"
             (categoryManage)="openManage('categories')"
             (nodeSelect)="onSelect($event)"
@@ -72,44 +99,6 @@
             (saveRequest)="saveTree()"
             (cancelRequest)="cancelTreeEdit()">
           </app-material-tree>
-
-          <!-- From Tech:Tech Stack 实时内容(叠加,不替换原树) -->
-          @if (showFromTech()) {
-            <div class="from-tech-section">
-              <div class="from-tech-header" (click)="toggleFromTech()">
-                <mat-icon>{{ fromTechOpen() ? 'expand_more' : 'chevron_right' }}</mat-icon>
-                <mat-icon class="ft-icon">link</mat-icon>
-                <span class="ft-title">{{ t('practice.fromTech') }}</span>
-                <span class="ts-count">{{ tsTopics().length }}</span>
-              </div>
-              @if (fromTechOpen()) {
-                @if (tsLoading() && tsTopics().length === 0) {
-                  <p class="tree-status">{{ t('practice.treeLoading') }}</p>
-                } @else {
-                  <div class="ts-tree">
-                    @for (tp of tsTopics(); track tp.topic) {
-                      <div class="ts-folder" (click)="loadTsItems(tp.topic)"
-                           [class.expanded]="tsExpandedTopic() === tp.topic">
-                        <mat-icon>{{ tsExpandedTopic() === tp.topic ? 'expand_more' : 'chevron_right' }}</mat-icon>
-                        <span class="ts-folder-name">{{ tp.topic }}</span>
-                        <span class="ts-count">{{ tp.total }}</span>
-                      </div>
-                      @if (tsExpandedTopic() === tp.topic) {
-                        @for (item of tsItems(); track item.id) {
-                          <div class="ts-item" (click)="selectTsItem(item)"
-                               [class.selected]="tsSelected()?.id === item.id">
-                            <span class="ts-item-title">{{ item.question || item.title }}</span>
-                          </div>
-                        }
-                      }
-                    } @empty {
-                      <p class="tree-status">{{ t('practice.tsEmpty') }}</p>
-                    }
-                  </div>
-                }
-              }
-            </div>
-          }
         }
       </div>
     }

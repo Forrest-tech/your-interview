@@ -29,6 +29,9 @@
           <option [value]="c.id">{{ c.name }}</option>
         }
         <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
+        @if (showFromTechOption) {
+          <option value="__fromTech">{{ t('practice.fromTech') }}</option>
+        }
       </select>
       <button mat-icon-button class="head-tool cat-manage"
               [matTooltip]="t('practice.categoryManage')"

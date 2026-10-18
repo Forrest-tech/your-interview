@@ -181,6 +181,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // Tech Stack 分类,或已链接的分类,都显示 From Tech 区
     return cat?.name?.toLowerCase().includes('tech stack') || cat?.linkedSource === 'techstack';
   });
+  /** 下拉是否选了 "from Tech" 虚拟选项 */
+  readonly isFromTechSelected = computed(() => this.categoryFilter() === '__fromTech');
   /** From Tech 区展开/折叠 */
   readonly fromTechOpen = signal(true);
   /** Tech Stack 的分类列表(实时从 Knowledge 取) */
@@ -1181,8 +1183,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       next: (list) => {
         this.categories.set(list ?? []);
         this.validateCategoryFilter();
-        // 若当前分类显示 From Tech 区,加载实时数据
-        if (this.showFromTech()) {
+        // 若下拉选的是 from Tech,加载实时数据
+        if (this.isFromTechSelected()) {
           this.loadTsTopics();
         }
       },
@@ -1212,16 +1214,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.tsSelected.set(null);
     this.tsExpandedTopic.set(null);
     this.tsItems.set([]);
-    if (this.showFromTech()) {
+    if (this.isFromTechSelected()) {
       this.loadTsTopics();
     }
   }
 
-  // ---------- From Tech:Tech Stack 实时内容(叠加模式) ----------
+  // ---------- From Tech:Tech Stack 实时内容(下拉虚拟选项) ----------
 
   /** 加载 Tech Stack 分类(从 Knowledge 实时查) */
   loadTsTopics(): void {
-    if (!this.showFromTech()) return;
+    if (!this.isFromTechSelected()) return;
     this.tsLoading.set(true);
     this.knowledgeApi.get<KnowledgeTopic[]>('/api/knowledge/topics').subscribe({
       next: (list) => {

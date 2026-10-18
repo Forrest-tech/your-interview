@@ -103,6 +103,9 @@ export class MaterialTreeComponent {
   /** 当前类别过滤:'all' | 'uncategorized' | 类别id。 */
   @Input() categoryFilter: string = 'all';
 
+  /** 是否在下拉里显示 "From Tech" 虚拟选项(AI Practice 用)。 */
+  @Input() showFromTechOption = false;
+
   /** 用户在下拉里换了类别(把新值抛给父级,父级回写 categoryFilter)。 */
   @Output() categorySelect = new EventEmitter<string>();
 

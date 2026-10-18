@@ -139,6 +139,41 @@ export class TechStackComponent implements OnInit {
 
   /** 是否进入"今日复习"专注模式:进入后隐藏列表/筛选,改走闪卡队列。 */
   readonly reviewMode = signal(false);
+  /** ★ #4:期望留存率 (FSRS 模式,默认 90%)。 */
+  readonly desiredRetention = signal<number>(
+    parseFloat(localStorage.getItem('ts.desiredRetention') || '0.9'));
+  /** ★ #4:目标面试日期 (用于复习量预测)。 */
+  readonly interviewDate = signal<string>(
+    localStorage.getItem('ts.interviewDate') || '');
+  /** ★ #4:按留存率预测到面试日前的复习量。 */
+  readonly forecastCount = computed(() => {
+    const dateStr = this.interviewDate();
+    if (!dateStr) return null;
+    const target = new Date(dateStr).getTime();
+    const retention = this.desiredRetention();
+    // 留存率越高,间隔越短,到期更多:用系数模拟
+    // retention 0.9 -> 系数 1.0; 0.95 -> 1.3; 0.8 -> 0.7
+    const factor = 1 + (retention - 0.9) * 6;
+    const items = this.items();
+    let count = 0;
+    for (const it of items) {
+      if (!it.nextReviewAt) continue;
+      const due = new Date(it.nextReviewAt).getTime();
+      // 按系数扩展窗口:高留存率下,稍晚到期的也算进去
+      const windowMs = (target - Date.now()) * factor;
+      if (due <= Date.now() + windowMs) count++;
+    }
+    return count;
+  });
+
+  setDesiredRetention(v: number): void {
+    this.desiredRetention.set(v);
+    localStorage.setItem('ts.desiredRetention', String(v));
+  }
+  setInterviewDate(v: string): void {
+    this.interviewDate.set(v);
+    localStorage.setItem('ts.interviewDate', v);
+  }
   /** 待复习队列(取自 dueOnly 列表,已按优先级排好)。 */
   readonly reviewQueue = signal<KnowledgeItem[]>([]);
   /** 当前卡片下标。 */

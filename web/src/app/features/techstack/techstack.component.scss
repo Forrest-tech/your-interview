@@ -121,6 +121,40 @@ mat-card { border-radius: 8px; }
 }
 
 .bucket-pct { font-size: 11px; opacity: 0.45; margin-top: 3px; }
+/* ★ #4:FSRS 面板 */
+.fsrs-panel {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e1e5eb;
+}
+.fsrs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.fsrs-row:last-child { margin-bottom: 0; }
+.fsrs-row label {
+  font-size: 12px;
+  color: #5a6472;
+  min-width: 70px;
+}
+.fsrs-row input[type="range"] { flex: 1; }
+.fsrs-val {
+  font-weight: 600;
+  color: #2b6cb0;
+  min-width: 40px;
+}
+.fsrs-forecast {
+  font-size: 12px;
+  color: #5a6472;
+}
+.fsrs-forecast b {
+  color: #c53030;
+  font-size: 14px;
+}
 
 /* ---------- 筛选 ---------- */
 

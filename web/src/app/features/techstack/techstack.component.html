@@ -67,6 +67,25 @@
               </div>
             }
           </div>
+
+          <!-- ★ #4:FSRS 期望留存率 + 面试日复习量预测 -->
+          <div class="fsrs-panel">
+            <div class="fsrs-row">
+              <label>期望留存率</label>
+              <input type="range" min="0.8" max="0.95" step="0.01"
+                     [value]="desiredRetention()"
+                     (input)="setDesiredRetention($any($event.target).valueAsNumber)" />
+              <span class="fsrs-val">{{ (desiredRetention() * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="fsrs-row">
+              <label>面试日期</label>
+              <input type="date" [value]="interviewDate()"
+                     (change)="setInterviewDate($any($event.target).value)" />
+              @if (forecastCount() !== null) {
+                <span class="fsrs-forecast">到那天约需复习 <b>{{ forecastCount() }}</b> 条</span>
+              }
+            </div>
+          </div>
         </div>
       }
       <div class="filter-header">

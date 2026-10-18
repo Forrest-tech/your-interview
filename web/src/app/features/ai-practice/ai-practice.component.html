@@ -55,6 +55,19 @@
           </div>
         } @else if (isFromTechSelected()) {
           <!-- From Tech:下拉选 "from Tech" 时显示 Tech Stack 实时内容 -->
+          <div class="th-row th-category">
+            <select class="cat-select"
+                    [ngModel]="categoryFilter()"
+                    (ngModelChange)="onCategoryFilterChange($event)"
+                    [attr.aria-label]="t('practice.categoryLabel')">
+              <option value="all">{{ t('practice.categoryAll') }}</option>
+              @for (c of categories(); track c.id) {
+                <option [value]="c.id">{{ c.name }}</option>
+              }
+              <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
+              <option value="__fromTech">{{ t('practice.fromTech') }}</option>
+            </select>
+          </div>
           @if (tsLoading() && tsTopics().length === 0) {
             <p class="tree-status">{{ t('practice.treeLoading') }}</p>
           } @else {

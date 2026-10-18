@@ -105,7 +105,7 @@
          [class.drop-before]="dropTargetId() === n.id && dropMode() === 'before'"
          [class.drop-after]="dropTargetId() === n.id && dropMode() === 'after'"
          [class.dragging]="draggingId === n.id"
-         draggable="true"
+         [attr.draggable]="renamingId() === n.id ? 'false' : 'true'"
          (dragstart)="onDragStart(n, $event)"
          (dragend)="onDragEnd()"
          (dragover)="onRowDragOver(n, $event)"

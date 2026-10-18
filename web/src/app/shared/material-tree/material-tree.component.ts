@@ -362,6 +362,8 @@ export class MaterialTreeComponent {
   // ---------- 拖拽:移入文件夹 / 同级排序 / 移出到根层 ----------
   onDragStart(node: MaterialNode, ev: DragEvent): void {
     if (!this.editable) return;
+    // ★ 重命名输入框里拖选文字时,绝不能启动行拖拽(否则框被拖走)。
+    if (this.renamingId() === node.id) { ev.preventDefault(); return; }
     this.draggingId = node.id;
     this.moveMenuId.set(null);
     ev.dataTransfer?.setData('text/plain', node.id);

@@ -149,6 +149,22 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly fromTechNodes = signal<MaterialNode[]>([]);
   readonly selectedId = signal<string | null>(null);
 
+  /**
+   * ★ 当前正在展示的树。
+   * From Tech 只是换了个数据源(实时读 Knowledge),不是新模块 ——
+   * 选中/标题/重命名/展开恢复这些交互,两棵树走同一套逻辑,
+   * 差别只在这里:操作哪棵树。
+   */
+  private activeTree(): MaterialNode[] {
+    return this.isFromTechSelected() ? this.fromTechNodes() : this.nodes();
+  }
+
+  /** 换数组引用,强制树组件重渲(选中高亮/展开箭头同步)。 */
+  private refreshActiveTree(): void {
+    if (this.isFromTechSelected()) this.fromTechNodes.set([...this.fromTechNodes()]);
+    else this.nodes.set([...this.nodes()]);
+  }
+
   // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
   /** 类别下拉的数据源(服务端加载;空 = 只有"全部/未分类"两项)。 */
   readonly categories = signal<PracticeCategoryDto[]>([]);
@@ -1344,13 +1360,21 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         tree.sort((a, b) => a.name.localeCompare(b.name));
         this.fromTechNodes.set(tree);
         this.tsLoading.set(false);
-        // 切换到 From Tech 时,默认选中第一个节点的第一个内容
-        const first = this.firstFile(tree);
+        // 加载过程中用户已切走 → 只留树,不碰选中(切走就不恢复,和本地分类一致)。
+        if (!this.isFromTechSelected()) return;
+        // ★ 刷新/切回 from-tech 时,恢复上次的选中与展开 —— 和其它分类一致,
+        //   不再每次都跳到第一个条目。
+        //   选中:URL 参数优先,其次上次记住的 ts: 条目,都没有才取第一个。
+        const wanted = this.route.snapshot.queryParamMap.get('materialId')
+          || this.readStoredMaterialId();
+        const target = wanted ? this.findFile(tree, wanted) : null;
+        const first = target && !target.folder ? target : this.firstFile(tree);
         if (first) {
-          // 展开第一个文件夹
-          const firstFolder = tree[0];
-          if (firstFolder?.folder) {
-            firstFolder.expanded = true;
+          // 展开:本地记录里有这棵实时树的展开记录就原样恢复(尊重用户收起);
+          //      首次进来则自动展开到当前条目(和本地分类首次使用一致)。
+          this.restoreExpandedState();
+          if (!this.hasFromTechExpandedRecord()) {
+            this.expandPathTo(first);
           }
           this.selectFile(first);
         }
@@ -1508,6 +1532,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     //   跟当前树的素材 id 对齐。即使某个录音因素材 id 变动而“掉队”,
     //   也能在此补回内存,不会“凭空消失”。
     this.recorder.syncAllRecordings(this.allMaterialIds());
+    // ★ From Tech:选中恢复由 loadTsTopics→buildFromTechTree 负责(本地树里没有 ts: id)。
+    //   这里若不返回,会误选本地第一个文件,并把 localStorage 里存着的 ts: id 覆盖掉,
+    //   导致刷新后 from-tech 永远回到第一个条目 —— 和其它分类"刷新保持原状"不一致。
+    if (this.isFromTechSelected()) return;
     const fromUrl = this.route.snapshot.queryParamMap.get('materialId');
     const wanted = fromUrl || this.readStoredMaterialId();
     const target = wanted ? this.findFile(this.nodes(), wanted) : null;
@@ -1531,21 +1559,22 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 这里解决的是"回读时库里 expanded=false → 刷新后父级全折叠"的情况。
    */
   private expandPathTo(target: MaterialNode): void {
+    const list = this.activeTree();
     const path: MaterialNode[] = [];
-    const walk = (list: MaterialNode[], stack: MaterialNode[]): boolean => {
-      for (const n of list ?? []) {
+    const walk = (l: MaterialNode[], stack: MaterialNode[]): boolean => {
+      for (const n of l ?? []) {
         if (n.id === target.id) { path.push(...stack); return true; }
         if (n.folder && n.children?.length && walk(n.children, [...stack, n])) return true;
       }
       return false;
     };
-    if (!walk(this.nodes(), [])) return;      // 没找到就什么都不动
+    if (!walk(list, [])) return;      // 没找到就什么都不动
     let changed = false;
     for (const folder of path) {
       if (folder.folder && !folder.expanded) { folder.expanded = true; changed = true; }
     }
     // 换一个数组引用,保证树组件一定重渲(选中高亮 + 展开箭头同步)
-    if (changed) this.nodes.set([...this.nodes()]);
+    if (changed) this.refreshActiveTree();
   }
 
   /** ★ 第三十九轮:收集当前树里所有节点的 id(用于录音对齐)。 */
@@ -1897,7 +1926,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   onFolderToggle(node: MaterialNode): void {
     // 组件内已就地改了 expanded,这里只需把数组引用换新,触发变更检测。
-    this.nodes.set([...this.nodes()]);
+    // ★ from-tech:刷新的是实时树那根 signal,不再错刷 nodes()。
+    this.refreshActiveTree();
     // ★ 第四十四轮(Forrest):展开/收起状态立即记入本地 ——
     //   刷新页面后原样恢复,不用再依赖"整树保存"才落库。
     this.saveExpandedState();
@@ -1923,16 +1953,30 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         if (n.children?.length) walk(n.children);
       }
     };
-    walk(this.nodes());
+    // ★ from-tech 的 topic 文件夹(id 为 ts:topic:…)也记进来 ——
+    //   两棵树 id 命名空间天然不重叠(ts:topic:… vs GUID),同一份记录互不干扰。
+    //   写入时只替换当前这棵树的记录,另一棵树的原样保留 —— 否则切树 toggle
+    //   一次就会把另一棵树的展开状态洗掉。
+    walk(this.activeTree());
     try {
-      localStorage.setItem(AiPracticeComponent.TREE_EXPANDED_KEY, JSON.stringify(ids));
+      const raw = localStorage.getItem(AiPracticeComponent.TREE_EXPANDED_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      const prev: string[] = Array.isArray(arr)
+        ? arr.filter((x): x is string => typeof x === 'string')
+        : [];
+      const fromTech = this.isFromTechSelected();
+      const keep = prev.filter((id) => fromTech ? !id.startsWith('ts:topic:') : id.startsWith('ts:topic:'));
+      const merged = [...keep, ...ids.filter((id) => !keep.includes(id))];
+      localStorage.setItem(AiPracticeComponent.TREE_EXPANDED_KEY, JSON.stringify(merged));
     } catch { /* 隐私模式写不了就算了,不影响本次会话 */ }
   }
 
   /**
-   * 按本地记录恢复展开/收起状态。
+   * 按本地记录恢复展开/收起状态(当前展示的那棵树:本地树或 from-tech 实时树)。
    * @returns true = 本地有记录并已应用;false = 没有记录(首次使用/存储被清)。
    * 恢复是"权威覆盖":数据库里 expanded 是上次保存时的旧值,以本地为准。
+   * ★ from-tech 复用同一套:walk 的是 activeTree(),两棵树 id 命名空间天然不重叠
+   *   (ts:topic:… vs GUID),同一份记录互不干扰。
    */
   private restoreExpandedState(): boolean {
     try {
@@ -1951,9 +1995,24 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
           if (n.children?.length) walk(n.children);
         }
       };
-      walk(this.nodes());
-      if (changed) this.nodes.set([...this.nodes()]);
+      walk(this.activeTree());
+      if (changed) this.refreshActiveTree();
       return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * ★ from-tech 专用:本地展开记录里有没有这棵实时树的记录。
+   * 有 → restoreExpandedState() 已按它原样恢复,调用方不再自动展开(尊重用户);
+   * 没有(首次进 from-tech)→ 调用方走"自动展开到当前条目",和本地分类首次使用一致。
+   */
+  private hasFromTechExpandedRecord(): boolean {
+    try {
+      const raw = localStorage.getItem(AiPracticeComponent.TREE_EXPANDED_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) && arr.some((x) => typeof x === 'string' && x.startsWith('ts:topic:'));
     } catch {
       return false;
     }

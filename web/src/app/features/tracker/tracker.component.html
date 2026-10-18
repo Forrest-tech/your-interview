@@ -8,26 +8,30 @@
       <button mat-flat-button color="primary" class="smart-btn" (click)="openSmartAdd()">
         <mat-icon>auto_awesome</mat-icon>{{ t('tracker.smartAdd') }}
       </button>
-      <button mat-stroked-button class="al-btn" (click)="openAnswerLibrary()" [matTooltip]="t('tracker.alTitle')">
-        <mat-icon>library_books</mat-icon>{{ t('tracker.alTitle') }}
-      </button>
-      <button mat-stroked-button (click)="exportCsv()" [matTooltip]="t('tracker.exportCsv')">
-        <mat-icon>download</mat-icon>{{ t('tracker.exportCsv') }}
-      </button>
-      <!-- ★ #19:全量备份 -->
-      <button mat-stroked-button (click)="exportBackup()" matTooltip="备份全部数据 (JSON)">
-        <mat-icon>backup</mat-icon>备份
-      </button>
-      <button mat-stroked-button (click)="csvFile.click()" [matTooltip]="t('tracker.importCsv')">
-        <mat-icon>upload</mat-icon>{{ t('tracker.importCsv') }}
-      </button>
-      <input #csvFile type="file" hidden accept=".csv" (change)="importCsv($event)">
-      <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
-        <mat-icon>refresh</mat-icon>
-      </button>
       <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.newApp')">
         <mat-icon>add</mat-icon>
       </button>
+      <button mat-icon-button [matMenuTriggerFor]="moreMenu" matTooltip="更多操作">
+        <mat-icon>more_vert</mat-icon>
+      </button>
+      <mat-menu #moreMenu="matMenu">
+        <button mat-menu-item (click)="openAnswerLibrary()">
+          <mat-icon>library_books</mat-icon>{{ t('tracker.alTitle') }}
+        </button>
+        <button mat-menu-item (click)="exportCsv()">
+          <mat-icon>download</mat-icon>{{ t('tracker.exportCsv') }}
+        </button>
+        <button mat-menu-item (click)="exportBackup()">
+          <mat-icon>backup</mat-icon>备份
+        </button>
+        <button mat-menu-item (click)="csvFile.click()">
+          <mat-icon>upload</mat-icon>{{ t('tracker.importCsv') }}
+        </button>
+        <button mat-menu-item (click)="reload()">
+          <mat-icon>refresh</mat-icon>{{ t('common.refresh') }}
+        </button>
+      </mat-menu>
+      <input #csvFile type="file" hidden accept=".csv" (change)="importCsv($event)">
     </div>
   </header>
 

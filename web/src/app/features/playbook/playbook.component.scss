@@ -261,10 +261,11 @@
   .dim-lbl {
     font-size: 10px;
     color: #888;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
+    text-align: center;
+    line-height: 1.2;
+    min-height: 24px;
+    display: flex;
+    align-items: center;
   }
 
   .dim-val {

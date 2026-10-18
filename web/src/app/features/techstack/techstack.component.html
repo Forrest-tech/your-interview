@@ -86,6 +86,35 @@
               }
             </div>
           </div>
+
+          <!-- ★ #9:复习热力图 + 连击 -->
+          <div class="heatmap-panel">
+            <div class="heatmap-head">
+              <span class="heatmap-title">复习热力图</span>
+              @if (reviewStreak() > 0) {
+                <span class="streak-badge">🔥 {{ reviewStreak() }} 天连击</span>
+              }
+            </div>
+            <div class="heatmap-grid">
+              @for (week of heatmapWeeks(); track $index) {
+                <div class="heatmap-week">
+                  @for (day of week; track day.date) {
+                    <div class="heatmap-day" [class]="'lv-' + day.level"
+                         [matTooltip]="day.count >= 0 ? day.date + ': ' + day.count + ' 条' : ''"></div>
+                  }
+                </div>
+              }
+            </div>
+            <div class="heatmap-legend">
+              <span>少</span>
+              <div class="heatmap-day lv-0"></div>
+              <div class="heatmap-day lv-1"></div>
+              <div class="heatmap-day lv-2"></div>
+              <div class="heatmap-day lv-3"></div>
+              <div class="heatmap-day lv-4"></div>
+              <span>多</span>
+            </div>
+          </div>
         </div>
       }
       <div class="filter-header">

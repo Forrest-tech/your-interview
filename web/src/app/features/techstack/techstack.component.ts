@@ -1159,6 +1159,7 @@ export class TechStackComponent implements OnInit {
           this.reviewLoading.set(false);
           this.reviewReviewed.update((n) => n + 1);
           this.updateQueueItem(card.id, o);
+          this.recordReviewActivity(); // ★ #9:记录复习活动(热力图)
           this.advance();
         },
         error: (e: Error) => {
@@ -1185,6 +1186,59 @@ export class TechStackComponent implements OnInit {
       )
     );
   }
+
+  /** ★ #9:记录每日复习数 (localStorage,供热力图)。 */
+  private recordReviewActivity(): void {
+    const key = 'ts.reviewActivity';
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const data: Record<string, number> = JSON.parse(localStorage.getItem(key) || '{}');
+      data[today] = (data[today] || 0) + 1;
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch { /* ignore */ }
+  }
+
+  /** ★ #9:过去 12 周的热力图数据。 */
+  readonly heatmapWeeks = computed(() => {
+    let data: Record<string, number> = {};
+    try { data = JSON.parse(localStorage.getItem('ts.reviewActivity') || '{}'); } catch { /* ignore */ }
+    const weeks: { date: string; count: number; level: number }[][] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayOfWeek = (today.getDay() + 6) % 7;
+    const start = new Date(today);
+    start.setDate(start.getDate() - dayOfWeek - 7 * 11);
+    for (let w = 0; w < 12; w++) {
+      const week: { date: string; count: number; level: number }[] = [];
+      for (let d = 0; d < 7; d++) {
+        const dt = new Date(start);
+        dt.setDate(dt.getDate() + w * 7 + d);
+        const key = dt.toISOString().slice(0, 10);
+        const count = dt > today ? -1 : (data[key] || 0);
+        const level = count < 0 ? -1 : count === 0 ? 0 : count < 3 ? 1 : count < 6 ? 2 : count < 10 ? 3 : 4;
+        week.push({ date: key, count, level });
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  });
+
+  /** ★ #9:当前连击 (连续复习天数)。 */
+  readonly reviewStreak = computed(() => {
+    let data: Record<string, number> = {};
+    try { data = JSON.parse(localStorage.getItem('ts.reviewActivity') || '{}'); } catch { /* ignore */ }
+    let streak = 0;
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    const todayKey = d.toISOString().slice(0, 10);
+    if (!data[todayKey]) d.setDate(d.getDate() - 1);
+    while (true) {
+      const key = d.toISOString().slice(0, 10);
+      if (data[key]) { streak++; d.setDate(d.getDate() - 1); }
+      else break;
+    }
+    return streak;
+  });
 
   /** 推进到下一张:收起答案;若已是最后一张则结束本轮。 */
   private advance(): void {

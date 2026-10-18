@@ -155,6 +155,65 @@ mat-card { border-radius: 8px; }
   color: #c53030;
   font-size: 14px;
 }
+/* ★ #9:热力图 */
+.heatmap-panel {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e1e5eb;
+}
+.heatmap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.heatmap-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2b3340;
+}
+.streak-badge {
+  font-size: 12px;
+  background: #fff3e0;
+  color: #e65100;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.heatmap-grid {
+  display: flex;
+  gap: 3px;
+}
+.heatmap-week {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.heatmap-day {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: #ebedf0;
+}
+.heatmap-day.lv-1 { background: #c6e48b; }
+.heatmap-day.lv-2 { background: #7bc96f; }
+.heatmap-day.lv-3 { background: #239a3b; }
+.heatmap-day.lv-4 { background: #196127; }
+.heatmap-day.lv--1 { background: transparent; }
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #8a94a6;
+}
+.heatmap-legend .heatmap-day {
+  width: 10px;
+  height: 10px;
+}
 /* ★ #5:重做模式 */
 .resole-toggle {
   display: flex;

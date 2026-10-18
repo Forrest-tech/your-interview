@@ -155,7 +155,7 @@ export class DashboardComponent implements OnInit {
     const speaking = ['pronunciation', 'fluency', 'sentenceintegrity', 'pron', 'flu'];
     const d = dimension.toLowerCase().replace(/[^a-z]/g, '');
     if (speaking.some(s => d.includes(s))) {
-      this.router.navigate(['/ai-practice']);
+      this.router.navigate(['/practice']);
     } else {
       this.router.navigate(['/tech-stack'], { queryParams: { topic: dimension } });
     }

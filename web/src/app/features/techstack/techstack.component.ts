@@ -1166,7 +1166,7 @@ export class TechStackComponent implements OnInit {
   /** ★ 打通:Tech Stack 卡片 → AI Practice 口语练习。 */
   practiceCard(item: KnowledgeItem): void {
     const q = item.question || item.title;
-    this.router.navigate(['/ai-practice'], {
+    this.router.navigate(['/practice'], {
       queryParams: { q: q.slice(0, 200) }
     });
   }

@@ -496,8 +496,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     if (rows.length === 0) {
       this.snack.open(this.t('tracker.exportEmpty'), this.t('common.close'), { duration: 2500 });
       return;
-    }
-    const header = ['Company', 'Role', 'Location', 'Status', 'Priority', 'Applied Date', 'Salary', 'Link', 'Notes'];
+    }    const header = ['Company', 'Role', 'Location', 'Status', 'Priority', 'Applied Date', 'Salary', 'Link', 'Notes'];
     const esc = (v: unknown): string => {
       const s = String(v ?? '');
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -519,6 +518,50 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     link.download = `applications-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  /** ★ #19:全量备份 (JSON:申请 + 知识库 + STAR 故事 + 复盘)。 */
+  async exportBackup(): Promise<void> {
+    const data: Record<string, unknown> = {
+      exportedAt: new Date().toISOString(),
+      version: 1
+    };
+    // 申请
+    try {
+      const apps = await this.api.get<Paged<Application>>('/api/jobs/applications', {
+        page: 1, pageSize: 1000
+      }).toPromise();
+      data['applications'] = apps?.items ?? [];
+    } catch { data['applications'] = []; }
+    // 知识库
+    try {
+      const kb = await this.api.get<Paged<any>>('/api/knowledge', {
+        page: 1, pageSize: 1000
+      }).toPromise();
+      data['knowledge'] = kb?.items ?? [];
+    } catch { data['knowledge'] = []; }
+    // STAR 故事 (localStorage)
+    try {
+      data['starStories'] = JSON.parse(localStorage.getItem('pb.starStories') || '[]');
+    } catch { data['starStories'] = []; }
+    // 复盘 (localStorage,所有 pb.debrief.* key)
+    const debriefs: Record<string, unknown> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('pb.debrief.')) {
+        try { debriefs[k] = JSON.parse(localStorage.getItem(k) || 'null'); } catch { /* skip */ }
+      }
+    }
+    data['debriefs'] = debriefs;
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `your-interview-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    this.snack.open('备份已下载', '关闭', { duration: 2500 });
   }
 
 /** 导入 CSV(Simplify 对等功能):与 exportCsv 格式互通,逐行创建投递。 */

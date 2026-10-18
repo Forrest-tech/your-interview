@@ -597,6 +597,22 @@
                   </section>
                 }
 
+                <!-- ★ #10:Interviewing.io 模式 — Hire/No-Hire verdict -->
+                @if (hireVerdict(); as v) {
+                  <section class="verdict-banner" [class]="'v-' + v.level">
+                    <div class="verdict-label">{{ v.label }}</div>
+                    <div class="verdict-score">{{ v.avg }}分</div>
+                    @if (v.weaknesses.length > 0) {
+                      <div class="verdict-weak">
+                        待加强:
+                        @for (w of v.weaknesses; track w) {
+                          <span class="vw-item">{{ w }}</span>
+                        }
+                      </div>
+                    }
+                  </section>
+                }
+
                 <!-- ★ 第三十一轮(Forrest 指定):音频波形移入评分报告内部。
                      位置 = 总分胶囊之后、Recognition 之前。
                      数据源就是本报告的这条录音(activeTake 的 id),

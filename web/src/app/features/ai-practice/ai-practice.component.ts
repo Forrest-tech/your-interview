@@ -1750,8 +1750,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   /** ★ #3:Orai 模式 — 一次只给一个最关键的改进点。 */
-  readonly oneFix = computed(() => {
-    const sc = this.activeTake()?.score;
+  readonly oneFix = computed(() => {    const sc = this.activeTake()?.score;
     if (!sc) return null;
     const fs = this.fillerStats();
     // 优先级:填充词 > 流利度 > 准确度 > 发音 > 完整度
@@ -1783,6 +1782,30 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       title: `优先改进:${weakest.label} (${weakest.val.toFixed(0)}分)`,
       detail: fixes[weakest.key] ?? '继续练习。'
     };
+  });
+
+  /** ★ #10:Interviewing.io 模式 — Hire/No-Hire verdict + 2-3 个待加强点。 */
+  readonly hireVerdict = computed(() => {
+    const sc = this.activeTake()?.score;
+    if (!sc || sc.simulated) return null;
+    const pron = sc.pronScore ?? 0;
+    const acc = sc.accuracyScore ?? 0;
+    const flu = sc.fluencyScore ?? 0;
+    const avg = (pron + acc + (flu || acc)) / 3;
+    let level: 'hire' | 'lean-hire' | 'lean-no' | 'no-hire';
+    let label: string;
+    if (avg >= 85) { level = 'hire'; label = 'HIRE'; }
+    else if (avg >= 75) { level = 'lean-hire'; label = 'LEAN HIRE'; }
+    else if (avg >= 60) { level = 'lean-no'; label = 'LEAN NO-HIRE'; }
+    else { level = 'no-hire'; label = 'NO-HIRE'; }
+    // 2-3 个待加强点
+    const weaknesses: string[] = [];
+    const fs = this.fillerStats();
+    if (fs && fs.perMinute > 3) weaknesses.push(`填充词过多 (${fs.perMinute}/分钟)`);
+    if (flu && flu < 75) weaknesses.push(`流利度 ${flu.toFixed(0)}分`);
+    if (acc < 80) weaknesses.push(`发音准确度 ${acc.toFixed(0)}分`);
+    if (pron < 80) weaknesses.push(`整体发音 ${pron.toFixed(0)}分`);
+    return { level, label, avg: Math.round(avg), weaknesses: weaknesses.slice(0, 3) };
   });
 
   /** 在历史列表里点"查看报告"：把该条设为当前作品并弹到结果区。 */

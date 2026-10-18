@@ -1109,6 +1109,57 @@
   color: #33691e;
   line-height: 1.5;
 }
+/* ★ #10:Verdict 横幅 */
+.verdict-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  border: 2px solid;
+}
+.verdict-banner.v-hire {
+  background: #e8f5e9;
+  border-color: #2e7d32;
+}
+.verdict-banner.v-lean-hire {
+  background: #f1f8e9;
+  border-color: #7cb342;
+}
+.verdict-banner.v-lean-no {
+  background: #fff8e1;
+  border-color: #ff9800;
+}
+.verdict-banner.v-no-hire {
+  background: #ffebee;
+  border-color: #c62828;
+}
+.verdict-label {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.v-hire .verdict-label { color: #1b5e20; }
+.v-lean-hire .verdict-label { color: #33691e; }
+.v-lean-no .verdict-label { color: #e65100; }
+.v-no-hire .verdict-label { color: #b71c1c; }
+.verdict-score {
+  font-size: 14px;
+  color: #5a6472;
+  font-weight: 600;
+}
+.verdict-weak {
+  margin-left: auto;
+  font-size: 12px;
+  color: #5a6472;
+}
+.vw-item {
+  background: rgba(0,0,0,0.06);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
 .filler-bar mat-icon {
   color: #ff9800;
   font-size: 18px;

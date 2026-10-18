@@ -1712,6 +1712,43 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.pickedWord.set(this.pickedWord() === i ? null : i);
   }
 
+  /** ★ #1:填充词检测(Yoodli 模式)。 */
+  private static readonly FILLERS = new Set([
+    'um', 'uh', 'uhm', 'umm', 'hmm', 'hm',
+    'like', 'you know', 'i mean', 'basically', 'actually', 'literally',
+    'stuff', 'things', 'well', 'so', 'right',
+    '那个', '就是', '然后', '嗯', '啊', '这个', '其实'
+  ]);
+
+  isFiller(word: string): boolean {
+    return AiPracticeComponent.FILLERS.has(word.toLowerCase().trim());
+  }
+
+  /** ★ #1:当前评分的填充词统计。 */
+  readonly fillerStats = computed(() => {
+    const sc = this.activeTake()?.score;
+    if (!sc?.words?.length) return null;
+    const fillers = sc.words.filter(w => this.isFiller(w.word));
+    const minutes = (sc.billedSeconds ?? 60) / 60;
+    return {
+      count: fillers.length,
+      perMinute: minutes > 0 ? +(fillers.length / minutes).toFixed(1) : 0,
+      indices: new Set(sc.words.map((w, i) => this.isFiller(w.word) ? i : -1).filter(i => i >= 0))
+    };
+  });
+
+  /** ★ #1:点击填充词 → 从该时间戳回放音频。 */
+  replayAt(offsetMs: number): void {
+    const rec = this.activeTake();
+    const blob = (rec as any)?.blob;
+    if (!blob) { this.toast(this.t('rec.noAudio')); return; }
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.currentTime = Math.max(0, offsetMs / 1000 - 0.5); // 提前 0.5s
+    audio.play().catch(() => this.toast(this.t('practice.retryLater')));
+    audio.onended = () => URL.revokeObjectURL(url);
+  }
+
   /** 在历史列表里点"查看报告"：把该条设为当前作品并弹到结果区。 */
   focusTake(id: string): void {
     this.activeTakeId.set(id);

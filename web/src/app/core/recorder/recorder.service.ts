@@ -46,8 +46,8 @@ export interface RecordingScore {
   prosodyScore: number | null;
   /** 识别出的文本。 */
   recognized: string;
-  /** 逐词明细。 */
-  words: { word: string; accuracy: number; errorType: string }[];
+  /** 逐词明细(含时间戳,供回放定位)。 */
+  words: { word: string; accuracy: number; errorType: string; offsetMs?: number; durationMs?: number }[];
   /** 是否在模拟态(阶段一,未接后端)。界面需明示。 */
   simulated: boolean;
   /**

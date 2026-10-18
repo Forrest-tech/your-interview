@@ -222,7 +222,9 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                 {
                     word = w.Word,
                     accuracy = w.Accuracy,
-                    errorType = w.ErrorType
+                    errorType = w.ErrorType,
+                    offsetMs = w.OffsetMs,
+                    durationMs = w.DurationMs
                 }),
                 // 计费口径:本次送评的音频时长(秒)。精确值。
                 billedSeconds = audioSeconds,

@@ -1057,6 +1057,44 @@
   border-radius: 3px;
   cursor: default;
 }
+/* ★ #1:填充词高亮(Yoodli 模式) */
+.rw.is-filler {
+  background: #fff3e0;
+  color: #e65100;
+  border-bottom: 2px solid #ff9800;
+  cursor: pointer;
+}
+.rw.is-filler:hover {
+  background: #ffe0b2;
+}
+/* ★ #1:填充词统计条 */
+.filler-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: #fff8e1;
+  border: 1px solid #ffe0b2;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #5d4037;
+}
+.filler-bar mat-icon {
+  color: #ff9800;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+.filler-bar b {
+  color: #e65100;
+  font-size: 15px;
+}
+.filler-hint {
+  margin-left: auto;
+  color: #8d6e63;
+  font-size: 12px;
+}
 .rw.e-ok { color: #2b3340; }
 /* ⚠️ 2026-09-16:无词级数据 —— 不能被当作"读对"刷成普通色 */
 .rw.e-na { color: #98a1ad; }

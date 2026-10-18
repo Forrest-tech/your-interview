@@ -533,7 +533,13 @@ public sealed class PronunciationAssessor(
                 // 无词级数据 → errorType 用空串标记"未知",而不是冒充 "None"(正确)。
                 // 这样前端 recognitionPct 就不会把没评估的词算作"识别正确"。
                 if (!hasWordData) errorType = "";
-                words.Add(new WordScore(word, Math.Round(acc, 1), errorType));
+                // ★ 2026-10-18:透出词级时间戳(供前端时间戳回放用)。Azure 单位是 100ns。
+                double offsetMs = 0, durationMs = 0;
+                if (w.TryGetProperty("Offset", out var off) && off.ValueKind == JsonValueKind.Number)
+                    offsetMs = off.GetDouble() / 10000.0;
+                if (w.TryGetProperty("Duration", out var dur) && dur.ValueKind == JsonValueKind.Number)
+                    durationMs = dur.GetDouble() / 10000.0;
+                words.Add(new WordScore(word, Math.Round(acc, 1), errorType, offsetMs, durationMs));
             }
         }
 
@@ -566,7 +572,7 @@ public sealed record PronunciationResult(
     string RecognizedText,
     IReadOnlyList<WordScore> Words);
 
-public sealed record WordScore(string Word, double Accuracy, string ErrorType);
+public sealed record WordScore(string Word, double Accuracy, string ErrorType, double OffsetMs = 0, double DurationMs = 0);
 
 /// <summary>
 /// Azure 神经语音合成(示范朗读用)。

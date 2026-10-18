@@ -69,44 +69,6 @@
           </div>
 
           <!-- ★ #4:FSRS 期望留存率 + 面试日复习量预测 -->
-          <div class="fsrs-panel">
-            <div class="fsrs-row">
-              <label>期望留存率</label>
-              <input type="range" min="0.8" max="0.95" step="0.01"
-                     [value]="desiredRetention()"
-                     (input)="setDesiredRetention($any($event.target).valueAsNumber)" />
-              <span class="fsrs-val">{{ (desiredRetention() * 100).toFixed(0) }}%</span>
-            </div>
-            <div class="fsrs-row">
-              <label>面试日期</label>
-              <input type="date" [value]="interviewDate()"
-                     (change)="setInterviewDate($any($event.target).value)" />
-              @if (forecastCount() !== null) {
-                <span class="fsrs-forecast">到那天约需复习 <b>{{ forecastCount() }}</b> 条</span>
-              }
-            </div>
-            <!-- ★ #11:冲刺模式开关 -->
-            <div class="fsrs-row">
-              <label>冲刺模式</label>
-              <input type="checkbox" [checked]="sprintMode()" (change)="toggleSprintMode()" />
-              <span class="fsrs-hint">按剩余天数重排:≤3天按重要度+弱项,≤14天按到期时间</span>
-            </div>
-            <!-- ★ #20:考试模式 -->
-            <div class="fsrs-row">
-              <label>考试模式</label>
-              <input type="checkbox" [checked]="examMode()" (change)="toggleExamMode()" />
-              <span class="fsrs-hint">复习时显示倒计时</span>
-              @if (examMode()) {
-                <select [ngModel]="examMinutes()" (ngModelChange)="setExamMinutes($event)">
-                  <option [value]="30">30分钟</option>
-                  <option [value]="60">60分钟</option>
-                  <option [value]="90">90分钟</option>
-                  <option [value]="120">120分钟</option>
-                </select>
-              }
-            </div>
-          </div>
-
           <!-- ★ #9:复习热力图 + 连击 -->
           <div class="heatmap-panel">
             <div class="heatmap-head">

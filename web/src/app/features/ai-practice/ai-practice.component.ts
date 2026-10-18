@@ -1802,29 +1802,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   });
 
   /** ★ #10:Interviewing.io 模式 — Hire/No-Hire verdict + 2-3 个待加强点。 */
-  readonly hireVerdict = computed(() => {
-    const sc = this.activeTake()?.score;
-    if (!sc || sc.simulated) return null;
-    const pron = sc.pronScore ?? 0;
-    const acc = sc.accuracyScore ?? 0;
-    const flu = sc.fluencyScore ?? 0;
-    const avg = (pron + acc + (flu || acc)) / 3;
-    let level: 'hire' | 'lean-hire' | 'lean-no' | 'no-hire';
-    let label: string;
-    if (avg >= 85) { level = 'hire'; label = 'HIRE'; }
-    else if (avg >= 75) { level = 'lean-hire'; label = 'LEAN HIRE'; }
-    else if (avg >= 60) { level = 'lean-no'; label = 'LEAN NO-HIRE'; }
-    else { level = 'no-hire'; label = 'NO-HIRE'; }
-    // 2-3 个待加强点
-    const weaknesses: string[] = [];
-    const fs = this.fillerStats();
-    if (fs && fs.perMinute > 3) weaknesses.push(`填充词过多 (${fs.perMinute}/分钟)`);
-    if (flu && flu < 75) weaknesses.push(`流利度 ${flu.toFixed(0)}分`);
-    if (acc < 80) weaknesses.push(`发音准确度 ${acc.toFixed(0)}分`);
-    if (pron < 80) weaknesses.push(`整体发音 ${pron.toFixed(0)}分`);
-    return { level, label, avg: Math.round(avg), weaknesses: weaknesses.slice(0, 3) };
-  });
-
   /** ★ #14:AI 追问 (像真面试官一样,基于回答生成一层追问)。 */
   readonly followUpQuestion = signal<string | null>(null);
   readonly followUpLoading = signal(false);

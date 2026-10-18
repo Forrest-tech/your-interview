@@ -612,21 +612,6 @@
                 }
 
                 <!-- ★ #10:Interviewing.io 模式 — Hire/No-Hire verdict -->
-                @if (hireVerdict(); as v) {
-                  <section class="verdict-banner" [class]="'v-' + v.level">
-                    <div class="verdict-label">{{ v.label }}</div>
-                    <div class="verdict-score">{{ v.avg }}分</div>
-                    @if (v.weaknesses.length > 0) {
-                      <div class="verdict-weak">
-                        待加强:
-                        @for (w of v.weaknesses; track w) {
-                          <span class="vw-item">{{ w }}</span>
-                        }
-                      </div>
-                    }
-                  </section>
-                }
-
                 <!-- ★ #14:AI 追问 -->
                 <section class="followup-section">
                   @if (!followUpQuestion() && !followUpLoading()) {

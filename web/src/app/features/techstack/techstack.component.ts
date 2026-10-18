@@ -156,41 +156,6 @@ export class TechStackComponent implements OnInit {
   gradeBinary(pass: boolean): void {
     this.grade(pass ? 'Good' : 'Again');
   }
-  /** ★ #4:期望留存率 (FSRS 模式,默认 90%)。 */
-  readonly desiredRetention = signal<number>(
-    parseFloat(localStorage.getItem('ts.desiredRetention') || '0.9'));
-  /** ★ #4:目标面试日期 (用于复习量预测)。 */
-  readonly interviewDate = signal<string>(
-    localStorage.getItem('ts.interviewDate') || '');
-  /** ★ #4:按留存率预测到面试日前的复习量。 */
-  readonly forecastCount = computed(() => {
-    const dateStr = this.interviewDate();
-    if (!dateStr) return null;
-    const target = new Date(dateStr).getTime();
-    const retention = this.desiredRetention();
-    // 留存率越高,间隔越短,到期更多:用系数模拟
-    // retention 0.9 -> 系数 1.0; 0.95 -> 1.3; 0.8 -> 0.7
-    const factor = 1 + (retention - 0.9) * 6;
-    const items = this.items();
-    let count = 0;
-    for (const it of items) {
-      if (!it.nextReviewAt) continue;
-      const due = new Date(it.nextReviewAt).getTime();
-      // 按系数扩展窗口:高留存率下,稍晚到期的也算进去
-      const windowMs = (target - Date.now()) * factor;
-      if (due <= Date.now() + windowMs) count++;
-    }
-    return count;
-  });
-
-  setDesiredRetention(v: number): void {
-    this.desiredRetention.set(v);
-    localStorage.setItem('ts.desiredRetention', String(v));
-  }
-  setInterviewDate(v: string): void {
-    this.interviewDate.set(v);
-    localStorage.setItem('ts.interviewDate', v);
-  }
   /** 待复习队列(取自 dueOnly 列表,已按优先级排好)。 */
   readonly reviewQueue = signal<KnowledgeItem[]>([]);
   /** 当前卡片下标。 */
@@ -1099,7 +1064,6 @@ export class TechStackComponent implements OnInit {
           this.notify(this.t('techstack.reviewNoDue'));
           return;
         }
-        queue = this.applySprintSort(queue); // ★ #11
         this.reviewQueue.set(queue);
         this.reviewIndex.set(0);
         this.reviewRevealed.set(false);
@@ -1107,7 +1071,6 @@ export class TechStackComponent implements OnInit {
         this.reviewDone.set(false);
         this.reviewCurrent.set(null);
         this.reviewMode.set(true);
-        if (this.examMode()) this.startExamTimer(); // ★ #20
       },
       error: (e: Error) => {
         this.reviewLoading.set(false);
@@ -1117,48 +1080,9 @@ export class TechStackComponent implements OnInit {
   }
 
   /** ★ #20:考试模式 (倒计时器)。 */
-  readonly examMode = signal<boolean>(
-    localStorage.getItem('ts.examMode') === '1');
-  readonly examMinutes = signal<number>(
-    parseInt(localStorage.getItem('ts.examMinutes') || '60', 10));
-  readonly examTimeLeft = signal<number>(0);
-  private examTimer: ReturnType<typeof setInterval> | null = null;
-
-  toggleExamMode(): void {
-    const v = !this.examMode();
-    this.examMode.set(v);
-    localStorage.setItem('ts.examMode', v ? '1' : '0');
-  }
-  setExamMinutes(m: number): void {
-    this.examMinutes.set(m);
-    localStorage.setItem('ts.examMinutes', String(m));
-  }
-  startExamTimer(): void {
-    this.stopExamTimer();
-    this.examTimeLeft.set(this.examMinutes() * 60);
-    this.examTimer = setInterval(() => {
-      const left = this.examTimeLeft() - 1;
-      this.examTimeLeft.set(Math.max(0, left));
-      if (left <= 0) this.stopExamTimer();
-    }, 1000);
-  }
-  stopExamTimer(): void {
-    if (this.examTimer) {
-      clearInterval(this.examTimer);
-      this.examTimer = null;
-    }
-  }
-  readonly examTimeText = computed(() => {
-    const s = this.examTimeLeft();
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  });
-
   /** 退出会话:回到列表,并刷新 dueToday 计数(刚复习过的会退出队列)。 */
   exitReview(): void {
     this.reviewMode.set(false);
-    this.stopExamTimer(); // ★ #20
     this.reviewCurrent.set(null);
     this.loadBuckets();
   }
@@ -1291,41 +1215,6 @@ export class TechStackComponent implements OnInit {
   });
 
   /** ★ #11:冲刺模式 (按面试倒计时重排复习优先级)。 */
-  readonly sprintMode = signal<boolean>(
-    localStorage.getItem('ts.sprintMode') === '1');
-
-  toggleSprintMode(): void {
-    const v = !this.sprintMode();
-    this.sprintMode.set(v);
-    localStorage.setItem('ts.sprintMode', v ? '1' : '0');
-  }
-
-  /** ★ #11:按剩余天数重排队列。 */
-  private applySprintSort(queue: KnowledgeItem[]): KnowledgeItem[] {
-    if (!this.sprintMode()) return queue;
-    const dateStr = this.interviewDate();
-    if (!dateStr) return queue;
-    const daysLeft = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
-    const masteryRank: Record<string, number> = {
-      'Stuck': 0, 'NeedsReview': 1, 'ToDo': 2, 'Practicing': 3, 'Familiar': 4, 'Mastered': 5
-    };
-    return [...queue].sort((a, b) => {
-      if (daysLeft <= 3) {
-        // 冲刺:重要度优先,弱项优先
-        const imp = (b.importance ?? 3) - (a.importance ?? 3);
-        if (imp !== 0) return imp;
-        return (masteryRank[a.mastery] ?? 3) - (masteryRank[b.mastery] ?? 3);
-      } else if (daysLeft <= 14) {
-        // 中期:到期时间 + 重要度
-        const da = a.nextReviewAt ? new Date(a.nextReviewAt).getTime() : Infinity;
-        const db = b.nextReviewAt ? new Date(b.nextReviewAt).getTime() : Infinity;
-        if (da !== db) return da - db;
-        return (b.importance ?? 3) - (a.importance ?? 3);
-      }
-      return 0; // 长期:保持后端 FSRS 排序
-    });
-  }
-
   /** 推进到下一张:收起答案;若已是最后一张则结束本轮。 */
   private advance(): void {
     const idx = this.reviewIndex();

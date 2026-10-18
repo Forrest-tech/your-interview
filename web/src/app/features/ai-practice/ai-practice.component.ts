@@ -933,12 +933,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       after?.();
       return;
     }
-    // 逐个 PUT 到 Knowledge(改名→question,内容→betterAnswer)
-    let pending = updates.length * 2;
+    // 逐个 PUT 到 Knowledge(一次写回题目+推荐答案,避免并发 xmin 冲突)
+    // 串行发送,避免并行导致 xmin 冲突
     let failed = 0;
-    const done = () => {
-      pending--;
-      if (pending === 0) {
+    const sendNext = (index: number) => {
+      if (index >= updates.length) {
         if (failed === 0) {
           this.treeDirty.set(false);
           this.treeEditing.set(false);
@@ -949,22 +948,18 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
           this.treeError.set(this.t('practice.tsSavePartial'));
         }
         after?.();
+        return;
       }
-    };
-    for (const u of updates) {
-      this.knowledgeApi.put<void>(`/api/knowledge/${u.kid}/question`, {
-        question: u.name || null
-      }).subscribe({
-        next: () => done(),
-        error: () => { failed++; done(); }
-      });
-      this.knowledgeApi.put<void>(`/api/knowledge/${u.kid}/better-answer`, {
+      const u = updates[index];
+      this.knowledgeApi.put<void>(`/api/knowledge/${u.kid}/from-tech`, {
+        question: u.name || null,
         betterAnswer: u.content || null
       }).subscribe({
-        next: () => done(),
-        error: () => { failed++; done(); }
+        next: () => sendNext(index + 1),
+        error: () => { failed++; sendNext(index + 1); }
       });
-    }
+    };
+    sendNext(0);
   }
 
   // ---------- 树编辑模式(2026-09-20,Forrest) ----------

@@ -178,6 +178,17 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    public sealed record UpdateFromTechBody(string? Question, string? BetterAnswer);
+
+    /// <summary>From Tech 一次写回题目+推荐答案(避免并发 xmin 冲突)。</summary>
+    [HttpPut("{id:guid}/from-tech")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> UpdateFromTech(Guid id, [FromBody] UpdateFromTechBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateFromTechCommand(id, body.Question, body.BetterAnswer), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeDelete)]
     public async Task<IResult> Delete(Guid id, CancellationToken ct)

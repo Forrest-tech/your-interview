@@ -855,6 +855,25 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     fetchPage(1, []);
   }
 
+  /** ★ #18:幽灵跟进提醒 (Applied 状态 21 天无更新)。 */
+  readonly ghostingApps = signal<Application[]>([]);
+  loadGhosting(): void {
+    this.api.get<Paged<Application>>('/api/jobs/applications', {
+      page: 1, pageSize: 200, status: 'Applied'
+    }).subscribe({
+      next: (r) => {
+        const now = Date.now();
+        const stale = (r.items ?? []).filter(a => {
+          const updated = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+          const days = (now - updated) / 86400000;
+          return days >= 21;
+        });
+        this.ghostingApps.set(stale);
+      },
+      error: () => { /* 失败就空着,不打扰主流程 */ }
+    });
+  }
+
   /** 本周已投递数:appliedDate 落在本周一之后(含今天)。全量统计,见 loadWeeklyApplied。 */
   readonly weeklyApplied = computed(() => this.weeklyAppliedCount());
   readonly weeklyPct = computed(() => {
@@ -882,6 +901,7 @@ export class TrackerComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.reload();
+    this.loadGhosting(); // ★ #18
   }
 
   ngAfterViewInit(): void {

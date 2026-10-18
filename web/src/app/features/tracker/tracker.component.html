@@ -27,6 +27,25 @@
     </div>
   </header>
 
+  <!-- ★ #18:幽灵跟进提醒 -->
+  @if (ghostingApps().length > 0) {
+    <mat-card class="ghosting-banner">
+      <mat-icon>warning</mat-icon>
+      <div>
+        <b>{{ ghostingApps().length }} 个申请超过 21 天无更新</b>
+        <span class="ghosting-list">
+          @for (a of ghostingApps().slice(0, 5); track a.id) {
+            <span class="ghosting-item">{{ a.companyName }} · {{ a.role }}</span>
+          }
+          @if (ghostingApps().length > 5) {
+            <span>等 {{ ghostingApps().length - 5 }} 个…</span>
+          }
+        </span>
+      </div>
+      <button mat-button (click)="ghostingApps.set([])">忽略</button>
+    </mat-card>
+  }
+
   <!-- 概览指标:数字只在统计接口可用时显示,否则退回列表 total -->
   <section class="metrics" id="overview">
     <mat-card class="metric">

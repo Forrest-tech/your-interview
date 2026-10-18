@@ -94,6 +94,19 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly entry = signal<InterviewDetail | null>(null);
+
+  /** ★ #12:公司情报快捷搜索 (Glassdoor/1p3a/LeetCode Discuss)。 */
+  searchCompanyIntel(): void {
+    const c = this.entry()?.companyName?.trim();
+    if (!c) return;
+    const q = encodeURIComponent(`${c} interview questions`);
+    window.open(`https://www.google.com/search?q=${q}`, '_blank');
+  }
+  searchGlassdoor(): void {
+    const c = this.entry()?.companyName?.trim();
+    if (!c) return;
+    window.open(`https://www.glassdoor.com/Search/results.htm?keyword=${encodeURIComponent(c)}`, '_blank');
+  }
   readonly busy = signal<string | null>(null);
 
   /** 轮询定时器句柄 —— 必须在销毁时清掉。 */

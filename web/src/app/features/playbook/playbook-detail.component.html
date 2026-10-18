@@ -51,6 +51,15 @@
             <span class="result"><mat-icon inline>flag</mat-icon> {{ e.result }}</span>
           }
         </div>
+        <!-- ★ #12:公司情报快捷搜索 -->
+        <div class="intel-row">
+          <button mat-stroked-button (click)="searchCompanyIntel()">
+            <mat-icon>search</mat-icon> 面经搜索
+          </button>
+          <button mat-stroked-button (click)="searchGlassdoor()">
+            <mat-icon>business</mat-icon> Glassdoor
+          </button>
+        </div>
       </div>
 
       <!-- 总分 + 六维徽章 -->

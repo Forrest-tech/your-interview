@@ -1844,7 +1844,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         category: '口语练习',
         mastery: 'ToDo'
       }).toPromise();
-    } catch { /* 静默失败,不打断流程 */ }
+      this.toast('已加入 Tech Stack 复习');
+    } catch {
+      this.toast('加入失败,请重试');
+    }
   }
 
   async generateFollowUp(): Promise<void> {
@@ -1866,8 +1869,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       }).toPromise();
       const q = res?.text ?? res?.content ?? '';
       this.followUpQuestion.set(q.trim() || null);
+      if (!q.trim()) this.toast('AI 追问失败,请检查 AI 配置');
     } catch {
       this.followUpQuestion.set(null);
+      this.toast('AI 追问失败,请检查 AI 配置');
     } finally {
       this.followUpLoading.set(false);
     }
@@ -1910,9 +1915,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // 否则 findFile 在空树上永远找不到,会错误地跳到第一个素材。
     // 恢复选中项的逻辑移到 afterTreeReady(),由加载回调触发。
     this.restoreTree();
-    // ★ 打通:从 Playbook 带题目过来 (?q=...),设为本次练习题。
-    const q = this.route.snapshot.queryParamMap.get('q');
-    if (q) this.customQuestion.set(q);
+    // ★ 打通:从 Playbook 带题目过来 (?q=...)。用订阅而不用 snapshot,
+    //   因为 Angular 会复用组件 —— 已在 AI Practice 页时再跳一次,
+    //   ngOnInit 不重跑,snapshot 就读不到新参数。
+    this.route.queryParamMap.subscribe(params => {
+      const q = params.get('q');
+      if (q) this.customQuestion.set(q);
+    });
   }
 
   /** ★ 打通:外部带入的自定义练习题 (如从 Playbook 跳过来)。 */

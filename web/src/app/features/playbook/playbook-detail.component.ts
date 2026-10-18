@@ -1334,22 +1334,34 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   }
   updateDebrief(field: 'questions' | 'rating' | 'stuck', value: any): void {
     const cur = this.debriefForm();
+    if (field === 'rating') {
+      const n = Math.round(Number(value));
+      if (!Number.isFinite(n)) return;
+      value = Math.min(5, Math.max(1, n));
+    }
     this.debriefForm.set({ ...cur, [field]: value });
   }
   /** ★ #17:卡点一键转 Tech Stack 复习卡 */
   async stuckToCards(): Promise<void> {
     const stuck = this.debriefForm().stuck.trim();
     if (!stuck) return;
-    const lines = stuck.split('\n').map(s => s.trim()).filter(Boolean);
-    for (const line of lines.slice(0, 10)) {
-      await this.api.post('/api/knowledge', {
-        title: `复盘卡点: ${line.slice(0, 50)}`,
-        question: line,
-        topic: 'Interview Debrief',
-        category: '复盘',
-        mastery: 'ToDo'
-      }).toPromise().catch(() => null);
+    const lines = stuck.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10);
+    let ok = 0;
+    for (const line of lines) {
+      try {
+        await this.api.post('/api/knowledge', {
+          title: `复盘卡点: ${line.slice(0, 50)}`,
+          question: line,
+          topic: 'Interview Debrief',
+          category: '复盘',
+          mastery: 'ToDo'
+        }).toPromise();
+        ok++;
+      } catch { /* 单条失败跳过 */ }
     }
+    this.snack.open(
+      ok === lines.length ? `已创建 ${ok} 张复习卡` : `创建 ${ok}/${lines.length} 张,部分失败`,
+      '关闭', { duration: 3000 });
   }
 
   /** ★ 打通:Playbook 题目 → AI Practice 口语练习。 */

@@ -174,6 +174,12 @@ function todayIso(): string {
         <textarea matInput name="notes" rows="4" [(ngModel)]="form.notes"></textarea>
       </mat-form-field>
 
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>职位描述 (JD)</mat-label>
+        <textarea matInput name="jdText" rows="6" [(ngModel)]="form.jdText"
+                  placeholder="粘贴完整 JD,用于关键词提取和备战计划"></textarea>
+      </mat-form-field>
+
       <div class="qa-row">
         <span class="qa-hint">{{ t('tracker.insertAnswer') }}</span>
         <button mat-stroked-button type="button" (click)="insertAnswer()">

@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -116,6 +116,7 @@ export class PlaybookComponent implements OnInit {
   };
 
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
 
@@ -191,6 +192,11 @@ export class PlaybookComponent implements OnInit {
     this.loadCompanies();
     this.loadStats();
     this.loadUpcoming();
+    // ★ 打通:从 Tracker 带公司名过来 (?company=...),自动过滤到该公司。
+    this.route.queryParamMap.subscribe(params => {
+      const c = params.get('company');
+      if (c) { this.companyFilter = c; this.load(); }
+    });
   }
 
   /** 全局 upcoming 轮次:后端聚合,失败时静默留空(不挡主列表)。 */

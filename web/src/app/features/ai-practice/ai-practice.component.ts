@@ -1808,6 +1808,36 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     return { level, label, avg: Math.round(avg), weaknesses: weaknesses.slice(0, 3) };
   });
 
+  /** ★ #14:AI 追问 (像真面试官一样,基于回答生成一层追问)。 */
+  readonly followUpQuestion = signal<string | null>(null);
+  readonly followUpLoading = signal(false);
+
+  async generateFollowUp(): Promise<void> {
+    const take = this.activeTake();
+    if (!take || this.followUpLoading()) return;
+    const transcript = (take as any)?.transcript ?? (take as any)?.text ?? '';
+    const question = this.currentText();
+    if (!transcript.trim()) return;
+
+    this.followUpLoading.set(true);
+    this.followUpQuestion.set(null);
+    try {
+      const res = await this.knowledgeApi.post<{ text?: string; content?: string }>('/api/ai/complete', {
+        purpose: 'ai-practice-followup',
+        systemPrompt: 'You are a senior technical interviewer. Based on the candidate\'s answer, ask ONE sharp follow-up question that digs deeper into a weak point, edge case, or design trade-off. Reply in the same language as the answer. Output only the question, no preamble.',
+        prompt: `Original question: ${question}\n\nCandidate's answer:\n${transcript.slice(0, 2000)}`,
+        maxTokens: 200,
+        temperature: 0.7
+      }).toPromise();
+      const q = res?.text ?? res?.content ?? '';
+      this.followUpQuestion.set(q.trim() || null);
+    } catch {
+      this.followUpQuestion.set(null);
+    } finally {
+      this.followUpLoading.set(false);
+    }
+  }
+
   /** 在历史列表里点"查看报告"：把该条设为当前作品并弹到结果区。 */
   focusTake(id: string): void {
     this.activeTakeId.set(id);

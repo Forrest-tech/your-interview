@@ -613,6 +613,25 @@
                   </section>
                 }
 
+                <!-- ★ #14:AI 追问 -->
+                <section class="followup-section">
+                  @if (!followUpQuestion() && !followUpLoading()) {
+                    <button mat-stroked-button (click)="generateFollowUp()">
+                      <mat-icon>psychology</mat-icon> AI 追问一层
+                    </button>
+                  }
+                  @if (followUpLoading()) {
+                    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+                  }
+                  @if (followUpQuestion(); as fq) {
+                    <div class="followup-card">
+                      <div class="followup-label"><mat-icon>forum</mat-icon> 面试官追问</div>
+                      <p>{{ fq }}</p>
+                      <button mat-button (click)="generateFollowUp()">换一个</button>
+                    </div>
+                  }
+                </section>
+
                 <!-- ★ 第三十一轮(Forrest 指定):音频波形移入评分报告内部。
                      位置 = 总分胶囊之后、Recognition 之前。
                      数据源就是本报告的这条录音(activeTake 的 id),

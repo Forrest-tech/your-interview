@@ -1312,4 +1312,39 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   refresh(): void {
     this.load();
   }
+
+  // ★ #17:面后复盘 (localStorage,按 entry id 存)
+  readonly showDebrief = signal(false);
+  readonly debriefForm = signal({ questions: '', rating: 3, stuck: '' });
+
+  loadDebrief(): void {
+    const id = this.entry()?.id;
+    if (!id) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`pb.debrief.${id}`) || 'null');
+      if (saved) this.debriefForm.set(saved);
+    } catch { /* ignore */ }
+    this.showDebrief.set(true);
+  }
+  saveDebrief(): void {
+    const id = this.entry()?.id;
+    if (!id) return;
+    localStorage.setItem(`pb.debrief.${id}`, JSON.stringify(this.debriefForm()));
+    this.showDebrief.set(false);
+  }
+  /** ★ #17:卡点一键转 Tech Stack 复习卡 */
+  async stuckToCards(): Promise<void> {
+    const stuck = this.debriefForm().stuck.trim();
+    if (!stuck) return;
+    const lines = stuck.split('\n').map(s => s.trim()).filter(Boolean);
+    for (const line of lines.slice(0, 10)) {
+      await this.api.post('/api/knowledge', {
+        title: `复盘卡点: ${line.slice(0, 50)}`,
+        question: line,
+        topic: 'Interview Debrief',
+        category: '复盘',
+        mastery: 'ToDo'
+      }).toPromise().catch(() => null);
+    }
+  }
 }

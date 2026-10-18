@@ -59,8 +59,43 @@
           <button mat-stroked-button (click)="searchGlassdoor()">
             <mat-icon>business</mat-icon> Glassdoor
           </button>
+          <!-- ★ #17:面后复盘 -->
+          <button mat-stroked-button (click)="loadDebrief()">
+            <mat-icon>rate_review</mat-icon> 面后复盘
+          </button>
         </div>
       </div>
+
+      <!-- ★ #17:复盘表单 -->
+      @if (showDebrief()) {
+        <mat-card class="debrief-card">
+          <mat-card-header><mat-card-title>面后复盘</mat-card-title></mat-card-header>
+          <mat-card-content>
+            <mat-form-field class="full">
+              <mat-label>被问了什么 (每行一条)</mat-label>
+              <textarea matInput rows="4" [ngModel]="debriefForm().questions"
+                        (ngModelChange)="debriefForm.set({...debriefForm(), questions: $event})"></textarea>
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>自评 (1-5)</mat-label>
+              <input matInput type="number" min="1" max="5" [ngModel]="debriefForm().rating"
+                     (ngModelChange)="debriefForm.set({...debriefForm(), rating: $event})" />
+            </mat-form-field>
+            <mat-form-field class="full">
+              <mat-label>卡住的点 (每行一条,可一键转复习卡)</mat-label>
+              <textarea matInput rows="3" [ngModel]="debriefForm().stuck"
+                        (ngModelChange)="debriefForm.set({...debriefForm(), stuck: $event})"></textarea>
+            </mat-form-field>
+            <div class="debrief-actions">
+              <button mat-raised-button color="primary" (click)="saveDebrief()">保存复盘</button>
+              <button mat-stroked-button (click)="stuckToCards()">
+                <mat-icon>school</mat-icon> 卡点转复习卡
+              </button>
+              <button mat-button (click)="showDebrief.set(false)">取消</button>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      }
 
       <!-- 总分 + 六维徽章 -->
       <div class="badges">

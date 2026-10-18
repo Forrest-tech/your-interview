@@ -467,9 +467,8 @@ export class TrackerComponent implements OnInit, AfterViewInit {
 
   private maybeGeneratePrepPlan(app: Application): void {
     const jd = app.jdText || app.jdSummary || '';
-    if (!jd.trim()) return;
-    const found = TrackerComponent.TECH_KEYWORDS.filter(k =>
-      jd.toLowerCase().includes(k.toLowerCase()));
+    const found = jd.trim() ? TrackerComponent.TECH_KEYWORDS.filter(k =>
+      jd.toLowerCase().includes(k.toLowerCase())) : [];
     // 用 Material Dialog 替代原生 confirm
     const dialogRef = this.dialog.open(PrepPlanDialogComponent, {
       width: '480px',

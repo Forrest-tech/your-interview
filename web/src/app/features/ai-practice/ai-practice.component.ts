@@ -1268,6 +1268,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.tsItems.set([]);
     if (this.isFromTechSelected()) {
       this.loadTsTopics();
+    } else {
+      // 切回普通分类:重载真实材料树(之前可能被 From Tech 虚拟树覆盖)
+      this.reloadTree();
     }
   }
 

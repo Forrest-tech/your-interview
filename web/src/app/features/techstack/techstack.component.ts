@@ -139,6 +139,23 @@ export class TechStackComponent implements OnInit {
 
   /** 是否进入"今日复习"专注模式:进入后隐藏列表/筛选,改走闪卡队列。 */
   readonly reviewMode = signal(false);
+  /** ★ #5:重做模式 (Anki-for-LeetCode 模式:只看题,重做/重讲,pass/fail)。 */
+  readonly resoleMode = signal<boolean>(
+    localStorage.getItem('ts.resoleMode') === '1');
+  /** ★ #5:重做模式下是否已翻开答案。 */
+  readonly resoleRevealed = signal(false);
+
+  toggleResoleMode(): void {
+    const v = !this.resoleMode();
+    this.resoleMode.set(v);
+    localStorage.setItem('ts.resoleMode', v ? '1' : '0');
+    this.resoleRevealed.set(false);
+  }
+
+  /** ★ #5:二元评分 (Pass/Fail) 映射到 SM-2。 */
+  gradeBinary(pass: boolean): void {
+    this.grade(pass ? 'Good' : 'Again');
+  }
   /** ★ #4:期望留存率 (FSRS 模式,默认 90%)。 */
   readonly desiredRetention = signal<number>(
     parseFloat(localStorage.getItem('ts.desiredRetention') || '0.9'));
@@ -1178,6 +1195,7 @@ export class TechStackComponent implements OnInit {
     }
     this.reviewIndex.set(idx + 1);
     this.reviewRevealed.set(false);
+    this.resoleRevealed.set(false); // ★ #5:重做模式翻页时重置
     this.reviewCurrent.set(null);
   }
 

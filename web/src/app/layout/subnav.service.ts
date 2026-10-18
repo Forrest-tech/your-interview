@@ -43,12 +43,11 @@ export class SubnavService {
       if (path === key || path.startsWith(key + '/')) return items;
     }
 
-    // 2) 按模块给出默认子导航(锚点式,滚动到对应区块)
-    // Playbook 列表页只有 overview 有对应区块;详情页由组件自己注册 tab 切换。
+    // 2) 按模块给出默认子导航
+    // ★ 2026-10-18:只保留有实际功能的,纯锚点滚动的不算功能,直接不显示
+    // Playbook 列表页:无实际功能,不显示侧边栏
     if (path === '/playbook') {
-      return [
-        this.anchor('sub.overview', 'dashboard', 'overview')
-      ];
+      return [];
     }
     if (path.startsWith('/tracker')) {
       // ★ 2026-10-18:Tracker 自己 register 有实际功能的子导航,这里返回空
@@ -71,10 +70,8 @@ export class SubnavService {
       return [];
     }
     if (path.startsWith('/mock')) {
-      return [
-        this.anchor('sub.sessions', 'list_alt', 'sessions'),
-        this.anchor('sub.overview', 'graphic_eq', 'overview')
-      ];
+      // ★ 2026-10-18:纯锚点滚动不算功能,不显示
+      return [];
     }
     if (path.startsWith('/admin')) {
       // ★ 2026-10-18:移除坏掉的锚点 —— 模板里没有对应的 id,点了没反应。

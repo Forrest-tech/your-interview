@@ -59,6 +59,26 @@
             }
           </mat-select>
         </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>{{ t('pb.br.rounds.datePh') }}</mat-label>
+          <input matInput type="date" [(ngModel)]="newDate">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>{{ t('pb.br.rounds.interviewersPh') }}</mat-label>
+          <input matInput [(ngModel)]="newInterviewers" placeholder="David, Vinitha">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>{{ t('pb.br.rounds.formatPh') }}</mat-label>
+          <mat-select [(ngModel)]="newFormat">
+            <mat-option value="Phone">Phone</mat-option>
+            <mat-option value="Video">Video</mat-option>
+            <mat-option value="Onsite">Onsite</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>{{ t('pb.br.rounds.locationPh') }}</mat-label>
+          <input matInput [(ngModel)]="newLocation">
+        </mat-form-field>
         <button mat-flat-button color="primary" (click)="addRound()" [disabled]="busy() === 'add'">
           <mat-icon>add</mat-icon> {{ t('pb.br.rounds.add') }}
         </button>

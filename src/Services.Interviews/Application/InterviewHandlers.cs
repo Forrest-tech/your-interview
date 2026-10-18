@@ -310,7 +310,9 @@ public sealed record UpdateRoundEmailsCommand(
 // ============================ 轮次(缺口1) ============================
 
 public sealed record AddRoundCommand(
-    Guid EntryId, string Stage = "Technical") : IRequest<Result<Guid>>;
+    Guid EntryId, string Stage = "Technical", DateOnly? ScheduledDate = null,
+    string? Interviewers = null, string? Format = null, string? Location = null,
+    string? ScheduledTime = null) : IRequest<Result<Guid>>;
 
 public sealed record UpdateRoundCommand(
     Guid EntryId, Guid RoundId, string Stage, DateOnly? ScheduledDate, string? Interviewers,
@@ -1178,6 +1180,13 @@ public sealed class AddRoundCommandHandler(InterviewsDbContext db)
         if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
 
         var r = e.AddRound(request.Stage);
+        // ★ 一次性设置日期/面试官/形式/地点,避免建完再改两步走
+        if (request.ScheduledDate.HasValue || !string.IsNullOrWhiteSpace(request.Interviewers) ||
+            !string.IsNullOrWhiteSpace(request.Format) || !string.IsNullOrWhiteSpace(request.Location))
+        {
+            e.UpdateRound(r.Id, request.Stage, request.ScheduledDate, request.Interviewers,
+                request.Format, request.Location, InterviewRoundOutcome.Pending, null, null);
+        }
         await db.SaveChangesAsync(ct);
         return Result.Success(r.Id);
     }

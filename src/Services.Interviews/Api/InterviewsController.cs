@@ -407,7 +407,9 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> AddRound(Guid id, [FromBody] AddRoundBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new AddRoundCommand(id, body.Stage ?? "Technical"), ct);
+        var r = await sender.Send(new AddRoundCommand(id, body.Stage ?? "Technical",
+            body.ScheduledDate, body.Interviewers, body.Format, body.Location,
+            body.ScheduledTime), ct);
         return r.IsSuccess
             ? Results.Created($"/api/interviews/{id}/rounds/{r.Value}", new { id = r.Value })
             : r.ToProblemDetails();
@@ -584,7 +586,9 @@ public sealed record AddQuestionBody(
     string QuestionText, string? MyAnswerText = null, string? Category = null,
     int Difficulty = 3, string? Assessment = null);
 
-public sealed record AddRoundBody(string? Stage = null);
+public sealed record AddRoundBody(string? Stage = null, DateOnly? ScheduledDate = null,
+    string? Interviewers = null, string? Format = null, string? Location = null,
+    string? ScheduledTime = null);
 
 public sealed record UpdateRoundBody(
     string Stage, DateOnly? ScheduledDate, string? Interviewers, string? Format,

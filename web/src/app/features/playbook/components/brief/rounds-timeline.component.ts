@@ -154,16 +154,26 @@ export class RoundsTimelineComponent implements OnInit {
   // ---------------- 新增 / 删除轮次 ----------------
   readonly showAdd = signal(false);
   newStage = 'Technical';
+  newDate = '';
+  newInterviewers = '';
+  newFormat = '';
+  newLocation = '';
 
   addRound(): void {
     if (this.busy()) return;
     this.busy.set('add');
     this.api.post<{ id: string }>(`/api/interviews/${this.entryId()}/rounds`, {
       stage: this.newStage,
+      scheduledDate: this.newDate || null,
+      interviewers: this.newInterviewers || null,
+      format: this.newFormat || null,
+      location: this.newLocation || null,
     }).subscribe({
       next: () => {
         this.busy.set(null);
         this.showAdd.set(false);
+        // 重置表单
+        this.newDate = ''; this.newInterviewers = ''; this.newFormat = ''; this.newLocation = '';
         this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2500 });
         this.load();
       },

@@ -85,6 +85,12 @@
                 <span class="fsrs-forecast">到那天约需复习 <b>{{ forecastCount() }}</b> 条</span>
               }
             </div>
+            <!-- ★ #11:冲刺模式开关 -->
+            <div class="fsrs-row">
+              <label>冲刺模式</label>
+              <input type="checkbox" [checked]="sprintMode()" (change)="toggleSprintMode()" />
+              <span class="fsrs-hint">按剩余天数重排:≤3天按重要度+弱项,≤14天按到期时间</span>
+            </div>
           </div>
 
           <!-- ★ #9:复习热力图 + 连击 -->

@@ -1094,11 +1094,12 @@ export class TechStackComponent implements OnInit {
     }).subscribe({
       next: (r) => {
         this.reviewLoading.set(false);
-        const queue = r.items ?? [];
+        let queue = r.items ?? [];
         if (queue.length === 0) {
           this.notify(this.t('techstack.reviewNoDue'));
           return;
         }
+        queue = this.applySprintSort(queue); // ★ #11
         this.reviewQueue.set(queue);
         this.reviewIndex.set(0);
         this.reviewRevealed.set(false);
@@ -1239,6 +1240,42 @@ export class TechStackComponent implements OnInit {
     }
     return streak;
   });
+
+  /** ★ #11:冲刺模式 (按面试倒计时重排复习优先级)。 */
+  readonly sprintMode = signal<boolean>(
+    localStorage.getItem('ts.sprintMode') === '1');
+
+  toggleSprintMode(): void {
+    const v = !this.sprintMode();
+    this.sprintMode.set(v);
+    localStorage.setItem('ts.sprintMode', v ? '1' : '0');
+  }
+
+  /** ★ #11:按剩余天数重排队列。 */
+  private applySprintSort(queue: KnowledgeItem[]): KnowledgeItem[] {
+    if (!this.sprintMode()) return queue;
+    const dateStr = this.interviewDate();
+    if (!dateStr) return queue;
+    const daysLeft = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
+    const masteryRank: Record<string, number> = {
+      'Stuck': 0, 'NeedsReview': 1, 'ToDo': 2, 'Practicing': 3, 'Familiar': 4, 'Mastered': 5
+    };
+    return [...queue].sort((a, b) => {
+      if (daysLeft <= 3) {
+        // 冲刺:重要度优先,弱项优先
+        const imp = (b.importance ?? 3) - (a.importance ?? 3);
+        if (imp !== 0) return imp;
+        return (masteryRank[a.mastery] ?? 3) - (masteryRank[b.mastery] ?? 3);
+      } else if (daysLeft <= 14) {
+        // 中期:到期时间 + 重要度
+        const da = a.nextReviewAt ? new Date(a.nextReviewAt).getTime() : Infinity;
+        const db = b.nextReviewAt ? new Date(b.nextReviewAt).getTime() : Infinity;
+        if (da !== db) return da - db;
+        return (b.importance ?? 3) - (a.importance ?? 3);
+      }
+      return 0; // 长期:保持后端 FSRS 排序
+    });
+  }
 
   /** 推进到下一张:收起答案;若已是最后一张则结束本轮。 */
   private advance(): void {

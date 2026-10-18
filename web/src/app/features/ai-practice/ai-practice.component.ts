@@ -145,6 +145,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   // ---------- 素材树 ----------
   readonly nodes = signal<MaterialNode[]>([]);
+  /** From Tech 虚拟树(独立 signal,不污染 nodes) */
+  readonly fromTechNodes = signal<MaterialNode[]>([]);
   readonly selectedId = signal<string | null>(null);
 
   // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
@@ -924,7 +926,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         if (n.children) walk(n.children);
       }
     };
-    walk(this.nodes());
+    walk(this.fromTechNodes());
     if (updates.length === 0) {
       this.treeDirty.set(false);
       this.treeEditing.set(false);
@@ -1274,12 +1276,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.tsSelected.set(null);
     this.tsExpandedTopic.set(null);
     this.tsItems.set([]);
-    // 切换分类:清除旧选中(含 URL 参数),强制选中新分类的第一个文件
+    // 切换分类:清除旧选中(含 URL 参数)
     this.selectedId.set(null);
     try {
       localStorage.removeItem('active_practice_material_id');
     } catch { /* 忽略 */ }
-    // 清 URL 里的 materialId,避免 afterTreeReady 按旧 ID 恢复
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { materialId: null },
@@ -1289,8 +1290,21 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (this.isFromTechSelected()) {
       this.loadTsTopics();
     } else {
-      // 切回普通分类:重载真实材料树(之前可能被 From Tech 虚拟树覆盖)
-      this.reloadTree();
+      // 普通分类:直接选中新分类的第一个文件(nodes 未被污染,无需重载)
+      const visible = value === 'all'
+        ? this.nodes()
+        : value === 'uncategorized'
+          ? this.nodes().filter(n => !n.categoryId)
+          : this.nodes().filter(n => n.categoryId === value);
+      const first = this.firstFile(visible);
+      if (first) {
+        this.expandPathTo(first);
+        this.selectFile(first);
+      } else {
+        // 新分类为空:清空右侧
+        this.saved.set('');
+        this.draft.set('');
+      }
     }
   }
 
@@ -1323,7 +1337,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       pending--;
       if (pending === 0) {
         tree.sort((a, b) => a.name.localeCompare(b.name));
-        this.nodes.set(tree);
+        this.fromTechNodes.set(tree);
         this.tsLoading.set(false);
         // 切换到 From Tech 时,默认选中第一个节点的第一个内容
         const first = this.firstFile(tree);
@@ -1854,7 +1868,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   onTreeChange(next: MaterialNode[]): void {
-    this.nodes.set([...next]);
+    if (this.isFromTechSelected()) {
+      this.fromTechNodes.set([...next]);
+    } else {
+      this.nodes.set([...next]);
+    }
     // 树变了 → 标记未保存,驱动侧栏「保存修改」按钮亮起
     this.treeDirty.set(true);
     // ★ 2026-09-20(Forrest):不再自动落盘 —— 只有点「保存修改」并确认
@@ -2094,10 +2112,16 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   saveEdit(): void {
     const id = this.selectedId();
     if (!id || !this.editing()) return;
-    const target = this.findFile(this.nodes(), id);
+    // From Tech:从虚拟树找节点
+    const searchTree = id.startsWith('ts:') ? this.fromTechNodes() : this.nodes();
+    const target = this.findFile(searchTree, id);
     const text = this.draft();
     if (target) target.content = text;
-    this.nodes.set([...this.nodes()]);
+    if (id.startsWith('ts:')) {
+      this.fromTechNodes.set([...this.fromTechNodes()]);
+    } else {
+      this.nodes.set([...this.nodes()]);
+    }
     this.saved.set(text);
     this.editing.set(false);
     // 内容变了,旧评分作废 —— 参考文本变了,旧分数不再对应这份文本

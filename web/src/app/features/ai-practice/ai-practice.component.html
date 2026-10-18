@@ -55,7 +55,7 @@
           </div>
         } @else {
           <app-material-tree
-            [nodes]="nodes()"
+            [nodes]="isFromTechSelected() ? fromTechNodes() : nodes()"
             [selectedId]="selectedId()"
             [editable]="treeEditing()"
             [canSave]="treeDirty()"

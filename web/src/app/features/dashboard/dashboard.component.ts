@@ -85,7 +85,8 @@ export class DashboardComponent implements OnInit {
   readonly hasActions = computed(() =>
     (this.actionCenter()?.followUps.length ?? 0) > 0 ||
     (this.actionCenter()?.deadlines.length ?? 0) > 0 ||
-    this.weakest().length > 0);
+    this.weakest().length > 0 ||
+    this.upcomingRounds().length > 0);
 
   ngOnInit(): void {
     this.load();

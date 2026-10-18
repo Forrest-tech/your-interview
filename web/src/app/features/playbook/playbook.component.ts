@@ -487,6 +487,12 @@ export class PlaybookComponent implements OnInit {
   }
   saveStory(s: StarStory): void {
     if (!s.title.trim()) return;
+    // 空故事没有意义:标题之外 S/T/A/R 至少填一项,否则就是一张废卡
+    const filled = [s.situation, s.task, s.action, s.result].filter(v => v && v.trim()).length;
+    if (filled === 0) {
+      this.snack.open('故事内容是空的:请至少填写 S/T/A/R 中的一项', '关闭', { duration: 3500 });
+      return;
+    }
     const list = this.loadStarStories();
     const idx = list.findIndex(x => x.id === s.id);
     if (idx >= 0) list[idx] = s; else list.push(s);

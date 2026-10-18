@@ -531,12 +531,6 @@
       </div>
 
       <mat-card class="rs-card">
-        <!-- ★ #20:考试倒计时 -->
-        @if (examMode() && examTimeLeft() > 0) {
-          <div class="exam-timer" [class.exam-urgent]="examTimeLeft() < 300">
-            <mat-icon>timer</mat-icon> {{ examTimeText() }}
-          </div>
-        }
         <div class="rs-head">
           <h3>{{ c.title }}</h3>
           <span class="li-mastery" [class]="masteryClass(c.mastery)">{{ masteryLabel(c.mastery) }}</span>

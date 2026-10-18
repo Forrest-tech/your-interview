@@ -3487,3 +3487,18 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 }
 .ts-q p { font-size: 15px; font-weight: 500; margin: 0; }
 .ts-edit-btn { margin-top: 8px; }
+
+/* ★ 打通:从 Playbook 带过来的练习题横幅 */
+.custom-q-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: #e8eaf6;
+  border-left: 4px solid #3f51b5;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.custom-q-banner mat-icon { color: #3f51b5; }
+.custom-q-banner span { flex: 1; }

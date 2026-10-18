@@ -1198,7 +1198,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   private validateCategoryFilter(): void {
     const f = this.categoryFilter();
-    if (f === 'all' || f === 'uncategorized') return;
+    if (f === 'all' || f === 'uncategorized' || f === '__fromTech') return;
     if (this.categories().some((c) => c.id === f)) return;
     this.categoryFilter.set('all');
     try { localStorage.removeItem(AiPracticeComponent.CATEGORY_FILTER_KEY); } catch { /* 忽略 */ }

@@ -156,6 +156,17 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    public sealed record UpdateBetterAnswerBody(string? BetterAnswer);
+
+    /// <summary>只更新推荐答案(AI Practice From Tech 编辑写回用)。</summary>
+    [HttpPut("{id:guid}/better-answer")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> UpdateBetterAnswer(Guid id, [FromBody] UpdateBetterAnswerBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateBetterAnswerCommand(id, body.BetterAnswer), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeDelete)]
     public async Task<IResult> Delete(Guid id, CancellationToken ct)

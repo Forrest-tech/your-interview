@@ -158,6 +158,13 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
         Touch();
     }
 
+    /// <summary>只更新推荐答案(AI Practice From Tech 编辑写回用)。</summary>
+    public void SetBetterAnswer(string? betterAnswer)
+    {
+        BetterAnswer = string.IsNullOrWhiteSpace(betterAnswer) ? null : betterAnswer;
+        Touch();
+    }
+
     public void UpdateDetails(string title, string topic, string? subTopic, string question,
         int difficulty, int importance, string? tagsJson, string? conceptExplanation,
         string? myAnswer, string? betterAnswer, string? keyPointsJson, string? commonMistakesJson,

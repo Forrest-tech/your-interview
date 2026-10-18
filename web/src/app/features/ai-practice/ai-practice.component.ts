@@ -875,6 +875,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 确认后的真正保存(整树覆盖 + 回读对齐 GUID)。after 可选:保存成功后执行。 */
   private doSaveTree(after?: () => void): void {
+    // From Tech:写回 Knowledge(同一份数据),不走 Practice API
+    if (this.isFromTechSelected()) {
+      this.saveFromTechToKnowledge(after);
+      return;
+    }
     const payload = AiPracticeComponent.toPayload(this.nodes());
     // ★ 本次编辑期间删过东西 → 带 force 越过服务端"防误删熔断"
     //   (用户已经在弹窗里确认过删除,不应被拦)。
@@ -903,6 +908,53 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         this.treeDirty.set(true);
       }
     });
+  }
+
+  /** From Tech:把编辑后的推荐答案写回 Knowledge(同一份数据) */
+  private saveFromTechToKnowledge(after?: () => void): void {
+    const updates: { kid: string; content: string }[] = [];
+    const walk = (nodes: MaterialNode[]) => {
+      for (const n of nodes) {
+        if (!n.folder && n.id.startsWith('ts:item:')) {
+          const kid = (n as any)._kid as string;
+          if (kid) {
+            updates.push({ kid, content: n.content || '' });
+          }
+        }
+        if (n.children) walk(n.children);
+      }
+    };
+    walk(this.nodes());
+    if (updates.length === 0) {
+      this.treeDirty.set(false);
+      this.treeEditing.set(false);
+      after?.();
+      return;
+    }
+    // 逐个 PUT 到 Knowledge
+    let pending = updates.length;
+    let failed = 0;
+    const done = () => {
+      pending--;
+      if (pending === 0) {
+        if (failed === 0) {
+          this.treeDirty.set(false);
+          this.treeEditing.set(false);
+          this.toast(this.t('dialog.saveDone'));
+        } else {
+          this.treeError.set(this.t('practice.tsSavePartial'));
+        }
+        after?.();
+      }
+    };
+    for (const u of updates) {
+      this.knowledgeApi.put<void>(`/api/knowledge/${u.kid}/better-answer`, {
+        betterAnswer: u.content || null
+      }).subscribe({
+        next: () => done(),
+        error: () => { failed++; done(); }
+      });
+    }
   }
 
   // ---------- 树编辑模式(2026-09-20,Forrest) ----------
@@ -1225,16 +1277,63 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   loadTsTopics(): void {
     if (!this.isFromTechSelected()) return;
     this.tsLoading.set(true);
+    // From Tech:构建标准 MaterialNode 树(与普通分类同一套逻辑)
     this.knowledgeApi.get<KnowledgeTopic[]>('/api/knowledge/topics').subscribe({
       next: (list) => {
-        this.tsTopics.set((list ?? []).filter(t => t.topic).sort((a, b) => a.topic.localeCompare(b.topic)));
-        this.tsLoading.set(false);
-        if (this.tsTopics().length > 0 && !this.tsExpandedTopic()) {
-          this.loadTsItems(this.tsTopics()[0].topic);
-        }
+        const topics = (list ?? []).filter(t => t.topic).sort((a, b) => a.topic.localeCompare(b.topic));
+        this.buildFromTechTree(topics);
       },
-      error: () => { this.tsTopics.set([]); this.tsLoading.set(false); }
+      error: () => { this.nodes.set([]); this.tsLoading.set(false); }
     });
+  }
+
+  /** 从 Knowledge 数据构建标准 MaterialNode 树(id 带 ts: 前缀以便保存时识别) */
+  private buildFromTechTree(topics: KnowledgeTopic[]): void {
+    if (topics.length === 0) {
+      this.nodes.set([]);
+      this.tsLoading.set(false);
+      return;
+    }
+    const tree: MaterialNode[] = [];
+    let pending = topics.length;
+    const done = () => {
+      pending--;
+      if (pending === 0) {
+        tree.sort((a, b) => a.name.localeCompare(b.name));
+        this.nodes.set(tree);
+        this.tsLoading.set(false);
+      }
+    };
+    for (const tp of topics) {
+      const folder: MaterialNode = {
+        id: `ts:topic:${tp.topic}`,
+        name: tp.topic,
+        folder: true,
+        expanded: false,
+        children: []
+      };
+      tree.push(folder);
+      this.knowledgeApi.get<Paged<KnowledgeItem>>('/api/knowledge', { topic: tp.topic, pageSize: 100 }).subscribe({
+        next: (res) => {
+          const items = res.items ?? [];
+          folder.children = items.map(k => ({
+            id: `ts:item:${k.id}`,
+            name: k.question || k.title,
+            folder: false,
+            content: k.betterAnswer || k.conceptExplanation || '',
+            // 存原始 Knowledge ID 以便保存时写回
+            sortOrder: 0
+          } as MaterialNode & { _kid?: string }));
+          // 把 Knowledge ID 藏在 id 里,保存时解析
+          folder.children.forEach((c, i) => {
+            const kid = items[i]?.id;
+            (c as any)._kid = kid;
+          });
+          done();
+        },
+        error: () => done()
+      });
+    }
   }
 
   /** 加载某分类下的 Tech Stack 条目 */

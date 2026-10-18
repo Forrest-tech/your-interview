@@ -53,45 +53,6 @@
             <p>{{ t('practice.treeUnavailable') }}</p>
             <button mat-stroked-button (click)="reloadTree()">{{ t('practice.retryLoad') }}</button>
           </div>
-        } @else if (isFromTechSelected()) {
-          <!-- From Tech:下拉选 "from Tech" 时显示 Tech Stack 实时内容 -->
-          <div class="th-row th-category">
-            <select class="cat-select"
-                    [ngModel]="categoryFilter()"
-                    (ngModelChange)="onCategoryFilterChange($event)"
-                    [attr.aria-label]="t('practice.categoryLabel')">
-              <option value="all">{{ t('practice.categoryAll') }}</option>
-              @for (c of categories(); track c.id) {
-                <option [value]="c.id">{{ c.name }}</option>
-              }
-              <option value="uncategorized">{{ t('practice.categoryUncategorized') }}</option>
-              <option value="__fromTech">{{ t('practice.fromTech') }}</option>
-            </select>
-          </div>
-          @if (tsLoading() && tsTopics().length === 0) {
-            <p class="tree-status">{{ t('practice.treeLoading') }}</p>
-          } @else {
-            <div class="ts-tree">
-              @for (tp of tsTopics(); track tp.topic) {
-                <div class="ts-folder" (click)="loadTsItems(tp.topic)"
-                     [class.expanded]="tsExpandedTopic() === tp.topic">
-                  <mat-icon>{{ tsExpandedTopic() === tp.topic ? 'expand_more' : 'chevron_right' }}</mat-icon>
-                  <span class="ts-folder-name">{{ tp.topic }}</span>
-                  <span class="ts-count">{{ tp.total }}</span>
-                </div>
-                @if (tsExpandedTopic() === tp.topic) {
-                  @for (item of tsItems(); track item.id) {
-                    <div class="ts-item" (click)="selectTsItem(item)"
-                         [class.selected]="tsSelected()?.id === item.id">
-                      <span class="ts-item-title">{{ item.question || item.title }}</span>
-                    </div>
-                  }
-                }
-              } @empty {
-                <p class="tree-status">{{ t('practice.tsEmpty') }}</p>
-              }
-            </div>
-          }
         } @else {
           <app-material-tree
             [nodes]="nodes()"
@@ -318,25 +279,7 @@
                       spellcheck="false"
                       [placeholder]="t('practice.placeholder')"></textarea>
           } @else {
-            @if (tsSelected(); as ts) {
-              <!-- Tech Stack 条目:题目 + 推荐答案(只读,Obsidian view-source 模式) -->
-              <div class="ts-detail">
-                <div class="ts-q">
-                  <span class="ts-label">{{ t('practice.tsQuestion') }}</span>
-                  <p>{{ ts.question || ts.title }}</p>
-                </div>
-                @if (ts.betterAnswer) {
-                  <div class="ts-a">
-                    <span class="ts-label">{{ t('practice.tsAnswer') }}</span>
-                    <p class="read-text">{{ ts.betterAnswer }}</p>
-                  </div>
-                }
-                <button mat-stroked-button (click)="editInTechStack()" class="ts-edit-btn">
-                  <mat-icon>open_in_new</mat-icon>
-                  {{ t('practice.tsEditIn') }}
-                </button>
-              </div>
-            } @else if (readonlyText()) {
+            @if (readonlyText()) {
               <!-- ★ 第十三轮(Forrest):标记属于素材本身,不再给正文涂色 -->
               <p class="read-text">{{ readonlyText() }}</p>
             } @else {

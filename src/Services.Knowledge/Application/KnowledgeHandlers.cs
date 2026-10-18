@@ -129,6 +129,9 @@ public sealed record UpdateKnowledgeCommand(
 /// <summary>只更新我的回答(Playbook Q&A 页签用,避免全量 PUT 误清空)。</summary>
 public sealed record UpdateMyAnswerCommand(Guid Id, string? MyAnswer) : IRequest<Result>;
 
+/// <summary>只更新推荐答案(AI Practice From Tech 编辑写回用)。</summary>
+public sealed record UpdateBetterAnswerCommand(Guid Id, string? BetterAnswer) : IRequest<Result>;
+
 public sealed record DeleteKnowledgeCommand(Guid Id) : IRequest<Result>;
 
 /// <summary>重命名分类:返回受影响的条目数。新名字已存在时即为合并。</summary>
@@ -564,6 +567,19 @@ public sealed class UpdateMyAnswerCommandHandler(KnowledgeDbContext db)
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
         k.SetMyAnswer(request.MyAnswer);
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public sealed class UpdateBetterAnswerCommandHandler(KnowledgeDbContext db)
+    : IRequestHandler<UpdateBetterAnswerCommand, Result>
+{
+    public async Task<Result> Handle(UpdateBetterAnswerCommand request, CancellationToken ct)
+    {
+        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (k is null) return Result.Failure(Error.NotFound("知识点"));
+        k.SetBetterAnswer(request.BetterAnswer);
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }

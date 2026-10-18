@@ -24,6 +24,10 @@
         <button mat-menu-item (click)="exportBackup()">
           <mat-icon>backup</mat-icon>备份
         </button>
+        <button mat-menu-item (click)="backupFile.click()">
+          <mat-icon>restore</mat-icon>恢复备份
+        </button>
+        <input #backupFile type="file" hidden accept=".json" (change)="importBackup($event)">
         <button mat-menu-item (click)="csvFile.click()">
           <mat-icon>upload</mat-icon>{{ t('tracker.importCsv') }}
         </button>

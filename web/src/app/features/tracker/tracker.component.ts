@@ -554,6 +554,15 @@ export class TrackerComponent implements OnInit, AfterViewInit {
       }
     }
     data['debriefs'] = debriefs;
+    // 粘贴的备战材料 (localStorage,所有 pb-pasted-* key)
+    const pasted: Record<string, unknown> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('pb-pasted-')) {
+        try { pasted[k] = localStorage.getItem(k); } catch { /* skip */ }
+      }
+    }
+    data['pastedMaterial'] = pasted;
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -563,6 +572,43 @@ export class TrackerComponent implements OnInit, AfterViewInit {
     link.click();
     URL.revokeObjectURL(url);
     this.snack.open('备份已下载', '关闭', { duration: 2500 });
+  }
+
+  /** ★ 从备份恢复 localStorage 数据 (STAR/复盘/粘贴材料)。 */
+  importBackup(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string);
+        let count = 0;
+        if (Array.isArray(data['starStories'])) {
+          localStorage.setItem('pb.starStories', JSON.stringify(data['starStories']));
+          count++;
+        }
+        const debriefs = data['debriefs'] as Record<string, unknown> | undefined;
+        if (debriefs) {
+          for (const [k, v] of Object.entries(debriefs)) {
+            localStorage.setItem(k, JSON.stringify(v));
+            count++;
+          }
+        }
+        const pasted = data['pastedMaterial'] as Record<string, string> | undefined;
+        if (pasted) {
+          for (const [k, v] of Object.entries(pasted)) {
+            localStorage.setItem(k, v);
+            count++;
+          }
+        }
+        this.snack.open(`已恢复 ${count} 项本地数据`, '关闭', { duration: 3000 });
+      } catch {
+        this.snack.open('备份文件解析失败', '关闭', { duration: 3000 });
+      }
+      input.value = '';
+    };
+    reader.readAsText(file);
   }
 
 /** 导入 CSV(Simplify 对等功能):与 exportCsv 格式互通,逐行创建投递。 */

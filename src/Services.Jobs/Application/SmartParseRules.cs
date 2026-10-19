@@ -495,20 +495,21 @@ public static class JdPasteParser
     private static string StripLinkedInNoise(string text)
     {
         // LinkedIn 粘贴文本里的 UI 噪音:Premium 广告、Set alert、follower 数等。
+        // 注意:用 [^\n]* 而不是 .*，避免 Singleline 模式下跨行匹配。
         var noisePatterns = new[]
         {
-            @"Set alert for similar jobs.*?(?=\n)",
-            @"Try Premium for CA\$0.*?(?=\n)",
-            @".*?and millions of other members use Premium.*?(?=\n)",
-            @"1-month free trial with 24/7 support.*?(?=\n)",
-            @"We.ll remind you a week before your trial ends.*?(?=\n)",
-            @"Access company insights like.*?(?=\n)",
+            @"Set alert for similar jobs[^\n]*",
+            @"Try Premium for CA\$0[^\n]*",
+            @"and millions of other members use Premium[^\n]*",
+            @"1-month free trial with 24/7 support[^\n]*",
+            @"We.ll remind you a week before your trial ends[^\n]*",
+            @"Access company insights like[^\n]*",
             // "About the company" 段由 ExtractCompanyDescription 处理,这里不删 follower 行
             // (ExtractCompanyDescription 已会跳过 follower/员工数/行业行)
-            @"\d[\d,]* on LinkedIn.*?(?=\n)",
-            @"No response insights available yet.*?(?=\n)",
-            @"Over \d+ applicants.*?(?=\n)",
-            @"\d+ week ago.*?(?=\n)",
+            @"\d[\d,]* on LinkedIn[^\n]*",
+            @"No response insights available yet[^\n]*",
+            @"Over \d+ applicants[^\n]*",
+            @"\d+ week ago[^\n]*",
         };
         foreach (var pattern in noisePatterns)
         {

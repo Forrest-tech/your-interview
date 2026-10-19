@@ -1658,20 +1658,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             <button mat-button (click)="cancelEditJdSummary()">{{ t('common.cancel') }}</button>
           </div>
         } @else {
-          <!-- 公司介绍:LinkedIn "We're on it!" 式开头 -->
-          @if (detail.companyDescription) {
-            @for (b of richBlocks(detail.companyDescription); track $index) {
-              @if (b.kind === 'ul') {
-                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
-              } @else {
-                <p>{{ b.items[0] }}</p>
-              }
-            }
-          }
           <!-- Job Description -->
           <div class="jd-subhead">{{ t('tracker.dJobDescHeader') }}</div>
-          @if (richBlocks(detail.jdSummary).length > 0) {
-            @for (b of richBlocks(detail.jdSummary); track $index) {
+          @if (richBlocks(jdSummaryDisplay()).length > 0) {
+            @for (b of richBlocks(jdSummaryDisplay()); track $index) {
               @if (b.kind === 'ul') {
                 <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
               } @else {
@@ -1705,6 +1695,21 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           }
         }
       </section>
+
+      <!-- 公司介绍:LinkedIn "About the company" 侧边栏 —— 独立成节 -->
+      @if (detail.companyDescription) {
+        <mat-divider></mat-divider>
+        <section class="about-job">
+          <div class="jd-subhead" style="margin-top:0">{{ t('tracker.companyDescription') }}</div>
+          @for (b of richBlocks(detail.companyDescription); track $index) {
+            @if (b.kind === 'ul') {
+              <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
+            } @else {
+              <p>{{ b.items[0] }}</p>
+            }
+          }
+        </section>
+      }
 
       <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
       <mat-divider></mat-divider>
@@ -2927,9 +2932,47 @@ export class ApplicationDetailDialogComponent {
     return parts;
   }
 
+  /** 2026-10-19:详情页显示用 JD 摘要 —— 去掉已单独成节的 Qualifications / Additional Information，避免重复 */
+  jdSummaryDisplay(): string {
+    const d = this.detail;
+    if (!d) return '';
+    let t = d.jdSummary || '';
+    if (!t.trim()) return t;
+    // 有单独的 requirements/benefits 节时，从摘要里切掉对应原文段
+    const cutFrom = (src: string, markers: string[]): string => {
+      let idx = -1;
+      for (const m of markers) {
+        const i = src.search(new RegExp('^' + m + '\\b', 'im'));
+        if (i >= 0 && (idx < 0 || i < idx)) idx = i;
+      }
+      return idx >= 0 ? src.slice(0, idx).trim() : src;
+    };
+    if (d.requirements?.trim()) {
+      t = cutFrom(t, ['Qualifications', 'Requirements', '任职要求', '任职资格']);
+    }
+    if (d.benefits?.trim()) {
+      t = cutFrom(t, ['Additional Information', 'Benefits', 'Compensation', '福利', '待遇']);
+    }
+    return t.trim();
+  }
+
   /** 2026-10-19:LinkedIn 风格富文本分块 —— 段落与列表分开,列表渲染为 <ul> */
-  richBlocks(text: string | undefined | null): { kind: 'p' | 'ul'; items: string[] }[] {
-    if (!text) return [];
+  richBlocks(text: string | undefined | null): { kind: 'p' | 'ul'; items: string[] }[] {    if (!text) return [];
+    const t0 = text.trim();
+    if (!t0) return [];
+    // 无换行的大段文本:按句子切分,避免一屏文字墙
+    if (!t0.includes('\n') && t0.length > 600) {
+      const sentences = t0.match(/[^.!?。！？]+[.!?。！？]+[""』）)]?/g) ?? [t0];
+      const out2: { kind: 'p' | 'ul'; items: string[] }[] = [];
+      let cur2 = '';
+      for (const s of sentences) {
+        const cand = cur2 ? cur2 + ' ' + s.trim() : s.trim();
+        if (cand.length > 420 && cur2) { out2.push({ kind: 'p', items: [cur2] }); cur2 = s.trim(); }
+        else cur2 = cand;
+      }
+      if (cur2) out2.push({ kind: 'p', items: [cur2] });
+      return out2;
+    }
     const lines = text.split(/\n/).map(s => s.trim()).filter(s => s.length > 0);
     if (lines.length === 0) return [];
     const out: { kind: 'p' | 'ul'; items: string[] }[] = [];

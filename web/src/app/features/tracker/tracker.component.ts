@@ -828,8 +828,9 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly selected = signal<Set<string>>(new Set());
   readonly selectedCount = computed(() => this.selected().size);
 
-  toggleSelect(id: string, ev?: Event): void {
-    ev?.stopPropagation();
+  toggleSelect(id: string, ev?: Event | any): void {
+    // MatCheckboxChange 没有 stopPropagation,直接忽略
+    try { (ev as Event)?.stopPropagation?.(); } catch {}
     const next = new Set(this.selected());
     if (next.has(id)) next.delete(id); else next.add(id);
     this.selected.set(next);
@@ -1957,7 +1958,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           }
 
           <div class="q-list">
-            @for (q of appQuestions(); track $index; let i = $index) {
+            @for (q of appQuestions(); track q; let i = $index) {
               <div class="q-item">
                 <span class="q-num">{{ i + 1 }}</span>
                 <span class="q-text">{{ q }}</span>

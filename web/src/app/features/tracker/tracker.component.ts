@@ -1720,53 +1720,6 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </section>
       }
 
-      <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
-      <mat-divider></mat-divider>
-      <section>
-        <div class="sec-head fold-head">
-          <span (click)="jdTextEditing() ? null : jdExpanded.set(!jdExpanded())" style="display:flex;align-items:center;cursor:pointer;gap:6px;">
-            <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
-            <span>{{ t('tracker.dJdFull') }}</span>
-            @if (detail.jdText) {
-              <span class="fold-len">{{ tn('tracker.dJdChars', detail.jdText.length) }}</span>
-            }
-          </span>
-          <button mat-icon-button
-                  (click)="$event.stopPropagation(); jdTextEditing() ? cancelEditJdText() : startEditJdText()"
-                  [matTooltip]="t('common.edit')" class="edit-btn">
-            <mat-icon>{{ jdTextEditing() ? 'close' : 'edit' }}</mat-icon>
-          </button>
-        </div>
-
-        @if (app.jdSourceUrl) {
-          <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
-            <mat-icon>link</mat-icon>{{ t('tracker.dViewPosting') }}
-          </a>
-        }
-
-        @if (jdTextEditing()) {
-          <textarea class="plain-area" rows="16" [(ngModel)]="jdTextDraft"
-                    [placeholder]="t('tracker.dJdFull')"></textarea>
-          <div class="cl-actions save-row">
-            <button mat-flat-button color="primary" (click)="saveJdText()"
-                    [disabled]="jdTextSaving()">
-              {{ t('common.save') }}
-            </button>
-            <button mat-button (click)="cancelEditJdText()">{{ t('common.cancel') }}</button>
-          </div>
-        } @else if (detail.jdText) {
-          @if (jdExpanded()) {
-            <div class="jd-full">
-              <p class="pre">{{ detail.jdText }}</p>
-            </div>
-          } @else {
-            <p class="pre jd-peek">{{ detail.jdText?.slice(0, 220) }}…</p>
-          }
-        } @else {
-          <p class="cl-empty">{{ t('tracker.dJdEmpty') }}</p>
-        }
-      </section>
-
       <!-- 公司情报 -->
       @if (company()?.profile) {
         <mat-divider></mat-divider>
@@ -2988,13 +2941,28 @@ export class ApplicationDetailDialogComponent {
     const t0 = text.trim();
     if (!t0) return [];
     // 无换行的大段文本:按句子切分,避免一屏文字墙
+    // 注意:保护 .NET / ASP.NET / C# 等技术缩写不被句号切断
     if (!t0.includes('\n') && t0.length > 600) {
-      const sentences = t0.match(/[^.!?。！？]+[.!?。！？]+[""』）)]?/g) ?? [t0];
+      const PROT = '\u0000';
+      let work = t0
+        .replace(/\.NET\b/gi, PROT + 'DOTNET')
+        .replace(/ASP\.NET\b/gi, 'ASP' + PROT + 'DOTNET')
+        .replace(/\bC#/g, 'C' + PROT + 'SHARP')
+        .replace(/\be\.g\./gi, 'EG' + PROT)
+        .replace(/\bi\.e\./gi, 'IE' + PROT);
+      const sentences = work.match(/[^.!?。！？]+[.!?。！？]+[""』）)]?/g) ?? [work];
+      const restore = (s: string) => s
+        .replace(new RegExp(PROT + 'DOTNET', 'g'), '.NET')
+        .replace(new RegExp('ASP' + PROT + 'DOTNET', 'g'), 'ASP.NET')
+        .replace(new RegExp('C' + PROT + 'SHARP', 'g'), 'C#')
+        .replace(new RegExp('EG' + PROT, 'g'), 'e.g.')
+        .replace(new RegExp('IE' + PROT, 'g'), 'i.e.');
       const out2: { kind: 'p' | 'ul'; items: string[] }[] = [];
       let cur2 = '';
       for (const s of sentences) {
-        const cand = cur2 ? cur2 + ' ' + s.trim() : s.trim();
-        if (cand.length > 420 && cur2) { out2.push({ kind: 'p', items: [cur2] }); cur2 = s.trim(); }
+        const rs = restore(s.trim());
+        const cand = cur2 ? cur2 + ' ' + rs : rs;
+        if (cand.length > 420 && cur2) { out2.push({ kind: 'p', items: [cur2] }); cur2 = rs; }
         else cur2 = cand;
       }
       if (cur2) out2.push({ kind: 'p', items: [cur2] });

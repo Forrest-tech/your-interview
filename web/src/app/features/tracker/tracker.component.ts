@@ -2951,7 +2951,11 @@ export class ApplicationDetailDialogComponent {
   reparseJd(): void {
     const d = this.detail;
     const raw = d.jdText?.trim();
-    if (!raw) return;
+    if (!raw) {
+      // 原文为空时无法重解析，提示用户
+      this.snack.open(this.t('tracker.dNoJdText'), this.t('common.close'), { duration: 3000 });
+      return;
+    }
     this.reparsing.set(true);
     this.api.post('/api/jobs/parse-jd', { raw, useAi: false }).subscribe({
       next: (p: any) => {

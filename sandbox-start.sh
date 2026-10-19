@@ -5,6 +5,8 @@
 set -e
 export PATH=$HOME/workspace/.dotnet:$PATH
 export TMPDIR=$HOME/workspace/tmp
+# Bundled libpq for the pg16 binaries (survives VM replacement; apt-installed libpq5 does not)
+export LD_LIBRARY_PATH=$HOME/workspace/your-interview/lib/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 
 # 1. Postgres
 if ! pg_isready -h localhost -p 5432 >/dev/null 2>&1; then

@@ -1542,8 +1542,6 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         }
       </section>
 
-      }
-
 
       <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
       <mat-divider></mat-divider>

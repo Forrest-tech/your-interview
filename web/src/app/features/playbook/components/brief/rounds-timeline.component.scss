@@ -77,6 +77,17 @@
   background: #fafafa; border: 1px solid #eee; border-radius: 6px;
   padding: 12px; max-height: 320px; overflow: auto; margin: 4px 0 0;
 }
+/* ★ R07 打通:转写/录音操作行 */
+.tr-actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.tr-send { margin-top: 8px; }
+.upload-btn { cursor: pointer; display: inline-flex; }
+.upload-btn [mat-stroked-button] {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 15px; height: 36px; line-height: 36px;
+  border: 1px solid rgba(0,0,0,0.12); border-radius: 4px;
+  font-size: 14px; color: rgba(0,0,0,0.87);
+}
+.upload-btn:hover [mat-stroked-button] { background: rgba(0,0,0,0.04); }
 
 .tl-actions { display: flex; align-items: center; padding: 4px 8px 8px; }
 

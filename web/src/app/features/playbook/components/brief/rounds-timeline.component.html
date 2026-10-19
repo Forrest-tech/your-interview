@@ -262,11 +262,20 @@
                   <textarea matInput [(ngModel)]="transcriptDraft[r.id]" rows="8"
                             [placeholder]="t('pb.br.rounds.transcriptEmpty')"></textarea>
                 </mat-form-field>
-                <button mat-flat-button color="primary" (click)="saveTranscript(r)">
-                  {{ t('common.save') }}
-                </button>
+                <div class="tr-actions">
+                  <button mat-flat-button color="primary" (click)="saveTranscript(r)">
+                    {{ t('common.save') }}
+                  </button>
+                  <button mat-stroked-button (click)="sendTranscriptToAnalysis(r)"
+                          [disabled]="!((transcriptDraft[r.id] ?? transcriptOf(r)) || '').trim()">
+                    <mat-icon>analytics</mat-icon> {{ t('pb.br.rounds.sendToAnalysis') }}
+                  </button>
+                </div>
               } @else if (transcriptOf(r)) {
                 <pre class="transcript-text">{{ transcriptOf(r) }}</pre>
+                <button mat-stroked-button (click)="sendTranscriptToAnalysis(r)" class="tr-send">
+                  <mat-icon>analytics</mat-icon> {{ t('pb.br.rounds.sendToAnalysis') }}
+                </button>
               } @else {
                 <p class="dim small">{{ t('pb.br.rounds.transcriptEmpty') }}</p>
               }
@@ -291,9 +300,19 @@
                   <mat-label>{{ t('pb.br.rounds.recordingUrlPh') }}</mat-label>
                   <input matInput [(ngModel)]="recordingDraft[r.id]" placeholder="https://…">
                 </mat-form-field>
-                <button mat-flat-button color="primary" (click)="saveRecording(r)">
-                  {{ t('common.save') }}
-                </button>
+                <div class="tr-actions">
+                  <button mat-flat-button color="primary" (click)="saveRecording(r)">
+                    {{ t('common.save') }}
+                  </button>
+                  <label class="upload-btn">
+                    <input type="file" accept="audio/*" hidden
+                           (change)="uploadRoundRecording(r, $event)">
+                    <span mat-stroked-button>
+                      <mat-icon>upload</mat-icon> {{ t('pb.br.rounds.uploadRecording') }}
+                    </span>
+                  </label>
+                </div>
+                <p class="dim small">{{ t('pb.br.rounds.uploadHint') }}</p>
               }
             </div>
 

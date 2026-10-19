@@ -271,6 +271,50 @@ export class RoundsTimelineComponent implements OnInit {
     this.updateRoundDetails(r, { transcript: this.transcriptDraft[r.id] || null }, () => this.transcriptOpen.set(null));
   }
 
+  /**
+   * ★ R07 打通:把本轮转写稿送去分析。
+   * 轮次 transcript → 条目级 Text 资产(文件名带轮次) → Worker 的 FetchTranscriptAsync 会拾取。
+   */
+  sendTranscriptToAnalysis(r: BriefRound): void {
+    const text = (this.transcriptDraft[r.id] ?? this.transcriptOf(r)).trim();
+    if (!text) {
+      this.snack.open(this.t('pb.br.rounds.transcriptEmpty'), this.t('common.close'), { duration: 3000 });
+      return;
+    }
+    const fileName = `round-${r.order}-transcript.txt`;
+    this.api.post<{ id: string }>(
+      `/api/interviews/${this.entryId()}/assets`,
+      { textContent: text, fileName }).subscribe({
+      next: () => this.snack.open(
+        this.t('pb.br.rounds.sentToAnalysis'), this.t('common.close'), { duration: 4000 }),
+      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 }),
+    });
+  }
+
+  /**
+   * ★ R07 打通:轮次录音文件上传。
+   * 复用条目级 /assets multipart 上传 → 回写轮次 recordingUrl 为资产音频流地址。
+   */
+  uploadRoundRecording(r: BriefRound, ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.api.upload<{ id: string }>(`/api/interviews/${this.entryId()}/assets`, file).subscribe({
+      next: (res) => {
+        input.value = '';
+        const audioUrl = `/api/interviews/${this.entryId()}/assets/${res.id}/audio`;
+        this.updateRoundDetails(r, { recordingUrl: audioUrl }, () => {
+          this.recordingDraft[r.id] = audioUrl;
+          this.snack.open(this.t('pb.br.rounds.recordingUploaded'), this.t('common.close'), { duration: 4000 });
+        });
+      },
+      error: (e: Error) => {
+        input.value = '';
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+      },
+    });
+  }
+
   /** ★ 录音 */
   readonly recordingOpen = signal<string | null>(null);
   recordingDraft: Record<string, string> = {};

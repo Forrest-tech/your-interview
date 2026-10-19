@@ -1119,23 +1119,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   // ------------------------------ Simplify 对标:转化漏斗 ------------------------------
-  readonly funnel = computed(() => {
-    const by = this.stats()?.byStatus ?? {};
-    const stages: ApplicationStatus[] = ['Applied', 'Screen', 'Interview', 'Offer', 'Accepted'];
-    const counts = stages.map(s => by[s] ?? 0);
-    const max = Math.max(1, ...counts);
-    return stages.map((s, i) => ({
-      status: s,
-      label: this.i18n.t('status.' + s),
-      count: counts[i],
-      // 相对上一阶段的转化率(第一阶段恒 100%)
-      rate: i === 0 ? 100 : (counts[i - 1] > 0 ? Math.round((counts[i] / counts[i - 1]) * 100) : 0),
-      widthPct: Math.round((counts[i] / max) * 100)
-    }));
-  });
-  /** 漏斗是否有数据(模板里不能写箭头函数,用 computed 包一层)。 */
-  readonly hasFunnelData = computed(() => this.funnel().some(f => f.count > 0));
-
   /** ★ G-06: Sankey 流程图数据 —— 各阶段节点 + 流向边的宽度。 */
   readonly flowChart = computed(() => {
     const by = this.stats()?.byStatus ?? {};

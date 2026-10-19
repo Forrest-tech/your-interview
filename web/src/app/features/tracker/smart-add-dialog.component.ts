@@ -12,6 +12,7 @@ import {
 } from '@angular/material/dialog';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatExpansionModule } from '@angular/material/expansion';
 
 import { TrackerApi, ParsedJd, ParsedInvite } from '../../core/api/tracker-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -52,7 +53,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
     MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule,
-    MatChipsModule, MatTooltipModule
+    MatChipsModule, MatTooltipModule, MatExpansionModule
   ],
   template: `
     <h2 mat-dialog-title>
@@ -103,90 +104,127 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
       <!-- ============ 第二步:确认并修改结果 ============ -->
       @if (mode() === 'jd') {
         @if (parsed()) {
-          <div class="grid">
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.saCompany') }}</mat-label>
-              <input matInput name="jdCompany" [(ngModel)]="jd.company">
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.saRole') }}</mat-label>
-              <input matInput name="jdRole" [(ngModel)]="jd.role">
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.saLocation') }}</mat-label>
-              <input matInput name="jdLocation" [(ngModel)]="jd.location">
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.saSalary') }}</mat-label>
-              <input matInput name="jdSalary" [(ngModel)]="jd.salary">
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.saWorkMode') }}</mat-label>
-              <mat-select name="jdWorkMode" [(ngModel)]="jd.workMode">
-                <mat-option [value]="null">{{ t('tracker.saUnrecognized') }}</mat-option>
-                @for (w of workModes; track w) { <mat-option [value]="w">{{ w }}</mat-option> }
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.jobType') }}</mat-label>
-              <mat-select name="jdJobType" [(ngModel)]="jd.jobType">
-                <mat-option value="">{{ t('tracker.saUnrecognized') }}</mat-option>
-                @for (j of jobTypes; track j) { <mat-option [value]="j">{{ j }}</mat-option> }
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.workAuthorization') }}</mat-label>
-              <input matInput name="jdWorkAuth" [(ngModel)]="jd.workAuthorization"
-                     [placeholder]="t('tracker.saWorkAuthPh')">
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.saPriority') }}</mat-label>
-              <mat-select name="jdPriority" [(ngModel)]="jd.priority">
-                @for (p of priorities; track p) { <mat-option [value]="p">{{ p }}</mat-option> }
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.saDeadline') }}</mat-label>
-              <input matInput type="date" name="jdDeadline" [(ngModel)]="jd.deadline">
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{ t('tracker.saInitStatus') }}</mat-label>
-              <mat-select name="jdStatus" [(ngModel)]="jd.status">
-                @for (s of createStatuses; track s) {
-                  <mat-option [value]="s">{{ s }}</mat-option>
-                }
-              </mat-select>
-            </mat-form-field>
-          </div>
+          <mat-accordion class="sad-sections" multi>
+            <!-- 基本信息:常开展示 -->
+            <mat-expansion-panel [expanded]="true">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <mat-icon>info_outline</mat-icon>{{ t('tracker.saSecBasic') }}
+                </mat-panel-title>
+              </mat-expansion-panel-header>
+              <div class="grid">
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.saCompany') }}</mat-label>
+                  <input matInput name="jdCompany" [(ngModel)]="jd.company"
+                         [placeholder]="t('tracker.saRequired')">
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.saRole') }}</mat-label>
+                  <input matInput name="jdRole" [(ngModel)]="jd.role"
+                         [placeholder]="t('tracker.saRequired')">
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.saLocation') }}</mat-label>
+                  <input matInput name="jdLocation" [(ngModel)]="jd.location"
+                         [placeholder]="t('tracker.saNotFound')">
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.saSalary') }}</mat-label>
+                  <input matInput name="jdSalary" [(ngModel)]="jd.salary"
+                         [placeholder]="t('tracker.saNotFound')">
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.saWorkMode') }}</mat-label>
+                  <mat-select name="jdWorkMode" [(ngModel)]="jd.workMode">
+                    <mat-option [value]="null">{{ t('tracker.saUnrecognized') }}</mat-option>
+                    @for (w of workModes; track w) { <mat-option [value]="w">{{ w }}</mat-option> }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.jobType') }}</mat-label>
+                  <mat-select name="jdJobType" [(ngModel)]="jd.jobType">
+                    <mat-option value="">{{ t('tracker.saUnrecognized') }}</mat-option>
+                    @for (j of jobTypes; track j) { <mat-option [value]="j">{{ j }}</mat-option> }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.workAuthorization') }}</mat-label>
+                  <input matInput name="jdWorkAuth" [(ngModel)]="jd.workAuthorization"
+                         [placeholder]="t('tracker.saWorkAuthPh')">
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.saPriority') }}</mat-label>
+                  <mat-select name="jdPriority" [(ngModel)]="jd.priority">
+                    @for (p of priorities; track p) { <mat-option [value]="p">{{ p }}</mat-option> }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.saDeadline') }}</mat-label>
+                  <input matInput type="date" name="jdDeadline" [(ngModel)]="jd.deadline">
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ t('tracker.saInitStatus') }}</mat-label>
+                  <mat-select name="jdStatus" [(ngModel)]="jd.status">
+                    @for (s of createStatuses; track s) {
+                      <mat-option [value]="s">{{ s }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
 
-          <mat-form-field appearance="outline" class="full">
-            <mat-label>{{ t('tracker.saJobLink') }}</mat-label>
-            <input matInput name="jdLink" [(ngModel)]="jd.link">
-          </mat-form-field>
+              <mat-form-field appearance="outline" class="full">
+                <mat-label>{{ t('tracker.saJobLink') }}</mat-label>
+                <input matInput name="jdLink" [(ngModel)]="jd.link">
+              </mat-form-field>
+            </mat-expansion-panel>
 
-          <mat-form-field appearance="outline" class="full">
-            <mat-label>{{ t('tracker.saJdSummary') }}</mat-label>
-            <textarea matInput rows="3" name="jdSummary" [(ngModel)]="jd.jdSummary"></textarea>
-          </mat-form-field>
+            <!-- 职位详情:有内容时展开 -->
+            <mat-expansion-panel [expanded]="hasJobDetails">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <mat-icon>description</mat-icon>{{ t('tracker.saSecDetails') }}
+                </mat-panel-title>
+                <mat-panel-description>{{ detailsSummary }}</mat-panel-description>
+              </mat-expansion-panel-header>
+              <mat-form-field appearance="outline" class="full">
+                <mat-label>{{ t('tracker.saJdSummary') }}</mat-label>
+                <textarea matInput rows="4" name="jdSummary" [(ngModel)]="jd.jdSummary"
+                          [placeholder]="t('tracker.saNotFound')"></textarea>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="full">
+                <mat-label>{{ t('tracker.saRequirements') }}</mat-label>
+                <textarea matInput rows="4" name="jdRequirements" [(ngModel)]="jd.requirements"
+                          [placeholder]="t('tracker.saNotFound')"></textarea>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="full">
+                <mat-label>{{ t('tracker.saBenefits') }}</mat-label>
+                <textarea matInput rows="3" name="jdBenefits" [(ngModel)]="jd.benefits"
+                          [placeholder]="t('tracker.saNotFound')"></textarea>
+              </mat-form-field>
+            </mat-expansion-panel>
 
-          <mat-form-field appearance="outline" class="full">
-            <mat-label>{{ t('tracker.saCompanyDesc') }}</mat-label>
-            <textarea matInput rows="3" name="jdCompanyDesc" [(ngModel)]="jd.companyDescription"></textarea>
-          </mat-form-field>
+            <!-- 公司介绍:有内容时展开 -->
+            <mat-expansion-panel [expanded]="hasCompanyDesc">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <mat-icon>business</mat-icon>{{ t('tracker.saSecCompany') }}
+                </mat-panel-title>
+                <mat-panel-description>
+                  {{ jd.companyDescription ? t('tracker.saSecHasContent') : t('tracker.saSecEmpty') }}
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+              <mat-form-field appearance="outline" class="full">
+                <mat-label>{{ t('tracker.saCompanyDesc') }}</mat-label>
+                <textarea matInput rows="4" name="jdCompanyDesc" [(ngModel)]="jd.companyDescription"
+                          [placeholder]="t('tracker.saNotFound')"></textarea>
+              </mat-form-field>
+            </mat-expansion-panel>
+          </mat-accordion>
 
-          <mat-form-field appearance="outline" class="full">
-            <mat-label>{{ t('tracker.saRequirements') }}</mat-label>
-            <textarea matInput rows="4" name="jdRequirements" [(ngModel)]="jd.requirements"></textarea>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="full">
-            <mat-label>{{ t('tracker.saBenefits') }}</mat-label>
-            <textarea matInput rows="3" name="jdBenefits" [(ngModel)]="jd.benefits"></textarea>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="full">
+          <mat-form-field appearance="outline" class="full kw-field">
             <mat-label>{{ t('tracker.saKeywords') }}</mat-label>
-            <input matInput name="jdKeywords" [(ngModel)]="jd.matchKeywords">
+            <input matInput name="jdKeywords" [(ngModel)]="jd.matchKeywords"
+                   [placeholder]="t('tracker.saNotFound')">
           </mat-form-field>
         }
       } @else {
@@ -287,6 +325,12 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
     .note.warn { background: rgba(255,152,0,0.12); color: #a05a00; }
     .note mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .hint { font-size: 12.5px; opacity: .7; margin: 8px 0 0; }
+    .sad-sections { margin-top: 4px; }
+    .sad-sections mat-expansion-panel { margin-bottom: 8px; }
+    .sad-sections mat-panel-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; }
+    .sad-sections mat-panel-title mat-icon { font-size: 18px; width: 18px; height: 18px; opacity: .7; }
+    .sad-sections mat-panel-description { font-size: 12.5px; }
+    .kw-field { margin-top: 8px; }
   `]
 })
 export class SmartAddDialogComponent {
@@ -344,6 +388,19 @@ export class SmartAddDialogComponent {
   inviteApplicationId: string | null = this.data?.applicationId ?? null;
   get canSaveJd(): boolean { return this.jd.company.trim().length > 0 && this.jd.role.trim().length > 0; }
   canLinkInvite = computed(() => !!this.inviteApplicationId);
+
+  /** 职位详情区是否有解析出的内容 —— 有则默认展开,无则收起。 */
+  get hasJobDetails(): boolean {
+    return !!(this.jd.jdSummary?.trim() || this.jd.requirements?.trim() || this.jd.benefits?.trim());
+  }
+  /** 公司介绍区是否有解析出的内容 —— 有则默认展开,无则收起。 */
+  get hasCompanyDesc(): boolean { return !!this.jd.companyDescription?.trim(); }
+  /** 职位详情区的摘要提示:已填几项 / 空。 */
+  get detailsSummary(): string {
+    const n = [this.jd.jdSummary, this.jd.requirements, this.jd.benefits]
+      .filter(v => v?.trim()).length;
+    return n > 0 ? this.tf('tracker.saSecFilled', { n }) : this.t('tracker.saSecEmpty');
+  }
 
   stageLabel(s: string): string { return this.i18n.t('tracker.rt' + s); }
   formatLabel(f: string): string { return this.i18n.t('tracker.fm' + f); }

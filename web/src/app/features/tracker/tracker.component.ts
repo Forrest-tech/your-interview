@@ -1487,6 +1487,9 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           <span class="fvalue">
             @if (detail.link) {
               <a [href]="detail.link" target="_blank" class="teal-link">{{ t('tracker.dViewPosting') }} <mat-icon>open_in_new</mat-icon></a>
+              <button mat-button class="import-jd-btn" (click)="startEditJdText(); scrollToJd()">
+                <mat-icon>input</mat-icon>{{ t('tracker.dImportJd') }}
+              </button>
             } @else { — }
           </span>
         </div>
@@ -2026,6 +2029,11 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     }
     .teal-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
     .teal-link:hover { text-decoration: underline; }
+    .import-jd-btn {
+      margin-left: 8px; font-size: 13px; color: #0E9FCC;
+      padding: 2px 8px; min-width: 0; line-height: 1.5;
+    }
+    .import-jd-btn mat-icon { font-size: 14px; width: 14px; height: 14px; margin-right: 4px; }
     .jd-body { margin-top: 24px; }
     .jd-body p { font-size: 14px; color: #3D4451; line-height: 1.57; margin: 0 0 14px; }
     .jd-body .dim { color: #8A94A6; }
@@ -2650,6 +2658,14 @@ export class ApplicationDetailDialogComponent {
     this.jdTextEditing.set(true);
     // 编辑时自动展开全文
     this.jdExpanded.set(true);
+  }
+
+  /** 1-click JD 导入:打开编辑 + 滚动到 Full JD 区域。 */
+  scrollToJd(): void {
+    setTimeout(() => {
+      const el = document.querySelector('.jd-full-section');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
   }
 
   cancelEditJdText(): void {

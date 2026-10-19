@@ -788,6 +788,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dNotes': { zh: '备注', en: 'Notes', fr: 'Notes' },
   'tracker.dNoJd': { zh: '暂无 JD', en: 'No JD yet', fr: 'Pas encore de JD' },
   'tracker.dViewPosting': { zh: '查看职位', en: 'View Job Posting', fr: 'Voir l\'offre' },
+  'tracker.dImportJd': { zh: '导入 JD', en: 'Paste JD', fr: 'Coller JD' },
   'tracker.dJobType': { zh: '工作类型', en: 'Job type', fr: 'Type d\'emploi' },
   'tracker.dQuestionsPlaceholder': { zh: '暂无申请问题', en: 'No application questions yet', fr: 'Aucune question' },
   'tracker.favorite': { zh: '收藏', en: 'Favorite', fr: 'Favori' },

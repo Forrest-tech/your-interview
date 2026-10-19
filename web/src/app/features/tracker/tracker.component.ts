@@ -1636,11 +1636,11 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </div>
       </div>
 
-      <!-- 2026-10-19:详情页分段展示 —— JD 摘要 / 公司介绍 / 任职要求 / 福利待遇,自动分段 -->
+      <!-- 2026-10-19:LinkedIn 风格 "About the job" 布局 —— 公司介绍 / Job Description / Qualifications / Additional Information -->
       <mat-divider></mat-divider>
-      <section>
-        <div class="sec-head">
-          <span>{{ t('tracker.dJdSummary') }}</span>
+      <section class="about-job">
+        <div class="about-job-title">
+          <span>{{ t('tracker.dAboutTheJob') }}</span>
           <button mat-icon-button (click)="jdSummaryEditing() ? cancelEditJdSummary() : startEditJdSummary()"
                   [matTooltip]="t('common.edit')" class="edit-btn">
             <mat-icon>{{ jdSummaryEditing() ? 'close' : 'edit' }}</mat-icon>
@@ -1658,54 +1658,53 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             <button mat-button (click)="cancelEditJdSummary()">{{ t('common.cancel') }}</button>
           </div>
         } @else {
-          @if (paras(detail.jdSummary).length > 0) {
-            @for (p of paras(detail.jdSummary); track $index) {
-              <p>{{ p }}</p>
+          <!-- 公司介绍:LinkedIn "We're on it!" 式开头 -->
+          @if (detail.companyDescription) {
+            @for (b of richBlocks(detail.companyDescription); track $index) {
+              @if (b.kind === 'ul') {
+                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
+              } @else {
+                <p>{{ b.items[0] }}</p>
+              }
+            }
+          }
+          <!-- Job Description -->
+          <div class="jd-subhead">{{ t('tracker.dJobDescHeader') }}</div>
+          @if (richBlocks(detail.jdSummary).length > 0) {
+            @for (b of richBlocks(detail.jdSummary); track $index) {
+              @if (b.kind === 'ul') {
+                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
+              } @else {
+                <p>{{ b.items[0] }}</p>
+              }
             }
           } @else {
             <p class="dim">{{ t('tracker.dNoJd') }}</p>
           }
+          <!-- Qualifications -->
+          @if (detail.requirements) {
+            <div class="jd-subhead">{{ t('tracker.dQualifications') }}</div>
+            @for (b of richBlocks(detail.requirements); track $index) {
+              @if (b.kind === 'ul') {
+                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
+              } @else {
+                <p>{{ b.items[0] }}</p>
+              }
+            }
+          }
+          <!-- Additional Information -->
+          @if (detail.benefits) {
+            <div class="jd-subhead">{{ t('tracker.dAdditionalInfo') }}</div>
+            @for (b of richBlocks(detail.benefits); track $index) {
+              @if (b.kind === 'ul') {
+                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
+              } @else {
+                <p>{{ b.items[0] }}</p>
+              }
+            }
+          }
         }
       </section>
-
-      <!-- 公司介绍(完整存储,不截断)—— 2026-10-19:Smart paste 从 "About the company" 提取 -->
-      @if (detail.companyDescription) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head">
-            <span>{{ t('tracker.companyDescription') }}</span>
-          </div>
-          @for (p of paras(detail.companyDescription); track $index) {
-            <p>{{ p }}</p>
-          }
-        </section>
-      }
-
-      <!-- 任职要求 —— 2026-10-19:Smart paste 从 Qualifications/Requirements 段提取 -->
-      @if (detail.requirements) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head">
-            <span>{{ t('tracker.requirements') }}</span>
-          </div>
-          @for (p of paras(detail.requirements); track $index) {
-            <p>{{ p }}</p>
-          }
-        </section>
-      }
-
-      <!-- 福利待遇 —— 2026-10-19:Smart paste 从 Benefits/Advantages 段提取 -->
-      @if (detail.benefits) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head">
-            <span>{{ t('tracker.benefits') }}</span>
-          </div>
-          @for (p of paras(detail.benefits); track $index) {
-            <p>{{ p }}</p>
-          }
-        </section>
-      }
 
       <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
       <mat-divider></mat-divider>
@@ -2238,6 +2237,20 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       color: #1A1D23; letter-spacing: 0;
     }
     .sec-head .edit-btn { margin-left: auto; }
+    /* ---- 2026-10-19:LinkedIn 风格 "About the job" ---- */
+    .about-job-title {
+      display: flex; align-items: center; gap: 6px;
+      margin: 0 0 16px; font-size: 20px; font-weight: 700;
+      color: #1A1D23;
+    }
+    .about-job-title .edit-btn { margin-left: auto; }
+    .about-job .jd-subhead {
+      margin: 20px 0 10px; font-size: 15px; font-weight: 700;
+      color: #1A1D23;
+    }
+    .about-job p { margin: 0 0 12px; line-height: 1.65; font-size: 14px; color: #333; }
+    .about-job .jd-list { margin: 0 0 16px; padding-left: 20px; }
+    .about-job .jd-list li { margin: 0 0 8px; line-height: 1.6; font-size: 14px; color: #333; }
     .teal-link {
       color: #0E9FCC; font-weight: 500; text-decoration: none;
       display: inline-flex; align-items: center; gap: 6px;
@@ -2912,6 +2925,39 @@ export class ApplicationDetailDialogComponent {
       return out.length > 0 ? out : [t];
     }
     return parts;
+  }
+
+  /** 2026-10-19:LinkedIn 风格富文本分块 —— 段落与列表分开,列表渲染为 <ul> */
+  richBlocks(text: string | undefined | null): { kind: 'p' | 'ul'; items: string[] }[] {
+    if (!text) return [];
+    const lines = text.split(/\n/).map(s => s.trim()).filter(s => s.length > 0);
+    if (lines.length === 0) return [];
+    const out: { kind: 'p' | 'ul'; items: string[] }[] = [];
+    let curUl: string[] | null = null;
+    const flushUl = () => { if (curUl && curUl.length > 0) out.push({ kind: 'ul', items: curUl }); curUl = null; };
+    for (const ln of lines) {
+      // bullet: • · - * 或数字编号开头
+      const m = ln.match(/^[•·▪–—\-*]\s*(.+)$/) || ln.match(/^\d+[.)、]\s*(.+)$/);
+      if (m) {
+        if (!curUl) curUl = [];
+        curUl.push(m[1].trim());
+      } else {
+        flushUl();
+        out.push({ kind: 'p', items: [ln] });
+      }
+    }
+    flushUl();
+    // 合并连续的单句段落,避免碎片化(LinkedIn 风格:长描述为段落)
+    const merged: { kind: 'p' | 'ul'; items: string[] }[] = [];
+    for (const b of out) {
+      const last = merged[merged.length - 1];
+      if (b.kind === 'p' && last && last.kind === 'p' && (last.items[0].length + b.items[0].length) < 420) {
+        last.items[0] = last.items[0] + ' ' + b.items[0];
+      } else {
+        merged.push(b);
+      }
+    }
+    return merged;
   }
 
   saveJdSummary(): void {

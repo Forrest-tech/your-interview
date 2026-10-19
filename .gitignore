@@ -71,3 +71,4 @@ artifacts/
 
 # --- agent working docs(本地过程文档,不入库) ---
 replica/
+web/proxy.local.json

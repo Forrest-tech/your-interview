@@ -1943,7 +1943,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       }
 
       @else if (detailTab() === 'questions') {
-        <div class="questions-tab">
+        <div class="tab-body questions-tab">
           <div class="sec-head">
             <span>{{ t('tracker.dQuestions') }}</span>
             <span class="sec-count">{{ appQuestions().length }}</span>
@@ -1994,7 +1994,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @else {
         <!-- Email/Communications tab -->
         <!-- 沟通记录:按发生时间倒序的时间线 + 增删改 -->
-        <div class="comms">
+        <div class="tab-body comms">
           <div class="comms-head">
             <button mat-flat-button color="primary" (click)="startAddComm()">
               <mat-icon>add</mat-icon>{{ t('tracker.commsAdd') }}

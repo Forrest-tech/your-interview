@@ -289,35 +289,43 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         [FromServices] Application.LinkedInFetcher fetcher,
         CancellationToken ct)
     {
-        var url = body.Url?.Trim() ?? string.Empty;
-        if (!url.Contains("linkedin.com/jobs/view/"))
-            return Microsoft.AspNetCore.Http.Results.BadRequest(new { error = "not_linkedin_job_url" });
-
-        var (ok, html, err) = await fetcher.FetchJobHtmlAsync(url, ct);
-        if (!ok)
-            return Microsoft.AspNetCore.Http.Results.Ok(new { ok = false, error = err });
-
-        // HTML → 规则解析（保留 bullet）
-        var kind = Application.JdPasteParser.DetectKind(html!);
-        var parsed = Application.JdPasteParser.Parse(html!, kind);
-        return Microsoft.AspNetCore.Http.Results.Ok(new
+        try
         {
-            ok = true,
-            parsed.SourceKind,
-            parsed.Status,
-            parsed.Company,
-            parsed.Role,
-            parsed.Location,
-            parsed.Salary,
-            parsed.WorkMode,
-            parsed.JobType,
-            parsed.JdSummary,
-            parsed.Requirements,
-            parsed.Benefits,
-            parsed.CompanyDescription,
-            parsed.Link,
-            JdText = html
-        });
+            var url = body.Url?.Trim() ?? string.Empty;
+            if (!url.Contains("linkedin.com/jobs/view/"))
+                return Microsoft.AspNetCore.Http.Results.BadRequest(new { error = "not_linkedin_job_url" });
+
+            var (ok, html, err) = await fetcher.FetchJobHtmlAsync(url, ct);
+            if (!ok)
+                return Microsoft.AspNetCore.Http.Results.Ok(new { ok = false, error = err });
+
+            // HTML → 规则解析（保留 bullet）
+            var kind = Application.JdPasteParser.DetectKind(html!);
+            var parsed = Application.JdPasteParser.Parse(html!, kind);
+            return Microsoft.AspNetCore.Http.Results.Ok(new
+            {
+                ok = true,
+                parsed.SourceKind,
+                parsed.Status,
+                parsed.Company,
+                parsed.Role,
+                parsed.Location,
+                parsed.Salary,
+                parsed.WorkMode,
+                parsed.JobType,
+                parsed.JdSummary,
+                parsed.Requirements,
+                parsed.Benefits,
+                parsed.CompanyDescription,
+                parsed.Link,
+                JdText = html
+            });
+        }
+        catch (Exception ex)
+        {
+            // 2026-10-19:确保永不返回 500，前端显示友好错误
+            return Microsoft.AspNetCore.Http.Results.Ok(new { ok = false, error = "fetch_error: " + ex.Message });
+        }
     }
 
     /// <summary>

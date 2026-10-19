@@ -24,22 +24,12 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                 ".your-interview", "linkedin-profile");
     }
 
-    /// <summary>2026-10-19:浏览器缺失时自动下载，避免 Docker 构建时下载失败导致运行时不可用。</summary>
-    private void EnsureBrowserInstalled()
+    /// <summary>2026-10-19:检查浏览器是否存在，不存在则返回错误（避免运行时下载杀进程）。</summary>
+    private bool IsBrowserInstalled()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var browserPath = Path.Combine(home, ".cache", "ms-playwright", "chromium_headless_shell-1155");
-        if (Directory.Exists(browserPath)) return;
-        try
-        {
-            _log.LogInformation("Playwright 浏览器缺失，正在下载...");
-            var exit = Microsoft.Playwright.Program.Main(new[] { "install", "chromium-headless-shell" });
-            _log.LogInformation("Playwright 浏览器下载完成，exit={Exit}", exit);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Playwright 浏览器自动下载失败");
-        }
+        return Directory.Exists(browserPath);
     }
 
     private async Task EnsureAsync()
@@ -49,8 +39,9 @@ public sealed class LinkedInFetcher : IAsyncDisposable
         try
         {
             if (_ctx is not null) return;
-            // 2026-10-19:浏览器缺失时自动下载（Docker 构建时可能失败）
-            EnsureBrowserInstalled();
+            // 2026-10-19:浏览器必须在 Docker 构建时装好，缺失则抛错（前端显示友好提示）
+            if (!IsBrowserInstalled())
+                throw new InvalidOperationException("Playwright browser not installed. Rebuild Docker image.");
             _pw = await Playwright.CreateAsync();
             _browser = await _pw.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
             {

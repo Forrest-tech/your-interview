@@ -85,7 +85,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
           {{ t('tracker.saAiFill') }}
         </label>
         <span class="spacer"></span>
-        <button mat-stroked-button type="button" [disabled]="!canParse() || busy()" (click)="parse()">
+        <button mat-stroked-button type="button" [disabled]="!canParse || busy()" (click)="parse()">
           <mat-icon>auto_awesome</mat-icon>{{ parsed() ? t('tracker.saReparse') : t('tracker.saParse') }}
         </button>
       </div>
@@ -282,6 +282,10 @@ export class SmartAddDialogComponent {
   raw = '';
   useAi = true;
 
+  get canParse(): boolean {
+    return this.raw.trim().length > 0 && !this.busy();
+  }
+
   readonly workModes = WORK_MODES;
   readonly priorities = PRIORITIES;
   readonly stages = ROUND_STAGES;
@@ -306,8 +310,6 @@ export class SmartAddDialogComponent {
   } = { roundNo: null, stage: null, format: null, date: null, time: null, interviewer: '', location: '' };
 
   inviteApplicationId: string | null = this.data?.applicationId ?? null;
-
-  canParse = computed(() => this.raw.trim().length > 0 && !this.busy());
   canSaveJd = computed(() => this.jd.company.trim().length > 0 && this.jd.role.trim().length > 0);
   canLinkInvite = computed(() => !!this.inviteApplicationId);
 

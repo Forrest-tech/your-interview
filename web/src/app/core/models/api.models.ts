@@ -163,9 +163,9 @@ export interface TrackerStats {
   total: number;
   byStatus: Record<string, number>;
   bySource?: Record<string, number>;
-  activeCount: number;
-  interviewCount: number;
-  offerCount: number;
+  active: number;
+  inInterview: number;
+  offers: number;
   responseRate?: number;
   weeklyTrend?: { week: string; applied: number; interviews: number }[];
 }

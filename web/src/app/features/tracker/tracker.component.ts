@@ -995,9 +995,9 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   readonly statTotal = computed(() => this.stats()?.total ?? this.total());
-  readonly statActive = computed(() => this.stats()?.activeCount ?? 0);
-  readonly statInterview = computed(() => this.stats()?.interviewCount ?? 0);
-  readonly statOffer = computed(() => this.stats()?.offerCount ?? 0);
+  readonly statActive = computed(() => this.stats()?.active ?? 0);
+  readonly statInterview = computed(() => this.stats()?.inInterview ?? 0);
+  readonly statOffer = computed(() => this.stats()?.offers ?? 0);
 
   // ------------------------------ Simplify 对标:stale 检测 ------------------------------
   /** 超过多少天无更新算 stale(Simplify 模式:早期阶段 14 天无进展标黄)。 */

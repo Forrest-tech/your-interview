@@ -647,3 +647,33 @@ mat-form-field { width: 100%; }
   background: rgba(255,255,255,0.9); border-radius: 4px;
 }
 .list-row .select-box { flex: 0 0 auto; }
+
+/* ★ Questions tab (G-07) */
+.questions-tab { padding: 8px 0; }
+.sec-desc { font-size: 13px; color: rgba(0,0,0,0.55); margin: 4px 0 16px; }
+.sec-count {
+  background: rgba(0,0,0,0.06); border-radius: 10px;
+  font-size: 12px; padding: 1px 8px; margin-left: 8px;
+}
+.q-empty {
+  text-align: center; padding: 32px 16px; color: rgba(0,0,0,0.45);
+}
+.q-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.4; }
+.q-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.q-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px; background: #fff;
+}
+.q-num {
+  flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%;
+  background: #e8eaf6; color: #3f51b5; font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.q-text { flex: 1; font-size: 14px; line-height: 1.5; }
+.q-del { flex: 0 0 auto; opacity: 0.5; }
+.q-del:hover { opacity: 1; color: #c62828; }
+.q-add-form { margin-bottom: 16px; }
+.q-add-form .full { width: 100%; }
+.q-add-actions { display: flex; gap: 8px; margin-top: 8px; }
+.q-add-btn { margin-top: 4px; }

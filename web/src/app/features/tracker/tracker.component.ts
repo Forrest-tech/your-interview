@@ -1913,9 +1913,51 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       }
 
       @else if (detailTab() === 'questions') {
-        <div class="tab-placeholder">
-          <mat-icon>help</mat-icon>
-          <p>{{ t('tracker.dQuestions') }}</p>
+        <div class="questions-tab">
+          <div class="sec-head">
+            <span>{{ t('tracker.dQuestions') }}</span>
+            <span class="sec-count">{{ appQuestions().length }}</span>
+          </div>
+          <p class="sec-desc">{{ t('tracker.dQuestionsDesc') }}</p>
+
+          @if (appQuestions().length === 0 && !questionAdding()) {
+            <div class="q-empty">
+              <mat-icon>help_outline</mat-icon>
+              <p>{{ t('tracker.dQuestionsEmpty') }}</p>
+            </div>
+          }
+
+          <div class="q-list">
+            @for (q of appQuestions(); track $index; let i = $index) {
+              <div class="q-item">
+                <span class="q-num">{{ i + 1 }}</span>
+                <span class="q-text">{{ q }}</span>
+                <button mat-icon-button class="q-del" (click)="removeQuestion(i)"
+                        [matTooltip]="t('common.delete')">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            }
+          </div>
+
+          @if (questionAdding()) {
+            <div class="q-add-form">
+              <mat-form-field appearance="outline" class="full">
+                <mat-label>{{ t('tracker.dQuestionAdd') }}</mat-label>
+                <textarea matInput rows="2" [(ngModel)]="questionDraft"
+                          (keydown.enter)="addQuestion(); $event.preventDefault()"></textarea>
+              </mat-form-field>
+              <div class="q-add-actions">
+                <button mat-flat-button color="primary" (click)="addQuestion()"
+                        [disabled]="!questionDraft.trim()">{{ t('common.add') }}</button>
+                <button mat-button (click)="questionAdding.set(false); questionDraft = ''">{{ t('common.cancel') }}</button>
+              </div>
+            </div>
+          } @else {
+            <button mat-stroked-button (click)="questionAdding.set(true)" class="q-add-btn">
+              <mat-icon>add</mat-icon>{{ t('tracker.dQuestionAdd') }}
+            </button>
+          }
         </div>
       }
 
@@ -2690,6 +2732,42 @@ export class ApplicationDetailDialogComponent {
   readonly jdTextEditing = signal(false);
   jdTextDraft = '';
   readonly jdTextSaving = signal(false);
+
+  // ---------------------------- 面试问题 (G-07) ----------------------------
+
+  /** 每个申请的自定义面试问题(localStorage,按申请 id 存)。 */
+  readonly appQuestions = signal<string[]>(this.loadAppQuestions());
+  questionDraft = '';
+  readonly questionAdding = signal(false);
+
+  private questionsKey(): string {
+    return `yi-tracker-questions-${this.app.id}`;
+  }
+
+  private loadAppQuestions(): string[] {
+    try {
+      return JSON.parse(localStorage.getItem(this.questionsKey()) || '[]');
+    } catch { return []; }
+  }
+
+  private saveAppQuestions(qs: string[]): void {
+    try { localStorage.setItem(this.questionsKey(), JSON.stringify(qs)); } catch { /* 忽略 */ }
+    this.appQuestions.set(qs);
+  }
+
+  addQuestion(): void {
+    const q = this.questionDraft.trim();
+    if (!q) return;
+    this.saveAppQuestions([...this.appQuestions(), q]);
+    this.questionDraft = '';
+    this.questionAdding.set(false);
+  }
+
+  removeQuestion(idx: number): void {
+    const qs = [...this.appQuestions()];
+    qs.splice(idx, 1);
+    this.saveAppQuestions(qs);
+  }
 
   startEditNotes(): void {
     this.notesDraft = this.detail.notes ?? '';

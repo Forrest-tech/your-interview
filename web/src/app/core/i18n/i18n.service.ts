@@ -887,7 +887,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.saTabInvite': { zh: '面试邀请', en: 'Interview invite', fr: 'Invitation d’entretien' },
   'tracker.saPasteJd': { zh: '粘贴 JD 链接 / 正文 / 截图', en: 'Paste JD link / text / screenshot', fr: 'Collez le lien / texte / capture de l’offre' },
   'tracker.saPasteInvite': { zh: '粘贴邀请邮件或消息', en: 'Paste the invite email or message', fr: 'Collez l’e-mail ou le message d’invitation' },
-  'tracker.saPastePh': { zh: '支持 LinkedIn / Indeed / Greenhouse / Workday / 公司官网链接,或直接粘贴 JD 正文', en: 'Supports LinkedIn / Indeed / Greenhouse / Workday / company site links, or paste the JD text directly', fr: 'Accepte les liens LinkedIn / Indeed / Greenhouse / Workday / site entreprise, ou collez le texte de l’offre' },
+  'tracker.saPastePh': { zh: '从 LinkedIn 职位页复制 JD 后直接粘贴（保留 bullet 格式）;也支持纯文本', en: 'Copy JD from LinkedIn page and paste (preserves bullets); plain text also works', fr: 'Copiez depuis LinkedIn' },
   'tracker.saAiFill': { zh: '用 AI 补全规则解不出的字段', en: 'Let AI fill fields that rules cannot parse', fr: 'Laisser l’IA remplir les champs non reconnus' },
   'tracker.saParse': { zh: '解析', en: 'Parse', fr: 'Analyser' },
   'tracker.saReparse': { zh: '重新解析', en: 'Re-parse', fr: 'Réanalyser' },

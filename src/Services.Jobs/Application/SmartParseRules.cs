@@ -301,7 +301,20 @@ public static class JdPasteParser
         if (jdSummary is not null) conf["jdSummary"] = 50;
 
         // 公司介绍 / 任职要求 / 福利:段落级提取,供用户在弹窗里确认
+        // 2026-10-19:LinkedIn 抓取的 HTML 带 linkedin-company-desc 标记，优先用
         var companyDescription = ExtractCompanyDescription(lines, company);
+        if (isHtml)
+        {
+            var descMatch = Regex.Match(raw, @"<div class=""linkedin-company-desc"">(.*?)</div>",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (descMatch.Success)
+            {
+                var descHtml = descMatch.Groups[1].Value;
+                var descText = HtmlToText(descHtml);
+                if (!string.IsNullOrWhiteSpace(descText) && descText.Length > 20)
+                    companyDescription = descText;
+            }
+        }
         if (companyDescription is not null) conf["companyDescription"] = 70;
         var requirements = ExtractSection(lines, RequirementsHeaders);
         if (requirements is not null) conf["requirements"] = 70;

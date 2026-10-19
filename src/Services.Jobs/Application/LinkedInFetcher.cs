@@ -129,7 +129,7 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                 }
 
                 // 提 JD HTML：优先 .jobs-description__content
-                // 2026-10-19:同时提取页面标题（含职位+公司），解析器用
+                // 2026-10-19:同时提取页面标题、公司介绍、薪资/工作模式等结构化字段
                 var result = await page.EvaluateAsync<System.Text.Json.JsonElement>(@"() => {
                     const el = document.querySelector('.jobs-description__content')
                         || document.querySelector('.description__text')
@@ -143,10 +143,33 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                     } else {
                         html = document.body.innerHTML.slice(0, 200000);
                     }
-                    return { html: html, title: document.title };
+                    // 公司介绍：About the company 卡片
+                    let companyDesc = '';
+                    const aboutHeaders = document.querySelectorAll('h2, h3');
+                    for (const h of aboutHeaders) {
+                        if (/about the company/i.test(h.textContent)) {
+                            let sib = h.nextElementSibling;
+                            let parts = [];
+                            while (sib && parts.length < 5) {
+                                if (sib.textContent.trim()) parts.push(sib.innerHTML);
+                                sib = sib.nextElementSibling;
+                            }
+                            companyDesc = parts.join('\n');
+                            break;
+                        }
+                    }
+                    // 元数据：薪资/工作模式/职位类型（pill chips 或描述行）
+                    const meta = document.body.innerText.slice(0, 5000);
+                    return {
+                        html: html,
+                        title: document.title,
+                        companyDesc: companyDesc,
+                        bodyStart: meta
+                    };
                 }");
                 var html = result.GetProperty("html").GetString() ?? "";
                 var pageTitle = result.GetProperty("title").GetString() ?? "";
+                var companyDesc = result.TryGetProperty("companyDesc", out var cd) ? cd.GetString() ?? "" : "";
                 await page.CloseAsync();
 
                 // 保存登录态
@@ -160,6 +183,9 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                 // 页面标题格式: "职位 @ 公司 | LinkedIn"，拼到 HTML 前面供解析器用
                 if (!string.IsNullOrWhiteSpace(pageTitle))
                     html = $"<title>{System.Net.WebUtility.HtmlEncode(pageTitle)}</title>\n" + html;
+                // 公司介绍拼到后面，解析器提取
+                if (!string.IsNullOrWhiteSpace(companyDesc))
+                    html += $"\n<!--COMPANY_DESC-->\n<div class=\"linkedin-company-desc\">{companyDesc}</div>";
                 return (true, html, null);
             }
             catch

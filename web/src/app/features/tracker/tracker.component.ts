@@ -1441,54 +1441,47 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       </div>
 
       @if (detailTab() === 'overview') {
+      <!-- ★ Simplify 对齐:状态 pill (灰色) -->
       <div class="top">
-        <mat-chip-set>
-          <mat-chip [class]="'chip ' + statusClass(detail.status)">{{ statusLabel(detail.status) }}</mat-chip>
-          @if (detail.priority) {
-            <mat-chip>{{ detail.priority }} {{ t('tracker.dPriority') }}</mat-chip>
-          }
-          @if (detail.needsConnectFirst) {
-            <mat-chip highlighted>{{ t('tracker.dNeedNetwork') }}</mat-chip>
-          }
-        </mat-chip-set>
+        <span class="status-pill">{{ statusLabel(detail.status) }}</span>
+        @if (detail.priority) {
+          <span class="status-pill">{{ detail.priority }} {{ t('tracker.dPriority') }}</span>
+        }
+        @if (detail.needsConnectFirst) {
+          <span class="status-pill warn">{{ t('tracker.dNeedNetwork') }}</span>
+        }
         @if (detail.rejectionReason) {
           <p class="rejection">{{ t('tracker.dRejectReason') }}{{ detail.rejectionReason }}</p>
         }
       </div>
 
-      <dl class="fields">
-        <div><dt>{{ t('tracker.dLocation') }}</dt><dd>{{ detail.location || '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dSalary') }}</dt><dd>{{ detail.salary || '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dAppliedDate') }}</dt><dd>{{ detail.appliedDate || '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dOutreachMsg') }}</dt><dd>{{ detail.outreachMessage || '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dResumeMatch') }}</dt>
-          <dd>{{ detail.resumeScore != null ? tn('tracker.dScoreUnit', detail.resumeScore) : '—' }}</dd></div>
-        <!-- ★ #7:关键词差距清单 -->
-        @if (match(); as m) {
+      <!-- ★ Simplify 对齐:两列字段网格 -->
+      <div class="fields">
+        <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue">{{ detail.appliedDate || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dOutreachMsg') }}</span><span class="fvalue">{{ detail.outreachMessage || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dResumeMatch') }}</span>
+          <span class="fvalue">{{ detail.resumeScore != null ? tn('tracker.dScoreUnit', detail.resumeScore) : '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dPassRate') }}</span>
+          <span class="fvalue">{{ detail.passRateEstimate ? detail.passRateEstimate : '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dCreatedAt') }}</span><span class="fvalue">{{ detail.createdAt | date: 'yyyy-MM-dd HH:mm' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dUpdatedAt') }}</span>
+          <span class="fvalue">{{ detail.updatedAt ? (detail.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</span></div>
+      </div>
+      <!-- ★ 关键词差距 (保留,Simplify 没有但有用) -->
+      @if (match(); as m) {
+        @if (m.missing.length > 0) {
           <div class="kw-gap">
-            <dt>关键词差距 ({{ m.missing.length }} 缺失)</dt>
-            <dd>
-              @if (m.missing.length === 0) {
-                <span class="kw-ok">✓ 简历覆盖了 JD 的全部技术关键词</span>
-              } @else {
-                <div class="kw-list">
-                  @for (k of m.missing; track k) {
-                    <span class="kw-missing">{{ k }}</span>
-                  }
-                </div>
-                <div class="kw-hit">
-                  已覆盖: @for (k of m.hit; track k) { <span class="kw-hit-item">{{ k }}</span> }
-                </div>
+            <span class="flabel">关键词差距 ({{ m.missing.length }} 缺失)</span>
+            <div class="kw-list">
+              @for (k of m.missing; track k) {
+                <span class="kw-missing">{{ k }}</span>
               }
-            </dd>
+            </div>
           </div>
         }
-        <div><dt>{{ t('tracker.dPassRate') }}</dt>
-          <dd>{{ detail.passRateEstimate ? detail.passRateEstimate : '—' }}</dd></div>
-        <div><dt>{{ t('tracker.dCreatedAt') }}</dt><dd>{{ detail.createdAt | date: 'yyyy-MM-dd HH:mm' }}</dd></div>
-        <div><dt>{{ t('tracker.dUpdatedAt') }}</dt>
-          <dd>{{ detail.updatedAt ? (detail.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd></div>
-      </dl>
+      }
 
       <mat-divider></mat-divider>
       <section>
@@ -1887,17 +1880,27 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
     .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
+    /* ★ Simplify 对齐:状态 pill (灰色圆角) */
+    .status-pill {
+      display: inline-block; padding: 6px 16px; border-radius: 16px;
+      background: rgba(0,0,0,0.06); font-size: 13px; font-weight: 500;
+      margin-right: 8px; margin-bottom: 4px;
+    }
+    .status-pill.warn { background: #fff3e0; color: #e65100; }
     /* ★ Simplify 对齐:字段两列,标签小灰字在上 */
     .fields {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px;
-      margin: 0 0 20px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px;
+      margin: 0 0 24px;
     }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .flabel { font-size: 12px; color: rgba(0,0,0,0.45); letter-spacing: 0.2px; }
+    .fvalue { font-size: 14px; line-height: 1.5; }
+    .kw-gap { margin: 0 0 20px; }
+    .kw-gap .flabel { display: block; margin-bottom: 8px; }
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px;
       margin: 0 0 16px;
     }
-    .fields > div { display: flex; flex-direction: column; gap: 2px; }
-    dt { font-size: 11.5px; letter-spacing: 0.3px; opacity: 0.5; }
-    dd { margin: 0; font-size: 13.5px; }
+    .field { display: flex; flex-direction: column; gap: 2px; }
     section { margin-top: 16px; }
     section h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.3px; opacity: 0.7; }
     .pre { margin: 0; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }

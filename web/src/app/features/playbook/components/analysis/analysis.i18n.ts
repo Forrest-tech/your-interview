@@ -64,6 +64,10 @@ export const ANALYSIS_I18N: Record<string, { zh: string; en: string; fr?: string
   'pb.an.cat.Culture': { zh: '文化匹配', en: 'Culture Fit', fr: 'Culture' },
   'pb.an.cat.Other': { zh: '其他', en: 'Other', fr: 'Autre' },
 
+  // ---------- 短板清单(R01) ----------
+  'pb.an.weaknessTitle': { zh: '短板清单', en: 'Weak points', fr: 'Points faibles' },
+  'pb.an.noWeaknesses': { zh: '暂无短板记录', en: 'No weak points recorded', fr: 'Aucun point faible' },
+
   // ---------- 通用 ----------
   'pb.an.loading': { zh: '加载中…', en: 'Loading…', fr: 'Chargement…' },
   'pb.an.loadFailed': { zh: '加载失败', en: 'Failed to load', fr: 'Échec du chargement' },

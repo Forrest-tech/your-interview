@@ -114,6 +114,42 @@
       }
     </div>
 
+    <!-- 短板清单:R01 要求显式列出弱点 -->
+    <mat-card class="ar-weaknesses">
+      <mat-card-title>
+        <mat-icon>priority_high</mat-icon>{{ t('pb.an.weaknessTitle') }}
+        <span class="ar-qcount">({{ weaknesses().length }})</span>
+      </mat-card-title>
+      <mat-card-content>
+        @if (weaknesses().length === 0) {
+          <p class="ar-empty">{{ t('pb.an.noWeaknesses') }}</p>
+        } @else {
+          <ul class="wk-list">
+            @for (w of weaknesses(); track w.id) {
+              <li class="wk-item" [class]="'sev-' + w.severity">
+                <div class="wk-head">
+                  <span class="wk-cat">{{ weaknessCategoryLabel(w.category) }}</span>
+                  <span class="wk-title">{{ w.title }}</span>
+                  @if (w.occurrenceCount > 1) {
+                    <span class="wk-times">×{{ w.occurrenceCount }}</span>
+                  }
+                </div>
+                @if (w.detail) {
+                  <p class="wk-detail">{{ w.detail }}</p>
+                }
+                @if (w.evidence) {
+                  <p class="wk-evidence"><mat-icon>format_quote</mat-icon>{{ w.evidence }}</p>
+                }
+                @if (w.suggestion) {
+                  <p class="wk-suggestion"><mat-icon>tips_and_updates</mat-icon>{{ w.suggestion }}</p>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </mat-card-content>
+    </mat-card>
+
     <!-- 底部:逐题手风琴 -->
     <mat-card class="ar-questions">
       <mat-card-title>

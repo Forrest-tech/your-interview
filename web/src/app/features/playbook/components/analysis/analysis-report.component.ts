@@ -11,7 +11,7 @@ import { analysisT } from './analysis.i18n';
 import { NextActionsComponent } from './next-actions.component';
 import {
   AnalysisEntryView, AnalysisSnapshotDto, AnalysisTrendPointDto, AnalysisQuestionView,
-  DIMENSION_KEYS, DimScore, parseBullets, parseDimensions, scoreBand, splitSentences
+  WeaknessView, DIMENSION_KEYS, DimScore, parseBullets, parseDimensions, scoreBand, splitSentences
 } from './analysis.models';
 
 interface SparkPoint { x: number; y: number; date: string; score: number; }
@@ -75,6 +75,20 @@ export class AnalysisReportComponent implements OnInit {
 
   readonly questions = computed<AnalysisQuestionView[]>(() => this.entry()?.questions ?? []);
   readonly transcript = computed(() => this.entry()?.candidateTranscript ?? '');
+
+  /** 短板列表:按严重度倒序(后端已排),前端再兜底排一次。 */
+  readonly weaknesses = computed<WeaknessView[]>(() => {
+    const list = this.entry()?.weaknesses ?? [];
+    return [...list].sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0));
+  });
+
+  /** 短板分类 → 本地化标签(无对应键时回退原枚举值)。 */
+  weaknessCategoryLabel(cat: string | null | undefined): string {
+    if (!cat) return this.t('pb.an.weakness.cat.Other');
+    const key = 'pb.an.weakness.cat.' + cat;
+    const s = this.t(key);
+    return s === key ? cat : s;
+  }
 
   scoreBand = scoreBand;
   /** 模板里用 Math.abs —— 模板表达式访问不到全局 Math,显式暴露。 */

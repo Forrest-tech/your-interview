@@ -50,6 +50,22 @@ export interface AnalysisEntryView {
   questions?: AnalysisQuestionView[] | null;
   candidateTranscript?: string | null;
   analysisSummary?: string | null;
+  /** 后端 WeaknessDto 数组(camelCase)。 */
+  weaknesses?: WeaknessView[] | null;
+}
+
+/** 短板(WeaknessDto 子集):分类 chip + 标题 + 建议 + 证据。 */
+export interface WeaknessView {
+  id: string;
+  /** 后端枚举字符串,如 Pronunciation / Structure / TechnicalDepth。 */
+  category: string;
+  title: string;
+  detail?: string | null;
+  evidence?: string | null;
+  /** 严重度 1-5,列表按它倒序。 */
+  severity: number;
+  suggestion?: string | null;
+  occurrenceCount: number;
 }
 
 /** 六维展示元数据 —— 顺序即报告推荐阅读顺序。 */

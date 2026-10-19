@@ -2080,6 +2080,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.an.analyzedAt': { zh: '分析时间', en: 'Analyzed at', fr: 'Analysé le' },
   'pb.an.conclusions': { zh: '结论', en: 'Key takeaways', fr: 'Conclusions' },
   'pb.an.noConclusions': { zh: '暂无结论', en: 'No conclusions yet', fr: 'Aucune conclusion' },
+  'pb.an.weaknessTitle': { zh: '短板清单', en: 'Weak points', fr: 'Points faibles' },
+  'pb.an.noWeaknesses': { zh: '暂无短板记录', en: 'No weak points recorded', fr: 'Aucun point faible' },
   'pb.an.dimsTitle': { zh: '能力维度', en: 'Score dimensions', fr: 'Dimensions' },
   'pb.an.noDims': { zh: '暂无维度评分', en: 'No dimension scores yet', fr: 'Aucune note' },
   'pb.an.radarTitle': { zh: '维度雷达', en: 'Dimension radar', fr: 'Radar' },

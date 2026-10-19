@@ -393,9 +393,8 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** 公司 Logo:优先用后端解析的,fallback 用 Clearbit 按域名猜,再失败显示首字母。 */
   logoUrl(app: Application): string | null {
-    if (app.companyLogoUrl) return app.companyLogoUrl;
-    const domain = this.guessDomain(app.companyName);
-    return domain ? `https://logo.clearbit.com/${domain}` : null;
+    // 2026-10-19:去掉 clearbit 外部 logo，直接用首字母头像（避免控制台报错）
+    return app.companyLogoUrl || null;
   }
 
   /** 常见公司名 → 域名(猜错也没关系,加载失败会自动 fallback 到首字母)。 */

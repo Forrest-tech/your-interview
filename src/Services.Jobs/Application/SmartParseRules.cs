@@ -38,7 +38,8 @@ public sealed record ParsedJdDto(
     string SourceKind, string Status, string Message,
     string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
-    string? JdText, DateOnly? Deadline, string? DetectedSource,
+    string? JdText, string? CompanyDescription, string? Requirements, string? Benefits,
+    DateOnly? Deadline, string? DetectedSource,
     Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview);
 
 // ============================ 邀请邮件解析(需求 6.2.3) ============================
@@ -114,10 +115,17 @@ public static class JdPasteParser
     // ⚠️ 两端都要允许出现币种符号:"$140,000 - $180,000" 是最常见的写法,
     //    只在开头允许符号会让整条匹配失败,退而去匹配日期里的 "2026-11-30"
     //    → 解出 "$11k - $26k" 这种荒谬结果(踩过,务必保留 cur2)。
+    // ⚠️ 2026-10-19:补 (?<![\d$€£\-–—]) 前瞻 —— 之前 "2026-11-30" 里 "026-11"
+    //    仍能命中,日期必须整体排除(连 "-" 前导的 "11-30" 段也要挡)。
+    // ⚠️ 2026-10-19:金额后允许 "/yr|/year|per year|per hour" 等频率后缀,
+    //    否则 "$90K/yr - $105K/yr"(LinkedIn 常见写法) 完全匹配不上。
     private static readonly Regex SalaryRange = new(
-        @"(?<cur>[$€£]|USD|CAD|US\$|C\$)?\s*(?<lo>\d{2,3})(?:[kK]|,?000)?\s*(?:-|–|—|to|~)\s*(?:(?:USD|CAD|AUD|GBP|EUR)\s*)?(?<cur2>[$€£]|USD|CAD|US\$|C\$)?\s*(?<hi>\d{2,3})(?:[kK]|,?000)?", Opts);
+        @"(?<![\d$€£\-–—])(?<cur>[$€£]|USD|CAD|US\$|C\$)?\s*(?<lo>\d{2,3})(?:[kK]|,?000)?(?<rate1>\s*(?:/|per\s+)(?:year|yr|annum|month|mo|week|wk|hour|hr))?\s*(?:-|–|—|to|~)\s*(?:(?:USD|CAD|AUD|GBP|EUR)\s*)?(?<cur2>[$€£]|USD|CAD|US\$|C\$)?\s*(?<hi>\d{2,3})(?:[kK]|,?000)?(?<rate2>\s*(?:/|per\s+)(?:year|yr|annum|month|mo|week|wk|hour|hr))?(?!\d)", Opts);
     private static readonly Regex SalarySingle = new(
-        @"(?<cur>[$€£]|USD|CAD|US\$|C\$)\s*(?<lo>\d{2,3})\s*[kK]\b", Opts);
+        @"(?<![\d$€£\-–—])(?<cur>[$€£]|USD|CAD|US\$|C\$)\s*(?<lo>\d{2,3})\s*[kK](?<rate>\s*(?:/|per\s+)(?:year|yr|annum|month|mo|week|wk|hour|hr))?\b", Opts);
+    // 时薪无 k 写法:"$45/hour"、"$55 per hr"
+    private static readonly Regex SalaryHourly = new(
+        @"(?<![\d$€£\-–—])(?<cur>[$€£]|USD|CAD|C\$)\s*(?<lo>\d{2,3}(?:\.\d{1,2})?)\s*(?:/|per\s+)(?:hour|hr)\b", Opts);
     private static readonly Regex LocationCityState = new(
         @"\b(?<city>[A-Z][a-zA-Z]+(?:[ ][A-Z][a-zA-Z]+)?)[ ]*,[ ]*(?<region>[A-Z]{2}|[A-Z][a-zA-Z]+)\b", RegexOptions.Compiled);
     private static readonly Regex UrlAnywhere = new(@"https?://\S+", Opts);
@@ -235,6 +243,14 @@ public static class JdPasteParser
         var jdSummary = isUrl ? null : Summary(text);
         if (jdSummary is not null) conf["jdSummary"] = 50;
 
+        // 公司介绍 / 任职要求 / 福利:段落级提取,供用户在弹窗里确认
+        var companyDescription = ExtractCompanyDescription(lines, company);
+        if (companyDescription is not null) conf["companyDescription"] = 70;
+        var requirements = ExtractSection(lines, RequirementsHeaders);
+        if (requirements is not null) conf["requirements"] = 70;
+        var benefits = ExtractSection(lines, BenefitsHeaders);
+        if (benefits is not null) conf["benefits"] = 70;
+
         var filled = CountFilled(company, role, location, salary, workMode, jdSummary);
 
         return new ParsedJdDto(
@@ -242,7 +258,8 @@ public static class JdPasteParser
             filled >= 4 ? ParseOutcome.Ok : filled >= 1 ? ParseOutcome.Partial : ParseOutcome.Failed,
             string.Empty,
             company, role, location, salary, workMode, jdSummary, keywords, priority,
-            link, jdText, deadline, detected ?? (isUrl ? "未知站点" : null),
+            link, jdText, companyDescription, requirements, benefits,
+            deadline, detected ?? (isUrl ? "未知站点" : null),
             conf, false, false);
     }
 
@@ -551,7 +568,7 @@ public static class JdPasteParser
     private static string? GuessWorkMode(string text)
     {
         if (Regex.IsMatch(text, @"\b(hybrid)\b", RegexOptions.IgnoreCase)) return "Hybrid";
-        if (Regex.IsMatch(text, @"\b(remote|fully remote|wfh|work from home|远程|全远程)\b", RegexOptions.IgnoreCase)) return "Remote";
+        if (Regex.IsMatch(text, @"\b(remote|fully remote|wfh|work from home|telecommute|远程|全远程)\b", RegexOptions.IgnoreCase)) return "Remote";
         if (Regex.IsMatch(text, @"\b(on-?site|in-?office|现场办公|坐班)\b", RegexOptions.IgnoreCase)) return "Onsite";
         return null;
     }
@@ -572,7 +589,18 @@ public static class JdPasteParser
             var cur = NormalizeCurrency(m.Groups["cur"].Value)
                    ?? NormalizeCurrency(m.Groups["cur2"].Value)
                    ?? string.Empty;
-            return cur.Length == 0 ? $"{loTxt} - {hiTxt}" : $"{cur}{loTxt} - {cur}{hiTxt}";
+            // 频率后缀:年薪默认不标,/hr·/mo·/wk 要保留才诚实
+            var rate = NormalizeRate(m.Groups["rate1"].Value)
+                    ?? NormalizeRate(m.Groups["rate2"].Value)
+                    ?? string.Empty;
+            return cur.Length == 0 ? $"{loTxt} - {hiTxt}{rate}" : $"{cur}{loTxt} - {cur}{hiTxt}{rate}";
+        }
+
+        var h = SalaryHourly.Match(text);
+        if (h.Success)
+        {
+            var cur = NormalizeCurrency(h.Groups["cur"].Value) ?? string.Empty;
+            return $"{cur}{h.Groups["lo"].Value}/hr";
         }
 
         var s = SalarySingle.Match(text);
@@ -580,10 +608,26 @@ public static class JdPasteParser
         {
             var lo = int.Parse(s.Groups["lo"].Value, CultureInfo.InvariantCulture);
             var cur = NormalizeCurrency(s.Groups["cur"].Value) ?? string.Empty;
-            return $"{cur}{lo}k+";
+            var rate = NormalizeRate(s.Groups["rate"].Value) ?? string.Empty;
+            return $"{cur}{lo}k{rate}+";
         }
 
         return null;
+    }
+
+    /// <summary>频率后缀归一:年薪(/yr·per year·annum)是默认,不加后缀;
+    /// 时薪/月薪/周薪必须保留后缀,否则数字会误导。</summary>
+    private static string? NormalizeRate(string raw)
+    {
+        var r = raw.Trim().TrimStart('/').Trim();
+        if (r.StartsWith("per ", StringComparison.OrdinalIgnoreCase)) r = r[4..].Trim();
+        return r.ToLowerInvariant() switch
+        {
+            "hour" or "hr" => "/hr",
+            "month" or "mo" => "/mo",
+            "week" or "wk" => "/wk",
+            _ => null, // year/yr/annum → 年薪默认
+        };
     }
 
     /// <summary>币种归一。认不出来返回 null —— 让调用方决定"不标币种",而不是默认美元。</summary>
@@ -600,13 +644,24 @@ public static class JdPasteParser
     private static DateOnly? GuessDeadline(string text)
     {
         var m = Regex.Match(text,
-            @"(?:apply by|deadline|截止|申请截止|投递截止|closes?)\s*[:：]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[A-Z][a-z]{2,8}\s+[0-9]{1,2},?\s+[0-9]{4}|[0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})",
+            @"(?:apply by|deadlines?|closing dates?|applications? closing|(?:posting |job )?expir(?:y|ation)(?: dates?)?|valid (?:through|until)|截止|申请截止|投递截止|clos(?:e|es|ing))\s*[:：]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[A-Z][a-z]{2,8}\s+[0-9]{1,2},?\s+[0-9]{4}|[0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})",
             RegexOptions.IgnoreCase);
         if (!m.Success) return null;
 
         var v = m.Groups[1].Value;
-        if (DateOnly.TryParse(v, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d1)) return d1;
-        if (DateOnly.TryParse(v, CultureInfo.GetCultureInfo("en-US"), DateTimeStyles.None, out var d2)) return d2;
+        // 显式多格式:TryParse 默认按 MM/dd 走,"15/12/2026"(dd/MM) 会被误判非法。
+        // day>12 的只能是 dd/MM,先试 dd/MM 再试 MM/dd,避免 "01/02/2026" 这类
+        // 歧义日期被固定解读 —— 歧义时优先北美常见 MM/dd。
+        var formats = new[]
+        {
+            "yyyy-M-d", "yyyy/M/d",
+            "M/d/yyyy", "MM/dd/yyyy", "M-d-yyyy", "MM-dd-yyyy",
+            "d/M/yyyy", "dd/MM/yyyy", "d-M-yyyy", "dd-MM-yyyy",
+            "MMMM d, yyyy", "MMMM d yyyy", "MMM d, yyyy", "MMM d yyyy",
+        };
+        foreach (var f in formats)
+            if (DateOnly.TryParseExact(v, f, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+                return d;
         return null;
     }
 
@@ -654,7 +709,12 @@ public static class JdPasteParser
             source = string.Join("\n", srcLines.Skip(proseStart));
         var flat = Regex.Replace(source, @"\s+", " ").Trim();
         if (flat.Length == 0) return null;
-        return flat.Length <= 220 ? flat : flat[..220] + "…";
+        // 2026-10-19:220 字符太短,正文常被拦腰截断 —— 放到 400,按词边界截。
+        const int max = 400;
+        if (flat.Length <= max) return flat;
+        var cut = flat.LastIndexOf(' ', max);
+        if (cut < max / 2) cut = max; // 实在没空格就硬截
+        return flat[..cut].TrimEnd() + "…";
     }
 
     /// <summary>
@@ -668,6 +728,137 @@ public static class JdPasteParser
         return Regex.IsMatch(line,
             @"posted\s|reference number|job details?|apply now|show more",
             RegexOptions.IgnoreCase);
+    }
+
+    // ---------- 段落级字段:公司介绍 / 任职要求 / 福利 ----------
+
+    /// <summary>
+    /// 已知的段落标题(归一化后比对)。命中即视为新段落的开始 ——
+    /// 段落提取就靠它来定边界,所以只收录"几乎不可能是正文"的标题。
+    /// </summary>
+    private static readonly string[] KnownSectionHeaders =
+    [
+        "about the company", "about the job", "job description", "job summary",
+        "about the role", "the role", "job overview", "position overview", "role overview",
+        "requirements", "qualifications", "preferred qualifications", "minimum qualifications",
+        "what you'll need", "what you bring", "must have", "nice to have", "key skills", "skills",
+        "responsibilities", "what you'll do", "key responsibilities", "your responsibilities",
+        "your day to day", "day to day",
+        "benefits", "what we offer", "perks", "compensation and benefits", "why join us",
+        "additional information",
+        "about us", "who we are", "our company", "equal opportunity", "how to apply",
+        "application process", "disclosure",
+        "职位描述", "岗位职责", "工作内容", "任职要求", "任职资格", "岗位要求",
+        "技能要求", "福利待遇", "薪资福利", "公司介绍", "关于我们",
+    ];
+
+    private static readonly string[] RequirementsHeaders =
+    [
+        "requirements", "qualifications", "preferred qualifications", "minimum qualifications",
+        "what you'll need", "what you bring", "must have", "nice to have", "key skills",
+        "任职要求", "任职资格", "岗位要求", "技能要求",
+    ];
+
+    private static readonly string[] BenefitsHeaders =
+    [
+        "benefits", "what we offer", "perks", "compensation and benefits", "why join us",
+        "additional information", "福利待遇", "薪资福利",
+    ];
+
+    /// <summary>
+    /// 是否像一个段落标题:命中已知标题表,或短行+冒号结尾。
+    /// 长度上限 60 挡住正文段落;冒号分支要求 ≤8 词,挡住 "Note: ..." 这类正文行。
+    /// </summary>
+    private static bool IsSectionHeader(string line)
+    {
+        var t = line.Trim().TrimEnd(':', '：');
+        if (t.Length == 0 || t.Length > 60) return false;
+        foreach (var h in KnownSectionHeaders)
+            if (string.Equals(t, h, StringComparison.OrdinalIgnoreCase)) return true;
+        var raw = line.TrimEnd();
+        if (raw.EndsWith(':') || raw.EndsWith('：'))
+        {
+            var words = t.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length is >= 1 and <= 8) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 通用段落提取:找到标题行后,收集到下一个段落标题之前的所有非空行。
+    /// 找不到标题返回 null;内容不足 10 字符也视为无(标题下直接就是下一标题的碎片页)。
+    /// </summary>
+    private static string? ExtractSection(IList<string> lines, string[] headers)
+    {
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var t = lines[i].Trim().TrimEnd(':', '：');
+            var hit = false;
+            foreach (var h in headers)
+            {
+                if (string.Equals(t, h, StringComparison.OrdinalIgnoreCase)) { hit = true; break; }
+            }
+            if (!hit) continue;
+
+            var sb = new List<string>();
+            for (var j = i + 1; j < lines.Count; j++)
+            {
+                var l = lines[j].Trim();
+                if (IsSectionHeader(l)) break;
+                if (l.Length > 0) sb.Add(l);
+            }
+            var v = string.Join("\n", sb).Trim();
+            if (v.Length >= 10) return v.Length <= 8000 ? v : v[..8000] + "…";
+            return null;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 公司介绍:取 "About the company" 标题之后、下一个段落标题之前的内容。
+    /// LinkedIn 形态下标题和正文之间夹着公司名、follower 数、行业行等元数据 ——
+    /// 先跳过这些(公司名用已解出的 company 比对,follower/员工数/行业分类行按模式跳过),
+    /// 剩下的第一个"像正文"的段落才是介绍。
+    /// </summary>
+    private static string? ExtractCompanyDescription(IList<string> lines, string? company)
+    {
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (!Regex.IsMatch(lines[i].Trim(), @"^about\s+the\s+company$", RegexOptions.IgnoreCase))
+                continue;
+
+            var j = i + 1;
+            // 跳过元数据行:公司名 / follower·员工数 / "Following" / 行业分类行 / "N on LinkedIn"
+            while (j < lines.Count && IsCompanyMetaLine(lines[j], company)) j++;
+
+            var sb = new List<string>();
+            for (; j < lines.Count; j++)
+            {
+                var l = lines[j].Trim();
+                if (IsSectionHeader(l)) break;
+                if (l.Length > 0) sb.Add(l);
+            }
+            var v = string.Join("\n", sb).Trim();
+            if (v.Length >= 20) return v.Length <= 8000 ? v : v[..8000] + "…";
+            return null;
+        }
+        return null;
+    }
+
+    private static bool IsCompanyMetaLine(string line, string? company)
+    {
+        var t = line.Trim();
+        if (t.Length == 0) return true;
+        if (company is not null && string.Equals(t, company, StringComparison.OrdinalIgnoreCase))
+            return true;
+        // follower / 员工数
+        if (Regex.IsMatch(t, @"[\d,]+\s*(followers|employees)", RegexOptions.IgnoreCase)) return true;
+        if (Regex.IsMatch(t, @"^\d[\d,\s]*$", RegexOptions.Compiled)) return true;
+        if (Regex.IsMatch(t, @"^(following|follow|•|\*)$", RegexOptions.IgnoreCase)) return true;
+        if (Regex.IsMatch(t, @"\bon\s+linkedin\b", RegexOptions.IgnoreCase)) return true;
+        // 行业分类行:逗号分隔、无句号结尾的短行("Transportation, Logistics, Supply Chain and Storage")
+        if (t.Contains(',') && !t.EndsWith('.') && t.Length < 100) return true;
+        return false;
     }
 
     private static string Title(string s)

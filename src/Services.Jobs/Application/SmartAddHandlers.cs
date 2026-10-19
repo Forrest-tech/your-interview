@@ -148,7 +148,7 @@ public sealed class ParseJdCommandHandler(
 // ============================ 一键建档(解析结果 → 投递记录) ============================
 
 public sealed record SmartAddApplicationCommand(
-    string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
+    string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
     string? CompanyDescription = null, string? WorkAuthorization = null)
@@ -214,6 +214,10 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
         // 工作身份要求:Smart paste 从 JD 正文提取,建档时一并存下。
         if (!string.IsNullOrWhiteSpace(request.WorkAuthorization))
             app.SetWorkAuthorization(request.WorkAuthorization.Trim());
+
+        // 岗位性质:Smart paste 从 JD 正文提取,建档时一并存下。
+        if (!string.IsNullOrWhiteSpace(request.JobType))
+            app.SetJobType(request.JobType.Trim());
 
         if (!string.IsNullOrWhiteSpace(request.MatchKeywords))
             app.SetAnalysis(null, null, request.MatchKeywords.Trim());
@@ -351,6 +355,7 @@ internal static class JdAiEnricher
               "location": "工作地点",
               "salary": "薪资范围原文或规范化写法",
               "workMode": "Remote | Hybrid | Onsite",
+              "jobType": "Full-time | Part-time | Permanent | Contract | Temporary | Freelance | Internship 或 null",
               "jdSummary": "80-150 字的中文摘要",
               "companyDescription": "公司介绍段落原文(About the company 段)",
               "requirements": "任职要求/资格段落原文",
@@ -386,6 +391,7 @@ internal static class JdAiEnricher
         var location = draft.Location ?? S("location");
         var salary = draft.Salary ?? S("salary");
         var workMode = draft.WorkMode ?? S("workMode");
+        var jobType = draft.JobType ?? S("jobType");
 
         // 摘要与关键词:AI 的理解力强于取前 N 字,所以 AI 结果优先
         var jdSummary = S("jdSummary") ?? draft.JdSummary;
@@ -410,6 +416,7 @@ internal static class JdAiEnricher
         var conf = new Dictionary<string, int>(draft.Confidence);
         if (company is not null) conf["company"] = Math.Max(conf.GetValueOrDefault("company"), 90);
         if (role is not null) conf["role"] = Math.Max(conf.GetValueOrDefault("role"), 90);
+        if (jobType is not null) conf["jobType"] = Math.Max(conf.GetValueOrDefault("jobType"), 85);
         if (jdSummary is not null) conf["jdSummary"] = 85;
         if (companyDescription is not null) conf["companyDescription"] = Math.Max(conf.GetValueOrDefault("companyDescription"), 85);
         if (requirements is not null) conf["requirements"] = Math.Max(conf.GetValueOrDefault("requirements"), 85);
@@ -419,7 +426,7 @@ internal static class JdAiEnricher
         return draft with
         {
             Company = company, Role = role, Location = location, Salary = salary,
-            WorkMode = workMode, JdSummary = jdSummary, MatchKeywords = keywords,
+            WorkMode = workMode, JobType = jobType, JdSummary = jdSummary, MatchKeywords = keywords,
             Priority = priority, Deadline = deadline, Confidence = conf,
             CompanyDescription = companyDescription, Requirements = requirements, Benefits = benefits,
             WorkAuthorization = workAuthorization

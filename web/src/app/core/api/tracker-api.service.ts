@@ -14,6 +14,7 @@ export interface ParsedJd {
   location: string | null;
   salary: string | null;
   workMode: string | null;
+  jobType: string | null;
   jdSummary: string | null;
   matchKeywords: string | null;
   priority: string | null;
@@ -94,7 +95,7 @@ export class TrackerApi {
   /** 把(用户改过的)草稿落成公司与投递记录。 */
   smartAdd(body: {
     company: string; role: string; location?: string | null; salary?: string | null;
-    workMode?: string | null; jdSummary?: string | null; matchKeywords?: string | null;
+    workMode?: string | null; jobType?: string | null; jdSummary?: string | null; matchKeywords?: string | null;
     priority?: string | null; link?: string | null; jdText?: string | null;
     source?: string | null; status?: string | null; deadline?: string | null;
     companyDescription?: string | null; workAuthorization?: string | null;

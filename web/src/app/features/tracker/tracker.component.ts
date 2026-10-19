@@ -828,6 +828,15 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly selected = signal<Set<string>>(new Set());
   readonly selectedCount = computed(() => this.selected().size);
 
+  /** ★ 选择模式:默认关闭,卡片不显示勾选框;点工具栏"选择"进入。 */
+  readonly selectMode = signal(false);
+
+  toggleSelectMode(): void {
+    const next = !this.selectMode();
+    this.selectMode.set(next);
+    if (!next) this.clearSelection();
+  }
+
   toggleSelect(id: string, ev?: Event | any): void {
     // MatCheckboxChange 没有 stopPropagation,直接忽略
     try { (ev as Event)?.stopPropagation?.(); } catch {}
@@ -913,6 +922,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private finishBulk(done: number, failed: number, _op: string): void {
     this.clearSelection();
+    this.selectMode.set(false);
     this.reload();
     if (failed > 0) {
       this.notify(this.tf('tracker.bulkPartial', { done, failed }), true);
@@ -1611,6 +1621,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       <div class="fields">
         <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
         <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.jobType') }}</span><span class="fvalue">{{ detail.jobType || '—' }}</span></div>
         <div class="field"><span class="flabel">{{ t('tracker.workAuthorization') }}</span><span class="fvalue">{{ detail.workAuthorization || '—' }}</span></div>
         <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue">{{ detail.appliedDate || '—' }}</span></div>
         <div class="field"><span class="flabel">URL</span>

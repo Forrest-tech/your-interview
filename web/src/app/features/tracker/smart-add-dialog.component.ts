@@ -31,6 +31,7 @@ export interface SmartAddDialogResult {
 }
 
 const WORK_MODES = ['Remote', 'Hybrid', 'Onsite'];
+const JOB_TYPES = ['Full-time', 'Part-time', 'Permanent', 'Contract', 'Temporary', 'Freelance', 'Internship'];
 const PRIORITIES = ['High', 'Medium', 'Low'];
 const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
 
@@ -124,6 +125,13 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
               <mat-select name="jdWorkMode" [(ngModel)]="jd.workMode">
                 <mat-option [value]="null">{{ t('tracker.saUnrecognized') }}</mat-option>
                 @for (w of workModes; track w) { <mat-option [value]="w">{{ w }}</mat-option> }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>{{ t('tracker.jobType') }}</mat-label>
+              <mat-select name="jdJobType" [(ngModel)]="jd.jobType">
+                <mat-option value="">{{ t('tracker.saUnrecognized') }}</mat-option>
+                @for (j of jobTypes; track j) { <mat-option [value]="j">{{ j }}</mat-option> }
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline">
@@ -244,7 +252,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>{{ t('common.cancel') }}</button>
       @if (mode() === 'jd') {
-        <button mat-raised-button color="primary" [disabled]="!canSaveJd() || busy()" (click)="saveJd()">
+        <button mat-raised-button color="primary" [disabled]="!canSaveJd || busy()" (click)="saveJd()">
           {{ t('tracker.saSaveApp') }}
         </button>
       } @else {
@@ -307,6 +315,7 @@ export class SmartAddDialogComponent {
   }
 
   readonly workModes = WORK_MODES;
+  readonly jobTypes = JOB_TYPES;
   readonly priorities = PRIORITIES;
   readonly stages = ROUND_STAGES;
   readonly formats = INVITE_FORMATS;
@@ -315,12 +324,12 @@ export class SmartAddDialogComponent {
   /** JD 解析结果的可编辑副本 —— 解析只填初始值,用户改什么算什么。 */
   jd: {
     company: string; role: string; location: string; salary: string;
-    workMode: string | null; priority: string; link: string; jdSummary: string;
+    workMode: string | null; jobType: string; priority: string; link: string; jdSummary: string;
     matchKeywords: string; deadline: string | null; status: string; jdText: string | null;
     companyDescription: string; requirements: string; benefits: string;
     workAuthorization: string;
   } = {
-    company: '', role: '', location: '', salary: '', workMode: null,
+    company: '', role: '', location: '', salary: '', workMode: null, jobType: '',
     priority: 'Medium', link: '', jdSummary: '', matchKeywords: '',
     deadline: null, status: 'Saved', jdText: null,
     companyDescription: '', requirements: '', benefits: '', workAuthorization: ''
@@ -333,7 +342,7 @@ export class SmartAddDialogComponent {
   } = { roundNo: null, stage: null, format: null, date: null, time: null, interviewer: '', location: '' };
 
   inviteApplicationId: string | null = this.data?.applicationId ?? null;
-  canSaveJd = computed(() => this.jd.company.trim().length > 0 && this.jd.role.trim().length > 0);
+  get canSaveJd(): boolean { return this.jd.company.trim().length > 0 && this.jd.role.trim().length > 0; }
   canLinkInvite = computed(() => !!this.inviteApplicationId);
 
   stageLabel(s: string): string { return this.i18n.t('tracker.rt' + s); }
@@ -363,7 +372,8 @@ export class SmartAddDialogComponent {
           companyDescription: r.companyDescription ?? '',
           requirements: r.requirements ?? '',
           benefits: r.benefits ?? '',
-          workAuthorization: r.workAuthorization ?? ''
+          workAuthorization: r.workAuthorization ?? '',
+          jobType: r.jobType ?? ''
         };
       }));
     } else {
@@ -387,7 +397,7 @@ export class SmartAddDialogComponent {
   }
 
   saveJd(): void {
-    if (!this.canSaveJd()) return;
+    if (!this.canSaveJd) return;
     this.busy.set(true);
     this.trackerApi.smartAdd({
       company: this.jd.company.trim(),
@@ -395,6 +405,7 @@ export class SmartAddDialogComponent {
       location: this.jd.location || null,
       salary: this.jd.salary || null,
       workMode: this.jd.workMode,
+      jobType: this.jd.jobType || null,
       jdSummary: this.jd.jdSummary || null,
       matchKeywords: this.jd.matchKeywords || null,
       priority: this.jd.priority || null,

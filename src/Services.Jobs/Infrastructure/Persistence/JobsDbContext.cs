@@ -99,6 +99,8 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             e.Property(x => x.CompanyDescription).HasMaxLength(20000);
             // 工作身份要求:归一短文本,500 足够。
             e.Property(x => x.WorkAuthorization).HasMaxLength(500);
+            // 岗位性质:归一短文本(Full-time/Part-time/Permanent/Contract/...),100 足够。
+            e.Property(x => x.JobType).HasMaxLength(100);
             e.Property(x => x.PassRateEstimate).HasMaxLength(1000);
             e.Property(x => x.MatchKeywords).HasMaxLength(4000);
             e.Property(x => x.Notes).HasMaxLength(8000);

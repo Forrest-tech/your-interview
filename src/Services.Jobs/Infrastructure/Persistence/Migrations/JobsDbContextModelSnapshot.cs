@@ -377,6 +377,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40000)
                         .HasColumnType("character varying(40000)");
 
+                    b.Property<string>("JobType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Link")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");

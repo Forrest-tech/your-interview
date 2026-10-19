@@ -157,6 +157,12 @@ public sealed class JobApplication : AuditableAggregateRoot
     /// </summary>
     public string? WorkAuthorization { get; private set; }
 
+    /// <summary>
+    /// 岗位性质(归一短文本:Full-time / Part-time / Permanent / Contract / Temporary / Freelance / Internship)。
+    /// Smart paste 从 JD 正文提取。
+    /// </summary>
+    public string? JobType { get; private set; }
+
     public ApplicationStatus Status { get; private set; }
     public Priority Priority { get; private set; }
     public DateOnly? AppliedDate { get; private set; }
@@ -241,7 +247,7 @@ public sealed class JobApplication : AuditableAggregateRoot
 
     public void UpdateDetails(string role, string? location, string? link, string? salary,
         string? workMode, string? source, string? jdSummary, string? notes,
-        string? companyDescription = null, string? workAuthorization = null)
+        string? companyDescription = null, string? workAuthorization = null, string? jobType = null)
     {
         Role = role;
         Location = location;
@@ -255,6 +261,8 @@ public sealed class JobApplication : AuditableAggregateRoot
             CompanyDescription = string.IsNullOrWhiteSpace(companyDescription) ? null : companyDescription;
         if (workAuthorization is not null)
             WorkAuthorization = string.IsNullOrWhiteSpace(workAuthorization) ? null : workAuthorization;
+        if (jobType is not null)
+            JobType = string.IsNullOrWhiteSpace(jobType) ? null : jobType;
         Touch();
     }
 
@@ -294,6 +302,15 @@ public sealed class JobApplication : AuditableAggregateRoot
     public void SetWorkAuthorization(string? workAuthorization)
     {
         WorkAuthorization = string.IsNullOrWhiteSpace(workAuthorization) ? null : workAuthorization;
+        Touch();
+    }
+
+    /// <summary>
+    /// 设置岗位性质。独立方法,理由同 SetCompanyDescription。空串归一为 null。
+    /// </summary>
+    public void SetJobType(string? jobType)
+    {
+        JobType = string.IsNullOrWhiteSpace(jobType) ? null : jobType;
         Touch();
     }
 

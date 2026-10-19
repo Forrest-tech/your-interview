@@ -286,7 +286,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public async Task<IResult> SmartAddApplication([FromBody] SmartAddApplicationBody body, CancellationToken ct)
     {
         var r = await sender.Send(new SmartAddApplicationCommand(body.Company, body.Role, body.Location,
-            body.Salary, body.WorkMode, body.JdSummary, body.MatchKeywords, body.Priority,
+            body.Salary, body.WorkMode, body.JobType, body.JdSummary, body.MatchKeywords, body.Priority,
             body.Link, body.JdText, body.Source, body.Status, body.Deadline,
             body.CompanyDescription, body.WorkAuthorization), ct);
         return r.IsSuccess
@@ -340,7 +340,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
 
     /// <summary>解析结果(经用户改过)提交建档。</summary>
     public sealed record SmartAddApplicationBody(
-        string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
+        string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
         string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
         string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
         string? CompanyDescription = null, string? WorkAuthorization = null);

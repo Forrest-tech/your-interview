@@ -94,6 +94,8 @@ export interface Application {
   companyDescription?: string;
   /** 工作身份要求(2026-10-19):归一短文本。Smart paste 从 JD 正文提取。 */
   workAuthorization?: string;
+  /** 岗位性质(2026-10-19):归一短文本(Full-time/Part-time/Permanent/Contract/...)。Smart paste 提取。 */
+  jobType?: string;
   resumeScore?: number;
   /** 预估通过率(后端存为字符串,如 "75%";展示时原样显示)。 */
   passRateEstimate?: string | null;

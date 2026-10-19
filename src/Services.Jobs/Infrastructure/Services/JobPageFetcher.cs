@@ -30,7 +30,11 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
     ];
 
     private static readonly Regex ScriptStyle = new(
-        @"<(script|style|noscript|header|footer|nav)[^>]*>.*?</\1>",
+        @"<(script|style|noscript|header|footer|nav|aside|form|iframe|select|button|svg|picture)[^>]*>.*?</\1>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+
+    private static readonly Regex MainContent = new(
+        @"<(main|article)\b[^>]*>(.*?)</\1>",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
     private static readonly Regex HtmlTag = new(
@@ -41,6 +45,20 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
 
     private static readonly Regex MultiNewline = new(
         @"(\r?\n){3,}", RegexOptions.Compiled);
+
+    // 导航面包屑里的典型词组:一行里命中 ≥2 个即视为导航行。
+    // 例:"locations contact us EN FR randstad"、"0 my randstad my randstad randstad"
+    private static readonly Regex NavPhrases = new(
+        @"locations?|contact us|my\s+\w+(\s+\w+)?|sign\s*in|log\s*in|create account|privacy policy|cookies?|terms of use",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // 纯语言切换行:"EN FR" / "EN | FR"
+    private static readonly Regex LangToggleLine = new(
+        @"^[\s|·•\-–—/]*(en|fr)(\s*[|·•\-–—/]\s*(en|fr))?[\s|·•\-–—/]*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex SeparatorsOnly = new(
+        @"^[\s|·•\-–—/\\]+$", RegexOptions.Compiled);
 
     public async Task<string?> FetchPageTextAsync(string url, CancellationToken ct)
     {
@@ -87,11 +105,47 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
     internal static string ExtractText(string html)
     {
         var noScript = ScriptStyle.Replace(html, "\n");
-        var noTags = HtmlTag.Replace(noScript, " ");
+        // 主内容优先:页面有 <main>/<article> 时只取里面,导航栏自然被排除
+        var mm = MainContent.Match(noScript);
+        var content = mm.Success && mm.Groups[2].Value.Length >= 300
+            ? mm.Groups[2].Value : noScript;
+        var noTags = HtmlTag.Replace(content, " ");
         var decoded = System.Net.WebUtility.HtmlDecode(noTags);
         var collapsed = MultiSpace.Replace(decoded, " ");
-        var trimmed = MultiNewline.Replace(collapsed, "\n\n");
+        var deNav = RemoveNavLines(collapsed);
+        var trimmed = MultiNewline.Replace(deNav, "\n\n");
         return trimmed.Trim();
+    }
+
+    /// <summary>
+    /// 逐行剔除导航残渣。ATS/招聘站的导航常是纯文本 div(如 randstad 的
+    /// "locations contact us EN FR randstad"),标签剥离器处理不了,只能按行过滤。
+    /// 长行一律视为正文不动 —— 导航行都是短碎片。
+    /// </summary>
+    private static string RemoveNavLines(string text)
+    {
+        var sb = new System.Text.StringBuilder(text.Length);
+        foreach (var rawLine in text.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0) continue;
+            if (IsNavLine(line)) continue;
+            sb.AppendLine(line);
+        }
+        return sb.ToString();
+    }
+
+    private static bool IsNavLine(string line)
+    {
+        if (line.Length > 200) return false;
+        if (LangToggleLine.IsMatch(line)) return true;
+        if (SeparatorsOnly.IsMatch(line)) return true;
+        // 整行就是账号链接("my randstad")或孤立数字("0") —— 不是正文
+        if (Regex.IsMatch(line, @"^my\s+\w+(\s+\w+)?$", RegexOptions.IgnoreCase)) return true;
+        if (Regex.IsMatch(line, @"^[\d\s.,/\-–—x×]{1,10}$")) return true;
+        var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        if (words <= 12 && NavPhrases.Matches(line).Count >= 2) return true;
+        return false;
     }
 }
 

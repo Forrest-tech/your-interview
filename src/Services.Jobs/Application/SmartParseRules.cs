@@ -179,8 +179,20 @@ public static class JdPasteParser
         // ---- 正文里的结构化线索 ----
         var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        company ??= Labeled(lines, "公司", "Company", "Employer", "Organization")
-                 ?? AfterAt(lines)
+        company ??= Labeled(lines, "公司", "Company", "Employer", "Organization");
+
+        // 链接型公司名兜底(见下方 CleanCompanyName 注释)
+        if (company is null && link is not null)
+        {
+            var (uc, _, _) = ParseJobUrl(link);
+            if (!string.IsNullOrWhiteSpace(uc))
+            {
+                company = uc;
+                conf["company"] = 65;
+            }
+        }
+
+        company ??= AfterAt(lines)
                  ?? CompanyAfterAboutCompany(lines);
         if (company is not null) conf.TryAdd("company", 80);
 
@@ -195,12 +207,13 @@ public static class JdPasteParser
             if (company is not null) conf.TryAdd("company", 60);
         }
 
-        var location = Labeled(lines, "地点", "Location", "办公地点", "工作地点");
-        if (location is null)
-        {
-            var lm = LocationCityState.Match(text);
-            if (lm.Success) location = $"{lm.Groups["city"].Value}, {lm.Groups["region"].Value}";
-        }
+        // 最后清洗:正文里抓到的公司名可能带导航残渣
+        // ("locations contact us EN FR randstad" → "Randstad")
+        company = CleanCompanyName(company);
+        if (company is null) conf.Remove("company");
+
+        var location = Labeled(lines, "地点", "Location", "办公地点", "工作地点")
+                    ?? GuessLocation(text);
         if (location is not null) conf["location"] = 80;
 
         var workMode = GuessWorkMode(text);
@@ -317,7 +330,10 @@ public static class JdPasteParser
         // ATS 平台自己的名字:boards.greenhouse.io/{org} 的 "greenhouse" 不是公司,
         // 不加进来 fromSub 分支会把平台名当公司(踩过)
         "greenhouse", "lever", "ashby", "ashbyhq", "workable", "smartrecruiters",
-        "jobvite", "bamboohr", "recruitee"
+        "jobvite", "bamboohr", "recruitee",
+        // 顶级域残段:子域名型 ATS 里平台名被跳过后,剩下的 "com"/"io" 不是公司名。
+        // 不加的话 boards.greenhouse.io 会解出 "Io"(踩过)
+        "com", "net", "org", "io", "co", "ca", "app", "site"
     };
 
     private static string? FirstMeaningful(IEnumerable<string> parts)
@@ -440,6 +456,25 @@ public static class JdPasteParser
     }
 
     /// <summary>
+    /// 公司名导航残渣清洗。抓取页面正文里混入的导航行可能被前面的启发式
+    /// 误当成公司名(如 "locations contact us EN FR randstad")。
+    /// 剥掉导航词组和裸语言 token,剩下的才是公司名。
+    /// 注意:不剥 "home"/"jobs" —— "Home Depot" 这种真公司名会被误伤。
+    /// </summary>
+    private static readonly Regex CompanyNavTokens = new(
+        @"\b(locations?|contact(\s+us)?|sign\s*in|log\s*in|my\s+\w+|en|fr)\b",
+        Opts);
+
+    private static string? CleanCompanyName(string? company)
+    {
+        if (string.IsNullOrWhiteSpace(company)) return null;
+        var v = CompanyNavTokens.Replace(company, " ");
+        v = Regex.Replace(v, @"\s{2,}", " ").Trim(' ', '|', '·', '-', '—', ':');
+        if (v.Length < 2) return null;
+        return Title(v);
+    }
+
+    /// <summary>
     /// 公司名兜底:很多 JD 第一行是岗位、第二行是公司名(无标签)。
     /// 找到 role 行,取其下一行 —— 长度合理、不含岗位关键词、不是地点/薪资行。
     /// </summary>
@@ -464,6 +499,22 @@ public static class JdPasteParser
         return cand;
     }
 
+    /// <summary>
+    /// 地点:城市组是贪婪双词,可能把前面的词吞进来
+    /// ("Full Stack .Net Developer Toronto, Ontario" → city="Developer Toronto")。
+    /// 城市里含岗位词的匹配一律跳过,取下一个。
+    /// </summary>
+    private static string? GuessLocation(string text)
+    {
+        foreach (Match lm in LocationCityState.Matches(text))
+        {
+            var city = lm.Groups["city"].Value;
+            if (RoleWords.IsMatch(city)) continue;
+            return $"{city}, {lm.Groups["region"].Value}";
+        }
+        return null;
+    }
+
     private static string? GuessRole(IEnumerable<string> lines)
     {
         foreach (var line in lines)
@@ -484,6 +535,13 @@ public static class JdPasteParser
                 }).Trim();
                 v = Regex.Replace(v, @"[|\-–—]\s*(remote|hybrid|onsite|on-site).*$", string.Empty,
                     RegexOptions.IgnoreCase).Trim();
+                // 剥掉页面标题式前缀:"Job opening - X" / "Job: X" / "Opening: X"
+                // (无分隔符的不动 —— "Job Coach" 这种真职位不能误伤)
+                v = Regex.Replace(v, @"^(jobs?\s*(opening|posting|opportunity|ad|listing)?\s*[-–—:|]\s*)",
+                    string.Empty, RegexOptions.IgnoreCase).Trim();
+                // 剥掉尾部 "| 站点/公司名" 后缀。不含逗号的是站点后缀("| Randstad Canada");
+                // 含逗号的多半是地点("| Toronto, ON"),留着。
+                v = Regex.Replace(v, @"\s*\|\s*[^,|]{1,60}$", string.Empty).Trim();
                 if (v.Length is >= 3 and <= 80) return v;
             }
         }
@@ -575,16 +633,41 @@ public static class JdPasteParser
 
     private static string? Summary(string text)
     {
-        // LinkedIn 粘贴文本前段是 UI 噪音(标题行、"Over 100 applicants"、
-        // "No response insights"、薪资、工作模式、"Resume match" 等按钮文案),
-        // 摘要应从真正的职位描述开始:优先找 "About the job" / "Job Description" 段。
+        // 摘要应从真正的职位描述开始:优先找正文段落标题。
         var m = Regex.Match(text,
-            @"(?:About the job|Job Description|职位描述|岗位职责)\s*\n(.+)",
+            @"(?:About the job|Job Description|Job summary|About the role|The role|Job overview|Position overview|Role overview|职位描述|岗位职责)\s*\n(.+)",
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var source = m.Success ? m.Groups[1].Value : text;
+        // 抓取页面的首行常常是页面标题("Job opening - X | Randstad Canada"),
+        // 不是摘要内容 —— 剥掉它。
+        var firstNl = source.IndexOf('\n');
+        if (firstNl > 0 && Regex.IsMatch(source[..firstNl].Trim(),
+                @"^jobs?\s*(opening|posting|opportunity|ad|listing)?\b", RegexOptions.IgnoreCase))
+            source = source[(firstNl + 1)..];
+        // 再跳过头部元数据碎片("posted June 8th, 2026"、"contract"、"job details summary" 等):
+        // 短行(<8 词)不是正文段落;词数够但命中元数据模式的也是页面碎片。
+        var srcLines = source.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var proseStart = 0;
+        while (proseStart < srcLines.Length && IsSummarySkipLine(srcLines[proseStart]))
+            proseStart++;
+        if (proseStart < srcLines.Length)
+            source = string.Join("\n", srcLines.Skip(proseStart));
         var flat = Regex.Replace(source, @"\s+", " ").Trim();
         if (flat.Length == 0) return null;
         return flat.Length <= 220 ? flat : flat[..220] + "…";
+    }
+
+    /// <summary>
+    /// 摘要前导行过滤:短碎片行和元数据行(如 "posted June 8th, 2026"、
+    /// "Contract sector Technologies reference number C1O1V15PROEN job details")不是正文。
+    /// 只用于跳过"前导"行 —— 正文中间的短行不受影响。
+    /// </summary>
+    private static bool IsSummarySkipLine(string line)
+    {
+        if (line.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < 8) return true;
+        return Regex.IsMatch(line,
+            @"posted\s|reference number|job details?|apply now|show more",
+            RegexOptions.IgnoreCase);
     }
 
     private static string Title(string s)

@@ -28,11 +28,8 @@ public sealed class LinkedInFetcher : IAsyncDisposable
     private void EnsureBrowserInstalled()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var browserPath = Path.Combine(home, ".cache", "ms-playwright");
-        // 检查 chromium_headless_shell 是否存在
-        if (Directory.Exists(browserPath) &&
-            Directory.GetDirectories(browserPath, "chromium_headless_shell-*").Length > 0)
-            return;
+        var browserPath = Path.Combine(home, ".cache", "ms-playwright", "chromium_headless_shell-1155");
+        if (Directory.Exists(browserPath)) return;
         try
         {
             _log.LogInformation("Playwright 浏览器缺失，正在下载...");

@@ -1816,7 +1816,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       await this.knowledgeApi.post('/api/knowledge', {
         title: question.slice(0, 60),
         question: question,
-        betterAnswer: transcript.slice(0, 1000),
+        myAnswer: transcript.slice(0, 1000),
         topic: 'AI Practice',
         category: '口语练习',
         mastery: 'ToDo'

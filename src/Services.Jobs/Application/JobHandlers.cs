@@ -680,7 +680,7 @@ public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
 {
     public async Task<Result<TrackerStats>> Handle(GetTrackerStatsQuery request, CancellationToken ct)
     {
-        var apps = await db.Applications.AsNoTracking().ToListAsync(ct);
+        var apps = await db.Applications.AsNoTracking().Where(a => !a.IsArchived).ToListAsync(ct);
         var total = apps.Count;
 
         // 状态计数
@@ -749,7 +749,7 @@ public sealed class GetActionCenterQueryHandler(JobsDbContext db, TimeProvider c
         var today = DateOnly.FromDateTime(now.UtcDateTime);
         var deadlineUntil = today.AddDays(Math.Clamp(request.DeadlineDays, 1, 120));
 
-        var apps = await db.Applications.AsNoTracking().ToListAsync(ct);
+        var apps = await db.Applications.AsNoTracking().Where(a => !a.IsArchived).ToListAsync(ct);
 
         var followUps = apps
             .Where(a => a.NextFollowUpAt != null && a.NextFollowUpAt <= followUntil)

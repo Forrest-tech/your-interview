@@ -36,7 +36,10 @@ RUN dotnet publish "src/$SERVICE/" -c Release -o /app/publish --no-restore
 # 2026-10-19:为 Jobs 服务预装 Playwright Chromium(LinkedIn 抓取)
 # 注意:仅当 SERVICE=Services.Jobs 时有效，其他服务跳过以免拖慢构建
 RUN if [ "$SERVICE" = "Services.Jobs" ]; then \
-      dotnet tool install --global Microsoft.Playwright.CLI --version 1.49.1 || true; \
+      export PATH="$PATH:/root/.dotnet/tools" && \
+      dotnet tool install --global Microsoft.Playwright.CLI --version 1.50.0 && \
+      playwright install --with-deps chromium-headless-shell || \
+      echo "Playwright browser download failed, will retry at runtime"; \
     fi
 
 # ---------- 运行阶段 ----------

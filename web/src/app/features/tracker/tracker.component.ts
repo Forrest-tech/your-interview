@@ -1417,8 +1417,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           <img class="logo" [src]="app.companyLogoUrl" (error)="logoBroken.set(true)">
         }
       </span>
-      {{ app.companyName }}
-      <span class="role">{{ app.role }}</span>
+      <span class="title-wrap">
+        <span class="main-title">{{ app.role }}</span>
+        <span class="sub-title">{{ app.companyName }}</span>
+      </span>
     </h2>
 
     <mat-dialog-content class="detail-body">
@@ -1874,14 +1876,22 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     </mat-dialog-actions>
   `,
   styles: [`
-    h2 { display: flex; align-items: baseline; gap: 10px; }
+    /* ★ Simplify 对齐:头部标题堆叠 */
+    h2 { display: flex; align-items: flex-start; gap: 12px; }
+    h2 .title-wrap { display: flex; flex-direction: column; gap: 2px; }
+    h2 .main-title { font-size: 18px; font-weight: 600; line-height: 1.3; }
+    h2 .sub-title { font-size: 13px; font-weight: 400; opacity: 0.55; }
     .role { font-size: 14px; font-weight: 400; opacity: 0.6; }
     .detail-body { min-width: 460px; max-width: 620px; }
     @media (max-width: 620px) { .detail-body { min-width: auto; } }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
     .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
+    /* ★ Simplify 对齐:字段两列,标签小灰字在上 */
     .fields {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px;
+      margin: 0 0 20px;
+    }
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px;
       margin: 0 0 16px;
     }

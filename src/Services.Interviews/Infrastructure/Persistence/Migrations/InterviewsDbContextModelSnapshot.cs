@@ -298,6 +298,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
 
+                    b.Property<string>("DebriefJson")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 

@@ -130,6 +130,11 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public Guid? JobApplicationId { get; private set; }
     public string Role { get; private set; } = string.Empty;
 
+    /// <summary>复盘 (JSON):面试后总结,原存 localStorage,现迁后端。</summary>
+    public string? DebriefJson { get; private set; }
+
+    public void SetDebrief(string? json) { DebriefJson = json; Touch(); }
+
     /// <summary>公司情况:规模/业务/技术栈/面试风格/文化(长文本,自己整理)。</summary>
     public string? CompanyProfile { get; private set; }
 

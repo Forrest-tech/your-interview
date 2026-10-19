@@ -479,7 +479,20 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     });
     dialogRef.afterClosed().subscribe(go => {
       if (go) {
-        this.router.navigate(['/playbook'], { queryParams: { company: app.companyName } });
+        // ★ F-B1: 直接创建 Playbook 条目并预填,不让用户重输
+        this.api.post<{ id: string }>('/api/interviews', {
+          companyName: app.companyName,
+          role: app.role,
+          jdText: app.jdText || null,
+        }).subscribe({
+          next: (r) => {
+            this.router.navigate(['/playbook', r.id], { queryParams: { tab: 'rounds' } });
+          },
+          error: () => {
+            // 创建失败则回退到老行为:按公司过滤
+            this.router.navigate(['/playbook'], { queryParams: { company: app.companyName } });
+          }
+        });
       }
     });
   }

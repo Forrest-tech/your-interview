@@ -89,7 +89,7 @@ public sealed record InterviewEntryDto(
     List<RoundDto> Rounds,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
     string? QuestionsToAskJson = null, int ActionCount = 0,
-    List<ActionDto>? Actions = null);
+    List<ActionDto>? Actions = null, string? DebriefJson = null);
 
 public sealed record InterviewEntryListItemDto(
     Guid Id, Guid CompanyId, string CompanyName, string Role, int RoundNo,
@@ -195,7 +195,7 @@ public sealed record UpdateEntryCommand(
     Guid Id, string CompanyName, string Role, string? CompanyProfile, string? JdText,
     string? JdSummary, int RoundNo, DateOnly? InterviewDate, string? InterviewFormat,
     string? Interviewers, string? Location, string? Result, string? Notes,
-    string? QuestionsToAskJson = null) : IRequest<Result>;
+    string? QuestionsToAskJson = null, string? DebriefJson = null) : IRequest<Result>;
 
 public sealed record DeleteEntryCommand(Guid Id) : IRequest<Result>;
 
@@ -536,7 +536,7 @@ public static class InterviewMappingExtensions
         e.CreatedAt, e.UpdatedAt,
         e.QuestionsToAskJson, e.Actions.Count,
         e.Actions.OrderBy(x => x.IsDone).ThenBy(x => x.CreatedAt)
-            .Select(x => x.ToDto()).ToList());
+            .Select(x => x.ToDto()).ToList(), e.DebriefJson);
 
     /// <summary>指标 JSON 反序列化:坏数据/缺字段时返回 null,前端按"无指标"处理。</summary>
     private static SpeechMetricsDto? ParseSpeechMetrics(string? json)
@@ -847,6 +847,8 @@ public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
             request.JdText, request.JdSummary, request.RoundNo, request.InterviewDate,
             request.InterviewFormat, request.Interviewers, request.Location, request.Result,
             request.Notes, request.QuestionsToAskJson);
+        if (request.DebriefJson is not null)
+            e.SetDebrief(request.DebriefJson);
 
         await db.SaveChangesAsync(ct);
         return Result.Success();

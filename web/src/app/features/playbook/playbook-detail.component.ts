@@ -1318,19 +1318,39 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   readonly debriefForm = signal({ questions: '', rating: 3, stuck: '' });
 
   loadDebrief(): void {
-    const id = this.entry()?.id;
-    if (!id) return;
-    try {
-      const saved = JSON.parse(localStorage.getItem(`pb.debrief.${id}`) || 'null');
-      if (saved) this.debriefForm.set(saved);
-    } catch { /* ignore */ }
+    const e = this.entry();
+    if (!e?.id) return;
+    // ★ 优先后端,回退 localStorage (迁移期兼容)
+    const backendJson = (e as any).debriefJson;
+    if (backendJson) {
+      try {
+        this.debriefForm.set(JSON.parse(backendJson));
+      } catch { /* ignore */ }
+    } else {
+      try {
+        const saved = JSON.parse(localStorage.getItem(`pb.debrief.${e.id}`) || 'null');
+        if (saved) this.debriefForm.set(saved);
+      } catch { /* ignore */ }
+    }
     this.showDebrief.set(true);
   }
   saveDebrief(): void {
-    const id = this.entry()?.id;
-    if (!id) return;
-    localStorage.setItem(`pb.debrief.${id}`, JSON.stringify(this.debriefForm()));
-    this.showDebrief.set(false);
+    const e = this.entry();
+    if (!e?.id) return;
+    const json = JSON.stringify(this.debriefForm());
+    // ★ 写后端
+    this.api.put(`/api/interviews/${e.id}`, { ...e, debriefJson: json }).subscribe({
+      next: () => {
+        // 成功后清掉 localStorage 旧数据
+        try { localStorage.removeItem(`pb.debrief.${e.id}`); } catch { /* ignore */ }
+        this.showDebrief.set(false);
+      },
+      error: (err: Error) => {
+        // 失败则回退 localStorage,不丢数据
+        try { localStorage.setItem(`pb.debrief.${e.id}`, json); } catch { /* ignore */ }
+        this.snack.open('后端保存失败,已暂存本地: ' + err.message, '关闭', { duration: 5000 });
+      }
+    });
   }
   updateDebrief(field: 'questions' | 'rating' | 'stuck', value: any): void {
     const cur = this.debriefForm();

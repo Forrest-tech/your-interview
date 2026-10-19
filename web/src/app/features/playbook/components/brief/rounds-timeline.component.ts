@@ -256,10 +256,19 @@ export class RoundsTimelineComponent implements OnInit {
     });
   }
 
-  // ---------------- Transcript 折叠 ----------------
+  // ---------------- Transcript 折叠/编辑 ----------------
   readonly transcriptOpen = signal<string | null>(null);
+  transcriptDraft: Record<string, string> = {};
   toggleTranscript(r: BriefRound): void {
-    this.transcriptOpen.set(this.transcriptOpen() === r.id ? null : r.id);
+    if (this.transcriptOpen() === r.id) {
+      this.transcriptOpen.set(null);
+    } else {
+      this.transcriptDraft[r.id] = this.transcriptOf(r);
+      this.transcriptOpen.set(r.id);
+    }
+  }
+  saveTranscript(r: BriefRound): void {
+    this.updateRoundDetails(r, { transcript: this.transcriptDraft[r.id] || null }, () => this.transcriptOpen.set(null));
   }
 
   /** ★ 录音 */

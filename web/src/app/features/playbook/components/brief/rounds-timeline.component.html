@@ -247,18 +247,30 @@
               }
             </div>
 
-            <!-- Transcript 折叠 -->
-            @if (transcriptOf(r)) {
-              <div class="transcript">
+            <!-- Transcript:可折叠查看 + 可编辑粘贴 -->
+            <div class="transcript">
+              <div class="tr-head">
+                <span class="lbl"><mat-icon inline>description</mat-icon> {{ t('pb.br.rounds.transcriptTitle') }}</span>
                 <button mat-button (click)="toggleTranscript(r)">
                   <mat-icon>{{ transcriptOpen() === r.id ? 'expand_less' : 'expand_more' }}</mat-icon>
-                  {{ t('pb.br.rounds.transcriptTitle') }}
+                  {{ t(transcriptOpen() === r.id ? 'common.collapse' : 'common.edit') }}
                 </button>
-                @if (transcriptOpen() === r.id) {
-                  <pre class="transcript-text">{{ transcriptOf(r) }}</pre>
-                }
               </div>
-            }
+              @if (transcriptOpen() === r.id) {
+                <mat-form-field appearance="outline" class="wide">
+                  <mat-label>{{ t('pb.br.rounds.transcriptTitle') }}</mat-label>
+                  <textarea matInput [(ngModel)]="transcriptDraft[r.id]" rows="8"
+                            [placeholder]="t('pb.br.rounds.transcriptEmpty')"></textarea>
+                </mat-form-field>
+                <button mat-flat-button color="primary" (click)="saveTranscript(r)">
+                  {{ t('common.save') }}
+                </button>
+              } @else if (transcriptOf(r)) {
+                <pre class="transcript-text">{{ transcriptOf(r) }}</pre>
+              } @else {
+                <p class="dim small">{{ t('pb.br.rounds.transcriptEmpty') }}</p>
+              }
+            </div>
 
             <!-- ★ 录音 -->
             <div class="recording">

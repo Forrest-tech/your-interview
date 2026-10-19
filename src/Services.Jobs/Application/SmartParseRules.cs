@@ -883,7 +883,7 @@ public static class JdPasteParser
     private static readonly string[] BenefitsHeaders =
     [
         "benefits", "what we offer", "perks", "compensation and benefits", "why join us",
-        "additional information", "福利待遇", "薪资福利",
+        "additional information", "advantages", "福利待遇", "薪资福利",
     ];
 
     /// <summary>

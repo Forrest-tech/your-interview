@@ -38,22 +38,22 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                 Args = new[] { "--no-sandbox", "--disable-dev-shm-usage" }
             });
             Directory.CreateDirectory(_profileDir);
-            _ctx = await _browser.NewContextAsync(new BrowserNewContextOptions
-            {
-                UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                ViewportSize = new ViewportSize { Width = 1366, Height = 900 },
-                // 持久化 cookies，登录一次即可
-                StorageStatePath = Path.Combine(_profileDir, "state.json")
-            });
-            // 如果已有 state 则加载
             var statePath = Path.Combine(_profileDir, "state.json");
+            // 2026-10-19:有登录态则用，无则建空上下文（LinkedIn 部分职位页可匿名看）
             if (File.Exists(statePath))
             {
-                await _ctx.CloseAsync();
                 _ctx = await _browser.NewContextAsync(new BrowserNewContextOptions
                 {
                     StorageStatePath = statePath,
                     UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                });
+            }
+            else
+            {
+                _ctx = await _browser.NewContextAsync(new BrowserNewContextOptions
+                {
+                    UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    ViewportSize = new ViewportSize { Width = 1366, Height = 900 },
                 });
             }
         }

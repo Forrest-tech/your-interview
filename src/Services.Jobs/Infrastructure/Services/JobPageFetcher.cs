@@ -140,6 +140,11 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
         if (line.Length > 200) return false;
         if (LangToggleLine.IsMatch(line)) return true;
         if (SeparatorsOnly.IsMatch(line)) return true;
+        // 页脚横幅:职位提醒订阅 / newsletter / "similar jobs" 推广 —— 页面 chrome,不是 JD。
+        // (Randstad 的 "We will keep you updated when we have similar job postings.")
+        if (Regex.IsMatch(line,
+                @"similar job postings|job alerts|personalised|personalized|keep you updated|let similar jobs come to you|subscribing to your|job newsletter",
+                RegexOptions.IgnoreCase)) return true;
         // 整行就是账号链接("my randstad")或孤立数字("0") —— 不是正文
         if (Regex.IsMatch(line, @"^my\s+\w+(\s+\w+)?$", RegexOptions.IgnoreCase)) return true;
         if (Regex.IsMatch(line, @"^[\d\s.,/\-–—x×]{1,10}$")) return true;

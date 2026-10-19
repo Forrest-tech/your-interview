@@ -52,7 +52,7 @@ public sealed class ParseJdCommandHandler(
         {
             return Result.Success(new ParsedJdDto(
                 kind, ParseOutcome.Failed, "已识别为图片,但当前尚未接入图片识别,请改为粘贴 JD 文本,或直接手动填写。",
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 new Dictionary<string, int>(), false, true));
         }
 

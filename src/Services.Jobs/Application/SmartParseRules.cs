@@ -36,7 +36,7 @@ public static class PasteKind
 
 public sealed record ParsedJdDto(
     string SourceKind, string Status, string Message,
-    string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
+    string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? CompanyDescription, string? Requirements, string? Benefits,
     string? WorkAuthorization,
@@ -228,6 +228,9 @@ public static class JdPasteParser
         var workMode = GuessWorkMode(text);
         if (workMode is not null) conf["workMode"] = 85;
 
+        var jobType = ExtractJobType(lines, text);
+        if (jobType is not null) conf["jobType"] = 85;
+
         var salary = GuessSalary(text);
         if (salary is not null) conf["salary"] = 85;
 
@@ -263,7 +266,7 @@ public static class JdPasteParser
             kind,
             filled >= 4 ? ParseOutcome.Ok : filled >= 1 ? ParseOutcome.Partial : ParseOutcome.Failed,
             string.Empty,
-            company, role, location, salary, workMode, jdSummary, keywords, priority,
+            company, role, location, salary, workMode, jobType, jdSummary, keywords, priority,
             link, jdText, companyDescription, requirements, benefits,
             workAuthorization,
             deadline, detected ?? (isUrl ? "未知站点" : null),
@@ -581,6 +584,56 @@ public static class JdPasteParser
     }
 
     /// <summary>
+    /// 岗位性质:Full-time / Part-time / Permanent / Contract / Temporary / Freelance / Internship。
+    /// 优先级:标签行("Job Type: Contract") &gt; 独立短行("contract") &gt; 正文关键词。
+    /// 保守策略:"permanent" 只认标签/独立行(避开 "permanent resident"),
+    /// "contract" 只认标签/独立行(避开 "contract negotiation" 类正文)。
+    /// full-time/part-time 在正文里出现基本就是岗位性质,可放行。
+    /// </summary>
+    private static string? ExtractJobType(IList<string> lines, string text)
+    {
+        // 1) 标签行
+        var labeled = Labeled(lines, "Job Type", "Employment Type", "JobType", "岗位性质", "雇佣类型", "工作性质");
+        var norm = NormalizeJobType(labeled);
+        if (norm is not null) return norm;
+
+        // 2) 独立短行:整行就是岗位性质(如 Randstad 页的 "contract")
+        foreach (var raw in lines)
+        {
+            var t = raw.Trim().TrimEnd('.', '·', '•');
+            if (t.Length is 0 or > 20) continue;
+            norm = NormalizeJobType(t);
+            if (norm is not null) return norm;
+        }
+
+        // 3) 正文关键词:只放行误伤率极低的 full-time / part-time
+        if (Regex.IsMatch(text, @"\bfull[\s\-]?time\b", RegexOptions.IgnoreCase)) return "Full-time";
+        if (Regex.IsMatch(text, @"\bpart[\s\-]?time\b", RegexOptions.IgnoreCase)) return "Part-time";
+        return null;
+    }
+
+    private static string? NormalizeJobType(string? v)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return null;
+        var t = v.Trim().TrimEnd('.', '·', '•', ',', ';').ToLowerInvariant();
+        // 标签行可能带后缀("Contract - Technologies"),只取第一段
+        t = Regex.Split(t, @"[\s|·•\-–—/]+")[0];
+        return t switch
+        {
+            "full-time" or "fulltime" or "full" => "Full-time",
+            "part-time" or "parttime" or "part" => "Part-time",
+            "permanent" or "perm" => "Permanent",
+            "contract" or "contractor" => "Contract",
+            "temporary" or "temp" => "Temporary",
+            "freelance" or "freelancer" => "Freelance",
+            "internship" or "intern" => "Internship",
+            "casual" => "Casual",
+            "seasonal" => "Seasonal",
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// 工作身份要求:从 JD 正文里抓取国籍/PR/工签/担保相关的要求,归一为短文本。
     /// 检查顺序按\"限制强度\"从强到弱 —— 公民/PR 要求优先于笼统的\"合法工作身份\"。
     /// 注意避开误伤:\"PR team\"(公关团队)里的 PR 不是 permanent resident。
@@ -758,6 +811,12 @@ public static class JdPasteParser
             proseStart++;
         if (proseStart < srcLines.Length)
             source = string.Join("\n", srcLines.Skip(proseStart));
+        // 页脚横幅可能出现在正文之后(如 Randstad 的 job-alerts banner 在相关职位列表前):
+        // 从第一个页脚行起截断,后面的站点 chrome 不要。
+        var bodyLines = source.Split('\n');
+        var cutAt = Array.FindIndex(bodyLines, IsFooterLine);
+        if (cutAt >= 0)
+            source = string.Join("\n", bodyLines.Take(cutAt));
         var flat = Regex.Replace(source, @"\s+", " ").Trim();
         if (flat.Length == 0) return null;
         // 2026-10-19:用户要求完整内容,不截断。
@@ -768,14 +827,29 @@ public static class JdPasteParser
     /// 摘要前导行过滤:短碎片行和元数据行(如 "posted June 8th, 2026"、
     /// "Contract sector Technologies reference number C1O1V15PROEN job details")不是正文。
     /// 只用于跳过"前导"行 —— 正文中间的短行不受影响。
+    /// 2026-10-19:招聘站页脚横幅(职位提醒订阅/newsletter/"similar jobs" 推广)常混进正文流,
+    /// 如 Randstad 的 "We will keep you updated when we have similar job postings." ——
+    /// 这些行再长也不是 JD,一并跳过。
     /// </summary>
     private static bool IsSummarySkipLine(string line)
     {
+        if (IsFooterLine(line)) return true;
         if (line.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < 8) return true;
         return Regex.IsMatch(line,
             @"posted\s|reference number|job details?|apply now|show more",
             RegexOptions.IgnoreCase);
     }
+
+    /// <summary>
+    /// 页脚/推广横幅行判定:职位提醒订阅、newsletter、"similar jobs" 推广、
+    /// "keep you updated" 这类站点 chrome,绝不可能是 JD 正文。
+    /// 用多词精确短语,避免误伤正文("subscribe" 单词本身不出场)。
+    /// </summary>
+    private static bool IsFooterLine(string line)
+        => Regex.IsMatch(line,
+            @"similar job postings|job alerts|personalised|personalized|keep you updated|" +
+            @"let similar jobs come to you|subscribing to your|sign up for job|job newsletter",
+            RegexOptions.IgnoreCase);
 
     // ---------- 段落级字段:公司介绍 / 任职要求 / 福利 ----------
 

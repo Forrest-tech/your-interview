@@ -363,14 +363,21 @@ export class SmartAddDialogComponent {
   useAi = true;
 
   /** 2026-10-19:输入是否为 LinkedIn 职位链接 */
+  /** 2026-10-19:记录上次抓取的 URL，即使 raw 被替换也能重新抓取 */
+  private lastFetchedUrl: string | null = null;
+
   isLinkedInUrl(): boolean {
-    return /linkedin\.com\/jobs\/view\//i.test(this.raw.trim());
+    const raw = this.raw.trim();
+    return /linkedin\.com\/jobs\/view\//i.test(raw) || this.lastFetchedUrl !== null;
   }
 
   /** 2026-10-19:调用后端用登录态抓取 LinkedIn 职位页 */
   fetchLinkedIn(): void {
-    const url = this.raw.trim().match(/https?:\/\/[^\s)】」"',。]+/)?.[0] ?? this.raw.trim();
+    const url = this.lastFetchedUrl
+      ?? this.raw.trim().match(/https?:\/\/[^\s)】」"',。]+/)?.[0]
+      ?? this.raw.trim();
     if (!url) return;
+    this.lastFetchedUrl = url;
     this.fetching.set(true);
     this.msg.set(null);
     this.trackerApi.fetchLinkedIn(url).subscribe({
@@ -385,16 +392,24 @@ export class SmartAddDialogComponent {
           return;
         }
         // 用抓取结果填充表单（复用 parsed 结构）
+        // 2026-10-19:保留原 URL 在 link 字段，raw 保留 JD 文本用于保存
+        const fetchedUrl = url;
         this.parsed.set({
           company: r.company ?? '', role: r.role ?? '', location: r.location ?? '',
           salary: r.salary ?? '', workMode: r.workMode ?? '', jobType: r.jobType ?? '',
           jdSummary: r.jdSummary ?? '', requirements: r.requirements ?? '',
           benefits: r.benefits ?? '', companyDescription: r.companyDescription ?? '',
-          link: url, jdText: r.jdText ?? '', sourceKind: 'LinkedIn', status: r.status ?? '',
+          link: fetchedUrl, jdText: r.jdText ?? '', sourceKind: 'LinkedIn', status: r.status ?? '',
           message: '', confidence: {}
         } as any);
-        // 同步 raw 为 jdText，保存时落库
-        if (r.jdText) this.raw = r.jdText;
+        // 同步 raw 为 jdText，保存时落库；保留 URL 供 Re-parse 用
+        if (r.jdText) {
+          this.raw = r.jdText;
+        }
+        // 2026-10-19:即使 jdText 为空也保留 URL，避免按钮消失
+        if (!r.jdText && fetchedUrl) {
+          this.raw = fetchedUrl;
+        }
       },
       error: () => {
         this.fetching.set(false);

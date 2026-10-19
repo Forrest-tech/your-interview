@@ -196,7 +196,7 @@
       <mat-chip-set class="status-chips">
         <mat-chip class="fchip" [highlighted]="statusFilter() === null"
                   (click)="clearFilters()">
-          {{ t('common.all') }} ({{ total() }})
+          {{ t('common.all') }} ({{ statTotal() }})
         </mat-chip>
         @for (s of statusOptions; track s) {
           <mat-chip class="fchip" [class]="statusClass(s)"

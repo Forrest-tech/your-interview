@@ -1937,10 +1937,6 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </div>
       }
     </mat-dialog-content>
-
-    <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>{{ t('common.close') }}</button>
-    </mat-dialog-actions>
   `,
   styles: [`
     /* ★ Simplify 对齐:头部标题堆叠 */

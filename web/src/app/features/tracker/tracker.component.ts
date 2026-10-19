@@ -1640,11 +1640,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </div>
       </div>
 
-      <!-- 2026-10-19:LinkedIn 风格 "About the job" 布局 —— 公司介绍 / Job Description / Qualifications / Additional Information -->
+      <!-- 2026-10-19:Simplify 风格 —— 无 "About the job" 大标题,JD 正文直接跟字段网格 -->
       <mat-divider></mat-divider>
       <section class="about-job">
-        <div class="about-job-title">
-          <span>{{ t('tracker.dAboutTheJob') }}</span>
+        <div class="about-job-edit">
           <button mat-icon-button (click)="jdSummaryEditing() ? cancelEditJdSummary() : startEditJdSummary()"
                   [matTooltip]="t('common.edit')" class="edit-btn">
             <mat-icon>{{ jdSummaryEditing() ? 'close' : 'edit' }}</mat-icon>
@@ -1903,51 +1902,58 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       }
 
       @else if (detailTab() === 'score') {
-        <div class="tab-body">
-      <!-- 匹配分析(纯关键词,不调 AI)-->
+        <div class="tab-body score-tab">
+      <!-- 2026-10-19:Simplify 像素级 Resume Score —— 左 JD 卡片 + 右仪表盘/关键词 -->
       @if (match(); as m) {
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dMatchAnalysis') }}</span></div>
-
-          <div class="match-head">
-            <div class="score" [class]="matchTier(m.score)">
-              <span class="score-num">{{ m.score }}</span>
-              <span class="score-unit">{{ t('tracker.dScoreUnit') }}</span>
+        <div class="score-cols">
+          <!-- 左:Job Description 卡片(关键词高亮) -->
+          <div class="score-jd-card">
+            <div class="score-jd-head">
+              <mat-icon>work</mat-icon>
+              <span>{{ t('tracker.dJobDescHeader') }}</span>
             </div>
-            <div class="score-note">
-              <strong [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</strong>
-              <span>{{ tf('tracker.dHitKw', { n: m.hit.length, m: m.total }) }}</span>
+            <div class="score-jd-body" [innerHTML]="highlightedJd(m)"></div>
+          </div>
+          <!-- 右:仪表盘 + 关键词 -->
+          <div class="score-side">
+            <div class="gauge-wrap">
+              <svg class="gauge" viewBox="0 0 190 190" width="190" height="190">
+                <circle cx="95" cy="95" r="80" fill="none" stroke="#e9ebee" stroke-width="16"/>
+                <circle cx="95" cy="95" r="80" fill="none" stroke="#2bb5d8" stroke-width="16"
+                        stroke-linecap="round" [attr.stroke-dasharray]="gaugeArc(m.score)"
+                        transform="rotate(-90 95 95)"/>
+              </svg>
+              <div class="gauge-center">
+                <span class="gauge-num">{{ m.score }}</span>
+                <span class="gauge-pill" [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</span>
+              </div>
+            </div>
+            @if (m.score >= 70) {
+              <div class="score-banner ok">
+                <mat-icon>check_circle</mat-icon>
+                <span>{{ t('tracker.dScoreGreat') }}</span>
+              </div>
+            } @else if (m.score >= 40) {
+              <div class="score-banner warn">
+                <mat-icon>info</mat-icon>
+                <span>{{ t('tracker.dScoreFair') }}</span>
+              </div>
+            }
+            <div class="kw-card">
+              <div class="kw-card-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</div>
+              <div class="kw-pills">
+                @for (k of m.missing; track k) {
+                  <span class="kw-pill miss">{{ k }}</span>
+                }
+                @for (k of m.hit; track k) {
+                  <span class="kw-pill hit">{{ k }}</span>
+                }
+              </div>
             </div>
           </div>
-
-          @if (m.missing.length > 0) {
-            <div class="kw-group">
-              <span class="kw-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</span>
-              <div class="kw-list">
-                @for (k of m.missing; track k) {
-                  <span class="kw miss">{{ k }}</span>
-                }
-              </div>
-            </div>
-          }
-
-          @if (m.hit.length > 0) {
-            <div class="kw-group">
-              <span class="kw-title">{{ tn('tracker.dHitKwTitle', m.hit.length) }}</span>
-              <div class="kw-list">
-                @for (k of m.hit; track k) {
-                  <span class="kw ok">{{ k }}</span>
-                }
-              </div>
-            </div>
-          }
-
-          @if (m.softSkills.length > 0) {
-            <p class="soft-note">
-              {{ t('tracker.dSoftSkills') }}{{ m.softSkills.join('、') }}
-            </p>
-          }
-        </section>
+        </div>
+      } @else {
+        <p class="cl-empty">{{ t('tracker.dNoJd') }}</p>
       }
         </div>
       }
@@ -2121,7 +2127,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       color: #3D4451; border-radius: 8px;
     }
     .hdr-close:hover { background: #F7F8FA; }
-    .detail-body { padding: 0; height: 100%; overflow-y: auto; }
+    .detail-body { padding: 0; flex: 1 1 auto; overflow-y: auto; min-height: 0; }
     /* ★ Simplify 真站:双栏布局 */
     .two-col { display: flex; min-height: 100%; }
     .main-col { flex: 1; min-width: 0; padding: 24px 32px; }
@@ -2204,18 +2210,69 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       color: #1A1D23; letter-spacing: 0;
     }
     .sec-head .edit-btn { margin-left: auto; }
-    /* ---- 2026-10-19:LinkedIn 风格 "About the job" ---- */
-    .about-job-title {
-      display: flex; align-items: center; gap: 6px;
-      margin: 0 0 16px; font-size: 20px; font-weight: 700;
-      color: #1A1D23;
+    /* ---- 2026-10-19:Simplify 像素级 Resume Score ---- */
+    .score-tab { padding: 24px 28px; }
+    .score-cols { display: flex; gap: 24px; align-items: flex-start; }
+    .score-jd-card {
+      flex: 1.2; min-width: 0;
+      border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;
+      background: #fff;
     }
-    .about-job-title .edit-btn { margin-left: auto; }
+    .score-jd-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 20px; background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 15px; font-weight: 700; color: #111827;
+    }
+    .score-jd-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: #6b7280; }
+    .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #1f2937; max-height: 560px; overflow-y: auto; }
+    .score-jd-body p { margin: 0 0 12px; }
+    .hl-kw {
+      color: #0e7490; background: #cffafe; border-radius: 4px;
+      padding: 1px 6px; font-weight: 600; white-space: nowrap;
+    }
+    .score-side { flex: 1; min-width: 0; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .gauge-wrap { position: relative; width: 190px; height: 190px; }
+    .gauge { display: block; }
+    .gauge-center {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    }
+    .gauge-num { font-size: 52px; font-weight: 800; color: #111827; line-height: 1; }
+    .gauge-pill {
+      font-size: 12px; font-weight: 700; border-radius: 999px; padding: 4px 12px;
+    }
+    .gauge-pill.good { background: #d1fae5; color: #065f46; }
+    .gauge-pill.fair { background: #fde68a; color: #92400e; }
+    .gauge-pill.poor { background: #fecdd3; color: #9f1239; }
+    .score-banner {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; border-radius: 12px; padding: 14px 18px;
+      font-size: 14px; color: #111827;
+    }
+    .score-banner.ok { background: #d1fae5; }
+    .score-banner.warn { background: #fef3c7; }
+    .score-banner mat-icon { font-size: 24px; width: 24px; height: 24px; flex-shrink: 0; }
+    .score-banner.ok mat-icon { color: #059669; }
+    .score-banner.warn mat-icon { color: #d97706; }
+    .kw-card {
+      width: 100%; border: 1px solid #e5e7eb; border-radius: 12px;
+      padding: 20px; background: #fff;
+    }
+    .kw-card-title { font-size: 15px; font-weight: 700; color: #111827; margin: 0 0 16px; }
+    .kw-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .kw-pill {
+      font-size: 13px; font-weight: 500; border-radius: 999px; padding: 6px 14px;
+    }
+    .kw-pill.miss { background: #fecdd3; color: #9f1239; }
+    .kw-pill.hit { background: #d9f7e8; color: #065f46; }
+    .about-job-edit { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+    .about-job-edit .edit-btn { margin: 0; }
     .about-job .jd-subhead {
       margin: 22px 0 10px; font-size: 14px; font-weight: 700;
-      color: #1A1D23;
+      color: #1f2937;
     }
-    .about-job p { margin: 0 0 12px; line-height: 1.65; font-size: 14px; color: #333; }
+    .about-job p { margin: 0 0 16px; line-height: 1.7; font-size: 14px; color: #1f2937; }
     .about-job .jd-list { margin: 0 0 16px; padding-left: 20px; }
     .about-job .jd-list li { margin: 0 0 8px; line-height: 1.6; font-size: 14px; color: #333; }
     /* LinkedIn 风格:长描述默认折叠 */
@@ -2649,6 +2706,31 @@ export class ApplicationDetailDialogComponent {
     if (score >= 70) return this.t('tracker.dStrongMatch');
     if (score >= 50) return this.t('tracker.dMedMatch');
     return this.t('tracker.dWeakMatch');
+  }
+
+  /** 2026-10-19:仪表盘圆弧长度(SVG dasharray)。r=80,周长≈502.65 */
+  gaugeArc(score: number): string {
+    const c = 2 * Math.PI * 80;
+    const v = Math.max(0, Math.min(100, score)) / 100 * c;
+    return `${v.toFixed(1)} ${c.toFixed(1)}`;
+  }
+
+  /** 2026-10-19:Resume Score 左侧 JD 卡片 —— 命中关键词高亮为 teal pill */
+  highlightedJd(m: { hit: string[] }): string {
+    const jd = this.detail?.jdSummary || this.detail?.jdText || '';
+    if (!jd) return '';
+    // 按长度降序,避免短词先替换破坏长词
+    const keys = [...m.hit].sort((a, b) => b.length - a.length);
+    let html = jd.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    for (const k of keys) {
+      if (k.length < 2) continue;
+      const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      html = html.replace(new RegExp(`(${esc})`, 'gi'),
+        '<span class="hl-kw">$1</span>');
+    }
+    // 换行转段落
+    html = html.split(/\n\s*\n/).map(p => `<p>${p.trim().replace(/\n/g, '<br>')}</p>`).join('');
+    return html;
   }
 
   // ---------------------------- 公司 Logo / 页签 ----------------------------

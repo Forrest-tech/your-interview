@@ -96,27 +96,6 @@
     </mat-card>
   </section>
 
-  <!-- Simplify 对标:转化漏斗 -->
-  @if (hasFunnelData()) {
-  <section class="funnel">
-    <div class="funnel-title">{{ t('tracker.funnel') }}</div>
-    <div class="funnel-bars">
-      @for (f of funnel(); track f.status) {
-        <div class="f-row">
-          <span class="f-label">{{ f.label }}</span>
-          <div class="f-track">
-            <div class="f-fill" [style.width.%]="f.widthPct"></div>
-          </div>
-          <span class="f-count">{{ f.count }}</span>
-          @if (f.rate < 100) {
-            <span class="f-rate">{{ f.rate }}%</span>
-          }
-        </div>
-      }
-    </div>
-  </section>
-  }
-
   <!-- 筛选区 -->
   <mat-card class="filters">
     <mat-card-content>

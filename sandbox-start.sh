@@ -1,6 +1,6 @@
 #!/bin/bash
 # your-interview sandbox auto-start script
-# Restores Postgres, backends, and frontend after runtime restart
+# Restores Postgres, RabbitMQ, backends, and frontend after runtime restart
 
 set -e
 export PATH=$HOME/workspace/.dotnet:$PATH
@@ -33,6 +33,18 @@ if ! pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
     PGPASSWORD=postgres psql -h localhost -U postgres -c "ALTER USER postgres PASSWORD 'postgres123';" 2>/dev/null || true
     PGPASSWORD=postgres123 psql -h localhost -U postgres -c "CREATE DATABASE yourinterview;" 2>/dev/null || true
   fi
+fi
+
+# 1b. RabbitMQ (Jobs backend publishes via MassTransit/RabbitMQ; crashes without it)
+if ! command -v rabbitmq-server >/dev/null 2>&1; then
+  echo "[$(date)] Installing RabbitMQ (apt package lost after VM replacement)..."
+  sudo -n DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1 || true
+  sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y rabbitmq-server >/tmp/rabbitmq-install.log 2>&1
+fi
+if ! (echo > /dev/tcp/localhost/5672) 2>/dev/null; then
+  echo "[$(date)] Starting RabbitMQ..."
+  sudo -n rabbitmq-server -detached >/dev/null 2>&1
+  sleep 10
 fi
 
 # 2. Identity backend (5262)

@@ -71,6 +71,6 @@
     <PackageVersion Include="NSubstitute" Version="5.1.0" />
 
     <!-- 浏览器自动化(LinkedIn 职位页抓取) -->
-    <PackageVersion Include="Microsoft.Playwright" Version="1.49.1" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.50.0" />
   </ItemGroup>
 </Project>

@@ -104,8 +104,6 @@ services:
     volumes:
       # 2026-10-19:挂载 LinkedIn 会话，Auto-fetch 用（需读写，后端会回写登录态）
       - ~/.your-interview:/root/.your-interview
-      # 2026-10-19:挂载 Mac 宿主机的 Playwright 浏览器（login 脚本下好的），供 Auto-fetch 用
-      - ~/Library/Caches/ms-playwright:/root/.cache/ms-playwright:ro
     depends_on: *service-deps
     healthcheck: *service-health
 

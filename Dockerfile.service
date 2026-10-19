@@ -33,7 +33,8 @@ RUN dotnet restore "src/$SERVICE/"
 COPY src/ ./src/
 RUN dotnet publish "src/$SERVICE/" -c Release -o /app/publish --no-restore
 
-# 2026-10-19:Playwright 浏览器由宿主机挂载（~/Library/Caches/ms-playwright），Docker 内不下载
+# 2026-10-19:Playwright 浏览器（Linux 版，chromium-1117 对应 1.44.0）
+# 宿主机挂载的是 macOS 版，不能用，容器内下 Linux 版
 
 # ---------- 运行阶段 ----------
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
@@ -48,6 +49,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
     libgbm1 libasound2 libpango-1.0-0 libcairo2 \
     && rm -rf /var/lib/apt/lists/*
+
+# 2026-10-19:Jobs 服务下载 Linux 版 Playwright 浏览器（宿主机是 macOS 版，不能用）
+RUN if [ "$SERVICE" = "Services.Jobs" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends curl unzip && \
+      mkdir -p /root/.cache/ms-playwright/chromium-1117 && \
+      cd /root/.cache/ms-playwright/chromium-1117 && \
+      curl -sL -o c.zip https://playwright.azureedge.net/builds/chromium/1117/chromium-linux.zip && \
+      unzip -q c.zip && rm c.zip && \
+      apt-get remove -y curl unzip && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # 容器内无 ICU,统一用 invariant globalization
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \

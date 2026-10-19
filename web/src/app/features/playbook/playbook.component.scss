@@ -151,164 +151,257 @@
 /* 已结束的卡片稍微收敛 */
 .grid.completed .entry { opacity: 0.85; }
 
+/* ============ 条目卡片(现代 SaaS 风) ============ */
 .entry {
   cursor: pointer;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  border-radius: 14px !important;
+  border: 1px solid #edf0f4;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+  padding: 16px 18px;
+  overflow: hidden;
 
   &:hover {
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-    transform: translateY(-1px);
+    box-shadow: 0 10px 28px rgba(16, 24, 40, 0.12);
+    transform: translateY(-2px);
+    border-color: #e2e8f0;
   }
 
-  mat-card-header {
-    padding-bottom: 0;
+  &.selected {
+    border-color: #3f51b5;
+    box-shadow: 0 0 0 2px rgba(63, 81, 181, 0.18);
   }
 
-  .entry-head {
+  /* 头部 */
+  .entry-top {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-    width: 100%;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .avatar {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
   }
 
   .entry-title {
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     flex-direction: column;
+    gap: 2px;
 
-    strong {
-      font-size: 16px;
+    .company {
+      font-size: 16.5px;
+      font-weight: 650;
+      color: #101828;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .role {
       font-size: 13px;
-      color: #666;
+      color: #667085;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  /* 状态 pill(带圆点) */
+  .status-pill {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    &.ok { background: #e6f7ee; color: #157f3d; }
+    &.bad { background: #fdecec; color: #c62828; }
+    &.busy { background: #e8f1fd; color: #1565c0; }
+    &.ready { background: #fff6e0; color: #b7791f; }
+    &.idle { background: #f2f4f7; color: #667085; }
+  }
+
+  .sel-box { flex: 0 0 auto; }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 2px 0 14px 56px;
+    font-size: 12.5px;
+    color: #98a2b3;
+
+    span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    mat-icon { font-size: 15px; width: 15px; height: 15px; }
+  }
+
+  /* 分数区 */
+  .scores {
+    display: flex;
+    gap: 18px;
+    align-items: stretch;
+    background: #f8fafc;
+    border: 1px solid #eef2f6;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+
+  .overall {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 64px;
+    padding-right: 14px;
+    border-right: 1px solid #e6ebf1;
+
+    .overall-val {
+      font-size: 30px;
+      font-weight: 750;
+      line-height: 1;
+    }
+
+    .overall-lbl {
+      font-size: 11px;
+      color: #98a2b3;
+      margin-top: 5px;
+    }
+  }
+
+  .bars {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .bar-row {
+    display: grid;
+    grid-template-columns: 76px 1fr 30px;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .bar-lbl {
+    font-size: 11px;
+    color: #98a2b3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bar-track {
+    height: 6px;
+    border-radius: 999px;
+    background: #e9edf2;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.4s ease;
+
+    &.good { background: linear-gradient(90deg, #34c77b, #1faa5c); }
+    &.mid { background: linear-gradient(90deg, #f5b942, #ef9f1a); }
+    &.bad { background: linear-gradient(90deg, #f0665e, #d63c30); }
+    &.none { background: transparent; }
+  }
+
+  .bar-val {
+    font-size: 12px;
+    font-weight: 650;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 底部 */
+  .entry-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .counts {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 12.5px;
+    color: #667085;
+
+    span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    mat-icon { font-size: 15px; width: 15px; height: 15px; color: #98a2b3; }
+
+    .has-transcript { color: #157f3d; }
+    .has-transcript mat-icon { color: #1faa5c; }
+  }
+
+  .view-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #3f51b5;
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: background 0.15s ease, gap 0.15s ease;
+
+    mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+    &:hover {
+      background: rgba(63, 81, 181, 0.08);
+      gap: 7px;
     }
   }
 }
 
-/* 状态胶囊 */
-.chip {
-  padding: 2px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  white-space: nowrap;
+/* 分数色档 */
+.good { color: #1faa5c; }
+.mid { color: #ef9f1a; }
+.bad { color: #d63c30; }
+.none { color: #c3c9d2; }
 
-  &.ok { background: #e8f5e9; color: #2e7d32; }
-  &.bad { background: #ffebee; color: #c62828; }
-  &.busy { background: #e3f2fd; color: #1565c0; }
-  &.ready { background: #fff8e1; color: #f57f17; }
-  &.idle { background: #eeeeee; color: #616161; }
-}
 
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 8px 0 12px;
-  font-size: 12px;
-  color: #666;
-
-  span {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-  }
-}
-
-/* 分数区:总分大数字 + 五维小格 */
-.score-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.overall {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 56px;
-
-  .val {
-    font-size: 24px;
-    font-weight: 700;
-    line-height: 1;
-  }
-
-  .lbl {
-    font-size: 11px;
-    color: #888;
-  }
-}
-
-.dims {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-}
-
-.dim {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 4px 2px;
-  border-radius: 4px;
-  background: #fafafa;
-  min-width: 0;
-
-  .dim-lbl {
-    font-size: 10px;
-    color: #888;
-    text-align: center;
-    line-height: 1.2;
-    min-height: 24px;
-    display: flex;
-    align-items: center;
-  }
-
-  .dim-val {
-    font-size: 13px;
-    font-weight: 600;
-  }
-}
-
-/* 分数色档 —— 与仪表盘保持同一套阈值,避免两页含义不一致 */
-.good { color: #2e7d32; }
-.mid { color: #f57f17; }
-.bad { color: #c62828; }
-.none { color: #bbb; }
-
-.counts {
-  display: flex;
-  gap: 14px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid #f0f0f0;
-  font-size: 13px;
-  color: #555;
-
-  span {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .has-transcript {
-    color: #2e7d32;
-  }
-}
-
-mat-card-actions {
-  display: flex;
-  align-items: center;
-  padding: 0 8px 8px;
-
-  .spacer {
-    flex: 1;
-  }
-}
 
 .pager {
   display: flex;
@@ -442,15 +535,22 @@ mat-card-actions {
   &.editing {
     cursor: pointer;
   }
+}
 
-  &.selected {
-    outline: 2px solid #3f51b5;
-    outline-offset: -2px;
-    background: rgba(63, 81, 181, 0.04);
-  }
+/* 窄屏:分数条标签收窄,头像缩小 */
+@media (max-width: 420px) {
+  .entry {
+    padding: 14px;
 
-  .sel-box {
-    margin-right: 4px;
-    flex-shrink: 0;
+    .avatar { width: 38px; height: 38px; font-size: 13px; border-radius: 10px; }
+
+    .meta { margin-left: 50px; }
+
+    .scores { gap: 12px; padding: 10px 12px; }
+
+    .overall { min-width: 52px; padding-right: 10px; }
+    .overall .overall-val { font-size: 24px; }
+
+    .bar-row { grid-template-columns: 62px 1fr 28px; gap: 6px; }
   }
 }

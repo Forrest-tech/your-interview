@@ -263,49 +263,52 @@
       <mat-card class="entry" [class.editing]="editing()" [class.selected]="isSelected(e.id)"
                 [routerLink]="editing() ? null : ['/playbook', e.id]"
                 (click)="toggleSelect(e.id, $event)">
-        <mat-card-header>
-          <div class="entry-head">
-            @if (editing()) {
-              <mat-checkbox [checked]="isSelected(e.id)"
-                            (click)="$event.stopPropagation()"
-                            (change)="toggleSelectById(e.id)"
-                            class="sel-box"></mat-checkbox>
-            }
-            <div class="entry-title">
-              <strong>{{ e.companyName }}</strong>
-              <span class="role">{{ e.role }}</span>
-            </div>
-            <span class="chip" [class]="statusClass(e.status)">{{ statusLabel(e.status) }}</span>
+        <!-- 头部:头像 + 公司/职位 + 状态 pill -->
+        <div class="entry-top">
+          @if (editing()) {
+            <mat-checkbox [checked]="isSelected(e.id)"
+                          (click)="$event.stopPropagation()"
+                          (change)="toggleSelectById(e.id)"
+                          class="sel-box"></mat-checkbox>
+          }
+          <span class="avatar" [style.background]="avatarColor(e.companyName)">{{ companyInitials(e.companyName) }}</span>
+          <div class="entry-title">
+            <span class="company">{{ e.companyName }}</span>
+            <span class="role">{{ e.role }}</span>
           </div>
-        </mat-card-header>
+          <span class="status-pill" [class]="statusClass(e.status)"><span class="dot"></span>{{ statusLabel(e.status) }}</span>
+        </div>
 
-        <mat-card-content>
-          <div class="meta">
-            <span><mat-icon inline>repeat</mat-icon> {{ tn('pb.round', e.roundNo) }}</span>
-            @if (e.interviewDate) {
-              <span><mat-icon inline>event</mat-icon> {{ e.interviewDate }}</span>
-            }
-            @if (e.interviewFormat) {
-              <span><mat-icon inline>laptop</mat-icon> {{ e.interviewFormat }}</span>
-            }
+        <div class="meta">
+          <span><mat-icon inline>repeat</mat-icon> {{ tn('pb.round', e.roundNo) }}</span>
+          @if (e.interviewDate) {
+            <span><mat-icon inline>event</mat-icon> {{ e.interviewDate }}</span>
+          }
+          @if (e.interviewFormat) {
+            <span><mat-icon inline>laptop</mat-icon> {{ e.interviewFormat }}</span>
+          }
+        </div>
+
+        <!-- 分数区:总分 + 六维可视化条 -->
+        <div class="scores">
+          <div class="overall">
+            <span class="overall-val" [class]="scoreClass(e.overallScore)">{{ e.overallScore ?? '–' }}</span>
+            <span class="overall-lbl">{{ t('dim.overall') }}</span>
           </div>
-
-          <!-- 总分 + 六维小条:不必点进去就能看出"哪场最有问题" -->
-          <div class="score-row">
-            <div class="overall" [class]="scoreClass(e.overallScore)">
-              <span class="val">{{ e.overallScore ?? '—' }}</span>
-              <span class="lbl">{{ t('dim.overall') }}</span>
-            </div>
-            <div class="dims">
-              @for (d of dims(e); track d.key) {
-                <div class="dim">
-                  <span class="dim-lbl">{{ t(d.labelKey) }}</span>
-                  <span class="dim-val" [class]="scoreClass(d.value)">{{ d.value ?? '—' }}</span>
+          <div class="bars">
+            @for (d of dims(e); track d.key) {
+              <div class="bar-row">
+                <span class="bar-lbl">{{ t(d.labelKey) }}</span>
+                <div class="bar-track">
+                  <div class="bar-fill" [class]="scoreClass(d.value)" [style.width.%]="barWidth(d.value)"></div>
                 </div>
-              }
-            </div>
+                <span class="bar-val" [class]="scoreClass(d.value)">{{ d.value ?? '–' }}</span>
+              </div>
+            }
           </div>
+        </div>
 
+        <div class="entry-foot">
           <div class="counts">
             <span [title]="t('playbook.qaCount')"><mat-icon inline>help_outline</mat-icon> {{ e.questionCount ?? 0 }}</span>
             <span [title]="t('playbook.assetCount')"><mat-icon inline>attach_file</mat-icon> {{ e.assetCount ?? 0 }}</span>
@@ -313,13 +316,10 @@
               <span class="has-transcript"><mat-icon inline>check_circle</mat-icon> {{ t('pb.card.transcribed') }}</span>
             }
           </div>
-        </mat-card-content>
-
-        <mat-card-actions>
-          <a mat-button color="primary" [routerLink]="['/playbook', e.id]" (click)="$event.stopPropagation()">
-            <mat-icon>open_in_new</mat-icon> {{ t('pb.card.viewReview') }}
+          <a class="view-link" [routerLink]="['/playbook', e.id]" (click)="$event.stopPropagation()">
+            {{ t('pb.card.viewReview') }} <mat-icon inline>arrow_forward</mat-icon>
           </a>
-        </mat-card-actions>
+        </div>
       </mat-card>
   </ng-template>
 

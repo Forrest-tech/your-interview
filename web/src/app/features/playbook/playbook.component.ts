@@ -444,6 +444,27 @@ export class PlaybookComponent implements OnInit {
     return 'bad';
   }
 
+  /** ★ 卡片头像:公司名首字母 + 哈希彩色背景。 */
+  companyInitials(name?: string): string {
+    const n = (name ?? '').trim();
+    if (!n) return '?';
+    const parts = n.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  avatarColor(name?: string): string {
+    const n = (name ?? '?').trim() || '?';
+    let h = 0;
+    for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360;
+    return `hsl(${h}, 55%, 55%)`;
+  }
+
+  /** ★ 分数条宽度(0-100 钳制),无分时 0。 */
+  barWidth(v?: number): number {
+    if (v === undefined || v === null) return 0;
+    return Math.max(0, Math.min(100, v));
+  }
+
   /** 六维打平成数组,模板里 @for 更省事,避免手写五段重复结构。 */
   dims(e: InterviewEntry): { key: string; labelKey: string; value?: number }[] {
     return [

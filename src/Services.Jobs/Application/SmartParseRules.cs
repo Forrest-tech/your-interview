@@ -709,12 +709,8 @@ public static class JdPasteParser
             source = string.Join("\n", srcLines.Skip(proseStart));
         var flat = Regex.Replace(source, @"\s+", " ").Trim();
         if (flat.Length == 0) return null;
-        // 2026-10-19:220 字符太短,正文常被拦腰截断 —— 放到 400,按词边界截。
-        const int max = 400;
-        if (flat.Length <= max) return flat;
-        var cut = flat.LastIndexOf(' ', max);
-        if (cut < max / 2) cut = max; // 实在没空格就硬截
-        return flat[..cut].TrimEnd() + "…";
+        // 2026-10-19:用户要求完整内容,不截断。
+        return flat;
     }
 
     /// <summary>

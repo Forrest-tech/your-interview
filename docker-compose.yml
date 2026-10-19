@@ -102,8 +102,8 @@ services:
       # 2026-10-19:LinkedIn 登录态(宿主机 ~/.your-interview/linkedin-profile/state.json)
       LinkedIn__ProfileDir: /root/.your-interview/linkedin-profile
     volumes:
-      # 2026-10-19:挂载 LinkedIn 会话，Auto-fetch 用
-      - ~/.your-interview:/root/.your-interview:ro
+      # 2026-10-19:挂载 LinkedIn 会话，Auto-fetch 用（需读写，后端会回写登录态）
+      - ~/.your-interview:/root/.your-interview
     depends_on: *service-deps
     healthcheck: *service-health
 

@@ -82,7 +82,7 @@
                           @if (r.format) { · {{ r.format }} }
                         </span>
                       </span>
-                      <a mat-icon-button [routerLink]="['/playbook', r.entryId]" matTooltip="去准备">
+                      <a mat-icon-button [routerLink]="['/playbook', r.entryId]" [queryParams]="{tab: 'rounds'}" matTooltip="去准备">
                         <mat-icon>arrow_forward</mat-icon>
                       </a>
                     </li>

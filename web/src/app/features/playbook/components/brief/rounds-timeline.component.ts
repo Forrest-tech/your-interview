@@ -274,8 +274,7 @@ export class RoundsTimelineComponent implements OnInit {
     }
   }
   saveRecording(r: BriefRound): void {
-    this.updateRoundDetails(r, { recordingUrl: this.recordingDraft[r.id] || null });
-    this.recordingOpen.set(null);
+    this.updateRoundDetails(r, { recordingUrl: this.recordingDraft[r.id] || null }, () => this.recordingOpen.set(null));
   }
 
   /** ★ 面前问题 */
@@ -299,8 +298,7 @@ export class RoundsTimelineComponent implements OnInit {
   }
   savePrepQ(r: BriefRound): void {
     const lines = (this.prepQDraft[r.id] || '').split('\n').map(s => s.trim()).filter(s => s);
-    this.updateRoundDetails(r, { prepQuestionsJson: JSON.stringify(lines) });
-    this.prepQOpen.set(null);
+    this.updateRoundDetails(r, { prepQuestionsJson: JSON.stringify(lines) }, () => this.prepQOpen.set(null));
   }
 
   /** ★ 准备清单 */
@@ -333,8 +331,7 @@ export class RoundsTimelineComponent implements OnInit {
         const m2 = line.match(/^\[\s?\]\s*(.*)/);
         return { text: m2 ? m2[1] : line, done: false };
       });
-    this.updateRoundDetails(r, { checklistJson: JSON.stringify(items) });
-    this.checklistOpen.set(null);
+    this.updateRoundDetails(r, { checklistJson: JSON.stringify(items) }, () => this.checklistOpen.set(null));
   }
   toggleCheckItem(r: BriefRound, idx: number): void {
     const items = this.checklistOf(r);
@@ -343,7 +340,7 @@ export class RoundsTimelineComponent implements OnInit {
   }
 
   /** 通用:更新轮次详情字段。 */
-  private updateRoundDetails(r: BriefRound, patch: Record<string, unknown>): void {
+  private updateRoundDetails(r: BriefRound, patch: Record<string, unknown>, onSuccess?: () => void): void {
     const ex = this.extras[r.id] ?? {};
     const body = {
       stage: r.stage,
@@ -364,7 +361,11 @@ export class RoundsTimelineComponent implements OnInit {
       ...patch,
     };
     this.api.put(`/api/interviews/${this.entryId()}/rounds/${r.id}`, body).subscribe({
-      next: () => { this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2000 }); this.load(); },
+      next: () => {
+        this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2000 });
+        this.load();
+        onSuccess?.();
+      },
       error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 }),
     });
   }

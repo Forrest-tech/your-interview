@@ -1115,6 +1115,10 @@ export class TechStackComponent implements OnInit, OnDestroy {
           this.notify(this.t('techstack.reviewNoDue'));
           return;
         }
+        // ★ 200 上限提示:如果总数超过 200,告诉用户
+        if ((r.total ?? 0) > 200) {
+          this.notify(this.t('techstack.reviewTruncated').replace('{n}', String(r.total)));
+        }
         this.reviewQueue.set(queue);
         this.reviewIndex.set(0);
         this.reviewRevealed.set(false);
@@ -1215,7 +1219,9 @@ export class TechStackComponent implements OnInit, OnDestroy {
   /** ★ #9:记录每日复习数 (localStorage,供热力图)。 */
   private recordReviewActivity(): void {
     const key = 'ts.reviewActivity';
-    const today = new Date().toISOString().slice(0, 10);
+    // ★ 用本地日期,不用 UTC (21:00 EDT 会记到第二天)
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     try {
       const data: Record<string, number> = JSON.parse(localStorage.getItem(key) || '{}');
       data[today] = (data[today] || 0) + 1;

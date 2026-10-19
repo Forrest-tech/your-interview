@@ -662,6 +662,7 @@ const DICT: Record<string, Record<Lang, string>> = {
     fr: 'Gardez le rythme — revenez quand de nouvelles notions seront dues.'
   },
   'techstack.reviewNoDue': { zh: '暂时没有到期的知识点', en: 'No items are due right now', fr: 'Aucune notion n’est due pour l’instant' },
+  'techstack.reviewTruncated': { zh: '到期 {n} 张,本次只复习前 200 张', en: '{n} due, reviewing first 200', fr: '{n} dues, révision des 200 premiers' },
   'tracker.newApp': { zh: '新建投递', en: 'New application', fr: 'Nouvelle candidature' },
   'tracker.scrollLeft': { zh: '向左滚动', en: 'Scroll left', fr: 'Défiler vers la gauche' },
   'tracker.scrollRight': { zh: '向右滚动', en: 'Scroll right', fr: 'Défiler vers la droite' },

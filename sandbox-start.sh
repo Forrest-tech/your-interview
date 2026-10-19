@@ -62,7 +62,8 @@ if ! command -v rabbitmq-server >/dev/null 2>&1; then
 fi
 if ! (echo > /dev/tcp/localhost/5672) 2>/dev/null; then
   echo "[$(date)] Starting RabbitMQ..."
-  sudo -n rabbitmq-server -detached >/dev/null 2>&1
+  # 2026-10-19: || true so a RabbitMQ failure can't kill the rest of the run (set -e)
+  sudo -n rabbitmq-server -detached >/dev/null 2>&1 || true
   sleep 10
 fi
 

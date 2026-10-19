@@ -93,7 +93,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
             <mat-icon>{{ fetching() ? 'hourglass_empty' : 'cloud_download' }}</mat-icon>{{ t('tracker.saFetch') }}
           </button>
         }
-        <button mat-stroked-button type="button" [disabled]="!canParse || busy()" (click)="parse()">
+        <button mat-stroked-button type="button" [disabled]="!canParse || busy() || fetching()" (click)="parse()">
           <mat-icon>auto_awesome</mat-icon>{{ parsed() ? t('tracker.saReparse') : t('tracker.saParse') }}
         </button>
       </div>

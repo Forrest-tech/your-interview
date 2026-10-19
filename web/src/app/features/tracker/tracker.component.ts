@@ -1978,6 +1978,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       padding: 24px 32px 24px 0;
       border-left: 1px solid #ECEEF1;
       margin-left: 32px; padding-left: 32px;
+      align-self: flex-start;
+      position: sticky; top: 0;
     }
     .status-card {
       background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;

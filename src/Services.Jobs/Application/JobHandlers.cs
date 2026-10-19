@@ -72,7 +72,8 @@ public sealed record GetCompanyQuery(Guid Id) : IRequest<Result<CompanyDto>>;
 
 public sealed record ListApplicationsQuery(
     string? Search, string? Status, string? Priority, Guid? CompanyId,
-    string? SortBy = "updated", int Page = 1, int PageSize = 50)
+    string? SortBy = "updated", int Page = 1, int PageSize = 50,
+    bool? Archived = null)
     : IRequest<Result<PagedResult<ApplicationDto>>>;
 
 public sealed record GetApplicationQuery(Guid Id) : IRequest<Result<ApplicationDto>>;
@@ -116,6 +117,8 @@ public sealed record ChangeApplicationStatusCommand(Guid Id, string Status, stri
     : IRequest<Result>;
 
 public sealed record DeleteApplicationCommand(Guid Id) : IRequest<Result>;
+public sealed record ArchiveApplicationCommand(Guid Id) : IRequest<Result>;
+public sealed record UnarchiveApplicationCommand(Guid Id) : IRequest<Result>;
 
 public sealed record SetApplicationAnalysisCommand(Guid Id, int? ResumeScore, string? PassRateEstimate,
     string? MatchKeywords) : IRequest<Result>;
@@ -327,6 +330,12 @@ public sealed class ListApplicationsQueryHandler(JobsDbContext db)
         var q = db.Applications.AsNoTracking().AsQueryable();
         if (request.CompanyId.HasValue) q = q.Where(a => a.CompanyId == request.CompanyId.Value);
 
+        // ★ 归档过滤:默认只看未归档,Archived=true 只看已归档,null 看全部
+        if (request.Archived.HasValue)
+            q = q.Where(a => a.IsArchived == request.Archived.Value);
+        else
+            q = q.Where(a => !a.IsArchived);
+
         if (!string.IsNullOrWhiteSpace(request.Status))
         {
             var statuses = request.Status.Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -526,6 +535,33 @@ public sealed class DeleteApplicationCommandHandler(JobsDbContext db)
         var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
         a.MarkDeleted();
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public sealed class ArchiveApplicationCommandHandler(JobsDbContext db)
+    : IRequestHandler<ArchiveApplicationCommand, Result>
+{
+    public async Task<Result> Handle(ArchiveApplicationCommand request, CancellationToken ct)
+    {
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+        a.Archive();
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public sealed class UnarchiveApplicationCommandHandler(JobsDbContext db)
+    : IRequestHandler<UnarchiveApplicationCommand, Result>
+{
+    public async Task<Result> Handle(UnarchiveApplicationCommand request, CancellationToken ct)
+    {
+        var a = await db.Applications.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+        a.Unarchive();
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }

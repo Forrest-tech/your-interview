@@ -17,6 +17,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { Router } from '@angular/router';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -306,7 +307,7 @@ export class ApplicationDialogComponent {
     CommonModule, FormsModule, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatDividerModule,
-    MatSelectModule, MatMenuModule, DragDropModule
+    MatSelectModule, MatMenuModule, MatButtonToggleModule, DragDropModule
   ],
   templateUrl: './tracker.component.html',
   styleUrl: './tracker.component.scss'
@@ -823,6 +824,8 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   );
   /** ★ 只看收藏。 */
   readonly favOnly = signal(false);
+  /** ★ Active/Archived 标签页 (Simplify 对等)。 */
+  readonly showArchived = signal(false);
   /** 排序键直接对齐后端 sortBy(updated/applied/appliedAsc/company/deadline)。 */
   readonly sort = signal<string>(
     ((): string => {
@@ -1061,7 +1064,8 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       pageSize: this.pageSize(),
       status: this.statusFilter(),
       search: this.search().trim(),
-      sortBy: this.sort()
+      sortBy: this.sort(),
+      archived: this.showArchived()
     }).subscribe({
       next: (r) => {
         this.items.set(r.items ?? []);
@@ -1270,6 +1274,30 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.api.delete<void>(`/api/jobs/applications/${app.id}`).subscribe({
       next: () => {
         this.notify(this.t('tracker.deleted'));
+        this.reload();
+      },
+      error: (e: Error) => this.notify(e.message, true)
+    });
+  }
+
+  /** ★ 归档 (Simplify 对等)。 */
+  archive(app: Application, ev?: Event): void {
+    ev?.stopPropagation();
+    this.api.post<void>(`/api/jobs/applications/${app.id}/archive`, {}).subscribe({
+      next: () => {
+        this.notify(this.t('tracker.archived'));
+        this.reload();
+      },
+      error: (e: Error) => this.notify(e.message, true)
+    });
+  }
+
+  /** ★ 取消归档。 */
+  unarchive(app: Application, ev?: Event): void {
+    ev?.stopPropagation();
+    this.api.post<void>(`/api/jobs/applications/${app.id}/unarchive`, {}).subscribe({
+      next: () => {
+        this.notify(this.t('tracker.unarchived'));
         this.reload();
       },
       error: (e: Error) => this.notify(e.message, true)

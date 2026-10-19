@@ -122,6 +122,11 @@ public sealed class JobApplication : AuditableAggregateRoot
 
     public Guid CompanyId { get; private set; }
     public string Role { get; private set; } = string.Empty;
+    /** ★ 归档:Simplify 对等功能,归档的不删,只是隐藏。 */
+    public bool IsArchived { get; private set; }
+
+    public void Archive() { IsArchived = true; Touch(); }
+    public void Unarchive() { IsArchived = false; Touch(); }
     public string? Location { get; private set; }
     public string? Link { get; private set; }
     public string? Salary { get; private set; }

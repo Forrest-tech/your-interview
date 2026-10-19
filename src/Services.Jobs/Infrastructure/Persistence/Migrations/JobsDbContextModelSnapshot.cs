@@ -358,6 +358,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("JdSourceUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");

@@ -81,9 +81,10 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> ListApplications([FromQuery] string? search, [FromQuery] string? status,
         [FromQuery] string? priority, [FromQuery] Guid? companyId, [FromQuery] string? sortBy = "updated",
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default)
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] bool? archived = null,
+        CancellationToken ct = default)
     {
-        var r = await sender.Send(new ListApplicationsQuery(search, status, priority, companyId, sortBy, page, pageSize), ct);
+        var r = await sender.Send(new ListApplicationsQuery(search, status, priority, companyId, sortBy, page, pageSize, archived), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -142,6 +143,24 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public async Task<IResult> DeleteApplication(Guid id, CancellationToken ct)
     {
         var r = await sender.Send(new DeleteApplicationCommand(id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>归档申请 (Simplify 对等)。</summary>
+    [HttpPost("applications/{id:guid}/archive")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> ArchiveApplication(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ArchiveApplicationCommand(id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>取消归档。</summary>
+    [HttpPost("applications/{id:guid}/unarchive")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> UnarchiveApplication(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new UnarchiveApplicationCommand(id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 

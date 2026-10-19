@@ -5,6 +5,12 @@
       <p class="sub">{{ t('tracker.subtitle') }}</p>
     </div>
     <div class="head-actions">
+      <!-- ★ Active/Archived 标签页 (Simplify 对等) -->
+      <mat-button-toggle-group [value]="showArchived() ? 'archived' : 'active'"
+                               (change)="showArchived.set($event.value === 'archived'); page.set(1); reload()">
+        <mat-button-toggle value="active">{{ t('tracker.active') }}</mat-button-toggle>
+        <mat-button-toggle value="archived">{{ t('tracker.archivedTab') }}</mat-button-toggle>
+      </mat-button-toggle-group>
       <button mat-flat-button color="primary" class="smart-btn" (click)="openSmartAdd()">
         <mat-icon>auto_awesome</mat-icon>{{ t('tracker.smartAdd') }}
       </button>
@@ -280,6 +286,15 @@
                       [color]="isFavorite(a.id) ? 'warn' : undefined">
                 <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
               </button>
+              @if (!showArchived()) {
+                <button mat-icon-button (click)="archive(a, $event)" matTooltip="{{ t('tracker.archive') }}">
+                  <mat-icon>archive</mat-icon>
+                </button>
+              } @else {
+                <button mat-icon-button (click)="unarchive(a, $event)" matTooltip="{{ t('tracker.unarchive') }}">
+                  <mat-icon>unarchive</mat-icon>
+                </button>
+              }
             </mat-card>
           }
 

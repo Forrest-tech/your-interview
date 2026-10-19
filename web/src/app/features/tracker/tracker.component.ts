@@ -1530,55 +1530,153 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         }
       </section>
 
-      <!-- 匹配分析(纯关键词,不调 AI)-->
-      @if (match(); as m) {
+
+      <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
+      <mat-divider></mat-divider>
+      <section>
+        <div class="sec-head fold-head">
+          <span (click)="jdTextEditing() ? null : jdExpanded.set(!jdExpanded())" style="display:flex;align-items:center;cursor:pointer;gap:6px;">
+            <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
+            <span>{{ t('tracker.dJdFull') }}</span>
+            @if (detail.jdText) {
+              <span class="fold-len">{{ tn('tracker.dJdChars', detail.jdText.length) }}</span>
+            }
+          </span>
+          <button mat-icon-button
+                  (click)="$event.stopPropagation(); jdTextEditing() ? cancelEditJdText() : startEditJdText()"
+                  [matTooltip]="t('common.edit')" class="edit-btn">
+            <mat-icon>{{ jdTextEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </div>
+
+        @if (app.jdSourceUrl) {
+          <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
+            <mat-icon>link</mat-icon>{{ t('tracker.dViewPosting') }}
+          </a>
+        }
+
+        @if (jdTextEditing()) {
+          <textarea class="plain-area" rows="16" [(ngModel)]="jdTextDraft"
+                    [placeholder]="t('tracker.dJdFull')"></textarea>
+          <div class="cl-actions save-row">
+            <button mat-flat-button color="primary" (click)="saveJdText()"
+                    [disabled]="jdTextSaving()">
+              {{ t('common.save') }}
+            </button>
+            <button mat-button (click)="cancelEditJdText()">{{ t('common.cancel') }}</button>
+          </div>
+        } @else if (detail.jdText) {
+          @if (jdExpanded()) {
+            <div class="jd-full">
+              <p class="pre">{{ detail.jdText }}</p>
+            </div>
+          } @else {
+            <p class="pre jd-peek">{{ detail.jdText?.slice(0, 220) }}…</p>
+          }
+        } @else {
+          <p class="cl-empty">{{ t('tracker.dJdEmpty') }}</p>
+        }
+      </section>
+
+      <!-- 公司情报 -->
+      @if (company()?.profile) {
         <mat-divider></mat-divider>
         <section>
-          <div class="sec-head"><span>{{ t('tracker.dMatchAnalysis') }}</span></div>
-
-          <div class="match-head">
-            <div class="score" [class]="matchTier(m.score)">
-              <span class="score-num">{{ m.score }}</span>
-              <span class="score-unit">{{ t('tracker.dScoreUnit') }}</span>
-            </div>
-            <div class="score-note">
-              <strong [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</strong>
-              <span>{{ tf('tracker.dHitKw', { n: m.hit.length, m: m.total }) }}</span>
-            </div>
-          </div>
-
-          @if (m.missing.length > 0) {
-            <div class="kw-group">
-              <span class="kw-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</span>
-              <div class="kw-list">
-                @for (k of m.missing; track k) {
-                  <span class="kw miss">{{ k }}</span>
-                }
-              </div>
-            </div>
-          }
-
-          @if (m.hit.length > 0) {
-            <div class="kw-group">
-              <span class="kw-title">{{ tn('tracker.dHitKwTitle', m.hit.length) }}</span>
-              <div class="kw-list">
-                @for (k of m.hit; track k) {
-                  <span class="kw ok">{{ k }}</span>
-                }
-              </div>
-            </div>
-          }
-
-          @if (m.softSkills.length > 0) {
-            <p class="soft-note">
-              {{ t('tracker.dSoftSkills') }}{{ m.softSkills.join('、') }}
-            </p>
+          <div class="sec-head"><span>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</span></div>
+          <p class="pre">{{ company()?.profile }}</p>
+          @if (company()?.website) {
+            <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
+              <mat-icon>public</mat-icon>{{ company()!.website }}
+            </a>
           }
         </section>
       }
 
-      <!-- 求职信(Cover Letter) ★ Simplify 视觉 -->
-      <mat-divider></mat-divider>
+
+      @if ((detail.rounds?.length ?? 0) > 0) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head"><span>{{ t('tracker.dRounds') }}</span></div>
+          <ul class="rounds">
+            @for (r of detail.rounds ?? []; track r.id) {
+              <li>
+                <strong>{{ tn('tracker.dRoundN', r.order) }}</strong>
+                @if (r.stage) { <span class="tag">{{ r.stage }}</span> }
+                @if (r.scheduledDate) { <span>{{ r.scheduledDate | date: 'yyyy-MM-dd' }}</span> }
+                @if (r.format) { <span class="tag">{{ r.format }}</span> }
+                @if (r.interviewers) { <span class="tag">{{ r.interviewers }}</span> }
+                @if (r.outcome && r.outcome !== 'Pending') {
+                  <span class="tag" [class.outcome-pass]="r.outcome === 'Passed'"
+                        [class.outcome-fail]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
+                }
+                @if (r.notes) { <p class="pre">{{ r.notes }}</p> }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
+      @if (app.link) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head"><span>{{ t('tracker.dJobLink') }}</span></div>
+          <a [href]="app.link" target="_blank" rel="noopener noreferrer" class="link">
+            {{ app.link }}
+          </a>
+        </section>
+      }
+      </div><!-- /.main-col -->
+
+      <!-- ★ Simplify 真站:右侧边栏 -->
+      <div class="side-col">
+        <!-- Application Status 卡片 -->
+        <div class="status-card">
+          <h3>{{ t('tracker.dAppStatus') }}</h3>
+          <select class="status-select" [value]="detail.status" (change)="quickChangeStatus($event)">
+            @for (s of statusOrder; track s) {
+              <option [value]="s" [selected]="s === detail.status">{{ statusLabel(s) }}</option>
+            }
+          </select>
+          <div class="timeline">
+            @for (s of statusOrder; track s) {
+              <div class="tl-item" [class.done]="isStatusDone(s)">
+                <span class="tl-dot"></span>
+                <span class="tl-name">{{ statusLabel(s) }}</span>
+                @if (statusDate(s)) {
+                  <span class="tl-date">{{ statusDate(s) }}</span>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Notes 卡片(可编辑) -->
+        <div class="notes-card">
+          <h3 class="nc-head">
+            <span>{{ t('tracker.dNotes') }}</span>
+            <button mat-icon-button class="edit-btn" (click)="notesEditing() ? cancelEditNotes() : startEditNotes()"
+                    [matTooltip]="t('common.edit')">
+              <mat-icon>{{ notesEditing() ? 'close' : 'edit' }}</mat-icon>
+            </button>
+          </h3>
+          @if (notesEditing()) {
+            <textarea class="plain-area" rows="6" [(ngModel)]="notesDraft"
+                      [placeholder]="t('tracker.dNotes')"></textarea>
+            <div class="cl-actions save-row">
+              <button mat-flat-button color="primary" (click)="saveNotes()"
+                      [disabled]="notesSaving()">{{ t('common.save') }}</button>
+              <button mat-button (click)="cancelEditNotes()">{{ t('common.cancel') }}</button>
+            </div>
+          } @else {
+            <p class="pre">{{ detail.notes || '—' }}</p>
+          }
+        </div>
+      </div><!-- /.side-col -->
+      </div><!-- /.two-col -->
+      }
+
+      @else if (detailTab() === 'documents') {
+        <div class="tab-body">
       <section class="cl-section">
         <div class="sec-head">
           <mat-icon>description</mat-icon>
@@ -1659,185 +1757,56 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           <p class="cl-empty">{{ t('tracker.dClEmpty') }}</p>
         }
       </section>
-
-      <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
-      <mat-divider></mat-divider>
-      <section>
-        <div class="sec-head fold-head">
-          <span (click)="jdTextEditing() ? null : jdExpanded.set(!jdExpanded())" style="display:flex;align-items:center;cursor:pointer;gap:6px;">
-            <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
-            <span>{{ t('tracker.dJdFull') }}</span>
-            @if (detail.jdText) {
-              <span class="fold-len">{{ tn('tracker.dJdChars', detail.jdText.length) }}</span>
-            }
-          </span>
-          <button mat-icon-button
-                  (click)="$event.stopPropagation(); jdTextEditing() ? cancelEditJdText() : startEditJdText()"
-                  [matTooltip]="t('common.edit')" class="edit-btn">
-            <mat-icon>{{ jdTextEditing() ? 'close' : 'edit' }}</mat-icon>
-          </button>
-        </div>
-
-        @if (app.jdSourceUrl) {
-          <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
-            <mat-icon>link</mat-icon>{{ t('tracker.dViewPosting') }}
-          </a>
-        }
-
-        @if (jdTextEditing()) {
-          <textarea class="plain-area" rows="16" [(ngModel)]="jdTextDraft"
-                    [placeholder]="t('tracker.dJdFull')"></textarea>
-          <div class="cl-actions save-row">
-            <button mat-flat-button color="primary" (click)="saveJdText()"
-                    [disabled]="jdTextSaving()">
-              {{ t('common.save') }}
-            </button>
-            <button mat-button (click)="cancelEditJdText()">{{ t('common.cancel') }}</button>
-          </div>
-        } @else if (detail.jdText) {
-          @if (jdExpanded()) {
-            <div class="jd-full">
-              <p class="pre">{{ detail.jdText }}</p>
-            </div>
-          } @else {
-            <p class="pre jd-peek">{{ detail.jdText?.slice(0, 220) }}…</p>
-          }
-        } @else {
-          <p class="cl-empty">{{ t('tracker.dJdEmpty') }}</p>
-        }
-      </section>
-
-      <!-- 公司情报 -->
-      @if (company()?.profile) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</span></div>
-          <p class="pre">{{ company()?.profile }}</p>
-          @if (company()?.website) {
-            <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
-              <mat-icon>public</mat-icon>{{ company()!.website }}
-            </a>
-          }
-        </section>
-      }
-
-      <mat-divider></mat-divider>
-      <section>
-        <div class="sec-head">
-          <span>{{ t('tracker.dNotes') }}</span>
-          <button mat-icon-button (click)="notesEditing() ? cancelEditNotes() : startEditNotes()"
-                  [matTooltip]="t('common.edit')" class="edit-btn">
-            <mat-icon>{{ notesEditing() ? 'close' : 'edit' }}</mat-icon>
-          </button>
-        </div>
-        @if (notesEditing()) {
-          <textarea class="plain-area" rows="8" [(ngModel)]="notesDraft"
-                    [placeholder]="t('tracker.dNotes')"></textarea>
-          <div class="cl-actions save-row">
-            <button mat-flat-button color="primary" (click)="saveNotes()"
-                    [disabled]="notesSaving()">
-              {{ t('common.save') }}
-            </button>
-            <button mat-button (click)="cancelEditNotes()">{{ t('common.cancel') }}</button>
-          </div>
-        } @else {
-          <p class="pre">{{ detail.notes || '—' }}</p>
-        }
-      </section>
-
-      @if ((detail.history?.length ?? 0) > 0) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dHistory') }}</span></div>
-          <ol class="history">
-            @for (h of detail.history ?? []; track h.changedAt + h.status) {
-              <li>
-                <span class="to">{{ statusLabel(h.status) }}</span>
-                <time>{{ h.changedAt | date: 'yyyy-MM-dd HH:mm' }}</time>
-                @if (h.note) { <em class="note">{{ h.note }}</em> }
-              </li>
-            }
-          </ol>
-        </section>
-      }
-
-      @if ((detail.rounds?.length ?? 0) > 0) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dRounds') }}</span></div>
-          <ul class="rounds">
-            @for (r of detail.rounds ?? []; track r.id) {
-              <li>
-                <strong>{{ tn('tracker.dRoundN', r.order) }}</strong>
-                @if (r.stage) { <span class="tag">{{ r.stage }}</span> }
-                @if (r.scheduledDate) { <span>{{ r.scheduledDate | date: 'yyyy-MM-dd' }}</span> }
-                @if (r.format) { <span class="tag">{{ r.format }}</span> }
-                @if (r.interviewers) { <span class="tag">{{ r.interviewers }}</span> }
-                @if (r.outcome && r.outcome !== 'Pending') {
-                  <span class="tag" [class.outcome-pass]="r.outcome === 'Passed'"
-                        [class.outcome-fail]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
-                }
-                @if (r.notes) { <p class="pre">{{ r.notes }}</p> }
-              </li>
-            }
-          </ul>
-        </section>
-      }
-
-      @if (app.link) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dJobLink') }}</span></div>
-          <a [href]="app.link" target="_blank" rel="noopener noreferrer" class="link">
-            {{ app.link }}
-          </a>
-        </section>
-      }
-      </div><!-- /.main-col -->
-
-      <!-- ★ Simplify 真站:右侧边栏 -->
-      <div class="side-col">
-        <!-- Application Status 卡片 -->
-        <div class="status-card">
-          <h3>{{ t('tracker.dAppStatus') }}</h3>
-          <select class="status-select" [value]="detail.status" (change)="quickChangeStatus($event)">
-            @for (s of statusOrder; track s) {
-              <option [value]="s" [selected]="s === detail.status">{{ statusLabel(s) }}</option>
-            }
-          </select>
-          <div class="timeline">
-            @for (s of statusOrder; track s) {
-              <div class="tl-item" [class.done]="isStatusDone(s)">
-                <span class="tl-dot"></span>
-                <span class="tl-name">{{ statusLabel(s) }}</span>
-                @if (statusDate(s)) {
-                  <span class="tl-date">{{ statusDate(s) }}</span>
-                }
-              </div>
-            }
-          </div>
-        </div>
-
-        <!-- Notes 卡片 (简化版,完整编辑在下方) -->
-        <div class="notes-card">
-          <h3>{{ t('tracker.dNotes') }}</h3>
-          <p class="pre">{{ detail.notes || '—' }}</p>
-        </div>
-      </div><!-- /.side-col -->
-      </div><!-- /.two-col -->
-      }
-
-      @else if (detailTab() === 'documents') {
-        <div class="tab-placeholder">
-          <mat-icon>folder</mat-icon>
-          <p>{{ t('tracker.dDocuments') }}</p>
         </div>
       }
 
       @else if (detailTab() === 'score') {
-        <div class="tab-placeholder">
-          <mat-icon>assessment</mat-icon>
-          <p>{{ t('tracker.dResumeScore') }}</p>
+        <div class="tab-body">
+      <!-- 匹配分析(纯关键词,不调 AI)-->
+      @if (match(); as m) {
+        <section>
+          <div class="sec-head"><span>{{ t('tracker.dMatchAnalysis') }}</span></div>
+
+          <div class="match-head">
+            <div class="score" [class]="matchTier(m.score)">
+              <span class="score-num">{{ m.score }}</span>
+              <span class="score-unit">{{ t('tracker.dScoreUnit') }}</span>
+            </div>
+            <div class="score-note">
+              <strong [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</strong>
+              <span>{{ tf('tracker.dHitKw', { n: m.hit.length, m: m.total }) }}</span>
+            </div>
+          </div>
+
+          @if (m.missing.length > 0) {
+            <div class="kw-group">
+              <span class="kw-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</span>
+              <div class="kw-list">
+                @for (k of m.missing; track k) {
+                  <span class="kw miss">{{ k }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          @if (m.hit.length > 0) {
+            <div class="kw-group">
+              <span class="kw-title">{{ tn('tracker.dHitKwTitle', m.hit.length) }}</span>
+              <div class="kw-list">
+                @for (k of m.hit; track k) {
+                  <span class="kw ok">{{ k }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          @if (m.softSkills.length > 0) {
+            <p class="soft-note">
+              {{ t('tracker.dSoftSkills') }}{{ m.softSkills.join('、') }}
+            </p>
+          }
+        </section>
+      }
         </div>
       }
 
@@ -2018,6 +1987,9 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       padding: 24px;
     }
     .notes-card h3 { font-size: 16px; font-weight: 700; color: #1A1D23; margin: 0 0 16px; }
+    .notes-card .nc-head { display: flex; align-items: center; justify-content: space-between; }
+    .tab-body { padding: 24px 32px; }
+    .tab-body > section:first-child { margin-top: 0; }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
     .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
@@ -2535,12 +2507,21 @@ export class ApplicationDetailDialogComponent {
     });
   }
 
-  /* ★ Simplify 真站:状态时间线 */
+  /* ★ Simplify 真站:状态时间线 — 固定 5 阶段,不含 Accepted/Rejected 等 */
   readonly statusOrder = ['Saved', 'Applied', 'Screen', 'Interview', 'Offer'];
 
   isStatusDone(s: string): boolean {
     const order = this.statusOrder;
-    const currentIdx = order.indexOf(this.detail.status);
+    let currentIdx = order.indexOf(this.detail.status);
+    if (currentIdx < 0) {
+      // 当前状态不在 5 阶段内(如 Rejected/Accepted):按 history 取走到的最远阶段
+      const hist = (this.detail as any).history as Array<{ status: string }> | undefined;
+      currentIdx = -1;
+      for (const h of hist ?? []) {
+        const i = order.indexOf(h.status);
+        if (i > currentIdx) currentIdx = i;
+      }
+    }
     const sIdx = order.indexOf(s);
     return sIdx >= 0 && sIdx <= currentIdx;
   }
@@ -2996,7 +2977,6 @@ export interface CoverLetterReadinessDto {
   /** 有值时说明输入不全(简历缺失是硬阻断,JD/公司情报是建议补)。 */
   missingHint: string | null;
 }
-
 
 
 /** ★ 备战计划对话框 (替代原生 confirm)。 */

@@ -876,6 +876,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dWeakMatch': { zh: '弱匹配', en: 'Weak match', fr: 'Faible adéquation' },
   'tracker.dScoreGreat': { zh: '很棒的匹配！你的简历与这份工作高度契合。', en: 'Great match! Your resume is well-tailored to this job.', fr: 'Excellent! Votre CV correspond bien à ce poste.' },
   'tracker.dScoreFair': { zh: '不错的匹配，补充缺失的关键词可以进一步提升。', en: 'Fair match — adding the missing keywords can improve it.', fr: 'Correspondance correcte.' },
+  'tracker.dReparse': { zh: '重新解析', en: 'Re-parse', fr: 'Réanalyser' },
   'tracker.historyCreated': { zh: '新建时设置', en: 'Set on creation', fr: 'Défini à la création' },
 
   // ---------- 投递跟踪 · 智能粘贴弹窗 ----------

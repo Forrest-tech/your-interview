@@ -1627,6 +1627,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       <mat-divider></mat-divider>
       <section class="about-job">
         <div class="about-job-edit">
+          <button mat-icon-button (click)="reparseJd()" [matTooltip]="t('tracker.dReparse')"
+                  class="edit-btn" [disabled]="reparsing()">
+            <mat-icon>{{ reparsing() ? 'hourglass_empty' : 'refresh' }}</mat-icon>
+          </button>
           <button mat-icon-button (click)="jdSummaryEditing() ? cancelEditJdSummary() : startEditJdSummary()"
                   [matTooltip]="t('common.edit')" class="edit-btn">
             <mat-icon>{{ jdSummaryEditing() ? 'close' : 'edit' }}</mat-icon>
@@ -2857,6 +2861,8 @@ export class ApplicationDetailDialogComponent {
 
   /** JD 摘要编辑态。 */
   readonly jdSummaryEditing = signal(false);
+  /** 2026-10-19:重新解析 JD（用最新后端重跑，修复旧数据）。 */
+  readonly reparsing = signal(false);
   jdSummaryDraft = '';
   readonly jdSummarySaving = signal(false);
 
@@ -2939,6 +2945,37 @@ export class ApplicationDetailDialogComponent {
 
   cancelEditJdSummary(): void {
     this.jdSummaryEditing.set(false);
+  }
+
+  /** 2026-10-19:用最新后端重新解析 JD，修复旧数据的噪音/去重问题。 */
+  reparseJd(): void {
+    const d = this.detail;
+    const raw = d.jdText?.trim();
+    if (!raw) return;
+    this.reparsing.set(true);
+    this.api.post('/api/jobs/parse-jd', { raw, useAi: false }).subscribe({
+      next: (p: any) => {
+        const upd: any = {};
+        if (p.company) upd.company = p.company;
+        if (p.role) upd.role = p.role;
+        if (p.location) upd.location = p.location;
+        if (p.salary) upd.salary = p.salary;
+        if (p.workMode) upd.workMode = p.workMode;
+        if (p.jobType) upd.jobType = p.jobType;
+        if (p.jdSummary) upd.jdSummary = p.jdSummary;
+        if (p.requirements) upd.requirements = p.requirements;
+        if (p.benefits) upd.benefits = p.benefits;
+        if (p.companyDescription) upd.companyDescription = p.companyDescription;
+        this.api.put(`/api/jobs/applications/${this.app.id}`, upd).subscribe({
+          next: () => {
+            this.reparsing.set(false);
+            this.reloadDetail();
+          },
+          error: () => this.reparsing.set(false)
+        });
+      },
+      error: () => this.reparsing.set(false)
+    });
   }
 
   /**

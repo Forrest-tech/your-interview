@@ -18,6 +18,7 @@
     <PackageReference Include="Microsoft.Extensions.Http.Polly" />
     <PackageReference Include="Polly" />
     <PackageReference Include="Polly.Extensions" />
+    <PackageReference Include="Microsoft.Playwright" />
   </ItemGroup>
 
   <ItemGroup>

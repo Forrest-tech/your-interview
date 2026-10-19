@@ -53,6 +53,9 @@ builder.AddServiceDefaults(ServiceName, services =>
     services.AddSingleton<YourInterview.Services.Jobs.Infrastructure.Services.IJobPageFetcher,
         YourInterview.Services.Jobs.Infrastructure.Services.JobPageFetcher>();
 
+    // 2026-10-19:LinkedIn 职位页抓取(Playwright，带用户登录态)
+    services.AddSingleton<YourInterview.Services.Jobs.Application.LinkedInFetcher>();
+
     services.AddSingleton(TimeProvider.System);
     services.AddHealthChecks().AddDbContextCheck<JobsDbContext>("postgres");
 

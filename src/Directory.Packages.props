@@ -69,5 +69,8 @@
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.10" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="3.10.0" />
     <PackageVersion Include="NSubstitute" Version="5.1.0" />
+
+    <!-- 浏览器自动化(LinkedIn 职位页抓取) -->
+    <PackageVersion Include="Microsoft.Playwright" Version="1.49.1" />
   </ItemGroup>
 </Project>

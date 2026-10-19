@@ -87,6 +87,12 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
           {{ t('tracker.saAiFill') }}
         </label>
         <span class="spacer"></span>
+        <!-- 2026-10-19:LinkedIn 链接自动抓取 -->
+        @if (isLinkedInUrl()) {
+          <button mat-stroked-button type="button" [disabled]="fetching()" (click)="fetchLinkedIn()">
+            <mat-icon>{{ fetching() ? 'hourglass_empty' : 'cloud_download' }}</mat-icon>{{ t('tracker.saFetch') }}
+          </button>
+        }
         <button mat-stroked-button type="button" [disabled]="!canParse || busy()" (click)="parse()">
           <mat-icon>auto_awesome</mat-icon>{{ parsed() ? t('tracker.saReparse') : t('tracker.saParse') }}
         </button>
@@ -350,9 +356,52 @@ export class SmartAddDialogComponent {
   readonly status = signal<string>('');
   readonly parsed = signal<ParsedJd | null>(null);
   readonly invite = signal<ParsedInvite | null>(null);
+  /** 2026-10-19:LinkedIn 自动抓取中 */
+  readonly fetching = signal(false);
 
   raw = '';
   useAi = true;
+
+  /** 2026-10-19:输入是否为 LinkedIn 职位链接 */
+  isLinkedInUrl(): boolean {
+    return /linkedin\.com\/jobs\/view\//i.test(this.raw.trim());
+  }
+
+  /** 2026-10-19:调用后端用登录态抓取 LinkedIn 职位页 */
+  fetchLinkedIn(): void {
+    const url = this.raw.trim().match(/https?:\/\/[^\s)】」"',。]+/)?.[0] ?? this.raw.trim();
+    if (!url) return;
+    this.fetching.set(true);
+    this.msg.set(null);
+    this.trackerApi.fetchLinkedIn(url).subscribe({
+      next: (r: any) => {
+        this.fetching.set(false);
+        if (r?.ok === false) {
+          if (r.error === 'needs_login') {
+            this.msg.set(this.t('tracker.saNeedLogin'));
+          } else {
+            this.msg.set(this.t('tracker.saFetchFail'));
+          }
+          return;
+        }
+        // 用抓取结果填充表单（复用 parsed 结构）
+        this.parsed.set({
+          company: r.company ?? '', role: r.role ?? '', location: r.location ?? '',
+          salary: r.salary ?? '', workMode: r.workMode ?? '', jobType: r.jobType ?? '',
+          jdSummary: r.jdSummary ?? '', requirements: r.requirements ?? '',
+          benefits: r.benefits ?? '', companyDescription: r.companyDescription ?? '',
+          link: url, jdText: r.jdText ?? '', sourceKind: 'LinkedIn', status: r.status ?? '',
+          message: '', confidence: {}
+        } as any);
+        // 同步 raw 为 jdText，保存时落库
+        if (r.jdText) this.raw = r.jdText;
+      },
+      error: () => {
+        this.fetching.set(false);
+        this.msg.set(this.t('tracker.saFetchFail'));
+      }
+    });
+  }
 
   get canParse(): boolean {
     return this.raw.trim().length > 0 && !this.busy();

@@ -33,11 +33,25 @@ RUN dotnet restore "src/$SERVICE/"
 COPY src/ ./src/
 RUN dotnet publish "src/$SERVICE/" -c Release -o /app/publish --no-restore
 
+# 2026-10-19:为 Jobs 服务预装 Playwright Chromium(LinkedIn 抓取)
+# 注意:仅当 SERVICE=Services.Jobs 时有效，其他服务跳过以免拖慢构建
+RUN if [ "$SERVICE" = "Services.Jobs" ]; then \
+      dotnet tool install --global Microsoft.Playwright.CLI --version 1.49.1 || true; \
+    fi
+
 # ---------- 运行阶段 ----------
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 ARG SERVICE
 WORKDIR /app
 COPY --from=build /app/publish ./
+
+# 2026-10-19:Playwright Chromium 依赖(LinkedIn 职位页抓取)
+# 仅 Jobs 服务需要，但统一装简化 Dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+    libgbm1 libasound2 libpango-1.0-0 libcairo2 \
+    && rm -rf /var/lib/apt/lists/*
 
 # 容器内无 ICU,统一用 invariant globalization
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \

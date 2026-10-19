@@ -92,6 +92,11 @@ export class TrackerApi {
     return this.api.post<ParsedJd>(`${TrackerApi.BASE}/parse-jd`, { raw, useAi });
   }
 
+  /** 2026-10-19:LinkedIn 职位页自动抓取（后端用登录态）。 */
+  fetchLinkedIn(url: string): Observable<any> {
+    return this.api.post<any>(`${TrackerApi.BASE}/fetch-linkedin`, { url });
+  }
+
   /** 把(用户改过的)草稿落成公司与投递记录。 */
   smartAdd(body: {
     company: string; role: string; location?: string | null; salary?: string | null;

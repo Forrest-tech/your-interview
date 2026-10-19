@@ -279,6 +279,48 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     }
 
     /// <summary>
+    /// 2026-10-19:LinkedIn 职位页自动抓取 —— 用用户登录态抓页面 HTML，
+    /// 转结构化文本后走规则解析，bullet 结构完整保留。
+    /// </summary>
+    [HttpPost("fetch-linkedin")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> FetchLinkedIn(
+        [FromBody] FetchLinkedInBody body,
+        [FromServices] Application.LinkedInFetcher fetcher,
+        CancellationToken ct)
+    {
+        var url = body.Url?.Trim() ?? string.Empty;
+        if (!url.Contains("linkedin.com/jobs/view/"))
+            return Microsoft.AspNetCore.Http.Results.BadRequest(new { error = "not_linkedin_job_url" });
+
+        var (ok, html, err) = await fetcher.FetchJobHtmlAsync(url, ct);
+        if (!ok)
+            return Microsoft.AspNetCore.Http.Results.Ok(new { ok = false, error = err });
+
+        // HTML → 规则解析（保留 bullet）
+        var kind = Application.JdPasteParser.DetectKind(html!);
+        var parsed = Application.JdPasteParser.Parse(html!, kind);
+        return Microsoft.AspNetCore.Http.Results.Ok(new
+        {
+            ok = true,
+            parsed.SourceKind,
+            parsed.Status,
+            parsed.Company,
+            parsed.Role,
+            parsed.Location,
+            parsed.Salary,
+            parsed.WorkMode,
+            parsed.JobType,
+            parsed.JdSummary,
+            parsed.Requirements,
+            parsed.Benefits,
+            parsed.CompanyDescription,
+            parsed.Link,
+            JdText = html
+        });
+    }
+
+    /// <summary>
     /// 一键建档:把(用户改过的)解析结果落成公司与投递记录。
     /// 公司按名解析,不存在则新建 —— 粘贴入口不该要求用户先去建公司。
     /// </summary>
@@ -339,6 +381,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
 
     /// <summary>粘贴原文。UseAi=false 时只走规则解析(未配 AI 凭据也能用)。</summary>
     public sealed record ParseJdBody(string? Raw, bool UseAi = true);
+    public sealed record FetchLinkedInBody(string? Url);
 
     /// <summary>解析结果(经用户改过)提交建档。</summary>
     public sealed record SmartAddApplicationBody(

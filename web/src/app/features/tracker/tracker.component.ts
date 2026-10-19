@@ -2974,6 +2974,8 @@ export class ApplicationDetailDialogComponent {
     if (d.benefits?.trim()) {
       t = cutFrom(t, ['Additional Information', 'Benefits', 'Compensation', '福利', '待遇']);
     }
+    // 去掉原文里的 "Job Description" 小节标题(我们自己会渲染一个)
+    t = t.replace(/\bJob Description\b/i, '').trim();
     return t.trim();
   }
 

@@ -1483,11 +1483,11 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       <div class="fields">
         <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
         <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dJobType') }}</span><span class="fvalue">{{ detail.jobType || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue">{{ detail.appliedDate || '—' }}</span></div>
         <div class="field"><span class="flabel">URL</span>
           <span class="fvalue">
-            @if (detail.jobUrl) {
-              <a [href]="detail.jobUrl" target="_blank" class="teal-link">{{ t('tracker.dViewPosting') }} <mat-icon>open_in_new</mat-icon></a>
+            @if (detail.link) {
+              <a [href]="detail.link" target="_blank" class="teal-link">{{ t('tracker.dViewPosting') }} <mat-icon>open_in_new</mat-icon></a>
             } @else { — }
           </span>
         </div>

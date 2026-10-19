@@ -2110,17 +2110,15 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       color: #3D4451; border-radius: 8px;
     }
     .hdr-close:hover { background: #F7F8FA; }
-    .detail-body { padding: 0; flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+    .detail-body { padding: 0 !important; flex: 1 1 auto !important; overflow-y: auto !important; min-height: 0 !important; }
     /* ★ Simplify 真站:双栏布局 */
-    .two-col { display: flex; min-height: 100%; }
+    .two-col { display: flex; min-height: 100%; align-items: stretch; }
     .main-col { flex: 1; min-width: 0; padding: 24px 32px; }
     .side-col {
       flex: 0 0 360px; width: 360px;
       padding: 24px 32px 24px 0;
       border-left: 1px solid #ECEEF1;
       margin-left: 32px; padding-left: 32px;
-      align-self: flex-start;
-      position: sticky; top: 0;
     }
     .status-card {
       background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;

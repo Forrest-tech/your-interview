@@ -2980,6 +2980,11 @@ export class ApplicationDetailDialogComponent {
     if (!d) return '';
     let t = d.jdSummary || '';
     if (!t.trim()) return t;
+    // 2026-10-19:如果摘要与 requirements 实质相同(后端提取偏差),直接返回空,避免重复显示
+    const req = (d.requirements || '').trim();
+    if (req && (t.trim() === req || t.trim().startsWith(req.slice(0, 100)))) {
+      return '';
+    }
     // 有单独的 requirements/benefits 节时，从摘要里切掉对应原文段
     // 注意:文本可能没有换行(大段 blob)，不用 ^ 行首锚定
     const cutFrom = (src: string, markers: string[]): string => {

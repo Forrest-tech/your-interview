@@ -848,6 +848,13 @@ public static class JdPasteParser
         var flat = Regex.Replace(source, @"\s+", " ").Trim();
         if (flat.Length == 0) return null;
         // 2026-10-19:用户要求完整内容,不截断。
+        // 2026-10-19:摘要在 Qualifications / Additional Information / Benefits 等小节标题处停止,
+        // 避免与独立字段重复。
+        var stopM = Regex.Match(flat,
+            @"\b(qualifications|additional information|benefits|what we offer|what you'll bring|preferred qualifications|minimum qualifications)\b",
+            RegexOptions.IgnoreCase);
+        if (stopM.Success && stopM.Index > 100)
+            flat = flat[..stopM.Index].Trim();
         return flat;
     }
 

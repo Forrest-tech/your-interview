@@ -892,6 +892,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.saCompanyDesc': { zh: '公司介绍', en: 'Company description', fr: 'Présentation de l’entreprise' },
   'tracker.saRequirements': { zh: '任职要求', en: 'Requirements', fr: 'Exigences du poste' },
   'tracker.saBenefits': { zh: '福利待遇', en: 'Benefits', fr: 'Avantages' },
+  'tracker.workAuthorization': { zh: '工作身份要求', en: 'Work authorization', fr: 'Autorisation de travail' },
+  'tracker.saWorkAuthPh': { zh: '如:须为加拿大公民 / 接受开放工签', en: 'e.g. Must be a Canadian citizen / Open work permit accepted', fr: 'p. ex. Citoyenneté canadienne requise' },
   'tracker.saKeywords': { zh: '匹配关键词(逗号分隔)', en: 'Match keywords (comma-separated)', fr: 'Mots-clés (séparés par des virgules)' },
   'tracker.saLinkApp': { zh: '关联到哪条投递', en: 'Link to application', fr: 'Lier à la candidature' },
   'tracker.saSelectApp': { zh: '选择投递记录…', en: 'Select an application…', fr: 'Choisir une candidature…' },

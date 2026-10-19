@@ -447,6 +447,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("WorkAuthorization")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("WorkMode")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");

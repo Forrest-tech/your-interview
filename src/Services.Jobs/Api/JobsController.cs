@@ -288,7 +288,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         var r = await sender.Send(new SmartAddApplicationCommand(body.Company, body.Role, body.Location,
             body.Salary, body.WorkMode, body.JdSummary, body.MatchKeywords, body.Priority,
             body.Link, body.JdText, body.Source, body.Status, body.Deadline,
-            body.CompanyDescription), ct);
+            body.CompanyDescription, body.WorkAuthorization), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(r.Value)
             : r.ToProblemDetails();
@@ -343,7 +343,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
         string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
         string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
-        string? CompanyDescription = null);
+        string? CompanyDescription = null, string? WorkAuthorization = null);
 
     public sealed record LinkInviteBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
         string? Format, string? Notes);

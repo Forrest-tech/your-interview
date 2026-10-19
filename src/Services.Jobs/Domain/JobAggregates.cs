@@ -151,6 +151,12 @@ public sealed class JobApplication : AuditableAggregateRoot
     /// </summary>
     public string? CompanyDescription { get; private set; }
 
+    /// <summary>
+    /// 工作身份要求(归一短文本,如 "Citizen or PR required" / "Open work permit accepted")。
+    /// Smart paste 从 JD 正文提取 —— 持工签求职者的关键过滤项。
+    /// </summary>
+    public string? WorkAuthorization { get; private set; }
+
     public ApplicationStatus Status { get; private set; }
     public Priority Priority { get; private set; }
     public DateOnly? AppliedDate { get; private set; }
@@ -235,7 +241,7 @@ public sealed class JobApplication : AuditableAggregateRoot
 
     public void UpdateDetails(string role, string? location, string? link, string? salary,
         string? workMode, string? source, string? jdSummary, string? notes,
-        string? companyDescription = null)
+        string? companyDescription = null, string? workAuthorization = null)
     {
         Role = role;
         Location = location;
@@ -247,6 +253,8 @@ public sealed class JobApplication : AuditableAggregateRoot
         Notes = notes;
         if (companyDescription is not null)
             CompanyDescription = string.IsNullOrWhiteSpace(companyDescription) ? null : companyDescription;
+        if (workAuthorization is not null)
+            WorkAuthorization = string.IsNullOrWhiteSpace(workAuthorization) ? null : workAuthorization;
         Touch();
     }
 
@@ -277,6 +285,15 @@ public sealed class JobApplication : AuditableAggregateRoot
     public void SetCompanyDescription(string? companyDescription)
     {
         CompanyDescription = string.IsNullOrWhiteSpace(companyDescription) ? null : companyDescription;
+        Touch();
+    }
+
+    /// <summary>
+    /// 设置工作身份要求。独立方法,理由同 SetCompanyDescription。空串归一为 null。
+    /// </summary>
+    public void SetWorkAuthorization(string? workAuthorization)
+    {
+        WorkAuthorization = string.IsNullOrWhiteSpace(workAuthorization) ? null : workAuthorization;
         Touch();
     }
 

@@ -39,6 +39,7 @@ public sealed record ParsedJdDto(
     string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? CompanyDescription, string? Requirements, string? Benefits,
+    string? WorkAuthorization,
     DateOnly? Deadline, string? DetectedSource,
     Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview);
 
@@ -251,6 +252,11 @@ public static class JdPasteParser
         var benefits = ExtractSection(lines, BenefitsHeaders);
         if (benefits is not null) conf["benefits"] = 70;
 
+        // 工作身份要求:PR/公民/工签/是否担保 —— 求职者(尤其持工签者)的关键过滤项。
+        var workAuthorization = Labeled(lines, "工作身份", "身份要求", "Work Authorization", "Work Authorisation", "Eligibility", "Citizenship")
+                             ?? ExtractWorkAuthorization(text);
+        if (workAuthorization is not null) conf["workAuthorization"] = 75;
+
         var filled = CountFilled(company, role, location, salary, workMode, jdSummary);
 
         return new ParsedJdDto(
@@ -259,6 +265,7 @@ public static class JdPasteParser
             string.Empty,
             company, role, location, salary, workMode, jdSummary, keywords, priority,
             link, jdText, companyDescription, requirements, benefits,
+            workAuthorization,
             deadline, detected ?? (isUrl ? "未知站点" : null),
             conf, false, false);
     }
@@ -570,6 +577,50 @@ public static class JdPasteParser
         if (Regex.IsMatch(text, @"\b(hybrid)\b", RegexOptions.IgnoreCase)) return "Hybrid";
         if (Regex.IsMatch(text, @"\b(remote|fully remote|wfh|work from home|telecommute|远程|全远程)\b", RegexOptions.IgnoreCase)) return "Remote";
         if (Regex.IsMatch(text, @"\b(on-?site|in-?office|现场办公|坐班)\b", RegexOptions.IgnoreCase)) return "Onsite";
+        return null;
+    }
+
+    /// <summary>
+    /// 工作身份要求:从 JD 正文里抓取国籍/PR/工签/担保相关的要求,归一为短文本。
+    /// 检查顺序按\"限制强度\"从强到弱 —— 公民/PR 要求优先于笼统的\"合法工作身份\"。
+    /// 注意避开误伤:\"PR team\"(公关团队)里的 PR 不是 permanent resident。
+    /// </summary>
+    private static string? ExtractWorkAuthorization(string text)
+    {
+        // 1) 公民或 PR(组合先判,避免被单项提前命中)
+        if (Regex.IsMatch(text, @"\bcitizens?(ship)?\b.{0,40}\bpermanent\s+residen|\bpermanent\s+residen.{0,40}\bcitizens?(ship)?\b|\bPR\s+or\s+citizen\b|\bcitizen\s+or\s+PR\b", Opts))
+            return "Citizen or PR required";
+        // 2) 加拿大公民
+        if (Regex.IsMatch(text, @"\bcanadian\s+citizens?(ship)?\b", Opts))
+            return "Canadian citizen required";
+        // 3) PR(避开 \"PR team\" 这类公关语境 —— 要求 PR 附近有身份语境词)
+        if (Regex.IsMatch(text, @"\bpermanent\s+residen", Opts)
+            || Regex.IsMatch(text, @"\b(canadian\s+)?PR\s+(holder|status|card|required)\b", Opts))
+            return "PR required";
+        // 4) 开放工签可接受
+        if (Regex.IsMatch(text, @"\bopen\s+work\s+permit\b", Opts))
+            return "Open work permit accepted";
+        // 5) 有效工签
+        if (Regex.IsMatch(text, @"\bvalid\s+work\s+permit\b", Opts))
+            return "Valid work permit required";
+        // 6) 必须在加拿大全法工作身份
+        if (Regex.IsMatch(text, @"legally\s+(authorized|entitled)\s+to\s+work\s+in\s+canada|authorized\s+to\s+work\s+in\s+canada|eligible\s+to\s+work\s+in\s+canada", Opts))
+            return "Must be legally authorized to work in Canada";
+        // 7) 泛泛的工作许可要求
+        if (Regex.IsMatch(text, @"\bwork\s+authorization\b.{0,30}\brequir\w*\b|\brequir\w*\b.{0,30}\bwork\s+authorization\b", Opts))
+            return "Work authorization required";
+        // 8) 不担保(明确拒绝)
+        if (Regex.IsMatch(text, @"\bno\s+sponsorship\b|will\s+not\s+sponsor|\bunable\s+to\s+sponsor\b|cannot\s+sponsor|not\s+eligible\s+for\s+sponsorship", Opts))
+            return "No sponsorship available";
+        // 9) 提供担保
+        if (Regex.IsMatch(text, @"\bsponsorship\s+(available|offered|provided)\b", Opts))
+            return "Sponsorship available";
+        // 10) 安全许可(政府/涉密岗位常见的身份门槛)
+        if (Regex.IsMatch(text, @"\bsecurity\s+clearance\b", Opts))
+            return "Security clearance required";
+        // 11) 明确写了无限制
+        if (Regex.IsMatch(text, @"\bno\s+(work\s+)?authorization\s+(requirements?|restrictions?)\b|open\s+to\s+all\s+(candidates|applicants)", Opts))
+            return "No restriction";
         return null;
     }
 

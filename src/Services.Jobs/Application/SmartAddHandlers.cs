@@ -52,7 +52,7 @@ public sealed class ParseJdCommandHandler(
         {
             return Result.Success(new ParsedJdDto(
                 kind, ParseOutcome.Failed, "已识别为图片,但当前尚未接入图片识别,请改为粘贴 JD 文本,或直接手动填写。",
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 new Dictionary<string, int>(), false, true));
         }
 
@@ -151,7 +151,7 @@ public sealed record SmartAddApplicationCommand(
     string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
-    string? CompanyDescription = null)
+    string? CompanyDescription = null, string? WorkAuthorization = null)
     : IRequest<Result<SmartAddResultDto>>;
 
 public sealed record SmartAddResultDto(
@@ -210,6 +210,10 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
         // 公司介绍:Smart paste 从 "About the company" 段提取,建档时一并存下。
         if (!string.IsNullOrWhiteSpace(request.CompanyDescription))
             app.SetCompanyDescription(request.CompanyDescription.Trim());
+
+        // 工作身份要求:Smart paste 从 JD 正文提取,建档时一并存下。
+        if (!string.IsNullOrWhiteSpace(request.WorkAuthorization))
+            app.SetWorkAuthorization(request.WorkAuthorization.Trim());
 
         if (!string.IsNullOrWhiteSpace(request.MatchKeywords))
             app.SetAnalysis(null, null, request.MatchKeywords.Trim());
@@ -351,6 +355,7 @@ internal static class JdAiEnricher
               "companyDescription": "公司介绍段落原文(About the company 段)",
               "requirements": "任职要求/资格段落原文",
               "benefits": "福利待遇段落原文",
+              "workAuthorization": "工作身份要求原文或归一写法(如 Citizen or PR required / Open work permit accepted / Must be legally authorized to work in Canada / No sponsorship available)",
               "matchKeywords": "与岗位强相关的技术关键词,中文逗号分隔,最多 12 个",
               "priority": "Low | Medium | High | Critical",
               "deadline": "YYYY-MM-DD 或 null"
@@ -389,6 +394,7 @@ internal static class JdAiEnricher
         var companyDescription = draft.CompanyDescription ?? S("companyDescription");
         var requirements = draft.Requirements ?? S("requirements");
         var benefits = draft.Benefits ?? S("benefits");
+        var workAuthorization = draft.WorkAuthorization ?? S("workAuthorization");
 
         // 关键词取并集 —— 规则命中的偏"技术名词",模型给的偏"岗位要求",两者互补
         var keywords = MergeKeywords(draft.MatchKeywords, S("matchKeywords"));
@@ -408,13 +414,15 @@ internal static class JdAiEnricher
         if (companyDescription is not null) conf["companyDescription"] = Math.Max(conf.GetValueOrDefault("companyDescription"), 85);
         if (requirements is not null) conf["requirements"] = Math.Max(conf.GetValueOrDefault("requirements"), 85);
         if (benefits is not null) conf["benefits"] = Math.Max(conf.GetValueOrDefault("benefits"), 85);
+        if (workAuthorization is not null) conf["workAuthorization"] = Math.Max(conf.GetValueOrDefault("workAuthorization"), 85);
 
         return draft with
         {
             Company = company, Role = role, Location = location, Salary = salary,
             WorkMode = workMode, JdSummary = jdSummary, MatchKeywords = keywords,
             Priority = priority, Deadline = deadline, Confidence = conf,
-            CompanyDescription = companyDescription, Requirements = requirements, Benefits = benefits
+            CompanyDescription = companyDescription, Requirements = requirements, Benefits = benefits,
+            WorkAuthorization = workAuthorization
         };
     }
 

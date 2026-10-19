@@ -1611,6 +1611,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       <div class="fields">
         <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
         <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.workAuthorization') }}</span><span class="fvalue">{{ detail.workAuthorization || '—' }}</span></div>
         <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue">{{ detail.appliedDate || '—' }}</span></div>
         <div class="field"><span class="flabel">URL</span>
           <span class="fvalue">

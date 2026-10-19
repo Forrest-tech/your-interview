@@ -127,6 +127,11 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
               </mat-select>
             </mat-form-field>
             <mat-form-field appearance="outline">
+              <mat-label>{{ t('tracker.workAuthorization') }}</mat-label>
+              <input matInput name="jdWorkAuth" [(ngModel)]="jd.workAuthorization"
+                     [placeholder]="t('tracker.saWorkAuthPh')">
+            </mat-form-field>
+            <mat-form-field appearance="outline">
               <mat-label>{{ t('tracker.saPriority') }}</mat-label>
               <mat-select name="jdPriority" [(ngModel)]="jd.priority">
                 @for (p of priorities; track p) { <mat-option [value]="p">{{ p }}</mat-option> }
@@ -313,11 +318,12 @@ export class SmartAddDialogComponent {
     workMode: string | null; priority: string; link: string; jdSummary: string;
     matchKeywords: string; deadline: string | null; status: string; jdText: string | null;
     companyDescription: string; requirements: string; benefits: string;
+    workAuthorization: string;
   } = {
     company: '', role: '', location: '', salary: '', workMode: null,
     priority: 'Medium', link: '', jdSummary: '', matchKeywords: '',
     deadline: null, status: 'Saved', jdText: null,
-    companyDescription: '', requirements: '', benefits: ''
+    companyDescription: '', requirements: '', benefits: '', workAuthorization: ''
   };
 
   /** 邀请解析结果的可编辑副本。日期与时间拆开存 —— 表单控件就是两个。 */
@@ -356,7 +362,8 @@ export class SmartAddDialogComponent {
           status: 'Saved', jdText: r.jdText,
           companyDescription: r.companyDescription ?? '',
           requirements: r.requirements ?? '',
-          benefits: r.benefits ?? ''
+          benefits: r.benefits ?? '',
+          workAuthorization: r.workAuthorization ?? ''
         };
       }));
     } else {
@@ -396,7 +403,8 @@ export class SmartAddDialogComponent {
       source: this.parsed()?.detectedSource ?? null,
       status: this.jd.status,
       deadline: this.jd.deadline,
-      companyDescription: this.jd.companyDescription || null
+      companyDescription: this.jd.companyDescription || null,
+      workAuthorization: this.jd.workAuthorization || null
     }).subscribe({
       next: (r) => {
         this.busy.set(false);

@@ -92,6 +92,8 @@ export interface Application {
   jdSourceUrl?: string;
   /** 公司介绍(2026-10-19):完整存储,不截断。Smart paste 从 "About the company" 提取。 */
   companyDescription?: string;
+  /** 工作身份要求(2026-10-19):归一短文本。Smart paste 从 JD 正文提取。 */
+  workAuthorization?: string;
   resumeScore?: number;
   /** 预估通过率(后端存为字符串,如 "75%";展示时原样显示)。 */
   passRateEstimate?: string | null;

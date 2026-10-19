@@ -325,17 +325,17 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
   tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
 
-  /** 看板/列表视图切换(Simplify 模式)。默认 list,刷新后从 localStorage 恢复。 */
-  readonly viewMode = signal<'board' | 'list'>(
-    ((): 'board' | 'list' => {
+  /** 看板/列表/图表视图切换(Simplify 模式)。默认 list,刷新后从 localStorage 恢复。 */
+  readonly viewMode = signal<'board' | 'list' | 'chart'>(
+    ((): 'board' | 'list' | 'chart' => {
       try {
         const v = localStorage.getItem('yi-tracker-view');
-        return v === 'board' ? 'board' : 'list';
+        return v === 'board' ? 'board' : v === 'chart' ? 'chart' : 'list';
       } catch { return 'list'; }
     })()
   );
 
-  setViewMode(m: 'board' | 'list'): void {
+  setViewMode(m: 'board' | 'list' | 'chart'): void {
     this.viewMode.set(m);
     try { localStorage.setItem('yi-tracker-view', m); } catch { /* 忽略 */ }
   }
@@ -1124,6 +1124,35 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   });
   /** 漏斗是否有数据(模板里不能写箭头函数,用 computed 包一层)。 */
   readonly hasFunnelData = computed(() => this.funnel().some(f => f.count > 0));
+
+  /** ★ G-06: Sankey 流程图数据 —— 各阶段节点 + 流向边的宽度。 */
+  readonly flowChart = computed(() => {
+    const by = this.stats()?.byStatus ?? {};
+    // 主流程:Saved → Applied → Screen → Interview → Offer → Accepted
+    const stages: ApplicationStatus[] = ['Saved', 'Applied', 'Screen', 'Interview', 'Offer', 'Accepted'];
+    const counts = stages.map(s => by[s] ?? 0);
+    const max = Math.max(1, ...counts);
+    const rejected = by['Rejected'] ?? 0;
+    const ghosted = by['Ghosted'] ?? 0;
+    return {
+      nodes: stages.map((s, i) => ({
+        status: s,
+        label: this.i18n.t('status.' + s),
+        count: counts[i],
+        // 节点高度按数量比例,最小 24px
+        height: Math.max(24, Math.round((counts[i] / max) * 120)),
+        x: i * 160,
+      })),
+      // 边:从上一阶段流向下一阶段,宽度按目标阶段数量
+      edges: stages.slice(1).map((s, i) => ({
+        from: i, to: i + 1,
+        count: counts[i + 1],
+        width: Math.max(2, Math.round((counts[i + 1] / max) * 40)),
+      })),
+      rejected, ghosted,
+      total: counts.reduce((a, b) => a + b, 0) + rejected + ghosted,
+    };
+  });
 
   ngOnInit(): void {
     this.reload();

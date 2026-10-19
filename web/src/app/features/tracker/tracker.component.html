@@ -158,6 +158,12 @@
                   [matTooltip]="t('tracker.listView')">
             <mat-icon>view_list</mat-icon>
           </button>
+          <button mat-button type="button" class="view-btn"
+                  [class.active]="viewMode() === 'chart'"
+                  (click)="setViewMode('chart')"
+                  [matTooltip]="t('tracker.chartView')">
+            <mat-icon>account_tree</mat-icon>
+          </button>
         </div>
 
         <!-- 列可见性:只在看板视图显示 -->
@@ -423,6 +429,65 @@
       <div class="list-empty">{{ t('tracker.noResults') }}</div>
     }
   </div>
+  }
+
+  <!-- ★ G-06: 流程图视图 (Sankey 风格) -->
+  @if (viewMode() === 'chart') {
+  <mat-card class="chart-view">
+    <div class="chart-head">
+      <h3>{{ t('tracker.flowChart') }}</h3>
+      <span class="chart-total">{{ tn('tracker.chartTotal', flowChart().total) }}</span>
+    </div>
+    @if (flowChart().total > 0) {
+      <div class="sankey-wrap">
+        <svg class="sankey" viewBox="0 0 980 220" preserveAspectRatio="xMidYMid meet">
+          <!-- 连接边 -->
+          @for (e of flowChart().edges; track e.to) {
+            <path [attr.d]="'M ' + (flowChart().nodes[e.from].x + 100) + ' 110 C ' +
+                             (flowChart().nodes[e.from].x + 130) + ' 110, ' +
+                             (flowChart().nodes[e.to].x - 30) + ' 110, ' +
+                             flowChart().nodes[e.to].x + ' 110'"
+                  fill="none" stroke="#90caf9"
+                  [attr.stroke-width]="e.width" opacity="0.6"/>
+          }
+          <!-- 节点 -->
+          @for (n of flowChart().nodes; track n.status) {
+            <g [attr.transform]="'translate(' + n.x + ', 0)'">
+              <rect x="0" y="60" width="100" [attr.height]="n.height"
+                    rx="8" class="sankey-node" [class.empty]="n.count === 0"/>
+              <text x="50" y="45" text-anchor="middle" class="sankey-label">{{ n.label }}</text>
+              <text x="50" [attr.y]="60 + n.height / 2 + 5" text-anchor="middle"
+                    class="sankey-count">{{ n.count }}</text>
+            </g>
+          }
+        </svg>
+        <!-- 转化率 -->
+        <div class="chart-rates">
+          @for (e of flowChart().edges; track e.to) {
+            @if (flowChart().nodes[e.from].count > 0) {
+              <span class="rate-chip">
+                {{ flowChart().nodes[e.from].label }} → {{ flowChart().nodes[e.to].label }}:
+                {{ (e.count / flowChart().nodes[e.from].count * 100).toFixed(0) }}%
+              </span>
+            }
+          }
+        </div>
+        <!-- 终止状态 -->
+        @if (flowChart().rejected > 0 || flowChart().ghosted > 0) {
+          <div class="chart-terminal">
+            @if (flowChart().rejected > 0) {
+              <span class="term-chip rejected">{{ t('status.Rejected') }}: {{ flowChart().rejected }}</span>
+            }
+            @if (flowChart().ghosted > 0) {
+              <span class="term-chip ghosted">{{ t('status.Ghosted') }}: {{ flowChart().ghosted }}</span>
+            }
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="list-empty">{{ t('tracker.noResults') }}</div>
+    }
+  </mat-card>
   }
 
   <!-- 分页:数据量大时才有必要出现 -->

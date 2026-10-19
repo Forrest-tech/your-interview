@@ -375,10 +375,17 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
     padding: 0 !important;
     height: 100vh !important;
     max-height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
   }
 
   .mat-mdc-dialog-surface {
     border-radius: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    overflow: hidden !important;
   }
 
   /* 抽屉滑入动画 */

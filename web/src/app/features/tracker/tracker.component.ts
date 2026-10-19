@@ -2164,9 +2164,9 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       color: #3D4451; border-radius: 8px;
     }
     .hdr-close:hover { background: #F7F8FA; }
-    .detail-body { padding: 0; }
+    .detail-body { padding: 0; height: 100%; overflow-y: auto; }
     /* ★ Simplify 真站:双栏布局 */
-    .two-col { display: flex; }
+    .two-col { display: flex; min-height: 100%; }
     .main-col { flex: 1; min-width: 0; padding: 24px 32px; }
     .side-col {
       flex: 0 0 360px; width: 360px;

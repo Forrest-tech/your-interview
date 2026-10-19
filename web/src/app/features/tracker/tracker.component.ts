@@ -2939,10 +2939,11 @@ export class ApplicationDetailDialogComponent {
     let t = d.jdSummary || '';
     if (!t.trim()) return t;
     // 有单独的 requirements/benefits 节时，从摘要里切掉对应原文段
+    // 注意:文本可能没有换行(大段 blob)，不用 ^ 行首锚定
     const cutFrom = (src: string, markers: string[]): string => {
       let idx = -1;
       for (const m of markers) {
-        const i = src.search(new RegExp('^' + m + '\\b', 'im'));
+        const i = src.search(new RegExp('\\b' + m + '\\b', 'i'));
         if (i >= 0 && (idx < 0 || i < idx)) idx = i;
       }
       return idx >= 0 ? src.slice(0, idx).trim() : src;

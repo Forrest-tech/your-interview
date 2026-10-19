@@ -1093,6 +1093,12 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** ★ #18:幽灵跟进提醒 (Applied 状态 21 天无更新)。 */
   readonly ghostingApps = signal<Application[]>([]);
+  /** 2026-10-19:用户点"不再提示"后永久隐藏 ghosting 横幅（localStorage）。 */
+  readonly ghostingDismissed = signal(localStorage.getItem('yi.ghostingDismissed') === '1');
+  dismissGhostingForever(): void {
+    localStorage.setItem('yi.ghostingDismissed', '1');
+    this.ghostingDismissed.set(true);
+  }
   loadGhosting(): void {
     this.api.get<Paged<Application>>('/api/jobs/applications', {
       page: 1, pageSize: 200, status: 'Applied'

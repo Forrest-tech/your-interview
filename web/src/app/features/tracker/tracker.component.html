@@ -51,7 +51,7 @@
   </header>
 
   <!-- ★ #18:幽灵跟进提醒 -->
-  @if (ghostingApps().length > 0) {
+  @if (ghostingApps().length > 0 && !ghostingDismissed()) {
     <mat-card class="ghosting-banner">
       <mat-icon>warning</mat-icon>
       <div>
@@ -66,6 +66,7 @@
         </span>
       </div>
       <button mat-button (click)="ghostingApps.set([])">忽略</button>
+      <button mat-button (click)="dismissGhostingForever()">不再提示</button>
     </mat-card>
   }
 

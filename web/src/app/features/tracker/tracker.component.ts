@@ -2982,8 +2982,13 @@ export class ApplicationDetailDialogComponent {
     if (!t.trim()) return t;
     // 2026-10-19:如果摘要与 requirements 实质相同(后端提取偏差),直接返回空,避免重复显示
     const req = (d.requirements || '').trim();
-    if (req && (t.trim() === req || t.trim().startsWith(req.slice(0, 100)))) {
-      return '';
+    if (req) {
+      const reqNorm = req.replace(/[•·▪–—\-*\s]+/g, ' ').trim().toLowerCase();
+      const tNorm = t.replace(/[•·▪–—\-*\s]+/g, ' ').trim().toLowerCase();
+      // 摘要包含 requirements 的核心内容(前 80 字符) → 视为重复,不显示
+      if (tNorm === reqNorm || tNorm.includes(reqNorm.slice(0, 80)) || reqNorm.includes(tNorm.slice(0, 80))) {
+        return '';
+      }
     }
     // 有单独的 requirements/benefits 节时，从摘要里切掉对应原文段
     // 注意:文本可能没有换行(大段 blob)，不用 ^ 行首锚定

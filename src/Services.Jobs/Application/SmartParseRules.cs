@@ -869,7 +869,9 @@ public static class JdPasteParser
     private static bool IsSummarySkipLine(string line)
     {
         if (IsFooterLine(line)) return true;
-        if (line.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < 8) return true;
+        var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // 2026-10-19:4 词以下才是碎片;4-7 词的短句可能是正文(如 "We are hiring a Senior .NET Developer.")
+        if (words.Length < 4) return true;
         return Regex.IsMatch(line,
             @"posted\s|reference number|job details?|apply now|show more",
             RegexOptions.IgnoreCase);

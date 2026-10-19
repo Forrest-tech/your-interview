@@ -1460,7 +1460,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Simplify 模式:右侧抽屉(不是居中弹窗),看板在左侧保持可见。
     // 宽度对齐 Simplify 真站: 66vw (max 1280px)
     // 高度由 CSS .detail-drawer-panel 控制为 100vh
-    this.dialog.open(ApplicationDetailDialogComponent, {
+    const ref = this.dialog.open(ApplicationDetailDialogComponent, {
       data: app,
       width: '66vw',
       maxWidth: '1280px',
@@ -1468,6 +1468,10 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       position: { right: '0', top: '0' },
       panelClass: 'detail-drawer-panel',
       autoFocus: false
+    });
+    // 删除后关闭抽屉时刷新列表
+    ref.afterClosed().subscribe((deleted) => {
+      if (deleted) this.reload();
     });
   }
 

@@ -166,7 +166,7 @@ public static class JdPasteParser
     public static ParsedJdDto Parse(string raw, string kind)
     {
         var conf = new Dictionary<string, int>();
-        var text = raw.Trim();
+        var text = StripLinkedInNoise(raw.Trim());
         var isUrl = kind == PasteKind.Url;
 
         string? company = null;
@@ -491,6 +491,32 @@ public static class JdPasteParser
     private static readonly Regex CompanyNavTokens = new(
         @"\b(locations?|contact(\s+us)?|sign\s*in|log\s*in|my\s+\w+|en|fr)\b",
         Opts);
+
+    private static string StripLinkedInNoise(string text)
+    {
+        // LinkedIn 粘贴文本里的 UI 噪音:Premium 广告、Set alert、follower 数等。
+        var noisePatterns = new[]
+        {
+            @"Set alert for similar jobs.*?(?=\n)",
+            @"Try Premium for CA\$0.*?(?=\n)",
+            @".*?and millions of other members use Premium.*?(?=\n)",
+            @"1-month free trial with 24/7 support.*?(?=\n)",
+            @"We.ll remind you a week before your trial ends.*?(?=\n)",
+            @"Access company insights like.*?(?=\n)",
+            @"About the company\s*\n.*?\d[\d,]* followers.*?(?=\n)",
+            @"\d[\d,]* on LinkedIn.*?(?=\n)",
+            @"No response insights available yet.*?(?=\n)",
+            @"Over \d+ applicants.*?(?=\n)",
+            @"\d+ week ago.*?(?=\n)",
+        };
+        foreach (var pattern in noisePatterns)
+        {
+            text = Regex.Replace(text, pattern, "", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        }
+        // 清理多余空行
+        text = Regex.Replace(text, @"\n{3,}", "\n\n");
+        return text.Trim();
+    }
 
     private static string? CleanCompanyName(string? company)
     {

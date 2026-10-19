@@ -56,7 +56,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
   template: `
     <h2 mat-dialog-title>
       <mat-icon>auto_awesome</mat-icon>
-      {{ mode() === 'jd' ? t('tracker.saJd') : t('tracker.saInvite') }}
+      {{ t('tracker.smartPasteJob') }}
     </h2>
 
     <mat-dialog-content class="sad-body">

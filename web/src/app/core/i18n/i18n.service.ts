@@ -738,6 +738,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   // ---------- 投递跟踪 · 主页面(2026-10-07 i18n 补齐) ----------
   'tracker.subtitle': { zh: '按状态分列看清整个漏斗,卡住在哪一步一目了然', en: 'See the whole funnel by status — spot where you are stuck at a glance', fr: 'Visualisez l’entonnoir par statut — repérez d’un coup d’œil où vous bloquez' },
   'tracker.smartAdd': { zh: '智能粘贴', en: 'Smart paste', fr: 'Collage intelligent' },
+  'tracker.smartPasteJob': { zh: '智能粘贴建档', en: 'Smart paste job', fr: 'Collage intelligent d’offre' },
   'tracker.total': { zh: '总投递', en: 'Total', fr: 'Total' },
   'tracker.searchLabel': { zh: '搜索公司 / 职位 / 备注', en: 'Search company / role / notes', fr: 'Rechercher entreprise / poste / notes' },
   'tracker.searchPlaceholder': { zh: '例如 Shopify', en: 'e.g. Shopify', fr: 'p. ex. Shopify' },

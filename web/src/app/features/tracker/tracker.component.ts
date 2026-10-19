@@ -2543,7 +2543,7 @@ export class ApplicationDetailDialogComponent {
   quickChangeStatus(ev: Event): void {
     const select = ev.target as HTMLSelectElement;
     const newStatus = select.value;
-    this.api.put<void>(`/api/jobs/applications/${this.app.id}/status`,
+    this.api.post<void>(`/api/jobs/applications/${this.app.id}/status`,
       { status: newStatus }).subscribe({
       next: () => {
         this.snack.open(this.t('tracker.statusUpdated'), this.t('common.close'), { duration: 2000 });

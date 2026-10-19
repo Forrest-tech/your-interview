@@ -1485,15 +1485,15 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 
       <mat-divider></mat-divider>
       <section>
-        <h4 class="fold-head">
+        <div class="sec-head">
           <span>{{ t('tracker.dJdSummary') }}</span>
           <button mat-icon-button (click)="jdSummaryEditing() ? cancelEditJdSummary() : startEditJdSummary()"
                   [matTooltip]="t('common.edit')" class="edit-btn">
             <mat-icon>{{ jdSummaryEditing() ? 'close' : 'edit' }}</mat-icon>
           </button>
-        </h4>
+        </div>
         @if (jdSummaryEditing()) {
-          <textarea matInput class="cl-editor" rows="8" [(ngModel)]="jdSummaryDraft"
+          <textarea class="plain-area" rows="8" [(ngModel)]="jdSummaryDraft"
                     [placeholder]="t('tracker.dJdSummary')"></textarea>
           <div class="cl-actions save-row">
             <button mat-flat-button color="primary" (click)="saveJdSummary()"
@@ -1512,7 +1512,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if (match(); as m) {
         <mat-divider></mat-divider>
         <section>
-          <h4>{{ t('tracker.dMatchAnalysis') }}</h4>
+          <div class="sec-head"><span>{{ t('tracker.dMatchAnalysis') }}</span></div>
 
           <div class="match-head">
             <div class="score" [class]="matchTier(m.score)">
@@ -1555,10 +1555,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </section>
       }
 
-      <!-- 求职信(Cover Letter)-->
+      <!-- 求职信(Cover Letter) ★ Simplify 视觉 -->
       <mat-divider></mat-divider>
       <section class="cl-section">
-        <h4 class="fold-head">
+        <div class="sec-head">
           <mat-icon>description</mat-icon>
           <span>{{ t('tracker.dCoverLetter') }}</span>
           @if (cl(); as c) {
@@ -1567,32 +1567,29 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           <span class="fold-len">
             @if (cl(); as c) { {{ tn('tracker.dClChars', c.content.length) }} }
           </span>
-        </h4>
+        </div>
 
-        <!-- 输入体检提示(缺简历/缺 JD/缺公司情报)-->
+        <!-- 缺 JD 黄色提示条 -->
         @if (clReadiness(); as rd) {
           @if (rd.missingHint) {
-            <p class="cl-hint">
-              <mat-icon>info</mat-icon>
+            <div class="warn-banner">
+              <mat-icon>warning</mat-icon>
               <span>{{ rd.missingHint }}</span>
-            </p>
+            </div>
           }
           @if (cl()?.isStale) {
-            <p class="cl-hint stale">
+            <div class="warn-banner">
               <mat-icon>history</mat-icon>
               <span>{{ tf('tracker.dClStale', { a: cl()?.resumeVersion, b: rd.resumeVersion }) }}</span>
-            </p>
+            </div>
           }
         }
 
-        <!-- 生成参数 -->
+        <!-- 生成参数:朴素 textarea -->
         @if (!clGenerating()) {
-          <mat-form-field appearance="outline" class="cl-extra">
-            <mat-label>{{ t('tracker.dClExtra') }}</mat-label>
-            <textarea matInput rows="2" [(ngModel)]="clExtra"
-              [placeholder]="t('tracker.dClExtraPh')"></textarea>
-            <mat-hint>{{ t('tracker.dClHint') }}</mat-hint>
-          </mat-form-field>
+          <textarea class="plain-area" rows="3" [(ngModel)]="clExtra"
+            [placeholder]="t('tracker.dClExtraPh')"></textarea>
+          <p class="field-hint">{{ t('tracker.dClHint') }}</p>
         }
 
         <!-- 生成按钮 / 生成中 -->
@@ -1603,7 +1600,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           </div>
         } @else {
           <div class="cl-actions">
-            <button mat-flat-button color="primary" (click)="generateCoverLetter()"
+            <button mat-flat-button color="primary" class="gen-btn" (click)="generateCoverLetter()"
               [disabled]="!!clReadiness()?.missingHint">
               <mat-icon>auto_awesome</mat-icon>
               {{ (cl()?.content ? t('tracker.dClRegen') : t('tracker.dClGenerate')) }}
@@ -1628,7 +1625,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         <!-- 正文:编辑态 textarea / 预览态只读 -->
         @if (cl()?.content; as content) {
           @if (clEditing()) {
-            <textarea matInput class="cl-editor" rows="16" [(ngModel)]="clDraft"></textarea>
+            <textarea class="plain-area" rows="16" [(ngModel)]="clDraft"></textarea>
             <div class="cl-actions save-row">
               <button mat-flat-button color="primary" (click)="saveCoverLetter()">{{ t('common.save') }}</button>
               <button mat-button (click)="cancelEdit()">{{ t('common.cancel') }}</button>
@@ -1644,8 +1641,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
       <mat-divider></mat-divider>
       <section>
-        <h4 class="fold-head">
-          <span (click)="jdTextEditing() ? null : jdExpanded.set(!jdExpanded())" style="display:flex;align-items:center;cursor:pointer;">
+        <div class="sec-head fold-head">
+          <span (click)="jdTextEditing() ? null : jdExpanded.set(!jdExpanded())" style="display:flex;align-items:center;cursor:pointer;gap:6px;">
             <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
             <span>{{ t('tracker.dJdFull') }}</span>
             @if (detail.jdText) {
@@ -1657,7 +1654,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
                   [matTooltip]="t('common.edit')" class="edit-btn">
             <mat-icon>{{ jdTextEditing() ? 'close' : 'edit' }}</mat-icon>
           </button>
-        </h4>
+        </div>
 
         @if (app.jdSourceUrl) {
           <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
@@ -1666,7 +1663,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         }
 
         @if (jdTextEditing()) {
-          <textarea matInput class="cl-editor" rows="16" [(ngModel)]="jdTextDraft"
+          <textarea class="plain-area" rows="16" [(ngModel)]="jdTextDraft"
                     [placeholder]="t('tracker.dJdFull')"></textarea>
           <div class="cl-actions save-row">
             <button mat-flat-button color="primary" (click)="saveJdText()"
@@ -1692,7 +1689,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if (company()?.profile) {
         <mat-divider></mat-divider>
         <section>
-          <h4>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</h4>
+          <div class="sec-head"><span>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</span></div>
           <p class="pre">{{ company()?.profile }}</p>
           @if (company()?.website) {
             <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
@@ -1704,15 +1701,15 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 
       <mat-divider></mat-divider>
       <section>
-        <h4 class="fold-head">
+        <div class="sec-head">
           <span>{{ t('tracker.dNotes') }}</span>
           <button mat-icon-button (click)="notesEditing() ? cancelEditNotes() : startEditNotes()"
                   [matTooltip]="t('common.edit')" class="edit-btn">
             <mat-icon>{{ notesEditing() ? 'close' : 'edit' }}</mat-icon>
           </button>
-        </h4>
+        </div>
         @if (notesEditing()) {
-          <textarea matInput class="cl-editor" rows="8" [(ngModel)]="notesDraft"
+          <textarea class="plain-area" rows="8" [(ngModel)]="notesDraft"
                     [placeholder]="t('tracker.dNotes')"></textarea>
           <div class="cl-actions save-row">
             <button mat-flat-button color="primary" (click)="saveNotes()"
@@ -1729,7 +1726,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if ((detail.history?.length ?? 0) > 0) {
         <mat-divider></mat-divider>
         <section>
-          <h4>{{ t('tracker.dHistory') }}</h4>
+          <div class="sec-head"><span>{{ t('tracker.dHistory') }}</span></div>
           <ol class="history">
             @for (h of detail.history ?? []; track h.changedAt + h.status) {
               <li>
@@ -1745,7 +1742,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if ((detail.rounds?.length ?? 0) > 0) {
         <mat-divider></mat-divider>
         <section>
-          <h4>{{ t('tracker.dRounds') }}</h4>
+          <div class="sec-head"><span>{{ t('tracker.dRounds') }}</span></div>
           <ul class="rounds">
             @for (r of detail.rounds ?? []; track r.id) {
               <li>
@@ -1768,7 +1765,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       @if (app.link) {
         <mat-divider></mat-divider>
         <section>
-          <h4>{{ t('tracker.dJobLink') }}</h4>
+          <div class="sec-head"><span>{{ t('tracker.dJobLink') }}</span></div>
           <a [href]="app.link" target="_blank" rel="noopener noreferrer" class="link">
             {{ app.link }}
           </a>
@@ -1870,12 +1867,11 @@ function trimForm(f: ApplicationForm): ApplicationForm {
   `,
   styles: [`
     /* ★ Simplify 对齐:头部标题堆叠 */
-    h2 { display: flex; align-items: flex-start; gap: 12px; }
-    h2 .title-wrap { display: flex; flex-direction: column; gap: 2px; }
-    h2 .main-title { font-size: 18px; font-weight: 600; line-height: 1.3; }
+    h2[mat-dialog-title] { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+    h2 .title-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    h2 .main-title { font-size: 18px; font-weight: 600; line-height: 1.35; }
     h2 .sub-title { font-size: 13px; font-weight: 400; opacity: 0.55; }
-    .role { font-size: 14px; font-weight: 400; opacity: 0.6; }
-    .detail-body { min-width: 460px; max-width: 620px; }
+    .detail-body { min-width: 460px; max-width: 620px; padding-top: 4px; }
     @media (max-width: 620px) { .detail-body { min-width: auto; } }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
@@ -1897,11 +1893,16 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     .fvalue { font-size: 14px; line-height: 1.5; }
     .kw-gap { margin: 0 0 20px; }
     .kw-gap .flabel { display: block; margin-bottom: 8px; }
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px;
-      margin: 0 0 16px;
+    /* ---- Simplify 视觉:section 统一 ---- */
+    section { margin: 0; padding: 18px 0; }
+    section + section, mat-divider + section { border-top: 1px solid rgba(0,0,0,0.08); }
+    mat-divider { display: none; }
+    .sec-head {
+      display: flex; align-items: center; gap: 6px;
+      margin: 0 0 10px; font-size: 13px; font-weight: 500;
+      color: rgba(0,0,0,0.55); letter-spacing: 0.2px;
     }
-    .field { display: flex; flex-direction: column; gap: 2px; }
-    section { margin-top: 16px; }
+    .sec-head .edit-btn { margin-left: auto; }
     section h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.3px; opacity: 0.7; }
     .pre { margin: 0; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
     .history { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.9; }
@@ -1946,19 +1947,15 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     .kw.ok { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
     .soft-note { margin: 8px 0 0; font-size: 12px; opacity: 0.55; line-height: 1.6; }
     /* ---- JD 全文折叠 ---- */
-    .fold-head {
-      display: flex; align-items: center; gap: 6px;
-      cursor: pointer; user-select: none; margin-bottom: 8px;
-    }
-    .fold-head:hover { opacity: 0.75; }
-    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .fold-len { margin-left: auto; font-size: 11.5px; opacity: 0.45; font-weight: 400; }
-    /* 2026-10-08:条目编辑按钮 —— 标题行右侧的小编辑图标 */
-    .edit-btn { width: 28px; height: 28px; line-height: 28px; margin-left: auto; opacity: 0.55; }
+    .fold-head { cursor: default; }
+    .fold-head > span:first-child { display: flex; align-items: center; gap: 6px; }
+    .fold-head:hover { opacity: 1; }
+    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(0,0,0,0.45); }
+    .fold-len { font-size: 11.5px; opacity: 0.45; font-weight: 400; }
+    /* Simplify:标题行右侧的小编辑图标 */
+    .edit-btn { width: 26px; height: 26px; line-height: 26px; margin-left: auto; opacity: 0.45; }
     .edit-btn:hover { opacity: 1; }
-    .edit-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    h4.fold-head .edit-btn { margin-left: auto; }
-    h4.fold-head span:first-child { display: flex; align-items: center; }
+    .edit-btn mat-icon { font-size: 15px; width: 15px; height: 15px; }
     .jd-full { max-height: 340px; overflow-y: auto; padding-right: 6px; }
     .jd-peek { opacity: 0.65; }
     .src-link {
@@ -1999,31 +1996,51 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       max-height: 420px; overflow-y: auto;
     }
     .cl-empty { margin: 10px 0 0; font-size: 13px; opacity: 0.55; }
+    /* ★ Simplify 对齐:黄色警告条 */
+    .warn-banner {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
+      background: #fef9e7; border: 1px solid #f9e79f;
+      font-size: 12.5px; line-height: 1.6; color: #7d6608;
+    }
+    .warn-banner mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
+    /* ★ Simplify 对齐:朴素 textarea (非 mat-form-field) */
+    .plain-area {
+      width: 100%; box-sizing: border-box;
+      padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.6;
+      border: 1px solid rgba(0,0,0,0.2); border-radius: 8px; resize: vertical;
+      background: #fff; color: inherit;
+    }
+    .plain-area:focus { outline: none; border-color: #1a73e8; }
+    .plain-area::placeholder { color: rgba(0,0,0,0.35); }
+    .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(0,0,0,0.45); line-height: 1.5; }
+    .gen-btn { margin: 2px 0 4px; }
+    .gen-btn[disabled] { opacity: 0.5; }
 
-    /* ---- 公司 Logo ---- */
-    .logo-wrap { position: relative; flex: 0 0 30px; width: 30px; height: 30px; }
+    /* ---- 公司 Logo (Simplify:大圆角方块) ---- */
+    .logo-wrap { position: relative; flex: 0 0 40px; width: 40px; height: 40px; }
     .logo-avatar {
       display: flex; align-items: center; justify-content: center;
-      width: 30px; height: 30px; border-radius: 8px;
-      color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.3px;
+      width: 40px; height: 40px; border-radius: 10px;
+      color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
       text-transform: uppercase; overflow: hidden;
     }
     .logo {
       position: absolute; inset: 0;
-      width: 30px; height: 30px; border-radius: 8px; object-fit: contain;
+      width: 40px; height: 40px; border-radius: 10px; object-fit: contain;
       background: #fff;
     }
-    .detail-logo { margin-right: 8px; }
+    .detail-logo { margin-right: 0; flex: 0 0 40px; }
 
-    /* ---- 页签 ---- */
-    .tabs { display: flex; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    /* ---- 页签 (Simplify:极简,active 下划线) ---- */
+    .tabs { display: flex; gap: 20px; margin: 6px 0 16px; border-bottom: 1px solid rgba(0,0,0,0.08); }
     .tab {
       appearance: none; background: none; border: none; cursor: pointer;
-      padding: 8px 12px; font-size: 13.5px; color: inherit; opacity: 0.6;
+      padding: 8px 2px; font-size: 14px; color: rgba(0,0,0,0.55);
       border-bottom: 2px solid transparent; margin-bottom: -1px;
     }
-    .tab:hover { opacity: 0.85; }
-    .tab.active { opacity: 1; font-weight: 600; border-bottom-color: #3f51b5; }
+    .tab:hover { color: rgba(0,0,0,0.85); }
+    .tab.active { color: rgba(0,0,0,0.92); font-weight: 600; border-bottom-color: #1a73e8; }
 
     /* ---- 沟通记录 ---- */
     .comms-head { margin-bottom: 10px; }

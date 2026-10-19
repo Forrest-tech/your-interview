@@ -383,6 +383,7 @@ export class SmartAddDialogComponent {
     this.trackerApi.fetchLinkedIn(url).subscribe({
       next: (r: any) => {
         this.fetching.set(false);
+        console.log('[Auto-fetch] response:', JSON.stringify(r)?.slice(0, 500));
         if (r?.ok === false) {
           if (r.error === 'needs_login') {
             this.msg.set(this.t('tracker.saNeedLogin'));

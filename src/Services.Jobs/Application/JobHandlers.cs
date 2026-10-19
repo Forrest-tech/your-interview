@@ -28,6 +28,8 @@ public sealed record ApplicationDto(
     // 与 JdSummary 并存:摘要是给人看的速览,全文是给 AI 的原料 —— 两者用途不同。
     // ⚠️ 可达 40000 字符,列表接口不要带它(见 ListApplicationsQuery:仍用不带全文的映射)。
     string? JdText, string? JdSourceUrl,
+    // 公司介绍(2026-10-19):完整存储,不截断。Smart paste 从 "About the company" 提取。
+    string? CompanyDescription,
     string Status, string Priority, DateOnly? AppliedDate, DateOnly? Deadline,
     DateTimeOffset? NextFollowUpAt, int? ResumeScore, string? PassRateEstimate, string? MatchKeywords,
     string? Notes, string? PosterName, bool NeedsConnectFirst, string? OutreachMessage,
@@ -106,12 +108,12 @@ public sealed record DeleteCompanyCommand(Guid Id) : IRequest<Result>;
 
 public sealed record CreateApplicationCommand(Guid CompanyId, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Priority = null,
-    DateOnly? AppliedDate = null, string? Status = null)
+    DateOnly? AppliedDate = null, string? Status = null, string? CompanyDescription = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateApplicationCommand(Guid Id, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority,
-    DateOnly? Deadline, DateOnly? AppliedDate = null)
+    DateOnly? Deadline, DateOnly? AppliedDate = null, string? CompanyDescription = null)
     : IRequest<Result>;
 
 public sealed record ChangeApplicationStatusCommand(Guid Id, string Status, string? Note, string? RejectionReason)
@@ -195,7 +197,7 @@ internal static class JobsMapping
         // JD 全文随详情一并带出(2026-09-18)。列表查询同样走本映射 ——
         // 实测投递记录量级为个人求职(几十条),40000 字符全文带来的负载可接受;
         // 若未来记录上千,再拆出"不含全文"的精简映射给列表用。
-        a.JdText, a.JdSourceUrl,
+        a.JdText, a.JdSourceUrl, a.CompanyDescription,
         a.Status.ToString(), a.Priority.ToString(), a.AppliedDate, a.Deadline, a.NextFollowUpAt,
         a.ResumeScore, a.PassRateEstimate, a.MatchKeywords, a.Notes, a.PosterName, a.NeedsConnectFirst,
         a.OutreachMessage, a.OutreachSentAt, a.RejectionReason,
@@ -449,6 +451,9 @@ public sealed class CreateApplicationCommandHandler(JobsDbContext db)
         var app = new JobApplication(request.CompanyId, request.Role, request.Location, request.Link,
             request.Salary, request.WorkMode, request.Source, request.JdSummary);
 
+        if (!string.IsNullOrWhiteSpace(request.CompanyDescription))
+            app.SetCompanyDescription(request.CompanyDescription);
+
         if (request.AppliedDate.HasValue)
             app.SetAppliedDate(request.AppliedDate);
 
@@ -480,7 +485,8 @@ public sealed class UpdateApplicationCommandHandler(JobsDbContext db)
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
 
         a.UpdateDetails(request.Role, request.Location, request.Link, request.Salary,
-            request.WorkMode, request.Source, request.JdSummary, request.Notes);
+            request.WorkMode, request.Source, request.JdSummary, request.Notes,
+            request.CompanyDescription);
         a.SetDeadline(request.Deadline);
         if (request.AppliedDate.HasValue)
             a.SetAppliedDate(request.AppliedDate);

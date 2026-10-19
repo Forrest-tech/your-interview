@@ -145,6 +145,12 @@ public sealed class JobApplication : AuditableAggregateRoot
     /// <summary>JD 原始链接(可选)。JD 全文可能来自上传文件,留下出处便于复核。</summary>
     public string? JdSourceUrl { get; private set; }
 
+    /// <summary>
+    /// 公司介绍(完整文本,不截断)。Smart paste 从 "About the company" 段提取,
+    /// 与 JdText 并存:公司介绍是公司级信息,JD 全文是岗位级信息。
+    /// </summary>
+    public string? CompanyDescription { get; private set; }
+
     public ApplicationStatus Status { get; private set; }
     public Priority Priority { get; private set; }
     public DateOnly? AppliedDate { get; private set; }
@@ -228,7 +234,8 @@ public sealed class JobApplication : AuditableAggregateRoot
     public void SetAppliedDate(DateOnly? date) => AppliedDate = date;
 
     public void UpdateDetails(string role, string? location, string? link, string? salary,
-        string? workMode, string? source, string? jdSummary, string? notes)
+        string? workMode, string? source, string? jdSummary, string? notes,
+        string? companyDescription = null)
     {
         Role = role;
         Location = location;
@@ -238,6 +245,8 @@ public sealed class JobApplication : AuditableAggregateRoot
         Source = source;
         JdSummary = jdSummary;
         Notes = notes;
+        if (companyDescription is not null)
+            CompanyDescription = string.IsNullOrWhiteSpace(companyDescription) ? null : companyDescription;
         Touch();
     }
 
@@ -258,6 +267,16 @@ public sealed class JobApplication : AuditableAggregateRoot
     {
         JdText = string.IsNullOrWhiteSpace(jdText) ? null : jdText;
         JdSourceUrl = string.IsNullOrWhiteSpace(jdSourceUrl) ? null : jdSourceUrl;
+        Touch();
+    }
+
+    /// <summary>
+    /// 设置公司介绍。独立方法:Smart paste 抓到公司介绍是高频动作,
+    /// 不该逼迫调用方传齐所有投递字段。空串归一为 null。
+    /// </summary>
+    public void SetCompanyDescription(string? companyDescription)
+    {
+        CompanyDescription = string.IsNullOrWhiteSpace(companyDescription) ? null : companyDescription;
         Touch();
     }
 

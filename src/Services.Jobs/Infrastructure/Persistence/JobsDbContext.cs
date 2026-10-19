@@ -95,6 +95,8 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             // 岗位职责+任职要求+公司介绍三段,20000 在长 JD 上会截断。
             e.Property(x => x.JdText).HasMaxLength(40000);
             e.Property(x => x.JdSourceUrl).HasMaxLength(2048);
+            // 公司介绍:完整存储,20000 上限(LinkedIn 公司介绍通常 2000-5000 字)。
+            e.Property(x => x.CompanyDescription).HasMaxLength(20000);
             e.Property(x => x.PassRateEstimate).HasMaxLength(1000);
             e.Property(x => x.MatchKeywords).HasMaxLength(4000);
             e.Property(x => x.Notes).HasMaxLength(8000);

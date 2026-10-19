@@ -851,8 +851,8 @@ public static class JdPasteParser
         if (t.Length == 0) return true;
         if (company is not null && string.Equals(t, company, StringComparison.OrdinalIgnoreCase))
             return true;
-        // follower / 员工数
-        if (Regex.IsMatch(t, @"[\d,]+\s*(followers|employees)", RegexOptions.IgnoreCase)) return true;
+        // follower / 员工数("210,272 followers" / "10001+ employees")
+        if (Regex.IsMatch(t, @"[\d,+.]+\s*(followers|employees)", RegexOptions.IgnoreCase)) return true;
         if (Regex.IsMatch(t, @"^\d[\d,\s]*$", RegexOptions.Compiled)) return true;
         if (Regex.IsMatch(t, @"^(following|follow|•|\*)$", RegexOptions.IgnoreCase)) return true;
         if (Regex.IsMatch(t, @"\bon\s+linkedin\b", RegexOptions.IgnoreCase)) return true;

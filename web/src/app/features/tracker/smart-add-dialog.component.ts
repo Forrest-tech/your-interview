@@ -157,6 +157,21 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
           </mat-form-field>
 
           <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('tracker.saCompanyDesc') }}</mat-label>
+            <textarea matInput rows="3" name="jdCompanyDesc" [(ngModel)]="jd.companyDescription"></textarea>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('tracker.saRequirements') }}</mat-label>
+            <textarea matInput rows="4" name="jdRequirements" [(ngModel)]="jd.requirements"></textarea>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full">
+            <mat-label>{{ t('tracker.saBenefits') }}</mat-label>
+            <textarea matInput rows="3" name="jdBenefits" [(ngModel)]="jd.benefits"></textarea>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full">
             <mat-label>{{ t('tracker.saKeywords') }}</mat-label>
             <input matInput name="jdKeywords" [(ngModel)]="jd.matchKeywords">
           </mat-form-field>
@@ -297,10 +312,12 @@ export class SmartAddDialogComponent {
     company: string; role: string; location: string; salary: string;
     workMode: string | null; priority: string; link: string; jdSummary: string;
     matchKeywords: string; deadline: string | null; status: string; jdText: string | null;
+    companyDescription: string; requirements: string; benefits: string;
   } = {
     company: '', role: '', location: '', salary: '', workMode: null,
     priority: 'Medium', link: '', jdSummary: '', matchKeywords: '',
-    deadline: null, status: 'Saved', jdText: null
+    deadline: null, status: 'Saved', jdText: null,
+    companyDescription: '', requirements: '', benefits: ''
   };
 
   /** 邀请解析结果的可编辑副本。日期与时间拆开存 —— 表单控件就是两个。 */
@@ -336,7 +353,10 @@ export class SmartAddDialogComponent {
           salary: r.salary ?? '', workMode: r.workMode, priority: r.priority ?? 'Medium',
           link: r.link ?? '', jdSummary: r.jdSummary ?? '', matchKeywords: r.matchKeywords ?? '',
           deadline: r.deadline ? r.deadline.slice(0, 10) : null,
-          status: 'Saved', jdText: r.jdText
+          status: 'Saved', jdText: r.jdText,
+          companyDescription: r.companyDescription ?? '',
+          requirements: r.requirements ?? '',
+          benefits: r.benefits ?? ''
         };
       }));
     } else {
@@ -375,7 +395,8 @@ export class SmartAddDialogComponent {
       jdText: this.jd.jdText,
       source: this.parsed()?.detectedSource ?? null,
       status: this.jd.status,
-      deadline: this.jd.deadline
+      deadline: this.jd.deadline,
+      companyDescription: this.jd.companyDescription || null
     }).subscribe({
       next: (r) => {
         this.busy.set(false);

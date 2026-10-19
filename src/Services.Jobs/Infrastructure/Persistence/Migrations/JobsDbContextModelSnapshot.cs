@@ -23,34 +23,6 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationStatusChange", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ApplicationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("ChangedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ApplicationId");
-
-                    b.ToTable("application_status_changes", "jobs");
-                });
-
             modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationAnswerTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -110,10 +82,6 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ApplicationId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("ContactEmail")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
@@ -121,6 +89,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<string>("ContactName")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -154,6 +126,34 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.HasIndex("ApplicationId");
 
                     b.ToTable("application_communications", "jobs");
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationStatusChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.ToTable("application_status_changes", "jobs");
                 });
 
             modelBuilder.Entity("YourInterview.Services.Jobs.Domain.Company", b =>
@@ -346,6 +346,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("AppliedDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("CompanyDescription")
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)");
+
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid");
 
@@ -355,10 +359,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("Deadline")
                         .HasColumnType("date");
 
-                    b.Property<bool>("IsDeleted")
+                    b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsArchived")
+                    b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
                     b.Property<string>("JdSourceUrl")
@@ -503,6 +507,15 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.ToTable("resumes", "jobs");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationCommunication", b =>
+                {
+                    b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationStatusChange", b =>
                 {
                     b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
@@ -525,20 +538,6 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
                         .WithMany("Rounds")
-                        .HasForeignKey("ApplicationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationAnswerTemplate", b =>
-                {
-                    b.HasIndex("UserId");
-                });
-
-            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationCommunication", b =>
-                {
-                    b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
-                        .WithMany()
                         .HasForeignKey("ApplicationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

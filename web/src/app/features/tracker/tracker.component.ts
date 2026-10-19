@@ -1662,6 +1662,16 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         }
       </section>
 
+      <!-- 公司介绍(完整存储,不截断)—— 2026-10-19:Smart paste 从 "About the company" 提取 -->
+      @if (detail.companyDescription) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head">
+            <span>{{ t('tracker.companyDescription') }}</span>
+          </div>
+          <p class="pre">{{ detail.companyDescription }}</p>
+        </section>
+      }
 
       <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
       <mat-divider></mat-divider>

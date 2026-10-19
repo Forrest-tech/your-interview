@@ -19,6 +19,9 @@ export interface ParsedJd {
   priority: string | null;
   link: string | null;
   jdText: string | null;
+  companyDescription: string | null;
+  requirements: string | null;
+  benefits: string | null;
   deadline: string | null;
   detectedSource: string | null;
   confidence: Record<string, number>;
@@ -93,6 +96,7 @@ export class TrackerApi {
     workMode?: string | null; jdSummary?: string | null; matchKeywords?: string | null;
     priority?: string | null; link?: string | null; jdText?: string | null;
     source?: string | null; status?: string | null; deadline?: string | null;
+    companyDescription?: string | null;
   }): Observable<SmartAddResult> {
     return this.api.post<SmartAddResult>(`${TrackerApi.BASE}/applications/smart-add`, body);
   }

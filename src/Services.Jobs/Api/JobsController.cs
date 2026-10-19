@@ -112,7 +112,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     {
         var r = await sender.Send(new UpdateApplicationCommand(id, body.Role, body.Location, body.Link,
             body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline,
-            body.AppliedDate), ct);
+            body.AppliedDate, body.CompanyDescription), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -287,7 +287,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     {
         var r = await sender.Send(new SmartAddApplicationCommand(body.Company, body.Role, body.Location,
             body.Salary, body.WorkMode, body.JdSummary, body.MatchKeywords, body.Priority,
-            body.Link, body.JdText, body.Source, body.Status, body.Deadline), ct);
+            body.Link, body.JdText, body.Source, body.Status, body.Deadline,
+            body.CompanyDescription), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(r.Value)
             : r.ToProblemDetails();
@@ -318,7 +319,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted);
     public sealed record UpdateApplicationBody(string Role, string? Location, string? Link, string? Salary,
         string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority, DateOnly? Deadline,
-        DateOnly? AppliedDate);
+        DateOnly? AppliedDate, string? CompanyDescription);
     public sealed record ChangeStatusBody(string Status, string? Note, string? RejectionReason);
     /// <summary>JD 全文提交。空串由领域方法归一为 null。</summary>
     public sealed record JdContentBody(string? JdText, string? JdSourceUrl);
@@ -341,7 +342,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public sealed record SmartAddApplicationBody(
         string? Company, string? Role, string? Location, string? Salary, string? WorkMode,
         string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
-        string? JdText, string? Source, string? Status, DateOnly? Deadline = null);
+        string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
+        string? CompanyDescription = null);
 
     public sealed record LinkInviteBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
         string? Format, string? Notes);

@@ -503,7 +503,8 @@ public static class JdPasteParser
             @"1-month free trial with 24/7 support.*?(?=\n)",
             @"We.ll remind you a week before your trial ends.*?(?=\n)",
             @"Access company insights like.*?(?=\n)",
-            @"About the company\s*\n.*?\d[\d,]* followers.*?(?=\n)",
+            // "About the company" 段由 ExtractCompanyDescription 处理,这里不删
+            @"^\d[\d,]* followers.*?(?=\n)",
             @"\d[\d,]* on LinkedIn.*?(?=\n)",
             @"No response insights available yet.*?(?=\n)",
             @"Over \d+ applicants.*?(?=\n)",

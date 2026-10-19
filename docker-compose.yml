@@ -99,6 +99,11 @@ services:
       ASPNETCORE_URLS: "http://+:8080"
       # AiGateway 走 Docker 内部 DNS(jobs 容器内 127.0.0.1 不是宿主机)
       AiGateway__BaseUrl: "http://aigateway:8080/"
+      # 2026-10-19:LinkedIn 登录态(宿主机 ~/.your-interview/linkedin-profile/state.json)
+      LinkedIn__ProfileDir: /root/.your-interview/linkedin-profile
+    volumes:
+      # 2026-10-19:挂载 LinkedIn 会话，Auto-fetch 用
+      - ~/.your-interview:/root/.your-interview:ro
     depends_on: *service-deps
     healthcheck: *service-health
 

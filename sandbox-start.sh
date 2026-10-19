@@ -5,8 +5,19 @@
 set -e
 export PATH=$HOME/workspace/.dotnet:$PATH
 export TMPDIR=$HOME/workspace/tmp
-# Bundled libpq for the pg16 binaries (survives VM replacement; apt-installed libpq5 does not)
-export LD_LIBRARY_PATH=$HOME/workspace/your-interview/lib/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+# Bundled libpq for the pg16 binaries (survives VM replacement; apt-installed libpq5 does not).
+# NOTE (2026-10-19): after VM replacement /home/hatch is mode 2770 (root:nogroup), so pguser
+# cannot traverse it and the loader can't reach the bundled libs there. Stage them into
+# pguser-owned /home/pguser/pglib (done in the Postgres block below) and use that in
+# LD_LIBRARY_PATH instead of the workspace path.
+export PGLIB_SRC=$HOME/workspace/your-interview/lib/usr/lib/x86_64-linux-gnu
+
+# postgres client tools (pg_isready, psql) — apt packages are lost on VM replacement
+if ! command -v pg_isready >/dev/null 2>&1; then
+  echo "[$(date)] Installing postgresql-client (apt package lost after VM replacement)..."
+  sudo -n DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1 || true
+  sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-client >/tmp/pgclient-install.log 2>&1 || true
+fi
 
 # 1. Postgres
 if ! pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
@@ -19,6 +30,11 @@ if ! pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
     cp -r ~/workspace/tmp/pg16 /home/pguser/
     chown -R pguser:pguser /home/pguser/pg16
   fi
+  # Stage bundled libpq where pguser can read it (see NOTE above); idempotent
+  mkdir -p /home/pguser/pglib
+  cp -an "$PGLIB_SRC"/libpq.so.5* /home/pguser/pglib/ 2>/dev/null || true
+  chown -R pguser:pguser /home/pguser/pglib
+  export LD_LIBRARY_PATH=/home/pguser/pglib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
   if [ ! -d /home/pguser/pgdata ]; then
     su pguser -c "/home/pguser/pg16/usr/lib/postgresql/16/bin/initdb -D /home/pguser/pgdata -U postgres"
     # Set password and create DB after start
@@ -27,8 +43,11 @@ if ! pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
   mkdir -p /var/run/postgresql
   chown pguser:pguser /var/run/postgresql
   chown -R pguser:pguser /home/pguser/pgdata 2>/dev/null || true
-  su pguser -c "/home/pguser/pg16/usr/lib/postgresql/16/bin/pg_ctl -D /home/pguser/pgdata -l /home/pguser/pg.log start"
-  sleep 5
+  su pguser -c "/home/pguser/pg16/usr/lib/postgresql/16/bin/pg_ctl -D /home/pguser/pgdata -l /home/pguser/pg.log start" || true
+  for i in $(seq 1 30); do
+    pg_isready -h localhost -p 5432 >/dev/null 2>&1 && break
+    sleep 1
+  done
   if [ "$NEED_SETUP" = "1" ]; then
     PGPASSWORD=postgres psql -h localhost -U postgres -c "ALTER USER postgres PASSWORD 'postgres123';" 2>/dev/null || true
     PGPASSWORD=postgres123 psql -h localhost -U postgres -c "CREATE DATABASE yourinterview;" 2>/dev/null || true
@@ -39,7 +58,7 @@ fi
 if ! command -v rabbitmq-server >/dev/null 2>&1; then
   echo "[$(date)] Installing RabbitMQ (apt package lost after VM replacement)..."
   sudo -n DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1 || true
-  sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y rabbitmq-server >/tmp/rabbitmq-install.log 2>&1
+  sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y rabbitmq-server >/tmp/rabbitmq-install.log 2>&1 || echo "[$(date)] WARNING: rabbitmq-server install failed; continuing without it"
 fi
 if ! (echo > /dev/tcp/localhost/5672) 2>/dev/null; then
   echo "[$(date)] Starting RabbitMQ..."

@@ -87,7 +87,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         var r = await sender.Send(new UpdateEntryCommand(id, body.CompanyName, body.Role,
             body.CompanyProfile, body.JdText, body.JdSummary, body.RoundNo, body.InterviewDate,
             body.InterviewFormat, body.Interviewers, body.Location, body.Result, body.Notes,
-            body.QuestionsToAskJson), ct);
+            body.QuestionsToAskJson, body.DebriefJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -563,7 +563,8 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
 public sealed record UpdateEntryBody(
     string CompanyName, string Role, string? CompanyProfile, string? JdText, string? JdSummary,
     int RoundNo, DateOnly? InterviewDate, string? InterviewFormat, string? Interviewers,
-    string? Location, string? Result, string? Notes, string? QuestionsToAskJson = null);
+    string? Location, string? Result, string? Notes, string? QuestionsToAskJson = null,
+    string? DebriefJson = null);
 
 public sealed record AttachAssetBody(
     string Kind, string FileName, string? ContentType = null, long SizeBytes = 0,

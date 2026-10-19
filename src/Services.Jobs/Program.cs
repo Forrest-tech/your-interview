@@ -41,6 +41,18 @@ builder.AddServiceDefaults(ServiceName, services =>
         http.Timeout = TimeSpan.FromMinutes(3);
     });
 
+    // ---------- 招聘页面抓取(Smart paste 粘贴链接链路) ----------
+    // 浏览器 UA:很多 ATS 站点对默认 HttpClient UA 返回 403。
+    services.AddHttpClient(YourInterview.Services.Jobs.Infrastructure.Services.JobPageFetcherOptions.ClientName, http =>
+    {
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        http.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        http.Timeout = TimeSpan.FromSeconds(20);
+    });
+    services.AddSingleton<YourInterview.Services.Jobs.Infrastructure.Services.IJobPageFetcher,
+        YourInterview.Services.Jobs.Infrastructure.Services.JobPageFetcher>();
+
     services.AddSingleton(TimeProvider.System);
     services.AddHealthChecks().AddDbContextCheck<JobsDbContext>("postgres");
 

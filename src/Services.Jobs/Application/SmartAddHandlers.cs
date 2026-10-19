@@ -30,7 +30,9 @@ namespace YourInterview.Services.Jobs.Application;
 /// <summary>解析一段粘贴内容。UseAi=false 时只做确定性解析(未配 AI 凭据也能用)。</summary>
 public sealed record ParseJdCommand(string Raw, bool UseAi = true) : IRequest<Result<ParsedJdDto>>;
 
-public sealed class ParseJdCommandHandler(IAiGatewayClient ai)
+public sealed class ParseJdCommandHandler(
+    IAiGatewayClient ai,
+    YourInterview.Services.Jobs.Infrastructure.Services.IJobPageFetcher pageFetcher)
     : IRequestHandler<ParseJdCommand, Result<ParsedJdDto>>
 {
     public async Task<Result<ParsedJdDto>> Handle(ParseJdCommand request, CancellationToken ct)
@@ -54,7 +56,42 @@ public sealed class ParseJdCommandHandler(IAiGatewayClient ai)
                 new Dictionary<string, int>(), false, true));
         }
 
-        var draft = JdPasteParser.Parse(raw, kind);
+        // 链接:先尝试把页面抓下来再解析 —— 光靠 URL 模式只能猜出公司名。
+        // LinkedIn / Indeed 等反爬站点抓不到,返回 null 后降级为 URL 模式解析,
+        // 并给用户一句人话提示(改粘贴 JD 文本)。
+        string? fetchNote = null;
+        string parseInput = raw;
+        if (kind == PasteKind.Url)
+        {
+            var urlMatch = System.Text.RegularExpressions.Regex.Match(
+                raw.Trim(), @"https?://[^\s)】」,\u3002]+",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (urlMatch.Success)
+            {
+                var fetched = await pageFetcher.FetchPageTextAsync(urlMatch.Value, ct);
+                if (fetched is not null)
+                {
+                    // 抓到的正文 + 原链接一起解析:正文给字段,链接保留为职位链接。
+                    parseInput = fetched + "\n" + urlMatch.Value;
+                    kind = PasteKind.Text;
+                }
+                else
+                {
+                    fetchNote = "该网站禁止自动抓取,已只按链接解析 —— 建议直接粘贴 JD 文本,解析会准很多。";
+                }
+            }
+        }
+
+        var draft = JdPasteParser.Parse(parseInput, kind);
+        // 抓取成功时把原始链接写回 Link 字段,方便用户回看原文。
+        if (fetchNote is null && parseInput != raw && draft.Link is null)
+        {
+            var urlMatch = System.Text.RegularExpressions.Regex.Match(
+                raw.Trim(), @"https?://[^\s)】」,\u3002]+",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (urlMatch.Success)
+                draft = draft with { Link = urlMatch.Value };
+        }
         var usedAi = false;
         string? aiNote = null;
 
@@ -65,7 +102,7 @@ public sealed class ParseJdCommandHandler(IAiGatewayClient ai)
             cts.CancelAfter(TimeSpan.FromSeconds(30));
             try
             {
-                var enriched = await JdAiEnricher.EnrichAsync(ai, raw, draft, cts.Token);
+                var enriched = await JdAiEnricher.EnrichAsync(ai, parseInput, draft, cts.Token);
                 if (enriched is not null) { draft = enriched; usedAi = true; }
             }
             catch (AiGatewayException ex)
@@ -89,13 +126,13 @@ public sealed class ParseJdCommandHandler(IAiGatewayClient ai)
                    : filled >= 1 ? ParseOutcome.Partial
                    : ParseOutcome.Failed;
 
+        var extraNote = (fetchNote is null ? "" : " " + fetchNote)
+                      + (aiNote is null ? "" : " " + aiNote);
         var message = status switch
         {
-            ParseOutcome.Ok => usedAi ? "已解析,并经过 AI 补齐全字段。" : "已解析出主要字段。",
-            ParseOutcome.Partial => "只解析出部分字段,请补全后再保存。"
-                                    + (aiNote is null ? "" : " " + aiNote),
-            _ => "没能识别出岗位信息,请手动填写。"
-                 + (aiNote is null ? "" : " " + aiNote)
+            ParseOutcome.Ok => (usedAi ? "已解析,并经过 AI 补齐全字段。" : "已解析出主要字段。") + extraNote,
+            ParseOutcome.Partial => "只解析出部分字段,请补全后再保存。" + extraNote,
+            _ => "没能识别出岗位信息,请手动填写。" + extraNote
         };
 
         return Result.Success(draft with

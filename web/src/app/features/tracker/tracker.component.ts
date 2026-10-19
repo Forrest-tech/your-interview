@@ -1469,47 +1469,42 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       </div>
 
       @if (detailTab() === 'overview') {
-      <!-- ★ Simplify 对齐:状态 pill (灰色) -->
-      <div class="top">
-        <span class="status-pill">{{ statusLabel(detail.status) }}</span>
-        @if (detail.priority) {
-          <span class="status-pill">{{ detail.priority }} {{ t('tracker.dPriority') }}</span>
-        }
-        @if (detail.needsConnectFirst) {
-          <span class="status-pill warn">{{ t('tracker.dNeedNetwork') }}</span>
-        }
-        @if (detail.rejectionReason) {
-          <p class="rejection">{{ t('tracker.dRejectReason') }}{{ detail.rejectionReason }}</p>
-        }
+      <div class="two-col">
+      <div class="main-col">
+      <!-- ★ Simplify 真站:Job Posting 区块 -->
+      <div class="sec-head">
+        <span>{{ t('tracker.dJobPosting') }}</span>
+        <button mat-icon-button class="edit-btn" (click)="startEditPosting()" [matTooltip]="t('common.edit')">
+          <mat-icon>edit</mat-icon>
+        </button>
       </div>
 
-      <!-- ★ Simplify 对齐:两列字段网格 -->
+      <!-- 字段网格: Location, Salary / Job type, URL -->
       <div class="fields">
         <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
         <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue">{{ detail.appliedDate || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dOutreachMsg') }}</span><span class="fvalue">{{ detail.outreachMessage || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dResumeMatch') }}</span>
-          <span class="fvalue">{{ detail.resumeScore != null ? tn('tracker.dScoreUnit', detail.resumeScore) : '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dPassRate') }}</span>
-          <span class="fvalue">{{ detail.passRateEstimate ? detail.passRateEstimate : '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dCreatedAt') }}</span><span class="fvalue">{{ detail.createdAt | date: 'yyyy-MM-dd HH:mm' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dUpdatedAt') }}</span>
-          <span class="fvalue">{{ detail.updatedAt ? (detail.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dJobType') }}</span><span class="fvalue">{{ detail.jobType || '—' }}</span></div>
+        <div class="field"><span class="flabel">URL</span>
+          <span class="fvalue">
+            @if (detail.jobUrl) {
+              <a [href]="detail.jobUrl" target="_blank" class="teal-link">{{ t('tracker.dViewPosting') }} <mat-icon>open_in_new</mat-icon></a>
+            } @else { — }
+          </span>
+        </div>
       </div>
-      <!-- ★ 关键词差距 (保留,Simplify 没有但有用) -->
-      @if (match(); as m) {
-        @if (m.missing.length > 0) {
-          <div class="kw-gap">
-            <span class="flabel">关键词差距 ({{ m.missing.length }} 缺失)</span>
-            <div class="kw-list">
-              @for (k of m.missing; track k) {
-                <span class="kw-missing">{{ k }}</span>
-              }
-            </div>
-          </div>
+
+      <!-- JD 正文 -->
+      <div class="jd-body">
+        @if (detail.jdSummary) {
+          <p>{{ detail.jdSummary }}</p>
         }
-      }
+        @if (detail.jdText) {
+          <p class="pre">{{ detail.jdText }}</p>
+        }
+        @if (!detail.jdSummary && !detail.jdText) {
+          <p class="dim">{{ t('tracker.dNoJd') }}</p>
+        }
+      </div>
 
       <mat-divider></mat-divider>
       <section>
@@ -1799,6 +1794,38 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           </a>
         </section>
       }
+      </div><!-- /.main-col -->
+
+      <!-- ★ Simplify 真站:右侧边栏 -->
+      <div class="side-col">
+        <!-- Application Status 卡片 -->
+        <div class="status-card">
+          <h3>{{ t('tracker.dAppStatus') }}</h3>
+          <select class="status-select" [value]="detail.status" (change)="quickChangeStatus($event)">
+            @for (s of statusOrder; track s) {
+              <option [value]="s" [selected]="s === detail.status">{{ statusLabel(s) }}</option>
+            }
+          </select>
+          <div class="timeline">
+            @for (s of statusOrder; track s) {
+              <div class="tl-item" [class.done]="isStatusDone(s)">
+                <span class="tl-dot"></span>
+                <span class="tl-name">{{ statusLabel(s) }}</span>
+                @if (statusDate(s)) {
+                  <span class="tl-date">{{ statusDate(s) }}</span>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Notes 卡片 (简化版,完整编辑在下方) -->
+        <div class="notes-card">
+          <h3>{{ t('tracker.dNotes') }}</h3>
+          <p class="pre">{{ detail.notes || '—' }}</p>
+        </div>
+      </div><!-- /.side-col -->
+      </div><!-- /.two-col -->
       }
 
       @else if (detailTab() === 'documents') {
@@ -1947,6 +1974,53 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     }
     .hdr-close:hover { background: #F7F8FA; }
     .detail-body { padding: 0; }
+    /* ★ Simplify 真站:双栏布局 */
+    .two-col { display: flex; min-height: 400px; }
+    .main-col { flex: 1; min-width: 0; padding: 24px 32px; }
+    .side-col {
+      flex: 0 0 360px; width: 360px;
+      padding: 24px 32px 24px 0;
+      border-left: 1px solid #ECEEF1;
+      margin-left: 32px; padding-left: 32px;
+    }
+    .status-card {
+      background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;
+      padding: 24px; margin-bottom: 24px;
+    }
+    .status-card h3 { font-size: 16px; font-weight: 700; color: #1A1D23; margin: 0 0 16px; }
+    .status-select {
+      width: 100%; height: 40px; padding: 0 16px;
+      border: 1px solid #E3E6EA; border-radius: 8px;
+      font-size: 14px; color: #1F2937; background: #fff;
+      margin-bottom: 20px; cursor: pointer;
+    }
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before {
+      content: ''; position: absolute; left: 9px; top: 8px; bottom: 8px;
+      width: 2px; background: #E3E6EA;
+    }
+    .tl-item { position: relative; padding: 0 0 20px; }
+    .tl-item:last-child { padding-bottom: 0; }
+    .tl-dot {
+      position: absolute; left: -28px; top: 2px;
+      width: 20px; height: 20px; border-radius: 50%;
+      border: 2px solid #D4D9E0; background: #fff;
+    }
+    .tl-item.done .tl-dot { border-color: #2AAED3; }
+    .tl-item.done .tl-dot::after {
+      content: ''; position: absolute; left: 50%; top: 50%;
+      width: 8px; height: 8px; border-radius: 50%; background: #2AAED3;
+      transform: translate(-50%, -50%);
+    }
+    .tl-name { font-size: 14px; font-weight: 600; color: #1F2937; }
+    .tl-item:not(.done) .tl-name { font-weight: 500; color: #6E7681; }
+    .tl-date { font-size: 13px; color: #8A94A6; margin-left: 8px; }
+    .tl-edit { margin-left: 8px; color: #2AAED3; cursor: pointer; font-size: 14px; }
+    .notes-card {
+      background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;
+      padding: 24px;
+    }
+    .notes-card h3 { font-size: 16px; font-weight: 700; color: #1A1D23; margin: 0 0 16px; }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
     .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
@@ -1973,10 +2047,19 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     mat-divider { display: none; }
     .sec-head {
       display: flex; align-items: center; gap: 6px;
-      margin: 0 0 10px; font-size: 13px; font-weight: 500;
-      color: rgba(0,0,0,0.55); letter-spacing: 0.2px;
+      margin: 0 0 16px; font-size: 17px; font-weight: 700;
+      color: #1A1D23; letter-spacing: 0;
     }
     .sec-head .edit-btn { margin-left: auto; }
+    .teal-link {
+      color: #0E9FCC; font-weight: 500; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .teal-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .teal-link:hover { text-decoration: underline; }
+    .jd-body { margin-top: 24px; }
+    .jd-body p { font-size: 14px; color: #3D4451; line-height: 1.57; margin: 0 0 14px; }
+    .jd-body .dim { color: #8A94A6; }
     section h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.3px; opacity: 0.7; }
     .pre { margin: 0; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
     .history { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.9; }
@@ -2453,6 +2536,55 @@ export class ApplicationDetailDialogComponent {
       next: () => this.dialogRef.close(true),
       error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
     });
+  }
+
+  /* ★ Simplify 真站:状态时间线 */
+  readonly statusOrder = ['Saved', 'Applied', 'Screen', 'Interview', 'Offer'];
+
+  isStatusDone(s: string): boolean {
+    const order = this.statusOrder;
+    const currentIdx = order.indexOf(this.detail.status);
+    const sIdx = order.indexOf(s);
+    return sIdx >= 0 && sIdx <= currentIdx;
+  }
+
+  statusDate(s: string): string | null {
+    // 从 history 里找该状态的时间
+    const h = (this.detail as any).history;
+    if (!h || !Array.isArray(h)) return null;
+    const item = h.find((x: any) => x.status === s || x.to === s);
+    if (!item) return null;
+    const d = item.at || item.date || item.createdAt;
+    if (!d) return null;
+    try {
+      const dt = new Date(d);
+      return `${dt.getMonth() + 1}/${dt.getDate()}/${String(dt.getFullYear()).slice(2)}`;
+    } catch { return null; }
+  }
+
+  quickChangeStatus(ev: Event): void {
+    const select = ev.target as HTMLSelectElement;
+    const newStatus = select.value;
+    this.api.put<void>(`/api/jobs/applications/${this.app.id}/status`,
+      { status: newStatus }).subscribe({
+      next: () => {
+        this.snack.open(this.t('tracker.statusUpdated'), this.t('common.close'), { duration: 2000 });
+        this.reloadDetail();
+      },
+      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
+    });
+  }
+
+  private reloadDetail(): void {
+    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
+      next: (app: Application) => this.full.set(app),
+      error: () => this.loadError.set(true)
+    });
+  }
+
+  startEditPosting(): void {
+    // TODO: 内联编辑 Job Posting 字段
+    this.snack.open(this.t('common.comingSoon'), this.t('common.close'), { duration: 2000 });
   }
 
   // ---------------------------- 条目编辑(2026-10-08) ----------------------------

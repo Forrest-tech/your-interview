@@ -46,7 +46,8 @@ public sealed record TrackerStats(
     int Total, int Active, int Applied, int InInterview, int Offers, int Rejected, int Ghosted,
     double ResponseRate, double InterviewRate, double OfferRate,
     double AverageDaysToFirstResponse, IReadOnlyList<PipelineColumn> Pipeline,
-    IReadOnlyList<SourceBreakdown> BySource, IReadOnlyList<MonthlyCount> ByMonth);
+    IReadOnlyList<SourceBreakdown> BySource, IReadOnlyList<MonthlyCount> ByMonth,
+    IReadOnlyDictionary<string, int> ByStatus);
 
 public sealed record SourceBreakdown(string Source, int Count, int Responded);
 public sealed record MonthlyCount(string Month, int Applications, int Interviews, int Offers);
@@ -735,7 +736,7 @@ public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
             C(ApplicationStatus.Ghosted),
             Rate(responded, appliedOrBeyond), Rate(interviewed, appliedOrBeyond), Rate(offers, appliedOrBeyond),
             responseDurations.Count > 0 ? Math.Round(responseDurations.Average(), 1) : 0,
-            pipeline, bySource, byMonth));
+            pipeline, bySource, byMonth, byStatus));
     }
 }
 

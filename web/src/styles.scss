@@ -367,10 +367,14 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   border-radius: 0 !important;
   margin: 0 !important;
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18) !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
 
   .mat-mdc-dialog-container {
     border-radius: 0 !important;
     padding: 0 !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
   }
 
   .mat-mdc-dialog-surface {

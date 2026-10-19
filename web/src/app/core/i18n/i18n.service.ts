@@ -778,6 +778,18 @@ const DICT: Record<string, Record<Lang, string>> = {
 
   // ---------- 投递跟踪 · 详情弹窗 ----------
   'tracker.dOverview': { zh: '概览', en: 'Overview', fr: 'Aperçu' },
+  'tracker.dDocuments': { zh: '文档', en: 'Documents', fr: 'Documents' },
+  'tracker.dResumeScore': { zh: '简历评分', en: 'Resume Score', fr: 'Score CV' },
+  'tracker.dEmail': { zh: '邮件', en: 'Email', fr: 'E-mail' },
+  'tracker.dQuestions': { zh: '问题', en: 'Questions', fr: 'Questions' },
+  'tracker.dJobPosting': { zh: '职位发布', en: 'Job Posting', fr: 'Offre d\'emploi' },
+  'tracker.dJobType': { zh: '工作类型', en: 'Job type', fr: 'Type d\'emploi' },
+  'tracker.dNoJd': { zh: '暂无 JD', en: 'No JD yet', fr: 'Pas de JD' },
+  'tracker.dAppStatus': { zh: '申请状态', en: 'Application Status', fr: 'Statut' },
+  'tracker.dQuestionsPlaceholder': { zh: '暂无申请问题', en: 'No application questions yet', fr: 'Aucune question' },
+  'tracker.favorite': { zh: '收藏', en: 'Favorite', fr: 'Favori' },
+  'tracker.unfavorite': { zh: '取消收藏', en: 'Unfavorite', fr: 'Retirer des favoris' },
+  'tracker.statusUpdated': { zh: '状态已更新', en: 'Status updated', fr: 'Statut mis à jour' },
   'tracker.detailStale': { zh: '详情加载失败,显示的可能是旧数据', en: 'Failed to load details — data may be outdated', fr: 'Données possiblement obsolètes' },
   'tracker.dPriority': { zh: '优先级', en: 'Priority', fr: 'Priorité' },
   'tracker.dNeedNetwork': { zh: '需先建立人脉', en: 'Network first', fr: 'Réseauter d’abord' },

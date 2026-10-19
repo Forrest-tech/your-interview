@@ -62,7 +62,22 @@ public sealed class LinkedInFetcher : IAsyncDisposable
             // 2026-10-19:沙盒/容器经代理出站，Playwright 需显式配置
             if (!string.IsNullOrEmpty(proxy))
             {
-                ctxOpts.Proxy = new Proxy { Server = proxy };
+                // 解析 http://user:pass@host:port 格式
+                try
+                {
+                    var uri = new Uri(proxy);
+                    var userInfo = uri.UserInfo.Split(':');
+                    ctxOpts.Proxy = new Proxy
+                    {
+                        Server = $"{uri.Scheme}://{uri.Host}:{uri.Port}",
+                        Username = userInfo.Length > 0 ? Uri.UnescapeDataString(userInfo[0]) : null,
+                        Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : null,
+                    };
+                }
+                catch
+                {
+                    ctxOpts.Proxy = new Proxy { Server = proxy };
+                }
             }
             _ctx = await _browser.NewContextAsync(ctxOpts);
         }

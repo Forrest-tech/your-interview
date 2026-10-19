@@ -64,6 +64,9 @@ if ! curl -s http://localhost:5125/api/jobs/stats --max-time 3 2>/dev/null | gre
     echo "[$(date)] Starting Jobs..."
     export ConnectionStrings__Jobs="Host=localhost;Port=5432;Database=yourinterview;Username=postgres;Password=postgres123"
     export ASPNETCORE_URLS="http://localhost:5125"
+    # 2026-10-19:Playwright 出站经代理(沙盒)
+    export HTTPS_PROXY="${HTTPS_PROXY:-http://hatch-egress-proxy:3128}"
+    export HTTP_PROXY="${HTTP_PROXY:-http://hatch-egress-proxy:3128}"
     cd ~/workspace/your-interview
     nohup dotnet run --project src/Services.Jobs --no-build > /tmp/jobs.log 2>&1 &
   fi

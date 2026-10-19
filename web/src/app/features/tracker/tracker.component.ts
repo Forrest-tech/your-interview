@@ -1319,12 +1319,10 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   openDetail(app: Application): void {
     // Simplify 模式:右侧抽屉(不是居中弹窗),看板在左侧保持可见。
-    // 宽度对齐 Simplify 真站:约 66% 视口,双栏布局(主内容 + 右侧边栏)。
     this.dialog.open(ApplicationDetailDialogComponent, {
       data: app,
-      width: '66vw',
-      maxWidth: '1280px',
-      minWidth: '900px',
+      width: '480px',
+      maxWidth: '92vw',
       height: '100vh',
       maxHeight: '100vh',
       position: { right: '0', top: '0' },
@@ -1412,7 +1410,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule
   ],
   template: `
-    <div class="drawer-header">
+    <h2 mat-dialog-title>
       <span class="logo-wrap detail-logo">
         <span class="logo-avatar" [style.background]="avatarColor(app.companyName)">{{ companyInitials(app.companyName) }}</span>
         @if (app.companyLogoUrl && !logoBroken()) {
@@ -1423,25 +1421,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         <span class="main-title">{{ app.role }}</span>
         <span class="sub-title">{{ app.companyName }}</span>
       </span>
-      <span class="header-actions">
-        <button class="hdr-btn" (click)="toggleFavorite(app.id); $event.stopPropagation()"
-                [matTooltip]="isFavorite(app.id) ? t('tracker.unfavorite') : t('tracker.favorite')">
-          <mat-icon>{{ isFavorite(app.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
-          <span>{{ t('tracker.favorite') }}</span>
-        </button>
-        <button class="hdr-btn" (click)="archiveApp(app)" [matTooltip]="t('tracker.archive')">
-          <mat-icon>archive</mat-icon>
-          <span>{{ t('tracker.archive') }}</span>
-        </button>
-        <button class="hdr-btn danger" (click)="removeApp(app)" [matTooltip]="t('common.delete')">
-          <mat-icon>delete</mat-icon>
-          <span>{{ t('common.delete') }}</span>
-        </button>
-        <button class="hdr-close" mat-dialog-close [matTooltip]="t('common.close')">
-          <mat-icon>close</mat-icon>
-        </button>
-      </span>
-    </div>
+    </h2>
 
     <mat-dialog-content class="detail-body">
       @if (loadError()) {
@@ -1452,58 +1432,44 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       }
       <div class="tabs">
         <button class="tab" [class.active]="detailTab() === 'overview'"
-                (click)="switchTab('overview')">
-          <mat-icon>description</mat-icon>{{ t('tracker.dOverview') }}</button>
-        <button class="tab" [class.active]="detailTab() === 'documents'"
-                (click)="switchTab('documents')">
-          <mat-icon>folder</mat-icon>{{ t('tracker.dDocuments') }}</button>
-        <button class="tab" [class.active]="detailTab() === 'score'"
-                (click)="switchTab('score')">
-          <mat-icon>speed</mat-icon>{{ t('tracker.dResumeScore') }}</button>
-        <button class="tab" [class.active]="detailTab() === 'email'"
-                (click)="switchTab('email')">
-          <mat-icon>mail</mat-icon>{{ t('tracker.dEmail') }}
-          @if (comms().length > 0) { ({{ comms().length }}) }</button>
-        <button class="tab" [class.active]="detailTab() === 'questions'"
-                (click)="switchTab('questions')">
-          <mat-icon>help</mat-icon>{{ t('tracker.dQuestions') }}</button>
+                (click)="switchTab('overview')">{{ t('tracker.dOverview') }}</button>
+        <button class="tab" [class.active]="detailTab() === 'comms'"
+                (click)="switchTab('comms')">
+          {{ t('tracker.comms') }}
+          @if (comms().length > 0) { ({{ comms().length }}) }
+        </button>
       </div>
 
       @if (detailTab() === 'overview') {
-      <div class="two-col">
-      <div class="main-col">
-      <!-- ★ Job Posting 区块 -->
-      <section class="job-posting">
-        <div class="sec-head sec-head-lg">
-          <span>{{ t('tracker.dJobPosting') }}</span>
-          <button mat-icon-button class="edit-btn" (click)="openEditPosting()"
-                  [matTooltip]="t('common.edit')">
-            <mat-icon>edit</mat-icon>
-          </button>
-        </div>
-        <div class="fields">
-          <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
-          <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
-          <div class="field"><span class="flabel">{{ t('tracker.dJobType') }}</span><span class="fvalue">{{ detail.jobType || detail.workMode || '—' }}</span></div>
-          <div class="field"><span class="flabel">URL</span>
-            <span class="fvalue">
-              @if (detail.link) {
-                <a [href]="detail.link" target="_blank" class="teal-link">{{ t('tracker.dViewPosting') }}<mat-icon>open_in_new</mat-icon></a>
-              } @else { — }
-            </span>
-          </div>
-        </div>
-        <!-- JD 正文:直接渲染,不再分 summary/full -->
-        @if (detail.jdText) {
-          <p class="pre jd-body">{{ detail.jdText }}</p>
-        } @else {
-          <p class="dim">{{ t('tracker.dNoJd') }}</p>
+      <!-- ★ Simplify 对齐:状态 pill (灰色) -->
+      <div class="top">
+        <span class="status-pill">{{ statusLabel(detail.status) }}</span>
+        @if (detail.priority) {
+          <span class="status-pill">{{ detail.priority }} {{ t('tracker.dPriority') }}</span>
         }
-      </section>
-      @if (detail.rejectionReason) {
-        <p class="rejection">{{ t('tracker.dRejectReason') }}{{ detail.rejectionReason }}</p>
-      }
-      <!-- 关键词差距(保留在 Overview,Resume Score tab 也有完整版) -->
+        @if (detail.needsConnectFirst) {
+          <span class="status-pill warn">{{ t('tracker.dNeedNetwork') }}</span>
+        }
+        @if (detail.rejectionReason) {
+          <p class="rejection">{{ t('tracker.dRejectReason') }}{{ detail.rejectionReason }}</p>
+        }
+      </div>
+
+      <!-- ★ Simplify 对齐:两列字段网格 -->
+      <div class="fields">
+        <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue">{{ detail.appliedDate || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dOutreachMsg') }}</span><span class="fvalue">{{ detail.outreachMessage || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dResumeMatch') }}</span>
+          <span class="fvalue">{{ detail.resumeScore != null ? tn('tracker.dScoreUnit', detail.resumeScore) : '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dPassRate') }}</span>
+          <span class="fvalue">{{ detail.passRateEstimate ? detail.passRateEstimate : '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dCreatedAt') }}</span><span class="fvalue">{{ detail.createdAt | date: 'yyyy-MM-dd HH:mm' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dUpdatedAt') }}</span>
+          <span class="fvalue">{{ detail.updatedAt ? (detail.updatedAt | date: 'yyyy-MM-dd HH:mm') : '—' }}</span></div>
+      </div>
+      <!-- ★ 关键词差距 (保留,Simplify 没有但有用) -->
       @if (match(); as m) {
         @if (m.missing.length > 0) {
           <div class="kw-gap">
@@ -1542,153 +1508,53 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         }
       </section>
 
+      <!-- 匹配分析(纯关键词,不调 AI)-->
+      @if (match(); as m) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head"><span>{{ t('tracker.dMatchAnalysis') }}</span></div>
 
-      <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
-      <mat-divider></mat-divider>
-      <section>
-        <div class="sec-head fold-head">
-          <span (click)="jdTextEditing() ? null : jdExpanded.set(!jdExpanded())" style="display:flex;align-items:center;cursor:pointer;gap:6px;">
-            <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
-            <span>{{ t('tracker.dJdFull') }}</span>
-            @if (detail.jdText) {
-              <span class="fold-len">{{ tn('tracker.dJdChars', detail.jdText.length) }}</span>
-            }
-          </span>
-          <button mat-icon-button
-                  (click)="$event.stopPropagation(); jdTextEditing() ? cancelEditJdText() : startEditJdText()"
-                  [matTooltip]="t('common.edit')" class="edit-btn">
-            <mat-icon>{{ jdTextEditing() ? 'close' : 'edit' }}</mat-icon>
-          </button>
-        </div>
-
-        @if (app.jdSourceUrl) {
-          <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
-            <mat-icon>link</mat-icon>{{ t('tracker.dViewPosting') }}
-          </a>
-        }
-
-        @if (jdTextEditing()) {
-          <textarea class="plain-area" rows="16" [(ngModel)]="jdTextDraft"
-                    [placeholder]="t('tracker.dJdFull')"></textarea>
-          <div class="cl-actions save-row">
-            <button mat-flat-button color="primary" (click)="saveJdText()"
-                    [disabled]="jdTextSaving()">
-              {{ t('common.save') }}
-            </button>
-            <button mat-button (click)="cancelEditJdText()">{{ t('common.cancel') }}</button>
-          </div>
-        } @else if (detail.jdText) {
-          @if (jdExpanded()) {
-            <div class="jd-full">
-              <p class="pre">{{ detail.jdText }}</p>
+          <div class="match-head">
+            <div class="score" [class]="matchTier(m.score)">
+              <span class="score-num">{{ m.score }}</span>
+              <span class="score-unit">{{ t('tracker.dScoreUnit') }}</span>
             </div>
-          } @else {
-            <p class="pre jd-peek">{{ detail.jdText?.slice(0, 220) }}…</p>
-          }
-        } @else {
-          <p class="cl-empty">{{ t('tracker.dJdEmpty') }}</p>
-        }
-      </section>
+            <div class="score-note">
+              <strong [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</strong>
+              <span>{{ tf('tracker.dHitKw', { n: m.hit.length, m: m.total }) }}</span>
+            </div>
+          </div>
 
-      <!-- 公司情报 -->
-      @if (company()?.profile) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</span></div>
-          <p class="pre">{{ company()?.profile }}</p>
-          @if (company()?.website) {
-            <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
-              <mat-icon>public</mat-icon>{{ company()!.website }}
-            </a>
-          }
-        </section>
-      }
-
-
-      @if ((detail.rounds?.length ?? 0) > 0) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dRounds') }}</span></div>
-          <ul class="rounds">
-            @for (r of detail.rounds ?? []; track r.id) {
-              <li>
-                <strong>{{ tn('tracker.dRoundN', r.order) }}</strong>
-                @if (r.stage) { <span class="tag">{{ r.stage }}</span> }
-                @if (r.scheduledDate) { <span>{{ r.scheduledDate | date: 'yyyy-MM-dd' }}</span> }
-                @if (r.format) { <span class="tag">{{ r.format }}</span> }
-                @if (r.interviewers) { <span class="tag">{{ r.interviewers }}</span> }
-                @if (r.outcome && r.outcome !== 'Pending') {
-                  <span class="tag" [class.outcome-pass]="r.outcome === 'Passed'"
-                        [class.outcome-fail]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
-                }
-                @if (r.notes) { <p class="pre">{{ r.notes }}</p> }
-              </li>
-            }
-          </ul>
-        </section>
-      }
-
-      @if (app.link) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dJobLink') }}</span></div>
-          <a [href]="app.link" target="_blank" rel="noopener noreferrer" class="link">
-            {{ app.link }}
-          </a>
-        </section>
-      }
-      </div><!-- /.main-col -->
-
-      <!-- ★ 右侧边栏:Application Status + Notes -->
-      <div class="side-col">
-        <div class="status-card">
-          <h3>{{ t('tracker.dAppStatus') }}</h3>
-          <mat-form-field appearance="outline" class="status-select">
-            <mat-select [value]="detail.status" (selectionChange)="quickChangeStatus(detail, $event.value)">
-              @for (s of statusOrder; track s) {
-                <mat-option [value]="s">{{ statusLabel(s) }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-          <div class="status-timeline">
-            @for (s of statusOrder.slice(0, 5); track s) {
-              <div class="tl-row" [class.done]="isStatusDone(s)" [class.current]="detail.status === s">
-                <span class="tl-dot"></span>
-                <span class="tl-name">{{ statusLabel(s) }}</span>
-                @if (statusDate(s)) {
-                  <span class="tl-date">{{ statusDate(s) }}</span>
+          @if (m.missing.length > 0) {
+            <div class="kw-group">
+              <span class="kw-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</span>
+              <div class="kw-list">
+                @for (k of m.missing; track k) {
+                  <span class="kw miss">{{ k }}</span>
                 }
               </div>
-            }
-          </div>
-        </div>
-
-        <div class="notes-card">
-          <div class="sec-head">
-            <span>{{ t('tracker.dNotes') }}</span>
-            <button mat-icon-button (click)="notesEditing() ? cancelEditNotes() : startEditNotes()"
-                    [matTooltip]="t('common.edit')" class="edit-btn">
-              <mat-icon>{{ notesEditing() ? 'close' : 'edit' }}</mat-icon>
-            </button>
-          </div>
-          @if (notesEditing()) {
-            <textarea class="plain-area" rows="6" [(ngModel)]="notesDraft"
-                      [placeholder]="t('tracker.dNotes')"></textarea>
-            <div class="save-row">
-              <button mat-flat-button color="primary" (click)="saveNotes()"
-                      [disabled]="notesSaving()">{{ t('common.save') }}</button>
-              <button mat-button (click)="cancelEditNotes()">{{ t('common.cancel') }}</button>
             </div>
-          } @else {
-            <p class="pre">{{ detail.notes || '—' }}</p>
           }
-        </div>
-      </div><!-- /.side-col -->
-      </div><!-- /.two-col -->
+
+          @if (m.hit.length > 0) {
+            <div class="kw-group">
+              <span class="kw-title">{{ tn('tracker.dHitKwTitle', m.hit.length) }}</span>
+              <div class="kw-list">
+                @for (k of m.hit; track k) {
+                  <span class="kw ok">{{ k }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          @if (m.softSkills.length > 0) {
+            <p class="soft-note">
+              {{ t('tracker.dSoftSkills') }}{{ m.softSkills.join('、') }}
+            </p>
+          }
+        </section>
       }
 
-      @if (detailTab() === 'documents') {
-        <div class="two-col"><div class="main-col">
       <!-- 求职信(Cover Letter) ★ Simplify 视觉 -->
       <mat-divider></mat-divider>
       <section class="cl-section">
@@ -1772,68 +1638,142 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         }
       </section>
 
-        </div></div>
-      }
+      <!-- JD 全文(默认折叠:可达 40000 字符)—— 2026-10-08:加编辑 -->
+      <mat-divider></mat-divider>
+      <section>
+        <div class="sec-head fold-head">
+          <span (click)="jdTextEditing() ? null : jdExpanded.set(!jdExpanded())" style="display:flex;align-items:center;cursor:pointer;gap:6px;">
+            <mat-icon>{{ jdExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
+            <span>{{ t('tracker.dJdFull') }}</span>
+            @if (detail.jdText) {
+              <span class="fold-len">{{ tn('tracker.dJdChars', detail.jdText.length) }}</span>
+            }
+          </span>
+          <button mat-icon-button
+                  (click)="$event.stopPropagation(); jdTextEditing() ? cancelEditJdText() : startEditJdText()"
+                  [matTooltip]="t('common.edit')" class="edit-btn">
+            <mat-icon>{{ jdTextEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </div>
 
-      @if (detailTab() === 'score') {
-      <!-- 匹配分析(纯关键词,不调 AI)-->
-      @if (match(); as m) {
+        @if (app.jdSourceUrl) {
+          <a [href]="app.jdSourceUrl" target="_blank" rel="noopener noreferrer" class="src-link">
+            <mat-icon>link</mat-icon>{{ t('tracker.dViewPosting') }}
+          </a>
+        }
+
+        @if (jdTextEditing()) {
+          <textarea class="plain-area" rows="16" [(ngModel)]="jdTextDraft"
+                    [placeholder]="t('tracker.dJdFull')"></textarea>
+          <div class="cl-actions save-row">
+            <button mat-flat-button color="primary" (click)="saveJdText()"
+                    [disabled]="jdTextSaving()">
+              {{ t('common.save') }}
+            </button>
+            <button mat-button (click)="cancelEditJdText()">{{ t('common.cancel') }}</button>
+          </div>
+        } @else if (detail.jdText) {
+          @if (jdExpanded()) {
+            <div class="jd-full">
+              <p class="pre">{{ detail.jdText }}</p>
+            </div>
+          } @else {
+            <p class="pre jd-peek">{{ detail.jdText?.slice(0, 220) }}…</p>
+          }
+        } @else {
+          <p class="cl-empty">{{ t('tracker.dJdEmpty') }}</p>
+        }
+      </section>
+
+      <!-- 公司情报 -->
+      @if (company()?.profile) {
         <mat-divider></mat-divider>
         <section>
-          <div class="sec-head"><span>{{ t('tracker.dMatchAnalysis') }}</span></div>
-
-          <div class="match-head">
-            <div class="score" [class]="matchTier(m.score)">
-              <span class="score-num">{{ m.score }}</span>
-              <span class="score-unit">{{ t('tracker.dScoreUnit') }}</span>
-            </div>
-            <div class="score-note">
-              <strong [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</strong>
-              <span>{{ tf('tracker.dHitKw', { n: m.hit.length, m: m.total }) }}</span>
-            </div>
-          </div>
-
-          @if (m.missing.length > 0) {
-            <div class="kw-group">
-              <span class="kw-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</span>
-              <div class="kw-list">
-                @for (k of m.missing; track k) {
-                  <span class="kw miss">{{ k }}</span>
-                }
-              </div>
-            </div>
-          }
-
-          @if (m.hit.length > 0) {
-            <div class="kw-group">
-              <span class="kw-title">{{ tn('tracker.dHitKwTitle', m.hit.length) }}</span>
-              <div class="kw-list">
-                @for (k of m.hit; track k) {
-                  <span class="kw ok">{{ k }}</span>
-                }
-              </div>
-            </div>
-          }
-
-          @if (m.softSkills.length > 0) {
-            <p class="soft-note">
-              {{ t('tracker.dSoftSkills') }}{{ m.softSkills.join('、') }}
-            </p>
+          <div class="sec-head"><span>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</span></div>
+          <p class="pre">{{ company()?.profile }}</p>
+          @if (company()?.website) {
+            <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
+              <mat-icon>public</mat-icon>{{ company()!.website }}
+            </a>
           }
         </section>
-
       }
 
-      @if (detailTab() === 'questions') {
-        <div class="two-col"><div class="main-col">
-          <section>
-            <div class="sec-head"><span>{{ t('tracker.dQuestions') }}</span></div>
-            <p class="dim">{{ t('tracker.dQuestionsPlaceholder') }}</p>
-          </section>
-        </div></div>
+      <mat-divider></mat-divider>
+      <section>
+        <div class="sec-head">
+          <span>{{ t('tracker.dNotes') }}</span>
+          <button mat-icon-button (click)="notesEditing() ? cancelEditNotes() : startEditNotes()"
+                  [matTooltip]="t('common.edit')" class="edit-btn">
+            <mat-icon>{{ notesEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </div>
+        @if (notesEditing()) {
+          <textarea class="plain-area" rows="8" [(ngModel)]="notesDraft"
+                    [placeholder]="t('tracker.dNotes')"></textarea>
+          <div class="cl-actions save-row">
+            <button mat-flat-button color="primary" (click)="saveNotes()"
+                    [disabled]="notesSaving()">
+              {{ t('common.save') }}
+            </button>
+            <button mat-button (click)="cancelEditNotes()">{{ t('common.cancel') }}</button>
+          </div>
+        } @else {
+          <p class="pre">{{ detail.notes || '—' }}</p>
+        }
+      </section>
+
+      @if ((detail.history?.length ?? 0) > 0) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head"><span>{{ t('tracker.dHistory') }}</span></div>
+          <ol class="history">
+            @for (h of detail.history ?? []; track h.changedAt + h.status) {
+              <li>
+                <span class="to">{{ statusLabel(h.status) }}</span>
+                <time>{{ h.changedAt | date: 'yyyy-MM-dd HH:mm' }}</time>
+                @if (h.note) { <em class="note">{{ h.note }}</em> }
+              </li>
+            }
+          </ol>
+        </section>
       }
 
-      @if (detailTab() === 'email' || detailTab() === 'comms') {
+      @if ((detail.rounds?.length ?? 0) > 0) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head"><span>{{ t('tracker.dRounds') }}</span></div>
+          <ul class="rounds">
+            @for (r of detail.rounds ?? []; track r.id) {
+              <li>
+                <strong>{{ tn('tracker.dRoundN', r.order) }}</strong>
+                @if (r.stage) { <span class="tag">{{ r.stage }}</span> }
+                @if (r.scheduledDate) { <span>{{ r.scheduledDate | date: 'yyyy-MM-dd' }}</span> }
+                @if (r.format) { <span class="tag">{{ r.format }}</span> }
+                @if (r.interviewers) { <span class="tag">{{ r.interviewers }}</span> }
+                @if (r.outcome && r.outcome !== 'Pending') {
+                  <span class="tag" [class.outcome-pass]="r.outcome === 'Passed'"
+                        [class.outcome-fail]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
+                }
+                @if (r.notes) { <p class="pre">{{ r.notes }}</p> }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
+      @if (app.link) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head"><span>{{ t('tracker.dJobLink') }}</span></div>
+          <a [href]="app.link" target="_blank" rel="noopener noreferrer" class="link">
+            {{ app.link }}
+          </a>
+        </section>
+      }
+      }
+
+      @else {
         <!-- 沟通记录:按发生时间倒序的时间线 + 增删改 -->
         <div class="comms">
           <div class="comms-head">
@@ -1926,202 +1866,213 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     </mat-dialog-actions>
   `,
   styles: [`
-    /* ===== Simplify 真站对齐 ===== */
-    /* ---- Drawer header ---- */
-    .drawer-header {
-      display: flex; align-items: flex-start; gap: 16px;
-      padding: 24px 32px 20px; border-bottom: 1px solid #ECEEF1;
+    /* ★ Simplify 对齐:头部标题堆叠 */
+    h2[mat-dialog-title] { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+    h2 .title-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    h2 .main-title { font-size: 18px; font-weight: 600; line-height: 1.35; }
+    h2 .sub-title { font-size: 13px; font-weight: 400; opacity: 0.55; }
+    .detail-body { min-width: 460px; max-width: 620px; padding-top: 4px; }
+    @media (max-width: 620px) { .detail-body { min-width: auto; } }
+    .top { margin-bottom: 14px; }
+    .chip { font-size: 12px; }
+    .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
+    /* ★ Simplify 对齐:状态 pill (灰色圆角) */
+    .status-pill {
+      display: inline-block; padding: 6px 16px; border-radius: 16px;
+      background: rgba(0,0,0,0.06); font-size: 13px; font-weight: 500;
+      margin-right: 8px; margin-bottom: 4px;
     }
-    .drawer-header .logo-wrap { flex: 0 0 62px; width: 62px; height: 62px; position: relative; }
-    .drawer-header .logo-avatar {
-      width: 62px; height: 62px; border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 22px; font-weight: 700;
-    }
-    .drawer-header .logo {
-      position: absolute; inset: 0; width: 62px; height: 62px;
-      border-radius: 12px; object-fit: contain; background: #fff;
-    }
-    .drawer-header .title-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-    .drawer-header .main-title { font-size: 20px; font-weight: 700; color: #1A1D23; line-height: 1.3; }
-    .drawer-header .sub-title { font-size: 15px; font-weight: 400; color: #6E7681; }
-    .header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-    .hdr-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      height: 38px; padding: 0 16px;
-      background: #fff; border: 1px solid #E3E6EA; border-radius: 8px;
-      font-size: 14px; color: #3D4451; cursor: pointer;
-    }
-    .hdr-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #6E7681; }
-    .hdr-btn:hover { background: #F7F8FA; }
-    .hdr-btn.danger { border-color: #EF4444; color: #EF4444; }
-    .hdr-btn.danger mat-icon { color: #EF4444; }
-    .hdr-close {
-      background: none; border: none; cursor: pointer; padding: 8px;
-      color: #3D4451; display: inline-flex;
-    }
-    .hdr-close mat-icon { font-size: 20px; width: 20px; height: 20px; }
-
-    /* ---- Tabs ---- */
-    .tabs {
-      display: flex; gap: 30px; padding: 0 32px;
-      border-bottom: 1px solid #ECEEF1; background: #fff;
-    }
-    .tab {
-      appearance: none; background: none; border: none; cursor: pointer;
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 16px 0 13px; font-size: 14px; color: #8A94A6;
-      border-bottom: 3px solid transparent; margin-bottom: -1px;
-    }
-    .tab mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .tab:hover { color: #3D4451; }
-    .tab.active { color: #1A1D23; font-weight: 600; border-bottom-color: #1A1D23; }
-
-    /* ---- Body: two-column ---- */
-    .detail-body { padding: 0 !important; background: #fff; }
-    .two-col { display: flex; min-height: 400px; }
-    .main-col { flex: 1; min-width: 0; padding: 24px 32px; }
-    .side-col {
-      flex: 0 0 360px; width: 360px; padding: 24px 32px;
-      border-left: 1px solid #ECEEF1; background: #fff;
-    }
-
-    /* ---- Job Posting ---- */
-    .sec-head {
-      display: flex; align-items: center; gap: 8px;
-      margin: 0 0 16px; font-size: 13px; font-weight: 500;
-      color: #8A94A6; letter-spacing: 0.2px;
-    }
-    .sec-head-lg span { font-size: 17px; font-weight: 700; color: #1A1D23; }
-    .sec-head .edit-btn { margin-left: auto; }
-    .edit-btn { opacity: 0.55; }
-    .edit-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .edit-btn:hover { opacity: 1; }
+    .status-pill.warn { background: #fff3e0; color: #e65100; }
+    /* ★ Simplify 对齐:字段两列,标签小灰字在上 */
     .fields {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px;
       margin: 0 0 24px;
     }
-    .field { display: flex; flex-direction: column; gap: 8px; }
-    .flabel { font-size: 13px; color: #8A94A6; font-weight: 400; }
-    .fvalue { font-size: 15px; color: #1F2937; line-height: 1.5; }
-    .teal-link { color: #0E9FCC; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
-    .teal-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .teal-link:hover { text-decoration: underline; }
-    .jd-body { font-size: 14px; color: #3D4451; line-height: 1.57; margin: 24px 0 0; white-space: pre-wrap; word-break: break-word; }
-    .dim { color: #8A94A6; font-size: 14px; }
-    .rejection { margin: 12px 0 0; font-size: 13px; color: #c62828; }
-
-    /* ---- Keyword gap ---- */
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .flabel { font-size: 12px; color: rgba(0,0,0,0.45); letter-spacing: 0.2px; }
+    .fvalue { font-size: 14px; line-height: 1.5; }
     .kw-gap { margin: 0 0 20px; }
     .kw-gap .flabel { display: block; margin-bottom: 8px; }
-    .kw-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .kw-missing {
-      padding: 4px 12px; border-radius: 12px; font-size: 12px;
-      background: #FDE8E8; color: #C62828;
+    /* ---- Simplify 视觉:section 统一 ---- */
+    section { margin: 0; padding: 18px 0; }
+    section + section, mat-divider + section { border-top: 1px solid rgba(0,0,0,0.08); }
+    mat-divider { display: none; }
+    .sec-head {
+      display: flex; align-items: center; gap: 6px;
+      margin: 0 0 10px; font-size: 13px; font-weight: 500;
+      color: rgba(0,0,0,0.55); letter-spacing: 0.2px;
     }
-    .kw.ok {
-      padding: 4px 12px; border-radius: 12px; font-size: 12px;
-      background: #E6F7ED; color: #1B7A3D;
+    .sec-head .edit-btn { margin-left: auto; }
+    section h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.3px; opacity: 0.7; }
+    .pre { margin: 0; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+    .history { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.9; }
+    .history mat-icon {
+      font-size: 14px; width: 14px; height: 14px;
+      vertical-align: middle; opacity: 0.45;
     }
-
-    /* ---- Sections ---- */
-    section { margin: 0; padding: 20px 0; border-top: 1px solid #ECEEF1; }
-    section:first-child { border-top: none; padding-top: 0; }
-    .pre { margin: 0; font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; color: #3D4451; }
-    .plain-area {
-      width: 100%; padding: 12px 14px; font-size: 14px; line-height: 1.6;
-      border: 1px solid #E3E6EA; border-radius: 8px; resize: vertical;
-      font-family: inherit; box-sizing: border-box;
+    .history time { margin-left: 8px; opacity: 0.55; font-size: 12px; }
+    .history .note { display: block; opacity: 0.6; font-style: italic; font-size: 12.5px; }
+    .rounds { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.8; }
+    .tag {
+      display: inline-block; margin-left: 6px; padding: 1px 7px;
+      border-radius: 10px; background: rgba(0, 0, 0, 0.06); font-size: 11.5px;
     }
-    .plain-area:focus { outline: none; border-color: #2AAED3; }
-    .save-row { display: flex; gap: 8px; margin-top: 12px; }
-    .field-hint { font-size: 12px; color: #8A94A6; margin: 8px 0 0; }
-    .warn-banner {
-      display: flex; gap: 10px; align-items: flex-start;
-      padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;
-      background: #FEF9E7; border: 1px solid #F5E6A3;
-      font-size: 13px; color: #7A5C00; line-height: 1.5;
-    }
-    .warn-banner mat-icon { font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
-
-    /* ---- Match analysis ---- */
-    .match-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .tag.outcome-pass { background: #e8f5e9; color: #2e7d32; }
+    .tag.outcome-fail { background: #ffebee; color: #c62828; }
+    .link { font-size: 13px; word-break: break-all; color: #303f9f; }
+    /* ---- 匹配分析 ---- */
+    .match-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
     .score {
       display: flex; align-items: baseline; gap: 2px;
-      padding: 8px 16px; border-radius: 10px; font-weight: 600;
+      padding: 6px 14px; border-radius: 10px; font-weight: 600;
     }
-    .score-num { font-size: 28px; line-height: 1; }
+    .score-num { font-size: 26px; line-height: 1; }
     .score-unit { font-size: 12px; }
+    .score.good { background: #e8f5e9; color: #2e7d32; }
+    .score.fair { background: #fff8e1; color: #ef6c00; }
+    .score.poor { background: #ffebee; color: #c62828; }
+    .score-note { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+    .score-note strong.good { color: #2e7d32; }
+    .score-note strong.fair { color: #ef6c00; }
+    .score-note strong.poor { color: #c62828; }
+    .score-note span { opacity: 0.6; }
     .kw-group { margin-bottom: 12px; }
-    .kw-title { font-size: 13px; color: #8A94A6; display: block; margin-bottom: 8px; }
-    .kw.miss {
-      padding: 4px 12px; border-radius: 12px; font-size: 12px;
-      background: #FDE8E8; color: #C62828;
+    .kw-title { display: block; font-size: 11.5px; opacity: 0.55; margin-bottom: 6px; }
+    .kw-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .kw {
+      padding: 2px 9px; border-radius: 11px; font-size: 12px;
+      border: 1px solid transparent;
     }
-    .soft-note { font-size: 13px; color: #8A94A6; margin: 12px 0 0; }
+    .kw.miss { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
+    .kw.ok { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
+    .soft-note { margin: 8px 0 0; font-size: 12px; opacity: 0.55; line-height: 1.6; }
+    /* ---- JD 全文折叠 ---- */
+    .fold-head { cursor: default; }
+    .fold-head > span:first-child { display: flex; align-items: center; gap: 6px; }
+    .fold-head:hover { opacity: 1; }
+    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(0,0,0,0.45); }
+    .fold-len { font-size: 11.5px; opacity: 0.45; font-weight: 400; }
+    /* Simplify:标题行右侧的小编辑图标 */
+    .edit-btn { width: 26px; height: 26px; line-height: 26px; margin-left: auto; opacity: 0.45; }
+    .edit-btn:hover { opacity: 1; }
+    .edit-btn mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    .jd-full { max-height: 340px; overflow-y: auto; padding-right: 6px; }
+    .jd-peek { opacity: 0.65; }
+    .src-link {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12.5px; color: #303f9f; margin-bottom: 8px;
+    }
+    .src-link mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    /* ---- 求职信 ---- */
+    .cl-status {
+      margin-left: 6px; padding: 1px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 500;
+    }
+    .cl-status.cl-draft { background: rgba(0,0,0,0.07); }
+    .cl-status.cl-generated { background: #e3f2fd; color: #1565c0; }
+    .cl-status.cl-final { background: #e8f5e9; color: #2e7d32; }
+    .cl-hint {
+      display: flex; align-items: flex-start; gap: 6px;
+      margin: 0 0 10px; padding: 9px 11px; border-radius: 8px;
+      background: #fff8e1; font-size: 12.5px; line-height: 1.6;
+    }
+    .cl-hint.stale { background: #f3e5f5; }
+    .cl-hint mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
+    .cl-extra { width: 100%; margin-bottom: 4px; }
+    .cl-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+    .cl-actions.save-row { margin-top: 10px; }
+    .cl-generating { margin-top: 8px; }
+    .cl-generating p { margin: 10px 0 0; font-size: 12.5px; opacity: 0.65; }
+    .cl-editor {
+      width: 100%; margin-top: 10px; padding: 12px;
+      font-family: inherit; font-size: 13.5px; line-height: 1.7;
+      border: 1px solid rgba(0,0,0,0.18); border-radius: 8px;
+      resize: vertical; box-sizing: border-box;
+    }
+    .cl-preview {
+      margin-top: 10px; padding: 14px 16px; border-radius: 8px;
+      background: rgba(0,0,0,0.028); font-size: 13.5px; line-height: 1.75;
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 420px; overflow-y: auto;
+    }
+    .cl-empty { margin: 10px 0 0; font-size: 13px; opacity: 0.55; }
+    /* ★ Simplify 对齐:黄色警告条 */
+    .warn-banner {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
+      background: #fef9e7; border: 1px solid #f9e79f;
+      font-size: 12.5px; line-height: 1.6; color: #7d6608;
+    }
+    .warn-banner mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
+    /* ★ Simplify 对齐:朴素 textarea (非 mat-form-field) */
+    .plain-area {
+      width: 100%; box-sizing: border-box;
+      padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.6;
+      border: 1px solid rgba(0,0,0,0.2); border-radius: 8px; resize: vertical;
+      background: #fff; color: inherit;
+    }
+    .plain-area:focus { outline: none; border-color: #1a73e8; }
+    .plain-area::placeholder { color: rgba(0,0,0,0.35); }
+    .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(0,0,0,0.45); line-height: 1.5; }
+    .gen-btn { margin: 2px 0 4px; }
+    .gen-btn[disabled] { opacity: 0.5; }
 
-    /* ---- Sidebar: status card ---- */
-    .status-card {
-      background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;
-      padding: 24px; margin-bottom: 24px;
+    /* ---- 公司 Logo (Simplify:大圆角方块) ---- */
+    .logo-wrap { position: relative; flex: 0 0 40px; width: 40px; height: 40px; }
+    .logo-avatar {
+      display: flex; align-items: center; justify-content: center;
+      width: 40px; height: 40px; border-radius: 10px;
+      color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
+      text-transform: uppercase; overflow: hidden;
     }
-    .status-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 700; color: #1A1D23; }
-    .status-select { width: 100%; margin-bottom: 20px; }
-    .status-timeline { position: relative; padding-left: 4px; }
-    .tl-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 0; position: relative;
+    .logo {
+      position: absolute; inset: 0;
+      width: 40px; height: 40px; border-radius: 10px; object-fit: contain;
+      background: #fff;
     }
-    .tl-row::before {
-      content: ''; position: absolute; left: 9px; top: -10px; bottom: 50%;
-      width: 2px; background: #E3E6EA;
-    }
-    .tl-row:first-child::before { display: none; }
-    .tl-row.done::before { background: #2AAED3; }
-    .tl-dot {
-      flex: 0 0 20px; width: 20px; height: 20px; border-radius: 50%;
-      border: 2px solid #D4D9E0; background: #fff; position: relative; z-index: 1;
-    }
-    .tl-row.done .tl-dot { border-color: #2AAED3; }
-    .tl-row.done .tl-dot::after {
-      content: ''; position: absolute; inset: 4px; border-radius: 50%;
-      background: #2AAED3;
-    }
-    .tl-row.current .tl-dot { border-color: #2AAED3; border-width: 3px; }
-    .tl-name { font-size: 14px; color: #6E7681; font-weight: 500; }
-    .tl-row.done .tl-name { color: #1F2937; font-weight: 600; }
-    .tl-date { font-size: 13px; color: #8A94A6; margin-left: auto; }
+    .detail-logo { margin-right: 0; flex: 0 0 40px; }
 
-    /* ---- Sidebar: notes card ---- */
-    .notes-card { margin-bottom: 24px; }
-    .notes-card .sec-head span { font-size: 16px; font-weight: 700; color: #1A1D23; }
-
-    /* ---- Rounds / links ---- */
-    .rounds { margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 1.8; color: #3D4451; }
-    .rounds li { padding: 8px 0; border-bottom: 1px solid #F0F1F3; }
-    .rounds li:last-child { border-bottom: none; }
-    .tag {
-      display: inline-block; margin-left: 6px; padding: 2px 10px;
-      border-radius: 10px; background: #F0F1F3; font-size: 12px; color: #3D4451;
+    /* ---- 页签 (Simplify:极简,active 下划线) ---- */
+    .tabs { display: flex; gap: 20px; margin: 6px 0 16px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    .tab {
+      appearance: none; background: none; border: none; cursor: pointer;
+      padding: 8px 2px; font-size: 14px; color: rgba(0,0,0,0.55);
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
     }
-    .link { font-size: 14px; word-break: break-all; color: #0E9FCC; }
+    .tab:hover { color: rgba(0,0,0,0.85); }
+    .tab.active { color: rgba(0,0,0,0.92); font-weight: 600; border-bottom-color: #1a73e8; }
 
-    /* ---- Comms ---- */
-    .comms { padding: 24px 32px; }
-    .comms-head { margin-bottom: 16px; }
+    /* ---- 沟通记录 ---- */
+    .comms-head { margin-bottom: 10px; }
+    .comms-empty { font-size: 13px; opacity: 0.55; margin: 4px 0 0; }
     .comm-form {
-      padding: 16px; margin-bottom: 16px; border-radius: 12px;
-      background: #F7F8FA; border: 1px solid #ECEEF1;
+      padding: 12px; margin-bottom: 14px; border-radius: 10px;
+      background: rgba(0,0,0,0.025); border: 1px solid rgba(0,0,0,0.08);
     }
-    .comm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+    .comm-form mat-form-field { width: 100%; }
+    .comm-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .comm-form .row2 mat-form-field { width: 100%; }
+    .comm-form-actions { display: flex; gap: 8px; }
+    .comm-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
     .comm-item {
-      display: flex; gap: 12px; align-items: flex-start;
-      padding: 14px 16px; border-radius: 12px; border: 1px solid #ECEEF1;
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08);
     }
-    .stale-warning {
-      display: flex; align-items: center; gap: 8px;
-      padding: 12px 32px; background: #FFF8E1; color: #7A5C00; font-size: 13px;
+    .comm-type {
+      flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px;
+      background: rgba(0,0,0,0.06);
     }
+    .comm-type.ct-email { background: #e3f2fd; color: #1565c0; }
+    .comm-type.ct-call { background: #e8f5e9; color: #2e7d32; }
+    .comm-type.ct-interview { background: #fff3e0; color: #ef6c00; }
+    .comm-type.ct-message { background: #f3e5f5; color: #7b1fa2; }
+    .comm-type.ct-note { background: #eceff1; color: #455a64; }
+    .comm-body { flex: 1; min-width: 0; }
+    .comm-subject { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
+    .comm-content { margin: 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    .comm-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 11.5px; opacity: 0.6; }
+    .comm-actions { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+    .comm-actions .danger { color: #c62828; }
   `]
 })
 export class ApplicationDetailDialogComponent {
@@ -2369,106 +2320,12 @@ export class ApplicationDetailDialogComponent {
   readonly logoBroken = signal(false);
 
   /** 详情页当前页签。 */
-  readonly detailTab = signal<'overview' | 'documents' | 'score' | 'email' | 'questions' | 'comms'>('overview');
+  readonly detailTab = signal<'overview' | 'comms'>('overview');
 
-  switchTab(tab: 'overview' | 'documents' | 'score' | 'email' | 'questions' | 'comms'): void {
+  switchTab(tab: 'overview' | 'comms'): void {
     this.detailTab.set(tab);
-    if (tab === 'comms' || tab === 'email') this.loadCommunications();
+    if (tab === 'comms') this.loadCommunications();
   }
-
-  /** ★ Header 收藏按钮 (Simplify 对齐)。 */
-  toggleFavorite(id: string): void {
-    try {
-      const key = 'yi-tracker-favorites';
-      const arr: string[] = JSON.parse(localStorage.getItem(key) || '[]');
-      const idx = arr.indexOf(id);
-      if (idx >= 0) arr.splice(idx, 1); else arr.push(id);
-      localStorage.setItem(key, JSON.stringify(arr));
-    } catch { /* ignore */ }
-  }
-
-  isFavorite(id: string): boolean {
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem('yi-tracker-favorites') || '[]');
-      return arr.includes(id);
-    } catch { return false; }
-  }
-
-  /** ★ Header 归档按钮。 */
-  archiveApp(app: Application): void {
-    this.api.post<void>(`/api/jobs/applications/${app.id}/archive`, {}).subscribe({
-      next: () => {
-        this.snack.open(this.t('tracker.archived'), this.t('common.close'), { duration: 2500 });
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
-    });
-  }
-
-  /** ★ Header 删除按钮。 */
-  removeApp(app: Application): void {
-    const ok = confirm(this.tf('tracker.confirmDelete', { a: `${app.companyName} · ${app.role}` }));
-    if (!ok) return;
-    this.api.delete<void>(`/api/jobs/applications/${app.id}`).subscribe({
-      next: () => {
-        this.snack.open(this.t('tracker.deleted'), this.t('common.close'), { duration: 2500 });
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
-    });
-  }
-
-  /** ★ Job Posting 编辑按钮。 */
-  openEditPosting(): void {
-    // 复用现有的编辑逻辑
-    this.startEditJdSummary();
-  }
-
-  /** ★ 状态时间线:判断某状态是否已完成。 */
-  isStatusDone(s: string): boolean {
-    const order = ['Saved', 'Applied', 'Screen', 'Interviewing', 'Offer'];
-    const currentIdx = order.indexOf(this.detail.status);
-    const sIdx = order.indexOf(s);
-    return sIdx >= 0 && sIdx <= currentIdx;
-  }
-
-  /** ★ 状态时间线:获取某状态的日期。 */
-  statusDate(s: string): string | null {
-    const h = (this.detail.history ?? []).find(x => x.status === s);
-    if (h?.changedAt) {
-      try {
-        return new Date(h.changedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-      } catch { return null; }
-    }
-    // 如果当前状态就是 s,用 updatedAt
-    if (this.detail.status === s && this.detail.updatedAt) {
-      try {
-        return new Date(this.detail.updatedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-      } catch { return null; }
-    }
-    return null;
-  }
-
-  /** ★ 快捷改状态 (sidebar dropdown 用)。 */
-  quickChangeStatus(app: Application, status: string): void {
-    this.api.put(`/api/jobs/applications/${app.id}/status`, { status }).subscribe({
-      next: () => {
-        this.snack.open(this.t('tracker.statusUpdated'), this.t('common.close'), { duration: 2000 });
-        // 刷新详情
-        this.reloadDetail();
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
-    });
-  }
-
-  /** ★ 重新加载详情。 */
-  private reloadDetail(): void {
-    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
-      next: (a) => this.full.set(a),
-      error: () => { this.loadError.set(true); }
-    });
-  }
-
-  /** ★ 状态顺序 (sidebar timeline 用)。 */
-  readonly statusOrder: ApplicationStatus[] = ['Saved', 'Applied', 'Screen', 'Interview', 'Offer'];
 
   // ---------------------------- 条目编辑(2026-10-08) ----------------------------
   // 详情弹窗之前是纯只读 —— Notes/JD 全文/JD 摘要都改不了。

@@ -1,0 +1,67 @@
+/* R08 日历月视图 */
+.cal-page { padding: 20px 24px; max-width: 1100px; margin: 0 auto; }
+
+.cal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+
+  h2 { margin: 0; font-size: 20px; font-weight: 600; }
+}
+
+.cal-nav { display: flex; align-items: center; gap: 4px; }
+
+.cal-month { font-size: 16px; font-weight: 500; min-width: 110px; text-align: center; }
+
+.cal-loading, .cal-empty { text-align: center; padding: 40px 0; opacity: 0.55; }
+
+.cal-grid { padding: 0; overflow: hidden; }
+
+.cal-week-head, .cal-week { display: grid; grid-template-columns: repeat(7, 1fr); }
+
+.cal-week-head {
+  background: rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cal-dow {
+  padding: 10px 0; text-align: center;
+  font-size: 12px; font-weight: 600; opacity: 0.55;
+}
+
+.cal-week { border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.cal-week:last-child { border-bottom: none; }
+
+.cal-cell {
+  min-height: 96px; padding: 6px 8px;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex; flex-direction: column; gap: 4px;
+  cursor: default;
+}
+.cal-cell:last-child { border-right: none; }
+.cal-cell.outside { background: rgba(0, 0, 0, 0.02); }
+.cal-cell.outside .cal-date { opacity: 0.35; }
+.cal-cell.today .cal-date {
+  background: #1a73e8; color: #fff;
+  border-radius: 50%; width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.cal-date { font-size: 13px; font-weight: 500; }
+
+.cal-chip {
+  appearance: none; border: none; cursor: pointer;
+  text-align: left; padding: 4px 8px; border-radius: 6px;
+  background: #e8f0fe; color: #1a73e8;
+  display: flex; flex-direction: column; gap: 1px;
+  font-size: 11px; line-height: 1.3;
+  transition: background 0.15s;
+}
+.cal-chip:hover { background: #d2e3fc; }
+
+.chip-co { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip-stage { opacity: 0.75; }
+
+@media (max-width: 720px) {
+  .cal-cell { min-height: 64px; padding: 4px; }
+  .chip-stage { display: none; }
+}

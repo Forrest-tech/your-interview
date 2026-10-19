@@ -1,0 +1,46 @@
+<div class="cal-page">
+  <div class="cal-head">
+    <h2>{{ t('pb.cal.title') }}</h2>
+    <div class="cal-nav">
+      <button mat-icon-button (click)="prevMonth()" [attr.aria-label]="t('pb.cal.prev')">
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+      <span class="cal-month">{{ monthLabel() }}</span>
+      <button mat-icon-button (click)="nextMonth()" [attr.aria-label]="t('pb.cal.next')">
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+      <button mat-button (click)="goToday()">{{ t('pb.cal.today') }}</button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="cal-loading">{{ t('common.loading') }}</p>
+  } @else {
+    <mat-card class="cal-grid">
+      <div class="cal-week-head">
+        @for (h of weekHeaders; track h) {
+          <div class="cal-dow">{{ h }}</div>
+        }
+      </div>
+      @for (week of weeks(); track $index) {
+        <div class="cal-week">
+          @for (day of week; track day.date.getTime()) {
+            <div class="cal-cell" [class.outside]="!day.inMonth" [class.today]="day.isToday">
+              <span class="cal-date">{{ day.date.getDate() }}</span>
+              @for (r of day.rounds; track r.roundId) {
+                <button class="cal-chip" (click)="goRound(r)"
+                        [matTooltip]="r.role + ' · ' + r.stage">
+                  <span class="chip-co">{{ r.companyName }}</span>
+                  <span class="chip-stage">{{ r.stage }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+    </mat-card>
+    @if (rounds().length === 0) {
+      <p class="cal-empty">{{ t('pb.cal.empty') }}</p>
+    }
+  }
+</div>

@@ -1325,7 +1325,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       width: '66vw',
       maxWidth: '1280px',
       minWidth: '900px',
-      height: '100vh',
       maxHeight: '100vh',
       position: { right: '0', top: '0' },
       panelClass: 'detail-drawer-panel',

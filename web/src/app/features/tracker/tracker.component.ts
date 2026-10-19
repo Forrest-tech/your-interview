@@ -1971,7 +1971,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     .hdr-close:hover { background: #F7F8FA; }
     .detail-body { padding: 0; }
     /* ★ Simplify 真站:双栏布局 */
-    .two-col { display: flex; min-height: 400px; }
+    .two-col { display: flex; }
     .main-col { flex: 1; min-width: 0; padding: 24px 32px; }
     .side-col {
       flex: 0 0 360px; width: 360px;

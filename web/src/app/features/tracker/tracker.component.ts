@@ -1776,7 +1776,6 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       }
 
       @if (detailTab() === 'score') {
-        <div class="two-col"><div class="main-col">
       <!-- 匹配分析(纯关键词,不调 AI)-->
       @if (match(); as m) {
         <mat-divider></mat-divider>
@@ -1823,7 +1822,6 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           }
         </section>
 
-        </div></div>
       }
 
       @if (detailTab() === 'questions') {

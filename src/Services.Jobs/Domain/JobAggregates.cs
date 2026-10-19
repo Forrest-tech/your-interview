@@ -163,6 +163,16 @@ public sealed class JobApplication : AuditableAggregateRoot
     /// </summary>
     public string? JobType { get; private set; }
 
+    /// <summary>
+    /// 任职要求(完整文本)。Smart paste 从 Qualifications/Requirements 段提取。
+    /// </summary>
+    public string? Requirements { get; private set; }
+
+    /// <summary>
+    /// 福利待遇(完整文本)。Smart paste 从 Benefits/Advantages 段提取。
+    /// </summary>
+    public string? Benefits { get; private set; }
+
     public ApplicationStatus Status { get; private set; }
     public Priority Priority { get; private set; }
     public DateOnly? AppliedDate { get; private set; }
@@ -247,7 +257,8 @@ public sealed class JobApplication : AuditableAggregateRoot
 
     public void UpdateDetails(string role, string? location, string? link, string? salary,
         string? workMode, string? source, string? jdSummary, string? notes,
-        string? companyDescription = null, string? workAuthorization = null, string? jobType = null)
+        string? companyDescription = null, string? workAuthorization = null, string? jobType = null,
+        string? requirements = null, string? benefits = null)
     {
         Role = role;
         Location = location;
@@ -263,6 +274,10 @@ public sealed class JobApplication : AuditableAggregateRoot
             WorkAuthorization = string.IsNullOrWhiteSpace(workAuthorization) ? null : workAuthorization;
         if (jobType is not null)
             JobType = string.IsNullOrWhiteSpace(jobType) ? null : jobType;
+        if (requirements is not null)
+            Requirements = string.IsNullOrWhiteSpace(requirements) ? null : requirements;
+        if (benefits is not null)
+            Benefits = string.IsNullOrWhiteSpace(benefits) ? null : benefits;
         Touch();
     }
 
@@ -311,6 +326,24 @@ public sealed class JobApplication : AuditableAggregateRoot
     public void SetJobType(string? jobType)
     {
         JobType = string.IsNullOrWhiteSpace(jobType) ? null : jobType;
+        Touch();
+    }
+
+    /// <summary>
+    /// 设置任职要求。独立方法,理由同 SetCompanyDescription。空串归一为 null。
+    /// </summary>
+    public void SetRequirements(string? requirements)
+    {
+        Requirements = string.IsNullOrWhiteSpace(requirements) ? null : requirements;
+        Touch();
+    }
+
+    /// <summary>
+    /// 设置福利待遇。独立方法,理由同 SetCompanyDescription。空串归一为 null。
+    /// </summary>
+    public void SetBenefits(string? benefits)
+    {
+        Benefits = string.IsNullOrWhiteSpace(benefits) ? null : benefits;
         Touch();
     }
 

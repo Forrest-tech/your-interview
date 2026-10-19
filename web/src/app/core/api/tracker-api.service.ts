@@ -99,6 +99,7 @@ export class TrackerApi {
     priority?: string | null; link?: string | null; jdText?: string | null;
     source?: string | null; status?: string | null; deadline?: string | null;
     companyDescription?: string | null; workAuthorization?: string | null;
+    requirements?: string | null; benefits?: string | null;
   }): Observable<SmartAddResult> {
     return this.api.post<SmartAddResult>(`${TrackerApi.BASE}/applications/smart-add`, body);
   }

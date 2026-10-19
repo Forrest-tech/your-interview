@@ -96,6 +96,10 @@ export interface Application {
   workAuthorization?: string;
   /** 岗位性质(2026-10-19):归一短文本(Full-time/Part-time/Permanent/Contract/...)。Smart paste 提取。 */
   jobType?: string;
+  /** 任职要求(2026-10-19):完整存储。Smart paste 从 Qualifications/Requirements 段提取。 */
+  requirements?: string;
+  /** 福利待遇(2026-10-19):完整存储。Smart paste 从 Benefits/Advantages 段提取。 */
+  benefits?: string;
   resumeScore?: number;
   /** 预估通过率(后端存为字符串,如 "75%";展示时原样显示)。 */
   passRateEstimate?: string | null;

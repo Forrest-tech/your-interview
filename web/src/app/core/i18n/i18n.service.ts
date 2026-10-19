@@ -829,6 +829,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dScoreUnit': { zh: '分', en: 'pts', fr: 'pts' },
   'tracker.dJdSummary': { zh: 'JD 摘要', en: 'JD summary', fr: 'Résumé de l’offre' },
   'tracker.companyDescription': { zh: '公司介绍', en: 'Company description', fr: 'Description de l’entreprise' },
+  'tracker.requirements': { zh: '任职要求', en: 'Requirements', fr: 'Exigences' },
+  'tracker.benefits': { zh: '福利待遇', en: 'Benefits', fr: 'Avantages' },
   'tracker.dMatchAnalysis': { zh: '简历匹配分析', en: 'Resume match analysis', fr: 'Analyse d’adéquation CV' },
   'tracker.dHitKw': { zh: '命中 {n} / {m} 个 JD 技术关键词', en: '{n} of {m} JD tech keywords matched', fr: '{n} mots-clés techniques sur {m} trouvés' },
   'tracker.dMissingKw': { zh: '缺少的关键词 ({n})', en: 'Missing keywords ({n})', fr: 'Mots-clés manquants ({n})' },

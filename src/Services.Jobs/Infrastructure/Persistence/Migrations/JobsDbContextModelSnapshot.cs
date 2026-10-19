@@ -346,6 +346,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("AppliedDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("Benefits")
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)");
+
                     b.Property<string>("CompanyDescription")
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
@@ -426,6 +430,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<string>("RejectionReason")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Requirements")
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)");
 
                     b.Property<int?>("ResumeScore")
                         .HasColumnType("integer");

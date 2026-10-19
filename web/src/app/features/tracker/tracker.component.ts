@@ -1636,19 +1636,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </div>
       </div>
 
-      <!-- JD 正文 -->
-      <div class="jd-body">
-        @if (detail.jdSummary) {
-          <p>{{ detail.jdSummary }}</p>
-        }
-        @if (detail.jdText) {
-          <p class="pre">{{ detail.jdText }}</p>
-        }
-        @if (!detail.jdSummary && !detail.jdText) {
-          <p class="dim">{{ t('tracker.dNoJd') }}</p>
-        }
-      </div>
-
+      <!-- 2026-10-19:详情页分段展示 —— JD 摘要 / 公司介绍 / 任职要求 / 福利待遇,自动分段 -->
       <mat-divider></mat-divider>
       <section>
         <div class="sec-head">
@@ -1670,7 +1658,13 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             <button mat-button (click)="cancelEditJdSummary()">{{ t('common.cancel') }}</button>
           </div>
         } @else {
-          <p class="pre">{{ detail.jdSummary || '—' }}</p>
+          @if (paras(detail.jdSummary).length > 0) {
+            @for (p of paras(detail.jdSummary); track $index) {
+              <p>{{ p }}</p>
+            }
+          } @else {
+            <p class="dim">{{ t('tracker.dNoJd') }}</p>
+          }
         }
       </section>
 
@@ -1681,7 +1675,35 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           <div class="sec-head">
             <span>{{ t('tracker.companyDescription') }}</span>
           </div>
-          <p class="pre">{{ detail.companyDescription }}</p>
+          @for (p of paras(detail.companyDescription); track $index) {
+            <p>{{ p }}</p>
+          }
+        </section>
+      }
+
+      <!-- 任职要求 —— 2026-10-19:Smart paste 从 Qualifications/Requirements 段提取 -->
+      @if (detail.requirements) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head">
+            <span>{{ t('tracker.requirements') }}</span>
+          </div>
+          @for (p of paras(detail.requirements); track $index) {
+            <p>{{ p }}</p>
+          }
+        </section>
+      }
+
+      <!-- 福利待遇 —— 2026-10-19:Smart paste 从 Benefits/Advantages 段提取 -->
+      @if (detail.benefits) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head">
+            <span>{{ t('tracker.benefits') }}</span>
+          </div>
+          @for (p of paras(detail.benefits); track $index) {
+            <p>{{ p }}</p>
+          }
         </section>
       }
 
@@ -2859,6 +2881,37 @@ export class ApplicationDetailDialogComponent {
 
   cancelEditJdSummary(): void {
     this.jdSummaryEditing.set(false);
+  }
+
+  /**
+   * 文本自动分段(2026-10-19):详情页 JD 摘要/公司介绍/任职要求/福利待遇展示用。
+   * 1) 优先按空行分段;2) 无空行时按句子边界切成适读长度的段落。
+   * 返回段落数组,模板用 @for 渲染成 <p>。
+   */
+  paras(text: string | undefined | null): string[] {
+    if (!text) return [];
+    const t = text.trim();
+    if (!t) return [];
+    // 先按空行(一个或多个)分段
+    let parts = t.split(/\n\s*\n/).map(s => s.trim()).filter(s => s.length > 0);
+    if (parts.length <= 1) {
+      // 无空行:按单换行分段
+      parts = t.split(/\n/).map(s => s.trim()).filter(s => s.length > 0);
+    }
+    if (parts.length <= 1) {
+      // 仍是整块:按句子边界切,每段约 2-4 句,避免一屏大段文字
+      const sentences = t.match(/[^.!?。！？]+[.!?。！？]+[""』）)]?/g) ?? [t];
+      const out: string[] = [];
+      let cur = '';
+      for (const s of sentences) {
+        const cand = cur ? cur + ' ' + s.trim() : s.trim();
+        if (cand.length > 420 && cur) { out.push(cur); cur = s.trim(); }
+        else cur = cand;
+      }
+      if (cur) out.push(cur);
+      return out.length > 0 ? out : [t];
+    }
+    return parts;
   }
 
   saveJdSummary(): void {

@@ -472,7 +472,9 @@ export class SmartAddDialogComponent {
       status: this.jd.status,
       deadline: this.jd.deadline,
       companyDescription: this.jd.companyDescription || null,
-      workAuthorization: this.jd.workAuthorization || null
+      workAuthorization: this.jd.workAuthorization || null,
+      requirements: this.jd.requirements || null,
+      benefits: this.jd.benefits || null
     }).subscribe({
       next: (r) => {
         this.busy.set(false);

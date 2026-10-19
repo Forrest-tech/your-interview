@@ -151,7 +151,8 @@ public sealed record SmartAddApplicationCommand(
     string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
-    string? CompanyDescription = null, string? WorkAuthorization = null)
+    string? CompanyDescription = null, string? WorkAuthorization = null,
+    string? Requirements = null, string? Benefits = null)
     : IRequest<Result<SmartAddResultDto>>;
 
 public sealed record SmartAddResultDto(
@@ -218,6 +219,14 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
         // 岗位性质:Smart paste 从 JD 正文提取,建档时一并存下。
         if (!string.IsNullOrWhiteSpace(request.JobType))
             app.SetJobType(request.JobType.Trim());
+
+        // 任职要求:Smart paste 从 Qualifications/Requirements 段提取,建档时一并存下。
+        if (!string.IsNullOrWhiteSpace(request.Requirements))
+            app.SetRequirements(request.Requirements.Trim());
+
+        // 福利待遇:Smart paste 从 Benefits/Advantages 段提取,建档时一并存下。
+        if (!string.IsNullOrWhiteSpace(request.Benefits))
+            app.SetBenefits(request.Benefits.Trim());
 
         if (!string.IsNullOrWhiteSpace(request.MatchKeywords))
             app.SetAnalysis(null, null, request.MatchKeywords.Trim());

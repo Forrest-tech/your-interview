@@ -34,6 +34,10 @@ public sealed record ApplicationDto(
     string? WorkAuthorization,
     // 岗位性质(2026-10-19):归一短文本(Full-time/Part-time/Permanent/Contract/...)。Smart paste 提取。
     string? JobType,
+    // 任职要求(2026-10-19):完整存储。Smart paste 从 Qualifications/Requirements 段提取。
+    string? Requirements,
+    // 福利待遇(2026-10-19):完整存储。Smart paste 从 Benefits/Advantages 段提取。
+    string? Benefits,
     string Status, string Priority, DateOnly? AppliedDate, DateOnly? Deadline,
     DateTimeOffset? NextFollowUpAt, int? ResumeScore, string? PassRateEstimate, string? MatchKeywords,
     string? Notes, string? PosterName, bool NeedsConnectFirst, string? OutreachMessage,
@@ -113,13 +117,15 @@ public sealed record DeleteCompanyCommand(Guid Id) : IRequest<Result>;
 public sealed record CreateApplicationCommand(Guid CompanyId, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Priority = null,
     DateOnly? AppliedDate = null, string? Status = null, string? CompanyDescription = null,
-    string? WorkAuthorization = null, string? JobType = null)
+    string? WorkAuthorization = null, string? JobType = null,
+    string? Requirements = null, string? Benefits = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateApplicationCommand(Guid Id, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority,
     DateOnly? Deadline, DateOnly? AppliedDate = null, string? CompanyDescription = null,
-    string? WorkAuthorization = null, string? JobType = null)
+    string? WorkAuthorization = null, string? JobType = null,
+    string? Requirements = null, string? Benefits = null)
     : IRequest<Result>;
 
 public sealed record ChangeApplicationStatusCommand(Guid Id, string Status, string? Note, string? RejectionReason)
@@ -204,6 +210,7 @@ internal static class JobsMapping
         // 实测投递记录量级为个人求职(几十条),40000 字符全文带来的负载可接受;
         // 若未来记录上千,再拆出"不含全文"的精简映射给列表用。
         a.JdText, a.JdSourceUrl, a.CompanyDescription, a.WorkAuthorization, a.JobType,
+        a.Requirements, a.Benefits,
         a.Status.ToString(), a.Priority.ToString(), a.AppliedDate, a.Deadline, a.NextFollowUpAt,
         a.ResumeScore, a.PassRateEstimate, a.MatchKeywords, a.Notes, a.PosterName, a.NeedsConnectFirst,
         a.OutreachMessage, a.OutreachSentAt, a.RejectionReason,
@@ -466,6 +473,12 @@ public sealed class CreateApplicationCommandHandler(JobsDbContext db)
         if (!string.IsNullOrWhiteSpace(request.JobType))
             app.SetJobType(request.JobType);
 
+        if (!string.IsNullOrWhiteSpace(request.Requirements))
+            app.SetRequirements(request.Requirements);
+
+        if (!string.IsNullOrWhiteSpace(request.Benefits))
+            app.SetBenefits(request.Benefits);
+
         if (request.AppliedDate.HasValue)
             app.SetAppliedDate(request.AppliedDate);
 
@@ -498,7 +511,8 @@ public sealed class UpdateApplicationCommandHandler(JobsDbContext db)
 
         a.UpdateDetails(request.Role, request.Location, request.Link, request.Salary,
             request.WorkMode, request.Source, request.JdSummary, request.Notes,
-            request.CompanyDescription, request.WorkAuthorization, request.JobType);
+            request.CompanyDescription, request.WorkAuthorization, request.JobType,
+            request.Requirements, request.Benefits);
         a.SetDeadline(request.Deadline);
         if (request.AppliedDate.HasValue)
             a.SetAppliedDate(request.AppliedDate);

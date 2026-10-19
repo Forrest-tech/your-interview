@@ -954,6 +954,8 @@ public static class JdPasteParser
             {
                 var l = lines[j].Trim();
                 if (IsSectionHeader(l)) break;
+                // 2026-10-19:福利/任职要求段遇到页脚噪音时停止(LinkedIn 粘贴文本尾部)
+                if (IsSectionFooterNoise(l)) break;
                 if (l.Length > 0) sb.Add(l);
             }
             var v = string.Join("\n", sb).Trim();
@@ -961,6 +963,22 @@ public static class JdPasteParser
             return null;
         }
         return null;
+    }
+
+    /// <summary>
+    /// 段落尾部噪音:LInkedIn 粘贴文本的页脚(GDPR、SmartRecruiters、Premium 广告等),遇到即停止收集。
+    /// </summary>
+    private static bool IsSectionFooterNoise(string line)
+    {
+        var t = line.Trim();
+        if (t.Length == 0) return false;
+        var lower = t.ToLowerInvariant();
+        return lower.StartsWith("recruiting-platform powered by")
+            || lower.StartsWith("disclosure requirements pertaining")
+            || lower.StartsWith("set alert for similar jobs")
+            || lower.Contains("and millions of other members use premium")
+            || lower.StartsWith("try premium for")
+            || lower.StartsWith("job search faster with premium");
     }
 
     /// <summary>

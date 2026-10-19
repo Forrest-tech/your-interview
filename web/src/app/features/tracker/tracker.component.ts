@@ -18,6 +18,7 @@ import { Router } from '@angular/router';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -307,7 +308,8 @@ export class ApplicationDialogComponent {
     CommonModule, FormsModule, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatDividerModule,
-    MatSelectModule, MatMenuModule, MatButtonToggleModule, DragDropModule
+    MatSelectModule, MatMenuModule, MatButtonToggleModule, MatCheckboxModule,
+    DragDropModule
   ],
   templateUrl: './tracker.component.html',
   styleUrl: './tracker.component.scss'
@@ -821,6 +823,103 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   isFavorite(id: string): boolean {
     return this.favorites().has(id);
   }
+
+  /** ★ 批量操作:选中的申请 id 集合。 */
+  readonly selected = signal<Set<string>>(new Set());
+  readonly selectedCount = computed(() => this.selected().size);
+
+  toggleSelect(id: string, ev?: Event): void {
+    ev?.stopPropagation();
+    const next = new Set(this.selected());
+    if (next.has(id)) next.delete(id); else next.add(id);
+    this.selected.set(next);
+  }
+
+  isSelected(id: string): boolean {
+    return this.selected().has(id);
+  }
+
+  clearSelection(): void {
+    this.selected.set(new Set());
+  }
+
+  /** 全选当前页。 */
+  selectAllVisible(): void {
+    const next = new Set(this.selected());
+    for (const a of this.displayItems()) next.add(a.id);
+    this.selected.set(next);
+  }
+
+  /** 批量改状态:逐个调 /status(走状态机校验),失败的单独 toast。 */
+  bulkSetStatus(status: ApplicationStatus): void {
+    const ids = [...this.selected()];
+    if (ids.length === 0) return;
+    let done = 0, failed = 0;
+    for (const id of ids) {
+      this.api.post<void>(`/api/jobs/applications/${id}/status`, { status }).subscribe({
+        next: () => {
+          done++;
+          if (done + failed === ids.length) this.finishBulk(done, failed, 'status');
+        },
+        error: () => {
+          failed++;
+          if (done + failed === ids.length) this.finishBulk(done, failed, 'status');
+        }
+      });
+    }
+  }
+
+  /** 批量归档。 */
+  bulkArchive(): void {
+    const ids = [...this.selected()];
+    if (ids.length === 0) return;
+    let done = 0, failed = 0;
+    for (const id of ids) {
+      this.api.post<void>(`/api/jobs/applications/${id}/archive`, {}).subscribe({
+        next: () => {
+          done++;
+          if (done + failed === ids.length) this.finishBulk(done, failed, 'archive');
+        },
+        error: () => {
+          failed++;
+          if (done + failed === ids.length) this.finishBulk(done, failed, 'archive');
+        }
+      });
+    }
+  }
+
+  /** 批量删除:二次确认。 */
+  bulkDelete(): void {
+    const n = this.selected().size;
+    if (n === 0) return;
+    const ok = confirm(this.tf('tracker.confirmBulkDelete', { n }));
+    if (!ok) return;
+    const ids = [...this.selected()];
+    let done = 0, failed = 0;
+    for (const id of ids) {
+      this.api.delete<void>(`/api/jobs/applications/${id}`).subscribe({
+        next: () => {
+          done++;
+          if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
+        },
+        error: () => {
+          failed++;
+          if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
+        }
+      });
+    }
+  }
+
+  private finishBulk(done: number, failed: number, _op: string): void {
+    this.clearSelection();
+    this.reload();
+    if (failed > 0) {
+      this.notify(this.tf('tracker.bulkPartial', { done, failed }), true);
+    } else {
+      this.notify(this.tn('tracker.bulkDone', done));
+    }
+  }
+
   readonly total = signal(0);
   readonly page = signal(1);
   readonly pageSize = signal(50);

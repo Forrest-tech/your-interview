@@ -203,6 +203,32 @@
     </mat-card-content>
   </mat-card>
 
+  <!-- ★ 批量操作工具栏:有选中项时出现 -->
+  @if (selectedCount() > 0) {
+    <mat-card class="bulk-bar">
+      <span class="bulk-count">{{ tn('tracker.bulkSelected', selectedCount()) }}</span>
+      <mat-form-field appearance="outline" class="bulk-status">
+        <mat-label>{{ t('tracker.bulkStatus') }}</mat-label>
+        <mat-select (selectionChange)="bulkSetStatus($event.value); $event.source.value = null"
+                    [placeholder]="t('tracker.bulkStatus')">
+          @for (s of statusOptions; track s) {
+            <mat-option [value]="s">{{ t('status.' + s) }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      @if (!showArchived()) {
+        <button mat-stroked-button (click)="bulkArchive()">
+          <mat-icon>archive</mat-icon>{{ t('tracker.archive') }}
+        </button>
+      }
+      <button mat-stroked-button color="warn" (click)="bulkDelete()">
+        <mat-icon>delete</mat-icon>{{ t('common.delete') }}
+      </button>
+      <span class="spacer"></span>
+      <button mat-button (click)="clearSelection()">{{ t('tracker.clearSelection') }}</button>
+    </mat-card>
+  }
+
   @if (loading()) {
     <mat-progress-bar mode="indeterminate"></mat-progress-bar>
   }
@@ -260,10 +286,16 @@
              (cdkDropListDropped)="onCardDrop($event, col.status)">
           @for (a of col.items; track a.id) {
             <mat-card class="app-card" cdkDrag [cdkDragData]="a"
+                      [class.selected]="isSelected(a.id)"
                       (click)="openDetail(a)"
                       tabindex="0" role="button"
                       [attr.aria-label]="a.companyName + ' ' + a.role"
                       (keydown.enter)="openDetail(a)" (keydown.space)="openDetail(a); $event.preventDefault()">
+              <mat-checkbox class="select-box" [checked]="isSelected(a.id)"
+                            (change)="toggleSelect(a.id, $event)"
+                            (click)="$event.stopPropagation()"
+                            [attr.aria-label]="t('tracker.bulkSelected')">
+              </mat-checkbox>
               <span class="logo-wrap">
                 <span class="logo-avatar" [style.background]="avatarColor(a.companyName)">{{ companyInitials(a.companyName) }}</span>
                 @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
@@ -317,7 +349,12 @@
   @if (viewMode() === 'list') {
   <div class="list-view" id="status">
     @for (a of displayItems(); track a.id) {
-      <div class="list-row" (click)="openDetail(a)" [class.followup]="needsFollowUp(a)">
+      <div class="list-row" (click)="openDetail(a)" [class.followup]="needsFollowUp(a)"
+           [class.selected]="isSelected(a.id)">
+        <mat-checkbox class="select-box" [checked]="isSelected(a.id)"
+                      (change)="toggleSelect(a.id, $event)"
+                      (click)="$event.stopPropagation()">
+        </mat-checkbox>
         <div class="lr-logo">
           @if (logoUrl(a) && !logoBrokenCard(a.id)) {
             <img [src]="logoUrl(a)" [alt]="a.companyName"

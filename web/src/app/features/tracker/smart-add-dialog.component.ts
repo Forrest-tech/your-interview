@@ -76,7 +76,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
       <!-- ============ 第一步:粘贴 ============ -->
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ mode() === 'jd' ? t('tracker.saPasteJd') : t('tracker.saPasteInvite') }}</mat-label>
-        <textarea matInput rows="5" [(ngModel)]="raw"
+        <textarea matInput rows="5" [(ngModel)]="raw" (paste)="onPaste($event)"
                   [placeholder]="t('tracker.saPastePh')"></textarea>
         <mat-icon matPrefix>content_paste</mat-icon>
       </mat-form-field>
@@ -404,6 +404,17 @@ export class SmartAddDialogComponent {
 
   stageLabel(s: string): string { return this.i18n.t('tracker.rt' + s); }
   formatLabel(f: string): string { return this.i18n.t('tracker.fm' + f); }
+
+  /** 2026-10-19:粘贴时优先取剪贴板 HTML(保留 bullet 结构)，无 HTML 则用纯文本。 */
+  onPaste(e: ClipboardEvent): void {
+    const html = e.clipboardData?.getData('text/html');
+    if (html && /<(li|ul|ol|p|div)[\s>]/i.test(html)) {
+      e.preventDefault();
+      // 存 HTML，后端 HtmlToText 会保留 bullet
+      this.raw = html;
+    }
+    // 无 HTML 时走默认粘贴(纯文本)
+  }
 
   parse(): void {
     this.busy.set(true);

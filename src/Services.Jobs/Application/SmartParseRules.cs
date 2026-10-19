@@ -32,6 +32,7 @@ public static class PasteKind
     public const string Url = "Url";
     public const string Text = "Text";
     public const string Image = "Image";
+    public const string Html = "Html";
 }
 
 public sealed record ParsedJdDto(
@@ -138,6 +139,9 @@ public static class JdPasteParser
         var s = raw.Trim();
         if (ImageUrl.IsMatch(s)) return PasteKind.Image;
         if (UrlToken.IsMatch(s)) return PasteKind.Url;
+        // 2026-10-19:含 HTML 标签的富文本粘贴(从 LinkedIn 页面复制)
+        if (s.Contains('<') && s.Contains('>') && Regex.IsMatch(s, @"<(p|div|li|ul|ol|h[1-6]|br)[\s>]", RegexOptions.IgnoreCase))
+            return PasteKind.Html;
         return PasteKind.Text;
     }
 
@@ -163,10 +167,39 @@ public static class JdPasteParser
         return m.Success ? m.Groups[1].Value : null;
     }
 
+    /// <summary>
+    /// 2026-10-19:HTML 转结构化文本 —— 保留 &lt;ul&gt;&lt;li&gt; 的 bullet 结构。
+    /// 用于从 LinkedIn 页面复制的富文本粘贴(剪贴板 text/html)。
+    /// li 转为 "• " 开头行,p/h1-h4 转为独立段落,其余标签剥掉。
+    /// </summary>
+    public static string HtmlToText(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+        var t = html;
+        // li → bullet 行
+        t = Regex.Replace(t, @"<li[^>]*>", "\n• ", RegexOptions.IgnoreCase);
+        t = Regex.Replace(t, @"</li>", "", RegexOptions.IgnoreCase);
+        // 块级标签 → 换行
+        t = Regex.Replace(t, @"</?(p|div|h[1-6]|br|tr)[^>]*>", "\n", RegexOptions.IgnoreCase);
+        t = Regex.Replace(t, @"</?ul[^>]*>", "\n", RegexOptions.IgnoreCase);
+        t = Regex.Replace(t, @"</?ol[^>]*>", "\n", RegexOptions.IgnoreCase);
+        // 去掉其余标签
+        t = Regex.Replace(t, @"<[^>]+>", " ", RegexOptions.IgnoreCase);
+        // HTML 实体
+        t = t.Replace("&nbsp;", " ").Replace("&amp;", "&").Replace("&lt;", "<")
+             .Replace("&gt;", ">").Replace("&quot;", "\"").Replace("&#39;", "'");
+        // 清理多余空行
+        t = Regex.Replace(t, @"[ \t]+", " ");
+        t = Regex.Replace(t, @"\n\s*\n\s*\n+", "\n\n");
+        return t.Trim();
+    }
+
     public static ParsedJdDto Parse(string raw, string kind)
     {
         var conf = new Dictionary<string, int>();
-        var text = StripLinkedInNoise(raw.Trim());
+        // 2026-10-19:HTML 富文本先转结构化文本(保留 bullet)
+        var isHtml = kind == PasteKind.Html;
+        var text = isHtml ? HtmlToText(raw.Trim()) : StripLinkedInNoise(raw.Trim());
         var isUrl = kind == PasteKind.Url;
 
         string? company = null;

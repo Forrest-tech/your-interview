@@ -199,6 +199,26 @@ public static class JdPasteParser
         var conf = new Dictionary<string, int>();
         // 2026-10-19:HTML 富文本先转结构化文本(保留 bullet)
         var isHtml = kind == PasteKind.Html;
+        // 2026-10-19:LinkedIn 抓取的 HTML 带 <title>职位 @ 公司 | LinkedIn>，先提取
+        string? titleTagRole = null;
+        string? titleTagCompany = null;
+        if (isHtml)
+        {
+            var titleMatch = Regex.Match(raw, @"<title>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (titleMatch.Success)
+            {
+                var title = System.Net.WebUtility.HtmlDecode(titleMatch.Groups[1].Value.Trim());
+                // 格式: "Senior .Net Developer @ Arvato | LinkedIn" 或 "Senior .Net Developer hiring now | LinkedIn"
+                var atIdx = title.IndexOf(" @ ");
+                if (atIdx > 0)
+                {
+                    titleTagRole = title.Substring(0, atIdx).Trim();
+                    var rest = title.Substring(atIdx + 3);
+                    var pipeIdx = rest.IndexOf(" | ");
+                    titleTagCompany = (pipeIdx > 0 ? rest.Substring(0, pipeIdx) : rest).Trim();
+                }
+            }
+        }
         var text = isHtml ? HtmlToText(raw.Trim()) : StripLinkedInNoise(raw.Trim());
         var isUrl = kind == PasteKind.Url;
 
@@ -295,6 +315,9 @@ public static class JdPasteParser
 
         var filled = CountFilled(company, role, location, salary, workMode, jdSummary);
 
+        // 2026-10-19:<title> 提取的职位/公司优先（LinkedIn 抓取场景）
+        if (!string.IsNullOrWhiteSpace(titleTagRole)) role = titleTagRole;
+        if (!string.IsNullOrWhiteSpace(titleTagCompany)) company = titleTagCompany;
         return new ParsedJdDto(
             kind,
             filled >= 4 ? ParseOutcome.Ok : filled >= 1 ? ParseOutcome.Partial : ParseOutcome.Failed,

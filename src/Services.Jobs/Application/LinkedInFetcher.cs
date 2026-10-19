@@ -126,16 +126,24 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                 }
 
                 // 提 JD HTML：优先 .jobs-description__content
-                var html = await page.EvaluateAsync<string>(@"() => {
+                // 2026-10-19:同时提取页面标题（含职位+公司），解析器用
+                var result = await page.EvaluateAsync<System.Text.Json.JsonElement>(@"() => {
                     const el = document.querySelector('.jobs-description__content')
                         || document.querySelector('.description__text')
-                        || document.querySelector('[class*=job-details]');
-                    if (!el) return document.body.innerHTML.slice(0, 200000);
-                    // 展开 'Show more'
-                    const btn = el.querySelector('button');
-                    if (btn) btn.click();
-                    return el.innerHTML;
+                        || document.querySelector('[class*=job-details]')
+                        || document.querySelector('.jobs-details__main-content');
+                    let html = '';
+                    if (el) {
+                        const btn = el.querySelector('button');
+                        if (btn) btn.click();
+                        html = el.innerHTML;
+                    } else {
+                        html = document.body.innerHTML.slice(0, 200000);
+                    }
+                    return { html: html, title: document.title };
                 }");
+                var html = result.GetProperty("html").GetString() ?? "";
+                var pageTitle = result.GetProperty("title").GetString() ?? "";
                 await page.CloseAsync();
 
                 // 保存登录态
@@ -146,6 +154,9 @@ public sealed class LinkedInFetcher : IAsyncDisposable
 
                 if (string.IsNullOrWhiteSpace(html))
                     return (false, null, "empty");
+                // 页面标题格式: "职位 @ 公司 | LinkedIn"，拼到 HTML 前面供解析器用
+                if (!string.IsNullOrWhiteSpace(pageTitle))
+                    html = $"<title>{System.Net.WebUtility.HtmlEncode(pageTitle)}</title>\n" + html;
                 return (true, html, null);
             }
             catch

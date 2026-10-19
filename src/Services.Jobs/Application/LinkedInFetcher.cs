@@ -24,12 +24,15 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                 ".your-interview", "linkedin-profile");
     }
 
-    /// <summary>2026-10-19:检查浏览器是否存在，不存在则返回错误（避免运行时下载杀进程）。</summary>
+    /// <summary>2026-10-19:检查浏览器是否存在。</summary>
     private bool IsBrowserInstalled()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var browserPath = Path.Combine(home, ".cache", "ms-playwright", "chromium_headless_shell-1155");
-        return Directory.Exists(browserPath);
+        var basePath = Path.Combine(home, ".cache", "ms-playwright");
+        // .NET Playwright 1.44.0 用 chromium-1117（与 Mac 宿主机 Python Playwright 一致）
+        // 兼容 headless shell 和完整版
+        return Directory.Exists(Path.Combine(basePath, "chromium-1117"))
+            || Directory.Exists(Path.Combine(basePath, "chromium_headless_shell-1117"));
     }
 
     private async Task EnsureAsync()

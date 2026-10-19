@@ -1319,10 +1319,12 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   openDetail(app: Application): void {
     // Simplify 模式:右侧抽屉(不是居中弹窗),看板在左侧保持可见。
+    // 宽度对齐 Simplify 真站: 66vw (max 1280px)
     this.dialog.open(ApplicationDetailDialogComponent, {
       data: app,
-      width: '480px',
-      maxWidth: '92vw',
+      width: '66vw',
+      maxWidth: '1280px',
+      minWidth: '900px',
       height: '100vh',
       maxHeight: '100vh',
       position: { right: '0', top: '0' },
@@ -1410,7 +1412,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule
   ],
   template: `
-    <h2 mat-dialog-title>
+    <h2 mat-dialog-title class="detail-header">
       <span class="logo-wrap detail-logo">
         <span class="logo-avatar" [style.background]="avatarColor(app.companyName)">{{ companyInitials(app.companyName) }}</span>
         @if (app.companyLogoUrl && !logoBroken()) {
@@ -1420,6 +1422,23 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       <span class="title-wrap">
         <span class="main-title">{{ app.role }}</span>
         <span class="sub-title">{{ app.companyName }}</span>
+      </span>
+      <span class="header-actions">
+        <button class="hdr-btn" (click)="toggleFav()" [matTooltip]="t('tracker.favorite')">
+          <mat-icon>{{ isFav() ? 'favorite' : 'favorite_border' }}</mat-icon>
+          <span>{{ t('tracker.favorite') }}</span>
+        </button>
+        <button class="hdr-btn" (click)="doArchive()" [matTooltip]="t('tracker.archive')">
+          <mat-icon>archive</mat-icon>
+          <span>{{ t('tracker.archive') }}</span>
+        </button>
+        <button class="hdr-btn danger" (click)="doDelete()" [matTooltip]="t('common.delete')">
+          <mat-icon>delete</mat-icon>
+          <span>{{ t('common.delete') }}</span>
+        </button>
+        <button class="hdr-close" mat-dialog-close [matTooltip]="t('common.close')">
+          <mat-icon>close</mat-icon>
+        </button>
       </span>
     </h2>
 
@@ -1432,12 +1451,21 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       }
       <div class="tabs">
         <button class="tab" [class.active]="detailTab() === 'overview'"
-                (click)="switchTab('overview')">{{ t('tracker.dOverview') }}</button>
-        <button class="tab" [class.active]="detailTab() === 'comms'"
-                (click)="switchTab('comms')">
-          {{ t('tracker.comms') }}
-          @if (comms().length > 0) { ({{ comms().length }}) }
-        </button>
+                (click)="switchTab('overview')">
+          <mat-icon>visibility</mat-icon>{{ t('tracker.dOverview') }}</button>
+        <button class="tab" [class.active]="detailTab() === 'documents'"
+                (click)="switchTab('documents')">
+          <mat-icon>folder</mat-icon>{{ t('tracker.dDocuments') }}</button>
+        <button class="tab" [class.active]="detailTab() === 'score'"
+                (click)="switchTab('score')">
+          <mat-icon>assessment</mat-icon>{{ t('tracker.dResumeScore') }}</button>
+        <button class="tab" [class.active]="detailTab() === 'email'"
+                (click)="switchTab('email')">
+          <mat-icon>email</mat-icon>{{ t('tracker.dEmail') }}
+          @if (comms().length > 0) { ({{ comms().length }}) }</button>
+        <button class="tab" [class.active]="detailTab() === 'questions'"
+                (click)="switchTab('questions')">
+          <mat-icon>help</mat-icon>{{ t('tracker.dQuestions') }}</button>
       </div>
 
       @if (detailTab() === 'overview') {
@@ -1773,7 +1801,29 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       }
       }
 
+      @else if (detailTab() === 'documents') {
+        <div class="tab-placeholder">
+          <mat-icon>folder</mat-icon>
+          <p>{{ t('tracker.dDocuments') }}</p>
+        </div>
+      }
+
+      @else if (detailTab() === 'score') {
+        <div class="tab-placeholder">
+          <mat-icon>assessment</mat-icon>
+          <p>{{ t('tracker.dResumeScore') }}</p>
+        </div>
+      }
+
+      @else if (detailTab() === 'questions') {
+        <div class="tab-placeholder">
+          <mat-icon>help</mat-icon>
+          <p>{{ t('tracker.dQuestions') }}</p>
+        </div>
+      }
+
       @else {
+        <!-- Email/Communications tab -->
         <!-- 沟通记录:按发生时间倒序的时间线 + 增删改 -->
         <div class="comms">
           <div class="comms-head">
@@ -1867,12 +1917,36 @@ function trimForm(f: ApplicationForm): ApplicationForm {
   `,
   styles: [`
     /* ★ Simplify 对齐:头部标题堆叠 */
-    h2[mat-dialog-title] { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
-    h2 .title-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    h2 .main-title { font-size: 18px; font-weight: 600; line-height: 1.35; }
-    h2 .sub-title { font-size: 13px; font-weight: 400; opacity: 0.55; }
-    .detail-body { min-width: 460px; max-width: 620px; padding-top: 4px; }
-    @media (max-width: 620px) { .detail-body { min-width: auto; } }
+    /* ★ Simplify 真站:头部 */
+    h2[mat-dialog-title].detail-header {
+      display: flex; align-items: flex-start; gap: 16px;
+      margin: 0; padding: 24px 32px 20px;
+      border-bottom: 1px solid #ECEEF1;
+    }
+    h2 .title-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+    h2 .main-title { font-size: 20px; font-weight: 700; line-height: 1.3; color: #1A1D23; }
+    h2 .sub-title { font-size: 15px; font-weight: 400; color: #6E7681; }
+    .detail-header .logo-wrap { flex: 0 0 62px; width: 62px; height: 62px; }
+    .detail-header .logo-avatar { width: 62px; height: 62px; border-radius: 12px; font-size: 22px; }
+    .detail-header .logo { width: 62px; height: 62px; border-radius: 12px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .hdr-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 38px; padding: 0 16px;
+      background: #fff; border: 1px solid #E3E6EA; border-radius: 8px;
+      font-size: 14px; color: #3D4451; cursor: pointer;
+    }
+    .hdr-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #6E7681; }
+    .hdr-btn:hover { background: #F7F8FA; }
+    .hdr-btn.danger { border-color: #EF4444; color: #EF4444; }
+    .hdr-btn.danger mat-icon { color: #EF4444; }
+    .hdr-close {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px; border: none; background: none; cursor: pointer;
+      color: #3D4451; border-radius: 8px;
+    }
+    .hdr-close:hover { background: #F7F8FA; }
+    .detail-body { padding: 0; }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
     .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
@@ -2033,14 +2107,26 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     .detail-logo { margin-right: 0; flex: 0 0 40px; }
 
     /* ---- 页签 (Simplify:极简,active 下划线) ---- */
-    .tabs { display: flex; gap: 20px; margin: 6px 0 16px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    /* ★ Simplify 真站:5 tab */
+    .tabs {
+      display: flex; gap: 30px; margin: 0; padding: 0 32px;
+      border-bottom: 1px solid #ECEEF1;
+    }
     .tab {
       appearance: none; background: none; border: none; cursor: pointer;
-      padding: 8px 2px; font-size: 14px; color: rgba(0,0,0,0.55);
-      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 2px; font-size: 14px; color: #8A94A6;
+      border-bottom: 3px solid transparent; margin-bottom: -1px;
     }
-    .tab:hover { color: rgba(0,0,0,0.85); }
-    .tab.active { color: rgba(0,0,0,0.92); font-weight: 600; border-bottom-color: #1a73e8; }
+    .tab mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    .tab:hover { color: #3D4451; }
+    .tab.active { color: #1A1D23; font-weight: 600; border-bottom-color: #1A1D23; }
+    .tab-placeholder {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      padding: 60px 32px; color: #8A94A6;
+    }
+    .tab-placeholder mat-icon { font-size: 48px; width: 48px; height: 48px; opacity: 0.4; }
+    .tab-placeholder p { font-size: 16px; margin: 0; }
 
     /* ---- 沟通记录 ---- */
     .comms-head { margin-bottom: 10px; }
@@ -2320,11 +2406,53 @@ export class ApplicationDetailDialogComponent {
   readonly logoBroken = signal(false);
 
   /** 详情页当前页签。 */
-  readonly detailTab = signal<'overview' | 'comms'>('overview');
+  readonly detailTab = signal<'overview' | 'documents' | 'score' | 'email' | 'questions' | 'comms'>('overview');
 
-  switchTab(tab: 'overview' | 'comms'): void {
-    this.detailTab.set(tab);
-    if (tab === 'comms') this.loadCommunications();
+  switchTab(tab: 'overview' | 'documents' | 'score' | 'email' | 'questions' | 'comms'): void {
+    // comms 是旧名,统一映射到 email
+    const t = tab === 'comms' ? 'email' : tab;
+    this.detailTab.set(t as any);
+    if (t === 'email') this.loadCommunications();
+  }
+
+  /* ★ Simplify 真站:头部操作按钮 */
+  readonly dialogRef = inject(MatDialogRef<ApplicationDetailDialogComponent>);
+  private readonly favKey = 'yi-tracker-favorites';
+
+  isFav(): boolean {
+    try {
+      const arr: string[] = JSON.parse(localStorage.getItem(this.favKey) ?? '[]');
+      return arr.includes(this.app.id);
+    } catch { return false; }
+  }
+
+  toggleFav(): void {
+    try {
+      const arr: string[] = JSON.parse(localStorage.getItem(this.favKey) ?? '[]');
+      const i = arr.indexOf(this.app.id);
+      if (i >= 0) arr.splice(i, 1); else arr.push(this.app.id);
+      localStorage.setItem(this.favKey, JSON.stringify(arr));
+      this.snack.open(this.t(i >= 0 ? 'tracker.unfavorited' : 'tracker.favorited'),
+        this.t('common.close'), { duration: 2000 });
+    } catch { /* ignore */ }
+  }
+
+  doArchive(): void {
+    this.api.post<void>(`/api/jobs/applications/${this.app.id}/archive`, {}).subscribe({
+      next: () => {
+        this.snack.open(this.t('tracker.archived'), this.t('common.close'), { duration: 2000 });
+        this.dialogRef.close(true);
+      },
+      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
+    });
+  }
+
+  doDelete(): void {
+    if (!confirm(this.t('tracker.deleteConfirm'))) return;
+    this.api.delete<void>(`/api/jobs/applications/${this.app.id}`).subscribe({
+      next: () => this.dialogRef.close(true),
+      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
+    });
   }
 
   // ---------------------------- 条目编辑(2026-10-08) ----------------------------

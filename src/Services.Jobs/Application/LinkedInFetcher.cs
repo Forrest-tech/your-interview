@@ -40,22 +40,31 @@ public sealed class LinkedInFetcher : IAsyncDisposable
             Directory.CreateDirectory(_profileDir);
             var statePath = Path.Combine(_profileDir, "state.json");
             // 2026-10-19:有登录态则用，无则建空上下文（LinkedIn 部分职位页可匿名看）
+            var proxy = Environment.GetEnvironmentVariable("HTTPS_PROXY")
+                ?? Environment.GetEnvironmentVariable("HTTP_PROXY");
+            BrowserNewContextOptions ctxOpts;
             if (File.Exists(statePath))
             {
-                _ctx = await _browser.NewContextAsync(new BrowserNewContextOptions
+                ctxOpts = new BrowserNewContextOptions
                 {
                     StorageStatePath = statePath,
                     UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                });
+                };
             }
             else
             {
-                _ctx = await _browser.NewContextAsync(new BrowserNewContextOptions
+                ctxOpts = new BrowserNewContextOptions
                 {
                     UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     ViewportSize = new ViewportSize { Width = 1366, Height = 900 },
-                });
+                };
             }
+            // 2026-10-19:沙盒/容器经代理出站，Playwright 需显式配置
+            if (!string.IsNullOrEmpty(proxy))
+            {
+                ctxOpts.Proxy = new Proxy { Server = proxy };
+            }
+            _ctx = await _browser.NewContextAsync(ctxOpts);
         }
         finally { _lock.Release(); }
     }

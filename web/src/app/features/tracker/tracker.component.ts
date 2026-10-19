@@ -792,6 +792,21 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly error = signal<string | null>(null);
 
   readonly items = signal<Application[]>([]);
+  /** ★ 收藏 (localStorage):id 集合。 */
+  readonly favorites = signal<Set<string>>(new Set(
+    JSON.parse(localStorage.getItem('yi-tracker-favorites') || '[]')
+  ));
+
+  toggleFavorite(id: string): void {
+    const f = new Set(this.favorites());
+    if (f.has(id)) f.delete(id); else f.add(id);
+    this.favorites.set(f);
+    try { localStorage.setItem('yi-tracker-favorites', JSON.stringify([...f])); } catch { /* 忽略 */ }
+  }
+
+  isFavorite(id: string): boolean {
+    return this.favorites().has(id);
+  }
   readonly total = signal(0);
   readonly page = signal(1);
   readonly pageSize = signal(50);
@@ -806,6 +821,8 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       } catch { return null; }
     })()
   );
+  /** ★ 只看收藏。 */
+  readonly favOnly = signal(false);
   /** 排序键直接对齐后端 sortBy(updated/applied/appliedAsc/company/deadline)。 */
   readonly sort = signal<string>(
     ((): string => {
@@ -840,12 +857,14 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     const all = this.displayItems();
     const only = this.statusFilter();
     const hidden = this.hiddenCols();
+    const favs = this.favorites();
+    const favOnly = this.favOnly();
     const statuses = (only ? [only] : this.statusOrder).filter(s => !hidden.has(s));
 
     return statuses.map((status) => ({
       status,
       label: this.i18n.t('status.' + status),
-      items: all.filter((a) => a.status === status)
+      items: all.filter((a) => a.status === status && (!favOnly || favs.has(a.id)))
     }));
   });
 

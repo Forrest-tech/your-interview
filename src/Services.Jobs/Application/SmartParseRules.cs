@@ -180,7 +180,8 @@ public static class JdPasteParser
         var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         company ??= Labeled(lines, "公司", "Company", "Employer", "Organization")
-                 ?? AfterAt(lines);
+                 ?? AfterAt(lines)
+                 ?? CompanyAfterAboutCompany(lines);
         if (company is not null) conf.TryAdd("company", 80);
 
         role ??= Labeled(lines, "职位", "岗位", "Role", "Title", "Position", "Job Title")
@@ -406,6 +407,39 @@ public static class JdPasteParser
     }
 
     /// <summary>
+    /// LinkedIn 形态:"About the company" 标题后紧跟公司名(再往下是 follower 数等)。
+    /// 例:
+    ///   About the company
+    ///   Arvato
+    ///   210,272 followers
+    /// 取标题后第一个"像公司名"的非空行:长度 2-60、不含岗位词、不是纯数字/ follower 行。
+    /// </summary>
+    private static string? CompanyAfterAboutCompany(IList<string> lines)
+    {
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (!Regex.IsMatch(lines[i], @"^\s*about\s+the\s+company\s*$", RegexOptions.IgnoreCase))
+                continue;
+            // 标题后找第一个像公司名的行(最多往下看 3 行,跳过空行)
+            for (var j = i + 1; j < Math.Min(i + 4, lines.Count); j++)
+            {
+                var cand = lines[j].Trim();
+                if (cand.Length == 0) continue;
+                if (cand.Length is < 2 or > 60) continue;
+                if (RoleWords.IsMatch(cand)) continue;
+                if (Regex.IsMatch(cand, @"[\d,]+\s*(followers|employees)", RegexOptions.IgnoreCase)) continue;
+                if (Regex.IsMatch(cand, @"^\d[\d,\s]*$", RegexOptions.Compiled)) continue;
+                if (cand.Contains(':')) continue;
+                // 公司名通常是短词组,太长的大概率是描述句
+                if (cand.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 5) continue;
+                return cand;
+            }
+            return null;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// 公司名兜底:很多 JD 第一行是岗位、第二行是公司名(无标签)。
     /// 找到 role 行,取其下一行 —— 长度合理、不含岗位关键词、不是地点/薪资行。
     /// </summary>
@@ -541,7 +575,14 @@ public static class JdPasteParser
 
     private static string? Summary(string text)
     {
-        var flat = Regex.Replace(text, @"\s+", " ").Trim();
+        // LinkedIn 粘贴文本前段是 UI 噪音(标题行、"Over 100 applicants"、
+        // "No response insights"、薪资、工作模式、"Resume match" 等按钮文案),
+        // 摘要应从真正的职位描述开始:优先找 "About the job" / "Job Description" 段。
+        var m = Regex.Match(text,
+            @"(?:About the job|Job Description|职位描述|岗位职责)\s*\n(.+)",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var source = m.Success ? m.Groups[1].Value : text;
+        var flat = Regex.Replace(source, @"\s+", " ").Trim();
         if (flat.Length == 0) return null;
         return flat.Length <= 220 ? flat : flat[..220] + "…";
     }

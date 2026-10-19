@@ -1658,6 +1658,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             <button mat-button (click)="cancelEditJdSummary()">{{ t('common.cancel') }}</button>
           </div>
         } @else {
+          <div class="about-job-body" [class.collapsed]="!aboutJobExpanded()">
           <!-- Job Description -->
           <div class="jd-subhead">{{ t('tracker.dJobDescHeader') }}</div>
           @if (richBlocks(jdSummaryDisplay()).length > 0) {
@@ -1693,6 +1694,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
               }
             }
           }
+          </div>
+          <button class="more-link" (click)="aboutJobExpanded.set(!aboutJobExpanded())">
+            {{ aboutJobExpanded() ? t('common.showLess') : t('common.showMore') }}
+          </button>
         }
       </section>
 
@@ -2250,12 +2255,24 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     }
     .about-job-title .edit-btn { margin-left: auto; }
     .about-job .jd-subhead {
-      margin: 20px 0 10px; font-size: 15px; font-weight: 700;
+      margin: 22px 0 10px; font-size: 14px; font-weight: 700;
       color: #1A1D23;
     }
     .about-job p { margin: 0 0 12px; line-height: 1.65; font-size: 14px; color: #333; }
     .about-job .jd-list { margin: 0 0 16px; padding-left: 20px; }
     .about-job .jd-list li { margin: 0 0 8px; line-height: 1.6; font-size: 14px; color: #333; }
+    /* LinkedIn 风格:长描述默认折叠 */
+    .about-job-body.collapsed { max-height: 320px; overflow: hidden; position: relative; }
+    .about-job-body.collapsed::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 60px;
+      background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
+      pointer-events: none;
+    }
+    .more-link {
+      background: none; border: none; padding: 4px 0; cursor: pointer;
+      color: #666; font-size: 14px; font-weight: 500;
+    }
+    .more-link:hover { color: #0A66C2; text-decoration: underline; }
     .teal-link {
       color: #0E9FCC; font-weight: 500; text-decoration: none;
       display: inline-flex; align-items: center; gap: 6px;
@@ -2496,6 +2513,9 @@ export class ApplicationDetailDialogComponent {
 
   /** JD 全文是否展开(默认折叠:40000 字符铺开会淹没弹窗)。 */
   readonly jdExpanded = signal(false);
+
+  /** 2026-10-19:About the job 是否展开(LinkedIn 风格:长描述默认折叠,点 more 展开)。 */
+  readonly aboutJobExpanded = signal(false);
 
   /** 匹配分析结果。null = 还没算(JD 或简历缺失时保持 null)。 */
   readonly match = signal<MatchResult | null>(null);

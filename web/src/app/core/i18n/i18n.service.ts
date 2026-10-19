@@ -45,6 +45,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'common.collapse': { zh: '折叠/展开', en: 'Collapse / expand', fr: 'Réduire / développer' },
   'common.save': { zh: '保存', en: 'Save', fr: 'Enregistrer' },
   'common.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
+  'common.showMore': { zh: '展开更多', en: 'Show more', fr: 'Afficher plus' },
+  'common.showLess': { zh: '收起', en: 'Show less', fr: 'Afficher moins' },
   'common.add': { zh: '添加', en: 'Add', fr: 'Ajouter' },
   'common.optional': { zh: '选填', en: 'Optional', fr: 'Facultatif' },
   'common.delete': { zh: '删除', en: 'Delete', fr: 'Supprimer' },

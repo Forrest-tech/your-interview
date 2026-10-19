@@ -683,9 +683,9 @@ public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
         var apps = await db.Applications.AsNoTracking().Where(a => !a.IsArchived).ToListAsync(ct);
         var total = apps.Count;
 
-        // 状态计数
-        var byStatus = apps.GroupBy(a => a.Status).ToDictionary(g => g.Key, g => g.Count());
-        int C(ApplicationStatus s) => byStatus.TryGetValue(s, out var v) ? v : 0;
+        // 状态计数 (string key 供前端直接查)
+        var byStatus = apps.GroupBy(a => a.Status.ToString()).ToDictionary(g => g.Key, g => g.Count());
+        int C(ApplicationStatus s) => byStatus.TryGetValue(s.ToString(), out var v) ? v : 0;
 
         var active = apps.Count(a => a.Status is ApplicationStatus.Applied or ApplicationStatus.Screen
             or ApplicationStatus.Interview or ApplicationStatus.Offer);

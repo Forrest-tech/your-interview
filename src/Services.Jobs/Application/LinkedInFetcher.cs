@@ -158,18 +158,42 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                             break;
                         }
                     }
-                    // 元数据：薪资/工作模式/职位类型（pill chips 或描述行）
-                    const meta = document.body.innerText.slice(0, 5000);
+                    // 元数据：薪资/工作模式/职位类型（pill chips）
+                    // LinkedIn 职位头部的 pill：$90K/yr、Hybrid、Full-time 等
+                    let salary = '', workMode = '', jobType = '';
+                    const pills = document.querySelectorAll('li, span, div');
+                    for (const p of pills) {
+                        const t = (p.textContent || '').trim();
+                        if (!t || t.length > 50) continue;
+                        // 薪资：含 $ 或 /yr / /hr
+                        if (!salary && /\$[\d,]+/.test(t) && /\/yr|\/hr|per year|per hour/i.test(t)) {
+                            salary = t;
+                        }
+                        // 工作模式
+                        if (!workMode && /^(Hybrid|Remote|On-site)$/i.test(t)) {
+                            workMode = t;
+                        }
+                        // 职位类型
+                        if (!jobType && /^(Full-time|Part-time|Contract|Temporary)$/i.test(t)) {
+                            jobType = t;
+                        }
+                        if (salary && workMode && jobType) break;
+                    }
                     return {
                         html: html,
                         title: document.title,
-                        companyDesc: companyDesc,
-                        bodyStart: meta
+                        salary: salary,
+                        workMode: workMode,
+                        jobType: jobType,
+                        companyDesc: companyDesc
                     };
                 }");
                 var html = result.GetProperty("html").GetString() ?? "";
                 var pageTitle = result.GetProperty("title").GetString() ?? "";
                 var companyDesc = result.TryGetProperty("companyDesc", out var cd) ? cd.GetString() ?? "" : "";
+                var liSalary = result.TryGetProperty("salary", out var s) ? s.GetString() ?? "" : "";
+                var liWorkMode = result.TryGetProperty("workMode", out var w) ? w.GetString() ?? "" : "";
+                var liJobType = result.TryGetProperty("jobType", out var j) ? j.GetString() ?? "" : "";
                 await page.CloseAsync();
 
                 // 保存登录态
@@ -183,6 +207,13 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                 // 页面标题格式: "职位 @ 公司 | LinkedIn"，拼到 HTML 前面供解析器用
                 if (!string.IsNullOrWhiteSpace(pageTitle))
                     html = $"<title>{System.Net.WebUtility.HtmlEncode(pageTitle)}</title>\n" + html;
+                // LinkedIn pill 字段：薪资/工作模式/职位类型，用 meta 标记传递
+                if (!string.IsNullOrWhiteSpace(liSalary))
+                    html = $"<meta name=\"li-salary\" content=\"{System.Net.WebUtility.HtmlEncode(liSalary)}\">\n" + html;
+                if (!string.IsNullOrWhiteSpace(liWorkMode))
+                    html = $"<meta name=\"li-workmode\" content=\"{System.Net.WebUtility.HtmlEncode(liWorkMode)}\">\n" + html;
+                if (!string.IsNullOrWhiteSpace(liJobType))
+                    html = $"<meta name=\"li-jobtype\" content=\"{System.Net.WebUtility.HtmlEncode(liJobType)}\">\n" + html;
                 // 公司介绍拼到后面，解析器提取
                 if (!string.IsNullOrWhiteSpace(companyDesc))
                     html += $"\n<!--COMPANY_DESC-->\n<div class=\"linkedin-company-desc\">{companyDesc}</div>";

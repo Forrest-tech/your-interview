@@ -202,6 +202,9 @@ public static class JdPasteParser
         // 2026-10-19:LinkedIn 抓取的 HTML 带 <title>职位 @ 公司 | LinkedIn>，先提取
         string? titleTagRole = null;
         string? titleTagCompany = null;
+        string? liSalary = null;
+        string? liWorkMode = null;
+        string? liJobType = null;
         if (isHtml)
         {
             var titleMatch = Regex.Match(raw, @"<title>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -218,6 +221,13 @@ public static class JdPasteParser
                     titleTagCompany = (pipeIdx > 0 ? rest.Substring(0, pipeIdx) : rest).Trim();
                 }
             }
+            // LinkedIn pill 字段
+            var salaryMatch = Regex.Match(raw, @"<meta name=""li-salary"" content=""(.*?)""", RegexOptions.IgnoreCase);
+            if (salaryMatch.Success) liSalary = System.Net.WebUtility.HtmlDecode(salaryMatch.Groups[1].Value);
+            var wmMatch = Regex.Match(raw, @"<meta name=""li-workmode"" content=""(.*?)""", RegexOptions.IgnoreCase);
+            if (wmMatch.Success) liWorkMode = System.Net.WebUtility.HtmlDecode(wmMatch.Groups[1].Value);
+            var jtMatch = Regex.Match(raw, @"<meta name=""li-jobtype"" content=""(.*?)""", RegexOptions.IgnoreCase);
+            if (jtMatch.Success) liJobType = System.Net.WebUtility.HtmlDecode(jtMatch.Groups[1].Value);
         }
         var text = isHtml ? HtmlToText(raw.Trim()) : StripLinkedInNoise(raw.Trim());
         var isUrl = kind == PasteKind.Url;
@@ -331,6 +341,10 @@ public static class JdPasteParser
         // 2026-10-19:<title> 提取的职位/公司优先（LinkedIn 抓取场景）
         if (!string.IsNullOrWhiteSpace(titleTagRole)) role = titleTagRole;
         if (!string.IsNullOrWhiteSpace(titleTagCompany)) company = titleTagCompany;
+        // 2026-10-19:LinkedIn pill 字段优先
+        if (!string.IsNullOrWhiteSpace(liSalary)) salary = liSalary;
+        if (!string.IsNullOrWhiteSpace(liWorkMode)) workMode = liWorkMode;
+        if (!string.IsNullOrWhiteSpace(liJobType)) jobType = liJobType;
         return new ParsedJdDto(
             kind,
             filled >= 4 ? ParseOutcome.Ok : filled >= 1 ? ParseOutcome.Partial : ParseOutcome.Failed,

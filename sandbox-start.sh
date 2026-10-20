@@ -12,6 +12,14 @@ export TMPDIR=$HOME/workspace/tmp
 # LD_LIBRARY_PATH instead of the workspace path.
 export PGLIB_SRC=$HOME/workspace/your-interview/lib/usr/lib/x86_64-linux-gnu
 
+# 2026-10-20: after VM replacement, ubuntu.sources reverts to include the
+# mirror.cogentco.com mirror, which is unusably slow and stalls `apt-get update`
+# indefinitely. Strip it (azure mirror only) before any apt call.
+if grep -q 'mirror.cogentco.com' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null; then
+  echo "[$(date)] Removing slow cogentco mirror from apt sources..."
+  sudo -n sed -i 's| http://mirror.cogentco.com/pub/linux/ubuntu||' /etc/apt/sources.list.d/ubuntu.sources
+fi
+
 # postgres client tools (pg_isready, psql) — apt packages are lost on VM replacement
 if ! command -v pg_isready >/dev/null 2>&1; then
   echo "[$(date)] Installing postgresql-client (apt package lost after VM replacement)..."

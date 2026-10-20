@@ -42,12 +42,6 @@
       </div>
     }
 
-    <mat-form-field appearance="outline" class="resume-field">
-      <mat-label>{{ t('profile.resumeLabel') }}</mat-label>
-      <textarea matInput rows="16" [(ngModel)]="resumeDraft"
-                [placeholder]="t('profile.resumePh')"></textarea>
-    </mat-form-field>
-
     <div class="actions">
       <button mat-raised-button color="primary" (click)="saveResume()">
         <mat-icon>save</mat-icon> {{ t('common.save') }}

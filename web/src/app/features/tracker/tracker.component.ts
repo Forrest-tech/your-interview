@@ -1808,6 +1808,15 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 
       @else if (detailTab() === 'documents') {
         <div class="tab-body">
+      <!-- 简历区:显示投递版本 -->
+      <section class="cl-section">
+        <div class="sec-head">
+          <mat-icon>description</mat-icon>
+          <span>{{ t('tracker.dResume') }}</span>
+        </div>
+        <p class="field-hint">{{ t('tracker.dResumeHint') }}</p>
+        <!-- TODO: 简历 PDF 展示/上传 -->
+      </section>
       <section class="cl-section">
         <div class="sec-head">
           <mat-icon>description</mat-icon>

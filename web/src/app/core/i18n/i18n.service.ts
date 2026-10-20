@@ -843,6 +843,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dHitKwTitle': { zh: '已命中 ({n})', en: 'Matched ({n})', fr: 'Trouvés ({n})' },
   'tracker.dSoftSkills': { zh: '另提及软素质要求(不计入分数):', en: 'Also mentioned soft skills (not scored):', fr: 'Compétences générales mentionnées (non notées) :' },
   'tracker.dCoverLetter': { zh: '求职信', en: 'Cover letter', fr: 'Lettre de motivation' },
+  'tracker.dResume': { zh: '简历', en: 'Resume', fr: 'CV' },
+  'tracker.dResumeHint': { zh: '显示投递时使用的简历版本。', en: 'Shows the resume version used for this application.', fr: 'Affiche la version du CV utilisée.' },
   'tracker.dClChars': { zh: '{n} 字符', en: '{n} chars', fr: '{n} caractères' },
   'tracker.dClStale': { zh: '这封信基于简历 v{a} 生成,当前简历已是 v{b} —— 建议重新生成。', en: 'Generated from resume v{a}; current resume is v{b} — consider regenerating.', fr: 'Générée depuis le CV v{a} ; le CV actuel est v{b} — régénérez.' },
   'tracker.dClExtra': { zh: '额外要求(可选)', en: 'Extra requirements (optional)', fr: 'Exigences supplémentaires (facultatif)' },

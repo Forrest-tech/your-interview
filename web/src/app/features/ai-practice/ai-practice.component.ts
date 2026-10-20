@@ -2244,7 +2244,41 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       const f = this.saveQueuedForce;
       this.saveQueuedForce = false;
       setTimeout(() => this.persistQuiet(f), 0);
+      return;
     }
+    // ★ F-10:队列排空后消费一次性完成回调(新建素材落库反馈)。
+    const cb = this.afterSaveOnce;
+    this.afterSaveOnce = null;
+    cb?.();
+  }
+
+  /** ★ F-10:一次性保存完成回调(finishSave 在队列排空时消费)。 */
+  private afterSaveOnce: (() => void) | null = null;
+
+  /**
+   * ★ F-10:新建素材(文件/文件夹)在改名提交时立即落库。
+   *
+   * 背景:素材树的结构编辑走"显式保存"约定(点保存图标 + 确认才写库),
+   * 但对**新建**这个动作,用户的直觉是"改完名回车 = 建好了"。
+   * 此前新建节点不点保存就刷新 → 条目消失且毫无提示,看起来像数据凭空丢失。
+   * 新建是纯新增、整树串行保存(persistQuiet)不会踩踏既有内容,
+   * 因此新建单独走自动落库;既有内容的编辑仍保持显式保存约定。
+   */
+  onNodeCreated(_node: MaterialNode): void {
+    if (this.isFromTechSelected()) return;   // 虚拟树不走 Practice API(与 persistQuiet 一致)
+    if (this.treeLoadFailed()) {
+      // 数据安全守卫拦截写回时必须让用户看见,不能静默丢弃新建。
+      this.treeError.set(this.t('practice.treeBlocked'));
+      return;
+    }
+    this.treeDirty.set(true);
+    this.afterSaveOnce = () => {
+      if (!this.treeError()) {
+        this.treeDirty.set(false);
+        this.toast(this.t('dialog.saveDone'));
+      }
+    };
+    this.persistQuiet();
   }
 
   /** 是否有整树保存请求在飞(串行化用)。 */

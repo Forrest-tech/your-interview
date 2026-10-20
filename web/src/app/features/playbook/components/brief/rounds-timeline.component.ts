@@ -97,6 +97,8 @@ export class RoundsTimelineComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly busy = signal<string | null>(null);
   readonly rounds = signal<BriefRound[]>([]);
+  /** 最近一次加载到的条目本体（备考方案预填 JD 用）。 */
+  readonly entryBrief = signal<BriefEntry | null>(null);
   /** 合成轮次:库里无 Round 实体但 entry 有 RoundNo 时展示用(跟 tab 计数一致)。 */
   readonly syntheticRound = signal<BriefRound | null>(null);
 
@@ -121,6 +123,44 @@ export class RoundsTimelineComponent implements OnInit {
 
   /** 合成轮次(老数据无 Round 实体时展示用):不可编辑/删除。 */
   isSynthetic(r: BriefRound): boolean { return r.id === '__synthetic_r1'; }
+
+  /**
+   * ★ F-03 修复:合成轮次在后端没有实体,直接写会 404(幽灵轮次陷阱)。
+   * 任何写操作先把它实体化:POST 建真实轮次 → 本地草稿/覆盖的键迁移到真实 id
+   * → 再用真实轮次继续原操作。实体化后 load() 也会以真实轮次为准。
+   */
+  private withRealRound(r: BriefRound, proceed: (real: BriefRound) => void): void {
+    if (!this.isSynthetic(r)) { proceed(r); return; }
+    if (this.busy()) return;
+    this.busy.set('materialize');
+    this.api.post<{ id: string }>(`/api/interviews/${this.entryId()}/rounds`, {
+      stage: r.stage || 'Technical',
+      scheduledDate: r.scheduledDate || null,
+      interviewers: r.interviewers || null,
+      format: r.format || null,
+      location: r.location || null,
+    }).subscribe({
+      next: (res) => {
+        this.busy.set(null);
+        const real: BriefRound = { ...r, id: res.id };
+        if (this.extras[r.id]) { this.extras[res.id] = this.extras[r.id]; delete this.extras[r.id]; }
+        for (const map of [this.editDrafts, this.transcriptDraft, this.recordingDraft, this.prepQDraft, this.checklistDraft]) {
+          if (map[r.id] !== undefined) { map[res.id] = map[r.id]; delete map[r.id]; }
+        }
+        const ov = this.emailOverrides()[r.id];
+        if (ov) {
+          this.emailOverrides.update((m) => { const n = { ...m, [res.id]: ov }; delete n[r.id]; return n; });
+        }
+        this.syntheticRound.set(null);
+        this.rounds.update((list) => [...list, real]);
+        proceed(real);
+      },
+      error: (e: Error) => {
+        this.busy.set(null);
+        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+      },
+    });
+  }
 
   openEdit(r: BriefRound): void {
     const ex = this.extras[r.id] ?? {};
@@ -272,6 +312,11 @@ export class RoundsTimelineComponent implements OnInit {
   }
 
   private saveEmails(r: BriefRound, list: RoundEmailItem[]): void {
+    // ★ F-03:占位轮次先实体化再存邮件,否则 PUT 必然 404。
+    this.withRealRound(r, (real) => this.saveEmailsReal(real, list));
+  }
+
+  private saveEmailsReal(r: BriefRound, list: RoundEmailItem[]): void {
     this.busy.set('emails-' + r.id);
     this.api.put<void>(`/api/interviews/${this.entryId()}/rounds/${r.id}/emails`, {
       emails: list,
@@ -316,12 +361,15 @@ export class RoundsTimelineComponent implements OnInit {
       return;
     }
     const fileName = `round-${r.order}-transcript.txt`;
-    this.api.post<{ id: string }>(
-      `/api/interviews/${this.entryId()}/assets`,
-      { textContent: text, fileName, roundId: r.id, phase: 'Post' }).subscribe({
-      next: () => this.snack.open(
-        this.t('pb.br.rounds.sentToAnalysis'), this.t('common.close'), { duration: 4000 }),
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 }),
+    // ★ F-03:占位轮次先实体化,资产才挂得上真实轮次。
+    this.withRealRound(r, (real) => {
+      this.api.post<{ id: string }>(
+        `/api/interviews/${this.entryId()}/assets`,
+        { textContent: text, fileName, roundId: real.id, phase: 'Post' }).subscribe({
+        next: () => this.snack.open(
+          this.t('pb.br.rounds.sentToAnalysis'), this.t('common.close'), { duration: 4000 }),
+        error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 }),
+      });
     });
   }
 
@@ -333,6 +381,11 @@ export class RoundsTimelineComponent implements OnInit {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    // ★ F-03:占位轮次先实体化再挂资产。
+    this.withRealRound(r, (real) => this.uploadRoundRecordingReal(real, file, input));
+  }
+
+  private uploadRoundRecordingReal(r: BriefRound, file: File, input: HTMLInputElement): void {
     this.api.upload<{ id: string }>(`/api/interviews/${this.entryId()}/assets`, file,
       { roundId: r.id, phase: 'Post' }).subscribe({
       next: (res) => {
@@ -429,6 +482,11 @@ export class RoundsTimelineComponent implements OnInit {
 
   /** 通用:更新轮次详情字段。 */
   private updateRoundDetails(r: BriefRound, patch: Record<string, unknown>, onSuccess?: () => void): void {
+    // ★ F-03:占位轮次先实体化;注意 patch 里没有 id 引用,其余键迁移在 withRealRound 里完成。
+    if (this.isSynthetic(r)) {
+      this.withRealRound(r, (real) => this.updateRoundDetails(real, patch, onSuccess));
+      return;
+    }
     const ex = this.extras[r.id] ?? {};
     const body = {
       stage: r.stage,
@@ -492,6 +550,12 @@ export class RoundsTimelineComponent implements OnInit {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file || this.busy()) return;
+    // ★ F-03:占位轮次先实体化再挂资产。
+    this.withRealRound(r, (real) => this.uploadRoundAssetReal(real, phase, file, input));
+  }
+
+  private uploadRoundAssetReal(r: BriefRound, phase: AssetPhase, file: File, input: HTMLInputElement): void {
+    if (this.busy()) return;
     this.busy.set('asset-' + r.id + phase);
     this.api.upload<{ id: string }>(
       `/api/interviews/${this.entryId()}/assets`, file,
@@ -517,6 +581,12 @@ export class RoundsTimelineComponent implements OnInit {
     const ref = this.dialog.open(PasteTextDialogComponent, { width: '640px' });
     ref.afterClosed().subscribe((text: string | null) => {
       if (!text || this.busy()) return;
+      // ★ F-03:占位轮次先实体化再挂资产。
+      this.withRealRound(r, (real) => this.pasteRoundTextReal(real, phase, kind, text));
+    });
+  }
+
+  private pasteRoundTextReal(r: BriefRound, phase: AssetPhase, kind: string, text: string): void {
       this.busy.set('asset-' + r.id + phase);
       this.api.post<{ id: string }>(
         `/api/interviews/${this.entryId()}/assets`,
@@ -532,7 +602,6 @@ export class RoundsTimelineComponent implements OnInit {
             this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
           },
         });
-    });
   }
 
   // ================= 备考方案（2026-10-19） =================
@@ -548,32 +617,35 @@ export class RoundsTimelineComponent implements OnInit {
 
   /** 打开输入对话框 → 生成备考方案 → 存为轮次资产。 */
   openPrepDialog(r: BriefRound): void {
+    // ★ F-03:占位轮次先实体化,备考方案才挂得上。
+    // ★ F-06:JD 预填条目已保存的(JdText 优先,否则 JdSummary),简历预填 Jobs 保存的简历文本;
+    //   生成在对话框内完成,失败留在对话框里显示本地化原因,不再静默关窗。
+    this.withRealRound(r, (real) => {
+      const e = this.entryBrief();
+      const jdHint = (e?.jdText ?? '').trim() || (e?.jdSummary ?? '').trim();
+      this.api.get<{ resumeText: string | null }>(`/api/jobs/resume-text`).subscribe({
+        next: (rt) => this.openPrepDialogReal(real, jdHint, (rt?.resumeText ?? '').trim()),
+        error: () => this.openPrepDialogReal(real, jdHint, ''),
+      });
+    });
+  }
+
+  private openPrepDialogReal(r: BriefRound, jdHint: string, resumeHint: string): void {
     const prevCount = this.sortedRounds().filter((x) => x.order < r.order).length;
     const ref = this.dialog.open(PrepPlanDialogComponent, {
       width: '640px',
-      data: { roundOrder: r.order, jdHint: '', prevRoundsCount: prevCount },
+      data: {
+        roundOrder: r.order, jdHint, resumeHint, prevRoundsCount: prevCount,
+        entryId: this.entryId(), roundId: r.id,
+      },
     });
-    ref.afterClosed().subscribe((input: {
-      jdText: string; resumeText: string; experiences: string; requirements: string;
-    } | null) => {
-      if (!input || this.busy()) return;
-      this.busy.set('prep-' + r.id);
-      this.api.post<PrepPlan>(
-        `/api/interviews/${this.entryId()}/rounds/${r.id}/prep-plan`, input)
-        .subscribe({
-          next: (p) => {
-            this.busy.set(null);
-            this.prepPlans.update((m) => ({ ...m, [r.id]: p }));
-            this.prepOpen.set(r.id);
-            this.prepHtmlOpen.set(r.id);
-            this.load(); // 刷新资产列表（新 PrepDoc 资产）
-            this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2500 });
-          },
-          error: (e: Error) => {
-            this.busy.set(null);
-            this.snack.open(e.message, this.t('common.close'), { duration: 6000 });
-          },
-        });
+    ref.afterClosed().subscribe((p: PrepPlan | null) => {
+      if (!p) return;
+      this.prepPlans.update((m) => ({ ...m, [r.id]: p }));
+      this.prepOpen.set(r.id);
+      this.prepHtmlOpen.set(r.id);
+      this.load(); // 刷新资产列表（新 PrepDoc 资产）
+      this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2500 });
     });
   }
 
@@ -647,6 +719,7 @@ export class RoundsTimelineComponent implements OnInit {
     this.api.get<BriefEntry>(`/api/interviews/${this.entryId()}`)
       .subscribe({
         next: (e) => {
+          this.entryBrief.set(e ?? null);
           const rs = e?.rounds ?? [];
           // 把 GET 下发的扩展字段（若后端已补）记入 extras，供 PUT 回显
           for (const r of rs) {

@@ -807,7 +807,14 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
       },
       error: (e: Error) => {
         this.busy.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+        // ★ F-07:409 是合法业务规则(没有可分析的转写),但绝不能把后端原文
+        //   直接抛给用户 —— 按错误码映射成本地化的"原因 + 下一步"提示。
+        const code = (e as unknown as { code?: string }).code;
+        if (code === 'Analysis.InvalidState') {
+          this.snack.open(this.i18n.t('pb.action.analysisBlocked'), this.t('common.close'), { duration: 8000 });
+        } else {
+          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+        }
       }
     });
   }

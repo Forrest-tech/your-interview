@@ -144,6 +144,13 @@ export class MaterialTreeComponent {
   @Output() nodeChange = new EventEmitter<MaterialNode[]>();
   @Output() nodeDelete = new EventEmitter<MaterialNode>();
   /**
+   * ★ F-10:新建节点改名提交的那一刻抛给父级 —— 父级据此立即落库。
+   * 新建是纯新增,用户改完名点回车/点勾的直觉就是"建好了",不该再要求
+   * 去找侧栏的保存图标+二次确认;否则刷新即丢,且毫无提示。
+   * (既有内容的编辑仍走显式"保存修改"约定,不受影响。)
+   */
+  @Output() nodeCreated = new EventEmitter<MaterialNode>();
+  /**
    * ★ 2026-09-20(Forrest):新建不再要求先点「编辑」——
    * 只读状态下点新建,先让父级进入编辑模式(弹出保存/取消),再落节点。
    */
@@ -343,11 +350,15 @@ export class MaterialTreeComponent {
     this.renamingId.set(null);
     // ★ 2026-09-20(Forrest):新建的节点改完名 → 焦点直接落到它上面
     //   (选中 + 右侧显示它的内容)。
-    if (this.pendingSelectId === node.id) {
+    const isFresh = this.pendingSelectId === node.id;
+    if (isFresh) {
       this.pendingSelectId = null;
       this.nodeSelect.emit(node);
     }
     if (changed) this.nodeChange.emit(this.nodes);
+    // ★ F-10:新建节点在改名提交时通知父级立即落库(名字没改、直接确认也要落,
+    //   否则默认名的节点同样会随刷新消失)。
+    if (isFresh) this.nodeCreated.emit(node);
   }
 
   cancelRename(): void {

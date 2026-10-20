@@ -449,6 +449,164 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
+    // ---------- 简历 PDF 文件(2026-10-19) ----------
+    //
+    // 为什么文件和正文分两个端点:
+    //   正文(text)是匹配分析/求职信生成的输入 —— 读文本不需要拖几 MB 的 PDF;
+    //   PDF 是给人看的(Documents tab 预览)。分开存、分开读,各走各的轻量路径。
+    //
+    // 去重(Forrest 定夺):某条投递没传 tailored 时,Documents 直接引用基础简历,
+    // 不复制。GET applications/{id}/resume-file 会自动回落到基础文件。
+
+    /// <summary>
+    /// 上传基础简历 PDF(/resume 页)。
+    /// multipart/form-data:file=PDF,textContent=前端 pdf.js 提取的文本(评分/求职信用)。
+    /// 文本会同步写进 resumes 表 —— 老的文本消费者(求职信生成等)不受影响。
+    /// </summary>
+    [HttpPost("resume-file")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    [RequestSizeLimit(12 * 1024 * 1024)]
+    public async Task<IResult> UploadResumeFile(
+        IFormFile file, [FromForm] string? textContent, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return Microsoft.AspNetCore.Http.Results.Problem(title: "没有收到文件",
+                detail: "请选择 PDF 简历再上传。", statusCode: StatusCodes.Status400BadRequest);
+        if (!IsPdf(file))
+            return Microsoft.AspNetCore.Http.Results.Problem(title: "只支持 PDF",
+                detail: "请上传 .pdf 文件。", statusCode: StatusCodes.Status400BadRequest);
+
+        await using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var r = await sender.Send(new SaveResumeFileCommand(Me, null, file.FileName,
+            file.ContentType, ms.ToArray(), textContent ?? string.Empty), ct);
+        if (!r.IsSuccess) return r.ToProblemDetails();
+
+        // 文本同步进 resumes 表 —— 求职信生成/匹配分析的老链路继续走文本,不碰 PDF。
+        if (!string.IsNullOrWhiteSpace(textContent))
+            await sender.Send(new SaveResumeCommand(Me, textContent), ct);
+
+        return Microsoft.AspNetCore.Http.Results.Ok(new
+        {
+            fileName = r.Value.FileName,
+            size = r.Value.Size,
+            updatedAt = r.Value.UpdatedAt ?? r.Value.CreatedAt
+        });
+    }
+
+    /// <summary>基础简历 PDF 元信息(文件名/大小/更新时间)—— 刷新页面后前端仍能显示文件名。</summary>
+    [HttpGet("resume-file/meta")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> GetResumeFileMeta(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetResumeFileQuery(Me, null), ct);
+        if (!r.IsSuccess) return r.ToProblemDetails();
+        if (r.Value is null) return Microsoft.AspNetCore.Http.Results.NotFound();
+        return Microsoft.AspNetCore.Http.Results.Ok(new
+        {
+            fileName = r.Value.FileName,
+            size = r.Value.Data.LongLength,
+            updatedAt = r.Value.UpdatedAt ?? r.Value.CreatedAt
+        });
+    }
+
+    /// <summary>下载基础简历 PDF。</summary>
+    [HttpGet("resume-file")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> DownloadResumeFile(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetResumeFileQuery(Me, null), ct);
+        if (!r.IsSuccess) return r.ToProblemDetails();
+        if (r.Value is null) return Microsoft.AspNetCore.Http.Results.NotFound();
+        return Results.File(r.Value.Data, r.Value.ContentType, r.Value.FileName);
+    }
+
+    /// <summary>删除基础简历 PDF(文本记录不动 —— /resume 页的"清空"才清文本)。</summary>
+    [HttpDelete("resume-file")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    public async Task<IResult> DeleteResumeFile(CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteResumeFileCommand(Me, null), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 某条投递的有效简历元信息。kind=tailored(投递版本) / base(引用基础) / none(都没有)。
+    /// textContent 供 Resume Score 按投递版本算分 —— 有 tailored 就用 tailored 的文本。
+    /// </summary>
+    [HttpGet("applications/{applicationId:guid}/resume")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> GetApplicationResume(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetEffectiveResumeQuery(Me, applicationId), ct);
+        if (!r.IsSuccess) return r.ToProblemDetails();
+        var v = r.Value;
+        return Microsoft.AspNetCore.Http.Results.Ok(new
+        {
+            kind = v.Kind,
+            fileName = v.File?.FileName,
+            size = v.File?.Size,
+            textContent = string.IsNullOrWhiteSpace(v.File?.TextContent) ? null : v.File.TextContent
+        });
+    }
+
+    /// <summary>
+    /// 下载某条投递的有效简历 PDF —— 有 tailored 下 tailored,没有回落基础(去重:不复制)。
+    /// </summary>
+    [HttpGet("applications/{applicationId:guid}/resume-file")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> DownloadApplicationResumeFile(Guid applicationId, CancellationToken ct)
+    {
+        var tailored = await sender.Send(new GetResumeFileQuery(Me, applicationId), ct);
+        if (!tailored.IsSuccess) return tailored.ToProblemDetails();
+        var file = tailored.Value
+            ?? (await sender.Send(new GetResumeFileQuery(Me, null), ct)).Value;
+        if (file is null) return Microsoft.AspNetCore.Http.Results.NotFound();
+        return Results.File(file.Data, file.ContentType, file.FileName);
+    }
+
+    /// <summary>
+    /// 上传某条投递的 tailored 简历 PDF(Documents tab)。
+    /// multipart/form-data:file=PDF,textContent=提取文本(评分用)。
+    /// </summary>
+    [HttpPost("applications/{applicationId:guid}/resume")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    [RequestSizeLimit(12 * 1024 * 1024)]
+    public async Task<IResult> UploadApplicationResume(Guid applicationId,
+        IFormFile file, [FromForm] string? textContent, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return Microsoft.AspNetCore.Http.Results.Problem(title: "没有收到文件",
+                detail: "请选择 PDF 简历再上传。", statusCode: StatusCodes.Status400BadRequest);
+        if (!IsPdf(file))
+            return Microsoft.AspNetCore.Http.Results.Problem(title: "只支持 PDF",
+                detail: "请上传 .pdf 文件。", statusCode: StatusCodes.Status400BadRequest);
+
+        await using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var r = await sender.Send(new SaveResumeFileCommand(Me, applicationId, file.FileName,
+            file.ContentType, ms.ToArray(), textContent ?? string.Empty), ct);
+        return r.IsSuccess
+            ? Microsoft.AspNetCore.Http.Results.Ok(new { fileName = r.Value.FileName, size = r.Value.Size })
+            : r.ToProblemDetails();
+    }
+
+    /// <summary>删除某条投递的 tailored 简历 —— 删完回落到基础简历(引用,不复制)。</summary>
+    [HttpDelete("applications/{applicationId:guid}/resume")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    public async Task<IResult> DeleteApplicationResume(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteResumeFileCommand(Me, applicationId), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    private static bool IsPdf(IFormFile file)
+    {
+        var name = file.FileName ?? string.Empty;
+        return name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(file.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase);
+    }
+
     // ---------- 求职信(Cover Letter,2026-09-18) ----------
 
     /// <summary>读某条投递的求职信。未撰写时返回 200 + null(前端据此显示空编辑器)。</summary>

@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,6 +28,7 @@ import { TrackerApi } from '../../core/api/tracker-api.service';
 import { Application, ApplicationStatus, AnswerTemplate, Communication, CommunicationType, Company, Paged, TrackerStats } from '../../core/models/api.models';
 import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
 import { SmartAddDialogComponent } from './smart-add-dialog.component';
+import { extractPdfText } from '../../core/utils/pdf-text';
 
 /** 状态下拉的选项 —— 顺序即漏斗顺序,下拉里也按流程排,避免用户找"面试中"要找半天。 */
 const STATUS_ORDER: ApplicationStatus[] = [
@@ -1808,11 +1810,28 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 
       @else if (detailTab() === 'documents') {
         <div class="tab-body">
-      <!-- 简历区:显示投递版本 -->
+      <!-- 简历区:投递版本优先,没有则引用基础简历(不复制) -->
       <section class="cl-section">
         <div class="sec-head">
           <mat-icon>description</mat-icon>
           <span>{{ t('tracker.dResume') }}</span>
+          @if (appResumeKind() === 'tailored') {
+            <span class="cl-status cl-generated">{{ t('tracker.dResumeTailored') }}</span>
+          } @else if (appResumeKind() === 'base') {
+            <span class="cl-status cl-draft">{{ t('tracker.dResumeBase') }}</span>
+          }
+          <span class="doc-actions">
+            <button mat-button (click)="tailoredFile.click()">
+              <mat-icon>upload_file</mat-icon>{{ t('tracker.dResumeUploadTailored') }}
+            </button>
+            <input #tailoredFile type="file" hidden accept=".pdf"
+                   (change)="uploadTailoredResume($event)">
+            @if (appResumeKind() === 'tailored') {
+              <button mat-button (click)="removeTailoredResume()">
+                <mat-icon>delete_outline</mat-icon>{{ t('common.delete') }}
+              </button>
+            }
+          </span>
         </div>
         <!-- 文件名 -->
         @if (resumeFileName()) {
@@ -2369,6 +2388,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     .fold-head:hover { opacity: 1; }
     .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(0,0,0,0.45); }
     .fold-len { font-size: 11.5px; opacity: 0.45; font-weight: 400; }
+    /* Documents tab 简历区:右侧操作按钮 */
+    .doc-actions { margin-left: auto; display: flex; gap: 4px; align-items: center; }
     /* Simplify:标题行右侧的小编辑图标 */
     .edit-btn { width: 26px; height: 26px; line-height: 26px; margin-left: auto; opacity: 0.45; }
     .edit-btn:hover { opacity: 1; }
@@ -2509,6 +2530,7 @@ export class ApplicationDetailDialogComponent {
   private readonly api = inject(ApiClient);
   private readonly trackerApi = inject(TrackerApi);
   private readonly i18n = inject(I18nService);
+  private readonly sanitizer = inject(DomSanitizer);
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
   tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
@@ -2550,15 +2572,93 @@ export class ApplicationDetailDialogComponent {
   /** 2026-10-19:About the job 是否展开(LinkedIn 风格:长描述默认折叠,点 more 展开)。 */
   readonly aboutJobExpanded = signal(false);
 
-  /** Documents tab: 简历文件名和 PDF URL（null = 未上传） */
+  /** Documents tab: 简历文件名和 PDF URL（null = 无文件） */
   readonly resumeFileName = signal<string | null>(null);
-  readonly resumeFileUrl = signal<string | null>(null);
+  readonly resumeFileUrl = signal<SafeResourceUrl | null>(null);
+
+  /**
+   * Documents tab: 有效简历来源。
+   * tailored = 本投递的投递版本; base = 引用基础简历(不复制); none = 都没有。
+   */
+  readonly appResumeKind = signal<'base' | 'tailored' | 'none'>('none');
+
+  /**
+   * 有效简历的提取文本(评分用)。来自后端 resume_files.TextContent ——
+   * 有 tailored 时后端返回 tailored 的文本,Resume Score 按投递版本算。
+   */
+  private readonly appResumeText = signal<string | null>(null);
 
   /** 匹配分析结果。null = 还没算(JD 或简历缺失时保持 null)。 */
   readonly match = signal<MatchResult | null>(null);
 
   /** 简历全文(匹配分析的比对基准)。null = 尚未拿到。 */
   private readonly resumeText = signal<string | null>(null);
+
+  /**
+   * 本投递的有效简历:先拿元信息(kind/fileName/textContent),再拿 PDF 二进制做预览。
+   * kind=tailored → 显示投递版本;kind=base → 引用基础简历(不复制);
+   * kind=none → 提示上传。
+   */
+  private loadAppResume(): void {
+    this.api.get<{ kind: string; fileName: string | null; textContent: string | null }>(
+      `/api/jobs/applications/${this.app.id}/resume`).subscribe({
+      next: (r) => {
+        const kind = r.kind === 'tailored' ? 'tailored' : r.kind === 'base' ? 'base' : 'none';
+        this.appResumeKind.set(kind);
+        this.resumeFileName.set(r.fileName);
+        this.appResumeText.set(r.textContent);
+        this.recomputeMatch();
+        if (kind !== 'none') {
+          this.api.getBlob(`/api/jobs/applications/${this.app.id}/resume-file`).subscribe({
+            next: (blob) => {
+              const url = URL.createObjectURL(blob);
+              this.resumeFileUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+            },
+            error: () => { this.resumeFileUrl.set(null); }
+          });
+        } else {
+          this.resumeFileUrl.set(null);
+        }
+      },
+      error: () => { this.appResumeKind.set('none'); this.recomputeMatch(); }
+    });
+  }
+
+  /** 上传本投递的 tailored 简历 PDF(文本前端 pdf.js 提取,一起发给后端)。 */
+  async uploadTailoredResume(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 });
+      return;
+    }
+    try {
+      const text = await extractPdfText(file);
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      fd.append('textContent', text);
+      this.api.postForm(`/api/jobs/applications/${this.app.id}/resume`, fd).subscribe({
+        next: () => {
+          this.snack.open(this.t('tracker.dResumeUploadOk'), this.t('common.close'), { duration: 2500 });
+          this.loadAppResume();
+        },
+        error: () => this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 })
+      });
+    } catch {
+      this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 });
+    }
+  }
+
+  /** 删除 tailored 版本 —— 回落到基础简历(引用,不复制)。 */
+  removeTailoredResume(): void {
+    if (!confirm(this.t('tracker.dResumeRemoveTailored'))) return;
+    this.api.delete(`/api/jobs/applications/${this.app.id}/resume`).subscribe({
+      next: () => this.loadAppResume(),
+      error: () => this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 })
+    });
+  }
 
   // ---------------------------- 求职信 ----------------------------
 
@@ -2603,6 +2703,9 @@ export class ApplicationDetailDialogComponent {
       },
       error: () => { this.recomputeMatch(); }
     });
+
+    // 本投递的有效简历(投递版本优先,没有回落基础):Documents tab 展示 + 评分基准
+    this.loadAppResume();
 
     // 求职信 + 输入体检:详情弹窗打开时各查一次
     this.loadCoverLetter();
@@ -2705,7 +2808,8 @@ export class ApplicationDetailDialogComponent {
   /** JD 全文到手或简历到手后重算 —— 两者缺一就不出分。 */
   private recomputeMatch(): void {
     const jd = this.app.jdText;
-    const resume = this.resumeText();
+    // 投递版本优先:有 tailored 文本就用它,没有才用基础简历
+    const resume = this.appResumeText() ?? this.resumeText();
     if (!jd || !resume) return;
     this.match.set(computeMatch(resume, jd));
   }

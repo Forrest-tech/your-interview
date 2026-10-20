@@ -31,6 +31,17 @@
       <span class="extract-hint">{{ t('profile.resumeExtractHint') }}</span>
     </div>
 
+    <!-- PDF 预览:文件名 + 一页显示、滚动翻页(浏览器内置 PDF 查看器) -->
+    @if (resumePdfUrl()) {
+      <div class="pdf-preview">
+        <div class="pdf-filename">
+          <mat-icon>picture_as_pdf</mat-icon>
+          <span>{{ resumeFileName() || t('profile.resumeSavedLabel') }}</span>
+        </div>
+        <iframe class="pdf-viewer" [src]="resumePdfUrl()" title="Resume PDF"></iframe>
+      </div>
+    }
+
     <mat-form-field appearance="outline" class="resume-field">
       <mat-label>{{ t('profile.resumeLabel') }}</mat-label>
       <textarea matInput rows="16" [(ngModel)]="resumeDraft"

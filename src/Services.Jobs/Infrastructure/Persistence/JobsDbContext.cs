@@ -18,6 +18,10 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
     public DbSet<UserResume> Resumes => Set<UserResume>();
     public DbSet<CoverLetter> CoverLetters => Set<CoverLetter>();
 
+    // ---- 简历 PDF 文件(2026-10-19)----
+    // 基础简历(ApplicationId null,一人一份)+ 各投递的 tailored 版本(一条投递一份)。
+    public DbSet<ResumeFile> ResumeFiles => Set<ResumeFile>();
+
     // ---- M3:申请问答库(用户级)与沟通记录(投递级)----
     public DbSet<ApplicationAnswerTemplate> AnswerTemplates => Set<ApplicationAnswerTemplate>();
     public DbSet<ApplicationCommunication> Communications => Set<ApplicationCommunication>();
@@ -161,6 +165,28 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.GeneratedByModel).HasMaxLength(200);
             e.Property(x => x.LastPromptHint).HasMaxLength(4000);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // 简历 PDF 文件(2026-10-19)。ApplicationId null = 基础简历(一人一份),
+        // 有值 = 该投递的 tailored 版本(一条投递一份)。
+        b.Entity<ResumeFile>(e =>
+        {
+            e.ToTable("resume_files");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FileName).HasMaxLength(300).IsRequired();
+            e.Property(x => x.ContentType).HasMaxLength(100).IsRequired();
+            // PDF 二进制:PostgreSQL bytea。10MB 上限在应用层校验,这里不设限。
+            e.Property(x => x.Data).HasColumnType("bytea").IsRequired();
+            // 提取文本:供 Resume Score 按投递版本算分,text 类型不设限。
+            e.Property(x => x.TextContent).HasColumnType("text").IsRequired();
+            // 基础简历一人一份(只对 ApplicationId IS NULL 的行唯一)
+            e.HasIndex(x => x.UserId).IsUnique().HasFilter("\"ApplicationId\" IS NULL");
+            // tailored 一条投递一份(只对 ApplicationId IS NOT NULL 的行唯一)
+            e.HasIndex(x => x.ApplicationId).IsUnique().HasFilter("\"ApplicationId\" IS NOT NULL");
+            e.HasIndex(x => x.UserId);
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted);
             e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);

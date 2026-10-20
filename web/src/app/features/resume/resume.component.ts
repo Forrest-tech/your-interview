@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,6 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { ApiClient } from '../../core/api/api-client';
+import { extractPdfText } from '../../core/utils/pdf-text';
 
 /**
  * 简历配置页(独立页面,不再放在 profile/account 里)。
@@ -39,13 +41,19 @@ export class ResumeComponent implements OnInit {
   /** 简历草稿(文本域绑定)。 */
   resumeDraft = '';
   resumeFileName = signal('');
+  /** 待上传的 PDF 文件(选完文件、点保存后才真正上传)。 */
+  private pendingPdf: File | null = null;
+  /** PDF 预览 URL(blob)。null = 后端没有存 PDF。 */
+  readonly resumePdfUrl = signal<SafeResourceUrl | null>(null);
   savedResumePreview = signal('');
   savedResumeDate = signal('');
   private readonly resumeKey = 'yi-my-resume';
   private readonly resumeMetaKey = 'yi-my-resume-meta';
+  private readonly sanitizer = inject(DomSanitizer);
 
   ngOnInit(): void {
     this.refreshResumePreview();
+    this.loadPdfPreview();
     // 有已存简历时,把全文载入编辑框,方便直接改。
     try {
       const text = localStorage.getItem(this.resumeKey) ?? '';
@@ -65,6 +73,22 @@ export class ResumeComponent implements OnInit {
         });
       }
     } catch { /* 忽略 */ }
+  }
+
+  /** 从后端拉 PDF 预览(有才显示)。 */
+  private loadPdfPreview(): void {
+    // 元信息:后端是文件名真源(换浏览器/清缓存后 localStorage 没了,这里还能显示)
+    this.api.get<{ fileName: string }>('/api/jobs/resume-file/meta').subscribe({
+      next: (m) => { if (m.fileName) this.resumeFileName.set(m.fileName); },
+      error: () => { /* 没有 PDF 就不显示 */ }
+    });
+    this.api.getBlob('/api/jobs/resume-file').subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        this.resumePdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+      },
+      error: () => { this.resumePdfUrl.set(null); /* 没有 PDF 就不显示,不阻断 */ }
+    });
   }
 
   saveResume(): void {
@@ -91,6 +115,21 @@ export class ResumeComponent implements OnInit {
         this.snack.open(this.t('profile.resumeSavedLocalOnly'), this.t('common.close'), { duration: 4000 });
       }
     });
+    // 有待上传的 PDF:一起存到后端(Documents tab 预览 + 去重引用都从这里读)
+    if (this.pendingPdf) {
+      const fd = new FormData();
+      fd.append('file', this.pendingPdf, this.pendingPdf.name);
+      fd.append('textContent', text);
+      this.api.postForm('/api/jobs/resume-file', fd).subscribe({
+        next: () => {
+          this.pendingPdf = null;
+          this.loadPdfPreview();
+        },
+        error: () => {
+          this.snack.open(this.t('profile.resumePdfSaveFailed'), this.t('common.close'), { duration: 4000 });
+        }
+      });
+    }
   }
 
   clearResume(): void {
@@ -100,12 +139,16 @@ export class ResumeComponent implements OnInit {
     } catch { /* 忽略 */ }
     this.resumeDraft = '';
     this.resumeFileName.set('');
+    this.pendingPdf = null;
+    this.resumePdfUrl.set(null);
     this.refreshResumePreview();
     // 同步清空后端
     this.api.put('/api/jobs/resume-text', { resumeText: '' }).subscribe({
       next: () => this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2000 }),
       error: () => this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2000 })
     });
+    // 后端 PDF 一起删
+    this.api.delete('/api/jobs/resume-file').subscribe({ error: () => { /* 忽略 */ } });
   }
 
   private refreshResumePreview(): void {
@@ -141,6 +184,8 @@ export class ResumeComponent implements OnInit {
     const file = input.files?.[0];
     if (!file) return;
     this.resumeFileName.set(file.name);
+    // PDF 留到点保存时一起上传(和文本保持一致)
+    this.pendingPdf = file.name.toLowerCase().endsWith('.pdf') ? file : null;
 
     try {
       const name = file.name.toLowerCase();
@@ -167,21 +212,6 @@ export class ResumeComponent implements OnInit {
   }
 
   private async extractPdfText(file: File): Promise<string> {
-    const pdfjs = await import('pdfjs-dist');
-    // pdf.js v4+ 需要 worker:用本地打包的 assets,比 CDN 可靠
-    const pdfjsAny = pdfjs as any;
-    if (pdfjsAny.GlobalWorkerOptions && !pdfjsAny.GlobalWorkerOptions.workerSrc) {
-      pdfjsAny.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.mjs';
-    }
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsAny.getDocument({ data: buf }).promise;
-    const parts: string[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const line = (content.items as any[]).map((it: any) => it.str ?? '').join(' ');
-      parts.push(line);
-    }
-    return parts.join('\n');
+    return extractPdfText(file);
   }
 }

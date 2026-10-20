@@ -430,7 +430,15 @@
         </div>
       </div>
     } @empty {
-      <div class="list-empty">{{ t('tracker.noResults') }}</div>
+      <!-- ★ F-05:搜索/筛选无结果时明确说明,并给出清除入口,不再误报"暂无投递"。 -->
+      <div class="list-empty">
+        @if (filtersActive()) {
+          <p>{{ t('tracker.noSearchResults') }}</p>
+          <button mat-stroked-button (click)="clearFilters()">{{ t('common.clearFilter') }}</button>
+        } @else {
+          {{ t('tracker.noResults') }}
+        }
+      </div>
     }
   </div>
   }

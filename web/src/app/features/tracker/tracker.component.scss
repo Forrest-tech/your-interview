@@ -699,3 +699,23 @@ mat-form-field { width: 100%; }
 .ghosting-item + .ghosting-item::before {
   content: "、";
 }
+
+/* ★ F-11:手机宽(≤640px)页头 —— 旧布局把标题和一整排操作按钮挤在一行,
+   标题被压成逐字竖排、"+" 按钮被推出屏幕。改为纵向堆叠 + 操作区换行。 */
+@media (max-width: 640px) {
+  .page { padding: 16px 14px 12px; }
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .page-head > div:first-child { min-width: 0; }
+  .page-head h2 { white-space: normal; }
+  .page-head .sub { white-space: normal; }
+  .head-actions {
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

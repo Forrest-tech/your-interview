@@ -416,3 +416,14 @@
   .f-inner { gap: 8px; }
   .f-meta { gap: 10px; }
 }
+
+/* ★ F-11:手机宽(≤640px)顶栏 —— 与品牌位/账户区的"图标化"既定风格一致:
+   品牌只留 logo、主导航只留图标(文字进 tooltip),保证 390px 下
+   所有导航项在一屏内可达,不再被挤出屏幕且无任何提示。 */
+@media (max-width: 640px) {
+  .topbar { padding: 0 8px; gap: 2px; }
+  .brand { margin-right: 4px; }
+  .brand-name { display: none; }
+  .nav-item { padding: 0 8px; }
+  .nav-text { display: none; }
+}

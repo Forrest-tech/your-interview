@@ -24,6 +24,7 @@
       <a class="nav-item"
          [routerLink]="item.path"
          routerLinkActive="active"
+         [attr.aria-label]="t(item.labelKey)"
          [matTooltip]="t(item.labelKey)"
          matTooltipShowDelay="350">
         <mat-icon>{{ item.icon }}</mat-icon>

@@ -26,6 +26,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { SubnavService } from '../../layout/subnav.service';
 import { TrackerApi } from '../../core/api/tracker-api.service';
 import { Application, ApplicationStatus, AnswerTemplate, Communication, CommunicationType, Company, Paged, TrackerStats } from '../../core/models/api.models';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
 import { SmartAddDialogComponent } from './smart-add-dialog.component';
 import { extractPdfText } from '../../core/utils/pdf-text';
@@ -900,26 +901,41 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  /** ★ F-02:删除确认统一走全站确认弹窗 —— 原生 confirm() 在无弹窗处理的环境
+   *  (自动化测试/某些内嵌浏览器)会被静默 dismiss,删除看起来"点了没反应"。 */
+  private confirmDelete(body: string): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.delete'), body,
+        confirmText: this.t('common.delete'), cancelText: this.t('common.cancel'),
+        danger: true,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
   /** 批量删除:二次确认。 */
   bulkDelete(): void {
     const n = this.selected().size;
     if (n === 0) return;
-    const ok = confirm(this.tf('tracker.confirmBulkDelete', { n }));
-    if (!ok) return;
-    const ids = [...this.selected()];
-    let done = 0, failed = 0;
-    for (const id of ids) {
-      this.api.delete<void>(`/api/jobs/applications/${id}`).subscribe({
-        next: () => {
-          done++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
-        },
-        error: () => {
-          failed++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
-        }
-      });
-    }
+    void this.confirmDelete(this.tf('tracker.confirmBulkDelete', { n })).then((ok) => {
+      if (!ok) return;
+      const ids = [...this.selected()];
+      let done = 0, failed = 0;
+      for (const id of ids) {
+        this.api.delete<void>(`/api/jobs/applications/${id}`).subscribe({
+          next: () => {
+            done++;
+            if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
+          },
+          error: () => {
+            failed++;
+            if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
+          }
+        });
+      }
+    });
   }
 
   private finishBulk(done: number, failed: number, _op: string): void {
@@ -1239,9 +1255,15 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ------------------------------ 筛选交互 ------------------------------
 
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+
   onSearchInput(value: string): void {
     this.search.set(value);
     this.page.set(1);
+    // ★ F-05:输入即筛选(300ms 防抖)—— 旧实现只更新信号、从不发请求,
+    //   用户打完整公司名列表也纹丝不动,只能靠回车(且焦点不在框内就无效)。
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => this.load(), 300);
   }
 
   onSearchEnter(): void {
@@ -1255,6 +1277,11 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   onSortChange(v: string): void {
     this.setSort(v);
+  }
+
+  /** 当前是否有搜索/筛选生效（空态文案区分"真没数据"与"被筛掉了"）。 */
+  filtersActive(): boolean {
+    return !!this.search().trim() || !!this.statusFilter() || this.showStaleOnly() || this.favOnly();
   }
 
   clearFilters(): void {
@@ -1411,15 +1438,15 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   /** 删除必须二次确认 —— 误删一条投递记录要重新回忆时间线,代价不对称。 */
   remove(app: Application, ev?: Event): void {
     ev?.stopPropagation();
-    const ok = confirm(this.tf('tracker.confirmDelete', { a: `${app.companyName} · ${app.role}` }));
-    if (!ok) return;
-
-    this.api.delete<void>(`/api/jobs/applications/${app.id}`).subscribe({
-      next: () => {
-        this.notify(this.t('tracker.deleted'));
-        this.reload();
-      },
-      error: (e: Error) => this.notify(e.message, true)
+    void this.confirmDelete(this.tf('tracker.confirmDelete', { a: `${app.companyName} · ${app.role}` })).then((ok) => {
+      if (!ok) return;
+      this.api.delete<void>(`/api/jobs/applications/${app.id}`).subscribe({
+        next: () => {
+          this.notify(this.t('tracker.deleted'));
+          this.reload();
+        },
+        error: (e: Error) => this.notify(e.message, true)
+      });
     });
   }
 
@@ -1985,7 +2012,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           </div>
         </div>
       } @else {
-        <p class="cl-empty">{{ t('tracker.dNoJd') }}</p>
+        <!-- ★ F-08:空态分清缺什么 —— 有 JD 缺简历时不能再说"暂无 JD"。 -->
+        <p class="cl-empty">{{ hasJdForScore() ? t('tracker.dNoResume') : t('tracker.dNoJd') }}</p>
       }
         </div>
       }
@@ -2532,6 +2560,7 @@ export class ApplicationDetailDialogComponent {
   private readonly api = inject(ApiClient);
   private readonly trackerApi = inject(TrackerApi);
   private readonly i18n = inject(I18nService);
+  private readonly dialog = inject(MatDialog);
   private readonly sanitizer = inject(DomSanitizer);
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
@@ -2810,12 +2839,20 @@ export class ApplicationDetailDialogComponent {
     }
   }
 
+  /** 是否有可用 JD（与 Overview / 高亮卡同一口径，供评分空态区分缺 JD 还是缺简历）。 */
+  hasJdForScore(): boolean {
+    return !!((this.detail.jdText ?? '').trim() || (this.detail.jdSummary ?? '').trim());
+  }
+
   /** JD 全文到手或简历到手后重算 —— 两者缺一就不出分。 */
   private recomputeMatch(): void {
-    const jd = this.app.jdText;
+    // ★ F-08:JD 口径与 Overview 对齐 —— 读最新详情(detail)，JdText 缺失时回落
+    //   JdSummary。旧实现只读列表项的 jdText，只有摘要的投递永远算不出分，
+    //   与 Overview 里明明有 JD 自相矛盾。
+    const jd = (this.detail.jdText ?? '').trim() || (this.detail.jdSummary ?? '').trim();
     // 投递版本优先:有 tailored 文本就用它,没有才用基础简历
     const resume = this.appResumeText() ?? this.resumeText();
-    if (!jd || !resume) return;
+    if (!jd || !resume) { this.match.set(null); return; }
     this.match.set(computeMatch(resume, jd));
   }
 
@@ -2932,10 +2969,25 @@ export class ApplicationDetailDialogComponent {
   }
 
   doDelete(): void {
-    if (!confirm(this.t('tracker.deleteConfirm'))) return;
-    this.api.delete<void>(`/api/jobs/applications/${this.app.id}`).subscribe({
-      next: () => this.dialogRef.close(true),
-      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
+    // ★ F-02:改用全站统一确认弹窗(原生 confirm 会被静默 dismiss);
+    //   删除成功补一条可见反馈,不再关窗无声。
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.delete'), body: this.t('tracker.deleteConfirm'),
+        confirmText: this.t('common.delete'), cancelText: this.t('common.cancel'),
+        danger: true,
+      } as ConfirmDialogData,
+    });
+    ref.afterClosed().subscribe((v) => {
+      if (v !== true) return;
+      this.api.delete<void>(`/api/jobs/applications/${this.app.id}`).subscribe({
+        next: () => {
+          this.snack.open(this.t('tracker.deleted'), this.t('common.close'), { duration: 3000 });
+          this.dialogRef.close(true);
+        },
+        error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
+      });
     });
   }
 

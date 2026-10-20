@@ -1814,8 +1814,20 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           <mat-icon>description</mat-icon>
           <span>{{ t('tracker.dResume') }}</span>
         </div>
-        <p class="field-hint">{{ t('tracker.dResumeHint') }}</p>
-        <!-- TODO: 简历 PDF 展示/上传 -->
+        <!-- 文件名 -->
+        @if (resumeFileName()) {
+          <div class="doc-filename">
+            <mat-icon>picture_as_pdf</mat-icon>
+            <span>{{ resumeFileName() }}</span>
+          </div>
+          <!-- PDF 查看器:单页显示,滚动翻页 -->
+          @if (resumeFileUrl()) {
+            <iframe class="doc-pdf-viewer" [src]="resumeFileUrl()" title="Resume PDF"></iframe>
+          }
+        } @else {
+          <p class="field-hint">{{ t('tracker.dResumeHint') }}</p>
+          <p class="dim">{{ t('tracker.dNoResume') }}</p>
+        }
       </section>
       <section class="cl-section">
         <div class="sec-head">
@@ -2279,6 +2291,16 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
       pointer-events: none;
     }
+    .doc-filename {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 600; font-size: 14px; margin: 12px 0;
+      color: #1f2937;
+    }
+    .doc-filename mat-icon { color: #d32f2f; }
+    .doc-pdf-viewer {
+      width: 100%; height: 700px; border: 1px solid #e5e7eb;
+      border-radius: 8px; background: #f9fafb;
+    }
     .more-link {
       background: none; border: none; padding: 4px 0; cursor: pointer;
       color: #666; font-size: 14px; font-weight: 500;
@@ -2527,6 +2549,10 @@ export class ApplicationDetailDialogComponent {
 
   /** 2026-10-19:About the job 是否展开(LinkedIn 风格:长描述默认折叠,点 more 展开)。 */
   readonly aboutJobExpanded = signal(false);
+
+  /** Documents tab: 简历文件名和 PDF URL（null = 未上传） */
+  readonly resumeFileName = signal<string | null>(null);
+  readonly resumeFileUrl = signal<string | null>(null);
 
   /** 匹配分析结果。null = 还没算(JD 或简历缺失时保持 null)。 */
   readonly match = signal<MatchResult | null>(null);

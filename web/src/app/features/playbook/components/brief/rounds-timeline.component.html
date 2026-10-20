@@ -217,6 +217,11 @@
               </div>
               @if (emailEditorId() === r.id) {
                 <div class="email-form">
+                  <mat-form-field appearance="outline" class="wide">
+                    <mat-label>{{ t('pb.br.rounds.emailPaste') }}</mat-label>
+                    <textarea matInput [ngModel]="emPaste" (ngModelChange)="onEmailPaste($event)" rows="4"
+                      [placeholder]="t('pb.br.rounds.emailPastePh')"></textarea>
+                  </mat-form-field>
                   <mat-form-field appearance="outline">
                     <mat-label>{{ t('pb.br.rounds.emailFromPh') }}</mat-label>
                     <input matInput [(ngModel)]="emFrom" />

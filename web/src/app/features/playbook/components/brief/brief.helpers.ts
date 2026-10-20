@@ -198,3 +198,78 @@ export function renderMarkdown(md: string): string {
   if (inList) out.push('</ul>');
   return out.join('\n');
 }
+
+/** 把各种日期写法归一为 yyyy-MM-dd；无法识别返回空串。 */
+export function normalizeEmailDate(s: string): string {
+  const t = s.trim();
+  const m1 = t.match(/(\d{4})[年\/\-.](\d{1,2})[月\/\-.](\d{1,2})日?/);
+  if (m1) {
+    const mm = String(+m1[2]).padStart(2, '0');
+    const dd = String(+m1[3]).padStart(2, '0');
+    return `${m1[1]}-${mm}-${dd}`;
+  }
+  const months: Record<string, number> = {
+    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+    jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
+  };
+  const m2 = t.match(/(\d{1,2})\s+([A-Za-z]+)\.?\s+(\d{4})/);
+  if (m2 && months[m2[2].toLowerCase()]) {
+    const mm = String(months[m2[2].toLowerCase()]).padStart(2, '0');
+    const dd = String(+m2[1]).padStart(2, '0');
+    return `${m2[3]}-${mm}-${dd}`;
+  }
+  const m3 = t.match(/([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  if (m3 && months[m3[1].toLowerCase()]) {
+    const mm = String(months[m3[1].toLowerCase()]).padStart(2, '0');
+    const dd = String(+m3[2]).padStart(2, '0');
+    return `${m3[3]}-${mm}-${dd}`;
+  }
+  const cleaned = t.replace(/\s+at\s+/i, ' ').replace(/GMT[+-]\d+.*$/, '').replace(/\([A-Za-z ]+\)/, '');
+  const d = new Date(cleaned);
+  if (!isNaN(d.getTime())) {
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  }
+  return '';
+}
+
+/**
+ * 粘贴进来的完整邮件一键解析：识别顶部头区块（From/Date/Subject，含中文客户端
+ * 发件人/发送时间/主题），其余内容当正文；没有头时全文当正文。
+ */
+export function parsePastedEmail(raw: string): { from: string; date: string; subject: string; body: string } {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  const headerLine = /^([A-Za-z\u4e00-\u9fa5][\w\u4e00-\u9fa5\- ]{0,20})\s*[:：]\s*(.*)$/;
+  const out = { from: '', date: '', subject: '', body: '' };
+  let i = 0;
+  let lastKey = '';
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim() === '') { i++; break; }
+    const m = line.match(headerLine);
+    if (m) {
+      lastKey = m[1].trim().toLowerCase();
+      const val = m[2].trim();
+      if (lastKey === 'from' || lastKey === '发件人') out.from = val.replace(/^"|"$/g, '');
+      else if (lastKey === 'date' || lastKey === 'sent' || lastKey === '发送时间' || lastKey === '发送日期') out.date = val;
+      else if (lastKey === 'subject' || lastKey === '主题' || lastKey === '标题') out.subject = val;
+      i++;
+    } else if (/^\s+/.test(line) && lastKey) {
+      // 折行续接上一条头
+      const val = line.trim();
+      if (lastKey === 'subject') out.subject += ' ' + val;
+      else if (lastKey === 'from') out.from += ' ' + val;
+      i++;
+    } else {
+      break;
+    }
+  }
+  // 没扫到任何头 → 全文都是正文
+  if (!out.from && !out.date && !out.subject) {
+    return { from: '', date: '', subject: '', body: raw.trim() };
+  }
+  out.date = normalizeEmailDate(out.date);
+  out.body = lines.slice(i).join('\n').trim();
+  return out;
+}

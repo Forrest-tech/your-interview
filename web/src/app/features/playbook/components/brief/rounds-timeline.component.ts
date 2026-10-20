@@ -20,7 +20,7 @@ import { I18nService } from '../../../../core/i18n/i18n.service';
 import type { BriefAsset, BriefEntry, BriefRound, RoundEmailItem } from './brief.models';
 import {
   applyParams, daysUntil, makeBriefT, nextRound, outcomeClass,
-  parseJsonList, renderMarkdown, todayStr,
+  parseJsonList, parsePastedEmail, renderMarkdown, todayStr,
 } from './brief.helpers';
 import { PrepPlanDialogComponent } from '../../prep-plan-dialog.component';
 import { PasteTextDialogComponent } from '../../paste-text-dialog.component';
@@ -225,6 +225,17 @@ export class RoundsTimelineComponent implements OnInit {
   emSubject = '';
   emDate = '';
   emSnippet = '';
+  emPaste = '';
+
+  /** 粘贴完整邮件 → 自动填充 From/Date/Subject/正文（各字段仍可微调）。 */
+  onEmailPaste(raw: string): void {
+    this.emPaste = raw;
+    const p = parsePastedEmail(raw);
+    if (p.from) this.emFrom = p.from;
+    if (p.subject) this.emSubject = p.subject;
+    if (p.date) this.emDate = p.date;
+    if (p.body) this.emSnippet = p.body;
+  }
 
   emailsOf(r: BriefRound): RoundEmailItem[] {
     const override = this.emailOverrides()[r.id];
@@ -238,6 +249,7 @@ export class RoundsTimelineComponent implements OnInit {
     this.emSubject = '';
     this.emDate = todayStr();
     this.emSnippet = '';
+    this.emPaste = '';
   }
 
   closeEmailEditor(): void { this.emailEditorId.set(null); }

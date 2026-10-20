@@ -69,6 +69,8 @@ export const BRIEF_I18N: Record<string, { zh: string; en: string; fr?: string }>
   'pb.br.rounds.emailDatePh': { zh: '日期', en: 'Date' },
   'pb.br.rounds.emailSnippetPh': { zh: '摘要（可选）', en: 'Snippet (optional)' },
   'pb.br.rounds.emailAdd': { zh: '添加邮件', en: 'Add email' },
+  'pb.br.rounds.emailPaste': { zh: '粘贴完整邮件（自动解析）', en: 'Paste full email (auto-parsed)' },
+  'pb.br.rounds.emailPastePh': { zh: '从 Gmail/Outlook 复制整封邮件（含发件人/日期/主题）粘进来，字段自动填充', en: 'Copy the full email from Gmail/Outlook (with From/Date/Subject) — fields auto-fill' },
   'pb.br.rounds.emailSaved': { zh: '邮件已更新', en: 'Emails updated' },
   'pb.br.rounds.transcriptTitle': { zh: '转写稿', en: 'Transcript' },
   'pb.br.rounds.transcriptEmpty': { zh: '暂无转写稿', en: 'No transcript yet' },

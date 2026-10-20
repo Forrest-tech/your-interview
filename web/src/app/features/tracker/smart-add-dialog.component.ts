@@ -451,12 +451,13 @@ export class SmartAddDialogComponent {
     workMode: string | null; jobType: string; priority: string; link: string; jdSummary: string;
     matchKeywords: string; deadline: string | null; status: string; jdText: string | null;
     companyDescription: string; requirements: string; benefits: string;
-    workAuthorization: string;
+    workAuthorization: string; logoUrl: string;
   } = {
     company: '', role: '', location: '', salary: '', workMode: null, jobType: '',
     priority: 'Medium', link: '', jdSummary: '', matchKeywords: '',
     deadline: null, status: 'Saved', jdText: null,
-    companyDescription: '', requirements: '', benefits: '', workAuthorization: ''
+    companyDescription: '', requirements: '', benefits: '', workAuthorization: '',
+    logoUrl: ''
   };
 
   /** 邀请解析结果的可编辑副本。日期与时间拆开存 —— 表单控件就是两个。 */

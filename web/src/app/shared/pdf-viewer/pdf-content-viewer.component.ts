@@ -1,5 +1,6 @@
 import { Component, Input, OnChanges, SimpleChanges, signal, inject } from '@angular/core';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
+import { getPdfjs } from '../../core/utils/pdf-text';
 
 /**
  * PDF 内容查看器:把每页渲染成图片,去掉浏览器自带 PDF 工具栏,
@@ -44,10 +45,7 @@ export class PdfContentViewerComponent implements OnChanges {
     if (!this.pdfUrl) return;
     this.loading.set(true);
     try {
-      const pdfjs = await import('pdfjs-dist') as any;
-      if (pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
-        pdfjs.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.mjs';
-      }
+      const pdfjs = getPdfjs();
       const data = await (await fetch(this.pdfUrl)).arrayBuffer();
       const pdf = await pdfjs.getDocument({ data }).promise;
       const urls: SafeUrl[] = [];

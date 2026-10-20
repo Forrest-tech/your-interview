@@ -55,7 +55,7 @@
               "src/favicon.ico",
               "src/assets",
               {
-                "glob": "pdf.worker.min.mjs",
+                "glob": "pdf.worker.min.js",
                 "input": "node_modules/pdfjs-dist/build",
                 "output": "assets/"
               }

@@ -47,6 +47,18 @@ export class ResumeComponent implements OnInit {
   /** PDF 预览 URL(blob)。null = 后端没有存 PDF。 */
   readonly resumePdfUrl = signal<SafeResourceUrl | null>(null);
   readonly resumePdfRawUrl = signal<string | null>(null);
+  /** 有已存简历时默认展示,点 Edit 才进入上传/替换;无简历时默认编辑。 */
+  readonly editing = signal(true);
+
+  /** 是否有已存简历(PDF 或文本)。 */
+  private hasSavedResume(): boolean {
+    return !!this.resumePdfRawUrl() || !!this.savedResumePreview().trim();
+  }
+
+  /** 根据是否有已存简历同步编辑态。 */
+  private syncEditing(): void {
+    this.editing.set(!this.hasSavedResume());
+  }
   savedResumePreview = signal('');
   savedResumeDate = signal('');
   private readonly resumeKey = 'yi-my-resume';
@@ -89,6 +101,7 @@ export class ResumeComponent implements OnInit {
         const url = URL.createObjectURL(blob);
         this.resumePdfRawUrl.set(url);
         this.resumePdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+        this.syncEditing();
       },
       error: () => { this.resumePdfRawUrl.set(null); this.resumePdfUrl.set(null); /* 没有 PDF 就不显示,不阻断 */ }
     });
@@ -112,6 +125,7 @@ export class ResumeComponent implements OnInit {
     this.api.put('/api/jobs/resume-text', { resumeText: text }).subscribe({
       next: () => {
         this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2500 });
+        this.editing.set(false);
       },
       error: () => {
         // 后端同步失败:localStorage 已存,提示用户但不算失败
@@ -171,6 +185,7 @@ export class ResumeComponent implements OnInit {
     } catch {
       this.savedResumePreview.set('');
     }
+    this.syncEditing();
   }
 
   /** 供备战材料对话框调用:取存好的简历。 */

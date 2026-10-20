@@ -18,6 +18,7 @@
       </div>
     }
 
+    @if (editing()) {
     <div class="resume-upload-row">
       <button mat-stroked-button (click)="resumeFile.click()">
         <mat-icon>upload_file</mat-icon> {{ t('profile.resumeUpload') }}
@@ -30,23 +31,29 @@
       }
       <span class="extract-hint">{{ t('profile.resumeExtractHint') }}</span>
     </div>
+    }
 
     <!-- 简历内容:每页渲染成图片,无浏览器 PDF 工具栏 -->
     @if (resumePdfRawUrl()) {
       <div class="pdf-preview">
-        <div class="pdf-filename">
-          <mat-icon>picture_as_pdf</mat-icon>
-          <span>{{ resumeFileName() || t('profile.resumeSavedLabel') }}</span>
-        </div>
         <app-pdf-content-viewer [pdfUrl]="resumePdfRawUrl()"></app-pdf-content-viewer>
       </div>
     }
 
     <div class="actions">
-      <button mat-raised-button color="primary" (click)="saveResume()">
-        <mat-icon>save</mat-icon> {{ t('common.save') }}
-      </button>
-      @if (savedResumePreview()) {
+      @if (editing()) {
+        <button mat-raised-button color="primary" (click)="saveResume()">
+          <mat-icon>save</mat-icon> {{ t('common.save') }}
+        </button>
+        @if (resumePdfRawUrl() || savedResumePreview()) {
+          <button mat-button (click)="editing.set(false)">
+            {{ t('common.cancel') }}
+          </button>
+        }
+      } @else {
+        <button mat-raised-button color="primary" (click)="editing.set(true)">
+          <mat-icon>edit</mat-icon> {{ t('common.edit') }}
+        </button>
         <button mat-button color="warn" (click)="clearResume()">
           <mat-icon>delete</mat-icon> {{ t('common.delete') }}
         </button>

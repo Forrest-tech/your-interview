@@ -210,6 +210,42 @@ public sealed class JobApplication : AuditableAggregateRoot
     public bool CanTransitionTo(ApplicationStatus target)
         => AllowedTransitions.TryGetValue(Status, out var allowed) && allowed.Contains(target);
 
+    /// <summary>
+    /// ★ F-09 修复:导入/建单指定初始状态时,沿状态机最短路径逐级流转到目标状态。
+    /// 旧逻辑只认"一步可达",Saved→Interview 这种跨级请求被静默丢弃 ——
+    /// 结果:数据明明已在面试,Tracker 却停在 Saved、统计 Interviews=0,自相矛盾。
+    /// 规则:初始状态必须被如实落库;沿途每一级都是合法流转(事件照常发),
+    /// 真正无路可达(如 Accepted→Saved)才返回 false 并保持原状态。
+    /// </summary>
+    public bool TryWalkToStatus(ApplicationStatus target, string? note = null)
+    {
+        if (target == Status) return true;
+
+        // BFS 找最短路径
+        var prev = new Dictionary<ApplicationStatus, ApplicationStatus> { [Status] = Status };
+        var queue = new Queue<ApplicationStatus>();
+        queue.Enqueue(Status);
+        while (queue.Count > 0)
+        {
+            var cur = queue.Dequeue();
+            if (!AllowedTransitions.TryGetValue(cur, out var nexts)) continue;
+            foreach (var n in nexts)
+            {
+                if (prev.ContainsKey(n)) continue;
+                prev[n] = cur;
+                if (n == target) { queue.Clear(); break; }
+                queue.Enqueue(n);
+            }
+        }
+        if (!prev.ContainsKey(target)) return false;
+
+        var path = new List<ApplicationStatus>();
+        for (var s = target; s != Status; s = prev[s]) path.Add(s);
+        path.Reverse();
+        foreach (var step in path) ChangeStatus(step, note);
+        return Status == target;
+    }
+
     public void ChangeStatus(ApplicationStatus target, string? note = null, string? rejectionReason = null)
         => ChangeStatusCore(target, note, rejectionReason, fromAddRound: false);
 

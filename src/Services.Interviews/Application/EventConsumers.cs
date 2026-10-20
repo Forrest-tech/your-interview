@@ -26,7 +26,7 @@ public sealed class InterviewInviteRecordedConsumer(
     {
         var e = context.Message;
 
-        var entry = await db.Entries.FirstOrDefaultAsync(x =>
+        var entry = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x =>
             x.JobApplicationId == e.ApplicationId && x.RoundNo == e.RoundNo,
             context.CancellationToken);
 
@@ -35,6 +35,11 @@ public sealed class InterviewInviteRecordedConsumer(
             entry = new InterviewEntry(e.CompanyId, e.CompanyName, e.Role, e.ApplicationId);
             entry.UpdateBasicInfo(e.CompanyName, e.Role, null, null, e.JdSummary,
                 e.RoundNo, e.InterviewDate, e.Format, e.Interviewers, null, null, null);
+            // ★ F-03 修复:必须落一个真实 Round 实体 —— 只有 RoundNo 没有轮次实体时,
+            //   前端只能合成占位轮次,用户往里存邮件/转写会直接 404(幽灵轮次陷阱)。
+            var round = entry.AddRound();
+            entry.UpdateRound(round.Id, round.Stage, e.InterviewDate, e.Interviewers,
+                e.Format, null, round.Outcome, null, null);
             db.Entries.Add(entry);
             logger.LogInformation("邀请登记自动建稿:{Company} · {Role} 第 {Round} 轮(申请 {AppId})",
                 e.CompanyName, e.Role, e.RoundNo, e.ApplicationId);
@@ -50,6 +55,15 @@ public sealed class InterviewInviteRecordedConsumer(
                 entry.InterviewFormat ?? e.Format,
                 entry.Interviewers ?? e.Interviewers,
                 entry.Location, entry.Result, entry.Notes);
+            // ★ F-03 修复:旧草稿可能只有 RoundNo 没有轮次实体(本修复前建的),补建。
+            if (entry.Rounds.Count == 0)
+            {
+                var round = entry.AddRound();
+                entry.UpdateRound(round.Id, round.Stage,
+                    entry.InterviewDate ?? e.InterviewDate,
+                    entry.Interviewers ?? e.Interviewers,
+                    entry.InterviewFormat ?? e.Format, null, round.Outcome, null, null);
+            }
             logger.LogInformation("邀请登记补全草稿:{Company} 第 {Round} 轮(申请 {AppId})",
                 entry.CompanyName, entry.RoundNo, e.ApplicationId);
         }

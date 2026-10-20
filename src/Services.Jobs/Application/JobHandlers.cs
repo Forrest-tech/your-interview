@@ -486,13 +486,14 @@ public sealed class CreateApplicationCommandHandler(JobsDbContext db)
             && Enum.TryParse<Priority>(request.Priority, true, out var p))
             app.SetPriority(p);
 
-        // CSV 导入等场景允许指定初始状态(默认 Saved)。用 ChangeStatus 走状态机,非法流转会被拒。
+        // CSV 导入等场景允许指定初始状态(默认 Saved)。
+        // ★ F-09:沿状态机路径逐级走到目标状态,而不是"一步不可达就静默丢弃"——
+        //   丢弃会让 Tracker 状态与真实进度自相矛盾(已面试却显示 Saved)。
         if (!string.IsNullOrWhiteSpace(request.Status)
             && Enum.TryParse<ApplicationStatus>(request.Status, true, out var st)
             && st != app.Status)
         {
-            if (app.CanTransitionTo(st))
-                app.ChangeStatus(st, "CSV import");
+            app.TryWalkToStatus(st, "CSV import");
         }
 
         db.Applications.Add(app);
@@ -713,7 +714,8 @@ public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
 {
     public async Task<Result<TrackerStats>> Handle(GetTrackerStatsQuery request, CancellationToken ct)
     {
-        var apps = await db.Applications.AsNoTracking().Where(a => !a.IsArchived).ToListAsync(ct);
+        var apps = await db.Applications.AsNoTracking().Include(a => a.Rounds)
+            .Where(a => !a.IsArchived).ToListAsync(ct);
         var total = apps.Count;
 
         // 状态计数 (string key 供前端直接查)
@@ -726,8 +728,11 @@ public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
         var appliedOrBeyond = apps.Count(a => a.Status != ApplicationStatus.Saved);
         var responded = apps.Count(a => a.Status is ApplicationStatus.Screen or ApplicationStatus.Interview
             or ApplicationStatus.Offer or ApplicationStatus.Accepted or ApplicationStatus.Rejected);
+        // ★ F-09 统计口径:有面试活动 = 状态已到 Interview/Offer/Accepted,
+        //   或已登记过至少一轮面试(Rounds)—— 状态可能因 Paused 等原因暂时回落,
+        //   但"面过"这个事实不能从统计里消失,否则与 Playbook 进度自相矛盾。
         var interviewed = apps.Count(a => a.Status is ApplicationStatus.Interview or ApplicationStatus.Offer
-            or ApplicationStatus.Accepted);
+            or ApplicationStatus.Accepted || a.Rounds.Count > 0);
         var offers = apps.Count(a => a.Status is ApplicationStatus.Offer or ApplicationStatus.Accepted);
 
         double Rate(int num, int den) => den <= 0 ? 0 : Math.Round(num * 100.0 / den, 1);
@@ -782,7 +787,8 @@ public sealed class GetActionCenterQueryHandler(JobsDbContext db, TimeProvider c
         var today = DateOnly.FromDateTime(now.UtcDateTime);
         var deadlineUntil = today.AddDays(Math.Clamp(request.DeadlineDays, 1, 120));
 
-        var apps = await db.Applications.AsNoTracking().Where(a => !a.IsArchived).ToListAsync(ct);
+        var apps = await db.Applications.AsNoTracking().Include(a => a.Rounds)
+            .Where(a => !a.IsArchived).ToListAsync(ct);
 
         var followUps = apps
             .Where(a => a.NextFollowUpAt != null && a.NextFollowUpAt <= followUntil)
@@ -804,8 +810,9 @@ public sealed class GetActionCenterQueryHandler(JobsDbContext db, TimeProvider c
 
         var active = apps.Count(a => a.Status is ApplicationStatus.Applied or ApplicationStatus.Screen
             or ApplicationStatus.Interview or ApplicationStatus.Offer);
+        // ★ F-09:与 TrackerStats 同口径 —— 登记过轮次也算有面试活动。
         var interviewed = apps.Count(a => a.Status is ApplicationStatus.Interview or ApplicationStatus.Offer
-            or ApplicationStatus.Accepted);
+            or ApplicationStatus.Accepted || a.Rounds.Count > 0);
         var offers = apps.Count(a => a.Status is ApplicationStatus.Offer or ApplicationStatus.Accepted);
 
         return Result.Success(new ActionCenterDto(
@@ -911,9 +918,9 @@ public sealed class BulkImportApplicationsCommandHandler(JobsDbContext db)
             {
                 if (st == ApplicationStatus.Applied || row.AppliedDate.HasValue)
                     app.MarkApplied(row.AppliedDate, "批量导入");
-                if (st != ApplicationStatus.Saved && st != ApplicationStatus.Applied
-                    && app.CanTransitionTo(st))
-                    app.ChangeStatus(st, "批量导入");
+                // ★ F-09:跨级状态沿路径逐级走,不要一步不可达就丢。
+                if (st != ApplicationStatus.Saved && st != ApplicationStatus.Applied)
+                    app.TryWalkToStatus(st, "批量导入");
             }
 
             db.Applications.Add(app);

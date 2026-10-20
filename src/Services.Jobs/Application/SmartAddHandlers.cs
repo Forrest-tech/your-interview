@@ -234,14 +234,14 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
         app.SetDeadline(request.Deadline);
         db.Applications.Add(app);
 
-        // 解析出"已投递"之类的状态时顺手流转;非法流转(如越级到面试中)直接忽略,
-        // 保持 Saved —— 状态机是硬约束,智能粘贴不能绕过它。
+        // 解析出"已投递"之类的状态时顺手流转。
+        // ★ F-09:沿状态机路径逐级走(不绕过状态机,也不静默丢弃跨级目标)——
+        //   旧逻辑把"越级到 Interview"直接忽略,建出来的投递状态与真实进度矛盾。
         if (!string.IsNullOrWhiteSpace(request.Status)
             && Enum.TryParse<ApplicationStatus>(request.Status, true, out var target)
-            && target != ApplicationStatus.Saved
-            && app.CanTransitionTo(target))
+            && target != ApplicationStatus.Saved)
         {
-            app.ChangeStatus(target, "智能粘贴建档");
+            app.TryWalkToStatus(target, "智能粘贴建档");
         }
 
         await db.SaveChangesAsync(ct);

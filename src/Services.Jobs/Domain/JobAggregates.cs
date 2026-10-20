@@ -677,6 +677,19 @@ public sealed class ApplicationCommunication : AuditableAggregateRoot
     /// <summary>发生时间(用户填写,不一定等于创建时间)。</summary>
     public DateTimeOffset OccurredAt { get; private set; }
 
+    /// <summary>
+    /// 元数据 JSON(2026-10-20 Playbook 详情页 v2):统一入口解析字段、AI 摘要、
+    /// 提取到的面试安排、关联的 Playbook 材料 id 等。Tracker 旧 UI 不读此字段。
+    /// </summary>
+    public string? MetaJson { get; private set; }
+
+    /// <summary>安排处理状态(2026-10-20):Pending(未处理)/ Done(已处理)/ Ignored(忽略)。null = 无安排。</summary>
+    public string? HandlingStatus { get; private set; }
+
+    public void SetMeta(string? metaJson) { MetaJson = metaJson; Touch(); }
+
+    public void SetHandlingStatus(string? status) { HandlingStatus = status; Touch(); }
+
     public void Update(string type, string? subject, string content, string? contactName,
         string? contactEmail, DateTimeOffset occurredAt)
     {

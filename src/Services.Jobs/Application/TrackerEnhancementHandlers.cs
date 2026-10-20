@@ -16,7 +16,9 @@ public sealed record AnswerTemplateDto(
 public sealed record CommunicationDto(
     Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
     string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
-    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
+    // 2026-10-20 Playbook v2:解析元数据 + 安排处理状态(Tracker 旧 UI 忽略)。
+    string? MetaJson = null, string? HandlingStatus = null);
 
 // ============================ 申请问答库(用户级) ============================
 
@@ -38,12 +40,18 @@ public sealed record ListCommunicationsQuery(Guid ApplicationId)
 
 public sealed record CreateCommunicationCommand(
     Guid ApplicationId, string Type, string? Subject, string Content,
-    string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt)
+    string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
+    string? MetaJson = null, string? HandlingStatus = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateCommunicationCommand(
     Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
     string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt)
+    : IRequest<Result>;
+
+/// <summary>Playbook v2:单独更新沟通的元数据 / 安排处理状态(不动正文)。</summary>
+public sealed record SetCommunicationMetaCommand(
+    Guid Id, Guid ApplicationId, string? MetaJson = null, string? HandlingStatus = null)
     : IRequest<Result>;
 
 public sealed record DeleteCommunicationCommand(Guid Id, Guid ApplicationId) : IRequest<Result>;
@@ -151,7 +159,8 @@ public sealed class ListCommunicationsQueryHandler(JobsDbContext db)
             .Where(c => c.ApplicationId == request.ApplicationId)
             .OrderByDescending(c => c.OccurredAt).ThenByDescending(c => c.CreatedAt)
             .Select(c => new CommunicationDto(c.Id, c.ApplicationId, c.Type, c.Subject, c.Content,
-                c.ContactName, c.ContactEmail, c.OccurredAt, c.CreatedAt, c.UpdatedAt))
+                c.ContactName, c.ContactEmail, c.OccurredAt, c.CreatedAt, c.UpdatedAt,
+                c.MetaJson, c.HandlingStatus))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<CommunicationDto>>(items);
@@ -168,9 +177,27 @@ public sealed class CreateCommunicationCommandHandler(JobsDbContext db)
 
         var c = new ApplicationCommunication(request.ApplicationId, request.Type, request.Subject,
             request.Content, request.ContactName, request.ContactEmail, request.OccurredAt);
+        if (!string.IsNullOrWhiteSpace(request.MetaJson)) c.SetMeta(request.MetaJson);
+        if (!string.IsNullOrWhiteSpace(request.HandlingStatus)) c.SetHandlingStatus(request.HandlingStatus);
         db.Communications.Add(c);
         await db.SaveChangesAsync(ct);
         return Result.Success(c.Id);
+    }
+}
+
+public sealed class SetCommunicationMetaCommandHandler(JobsDbContext db)
+    : IRequestHandler<SetCommunicationMetaCommand, Result>
+{
+    public async Task<Result> Handle(SetCommunicationMetaCommand request, CancellationToken ct)
+    {
+        var c = await db.Communications.FirstOrDefaultAsync(
+            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId, ct);
+        if (c is null) return Result.Failure(Error.NotFound("沟通记录"));
+
+        if (request.MetaJson is not null) c.SetMeta(request.MetaJson);
+        if (request.HandlingStatus is not null) c.SetHandlingStatus(request.HandlingStatus);
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
     }
 }
 

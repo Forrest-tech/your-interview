@@ -718,10 +718,21 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public async Task<IResult> CreateCommunication(Guid id, [FromBody] CommunicationBody body, CancellationToken ct)
     {
         var r = await sender.Send(new CreateCommunicationCommand(id, body.Type, body.Subject, body.Content,
-            body.ContactName, body.ContactEmail, body.OccurredAt), ct);
+            body.ContactName, body.ContactEmail, body.OccurredAt, body.MetaJson, body.HandlingStatus), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{id}/communications/{r.Value}", new { id = r.Value })
             : r.ToProblemDetails();
+    }
+
+    /// <summary>Playbook v2:更新沟通元数据 / 安排处理状态(红点处理走这里)。</summary>
+    [HttpPut("applications/{id:guid}/communications/{commId:guid}/meta")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> SetCommunicationMeta(Guid id, Guid commId,
+        [FromBody] CommunicationMetaBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SetCommunicationMetaCommand(commId, id,
+            body.MetaJson, body.HandlingStatus), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
     [HttpPut("applications/{id:guid}/communications/{commId:guid}")]
@@ -744,7 +755,10 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public sealed record AnswerTemplateBody(string Category, string Question, string Answer);
 
     public sealed record CommunicationBody(string Type, string? Subject, string Content,
-        string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt);
+        string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
+        string? MetaJson = null, string? HandlingStatus = null);
+
+    public sealed record CommunicationMetaBody(string? MetaJson = null, string? HandlingStatus = null);
 
 }
 

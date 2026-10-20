@@ -235,6 +235,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<DateTimeOffset?>("LastVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("MetaJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Phase")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
@@ -425,6 +428,10 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<double?>("AskedAtSeconds")
                         .HasColumnType("double precision");
 
+                    b.Property<string>("AskedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Assessment")
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
@@ -468,6 +475,12 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<string>("RecommendedAnswer")
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
+
+                    b.Property<string>("ReviewJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RoundId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("Sequence")
                         .HasColumnType("integer");
@@ -539,9 +552,15 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<string>("PrepQuestionsJson")
                         .HasColumnType("text");
 
+                    b.Property<string>("PrepReportJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("RecordingUrl")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ReviewJson")
+                        .HasColumnType("text");
 
                     b.Property<DateOnly?>("ScheduledDate")
                         .HasColumnType("date");

@@ -219,6 +219,9 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             e.Property(x => x.Content).HasColumnType("text").IsRequired();
             e.Property(x => x.ContactName).HasMaxLength(300);
             e.Property(x => x.ContactEmail).HasMaxLength(300);
+            // 2026-10-20 Playbook v2:解析元数据 + 安排处理状态。
+            e.Property(x => x.MetaJson).HasColumnType("text");
+            e.Property(x => x.HandlingStatus).HasMaxLength(20);
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted);
             e.HasIndex(x => x.ApplicationId);

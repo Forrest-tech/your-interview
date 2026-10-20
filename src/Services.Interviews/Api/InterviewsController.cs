@@ -163,7 +163,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         var jr = await sender.Send(new AttachAssetCommand(id, kind, fileName,
             body.ContentType, body.SizeBytes, body.StoragePath, body.BlobUrl, transcriptText,
             body.TranscriptSegmentsJson, body.DurationSeconds, body.SourceLanguage ?? "en",
-            body.Sha256, body.RoundId, body.Phase), ct);
+            body.Sha256, body.RoundId, body.Phase, body.MetaJson), ct);
         return jr.IsSuccess
             ? Results.Created($"/api/interviews/{id}", new { id = jr.Value })
             : jr.ToProblemDetails();
@@ -262,7 +262,8 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> AddQuestion(Guid id, [FromBody] AddQuestionBody body, CancellationToken ct)
     {
         var r = await sender.Send(new AddQuestionCommand(id, body.QuestionText, body.MyAnswerText,
-            body.Category ?? "Technical", body.Difficulty, body.Assessment), ct);
+            body.Category ?? "Technical", body.Difficulty, body.Assessment,
+            body.RoundId, body.AskedBy), ct);
         return r.IsSuccess
             ? Results.Created($"/api/interviews/{id}", new { id = r.Value })
             : r.ToProblemDetails();
@@ -513,6 +514,135 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    // ---------------- 详情页 v2(2026-10-20 定稿) ----------------
+
+    /// <summary>v2:改材料归属。body { roundId } —— null = 移到条目级(沟通记录)。</summary>
+    [HttpPut("{id:guid}/assets/{assetId:guid}/assignment")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> ReassignAsset(Guid id, Guid assetId,
+        [FromBody] ReassignAssetBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ReassignAssetCommand(id, assetId, body.RoundId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:更新材料元数据 JSON(解析字段/截图引用/AI 摘要/提取安排/处理状态)。</summary>
+    [HttpPut("{id:guid}/assets/{assetId:guid}/meta")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> UpdateAssetMeta(Guid id, Guid assetId,
+        [FromBody] AssetMetaBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new UpdateAssetMetaCommand(id, assetId, body.MetaJson), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:保存逐题复盘 JSON(标准答案用户编辑也走这里)。</summary>
+    [HttpPut("{id:guid}/questions/{questionId:guid}/review")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> SetQuestionReview(Guid id, Guid questionId,
+        [FromBody] ReviewJsonBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SetQuestionReviewCommand(id, questionId, body.ReviewJson), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:保存整轮复盘汇总 JSON。</summary>
+    [HttpPut("{id:guid}/rounds/{roundId:guid}/review")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> SetRoundReview(Guid id, Guid roundId,
+        [FromBody] ReviewJsonBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SetRoundReviewCommand(id, roundId, body.ReviewJson), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:AI 生成整轮复盘(逐题四维 + 汇总),落库后返回汇总 JSON。</summary>
+    [HttpPost("{id:guid}/rounds/{roundId:guid}/review/generate")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> GenerateRoundReview(Guid id, Guid roundId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GenerateRoundReviewCommand(id, roundId), ct);
+        return r.IsSuccess ? Results.Ok(new { reviewJson = r.Value }) : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:从本轮转写抽取问答对生成题目(已有本轮题目时幂等跳过)。</summary>
+    [HttpPost("{id:guid}/rounds/{roundId:guid}/questions/extract")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> ExtractRoundQuestions(Guid id, Guid roundId, CancellationToken ct)
+    {
+        var r = await sender.Send(new ExtractRoundQuestionsCommand(id, roundId), ct);
+        return r.IsSuccess ? Results.Ok(new { created = r.Value }) : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:保存结构化备考报告 JSON(Tech Stack 关联回存走这里)。</summary>
+    [HttpPut("{id:guid}/rounds/{roundId:guid}/prep-report")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> SetPrepReport(Guid id, Guid roundId,
+        [FromBody] PrepReportBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SetRoundPrepReportCommand(id, roundId, body.PrepReportJson), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:生成结构化备考报告(AI 优先,未配置时本地聚合兜底)。</summary>
+    [HttpPost("{id:guid}/rounds/{roundId:guid}/prep-report/generate")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> GeneratePrepReport(Guid id, Guid roundId,
+        [FromBody] GeneratePrepReportBody? body, CancellationToken ct)
+    {
+        var r = await sender.Send(new GeneratePrepReportCommand(id, roundId,
+            body?.JdText, body?.ResumeText, body?.Experiences), ct);
+        return r.IsSuccess ? Results.Ok(new { prepReportJson = r.Value }) : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:说话人批量改名(本轮转写分段 + 题目提问人全篇生效)。</summary>
+    [HttpPost("{id:guid}/rounds/{roundId:guid}/speakers/rename")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> RenameSpeaker(Guid id, Guid roundId,
+        [FromBody] RenameSpeakerBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new RenameSpeakerCommand(id, roundId, body.From, body.To), ct);
+        return r.IsSuccess ? Results.Ok(new { changed = r.Value }) : r.ToProblemDetails();
+    }
+
+    /// <summary>v2:导出本轮日历 .ics(提醒提前 1 天 + 提前 1 小时)。</summary>
+    [HttpGet("{id:guid}/rounds/{roundId:guid}/ics")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> RoundIcs(Guid id, Guid roundId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetEntryQuery(id), ct);
+        if (!r.IsSuccess) return r.ToProblemDetails();
+        var round = r.Value.Rounds.FirstOrDefault(x => x.Id == roundId);
+        if (round is null)
+            return Results.Problem(title: "轮次不存在", statusCode: StatusCodes.Status404NotFound);
+        if (round.ScheduledDate is null)
+            return Results.Problem(title: "本轮尚未安排日期,无法导出日历",
+                statusCode: StatusCodes.Status400BadRequest);
+
+        var date = round.ScheduledDate.Value;
+        var start = TimeOnly.TryParse(round.ScheduledTime, out var t) ? t : new TimeOnly(10, 0);
+        var dtStart = new DateTime(date.Year, date.Month, date.Day, start.Hour, start.Minute, 0);
+        var dtEnd = dtStart.AddHours(1);
+        string Fmt(DateTime d) => d.ToString("yyyyMMdd'T'HHmmss");
+        string Esc(string s) => s.Replace("\\", "\\\\").Replace(";", "\\;").Replace(",", "\\,").Replace("\n", "\\n");
+        var summary = Esc($"{r.Value.CompanyName} 面试 Round {round.Order} · {round.Stage}");
+        var desc = Esc($"岗位:{r.Value.Role}\n面试官:{round.Interviewers ?? "-"}\n形式:{round.Format ?? "-"}" +
+                       (string.IsNullOrWhiteSpace(round.MeetingLink) ? "" : $"\n会议链接:{round.MeetingLink}"));
+        var ics = string.Join("\r\n",
+            "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//YourInterview//Playbook//EN",
+            "BEGIN:VEVENT",
+            $"UID:{round.Id}@your-interview",
+            $"DTSTAMP:{DateTime.UtcNow:yyyyMMdd'T'HHmmss'Z'}",
+            $"DTSTART:{Fmt(dtStart)}", $"DTEND:{Fmt(dtEnd)}",
+            $"SUMMARY:{summary}", $"DESCRIPTION:{desc}",
+            string.IsNullOrWhiteSpace(round.Location) ? "" : $"LOCATION:{Esc(round.Location!)}",
+            "BEGIN:VALARM", "TRIGGER:-P1D", "ACTION:DISPLAY", $"DESCRIPTION:{summary}", "END:VALARM",
+            "BEGIN:VALARM", "TRIGGER:-PT1H", "ACTION:DISPLAY", $"DESCRIPTION:{summary}", "END:VALARM",
+            "END:VEVENT", "END:VCALENDAR", "");
+        return Results.File(System.Text.Encoding.UTF8.GetBytes(ics), "text/calendar",
+            $"{r.Value.CompanyName}-Round{round.Order}.ics");
+    }
+
     /// <summary>
     /// 问答候选(缺口3):把该条目的问答转成候选列表,前端勾选后调
     /// POST /api/knowledge/import-candidates 导入 TechStack。
@@ -598,12 +728,27 @@ public sealed record AttachAssetBody(
     string? StoragePath = null, string? BlobUrl = null, string? TranscriptText = null,
     string? TranscriptSegmentsJson = null, double? DurationSeconds = null,
     string? SourceLanguage = null, string? Sha256 = null, string? TextContent = null,
-    // 2026-10-19:资产按 Round 管理,新增上传必填 RoundId
-    Guid? RoundId = null, string? Phase = null);
+    // 2026-10-20 v2:RoundId 可空 = 条目级材料(沟通记录);MetaJson 承载解析字段等元数据。
+    Guid? RoundId = null, string? Phase = null, string? MetaJson = null);
 
 public sealed record GeneratePrepPlanBody(
     string? JdText = null, string? ResumeText = null, string? Experiences = null,
     string? Requirements = null);
+
+// ---------------- 详情页 v2 请求体 ----------------
+
+public sealed record ReassignAssetBody(Guid? RoundId);
+
+public sealed record AssetMetaBody(string? MetaJson);
+
+public sealed record ReviewJsonBody(string? ReviewJson);
+
+public sealed record PrepReportBody(string? PrepReportJson);
+
+public sealed record GeneratePrepReportBody(
+    string? JdText = null, string? ResumeText = null, string? Experiences = null);
+
+public sealed record RenameSpeakerBody(string From, string To);
 
 public sealed record TranscriptBody(string FullText, string? SegmentsJson = null);
 
@@ -618,7 +763,9 @@ public sealed record FailureBody(string Reason);
 
 public sealed record AddQuestionBody(
     string QuestionText, string? MyAnswerText = null, string? Category = null,
-    int Difficulty = 3, string? Assessment = null);
+    int Difficulty = 3, string? Assessment = null,
+    // 2026-10-20 v2:归轮 + 提问人。
+    Guid? RoundId = null, string? AskedBy = null);
 
 public sealed record AddRoundBody(string? Stage = null, DateOnly? ScheduledDate = null,
     string? Interviewers = null, string? Format = null, string? Location = null,

@@ -270,7 +270,7 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         long sizeBytes, string? storagePath, string? blobUrl, string? transcriptText = null,
         string? transcriptSegmentsJson = null, double? durationSeconds = null,
         string sourceLanguage = "en", string? sha256 = null,
-        Guid? roundId = null, AssetPhase? phase = null)
+        Guid? roundId = null, AssetPhase? phase = null, string? metaJson = null)
     {
         if (Status == InterviewStatus.Analyzing || Status == InterviewStatus.Transcribing)
             throw new InvalidOperationException($"当前状态 {Status} 不允许变更材料,请等待流程结束");
@@ -280,6 +280,7 @@ public sealed class InterviewEntry : AuditableAggregateRoot
 
         var asset = new InterviewAsset(Id, kind, fileName, contentType, sizeBytes, storagePath,
             blobUrl, durationSeconds, sourceLanguage, sha256, roundId, phase);
+        if (!string.IsNullOrWhiteSpace(metaJson)) asset.SetMeta(metaJson);
 
         // 文本类材料直接就是"已转写"状态,不需要走 STT
         // 2026-10-19:PrepDoc/Email/Feedback/Other 是轮次上下文(备考/邮件/反馈),
@@ -437,10 +438,13 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     // ---------- 手工维护问答与短板(不依赖 AI,面试后自己复盘时用) ----------
 
     public InterviewQuestion AddQuestion(string questionText, string? myAnswerText,
-        QuestionCategory category = QuestionCategory.Technical, int difficulty = 3)
+        QuestionCategory category = QuestionCategory.Technical, int difficulty = 3,
+        Guid? roundId = null, string? askedBy = null)
     {
+        if (roundId is not null && !_rounds.Any(r => r.Id == roundId.Value))
+            throw new InvalidOperationException("关联的轮次不存在");
         var seq = _questions.Count == 0 ? 1 : _questions.Max(q => q.Sequence) + 1;
-        var q = new InterviewQuestion(Id, seq, questionText, category, difficulty);
+        var q = new InterviewQuestion(Id, seq, questionText, category, difficulty, roundId, askedBy);
         q.FillAnswer(myAnswerText, null, false, null, null, null);
         _questions.Add(q);
         Touch();
@@ -473,6 +477,86 @@ public sealed class InterviewEntry : AuditableAggregateRoot
             ?? throw new InvalidOperationException("问题不存在");
         q.SetMastery(mastery);
         Touch();
+    }
+
+    // ================= 详情页 v2(2026-10-20 定稿):归属 / 复盘 / 备考报告 =================
+
+    /// <summary>改材料归属:roundId=null 表示移到条目级(沟通记录)。目标轮次必须存在。</summary>
+    public void ReassignAsset(Guid assetId, Guid? roundId)
+    {
+        var a = _assets.FirstOrDefault(x => x.Id == assetId)
+            ?? throw new InvalidOperationException("材料不存在");
+        if (roundId is not null && !_rounds.Any(r => r.Id == roundId.Value))
+            throw new InvalidOperationException("目标轮次不存在");
+        a.Reassign(roundId);
+        Touch();
+    }
+
+    /// <summary>更新材料元数据 JSON(解析字段/截图引用/AI 摘要/提取的安排等)。</summary>
+    public void UpdateAssetMeta(Guid assetId, string? metaJson)
+    {
+        var a = _assets.FirstOrDefault(x => x.Id == assetId)
+            ?? throw new InvalidOperationException("材料不存在");
+        a.SetMeta(metaJson);
+        Touch();
+    }
+
+    /// <summary>写入逐题复盘 JSON(四维分析 + 标准答案 AI 版/用户版)。</summary>
+    public void SetQuestionReview(Guid questionId, string? reviewJson)
+    {
+        var q = _questions.FirstOrDefault(x => x.Id == questionId)
+            ?? throw new InvalidOperationException("问题不存在");
+        q.SetReview(reviewJson);
+        Touch();
+    }
+
+    /// <summary>写入整轮复盘汇总 JSON(综合分/通过概率/最强/短板)。</summary>
+    public void SetRoundReview(Guid roundId, string? reviewJson)
+    {
+        var r = _rounds.FirstOrDefault(x => x.Id == roundId)
+            ?? throw new InvalidOperationException("轮次不存在");
+        r.SetReview(reviewJson);
+        Touch();
+    }
+
+    /// <summary>写入结构化备考报告 JSON(按面试流程排布,题目可挂 Tech Stack 条目 id)。</summary>
+    public void SetRoundPrepReport(Guid roundId, string? prepReportJson)
+    {
+        var r = _rounds.FirstOrDefault(x => x.Id == roundId)
+            ?? throw new InvalidOperationException("轮次不存在");
+        r.SetPrepReport(prepReportJson);
+        Touch();
+    }
+
+    /// <summary>
+    /// 说话人批量改名:把本轮转写分段里的 speaker 标签 from → to 全篇替换,
+    /// 同时把本轮题目里 AskedBy == from 的一并改掉(真名逐人标注)。
+    /// </summary>
+    public int RenameSpeakerInRound(Guid roundId, string from, string to)
+    {
+        if (string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to))
+            throw new InvalidOperationException("改名参数不能为空");
+        var changed = 0;
+        foreach (var a in _assets.Where(a => a.RoundId == roundId
+                     && !string.IsNullOrWhiteSpace(a.TranscriptSegmentsJson)))
+        {
+            var before = a.TranscriptSegmentsJson!;
+            var after = System.Text.RegularExpressions.Regex.Replace(before,
+                "\"speaker\"\\s*:\\s*\"" + System.Text.RegularExpressions.Regex.Escape(from) + "\"",
+                "\"speaker\": \"" + to.Replace("\"", "") + "\"");
+            if (!string.Equals(before, after, StringComparison.Ordinal))
+            {
+                a.SetTranscript(a.TranscriptText ?? "", after);
+                changed++;
+            }
+        }
+        foreach (var q in _questions.Where(q => q.RoundId == roundId && q.AskedBy == from))
+        {
+            q.SetAskedBy(to);
+            changed++;
+        }
+        if (changed > 0) Touch();
+        return changed;
     }
 
     /// <summary>新增一轮。Order 自动取 max+1,调用方可显式指定 Stage。</summary>
@@ -677,6 +761,17 @@ public sealed class InterviewAsset : Entity
     /// <summary>转写分段 JSON: [{idx,speaker,start,end,text,pitchHz}] —— 说话人分离结果。</summary>
     public string? TranscriptSegmentsJson { get; private set; }
 
+    /// <summary>
+    /// 材料元数据 JSON(2026-10-20 详情页 v2):统一入口解析出的字段
+    /// (邮件分类/发件人/主题/时间、截图附件 assetId、AI 摘要、提取到的安排、
+    /// 沟通处理状态、来源场景 如电话/邮件)。结构由前端约定,后端只透传存储。
+    /// </summary>
+    public string? MetaJson { get; private set; }
+
+    internal void Reassign(Guid? roundId) => RoundId = roundId;
+
+    internal void SetMeta(string? metaJson) => MetaJson = metaJson;
+
     public bool HasTranscript => !string.IsNullOrWhiteSpace(TranscriptText);
 
     internal void SetTranscript(string fullText, string? segmentsJson)
@@ -708,16 +803,35 @@ public sealed class InterviewQuestion : Entity
     private InterviewQuestion() { }
 
     internal InterviewQuestion(Guid interviewEntryId, int sequence, string questionText,
-        QuestionCategory category, int difficulty)
+        QuestionCategory category, int difficulty, Guid? roundId = null, string? askedBy = null)
     {
         InterviewEntryId = interviewEntryId;
         Sequence = sequence;
         QuestionText = questionText;
         Category = category;
         Difficulty = difficulty;
+        RoundId = roundId;
+        AskedBy = askedBy;
     }
 
     public Guid InterviewEntryId { get; private set; }
+
+    /// <summary>所属轮次(2026-10-20 详情页 v2:问答按轮组织)。null = 历史数据未归轮。</summary>
+    public Guid? RoundId { get; private set; }
+
+    /// <summary>提问人真名(2026-10-20:逐人标注;分不清时先用"面试官 1/2",可批量改名)。</summary>
+    public string? AskedBy { get; private set; }
+
+    /// <summary>
+    /// 逐题复盘 JSON(2026-10-20):{overall, verdict, dims:{relevance/depth/expression/
+    /// pronunciation:{score,comment,fix}}, stdSpoken:{ai,user}, stdTechnical:{ai,user}}。
+    /// 标准答案 AI 原版与用户编辑版分开存,用户版优先、可还原。
+    /// </summary>
+    public string? ReviewJson { get; private set; }
+
+    internal void SetReview(string? reviewJson) => ReviewJson = reviewJson;
+
+    internal void SetAskedBy(string? askedBy) => AskedBy = askedBy;
 
     /// <summary>在本场面里的提问顺序。</summary>
     public int Sequence { get; private set; }
@@ -895,6 +1009,24 @@ public sealed class InterviewRound : Entity
 
     /// <summary>准备清单 JSON:[{text, done}]。</summary>
     public string? ChecklistJson { get; private set; }
+
+    /// <summary>
+    /// 整轮复盘汇总 JSON(2026-10-20 详情页 v2):
+    /// {overall, passProbability, passBasis, strongest, weakest, summary}。
+    /// passProbability 明确是 AI 估计,依据写在 passBasis。
+    /// </summary>
+    public string? ReviewJson { get; private set; }
+
+    /// <summary>
+    /// 结构化备考报告 JSON(2026-10-20 详情页 v2):
+    /// {generatedAt, generatedBy, sources, sections:[{id,title,blocks}], questions:[...]}。
+    /// 题目与 Tech Stack 的关联以 knowledgeId 挂接(同一条记录,不复制答案)。
+    /// </summary>
+    public string? PrepReportJson { get; private set; }
+
+    internal void SetReview(string? reviewJson) => ReviewJson = reviewJson;
+
+    internal void SetPrepReport(string? prepReportJson) => PrepReportJson = prepReportJson;
 
     internal void Update(string stage, DateOnly? scheduledDate, string? interviewers,
         string? format, string? location, InterviewRoundOutcome outcome,

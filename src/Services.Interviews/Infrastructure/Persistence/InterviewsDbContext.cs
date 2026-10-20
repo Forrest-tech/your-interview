@@ -148,6 +148,8 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.TranscriptText).HasMaxLength(500000);
             e.Property(x => x.TranscriptSegmentsJson).HasColumnType("text");
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+            // 2026-10-20 详情页 v2:材料元数据(解析字段/摘要/处理状态等),前端约定结构。
+            e.Property(x => x.MetaJson).HasColumnType("text");
             // 2026-10-19:资产按 Round 管理。历史材料 RoundId/Phase 保持 null,不强制回填。
             e.Property(x => x.RoundId);
             e.Property(x => x.Phase).HasConversion<string>().HasMaxLength(10);
@@ -170,6 +172,10 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.MissedPointsJson).HasMaxLength(8000);
             e.Property(x => x.Category).HasConversion<string>().HasMaxLength(30);
             e.Property(x => x.Mastery).HasDefaultValue(0);
+            // 2026-10-20 详情页 v2:题目归轮 + 提问人 + 逐题复盘 JSON。
+            e.Property(x => x.RoundId);
+            e.Property(x => x.AskedBy).HasMaxLength(200);
+            e.Property(x => x.ReviewJson).HasColumnType("text");
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Sequence });
         });
@@ -203,6 +209,9 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.PrepQuestionsJson).HasColumnType("text");
             e.Property(x => x.EmailsJson).HasColumnType("text");
             e.Property(x => x.Transcript).HasColumnType("text");
+            // 2026-10-20 详情页 v2:整轮复盘汇总 + 结构化备考报告。
+            e.Property(x => x.ReviewJson).HasColumnType("text");
+            e.Property(x => x.PrepReportJson).HasColumnType("text");
             e.Property(x => x.RecordingUrl).HasMaxLength(2000);
             e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.InterviewEntryId);

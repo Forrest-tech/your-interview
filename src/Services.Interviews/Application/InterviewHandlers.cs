@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -21,13 +22,17 @@ public sealed record AssetDto(
     string? StoragePath = null, string? Sha256 = null, bool FileExists = true,
     string? IntegrityStatus = null, DateTimeOffset? LastVerifiedAt = null,
     // 2026-10-19:资产按 Round 管理。RoundId/Phase 为 null = 历史遗留未归类材料。
-    Guid? RoundId = null, string? Phase = null);
+    Guid? RoundId = null, string? Phase = null,
+    // 2026-10-20 详情页 v2:统一入口解析字段/摘要/处理状态等元数据 JSON。
+    string? MetaJson = null);
 
 public sealed record QuestionDto(
     Guid Id, int Sequence, string QuestionText, string? MyAnswerText, string Category,
     int Difficulty, string? Assessment, bool GotStuck, string? StuckReason,
     string? RecommendedAnswer, double? AskedAtSeconds, string? WeaknessTagsJson,
-    string? FollowUpQuestionsJson, string? MissedPointsJson, int Mastery = 0);
+    string? FollowUpQuestionsJson, string? MissedPointsJson, int Mastery = 0,
+    // 2026-10-20 详情页 v2:归轮 / 提问人 / 逐题复盘 JSON。
+    Guid? RoundId = null, string? AskedBy = null, string? ReviewJson = null);
 
 public sealed record WeaknessDto(
     Guid Id, string Category, string Title, string? Detail, string? Evidence,
@@ -38,7 +43,9 @@ public sealed record RoundDto(
     Guid Id, int Order, string Stage, DateOnly? ScheduledDate, string? Interviewers,
     string? Format, string? Location, string Outcome, string? Notes, string? Feedback,
     string? MeetingLink, string? ScheduledTime, string? EmailsJson, string? Transcript,
-    string? PrepQuestionsJson = null, string? RecordingUrl = null, string? ChecklistJson = null);
+    string? PrepQuestionsJson = null, string? RecordingUrl = null, string? ChecklistJson = null,
+    // 2026-10-20 详情页 v2:整轮复盘汇总 / 结构化备考报告 JSON。
+    string? ReviewJson = null, string? PrepReportJson = null);
 
 /// <summary>全局 upcoming:跨所有条目的未来轮次,带公司/职位上下文,供日历视图用。</summary>
 public sealed record UpcomingRoundDto(
@@ -205,8 +212,10 @@ public sealed record AttachAssetCommand(
     Guid EntryId, string Kind, string FileName, string? ContentType, long SizeBytes,
     string? StoragePath, string? BlobUrl, string? TranscriptText, string? TranscriptSegmentsJson,
     double? DurationSeconds, string SourceLanguage = "en", string? Sha256 = null,
-    // 2026-10-19:资产按 Round 管理,新增上传必填 RoundId
-    Guid? RoundId = null, string? Phase = null) : IRequest<Result<Guid>>;
+    // 2026-10-19:资产按 Round 管理;2026-10-20 v2 起 RoundId 可空 = 条目级材料(沟通记录)。
+    Guid? RoundId = null, string? Phase = null,
+    // 2026-10-20 详情页 v2:统一入口元数据 JSON(解析字段/摘要/处理状态)。
+    string? MetaJson = null) : IRequest<Result<Guid>>;
 
 /// <summary>
 /// 真正的录音文件上传(multipart):字节流经 IInterviewAudioStore 原子落盘,
@@ -264,7 +273,7 @@ public sealed record MarkEntryFailedCommand(Guid EntryId, string Reason) : IRequ
 
 public sealed record AddQuestionCommand(
     Guid EntryId, string QuestionText, string? MyAnswerText, string Category, int Difficulty,
-    string? Assessment = null) : IRequest<Result<Guid>>;
+    string? Assessment = null, Guid? RoundId = null, string? AskedBy = null) : IRequest<Result<Guid>>;
 
 public sealed record UpdateQuestionCommand(
     Guid EntryId, Guid QuestionId, string QuestionText, string? MyAnswerText, string Category,
@@ -379,8 +388,8 @@ public sealed class AttachAssetCommandValidator : AbstractValidator<AttachAssetC
             .NotEmpty()
             .When(x => !string.Equals(x.Kind, "Audio", StringComparison.OrdinalIgnoreCase))
             .WithMessage("文本类材料必须提供内容");
-        // 2026-10-19:新增上传必须关联轮次(历史遗留资产 RoundId 为 null,查询兼容)
-        RuleFor(x => x.RoundId).NotEmpty().WithMessage("必须指定材料所属的轮次");
+        // 2026-10-20 详情页 v2:统一入口允许条目级材料(RoundId=null → 沟通记录),
+        // 不再强制 RoundId;给了 RoundId 时由领域层校验轮次存在。
         RuleFor(x => x.Phase)
             .Must(p => p is null || AllowedPhases.Contains(p, StringComparer.OrdinalIgnoreCase))
             .WithMessage("阶段只能是 Pre(面试前) / Post(面试后)");
@@ -399,8 +408,7 @@ public sealed class UploadAssetFileCommandValidator : AbstractValidator<UploadAs
         RuleFor(x => x.DurationSeconds).InclusiveBetween(0, 24 * 3600)
             .When(x => x.DurationSeconds.HasValue)
             .WithMessage("录音时长不能超过 24 小时");
-        // 2026-10-19:新增上传必须关联轮次
-        RuleFor(x => x.RoundId).NotEmpty().WithMessage("必须指定材料所属的轮次");
+        // 2026-10-20 详情页 v2:录音也可归条目级(沟通电话录音),RoundId 可空。
         RuleFor(x => x.Phase)
             .Must(p => p is null || p.Equals("Pre", StringComparison.OrdinalIgnoreCase)
                                 || p.Equals("Post", StringComparison.OrdinalIgnoreCase))
@@ -512,12 +520,13 @@ public static class InterviewMappingExtensions
         a.TranscriptText?.Length ?? 0, a.UploadedAt,
         a.StoragePath, a.Sha256, a.FileExists,
         a.IntegrityStatus?.ToString(), a.LastVerifiedAt,
-        a.RoundId, a.Phase?.ToString());
+        a.RoundId, a.Phase?.ToString(), a.MetaJson);
 
     public static QuestionDto ToDto(this InterviewQuestion q) => new(
         q.Id, q.Sequence, q.QuestionText, q.MyAnswerText, q.Category.ToString(), q.Difficulty,
         q.Assessment, q.GotStuck, q.StuckReason, q.RecommendedAnswer, q.AskedAtSeconds,
-        q.WeaknessTagsJson, q.FollowUpQuestionsJson, q.MissedPointsJson, q.Mastery);
+        q.WeaknessTagsJson, q.FollowUpQuestionsJson, q.MissedPointsJson, q.Mastery,
+        q.RoundId, q.AskedBy, q.ReviewJson);
 
     public static ActionDto ToDto(this InterviewAction a) => new(
         a.Id, a.Title, a.Detail, a.DueDate, a.IsDone, a.CreatedAt);
@@ -530,7 +539,8 @@ public static class InterviewMappingExtensions
         r.Id, r.Order, r.Stage, r.ScheduledDate, r.Interviewers, r.Format, r.Location,
         r.Outcome.ToString(), r.Notes, r.Feedback,
         r.MeetingLink, r.ScheduledTime, r.EmailsJson, r.Transcript,
-        r.PrepQuestionsJson, r.RecordingUrl, r.ChecklistJson);
+        r.PrepQuestionsJson, r.RecordingUrl, r.ChecklistJson,
+        r.ReviewJson, r.PrepReportJson);
 
     public static GuidanceMaterialDto ToDto(this GeneratedMaterial m) => new(
         m.Id, m.Version, m.ContentMarkdown, m.Model, m.GeneratedAt,
@@ -916,7 +926,7 @@ public sealed class AttachAssetCommandHandler(InterviewsDbContext db)
             var asset = e.AttachAsset(kind, request.FileName, request.ContentType, request.SizeBytes,
                 request.StoragePath, request.BlobUrl, request.TranscriptText,
                 request.TranscriptSegmentsJson, request.DurationSeconds, request.SourceLanguage,
-                request.Sha256, request.RoundId, phase);
+                request.Sha256, request.RoundId, phase, request.MetaJson);
             await db.SaveChangesAsync(ct);
             return Result.Success(asset.Id);
         }
@@ -1153,13 +1163,23 @@ public sealed class AddQuestionCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result<Guid>> Handle(AddQuestionCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Questions).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await db.Entries.Include(x => x.Questions).Include(x => x.Rounds)
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
         if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
 
         if (!Enum.TryParse<QuestionCategory>(request.Category, true, out var cat))
             return Result.Failure<Guid>(Error.Validation("Question.InvalidCategory", "问题类型无效"));
 
-        var q = e.AddQuestion(request.QuestionText, request.MyAnswerText, cat, request.Difficulty);
+        InterviewQuestion q;
+        try
+        {
+            q = e.AddQuestion(request.QuestionText, request.MyAnswerText, cat, request.Difficulty,
+                request.RoundId, request.AskedBy);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure<Guid>(Error.Conflict("Question.InvalidState", ex.Message));
+        }
         if (request.Assessment is not null)
             q.UpdateFromAnalysis(request.QuestionText, request.MyAnswerText, request.Assessment,
                 cat, request.Difficulty, false, null, null, null);
@@ -2142,4 +2162,485 @@ public sealed class GetPrepPlanQueryHandler(InterviewsDbContext db)
         return Result.Success(new PrepPlanDto(a.Id, request.EntryId, request.RoundId, order,
             a.TranscriptText ?? "", null, a.UploadedAt));
     }
+}
+
+// ============================ 详情页 v2(2026-10-20 定稿) ============================
+// 统一入口归属 / 逐题复盘 / 结构化备考报告 / 转写抽题 / 说话人改名 / ICS。
+// JSON 结构由前后端共同约定(见 replica/playbook-redesign-spec.md),后端负责生成与存储。
+
+/// <summary>改材料归属:RoundId=null → 条目级(沟通记录)。</summary>
+public sealed record ReassignAssetCommand(Guid EntryId, Guid AssetId, Guid? RoundId) : IRequest<Result>;
+
+public sealed class ReassignAssetCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<ReassignAssetCommand, Result>
+{
+    public async Task<Result> Handle(ReassignAssetCommand request, CancellationToken ct)
+    {
+        var e = await LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try { e.ReassignAsset(request.AssetId, request.RoundId); }
+        catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Asset.Reassign", ex.Message)); }
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    internal static async Task<InterviewEntry?> LoadFull(InterviewsDbContext db, Guid id, CancellationToken ct)
+        => await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
+            .Include(x => x.Weaknesses).Include(x => x.Rounds)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+}
+
+/// <summary>更新材料元数据 JSON(解析字段/AI 摘要/提取安排/处理状态)。</summary>
+public sealed record UpdateAssetMetaCommand(Guid EntryId, Guid AssetId, string? MetaJson) : IRequest<Result>;
+
+public sealed class UpdateAssetMetaCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<UpdateAssetMetaCommand, Result>
+{
+    public async Task<Result> Handle(UpdateAssetMetaCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try { e.UpdateAssetMeta(request.AssetId, request.MetaJson); }
+        catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Asset.Meta", ex.Message)); }
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+/// <summary>写入逐题复盘 JSON(含标准答案用户编辑版)。</summary>
+public sealed record SetQuestionReviewCommand(Guid EntryId, Guid QuestionId, string? ReviewJson) : IRequest<Result>;
+
+public sealed class SetQuestionReviewCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<SetQuestionReviewCommand, Result>
+{
+    public async Task<Result> Handle(SetQuestionReviewCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try { e.SetQuestionReview(request.QuestionId, request.ReviewJson); }
+        catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Question.Review", ex.Message)); }
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+/// <summary>写入整轮复盘汇总 JSON。</summary>
+public sealed record SetRoundReviewCommand(Guid EntryId, Guid RoundId, string? ReviewJson) : IRequest<Result>;
+
+public sealed class SetRoundReviewCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<SetRoundReviewCommand, Result>
+{
+    public async Task<Result> Handle(SetRoundReviewCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try { e.SetRoundReview(request.RoundId, request.ReviewJson); }
+        catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Round.Review", ex.Message)); }
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+/// <summary>写入结构化备考报告 JSON(前端编辑 Tech Stack 关联后回存也走这里)。</summary>
+public sealed record SetRoundPrepReportCommand(Guid EntryId, Guid RoundId, string? PrepReportJson) : IRequest<Result>;
+
+public sealed class SetRoundPrepReportCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<SetRoundPrepReportCommand, Result>
+{
+    public async Task<Result> Handle(SetRoundPrepReportCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try { e.SetRoundPrepReport(request.RoundId, request.PrepReportJson); }
+        catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Round.PrepReport", ex.Message)); }
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+/// <summary>说话人批量改名(本轮分段 + 题目 AskedBy 全篇生效)。返回受影响处数。</summary>
+public sealed record RenameSpeakerCommand(Guid EntryId, Guid RoundId, string From, string To)
+    : IRequest<Result<int>>;
+
+public sealed class RenameSpeakerCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<RenameSpeakerCommand, Result<int>>
+{
+    public async Task<Result<int>> Handle(RenameSpeakerCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure<int>(Error.NotFound("面试条目"));
+        try
+        {
+            var n = e.RenameSpeakerInRound(request.RoundId, request.From, request.To);
+            await db.SaveChangesAsync(ct);
+            return Result.Success(n);
+        }
+        catch (InvalidOperationException ex) { return Result.Failure<int>(Error.Conflict("Speaker.Rename", ex.Message)); }
+    }
+}
+
+/// <summary>生成整轮复盘:逐题四维分析 + 整轮汇总(含通过概率,AI 估计)。</summary>
+public sealed record GenerateRoundReviewCommand(Guid EntryId, Guid RoundId) : IRequest<Result<string>>;
+
+public sealed class GenerateRoundReviewCommandHandler(InterviewsDbContext db, IAiGatewayClient ai)
+    : IRequestHandler<GenerateRoundReviewCommand, Result<string>>
+{
+    public async Task<Result<string>> Handle(GenerateRoundReviewCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure<string>(Error.NotFound("面试条目"));
+        var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
+        if (round is null) return Result.Failure<string>(Error.NotFound("轮次"));
+
+        var questions = e.Questions.Where(q => q.RoundId == round.Id).OrderBy(q => q.Sequence).ToList();
+        if (questions.Count == 0)
+            return Result.Failure<string>(Error.Validation("Review.NoQuestions",
+                "本轮还没有题目,请先从转写抽取问答或手工添加题目。"));
+
+        var hasAudio = e.Assets.Any(a => a.RoundId == round.Id && a.Kind == AssetKind.Audio);
+        var transcript = RoundTranscript(e, round);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"公司:{e.CompanyName} 岗位:{e.Role} 轮次:Round {round.Order}({round.Stage})");
+        sb.AppendLine($"面试官:{round.Interviewers}");
+        sb.AppendLine(hasAudio
+            ? "本轮有录音:发音维度可评分(依据原声)。"
+            : "★本轮无录音(转写来自粘贴文本):发音维度必须输出 null,禁止猜测发音。");
+        if (!string.IsNullOrWhiteSpace(transcript))
+            sb.AppendLine($"## 转写原文\n{Trunc(transcript, 12000)}");
+        sb.AppendLine("## 逐题(序号|提问人|问题|我的回答)");
+        foreach (var q in questions)
+            sb.AppendLine($"{q.Sequence}|{q.AskedBy ?? "面试官"}|{q.QuestionText}|{q.MyAnswerText ?? "(无记录)"}");
+
+        const string system =
+            "你是北美科技公司面试复盘教练。只输出一个 JSON 对象,不要任何额外文字,不要 Markdown 代码块。\n" +
+            "硬规矩:每个维度的 comment 里每句判断都必须给出依据——引用候选人原话片段、指出时间点、或写明『全段未出现 X』;没有依据的话不要写。\n" +
+            "输出结构:{\"round\":{\"overall\":0-100整数,\"passProbability\":0-100整数(AI估计),\"passBasis\":\"依据\",\"strongest\":\"\",\"weakest\":\"\",\"summary\":\"\"}," +
+            "\"questions\":[{\"sequence\":题序,\"overall\":0-10一位小数,\"verdict\":\"一句话总评\"," +
+            "\"dims\":{\"relevance\":{\"score\":0-10,\"comment\":\"\",\"fix\":\"\"},\"depth\":{同},\"expression\":{同}," +
+            "\"pronunciation\":{\"score\":0-10或null,\"comment\":\"\",\"fix\":\"\"}}," +
+            "\"stdSpoken\":\"北美口语版标准回答(第一人称,可直接朗读)\",\"stdTechnical\":\"技术版标准回答(要点式)\"}]}\n" +
+            "无录音时 pronunciation.score 必须为 null,comment 说明『无录音,不评分』。";
+
+        AiCompletionResult completion;
+        try
+        {
+            completion = await ai.CompleteAsync("round-review", sb.ToString(), system, 0.4, 6000, ct);
+        }
+        catch (AiGatewayException ex) when (ex.IsConfigurationError)
+        {
+            return Result.Failure<string>(Error.Validation("Review.AiNotConfigured",
+                "AI 未配置:请先在设置里配置模型凭据。"));
+        }
+        catch (AiGatewayException ex)
+        {
+            return Result.Failure<string>(Error.Validation("Review.AiFailed", ex.Message));
+        }
+
+        var json = ExtractJson(completion.Text);
+        if (json is null)
+            return Result.Failure<string>(Error.Validation("Review.BadAiJson", "AI 返回内容无法解析为 JSON,请重试。"));
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("round", out var roundEl))
+                e.SetRoundReview(round.Id, roundEl.GetRawText());
+            if (root.TryGetProperty("questions", out var qs))
+            {
+                foreach (var qEl in qs.EnumerateArray())
+                {
+                    if (!qEl.TryGetProperty("sequence", out var seqEl)) continue;
+                    var q = questions.FirstOrDefault(x => x.Sequence == seqEl.GetInt32());
+                    if (q is null) continue;
+                    var review = new Dictionary<string, object?>();
+                    foreach (var p in qEl.EnumerateObject())
+                        if (p.Name != "sequence") review[p.Name] = p.Value.Clone();
+                    e.SetQuestionReview(q.Id, JsonSerializer.Serialize(review));
+                    // 兼容旧字段:RecommendedAnswer 同步技术版,Assessment 同步总评
+                    var stdTech = qEl.TryGetProperty("stdTechnical", out var st) ? st.GetString() : null;
+                    var verdict = qEl.TryGetProperty("verdict", out var vd) ? vd.GetString() : null;
+                    q.UpdateFromAnalysis(q.QuestionText, q.MyAnswerText, verdict ?? q.Assessment,
+                        q.Category, q.Difficulty, q.GotStuck, q.StuckReason,
+                        stdTech ?? q.RecommendedAnswer, q.AskedAtSeconds);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return Result.Failure<string>(Error.Validation("Review.BadAiJson", "AI 返回 JSON 结构不完整,请重试。"));
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Result.Success(round.ReviewJson ?? "{}");
+    }
+
+    internal static string RoundTranscript(InterviewEntry e, InterviewRound round)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(round.Transcript)) parts.Add(round.Transcript!);
+        foreach (var a in e.Assets.Where(a => a.RoundId == round.Id
+                     && (a.Kind is AssetKind.Transcript or AssetKind.Text or AssetKind.Notes)
+                     && !string.IsNullOrWhiteSpace(a.TranscriptText)).OrderBy(a => a.UploadedAt))
+            parts.Add(a.TranscriptText!);
+        return string.Join("\n\n", parts);
+    }
+
+    internal static string? ExtractJson(string text)
+    {
+        var start = text.IndexOf('{');
+        var end = text.LastIndexOf('}');
+        return start >= 0 && end > start ? text[start..(end + 1)] : null;
+    }
+
+    private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];
+}
+
+/// <summary>从本轮转写抽取问答对 → 生成本轮题目(提问人逐人标注)。</summary>
+public sealed record ExtractRoundQuestionsCommand(Guid EntryId, Guid RoundId) : IRequest<Result<int>>;
+
+public sealed class ExtractRoundQuestionsCommandHandler(InterviewsDbContext db, IAiGatewayClient ai)
+    : IRequestHandler<ExtractRoundQuestionsCommand, Result<int>>
+{
+    public async Task<Result<int>> Handle(ExtractRoundQuestionsCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure<int>(Error.NotFound("面试条目"));
+        var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
+        if (round is null) return Result.Failure<int>(Error.NotFound("轮次"));
+
+        var transcript = GenerateRoundReviewCommandHandler.RoundTranscript(e, round);
+        if (string.IsNullOrWhiteSpace(transcript))
+            return Result.Failure<int>(Error.Validation("Extract.NoTranscript", "本轮还没有转写材料可抽取。"));
+
+        // 已有本轮题目时不重复抽取(幂等保护)
+        if (e.Questions.Any(q => q.RoundId == round.Id))
+            return Result.Success(0);
+
+        List<(string Question, string? Answer, string? AskedBy, string Category)> extracted;
+        try
+        {
+            var prompt =
+                $"下面是 {e.CompanyName} {e.Role} Round {round.Order}({round.Stage})的面试转写,面试官:{round.Interviewers}。\n" +
+                "抽取全部问答对,只输出 JSON 数组:[{\"question\":\"面试官原话\",\"answer\":\"候选人回答原话\",\"askedBy\":\"提问人真名,分不清写 面试官 1/面试官 2\",\"category\":\"Technical|SystemDesign|Behavioral|Coding|Culture|Other\"}]\n" +
+                "闲聊寒暄不要抽。转写:\n" + (transcript.Length > 12000 ? transcript[..12000] : transcript);
+            var completion = await ai.CompleteAsync("round-qa-extract", prompt,
+                "只输出 JSON 数组,不要其它文字。", 0.2, 6000, ct);
+            extracted = ParseExtracted(completion.Text);
+        }
+        catch (AiGatewayException)
+        {
+            // AI 不可用时用本地分段规则兜底(按说话人轮次配对),保证功能可用
+            extracted = FallbackExtract(transcript, round.Interviewers);
+        }
+
+        var created = 0;
+        foreach (var (question, answer, askedBy, category) in extracted)
+        {
+            if (string.IsNullOrWhiteSpace(question)) continue;
+            var cat = Enum.TryParse<QuestionCategory>(category, true, out var c) ? c : QuestionCategory.Technical;
+            e.AddQuestion(question.Trim(), answer, cat, 3, round.Id, askedBy);
+            created++;
+        }
+        await db.SaveChangesAsync(ct);
+        return Result.Success(created);
+    }
+
+    private static List<(string, string?, string?, string)> ParseExtracted(string text)
+    {
+        var start = text.IndexOf('[');
+        var end = text.LastIndexOf(']');
+        if (start < 0 || end <= start) return [];
+        var list = new List<(string, string?, string?, string)>();
+        try
+        {
+            using var doc = JsonDocument.Parse(text[start..(end + 1)]);
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var q = el.TryGetProperty("question", out var qe) ? qe.GetString() : null;
+                if (string.IsNullOrWhiteSpace(q)) continue;
+                list.Add((q!,
+                    el.TryGetProperty("answer", out var ae) ? ae.GetString() : null,
+                    el.TryGetProperty("askedBy", out var be) ? be.GetString() : null,
+                    el.TryGetProperty("category", out var ce) ? ce.GetString() ?? "Technical" : "Technical"));
+            }
+        }
+        catch (JsonException) { /* 坏 JSON → 返回空,调用方可见 0 条 */ }
+        return list;
+    }
+
+    /// <summary>无 AI 时的规则抽取:识别 "Name: 内容" 轮次行,面试官的问句 + 紧随的候选人回答配对。</summary>
+    internal static List<(string, string?, string?, string)> FallbackExtract(string transcript, string? interviewers)
+    {
+        var turns = new List<(string Speaker, string Text)>();
+        foreach (var rawLine in transcript.Replace("\r\n", "\n").Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0) continue;
+            var m = System.Text.RegularExpressions.Regex.Match(line, @"^([^:：]{1,40})[:：]\s*(.+)$");
+            if (m.Success) turns.Add((m.Groups[1].Value.Trim(), m.Groups[2].Value.Trim()));
+        }
+        var interviewerNames = (interviewers ?? "")
+            .Split(new[] { ',', '，', ';', '、' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => System.Text.RegularExpressions.Regex.Replace(s, @"\(.*?\)", "").Trim())
+            .Where(s => s.Length > 0).ToList();
+        bool IsCandidate(string speaker) =>
+            speaker.Contains("Forrest") || speaker.Equals("You", StringComparison.OrdinalIgnoreCase)
+            || speaker.Contains("我") || speaker.Contains("Candidate", StringComparison.OrdinalIgnoreCase);
+        string? MatchInterviewer(string speaker)
+        {
+            foreach (var n in interviewerNames)
+                if (speaker.Contains(n) || n.Contains(speaker)) return n;
+            return null;
+        }
+
+        var result = new List<(string, string?, string?, string)>();
+        for (var i = 0; i < turns.Count; i++)
+        {
+            var (speaker, text) = turns[i];
+            if (IsCandidate(speaker)) continue;
+            var askedBy = MatchInterviewer(speaker);
+            if (askedBy is null && interviewerNames.Count > 0 && !speaker.Contains("面试官")) continue;
+            if (!text.Contains('?') && !text.Contains('？')) continue;
+            string? answer = null;
+            if (i + 1 < turns.Count && IsCandidate(turns[i + 1].Speaker)) answer = turns[i + 1].Text;
+            result.Add((text, answer, askedBy ?? speaker, "Technical"));
+        }
+        return result;
+    }
+}
+
+/// <summary>生成结构化备考报告(AI 优先;AI 未配置时本地聚合兜底并标注 generatedBy)。</summary>
+public sealed record GeneratePrepReportCommand(
+    Guid EntryId, Guid RoundId, string? JdText = null, string? ResumeText = null,
+    string? Experiences = null) : IRequest<Result<string>>;
+
+public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAiGatewayClient ai)
+    : IRequestHandler<GeneratePrepReportCommand, Result<string>>
+{
+    public async Task<Result<string>> Handle(GeneratePrepReportCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure<string>(Error.NotFound("面试条目"));
+        var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
+        if (round is null) return Result.Failure<string>(Error.NotFound("轮次"));
+
+        string reportJson;
+        try
+        {
+            var prompt = BuildAiPrompt(e, round, request);
+            var completion = await ai.CompleteAsync("round-prep-report", prompt, PrepReportSystemPrompt, 0.5, 8000, ct);
+            var json = GenerateRoundReviewCommandHandler.ExtractJson(completion.Text);
+            if (json is null) throw new AiGatewayException("AI 返回内容无法解析为 JSON");
+            using var doc = JsonDocument.Parse(json); // 校验合法性
+            var root = JsonNode.Parse(json)!.AsObject();
+            root["generatedAt"] = DateTimeOffset.UtcNow.ToString("o");
+            root["generatedBy"] = completion.Model;
+            reportJson = root.ToJsonString();
+        }
+        catch (AiGatewayException)
+        {
+            // AI 未配置/失败:本地聚合兜底(JD/简历/历史原题/短板都是真实输入,只是不经 LLM 组织)
+            reportJson = BuildLocalReport(e, round, request);
+        }
+        catch (JsonException)
+        {
+            reportJson = BuildLocalReport(e, round, request);
+        }
+
+        e.SetRoundPrepReport(round.Id, reportJson);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(reportJson);
+    }
+
+    private const string PrepReportSystemPrompt =
+        "你是北美科技公司面试教练。只输出一个 JSON 对象,不要额外文字。\n" +
+        "结构:{\"sections\":[{\"id\":\"greeting|intro-listen|self-intro|deep-dive|tech-qa|behavioral|ask-back|closing\",\"title\":\"段标题\",\"blocks\":[{\"type\":\"script|points|qa-ref|list\",\"title\":\"可选\",\"text\":\"正文(script/points 用)\",\"items\":[\"要点数组(list 用)\"]}],\"questions\":[{\"question\":\"题面\",\"category\":\"分类\",\"sourceTags\":[\"机经|原题|短板|JD\"],\"weaknessRelated\":true/false,\"stdSpoken\":\"口语版标准答案\",\"stdTechnical\":\"技术版标准答案\"}]}" +
+        "要求:按真实面试流程顺序输出全部 8 段(greeting 开场寒暄、intro-listen 听对方介绍、self-intro 自我介绍(60秒与2分钟两版稿放 blocks)、deep-dive 项目深挖、tech-qa 技术问答(题目放 questions)、behavioral 行为题 STAR、ask-back 反问环节、closing 收尾与注意事项)。" +
+        "技术问答题目来源:JD 关键词、公司机经、候选人历史原题、已识别短板(短板题 weaknessRelated=true)。标准答案用北美面试口径,第一人称口语版 + 要点技术版。";
+
+    private static string BuildAiPrompt(InterviewEntry e, InterviewRound round, GeneratePrepReportCommand req)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"# 备考目标:{e.CompanyName} —— {e.Role}(Round {round.Order} / {round.Stage})");
+        if (!string.IsNullOrWhiteSpace(round.Interviewers)) sb.AppendLine($"面试官:{round.Interviewers}");
+        if (!string.IsNullOrWhiteSpace(round.Format)) sb.AppendLine($"形式:{round.Format}");
+        var jd = !string.IsNullOrWhiteSpace(req.JdText) ? req.JdText
+            : !string.IsNullOrWhiteSpace(e.JdText) ? e.JdText : e.JdSummary;
+        if (!string.IsNullOrWhiteSpace(jd)) sb.AppendLine($"## JD\n{Trunc(jd!, 6000)}");
+        if (!string.IsNullOrWhiteSpace(e.CompanyProfile)) sb.AppendLine($"## 公司背景\n{Trunc(e.CompanyProfile, 3000)}");
+        if (!string.IsNullOrWhiteSpace(req.ResumeText)) sb.AppendLine($"## 本投递简历\n{Trunc(req.ResumeText, 6000)}");
+        if (!string.IsNullOrWhiteSpace(req.Experiences)) sb.AppendLine($"## 全网机经(用户粘贴)\n{Trunc(req.Experiences, 5000)}");
+        var past = e.Questions.Take(30).ToList();
+        if (past.Count > 0)
+        {
+            sb.AppendLine("## 历史面试原题(类似岗位真实问过)");
+            foreach (var q in past) sb.AppendLine($"- {Trunc(q.QuestionText, 250)}");
+        }
+        if (e.Weaknesses.Count > 0)
+        {
+            sb.AppendLine("## 已识别技术短板");
+            foreach (var w in e.Weaknesses.Take(15)) sb.AppendLine($"- {w.Title}:{Trunc(w.Suggestion ?? w.Detail ?? "", 150)}");
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>本地聚合报告:结构与 AI 版一致,题目来自历史原题 + 卡壳题,短板题标红置顶。</summary>
+    internal static string BuildLocalReport(InterviewEntry e, InterviewRound round, GeneratePrepReportCommand req)
+    {
+        var questions = new List<object>();
+        var weaknessTitles = e.Weaknesses.Select(w => w.Title).ToList();
+        foreach (var q in e.Questions.OrderByDescending(q => q.GotStuck).Take(20))
+        {
+            var weak = q.GotStuck || weaknessTitles.Any(t =>
+                q.QuestionText.Contains(t, StringComparison.OrdinalIgnoreCase));
+            questions.Add(new
+            {
+                question = q.QuestionText,
+                category = q.Category.ToString(),
+                sourceTags = new[] { "原题" },
+                weaknessRelated = weak,
+                stdSpoken = (string?)null,
+                stdTechnical = q.RecommendedAnswer,
+                knowledgeId = (Guid?)null
+            });
+        }
+        var sections = new object[]
+        {
+            new { id = "greeting", title = "1 · 开场寒暄", blocks = new object[] {
+                new { type = "points", items = new[] { "提前 5 分钟进入会议", "开场一句:Hi, thanks for taking the time to speak with me today." } } }, questions = Array.Empty<object>() },
+            new { id = "intro-listen", title = "2 · 听对方介绍", blocks = new object[] {
+                new { type = "points", items = new[] { "记下团队规模、在招岗位的职责边界、当前项目关键词", "回应一句:That sounds great — the part about X is exactly what I've been doing." } } }, questions = Array.Empty<object>() },
+            new { id = "self-intro", title = "3 · 自我介绍", blocks = new object[] {
+                new { type = "script", title = "60 秒版(请按你的简历改写后朗读练习)", text = (string?)null } }, questions = Array.Empty<object>() },
+            new { id = "deep-dive", title = "4 · 项目深挖", blocks = new object[] {
+                new { type = "points", items = new[] { "准备 1 个核心项目的背景-难点-方案-结果四段式讲法", "数字先行:规模、性能提升、影响范围" } } }, questions = Array.Empty<object>() },
+            new { id = "tech-qa", title = "5 · 技术问答", blocks = Array.Empty<object>(), questions = questions.ToArray() },
+            new { id = "behavioral", title = "6 · 行为题 STAR", blocks = new object[] {
+                new { type = "points", items = new[] { "每个故事按 Situation-Task-Action-Result 讲,Result 带数字", "准备:冲突、失败、赶工、学新技术 各一个" } } }, questions = Array.Empty<object>() },
+            new { id = "ask-back", title = "7 · 反问环节", blocks = new object[] {
+                new { type = "list", items = new[] { "这个岗位前 90 天最重要的交付是什么?", "团队现在最大的技术挑战是什么?", "这个 role 的成功怎么衡量?" } } }, questions = Array.Empty<object>() },
+            new { id = "closing", title = "8 · 收尾与注意事项", blocks = new object[] {
+                new { type = "points", items = new[] { "结束前重申兴趣:Based on what I've heard, this role is exactly what I'm looking for.", "当天:提前测试设备与网络,水杯与简历放手边" } } }, questions = Array.Empty<object>() },
+        };
+        var report = new
+        {
+            generatedAt = DateTimeOffset.UtcNow.ToString("o"),
+            generatedBy = "local-aggregation",
+            sources = new
+            {
+                jd = !string.IsNullOrWhiteSpace(req.JdText) || !string.IsNullOrWhiteSpace(e.JdText) || !string.IsNullOrWhiteSpace(e.JdSummary),
+                company = !string.IsNullOrWhiteSpace(e.CompanyProfile),
+                experiences = !string.IsNullOrWhiteSpace(req.Experiences),
+                resume = !string.IsNullOrWhiteSpace(req.ResumeText),
+                pastQuestions = e.Questions.Count,
+                weaknesses = e.Weaknesses.Count
+            },
+            sections
+        };
+        return JsonSerializer.Serialize(report);
+    }
+
+    private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];
 }

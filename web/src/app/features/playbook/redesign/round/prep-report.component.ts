@@ -1,0 +1,586 @@
+import {
+  Component, EventEmitter, HostListener, Output, computed, effect, inject, input, signal
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import {
+  InterviewAsset, InterviewDetail, InterviewRound, KnowledgeItem
+} from '../../../../core/models/api.models';
+import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
+import { QaZoomService } from '../../../../core/qa-zoom/qa-zoom.service';
+import { TtsPlayerService } from '../../../../core/tts/tts-player.service';
+import { PlaybookV2Api } from '../playbook-v2.api';
+import {
+  PrepBlock, PrepQuestionItem, PrepReport, PrepSection, prepStdText, safeJson
+} from '../v2.models';
+import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
+import { ExportBlock, ExportDoc } from '../export/export-doc';
+
+/**
+ * 备考报告(2026-10-20 定稿):按模拟面试流程排布的完整备考文档。
+ * 左侧要点目录(点击定位、滚动高亮),右侧正文;题目与 Tech Stack 双向同步 ——
+ * 已入库的题答案以 Tech Stack 那份为准(同一条记录),在这里改即同步回去;
+ * 未入库的题选分类后一键加入,自动带来源标签(公司 · Round · 日期)。
+ * 与短板相关的题置顶标红。Guidance 类旧材料在本页签底部并列,不丢失。
+ */
+@Component({
+  selector: 'app-prep-report',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, QaZoomComponent],
+  template: `
+    <div class="prep" [style.--qa-scale]="zoom.scale()">
+      <div class="prep-head">
+        <div>
+          <div class="ph-title">备考报告</div>
+          @if (report(); as r) {
+            <div class="ph-sub">
+              生成于 {{ (r.generatedAt ?? '').slice(0, 16).replace('T', ' ') }}
+              · 数据来源:JD {{ r.sources?.jd ? '✓' : '—' }}
+              / 公司背景 {{ r.sources?.company ? '✓' : '—' }}
+              / 机经 {{ r.sources?.experiences ? '✓' : '—' }}
+              / 本投递简历 {{ r.sources?.resume ? '✓' : '—' }}
+              / 往期原题 {{ r.sources?.pastQuestions ?? 0 }} 道
+              / 短板 {{ r.sources?.weaknesses ?? 0 }} 项
+            </div>
+          } @else {
+            <div class="ph-sub">按真实面试流程生成:寒暄 → 自我介绍 → 项目深挖 → 技术问答 → 行为题 → 反问 → 收尾。</div>
+          }
+        </div>
+        <span class="spacer"></span>
+        <app-qa-zoom></app-qa-zoom>
+        <button mat-stroked-button (click)="openIntel()">全网面经搜索</button>
+        <button mat-stroked-button (click)="openGlassdoor()">Glassdoor 面经</button>
+        @if (report()) {
+          <button mat-stroked-button (click)="openExport()">导出备考报告</button>
+        }
+        <button mat-raised-button color="primary" (click)="generate()" [disabled]="busy()">
+          {{ busy() ? '生成中…' : (report() ? '重新生成' : '生成备考报告') }}
+        </button>
+      </div>
+      @if (notice()) { <p class="notice">{{ notice() }}</p> }
+      @if (tts.error()) { <p class="notice warn">{{ tts.error() }}</p> }
+
+      @if (!report()) {
+        <div class="gen-box">
+          <label>过往面经 / 经历材料(可选,粘贴文本 —— 机经的一手来源)
+            <textarea rows="4" class="fld" [ngModel]="experiencesDraft()"
+                      (ngModelChange)="experiencesDraft.set($event)"
+                      placeholder="粘贴这个岗位的面经、你准备的项目经历要点…"></textarea>
+          </label>
+          <label>本投递简历要点(可选)
+            <textarea rows="3" class="fld" [ngModel]="resumeDraft()"
+                      (ngModelChange)="resumeDraft.set($event)"
+                      placeholder="留空则只用 JD 与题库生成"></textarea>
+          </label>
+          <p class="hint">生成会综合:JD、公司背景、粘贴的机经、本投递简历、题库里过去类似岗位的原题、你的技术短板。</p>
+        </div>
+      } @else {
+        <div class="prep-body">
+          <nav class="toc">
+            @for (s of report()!.sections; track s.id) {
+              <button type="button" class="toc-item" [class.on]="activeSec() === s.id"
+                      (click)="jumpTo(s.id)">{{ s.title }}</button>
+            }
+          </nav>
+          <div class="sections">
+            @for (s of report()!.sections; track s.id) {
+              <section class="psec" [id]="'prep-sec-' + s.id" data-testid="prep-section">
+                <h4>{{ s.title }}</h4>
+                @for (b of s.blocks ?? []; track $index) {
+                  @if (b.type === 'script') {
+                    <div class="script-box">
+                      @if (b.title) { <div class="sb-title">{{ b.title }}</div> }
+                      @if (editingBlock() === s.id + ':' + $index) {
+                        <textarea class="fld qa-text" rows="6" [ngModel]="blockDraft()"
+                                  (ngModelChange)="blockDraft.set($event)"></textarea>
+                        <div class="row">
+                          <button mat-raised-button color="primary" (click)="saveBlock(s, $index)">保存</button>
+                          <button mat-button (click)="editingBlock.set(null)">取消</button>
+                        </div>
+                      } @else {
+                        <p class="qa-text pre">{{ b.userText || b.text }}</p>
+                        <div class="row">
+                          <button type="button" class="mini-btn" (click)="playText(b.userText || b.text || '')">
+                            {{ tts.playingKey() === tts.keyFor(b.userText || b.text || '') ? '⏸ 停止' : '▶ 朗读' }}
+                          </button>
+                          <button type="button" class="mini-btn" (click)="editBlock(s, $index, b)">✎ 编辑</button>
+                          @if (b.userText) { <span class="mine-tag">已按你的版本</span> }
+                        </div>
+                      }
+                    </div>
+                  } @else if (b.type === 'points' || b.type === 'list') {
+                    @if (b.title) { <div class="sb-title">{{ b.title }}</div> }
+                    <ul class="pts">
+                      @for (it of b.items ?? []; track $index) { <li>{{ it }}</li> }
+                    </ul>
+                  } @else if (b.text) {
+                    <p class="qa-text pre">{{ b.text }}</p>
+                  }
+                }
+                @for (q of sortedQuestions(s); track $index) {
+                  <article class="pq" [class.weak]="q.weaknessRelated" data-testid="prep-question">
+                    <div class="pq-head">
+                      @if (q.weaknessRelated) { <span class="weak-pin">📌 短板相关</span> }
+                      <span class="pq-text qa-text">{{ q.question }}</span>
+                    </div>
+                    @if (q.sourceTags?.length) {
+                      <div class="tags">@for (tg of q.sourceTags!; track $index) { <span class="tag">{{ tg }}</span> }</div>
+                    }
+                    @if (q.knowledgeId) {
+                      <div class="sync-row">
+                        <span class="sync-tag">已在 Tech Stack</span>
+                        <span class="sync-note">答案与 Tech Stack 是同一份,在这里改会同步回去</span>
+                      </div>
+                      <div class="sync-answer">
+                        <div class="sa-label">Tech Stack 里的答案</div>
+                        @if (editingSyncQ() === q.knowledgeId) {
+                          <textarea class="fld qa-text" rows="5" [ngModel]="syncDraft()"
+                                    (ngModelChange)="syncDraft.set($event)"></textarea>
+                          <div class="row">
+                            <button mat-raised-button color="primary" (click)="saveSyncAnswer(q)">保存并同步</button>
+                            <button mat-button (click)="editingSyncQ.set(null)">取消</button>
+                          </div>
+                        } @else {
+                          <p class="qa-text pre">{{ knowledgeAnswer(q.knowledgeId) || '(Tech Stack 里暂无答案)' }}</p>
+                          <div class="row">
+                            <button type="button" class="mini-btn"
+                                    (click)="playText(knowledgeAnswer(q.knowledgeId))">▶ 朗读</button>
+                            <button type="button" class="mini-btn" (click)="editSyncAnswer(q)">✎ 编辑(同步 Tech Stack)</button>
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      @for (std of prepStds(q); track std.key) {
+                        @if (std.text || true) {
+                          <div class="std-line">
+                            <span class="std-label">{{ std.label }}</span>
+                            @if (std.isUser) { <span class="mine-tag">已按你的版本</span> }
+                            <span class="spacer"></span>
+                            <button type="button" class="mini-btn" [disabled]="!std.text"
+                                    (click)="playText(std.text)">▶</button>
+                            <button type="button" class="mini-btn"
+                                    (click)="editPrepStd(s, q, std.key, std.text)">✎</button>
+                          </div>
+                          @if (editingPrepStd() === s.id + '|' + q.question + '|' + std.key) {
+                            <textarea class="fld qa-text" rows="4" [ngModel]="prepStdDraft()"
+                                      (ngModelChange)="prepStdDraft.set($event)"></textarea>
+                            <div class="row">
+                              <button mat-raised-button color="primary"
+                                      (click)="savePrepStd(s, q, std.key)">保存</button>
+                              <button mat-button (click)="editingPrepStd.set(null)">取消</button>
+                            </div>
+                          } @else if (std.text) {
+                            <p class="qa-text pre std-p">{{ std.text }}</p>
+                          }
+                        }
+                      }
+                      <div class="join-row">
+                        <label>分类
+                          <input class="fld sm" list="prep-topics"
+                                 [ngModel]="joinCategory()[q.question]"
+                                 (ngModelChange)="setJoinCat(q.question, $event)"
+                                 placeholder="如 C# / .NET">
+                          <datalist id="prep-topics">
+                            @for (tp of topics(); track tp) { <option [value]="tp"></option> }
+                          </datalist>
+                        </label>
+                        <button mat-stroked-button (click)="joinStack(s, q)" [disabled]="busy()">
+                          加入 Tech Stack
+                        </button>
+                        <span class="join-note">来源自动标注:{{ entry().companyName }} · Round {{ round().order }} · {{ round().scheduledDate ?? '' }}</span>
+                      </div>
+                    }
+                  </article>
+                }
+              </section>
+            }
+
+            @if (guidanceAssets().length) {
+              <section class="psec">
+                <h4>指导材料(历史)</h4>
+                <p class="hint">这些是之前生成的指导材料,完整件在「材料」页签里:</p>
+                <ul class="pts">
+                  @for (g of guidanceAssets(); track g.id) { <li>{{ g.fileName }}</li> }
+                </ul>
+              </section>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .prep { padding: 4px 2px; }
+    .qa-text { font-size: calc(14.5px * var(--qa-scale, 1)); line-height: 1.65; }
+    .pre { white-space: pre-wrap; }
+    .prep-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+    .ph-title { font-size: 15px; font-weight: 700; }
+    .ph-sub { font-size: 12px; color: var(--yi-text-muted, #888); margin-top: 2px; max-width: 560px; }
+    .spacer { flex: 1; }
+    .notice { font-size: 12.5px; color: var(--yi-text-muted, #777); }
+    .notice.warn { color: #b3261e; }
+    .gen-box { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; max-width: 720px; }
+    .gen-box label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px;
+                     color: var(--yi-text-muted, #777); }
+    .fld { border: 1px solid var(--yi-border, #ccc); border-radius: 8px; padding: 8px 10px;
+           font-size: 13px; background: transparent; color: inherit; box-sizing: border-box; }
+    .fld.sm { padding: 5px 8px; font-size: 12.5px; }
+    .hint { font-size: 12px; color: var(--yi-text-muted, #999); }
+    .prep-body { display: grid; grid-template-columns: 170px 1fr; gap: 20px; margin-top: 12px; }
+    @media (max-width: 760px) { .prep-body { grid-template-columns: 1fr; } .toc { position: static !important; flex-direction: row !important; flex-wrap: wrap; } }
+    .toc { position: sticky; top: 8px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
+    .toc-item { text-align: left; border: none; background: transparent; color: inherit; cursor: pointer;
+                font-size: 12.5px; padding: 6px 9px; border-radius: 7px; }
+    .toc-item.on { background: color-mix(in srgb, var(--yi-accent, #3f51b5) 14%, transparent); font-weight: 700; }
+    .psec { margin-bottom: 22px; scroll-margin-top: 10px; }
+    .psec h4 { font-size: 15px; margin: 0 0 8px; }
+    .script-box { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 8px 0; }
+    .sb-title { font-size: 12.5px; font-weight: 700; color: var(--yi-text-muted, #777); margin-bottom: 4px; }
+    .script-box p { margin: 2px 0 8px; }
+    .pts { margin: 4px 0 8px; padding-left: 20px; font-size: 13.5px; line-height: 1.65; }
+    .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+    .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+                border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; }
+    .mine-tag { font-size: 10.5px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+                border-radius: 999px; padding: 1px 7px; }
+    .pq { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 9px 0; }
+    .pq.weak { border-color: #e57373; background: color-mix(in srgb, #e57373 5%, transparent); }
+    .pq-head { display: flex; gap: 8px; align-items: flex-start; }
+    .weak-pin { font-size: 11px; font-weight: 700; color: #c62828; white-space: nowrap; margin-top: 3px; }
+    .pq-text { font-weight: 600; }
+    .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
+    .tag { font-size: 11px; border: 1px solid var(--yi-border, #ccc); border-radius: 999px; padding: 1px 8px;
+           color: var(--yi-text-muted, #777); }
+    .sync-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .sync-tag { font-size: 11px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+                border-radius: 999px; padding: 2px 9px; }
+    .sync-note { font-size: 11.5px; color: var(--yi-text-muted, #888); }
+    .sync-answer { margin-top: 6px; }
+    .sa-label { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #777); }
+    .sync-answer p { margin: 4px 0; }
+    .std-line { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+    .std-label { font-size: 12px; font-weight: 700; color: var(--yi-accent, #3f51b5); }
+    .std-p { margin: 4px 0 2px; }
+    .join-row { display: flex; gap: 10px; align-items: flex-end; margin-top: 10px; flex-wrap: wrap;
+                border-top: 1px dashed var(--yi-border, #ddd); padding-top: 10px; }
+    .join-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px;
+                      color: var(--yi-text-muted, #777); }
+    .join-note { font-size: 11.5px; color: var(--yi-text-muted, #999); }
+  `]
+})
+export class PrepReportComponent {
+  readonly entry = input.required<InterviewDetail>();
+  readonly round = input.required<InterviewRound>();
+  readonly guidanceAssets = input<InterviewAsset[]>([]);
+  @Output() readonly changed = new EventEmitter<void>();
+
+  private readonly api = inject(PlaybookV2Api);
+  private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
+  readonly zoom = inject(QaZoomService);
+  readonly tts = inject(TtsPlayerService);
+
+  readonly busy = signal(false);
+  readonly notice = signal<string | null>(null);
+  readonly experiencesDraft = signal('');
+  readonly resumeDraft = signal('');
+  readonly activeSec = signal('');
+  readonly editingBlock = signal<string | null>(null);
+  readonly blockDraft = signal('');
+  readonly editingSyncQ = signal<string | null>(null);
+  readonly syncDraft = signal('');
+  readonly editingPrepStd = signal<string | null>(null);
+  readonly prepStdDraft = signal('');
+  readonly joinCategory = signal<Record<string, string>>({});
+  readonly knowledge = signal(new Map<string, KnowledgeItem>());
+  readonly topics = signal<string[]>([]);
+
+  readonly report = computed(() => safeJson<PrepReport>(this.round().prepReportJson));
+
+  private loadedKey = '';
+
+  constructor() {
+    effect(() => {
+      const r = this.report();
+      const key = this.round().id + ':' + (r?.generatedAt ?? '');
+      if (key === this.loadedKey) return;
+      this.loadedKey = key;
+      if (r?.sections.length && !this.activeSec()) this.activeSec.set(r.sections[0].id);
+      const ids = new Set<string>();
+      for (const s of r?.sections ?? []) {
+        for (const q of s.questions ?? []) if (q.knowledgeId) ids.add(q.knowledgeId);
+      }
+      if (ids.size) {
+        this.api.listKnowledge().subscribe({
+          next: items => {
+            const map = new Map(this.knowledge());
+            for (const it of items) if (ids.has(it.id)) map.set(it.id, it);
+            this.knowledge.set(map);
+            this.topics.set([...new Set(items.map(i => i.topic).filter(Boolean))].sort());
+          },
+          error: () => undefined
+        });
+      }
+    });
+  }
+
+  @HostListener('window:scroll')
+  onScroll(): void {
+    const r = this.report();
+    if (!r) return;
+    let current = this.activeSec();
+    for (const s of r.sections) {
+      const el = document.getElementById('prep-sec-' + s.id);
+      if (el && el.getBoundingClientRect().top <= 140) current = s.id;
+    }
+    if (current !== this.activeSec()) this.activeSec.set(current);
+  }
+
+  jumpTo(id: string): void {
+    this.activeSec.set(id);
+    document.getElementById('prep-sec-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  sortedQuestions(s: PrepSection): PrepQuestionItem[] {
+    const qs = [...(s.questions ?? [])];
+    return qs.sort((a, b) => Number(b.weaknessRelated ?? false) - Number(a.weaknessRelated ?? false));
+  }
+
+  knowledgeAnswer(id: string): string {
+    const k = this.knowledge().get(id);
+    return k?.betterAnswer || k?.myAnswer || '';
+  }
+
+  prepStds(q: PrepQuestionItem): { key: 'spoken' | 'technical'; label: string; text: string; isUser: boolean }[] {
+    const sp = prepStdText(q.stdSpoken);
+    const te = prepStdText(q.stdTechnical);
+    return [
+      { key: 'spoken', label: '口语版', text: sp.text, isUser: sp.isUser },
+      { key: 'technical', label: '技术版', text: te.text, isUser: te.isUser }
+    ];
+  }
+
+  playText(text: string): void {
+    if (text) void this.tts.toggle(text);
+  }
+
+  // ---------------- 生成 ----------------
+
+  async generate(): Promise<void> {
+    this.busy.set(true);
+    this.notice.set(null);
+    try {
+      const r = await this.api.generatePrepReport(this.entry().id, this.round().id, {
+        jdText: this.entry().jdText ?? null,
+        resumeText: this.resumeDraft().trim() || null,
+        experiences: this.experiencesDraft().trim() || null
+      }).toPromise();
+      const parsed = safeJson<PrepReport>(r?.prepReportJson);
+      this.notice.set(parsed?.generatedBy === 'local-aggregation'
+        ? '已用本地聚合生成(AI 网关未配置/未返回):内容来自 JD、题库往期原题与短板,接入 AI 后重新生成可得到完整稿子。'
+        : '备考报告已生成。');
+      this.changed.emit();
+    } catch (e) {
+      this.notice.set('生成失败:' + (e instanceof Error ? e.message : '未知错误'));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  // ---------------- 稿子块编辑 ----------------
+
+  editBlock(s: PrepSection, idx: number, b: PrepBlock): void {
+    this.blockDraft.set(b.userText || b.text || '');
+    this.editingBlock.set(s.id + ':' + idx);
+  }
+
+  async saveBlock(s: PrepSection, idx: number): Promise<void> {
+    const r = this.report();
+    if (!r) return;
+    const next: PrepReport = JSON.parse(JSON.stringify(r)) as PrepReport;
+    const sec = next.sections.find(x => x.id === s.id);
+    if (!sec?.blocks?.[idx]) return;
+    sec.blocks[idx].userText = this.blockDraft();
+    await this.persist(next);
+    this.editingBlock.set(null);
+  }
+
+  // ---------------- 备考题标准答案编辑(未入库) ----------------
+
+  editPrepStd(s: PrepSection, q: PrepQuestionItem, key: 'spoken' | 'technical', text: string): void {
+    this.prepStdDraft.set(text);
+    this.editingPrepStd.set(s.id + '|' + q.question + '|' + key);
+  }
+
+  async savePrepStd(s: PrepSection, q: PrepQuestionItem, key: 'spoken' | 'technical'): Promise<void> {
+    const r = this.report();
+    if (!r) return;
+    const next: PrepReport = JSON.parse(JSON.stringify(r)) as PrepReport;
+    const sec = next.sections.find(x => x.id === s.id);
+    const item = sec?.questions?.find(x => x.question === q.question);
+    if (!item) return;
+    const cur = key === 'spoken' ? item.stdSpoken : item.stdTechnical;
+    const ai = typeof cur === 'string' ? cur : (cur?.ai ?? null);
+    const merged = { ai, user: this.prepStdDraft() };
+    if (key === 'spoken') item.stdSpoken = merged; else item.stdTechnical = merged;
+    await this.persist(next);
+    this.editingPrepStd.set(null);
+  }
+
+  // ---------------- Tech Stack 同步 ----------------
+
+  editSyncAnswer(q: PrepQuestionItem): void {
+    if (!q.knowledgeId) return;
+    this.syncDraft.set(this.knowledgeAnswer(q.knowledgeId));
+    this.editingSyncQ.set(q.knowledgeId);
+  }
+
+  async saveSyncAnswer(q: PrepQuestionItem): Promise<void> {
+    if (!q.knowledgeId) return;
+    this.busy.set(true);
+    try {
+      await this.api.updateKnowledgeAnswer(q.knowledgeId,
+        { betterAnswer: this.syncDraft() }).toPromise();
+      const fresh = await this.api.getKnowledge(q.knowledgeId).toPromise();
+      if (fresh) {
+        const map = new Map(this.knowledge());
+        map.set(fresh.id, fresh);
+        this.knowledge.set(map);
+      }
+      this.editingSyncQ.set(null);
+      this.snack.open('已同步到 Tech Stack', '关闭', { duration: 2200 });
+    } catch {
+      this.snack.open('同步失败', '关闭', { duration: 3000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  setJoinCat(question: string, cat: string): void {
+    this.joinCategory.set({ ...this.joinCategory(), [question]: cat });
+  }
+
+  async joinStack(s: PrepSection, q: PrepQuestionItem): Promise<void> {
+    const cat = (this.joinCategory()[q.question] || q.category || '').trim();
+    if (!cat) {
+      this.snack.open('先选一个分类再加入 Tech Stack', '关闭', { duration: 3000 });
+      return;
+    }
+    this.busy.set(true);
+    try {
+      const std = prepStdText(q.stdTechnical).text || prepStdText(q.stdSpoken).text;
+      const res = await this.api.importCandidates({
+        sourceInterviewEntryId: this.entry().id,
+        sourceCompanyName: this.entry().companyName,
+        sourceDate: this.round().scheduledDate ?? undefined,
+        sourceRoundNo: this.round().order,
+        sourceRoundStage: this.round().stage,
+        sourceJobApplicationId: this.entry().jobApplicationId ?? undefined,
+        items: [{
+          question: q.question,
+          myAnswer: std || q.myAnswer || undefined,
+          category: cat,
+          difficulty: 3
+        }]
+      }).toPromise();
+      const newId = res?.itemIds?.[0];
+      if (newId) {
+        const r = this.report();
+        if (r) {
+          const next: PrepReport = JSON.parse(JSON.stringify(r)) as PrepReport;
+          const sec = next.sections.find(x => x.id === s.id);
+          const item = sec?.questions?.find(x => x.question === q.question);
+          if (item) { item.knowledgeId = newId; await this.persist(next); }
+        }
+        this.snack.open('已加入 Tech Stack', '关闭', { duration: 2500 });
+      } else {
+        this.snack.open('该题已在 Tech Stack 里(按来源+题面判重跳过)', '关闭', { duration: 3000 });
+      }
+    } catch {
+      this.snack.open('加入失败', '关闭', { duration: 3000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private async persist(next: PrepReport): Promise<void> {
+    await this.api.setPrepReport(this.entry().id, this.round().id, JSON.stringify(next)).toPromise();
+    this.changed.emit();
+  }
+
+  // ---------------- 机经对话框 / 导出 ----------------
+
+  // ---------------- 机经来源(外部搜索,与旧版头部同款入口,按定稿移入备考) ----------------
+
+  openIntel(): void {
+    const c = this.entry().companyName?.trim();
+    if (!c) return;
+    const q = encodeURIComponent(`${c} interview questions`);
+    window.open(`https://www.google.com/search?q=${q}`, '_blank', 'noopener');
+  }
+
+  openGlassdoor(): void {
+    const c = this.entry().companyName?.trim();
+    if (!c) return;
+    window.open(`https://www.glassdoor.com/Search/results.htm?keyword=${encodeURIComponent(c)}`,
+      '_blank', 'noopener');
+  }
+
+  openExport(): void {
+    const e = this.entry();
+    const r = this.round();
+    const date = new Date().toISOString().slice(0, 10);
+    const data: ExportDialogData = {
+      title: '导出备考报告',
+      subtitle: `${e.companyName} · Round ${r.order} ${r.stage}`,
+      fileBase: `${e.companyName}-Round${r.order}-备考-${date}`,
+      storageKey: 'prep',
+      toggles: [
+        { key: 'flow', label: '流程稿与要点(寒暄/介绍/反问/收尾)', defaultOn: true },
+        { key: 'qa', label: '题目与标准答案', defaultOn: true }
+      ],
+      buildDoc: sel => this.buildExportDoc(sel)
+    };
+    this.dialog.open(ExportDialogComponent, { width: '560px', maxWidth: '94vw', data });
+  }
+
+  private buildExportDoc(sel: Set<string>): ExportDoc {
+    const e = this.entry();
+    const r = this.round();
+    const rep = this.report();
+    const blocks: ExportBlock[] = [];
+    for (const s of rep?.sections ?? []) {
+      const isQaSection = (s.questions?.length ?? 0) > 0;
+      if (isQaSection && !sel.has('qa')) continue;
+      if (!isQaSection && !sel.has('flow')) continue;
+      blocks.push({ kind: 'heading', text: s.title });
+      for (const b of s.blocks ?? []) {
+        if (b.type === 'script') {
+          if (b.title) blocks.push({ kind: 'subheading', text: b.title });
+          blocks.push({ kind: 'para', text: b.userText || b.text || '' });
+        } else if (b.items?.length) {
+          if (b.title) blocks.push({ kind: 'subheading', text: b.title });
+          blocks.push({ kind: 'list', items: b.items });
+        } else if (b.text) blocks.push({ kind: 'para', text: b.text });
+      }
+      for (const q of s.questions ?? []) {
+        blocks.push({ kind: 'subheading', text: q.question });
+        const sp = prepStdText(q.stdSpoken);
+        const te = prepStdText(q.stdTechnical);
+        const linked = q.knowledgeId ? this.knowledgeAnswer(q.knowledgeId) : '';
+        if (linked) blocks.push({ kind: 'std', label: '标准答案(Tech Stack)', text: linked });
+        if (sp.text) blocks.push({ kind: 'std', label: '口语版', text: sp.text });
+        if (te.text) blocks.push({ kind: 'std', label: '技术版', text: te.text });
+      }
+    }
+    return {
+      title: `${e.companyName} · Round ${r.order} ${r.stage} 备考报告`,
+      subtitle: `${e.role}${r.scheduledDate ? ' · ' + r.scheduledDate : ''}`,
+      blocks
+    };
+  }
+}

@@ -1,0 +1,567 @@
+import {
+  Component, EventEmitter, Output, computed, effect, inject, input, signal
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import {
+  InterviewAsset, InterviewDetail, InterviewQuestion, InterviewRound
+} from '../../../../core/models/api.models';
+import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
+import { QaZoomService } from '../../../../core/qa-zoom/qa-zoom.service';
+import { TtsPlayerService } from '../../../../core/tts/tts-player.service';
+import { PlaybookV2Api } from '../playbook-v2.api';
+import {
+  DimReview, QuestionReview, RoundReview, TranscriptSegment,
+  parseQuestionReview, safeJson, serializeQuestionReview
+} from '../v2.models';
+
+interface StdEdit { spoken: string; technical: string; }
+
+/**
+ * 面试实录(2026-10-20 定稿):
+ * 对话原文按段渲染(说话人真名 + 原文,恒标「原文 · 未修改」),有录音时逐段可播、
+ * 常驻播放条 + 播放高亮;逐题分析卡四维(切题性/技术深度/表达/发音),
+ * 无录音时发音不评分、不猜测并明示;每题两版北美标准回答(口语/技术),
+ * 可朗读(当前句高亮)、可编辑(AI 原版与用户版分开存,用户版优先,可还原)。
+ * 字号控件只作用于 .qa-text(问题与答案),与 AI Practice 共用同一份偏好。
+ */
+@Component({
+  selector: 'app-round-record',
+  standalone: true,
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, QaZoomComponent],
+  template: `
+    <div class="record" [style.--qa-scale]="zoom.scale()">
+      <div class="toolbar">
+        <span class="tb-title">对话原文 <span class="orig-tag">原文 · 未修改</span></span>
+        <span class="spacer"></span>
+        <app-qa-zoom></app-qa-zoom>
+        @if (audioAsset()) {
+          <button mat-stroked-button (click)="toggleTranscribe()" [disabled]="busy()">
+            {{ hasTranscript() ? '重新转写' : '开始转写' }}
+          </button>
+        }
+        <button mat-stroked-button (click)="extractQuestions()" [disabled]="busy() || !segments().length">
+          从转写抽取问答
+        </button>
+        <button mat-raised-button color="primary" (click)="generateReview()" [disabled]="busy()">
+          {{ busy() ? '处理中…' : (roundReview() ? '重新生成分析' : '生成逐题分析') }}
+        </button>
+      </div>
+      @if (notice()) { <p class="notice">{{ notice() }}</p> }
+      @if (tts.error()) { <p class="notice warn">{{ tts.error() }}</p> }
+
+      <!-- 说话人改名 -->
+      @if (speakerList().length) {
+        <div class="rename-row">
+          <span class="lbl">说话人改名(全篇生效):</span>
+          <select class="fld sm" [ngModel]="renameFrom()" (ngModelChange)="renameFrom.set($event)">
+            @for (s of speakerList(); track s) { <option [value]="s">{{ s }}</option> }
+          </select>
+          <span>→</span>
+          <input class="fld sm" placeholder="真实姓名" [ngModel]="renameTo()" (ngModelChange)="renameTo.set($event)">
+          <button mat-stroked-button (click)="doRename()" [disabled]="!renameTo().trim()">改名</button>
+        </div>
+      }
+
+      <!-- 对话原文 -->
+      @if (segments().length) {
+        <div class="segments" data-testid="record-segments">
+          @for (seg of segments(); track $index) {
+            <div class="seg" [class.playing]="currentSeg() === $index">
+              <div class="seg-head">
+                <span class="speaker">{{ seg.speaker }}</span>
+                @if (seg.start != null) {
+                  <span class="time">{{ fmtTime(seg.start) }}–{{ fmtTime(seg.end) }}</span>
+                  @if (audioAsset()) {
+                    <button type="button" class="play-btn" (click)="playSegment($index)"
+                            [title]="playMode() === 'segment' ? '只播本段' : '从此处连播'">▶</button>
+                  }
+                }
+              </div>
+              <p class="seg-text qa-text">{{ seg.text }}</p>
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="empty">本轮还没有转写。用上方「＋ 添加材料 → 录音 / 转写文本」粘贴转写,或在「材料」页签上传录音后点「开始转写」。</p>
+      }
+
+      <!-- 整轮总览 -->
+      @if (roundReview(); as rv) {
+        <div class="overview" data-testid="round-overview">
+          <div class="ov-scores">
+            @if (rv.overall != null) { <div class="ov-big">{{ rv.overall }}<span class="ov-unit">综合分</span></div> }
+            @if (rv.passProbability != null) {
+              <div class="ov-pass">通过概率 ≈ {{ rv.passProbability }}%
+                <span class="ai-tag">AI 估计</span></div>
+            }
+          </div>
+          @if (rv.passBasis) { <p class="ov-line"><b>估计依据:</b>{{ rv.passBasis }}</p> }
+          @if (rv.strongest) { <p class="ov-line"><b>最强项:</b>{{ rv.strongest }}</p> }
+          @if (rv.weakest) { <p class="ov-line"><b>最大短板:</b>{{ rv.weakest }}</p> }
+          @if (rv.summary) { <p class="ov-line">{{ rv.summary }}</p> }
+        </div>
+      }
+
+      <!-- 逐题分析 -->
+      @for (q of questions(); track q.id) {
+        <article class="qcard" data-testid="question-card">
+          <div class="q-head">
+            <span class="q-idx">Q{{ q.sequence }}</span>
+            <span class="q-text qa-text">{{ q.questionText }}</span>
+            @if (reviewOf(q)?.overall != null) {
+              <span class="q-score">本题 {{ reviewOf(q)!.overall }} 分</span>
+            }
+          </div>
+          @if (q.askedBy) { <p class="q-by">提问人:{{ q.askedBy }}</p> }
+
+          @if (q.myAnswerText) {
+            <div class="my-answer">
+              <div class="ma-label">我的回答 <span class="orig-tag">原文 · 未修改</span></div>
+              <p class="qa-text">{{ q.myAnswerText }}</p>
+            </div>
+          }
+
+          @if (reviewOf(q); as rv) {
+            <div class="dims">
+              @for (d of dimList(rv); track d.key) {
+                <div class="dim">
+                  <div class="dim-head">
+                    <span>{{ d.label }}</span>
+                    @if (d.review.score != null) {
+                      <span class="dim-score">{{ d.review.score }}</span>
+                    } @else {
+                      <span class="dim-na">不评分</span>
+                    }
+                  </div>
+                  @if (d.review.score != null) {
+                    <div class="bar"><div class="bar-fill" [style.width.%]="d.review.score"></div></div>
+                    @if (d.review.comment) { <p class="dim-c">{{ d.review.comment }}</p> }
+                    @if (d.review.fix) { <p class="dim-f"><b>改法:</b>{{ d.review.fix }}</p> }
+                  } @else {
+                    <p class="dim-c">{{ d.key === 'pronunciation' ? '无录音,不评分 —— 发音只能靠录音判断,这里不猜测。' : '暂无评价。' }}</p>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- 标准回答:口语版 / 技术版 -->
+            @for (std of stdBlocks(q, rv); track std.key) {
+              <div class="std-block">
+                <div class="std-head">
+                  <span class="std-label">{{ std.label }}</span>
+                  @if (std.isUser) { <span class="mine-tag">已按你的版本</span> }
+                  <span class="spacer"></span>
+                  @if (editingQ() === q.id + ':' + std.key) {
+                    <button mat-stroked-button (click)="saveStd(q, std.key)">保存</button>
+                    <button mat-button (click)="editingQ.set(null)">取消</button>
+                  } @else {
+                    <button type="button" class="mini-btn" (click)="playStd(q, std)"
+                            [disabled]="!std.text">
+                      {{ tts.playingKey() === tts.keyFor(std.text) ? '⏸ 停止' : '▶ 播放' }}
+                    </button>
+                    <button type="button" class="mini-btn" (click)="startEditStd(q, std)">✎ 编辑</button>
+                    @if (std.isUser) {
+                      <button type="button" class="mini-btn" (click)="restoreStd(q, std.key)">还原 AI 原版</button>
+                    }
+                  }
+                </div>
+                @if (editingQ() === q.id + ':' + std.key) {
+                  <textarea class="std-edit qa-text" rows="5"
+                            [ngModel]="editDraft()[std.key]"
+                            (ngModelChange)="setDraft(std.key, $event)"></textarea>
+                } @else if (std.text) {
+                  <p class="std-text qa-text">@for (s of sentencesOf(std.text); track $index) {
+                    <span [class.sent-on]="isActiveSentence(q, std, $index)">{{ s }} </span>
+                  }</p>
+                } @else {
+                  <p class="empty-sm">尚未生成 —— 点上方「生成逐题分析」后会出现。</p>
+                }
+              </div>
+            }
+          } @else {
+            <p class="empty-sm">本题还没有逐题分析。点上方「生成逐题分析」生成四维评价与标准回答。</p>
+          }
+        </article>
+      }
+
+      <!-- 常驻播放条 -->
+      @if (audioAsset()) {
+        <div class="player-bar">
+          <button mat-stroked-button (click)="ensureAudio()">加载录音播放</button>
+          @if (audioUrl()) {
+            <audio #player controls [src]="audioUrl()" (timeupdate)="onTimeUpdate(player)"></audio>
+            <label class="rate">倍速
+              <select [ngModel]="rate()" (ngModelChange)="setRate(player, $event)">
+                <option [value]="0.75">0.75×</option>
+                <option [value]="1">1×</option>
+                <option [value]="1.25">1.25×</option>
+                <option [value]="1.5">1.5×</option>
+                <option [value]="2">2×</option>
+              </select>
+            </label>
+            <button type="button" class="mini-btn" (click)="playMode.set(playMode() === 'all' ? 'segment' : 'all')">
+              {{ playMode() === 'all' ? '连播全部' : '只播本段' }}
+            </button>
+          }
+          <span class="pb-name">{{ audioAsset()?.fileName }}</span>
+        </div>
+      }
+    </div>
+  `,
+  styles: [`
+    .record { padding: 4px 2px 70px; position: relative; }
+    .qa-text { font-size: calc(15px * var(--qa-scale, 1)); line-height: 1.65; }
+    .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .tb-title { font-size: 14px; font-weight: 700; }
+    .orig-tag { font-size: 10.5px; font-weight: 600; color: #2e7d32; border: 1px solid #a5d6a7;
+                border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: 2px; }
+    .spacer { flex: 1; }
+    .notice { font-size: 12.5px; color: var(--yi-text-muted, #777); }
+    .notice.warn { color: #b3261e; }
+    .rename-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+    .rename-row .lbl { font-size: 12.5px; color: var(--yi-text-muted, #777); }
+    .fld.sm { border: 1px solid var(--yi-border, #ccc); border-radius: 7px; padding: 5px 8px;
+              font-size: 12.5px; background: transparent; color: inherit; }
+    .segments { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
+    .seg { border-left: 3px solid var(--yi-border, #ddd); padding: 2px 0 2px 12px; border-radius: 2px; }
+    .seg.playing { border-left-color: var(--yi-accent, #3f51b5); background: color-mix(in srgb, var(--yi-accent, #3f51b5) 6%, transparent); }
+    .seg-head { display: flex; align-items: center; gap: 8px; }
+    .speaker { font-size: 13px; font-weight: 700; }
+    .time { font-size: 11.5px; color: var(--yi-text-muted, #888); font-variant-numeric: tabular-nums; }
+    .play-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+                width: 22px; height: 22px; border-radius: 50%; font-size: 10px; cursor: pointer; }
+    .seg-text { margin: 3px 0 0; white-space: pre-wrap; }
+    .empty { font-size: 13px; color: var(--yi-text-muted, #888); padding: 14px 0; }
+    .empty-sm { font-size: 12.5px; color: var(--yi-text-muted, #999); }
+    .overview { border: 1px solid var(--yi-border, #ddd); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
+    .ov-scores { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+    .ov-big { font-size: 30px; font-weight: 800; }
+    .ov-unit { font-size: 12px; font-weight: 600; color: var(--yi-text-muted, #888); margin-left: 6px; }
+    .ov-pass { font-size: 16px; font-weight: 700; }
+    .ai-tag { font-size: 10.5px; border: 1px solid var(--yi-border, #ccc); border-radius: 999px;
+              padding: 1px 7px; color: var(--yi-text-muted, #888); margin-left: 4px; }
+    .ov-line { font-size: 13.5px; margin: 6px 0 0; line-height: 1.6; }
+    .qcard { border: 1px solid var(--yi-border, #ddd); border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
+    .q-head { display: flex; gap: 10px; align-items: flex-start; }
+    .q-idx { font-size: 12px; font-weight: 800; color: var(--yi-accent, #3f51b5);
+             border: 1px solid currentColor; border-radius: 6px; padding: 2px 6px; margin-top: 2px; }
+    .q-text { font-weight: 600; flex: 1; }
+    .q-score { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+    .q-by { font-size: 12px; color: var(--yi-text-muted, #888); margin: 4px 0 0; }
+    .my-answer { background: color-mix(in srgb, var(--yi-text, #222) 4%, transparent);
+                 border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+    .ma-label { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #777); }
+    .my-answer p { margin: 4px 0 0; white-space: pre-wrap; }
+    .dims { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin: 10px 0; }
+    .dim { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 10px 12px; }
+    .dim-head { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 700; }
+    .dim-score { font-size: 14px; }
+    .dim-na { font-size: 11.5px; color: var(--yi-text-muted, #999); font-weight: 600; }
+    .bar { height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--yi-text, #222) 10%, transparent); margin: 7px 0; }
+    .bar-fill { height: 100%; border-radius: 3px; background: var(--yi-accent, #3f51b5); }
+    .dim-c { font-size: 12.5px; line-height: 1.55; margin: 4px 0 0; }
+    .dim-f { font-size: 12.5px; line-height: 1.55; margin: 4px 0 0; color: var(--yi-text-muted, #666); }
+    .std-block { margin-top: 12px; border-top: 1px dashed var(--yi-border, #ddd); padding-top: 10px; }
+    .std-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .std-label { font-size: 12.5px; font-weight: 700; color: var(--yi-accent, #3f51b5); }
+    .mine-tag { font-size: 10.5px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+                border-radius: 999px; padding: 1px 7px; }
+    .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+                border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; }
+    .std-text { margin: 6px 0 0; white-space: pre-wrap; }
+    .std-text .sent-on { background: color-mix(in srgb, var(--yi-accent, #3f51b5) 22%, transparent); border-radius: 4px; }
+    .std-edit { width: 100%; box-sizing: border-box; border: 1px solid var(--yi-border, #ccc);
+                border-radius: 8px; padding: 8px 10px; background: transparent; color: inherit; margin-top: 6px; }
+    .player-bar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+                  background: var(--yi-surface, #fff); border: 1px solid var(--yi-border, #ddd);
+                  border-radius: 12px; padding: 10px 14px; margin-top: 16px;
+                  box-shadow: 0 -4px 18px rgba(0,0,0,.08); }
+    .player-bar audio { height: 34px; flex: 1; min-width: 220px; }
+    .rate { font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
+    .pb-name { font-size: 12px; color: var(--yi-text-muted, #888); }
+  `]
+})
+export class RoundRecordComponent {
+  readonly entry = input.required<InterviewDetail>();
+  readonly round = input.required<InterviewRound>();
+  @Output() readonly changed = new EventEmitter<void>();
+
+  private readonly api = inject(PlaybookV2Api);
+  private readonly snack = inject(MatSnackBar);
+  readonly zoom = inject(QaZoomService);
+  readonly tts = inject(TtsPlayerService);
+
+  readonly segments = signal<TranscriptSegment[]>([]);
+  readonly audioUrl = signal<string | null>(null);
+  readonly busy = signal(false);
+  readonly notice = signal<string | null>(null);
+  readonly currentSeg = signal(-1);
+  readonly playMode = signal<'all' | 'segment'>('all');
+  readonly rate = signal(1);
+  readonly renameFrom = signal('');
+  readonly renameTo = signal('');
+  readonly editingQ = signal<string | null>(null);
+  readonly editDraft = signal<StdEdit>({ spoken: '', technical: '' });
+  readonly activeSentence = signal<{ key: string; idx: number } | null>(null);
+
+  readonly roundAssets = computed(() =>
+    (this.entry().assets ?? []).filter(a => a.roundId === this.round().id));
+  readonly audioAsset = computed(() =>
+    this.roundAssets().find(a => a.kind === 'Audio') ?? null);
+  readonly hasTranscript = computed(() => this.segments().length > 0);
+  readonly questions = computed(() =>
+    (this.entry().questions ?? [])
+      .filter(q => q.roundId === this.round().id)
+      .sort((a, b) => a.sequence - b.sequence));
+  readonly roundReview = computed(() =>
+    safeJson<RoundReview>(this.round().reviewJson));
+  readonly speakerList = computed(() =>
+    [...new Set(this.segments().map(s => s.speaker))]);
+
+  private loadedRoundId = '';
+
+  constructor() {
+    this.tts.onSentence = (key, idx) => {
+      this.activeSentence.set(idx == null ? null : { key, idx });
+    };
+    effect(() => {
+      const rid = this.round().id;
+      if (rid !== this.loadedRoundId) {
+        this.loadedRoundId = rid;
+        this.currentSeg.set(-1);
+        void this.loadTranscript();
+      }
+      const list = this.speakerList();
+      if (list.length && !list.includes(this.renameFrom())) this.renameFrom.set(list[0]);
+    });
+  }
+
+  private async loadTranscript(): Promise<void> {
+    const candidates = this.roundAssets()
+      .filter(a => a.kind === 'Transcript' || a.kind === 'Text' || a.kind === 'Notes');
+    const all: TranscriptSegment[] = [];
+    for (const a of candidates) {
+      try {
+        const t = await this.api.getTranscript(this.entry().id, a.id).toPromise();
+        const segs = safeJson<TranscriptSegment[]>(t?.segmentsJson ?? null);
+        if (segs?.length) all.push(...segs);
+        else if (t?.transcriptText) {
+          all.push(...t.transcriptText.split(/\r?\n/).filter(x => x.trim())
+            .map(x => ({ speaker: '转写', text: x.trim() })));
+        }
+      } catch { /* 单件失败不阻塞其它材料 */ }
+    }
+    this.segments.set(all);
+  }
+
+  reviewOf(q: InterviewQuestion): QuestionReview | null {
+    return parseQuestionReview(q.reviewJson);
+  }
+
+  dimList(rv: QuestionReview): { key: string; label: string; review: DimReview }[] {
+    const d = rv.dims ?? {};
+    const na: DimReview = { score: null };
+    return [
+      { key: 'relevance', label: '切题性', review: d.relevance ?? na },
+      { key: 'depth', label: '技术深度', review: d.depth ?? na },
+      { key: 'expression', label: '表达', review: d.expression ?? na },
+      { key: 'pronunciation', label: '发音', review: d.pronunciation ?? na }
+    ];
+  }
+
+  stdBlocks(q: InterviewQuestion, rv: QuestionReview):
+    { key: 'spoken' | 'technical'; label: string; text: string; isUser: boolean }[] {
+    const mk = (key: 'spoken' | 'technical', label: string,
+      std: { ai?: string | null; user?: string | null } | undefined) => ({
+      key, label,
+      text: std?.user || std?.ai || (key === 'spoken' ? (q.recommendedAnswer ?? '') : ''),
+      isUser: !!std?.user
+    });
+    return [
+      mk('spoken', '北美标准回答 · 口语版', rv.stdSpoken),
+      mk('technical', '北美标准回答 · 技术版', rv.stdTechnical)
+    ];
+  }
+
+  sentencesOf(text: string): string[] {
+    return TtsPlayerService.splitSentences(text);
+  }
+
+  isActiveSentence(q: InterviewQuestion, std: { key: string; text: string }, idx: number): boolean {
+    const a = this.activeSentence();
+    return !!a && a.idx === idx && this.tts.playingKey() === this.tts.keyFor(std.text);
+  }
+
+  async playStd(q: InterviewQuestion, std: { key: string; text: string }): Promise<void> {
+    // 以答案文本为缓存键(与 TTS 服务内部一致);stdKey 仅作组件内标识。
+    await this.tts.toggle(std.text);
+  }
+
+  startEditStd(q: InterviewQuestion, std: { key: 'spoken' | 'technical'; text: string }): void {
+    const rv = this.reviewOf(q);
+    const next: StdEdit = {
+      spoken: rv?.stdSpoken?.user || rv?.stdSpoken?.ai || q.recommendedAnswer || '',
+      technical: rv?.stdTechnical?.user || rv?.stdTechnical?.ai || ''
+    };
+    next[std.key] = std.text;
+    this.editDraft.set(next);
+    this.editingQ.set(q.id + ':' + std.key);
+  }
+
+  setDraft(key: 'spoken' | 'technical', v: string): void {
+    this.editDraft.set({ ...this.editDraft(), [key]: v });
+  }
+
+  async saveStd(q: InterviewQuestion, key: 'spoken' | 'technical'): Promise<void> {
+    const rv = this.reviewOf(q) ?? {};
+    const draft = this.editDraft();
+    const next: QuestionReview = {
+      ...rv,
+      stdSpoken: key === 'spoken'
+        ? { ai: rv.stdSpoken?.ai ?? null, user: draft.spoken }
+        : rv.stdSpoken,
+      stdTechnical: key === 'technical'
+        ? { ai: rv.stdTechnical?.ai ?? null, user: draft.technical }
+        : rv.stdTechnical
+    };
+    await this.api.setQuestionReview(this.entry().id, q.id, serializeQuestionReview(next)).toPromise();
+    this.editingQ.set(null);
+    this.snack.open('已保存你的版本', '关闭', { duration: 2200 });
+    this.changed.emit();
+  }
+
+  async restoreStd(q: InterviewQuestion, key: 'spoken' | 'technical'): Promise<void> {
+    const rv = this.reviewOf(q);
+    if (!rv) return;
+    const next: QuestionReview = { ...rv };
+    if (key === 'spoken') next.stdSpoken = { ai: rv.stdSpoken?.ai ?? null, user: null };
+    else next.stdTechnical = { ai: rv.stdTechnical?.ai ?? null, user: null };
+    await this.api.setQuestionReview(this.entry().id, q.id, serializeQuestionReview(next)).toPromise();
+    this.snack.open('已还原为 AI 原版', '关闭', { duration: 2200 });
+    this.changed.emit();
+  }
+
+  async generateReview(): Promise<void> {
+    this.busy.set(true);
+    this.notice.set(null);
+    try {
+      if (!this.questions().length && this.segments().length) {
+        await this.api.extractQuestions(this.entry().id, this.round().id).toPromise();
+      }
+      await this.api.generateRoundReview(this.entry().id, this.round().id).toPromise();
+      this.snack.open('逐题分析已生成', '关闭', { duration: 2500 });
+      this.changed.emit();
+    } catch (e) {
+      this.notice.set('分析生成失败:' + errText(e) +
+        '(沙盒/未配置 AI 时可先用接口写入复盘数据,或配置 AI 网关后重试)');
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async extractQuestions(): Promise<void> {
+    this.busy.set(true);
+    try {
+      const r = await this.api.extractQuestions(this.entry().id, this.round().id).toPromise();
+      this.notice.set(r && r.created > 0
+        ? `已从转写抽出 ${r.created} 道题,进入下方逐题分析与「问答入库」。`
+        : '本轮题目已存在或转写里没有可抽取的问答。');
+      this.changed.emit();
+    } catch (e) {
+      this.notice.set('抽取失败:' + errText(e));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async toggleTranscribe(): Promise<void> {
+    const a = this.audioAsset();
+    if (!a) return;
+    this.busy.set(true);
+    try {
+      await this.api.startTranscription(this.entry().id, a.id).toPromise();
+      this.notice.set('转写任务已提交,完成后刷新本页可见分段转写(依赖转写 Worker 与消息队列)。');
+    } catch (e) {
+      this.notice.set('转写提交失败:' + errText(e));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async doRename(): Promise<void> {
+    const from = this.renameFrom();
+    const to = this.renameTo().trim();
+    if (!from || !to || from === to) return;
+    this.busy.set(true);
+    try {
+      await this.api.renameSpeaker(this.entry().id, this.round().id, from, to).toPromise();
+      this.renameTo.set('');
+      this.snack.open(`已把「${from}」全篇改为「${to}」`, '关闭', { duration: 2500 });
+      this.changed.emit();
+      void this.loadTranscript();
+    } catch (e) {
+      this.notice.set('改名失败:' + errText(e));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  ensureAudio(): void {
+    const a = this.audioAsset();
+    if (!a || this.audioUrl()) return;
+    this.api.audioBlob(this.entry().id, a.id).subscribe({
+      next: blob => this.audioUrl.set(URL.createObjectURL(blob)),
+      error: () => this.notice.set('录音加载失败(文件可能已丢失)。')
+    });
+  }
+
+  playSegment(idx: number): void {
+    this.ensureAudio();
+    const tryPlay = () => {
+      const audio = document.querySelector<HTMLAudioElement>('.player-bar audio');
+      const seg = this.segments()[idx];
+      if (!audio || !seg || seg.start == null) return;
+      audio.currentTime = seg.start;
+      void audio.play();
+      this.currentSeg.set(idx);
+    };
+    if (this.audioUrl()) tryPlay();
+    else setTimeout(tryPlay, 600);
+  }
+
+  onTimeUpdate(audio: HTMLAudioElement): void {
+    const t = audio.currentTime;
+    const segs = this.segments();
+    let idx = -1;
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      if (s.start != null && t >= s.start && (s.end == null || t < s.end)) { idx = i; break; }
+      if (s.start != null && t >= s.start) idx = i;
+    }
+    if (idx !== this.currentSeg()) this.currentSeg.set(idx);
+    const cur = segs[this.currentSeg()];
+    if (this.playMode() === 'segment' && cur?.end != null && t >= cur.end) audio.pause();
+  }
+
+  setRate(audio: HTMLAudioElement, r: number): void {
+    this.rate.set(r);
+    audio.playbackRate = r;
+  }
+
+  fmtTime(sec: number | null | undefined): string {
+    if (sec == null) return '';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+}
+
+function errText(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  const anyE = e as { error?: { detail?: string; title?: string }; message?: string };
+  return anyE?.error?.detail || anyE?.error?.title || anyE?.message || '未知错误';
+}

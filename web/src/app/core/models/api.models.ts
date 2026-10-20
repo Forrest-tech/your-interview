@@ -74,6 +74,8 @@ export interface Application {
   salary?: string;
   status: ApplicationStatus;
   priority?: string;
+  /** 投递来源(如 LinkedIn / Indeed / 官网)。 */
+  source?: string;
   appliedDate?: string;
   /** 投递截止日(ISO 日期,如 2026-09-30)。 */
   deadline?: string;
@@ -272,6 +274,11 @@ export interface InterviewQuestion {
   followUpQuestionsJson?: string;
   weaknessTagsJson?: string;
   askedAtSeconds?: number;
+  /** 2026-10-20 v2:归轮 / 提问人 / 逐题复盘 JSON。 */
+  roundId?: string | null;
+  askedBy?: string | null;
+  reviewJson?: string | null;
+  mastery?: number;
 }
 
 export interface InterviewRound {
@@ -291,6 +298,10 @@ export interface InterviewRound {
   emailsJson?: string;
   transcript?: string;
   recordingUrl?: string;
+  checklistJson?: string;
+  /** 2026-10-20 v2:整轮复盘汇总 / 结构化备考报告 JSON。 */
+  reviewJson?: string | null;
+  prepReportJson?: string | null;
 }
 
 export interface PrepQuestion {
@@ -431,12 +442,44 @@ export interface InterviewAsset {
   roundId?: string | null;
   /** Pre = 面试前，Post = 面试后。 */
   phase?: string | null;
+  /** 2026-10-20 v2:统一入口元数据 JSON(解析字段/截图引用/AI 摘要/提取安排/处理状态)。 */
+  metaJson?: string | null;
+  /** 转写全文(详情接口在 AssetDto 里不下发全文;前端按需调 transcript 端点)。 */
+  transcriptText?: string | null;
+}
+
+export interface InterviewWeakness {
+  id: string;
+  category: string;
+  title: string;
+  detail?: string;
+  evidence?: string;
+  severity: number;
+  suggestion?: string;
+  occurrenceCount: number;
+  sourceType: string;
+  createdAt: string;
+}
+
+export interface InterviewAction {
+  id: string;
+  title: string;
+  detail?: string;
+  dueDate?: string;
+  isDone: boolean;
+  createdAt: string;
 }
 
 export interface InterviewDetail extends InterviewEntry {
   assets?: InterviewAsset[];
   questions?: InterviewQuestion[];
   rounds?: InterviewRound[];
+  weaknesses?: InterviewWeakness[];
+  actions?: InterviewAction[];
+  /** 关联的 Tracker 投递 id(沟通记录同源与简历分来源)。 */
+  jobApplicationId?: string | null;
+  questionsToAskJson?: string | null;
+  debriefJson?: string | null;
 }
 
 /** 分析任务台账行 —— 「流水线记录」区直出(投递尝试与失败原因留痕)。 */

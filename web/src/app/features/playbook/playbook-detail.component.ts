@@ -1,1482 +1,401 @@
 import {
-  Component, OnDestroy, OnInit, ViewChild, computed, inject, signal
+  Component, computed, effect, inject, signal, viewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
-import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatTabsModule } from '@angular/material/tabs';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatDividerModule } from '@angular/material/divider';
-import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDialog } from '@angular/material/dialog';
-import { SubnavService } from '../../layout/subnav.service';
-import { GuidanceInputDialogComponent } from './guidance-input-dialog.component';
-import { PasteTextDialogComponent } from './paste-text-dialog.component';
-import { QuestionBankComponent } from './components/qa/question-bank.component';
-import { CoverageMiniComponent } from './components/qa/coverage-mini.component';
-import { AnalysisReportComponent } from './components/analysis/analysis-report.component';
-import { OverviewWidgetsComponent } from './components/analysis/overview-widgets.component';
-import { PrepBriefComponent } from './components/brief/brief.component';
-import { RoundsTimelineComponent } from './components/brief/rounds-timeline.component';
-import { PlaybookHeaderComponent } from './components/brief/playbook-header.component';
-import { catchError, of } from 'rxjs';
+import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  AnalysisJob, GuidanceMaterial, GuidanceVersion, InterviewAsset, InterviewDetail,
-  InterviewRound, InterviewStatus, KnowledgeItem, MasteryLevel, OfferProbability,
-  Paged, PassProbability, PrepQuestion, QuestionCandidate, RoundEmail, SpeechMetrics
+  Application, InterviewDetail, InterviewRound
 } from '../../core/models/api.models';
-import { QaQuestion } from './components/qa/qa.models';
-import { AuthService } from '../../core/auth/auth.service';
+import { PlaybookV2Api } from './redesign/playbook-v2.api';
+import { RoundReview, safeJson } from './redesign/v2.models';
+import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
+import { RoundCardComponent } from './redesign/round/round-card.component';
+import { CommLogComponent } from './redesign/round/comm-log.component';
 
-/** 六维显示用的元数据 —— 顺序即评测报告里的推荐阅读顺序。 */
-interface DimensionMeta {
-  key: string;
-  labelKey: string;
-  hintKey: string;
-  value?: number;
-}
+interface ResumeFileItem { id: string; fileName: string; isPrimary?: boolean; }
 
 /**
- * 机经详情 —— 整个应用价值最集中的一页。
- *
- * 结构说明:
- *   概览(结论)/ 问答(证据)/ 材料(输入)/ 编辑(元数据)四个页签,
- *   刻意按"使用频率"而非"数据表结构"来分:复盘时 90% 时间在"问答"页。
- *
- * 轮询:转写与分析都是异步流水线(状态机 Transcribing → Transcribed → Analyzing → Analyzed),
- * 这里每 15 秒拉一次详情。之所以用 setInterval 而不是长连接:
- *   一个自用工具的实时性要求就到这里,SSE/WebSocket 的复杂度不值得。
- *   ngOnDestroy 必须清掉定时器,否则离开页面后仍在偷偷发请求。
+ * Playbook 详情页(2026-10-20 最终定稿 v2 全新设计):
+ * ① 条目头(公司/岗位/状态 + 投递与 Recruiter 信息 + 下一步卡 + 岗位四格条)
+ * ② 条目级统一入口「＋ 添加材料」(邮件 / 录音·转写 / 备注)
+ * ③ 页面页签只剩 轮次 / 沟通记录(沟通有未处理安排时红点计数)
+ * ④ 轮次 stepper(一屏一轮)+ Round 工作卡
+ * ⑤ 轮次页下方保留:复盘与待办(行动项 + 复盘记录)
+ * 旧版面(概览/简报/流水线等页签)按定稿取消;日历仍是独立页,不受影响。
  */
 @Component({
   selector: 'app-playbook-detail',
   standalone: true,
   imports: [
     CommonModule, FormsModule, RouterLink,
-    MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
-    MatChipsModule, MatTabsModule, MatFormFieldModule, MatInputModule,
-    MatSelectModule, MatCheckboxModule, MatSnackBarModule, MatDividerModule, MatTooltipModule,
-    QuestionBankComponent, CoverageMiniComponent, AnalysisReportComponent, OverviewWidgetsComponent,
-    PrepBriefComponent, RoundsTimelineComponent, PlaybookHeaderComponent
+    MatButtonModule, MatIconModule, MatMenuModule,
+    IntakePanelComponent, RoundCardComponent, CommLogComponent
   ],
   templateUrl: './playbook-detail.component.html',
   styleUrl: './playbook-detail.component.scss'
 })
-export class PlaybookDetailComponent implements OnInit, OnDestroy {
-  private readonly api = inject(ApiClient);
-  /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
-  private readonly i18n = inject(I18nService);
-  t = (key: string): string => this.i18n.t(key);
-  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
-
+export class PlaybookDetailComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly api = inject(ApiClient);
+  private readonly v2 = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
-  private readonly dialog = inject(MatDialog);
-  private readonly subnav = inject(SubnavService);
-  readonly auth = inject(AuthService);
-
-  /** 当前选中的 tab(0=Overview, 1=Rounds, 2=Guidance, 3=Questions, 4=Analysis, 5=Assets, 6=Edit)。 */
-  readonly selectedTab = signal(0);
-
-  /** tab 切换：进入 Assets 总览时刷新条目（Rounds 里新传的资产要能立刻看到）。 */
-  onTabChange(idx: number): void {
-    this.selectedTab.set(idx);
-    if (idx === 5) this.load(false); // Assets 是第 6 个 tab
-  }
-
-  /** Rounds 时间线组件（Assets 总览点资产 → 跳转定位用，2026-10-19）。 */
-  @ViewChild('roundsTl') roundsTl?: RoundsTimelineComponent;
+  readonly i18n = inject(I18nService);
 
   readonly id = signal('');
-  readonly loading = signal(true);
-  readonly error = signal<string | null>(null);
   readonly entry = signal<InterviewDetail | null>(null);
+  readonly application = signal<Application | null>(null);
+  readonly resumeFile = signal<ResumeFileItem | null>(null);
+  readonly loading = signal(true);
+  readonly loadError = signal<string | null>(null);
 
-  /** ★ #12:公司情报快捷搜索 (Glassdoor/1p3a/LeetCode Discuss)。 */
-  searchCompanyIntel(): void {
-    const c = this.entry()?.companyName?.trim();
-    if (!c) return;
-    const q = encodeURIComponent(`${c} interview questions`);
-    window.open(`https://www.google.com/search?q=${q}`, '_blank');
-  }
-  searchGlassdoor(): void {
-    const c = this.entry()?.companyName?.trim();
-    if (!c) return;
-    window.open(`https://www.glassdoor.com/Search/results.htm?keyword=${encodeURIComponent(c)}`, '_blank');
-  }
-  readonly busy = signal<string | null>(null);
+  readonly pageTab = signal<'rounds' | 'comm'>('rounds');
+  readonly selectedRoundId = signal<string | null>(null);
+  readonly pendingComm = signal(0);
+  readonly expandedCell = signal<'jd' | 'company' | 'resume' | 'score' | null>(null);
+  readonly editingBasic = signal(false);
+  readonly confirmDelete = signal(false);
+  readonly newActionTitle = signal('');
+  readonly debriefDraft = signal('');
 
-  /** 轮询定时器句柄 —— 必须在销毁时清掉。 */
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  readonly intake = viewChild(IntakePanelComponent);
 
-  /** 需要轮询的中间态:流水线在跑,用户希望看到自己"进度到哪了"。 */
-  private static readonly POLLING_STATES: string[] = ['Transcribing', 'Analyzing'];
+  // 基本信息编辑草稿
+  readonly bCompany = signal('');
+  readonly bRole = signal('');
+  readonly bResult = signal('');
+  readonly bNotes = signal('');
 
-  readonly statusOptions: { value: InterviewStatus }[] = [
-    { value: 'Draft' },
-    { value: 'AssetsUploaded' },
-    { value: 'Transcribing' },
-    { value: 'Transcribed' },
-    { value: 'Analyzing' },
-    { value: 'Analyzed' },
-    { value: 'Failed' }
-  ];
+  readonly rounds = computed(() =>
+    [...(this.entry()?.rounds ?? [])].sort((a, b) => a.order - b.order));
 
-  readonly questionCategories = ['Technical', 'SystemDesign', 'Behavioral', 'Coding', 'Culture', 'Other'];
-
-  /** 轮次阶段 / 结果选项 —— 与后端 InterviewRoundOutcome / Stage 约定一致。 */
-  readonly roundStages = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
-  readonly roundOutcomes = ['Pending', 'Passed', 'Rejected', 'Ghosted', 'Cancelled', 'NoShow'];
-
-  /** 轮次结果 → 本地化标签(找不到键时回退英文枚举)。 */
-  roundOutcomeLabelFor(o: string): string {
-    const key = 'pb.roundOutcome.' + o;
-    const translated = this.i18n.t(key);
-    return translated !== key ? translated : o;
-  }
-
-  /** 轮次行内编辑草稿:key = round.id,打开编辑时从行数据复制一份。 */
-  roundDrafts: Record<string, InterviewRound> = {};
-  /** 新增轮次的阶段选择。 */
-  newRoundStage = 'Technical';
-
-  transcriptDrafts: Record<string, string> = {};
-
-  /** 编辑表单:点「编辑」页签时用当前数据填充。 */
-  editForm = {
-    companyName: '', role: '', roundNo: 1, interviewDate: '',
-    interviewFormat: '', interviewers: '', location: '', result: '',
-    jdText: '', jdSummary: '', companyProfile: '', notes: ''
-  };
-  editLoaded = false;
-
-  readonly questions = computed(() => this.entry()?.questions ?? []);
-
-  /** Q&A 页签用的题目:从 Knowledge(Tech Stack)取,Tech Stack 是唯一数据源 */
-  readonly knowledgeQuestions = signal<QaQuestion[]>([]);
-
-  /** 从 Knowledge 加载本条目的题目(按 entryId 筛选 SourcesJson) */
-  private loadKnowledgeQuestions(): void {
-    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', { entryId: this.id(), pageSize: 100 })
-      .subscribe({
-        next: (res) => {
-          const items = res.items ?? [];
-          this.knowledgeQuestions.set(items.map((k, i) => ({
-            id: k.id,
-            sequence: i + 1,
-            questionText: k.question || k.title,
-            myAnswerText: k.myAnswer ?? null,
-            recommendedAnswer: k.betterAnswer ?? null,
-            category: k.topic ?? null,
-            difficulty: k.difficulty ?? null,
-            mastery: this.masteryToNumber(k.mastery),
-          } as QaQuestion)));
-        },
-        error: () => this.knowledgeQuestions.set([])
-      });
-  }
-
-  /** MasteryLevel 字符串 → QA 用的数字(0=待练,1=练习中,2=已掌握,3=卡壳) */
-  private masteryToNumber(m: MasteryLevel | undefined): number {
-    switch (m) {
-      case 'Learning': return 1;
-      case 'Familiar':
-      case 'Mastered': return 2;
-      case 'NeedsReview': return 3;
-      default: return 0;  // New
+  /** 头部联系人行:各轮面试官汇总(Recruiter 沟通对象在沟通记录里)。 */
+  readonly recruiterLine = computed(() => {
+    const names = new Set<string>();
+    for (const r of this.rounds()) {
+      for (const n of (r.interviewers ?? '').split(/[,、/]/)) {
+        const t = n.trim();
+        if (t) names.add(t);
+      }
     }
-  }
-  readonly assets = computed(() => this.entry()?.assets ?? []);
-  readonly rounds = computed(() => this.entry()?.rounds ?? []);
-
-  // ================= 资产总览（2026-10-19：按 Round 分组 + 筛选） =================
-  /** Assets tab 上传区：轮次（必填）/ 阶段。 */
-  readonly uploadRoundId = signal('');
-  readonly uploadPhase = signal('Post');
-  /** 筛选：阶段（all/Pre/Post）、类型（all/kind）。 */
-  readonly assetPhaseFilter = signal('all');
-  readonly assetKindFilter = signal('all');
-
-  /** 轮次 id → 轮次序号（分组标题用）。 */
-  readonly roundOrderOf = computed(() => {
-    const m: Record<string, number> = {};
-    for (const r of this.rounds()) m[r.id] = r.order;
-    return m;
+    return [...names].join('、');
   });
 
-  /** 过滤后的资产。 */
-  readonly filteredAssets = computed(() => {
-    const pf = this.assetPhaseFilter();
-    const kf = this.assetKindFilter();
-    return this.assets().filter((a) => {
-      if (pf !== 'all' && (a.phase ?? '').toLowerCase() !== pf.toLowerCase()) return false;
-      if (kf !== 'all' && (a.kind ?? '').toLowerCase() !== kf.toLowerCase()) return false;
-      return true;
-    });
-  });
-
-  /** 资产分组：[{roundId, roundOrder, label, assets}]，无轮次的放最后「未归类」。 */
-  readonly assetGroups = computed(() => {
-    const groups = new Map<string, InterviewAsset[]>();
-    for (const a of this.filteredAssets()) {
-      const key = a.roundId ?? '__legacy';
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(a);
-    }
-    const orderOf = this.roundOrderOf();
-    return [...groups.entries()]
-      .map(([roundId, items]) => ({
-        roundId,
-        roundOrder: roundId === '__legacy' ? Number.MAX_SAFE_INTEGER : (orderOf[roundId] ?? 0),
-        label: roundId === '__legacy' ? this.t('pb.asset.legacyGroup') : `Round ${orderOf[roundId] ?? '?'}`,
-        assets: [...items].sort((x, y) => x.uploadedAt.localeCompare(y.uploadedAt)),
-      }))
-      .sort((a, b) => a.roundOrder - b.roundOrder);
-  });
-
-  /** Assets 总览点资产 → 跳到 Rounds tab 并定位轮次。 */
-  jumpToRound(roundId: string): void {
-    if (roundId === '__legacy') return;
-    this.selectedTab.set(1); // Rounds 是第 2 个 tab
-    this.roundsTl?.focusRound(roundId);
-  }
-
-  /** 资产类型标签。 */
-  assetKindLabel(kind: string): string {
-    const map: Record<string, string> = {
-      Audio: '录音', Transcript: '转写', Text: '文本', Notes: '纪要',
-      PrepDoc: '备考文档', Email: '邮件', Feedback: '反馈', Other: '其他',
-    };
-    return map[kind] ?? kind;
-  }
-
-  /** 每轮的通过概率(roundId -> PassProbability),懒加载。 */
-  readonly passProbs = signal<Record<string, PassProbability>>({});
-
-  /** 加载所有真实轮次(非 synthetic)的通过概率。 */
-  loadPassProbabilities(): void {
-    for (const r of this.displayRounds()) {
-      if (!r.id || r.id.startsWith('__synthetic') || this.passProbs()[r.id]) continue;
-      this.api.get<PassProbability>(`/api/interviews/rounds/${r.id}/pass-probability`)
-        .pipe(catchError(() => of(null)))
-        .subscribe((p) => {
-          if (p) this.passProbs.update((m) => ({ ...m, [r.id]: p }));
-        });
-    }
-  }
-
-  /** 取某轮的概率(未加载时返回 null)。 */
-  passProbFor(roundId: string): PassProbability | null {
-    return this.passProbs()[roundId] ?? null;
-  }
-
-  /** 概率颜色:>=70 绿,40-69 黄,<40 红。 */
-  probColor(p: number): string {
-    if (p >= 70) return '#2e7d32';
-    if (p >= 40) return '#f9a825';
-    return '#c62828';
-  }
-
-  /** 整单 offer 概率(漏斗模型),头部显示。 */
-  readonly offerProb = signal<OfferProbability | null>(null);
-
-  loadOfferProbability(): void {
-    const id = this.id();
-    if (!id) return;
-    this.api.get<OfferProbability>(`/api/interviews/${id}/offer-probability`)
-      .pipe(catchError(() => of(null)))
-      .subscribe((p) => this.offerProb.set(p));
-  }
-
-  /** 概率因子 tooltip:按当前 locale 格式化后端返回的结构化因子。 */
-  formatFactors(op: OfferProbability): string {
-    return op.factors.map((f) => this.formatFactor(f)).join('\n');
-  }
-
-  formatFactor(f: { key: string; arg1: number; arg2: number; arg3: number }): string {
-    switch (f.key) {
-      case 'no_history':
-        return this.t('pb.op.noHistory').replace('{r}', String(f.arg1));
-      case 'history_rate':
-        return this.t('pb.op.historyRate')
-          .replace('{r}', String(f.arg1)).replace('{o}', String(f.arg2)).replace('{t}', String(f.arg3));
-      case 'qa_bonus':
-        return this.t('pb.op.qaBonus').replace('{n}', String(f.arg1));
-      case 'prep_bonus':
-        return this.t('pb.op.prepBonus').replace('{n}', String(f.arg1)).replace('{b}', String(f.arg2));
-      case 'funnel_bonus':
-        return this.t('pb.op.funnelBonus').replace('{r}', String(f.arg1)).replace('{b}', String(f.arg2));
-      case 'pp_no_history':
-        return this.t('pb.pp.noHistory');
-      case 'pp_history_rate':
-        return this.t('pb.pp.historyRate').replace('{o}', String(f.arg1)).replace('{t}', String(f.arg2));
-      case 'pp_prep_list':
-        return this.t('pb.pp.prepList');
-      case 'pp_has_notes':
-        return this.t('pb.pp.hasNotes');
-      case 'pp_has_email':
-        return this.t('pb.pp.hasEmail');
-      case 'pp_qa_accum':
-        return this.t('pb.pp.qaAccum').replace('{n}', String(f.arg1)).replace('{b}', String(f.arg2));
-      default:
-        return f.key;
-    }
-  }
-
-  /** Rounds tab 显示用:有显式 rounds 就用,没有就从 entry 基本信息合成一个 Round 1 —— 不让 tab 空着。 */
-  readonly displayRounds = computed(() => {
+  readonly selectedRound = computed(() => {
     const rs = this.rounds();
-    if (rs.length > 0) return rs;
+    if (!rs.length) return null;
+    return rs.find(r => r.id === this.selectedRoundId()) ?? rs[rs.length - 1];
+  });
+
+  readonly statusText = computed(() => {
     const e = this.entry();
-    if (!e) return rs;
-    // 合成 Round 1:用 entry 上的轮次/日期/面试官/结果
-    return [{
-      id: '__synthetic_r1',
-      order: e.roundNo ?? 1,
-      stage: '',
-      outcome: e.result ?? '',
-      scheduledDate: e.interviewDate ?? '',
-      interviewers: e.interviewers ?? '',
-      notes: '',
-    }];
+    if (!e) return '';
+    if (e.result) return e.result;
+    if (this.rounds().some(r => r.outcome === 'Pending')) return '进行中';
+    if ((e.status as string) === 'Analyzed') return '已完成';
+    return e.result ?? '已完成';
   });
 
-  /** 未来 14 天内的面试(按日期排序),显示在 Rounds tab 顶部。 */
-  readonly upcomingRounds = computed(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const limit = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
-    return this.displayRounds()
-      .filter(r => r.scheduledDate && r.scheduledDate >= today && r.scheduledDate <= limit)
-      .sort((a, b) => (a.scheduledDate ?? '').localeCompare(b.scheduledDate ?? ''));
-  });
-  readonly audioAssets = computed(() =>
-    this.assets().filter((a) => (a.kind ?? '').toLowerCase() === 'audio'));
-
-  // ------------------------------------------------------------ 指导材料(缺口2)
-  readonly guidance = signal<GuidanceMaterial | null>(null);
-  readonly guidanceVersions = signal<GuidanceVersion[]>([]);
-  readonly guidanceLoading = signal(false);
-
-  /** 当前材料的 Markdown → 安全 HTML(极简渲染:标题/加粗/列表/换行,先转义防 XSS)。 */
-  readonly guidanceHtml = computed(() => {
-    const pasted = this.pastedMaterial();
-    if (pasted) return this.renderMarkdown(pasted);
-    return this.renderMarkdown(this.guidance()?.contentMarkdown ?? '');
-  });
-
-  /** 手动粘贴的备战材料( localStorage,按面试 ID 存)——聊天里生成的直接贴进来。 */
-  readonly pastedMaterial = signal<string | null>(null);
-
-  private pastedKey(): string { return `pb-pasted-${this.id()}`; }
-
-  loadPastedMaterial(): void {
-    try {
-      this.pastedMaterial.set(localStorage.getItem(this.pastedKey()));
-    } catch { /* 无痕模式等存不了就跳过 */ }
-  }
-
-  pasteMaterial(): void {
-    const current = this.pastedMaterial() ?? '';
-    // 用 textarea 对话框:大文本 prompt 放不下,这里用一个简单的可编辑区
-    const w = window.open('', '_blank', 'width=700,height=500');
-    if (!w) {
-      this.snack.open(this.t('pb.guidance.popupBlocked'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
-    w.document.write(`<title>${this.t('pb.guidance.pasteTitle')}</title>
-      <textarea id="t" style="width:100%;height:85%;font-family:monospace">${current.replace(/</g, '&lt;')}</textarea><br>
-      <button onclick="opener.postMessage({type:'pb-paste',text:document.getElementById('t').value},'*');window.close()">
-      ${this.t('common.save')}</button>`);
-    const handler = (e: MessageEvent) => {
-      if (e.data?.type !== 'pb-paste') return;
-      window.removeEventListener('message', handler);
-      const text = (e.data.text ?? '').trim();
+  readonly readiness = computed(() => {
+    const e = this.entry();
+    if (!e) return 0;
+    let s = 0;
+    if (e.jdText || e.jdSummary) s += 20;
+    if (e.companyProfile) s += 15;
+    if (this.rounds().some(r => r.prepReportJson)) s += 25;
+    if (e.questionsToAskJson && e.questionsToAskJson !== '[]') s += 15;
+    const next = this.rounds().find(r => r.outcome === 'Pending');
+    if (next?.checklistJson) {
       try {
-        if (text) localStorage.setItem(this.pastedKey(), text);
-        else localStorage.removeItem(this.pastedKey());
-      } catch { /* 忽略 */ }
-      this.pastedMaterial.set(text || null);
-      this.snack.open(this.t('pb.guidance.pasted'), this.t('common.close'), { duration: 2500 });
+        const items = JSON.parse(next.checklistJson) as { done?: boolean }[];
+        if (items.length) {
+          s += Math.round(25 * items.filter(i => i.done).length / items.length);
+        }
+      } catch { /* 清单损坏时不计分 */ }
+    }
+    return Math.min(100, s);
+  });
+
+  /** 下一步建议:按"最该做的一件事"排序,避免把待办一股脑堆给用户。 */
+  readonly nextStep = computed(() => {
+    const e = this.entry();
+    if (!e) return null;
+    if (this.pendingComm() > 0) {
+      return {
+        text: `处理沟通记录里的 ${this.pendingComm()} 条新安排`,
+        action: 'comm' as const, btn: '去处理', roundId: undefined as string | undefined
+      };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = this.rounds().find(r =>
+      r.outcome === 'Pending' && (!r.scheduledDate || r.scheduledDate >= today));
+    if (upcoming) {
+      return {
+        text: `备考 Round ${upcoming.order} · ${upcoming.stage}` +
+          (upcoming.scheduledDate ? `(${upcoming.scheduledDate}${upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''})` : ''),
+        action: 'prep' as const, btn: '去备考', roundId: upcoming.id as string | undefined
+      };
+    }
+    const unreviewed = [...this.rounds()].reverse()
+      .find(r => r.outcome !== 'Pending' && !r.reviewJson);
+    if (unreviewed) {
+      return {
+        text: `Round ${unreviewed.order} 已结束,还没生成复盘分析`,
+        action: 'review' as const, btn: '去复盘', roundId: unreviewed.id as string | undefined
+      };
+    }
+    const app = this.application();
+    if (app?.nextFollowUpAt && app.nextFollowUpAt.slice(0, 10) <= today) {
+      return {
+        text: '到了跟进时间,给 Recruiter 发一封简短跟进邮件',
+        action: 'comm' as const, btn: '看沟通记录', roundId: undefined as string | undefined
+      };
+    }
+    return {
+      text: '暂时没有待办,等对方回复;超过一周没消息可主动跟进一次',
+      action: 'none' as const, btn: '', roundId: undefined as string | undefined
     };
-    window.addEventListener('message', handler);
+  });
+
+  constructor() {
+    this.route.paramMap.subscribe(pm => {
+      const id = pm.get('id');
+      if (id && id !== this.id()) {
+        this.id.set(id);
+        void this.load();
+      }
+    });
+    // 首次加载后选默认轮次:第一个未开始的,否则最近一轮。
+    effect(() => {
+      const rs = this.rounds();
+      if (rs.length && !rs.some(r => r.id === this.selectedRoundId())) {
+        const pending = rs.find(r => r.outcome === 'Pending');
+        this.selectedRoundId.set((pending ?? rs[rs.length - 1]).id);
+      }
+    });
   }
 
-  clearPastedMaterial(): void {
-    try { localStorage.removeItem(this.pastedKey()); } catch { /* 忽略 */ }
-    this.pastedMaterial.set(null);
+  async load(): Promise<void> {
+    this.loading.set(true);
+    this.loadError.set(null);
+    try {
+      const e = await this.api.get<InterviewDetail>(`/api/interviews/${this.id()}`).toPromise();
+      if (!e) throw new Error('empty');
+      this.entry.set(e);
+      this.debriefDraft.set(parseDebrief(e.debriefJson));
+      if (e.jobApplicationId) {
+        this.api.get<Application>(`/api/jobs/applications/${e.jobApplicationId}`).subscribe({
+          next: app => this.application.set(app),
+          error: () => undefined
+        });
+        this.api.get<ResumeFileItem[]>(`/api/jobs/applications/${e.jobApplicationId}/resume-files`)
+          .subscribe({
+            next: files => this.resumeFile.set(
+              files.find(f => f.isPrimary) ?? files[0] ?? null),
+            error: () => undefined
+          });
+        void this.refreshPendingComm(e.jobApplicationId);
+      } else {
+        this.pendingComm.set(countPendingFromAssets(e));
+      }
+    } catch {
+      this.loadError.set('加载失败,请返回列表重试。');
+    } finally {
+      this.loading.set(false);
+    }
   }
 
-  /** 去 Mock 实战:带上公司/职位,方便选择对应模板。 */
+  private async refreshPendingComm(appId: string): Promise<void> {
+    try {
+      const rows = await this.v2.listCommunications(appId).toPromise();
+      const items = (rows ?? []).map(r => PlaybookV2Api.commFromJobs(r));
+      this.pendingComm.set(items.filter(c =>
+        !c.meta.movedToRoundId && PlaybookV2Api.isPending(c)).length);
+    } catch { /* 红点统计失败不阻塞页面 */ }
+  }
+
+  onCommPending(n: number): void { this.pendingComm.set(n); }
+
+  async onChildChanged(): Promise<void> {
+    const keepRound = this.selectedRoundId();
+    await this.load();
+    if (keepRound && this.rounds().some(r => r.id === keepRound)) {
+      this.selectedRoundId.set(keepRound);
+    }
+  }
+
+  // ---------------- 头部动作 ----------------
+
+  openIntake(type: IntakeType = 'email', roundId?: string): void {
+    this.intake()?.openPanel(type, roundId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   goMock(): void {
     const e = this.entry();
-    this.router.navigate(['/mock'], {
-      queryParams: {
-        company: e?.companyName ?? '',
-        role: e?.role ?? ''
-      }
+    void this.router.navigate(['/mock'], {
+      queryParams: { company: e?.companyName ?? '', role: e?.role ?? '' }
     });
   }
 
-  /** 目录:从当前材料提取 h2/h3,点击滚动定位。 */
-  readonly toc = computed(() => {
-    const pasted = this.pastedMaterial();
-    const md = pasted ?? this.guidance()?.contentMarkdown ?? '';
-    const items: { id: string; text: string; level: number }[] = [];
-    let idx = 0;
-    for (const line of md.split('\n')) {
-      const t = line.trim();
-      const m = t.match(/^(#{2,3})\s+(.+)/);
-      if (m) {
-        items.push({
-          id: `toc-${idx++}`,
-          text: m[2].replace(/[*_`]/g, ''),
-          level: m[1].length
-        });
-      }
+  openJd(): void {
+    const link = this.application()?.link;
+    if (link) { window.open(link, '_blank', 'noopener'); return; }
+    this.expandedCell.set(this.expandedCell() === 'jd' ? null : 'jd');
+  }
+
+  doNextStep(): void {
+    const ns = this.nextStep();
+    if (!ns) return;
+    if (ns.action === 'comm') this.pageTab.set('comm');
+    else if ((ns.action === 'prep' || ns.action === 'review') && ns.roundId) {
+      this.selectedRoundId.set(ns.roundId);
+      this.pageTab.set('rounds');
     }
-    return items;
-  });
-
-  scrollToToc(id: string): void {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  private renderMarkdown(md: string): string {
-    const esc = md
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const lines = esc.split('\n');
-    const out: string[] = [];
-    let inList = false;
-    let tocIdx = 0;
-    for (const line of lines) {
-      const t = line.trim();
-      if (/^#{1,3}\s/.test(t)) {
-        if (inList) { out.push('</ul>'); inList = false; }
-        const level = t.match(/^#+/)![0].length;
-        // h2/h3 加 id,与 toc() 的顺序对应
-        const idAttr = level >= 2 ? ` id="toc-${tocIdx++}"` : '';
-        out.push(`<h${level + 1}${idAttr}>${this.inlineMd(t.replace(/^#+\s*/, ''))}</h${level + 1}>`);
-      } else if (/^[-*]\s/.test(t)) {
-        if (!inList) { out.push('<ul>'); inList = true; }
-        out.push(`<li>${this.inlineMd(t.replace(/^[-*]\s*/, ''))}</li>`);
-      } else if (/^\d+[.)]\s/.test(t)) {
-        if (inList) { out.push('</ul>'); inList = false; }
-        out.push(`<p class="md-num">${this.inlineMd(t)}</p>`);
-      } else if (t === '') {
-        if (inList) { out.push('</ul>'); inList = false; }
-      } else {
-        if (inList) { out.push('</ul>'); inList = false; }
-        out.push(`<p>${this.inlineMd(t)}</p>`);
-      }
-    }
-    if (inList) out.push('</ul>');
-    return out.join('\n');
+  toggleCell(cell: 'jd' | 'company' | 'resume' | 'score'): void {
+    this.expandedCell.set(this.expandedCell() === cell ? null : cell);
   }
 
-  private inlineMd(s: string): string {
-    return s
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  roundScore(r: InterviewRound): number | null {
+    return safeJson<RoundReview>(r.reviewJson)?.overall ?? null;
   }
 
-  loadGuidance(): void {
-    this.guidanceLoading.set(true);
-    this.api.get<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance`).subscribe({
-      next: (g) => {
-        this.guidance.set(g);
-        this.guidanceLoading.set(false);
-        this.loadGuidanceVersions();
-      },
-      error: () => {
-        // 404 = 还没生成过,不是错误
-        this.guidance.set(null);
-        this.guidanceLoading.set(false);
-        this.loadGuidanceVersions();
-      }
-    });
+  roundStateIcon(r: InterviewRound): string {
+    if (r.outcome === 'Passed') return '✓';
+    if (r.outcome === 'Failed') return '✗';
+    if (r.outcome === 'Cancelled') return '—';
+    return '·';
   }
 
-  private loadGuidanceVersions(): void {
-    this.api.get<GuidanceVersion[]>(`/api/interviews/${this.id()}/guidance/versions`).subscribe({
-      next: (v) => this.guidanceVersions.set(v ?? []),
-      error: () => this.guidanceVersions.set([])
-    });
-  }
+  // ---------------- 基本信息 / 删除 ----------------
 
-  generateGuidance(): void {
-    // 弹出输入对话框:收集 JD/简历/面经/自定义要求
-    // 简历从 My Account 自动带入,JD 从条目自动带入
-    let savedResume = '';
-    try {
-      savedResume = localStorage.getItem('yi-my-resume') ?? '';
-    } catch { /* 忽略 */ }
-    const dialogRef = this.dialog.open(GuidanceInputDialogComponent, {
-      data: {
-        jdText: this.entry()?.jdText ?? '',
-        resumeText: savedResume,
-        interviewExperiences: '',
-        customRequirements: ''
-      },
-      width: '720px',
-      maxHeight: '90vh'
-    });
-    dialogRef.afterClosed().subscribe((result) => {
-      if (!result) return; // 用户取消
-      if (!confirm(this.t('pb.guidance.confirmGenerate'))) return;
-      this.busy.set('guidance');
-      this.api.post<GuidanceMaterial>(`/api/interviews/${this.id()}/guidance/generate`, {
-        jdText: result.jdText?.trim() || null,
-        resumeText: result.resumeText?.trim() || null,
-        interviewExperiences: result.interviewExperiences?.trim() || null,
-        customRequirements: result.customRequirements?.trim() || null
-      }).subscribe({
-      next: (g) => {
-        this.busy.set(null);
-        this.guidance.set(g);
-        this.loadGuidanceVersions();
-        this.snack.open(
-          this.t('pb.guidance.generated').replace('{version}', String(g.version)),
-          this.t('common.close'), { duration: 3000 });
-      },
-      error: (e: Error) => {
-        this.busy.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 6000 });
-      }
-      });
-    });
-  }
-
-  selectGuidanceVersion(v: GuidanceVersion): void {
-    this.guidanceLoading.set(true);
-    this.api.get<GuidanceMaterial>(
-      `/api/interviews/${this.id()}/guidance`, { version: v.version }).subscribe({
-      next: (g) => { this.guidance.set(g); this.guidanceLoading.set(false); },
-      error: (e: Error) => {
-        this.guidanceLoading.set(false);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-      }
-    });
-  }
-
-  readonly selectedGuidanceVersion = computed(() => {
-    const g = this.guidance();
-    if (!g) return null;
-    return this.guidanceVersions().find((v) => v.version === g.version) ?? null;
-  });
-
-  /** 填充词明细 → [词, 次数][] ,按次数降序,供模板展示。 */
-  fillerEntries(m: SpeechMetrics): [string, number][] {
-    const d = m.fillerWordBreakdown ?? {};
-    return Object.entries(d).sort((a, b) => b[1] - a[1]);
-  }
-
-  /** 结构骨架标记 → [标记, 次数][],按次数降序。 */
-  structureMarkerEntries(m: SpeechMetrics): [string, number][] {
-    const d = m.structureMarkers ?? {};
-    return Object.entries(d).sort((a, b) => b[1] - a[1]);
-  }
-
-  selectGuidanceVersionById(id: string): void {
-    const v = this.guidanceVersions().find((x) => x.id === id);
-    if (v) this.selectGuidanceVersion(v);
-  }
-
-  /** 导出 PDF:走浏览器打印(用户选"另存为 PDF")。 */
-  exportGuidancePdf(): void {
-    window.print();
-  }
-
-  /** 导出 Word:拼一个 Word 能打开的 HTML 文件下载。 */
-  exportGuidanceWord(): void {
-    const g = this.guidance();
-    if (!g) return;
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${this.guidanceHtml()}</body></html>`;
-    const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = this.t('pb.guidance.fileName').replace('{version}', String(g.version));
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  /**
-   * 分析任务台账(流水线记录)。
-   * 与详情分开拉:详情 15s 轮询时任务列表也该跟着刷新(投递中 → 已回写)。
-   */
-  readonly jobs = signal<AnalysisJob[]>([]);
-
-  /** 台账状态 → 本地化标签(与后端状态机一一对应,直出不下拉;找不到键时回退英文)。 */
-  jobStatusLabelFor(s: string): string {
-    const key = 'pb.jobStatus.' + s;
-    const translated = this.i18n.t(key);
-    return translated !== key ? translated : s;
-  }
-
-  /** 任务行文案:"尝试 1/3"。 */
-  attemptsLabel(j: AnalysisJob): string {
-    return this.i18n.t('pb.asset.attempts')
-      .replace('{a}', String(j.attempts))
-      .replace('{m}', String(j.maxAttempts));
-  }
-
-  private loadJobs(): void {
-    this.api.get<AnalysisJob[]>(`/api/interviews/${this.id()}/jobs`)
-      .subscribe({ next: (j) => this.jobs.set(j ?? []), error: () => this.jobs.set([]) });
-  }
-  readonly isPolling = computed(() =>
-    PlaybookDetailComponent.POLLING_STATES.includes(this.entry()?.status ?? ''));
-
-  readonly dims = computed<DimensionMeta[]>(() => {
+  startEditBasic(): void {
     const e = this.entry();
-    return [
-      { key: 'overall', labelKey: 'dim.overall', hintKey: 'pb.dimHint.overall', value: e?.overallScore },
-      { key: 'pronunciation', labelKey: 'dim.pronunciation', hintKey: 'pb.dimHint.pronunciation', value: e?.pronunciationScore },
-      { key: 'fluency', labelKey: 'dim.fluency', hintKey: 'pb.dimHint.fluency', value: e?.fluencyScore },
-      { key: 'structure', labelKey: 'dim.structure', hintKey: 'pb.dimHint.structure', value: e?.structureScore },
-      { key: 'technicalDepth', labelKey: 'dim.technicalDepth', hintKey: 'pb.dimHint.technicalDepth', value: e?.technicalDepthScore },
-      { key: 'relevance', labelKey: 'dim.relevance', hintKey: 'pb.dimHint.relevance', value: e?.relevanceScore }
-    ];
-  });
-
-  /** 只展示有分的维度做进度条 —— 零分和"没评"在视觉上必须区分开。 */
-  readonly scoredDims = computed(() => this.dims().filter((d) => d.value !== undefined));
-
-  ngOnInit(): void {
-    const id = this.route.snapshot.paramMap.get('id') ?? '';
-    this.id.set(id);
-    if (!id) {
-      this.error.set(this.t('pb.detail.missingId'));
-      this.loading.set(false);
-      return;
-    }
-    // 支持 ?tab=rounds 从全局 upcoming 跳进来直达轮次页签
-    if (this.route.snapshot.queryParamMap.get('tab') === 'rounds') {
-      this.selectedTab.set(1);
-    }
-    this.load();
-    this.loadPastedMaterial();
-
-    // 详情页的子导航:切换 tab,而不是滚动(列表页才用滚动锚点)。
-    // Tab 顺序: 0=Overview, 1=Rounds, 2=Guidance, 3=Questions, 4=Assets, 5=Edit
-    const tab = (idx: number, labelKey: string, icon: string) => ({
-      key: 'pb-tab:' + idx,
-      labelKey,
-      icon,
-      active: () => this.selectedTab() === idx,
-      action: () => this.selectedTab.set(idx)
-    });
-    this.subnav.register('/playbook/' + id, [
-      tab(0, 'sub.overview', 'dashboard'),
-      tab(3, 'sub.questions', 'forum'),
-      tab(5, 'sub.assets', 'folder_open'),
-      tab(6, 'sub.edit', 'edit_note')
-    ]);
+    if (!e) return;
+    this.bCompany.set(e.companyName);
+    this.bRole.set(e.role);
+    this.bResult.set(e.result ?? '');
+    this.bNotes.set(e.notes ?? '');
+    this.editingBasic.set(true);
+    this.confirmDelete.set(false);
   }
 
-  ngOnDestroy(): void {
-    this.stopPolling();
-    // 释放试听用的 Object URL —— 泄漏会让已卸载的音频 blob 无法被 GC
-    for (const url of this.assetAudioUrls.values()) URL.revokeObjectURL(url);
-    this.assetAudioUrls.clear();
-    this.subnav.unregister('/playbook/' + this.id());
-  }
-
-  // ---------------------------------------------------------------- 试听
-
-  /**
-   * 已上传录音的试听缓存(assetId → objectURL)。
-   *
-   * ★ 2026-09-24(M1):录音现在真正落盘了,支持回放。
-   * 不能把后端端点直接塞给 `<audio src>` —— 浏览器发那个请求不带
-   * Authorization 头,而端点带鉴权 → 必然 401(ai-practice 踩过的坑)。
-   * 所以走 ApiClient(带 Bearer)拉 blob,再 createObjectURL。
-   * 缓存后同一条重复试听不再重复下载。
-   */
-  readonly assetAudioUrls = new Map<string, string>();
-  readonly audioLoadingId = signal<string | null>(null);
-
-  /** 拉取并缓存某条录音的音频流,失败如实提示。 */
-  playAsset(a: InterviewAsset): void {
-    if (this.assetAudioUrls.has(a.id)) return;   // 已缓存(模板直接渲染 <audio>)
-
-    this.audioLoadingId.set(a.id);
-    this.api.getBlob(`/api/interviews/${this.id()}/assets/${a.id}/audio`)
-      .subscribe({
-        next: (blob) => {
-          this.assetAudioUrls.set(a.id, URL.createObjectURL(blob));
-          this.audioLoadingId.set(null);
-        },
-        error: (e: Error) => {
-          this.audioLoadingId.set(null);
-          this.snack.open(e.message || this.t('pb.asset.audioLoadFail'), this.t('common.close'), { duration: 5000 });
-        }
-      });
-  }
-
-  // ---------------------------------------------------------------- 加载
-
-  /** 题库增删后立即刷新(计数等),不再等 15 秒轮询。 */
-  onQuestionBankChanged(): void {
-    this.load(false);
-  }
-
-  load(showSpinner = true): void {
-    if (showSpinner) this.loading.set(true);
-    this.error.set(null);
-    this.loadJobs();
-    this.loadGuidance();
-    this.loadKnowledgeQuestions();
-
-    this.api.get<InterviewDetail>(`/api/interviews/${this.id()}`).subscribe({
-      next: (d) => {
-        this.entry.set(d);
-        this.loading.set(false);
-        this.syncPolling(d.status);
-        // 编辑表单只在第一次加载时填充 —— 否则用户正在输入时被轮询覆盖
-        if (!this.editLoaded) {
-          this.fillEditForm(d);
-          this.editLoaded = true;
-        }
-        // 加载各轮次通过概率
-        this.loadPassProbabilities();
-        // 加载整单 offer 概率
-        this.loadOfferProbability();
-      },
-      error: (e: Error) => {
-        this.error.set(e.message);
-        this.loading.set(false);
-        this.stopPolling();
-      }
-    });
-  }
-
-  /** 轮询只在"流水线进行中"才开;状态落定就立刻停,免得空转。 */
-  private syncPolling(status: string): void {
-    const shouldPoll = PlaybookDetailComponent.POLLING_STATES.includes(status);
-
-    if (shouldPoll && !this.pollTimer) {
-      this.pollTimer = setInterval(() => this.load(false), 15000);
-    } else if (!shouldPoll && this.pollTimer) {
-      this.stopPolling();
-    }
-  }
-
-  private stopPolling(): void {
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
-  }
-
-  // ---------------------------------------------------------------- 动作
-
-  startTranscription(): void {
-    this.run('transcription', 'pb.action.transcriptionStarted',
-      this.api.post<void>(`/api/interviews/${this.id()}/transcription/start`));
-  }
-
-  triggerAnalysis(): void {
-    this.run('analyze', 'pb.action.analysisStarted',
-      this.api.post<void>(`/api/interviews/${this.id()}/analyze`));
-  }
-
-  /** 三个动作按钮共用一条流程:置忙 → 请求 → 提示 → 重载详情。 */
-  private run(tag: string, msgKey: string, obs: ReturnType<ApiClient['post']>): void {
-    if (this.busy()) return;
-    this.busy.set(tag);
-
-    (obs as ReturnType<ApiClient['post']>).subscribe({
-      next: () => {
-        this.busy.set(null);
-        this.snack.open(this.i18n.t(msgKey), this.t('common.close'), { duration: 4000 });
-        // 流水线状态变了,重新拉一次顺便把轮询打开
-        setTimeout(() => this.load(false), 1200);
-      },
-      error: (e: Error) => {
-        this.busy.set(null);
-        // ★ F-07:409 是合法业务规则(没有可分析的转写),但绝不能把后端原文
-        //   直接抛给用户 —— 按错误码映射成本地化的"原因 + 下一步"提示。
-        const code = (e as unknown as { code?: string }).code;
-        if (code === 'Analysis.InvalidState') {
-          this.snack.open(this.i18n.t('pb.action.analysisBlocked'), this.t('common.close'), { duration: 8000 });
-        } else {
-          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-        }
-      }
-    });
-  }
-
-  // ---------------------------------------------------------------- 材料
-
-  /**
-   * 上传录音(multipart)。
-   *
-   * ★ 2026-09-24(M1 修复):后端 /assets 现在按 Content-Type 分流 ——
-   * FormData 走真正的文件落盘(原子写 + SHA-256),数据库登记相对路径;
-   * 之前这里发 FormData、后端却只收 JSON,类型不匹配,录音从未存上过。
-   */
-  onFileSelected(ev: Event, assetId?: string): void {
-    const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    const roundId = this.uploadRoundId();
-    if (!roundId) {
-      this.snack.open(this.t('pb.asset.pickRound'), this.t('common.close'), { duration: 4000 });
-      input.value = '';
-      return;
-    }
-    this.busy.set('upload');
-    this.api.upload<{ id: string }>(
-      `/api/interviews/${this.id()}/assets`, file,
-      { roundId, phase: this.uploadPhase() })
-      .subscribe({
-        next: () => {
-          input.value = '';   // 清空,否则同名文件第二次选不会触发 change
-          this.busy.set(null);
-          this.snack.open(this.t('pb.asset.uploaded'), this.t('common.close'), { duration: 4000 });
-          this.load(false);
-        },
-        error: (e: Error) => {
-          input.value = '';
-          this.busy.set(null);
-          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-        }
-      });
-  }
-
-  /** 粘贴文本建资产(A6):对话框收文本 → POST { textContent } → Kind=Text 登记。 */
-  pasteTextAsset(): void {
-    const roundId = this.uploadRoundId();
-    if (!roundId) {
-      this.snack.open(this.t('pb.asset.pickRound'), this.t('common.close'), { duration: 4000 });
-      return;
-    }
-    const ref = this.dialog.open(PasteTextDialogComponent, { width: '640px' });
-    ref.afterClosed().subscribe((text: string | null) => {
-      if (!text) return;
-      this.busy.set('upload');
-      this.api.post<{ id: string }>(
-        `/api/interviews/${this.id()}/assets`,
-        { textContent: text, roundId, phase: this.uploadPhase() })
-        .subscribe({
-          next: () => {
-            this.busy.set(null);
-            this.snack.open(this.t('pb.asset.textSaved'), this.t('common.close'), { duration: 4000 });
-            this.load(false);
-          },
-          error: (e: Error) => {
-            this.busy.set(null);
-            this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-          }
-        });
-    });
-  }
-
-  /** 粘贴转写文本 → 回写该 material 的 transcript。 */
-  saveTranscript(asset: InterviewAsset): void {
-    const text = (this.transcriptDrafts[asset.id] ?? '').trim();
-    if (!text) {
-      this.snack.open(this.t('pb.transcript.emptyFirst'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
-
-    this.busy.set(asset.id);
-    // segmentsJson 传合法空数组字符串而不是 null —— 后端把它当"无分段"解析,
-    // 传 null 在部分 JSON 解析路径上会退化成空串导致 400。
-    this.api.post<void>(
-      `/api/interviews/${this.id()}/assets/${asset.id}/transcript`,
-      { fullText: text, segmentsJson: '[]' })
-      .subscribe({
-        next: () => {
-          this.busy.set(null);
-          this.transcriptDrafts[asset.id] = '';
-          this.snack.open(this.t('pb.transcript.saved'), this.t('common.close'), { duration: 3000 });
-          this.load(false);
-        },
-        error: (e: Error) => {
-          this.busy.set(null);
-          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-        }
-      });
-  }
-
-
-  readonly showCandidates = signal(false);
-  readonly candidates = signal<QuestionCandidate[]>([]);
-  readonly candidatesLoading = signal(false);
-
-  readonly selectedCandidates = computed(() => this.candidates().filter((c) => c.selected));
-
-  openCandidateImport(): void {
-    this.showCandidates.set(true);
-    this.candidatesLoading.set(true);
-    this.api.get<QuestionCandidate[]>(`/api/interviews/${this.id()}/question-candidates`).subscribe({
-      next: (list) => {
-        // 默认全选;编辑草稿预填当前值
-        for (const c of list) {
-          c.selected = true;
-          c.editText = c.questionText;
-          c.editAnswer = c.myAnswerText ?? c.recommendedAnswer ?? '';
-          c.editCategory = c.category ?? 'Technical';
-        }
-        this.candidates.set(list);
-        this.candidatesLoading.set(false);
-      },
-      error: (e: Error) => {
-        this.candidatesLoading.set(false);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-      }
-    });
-  }
-
-  closeCandidateImport(): void {
-    this.showCandidates.set(false);
-    this.candidates.set([]);
-  }
-
-  toggleAllCandidates(select: boolean): void {
-    this.candidates.update((list) => list.map((c) => ({ ...c, selected: select })));
-  }
-
-  importCandidates(): void {
-    const sel = this.selectedCandidates();
-    if (sel.length === 0) {
-      this.snack.open(this.t('pb.import.selectAtLeastOne'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
+  async saveBasic(): Promise<void> {
     const e = this.entry();
-    this.busy.set('candidates');
-    this.api.post<{ created: number; skipped: number; total: number }>(
-      '/api/knowledge/import-candidates',
-      {
-        entryId: this.id(),
-        company: e?.companyName ?? null,
-        date: e?.interviewDate ?? null,
-        roundNo: e?.roundNo ?? null,
-        roundStage: null,
-        applicationId: null,
-        items: sel.map((c) => ({
-          title: (c.editText ?? c.questionText).slice(0, 80),
-          topic: c.editCategory ?? 'Technical',
-          question: c.editText ?? c.questionText,
-          difficulty: c.difficulty ?? 3,
-          importance: c.gotStuck ? 4 : 3,
-          betterAnswer: c.editAnswer || null,
-          clientKey: c.questionId
-        }))
-      }).subscribe({
-      next: (r) => {
-        this.busy.set(null);
-        this.closeCandidateImport();
-        this.snack.open(
-          this.t('pb.import.done')
-            .replace('{created}', String(r.created))
-            .replace('{skipped}', String(r.skipped)),
-          this.t('common.close'), { duration: 4000 });
-      },
-      error: (err: Error) => {
-        this.busy.set(null);
-        this.snack.open(err.message, this.t('common.close'), { duration: 6000 });
-      }
-    });
-  }
-
-  // ---------------------------------------------------------------- 轮次(缺口1)
-
-  addRound(): void {
-    this.busy.set('round');
-    this.api.post<{ id: string }>(`/api/interviews/${this.id()}/rounds`, {
-      stage: this.newRoundStage
-    }).subscribe({
-      next: () => {
-        this.busy.set(null);
-        this.snack.open(this.t('pb.round.added'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => {
-        this.busy.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-      }
-    });
-  }
-
-  /** 打开行内编辑:复制一份草稿,改完点保存才提交。 */
-  editRound(r: InterviewRound): void {
-    this.roundDrafts[r.id] = { ...r };
-  }
-
-  cancelEditRound(r: InterviewRound): void {
-    delete this.roundDrafts[r.id];
-  }
-
-  isEditingRound(r: InterviewRound): boolean {
-    return r.id in this.roundDrafts;
-  }
-
-  /** 展开的 round(工作区模式):一次只展开一个。 */
-  expandedRoundId = signal<string | null>(null);
-
-  toggleRoundExpand(r: InterviewRound): void {
-    this.expandedRoundId.set(this.expandedRoundId() === r.id ? null : r.id);
-  }
-
-  isRoundExpanded(r: InterviewRound): boolean {
-    return this.expandedRoundId() === r.id;
-  }
-
-  /** 备考问题清单:从 JSON 解析。 */
-  getPrepQuestions(r: InterviewRound): PrepQuestion[] {
+    if (!e) return;
     try {
-      return r.prepQuestionsJson ? JSON.parse(r.prepQuestionsJson) : [];
-    } catch { return []; }
-  }
-
-  /** 邮件列表:从 JSON 解析。 */
-  getRoundEmails(r: InterviewRound): RoundEmail[] {
-    try {
-      return r.emailsJson ? JSON.parse(r.emailsJson) : [];
-    } catch { return []; }
-  }
-
-  /** 切换备考问题勾选,立即保存。 */
-  togglePrepQuestion(r: InterviewRound, idx: number): void {
-    const qs = this.getPrepQuestions(r);
-    if (idx < 0 || idx >= qs.length) return;
-    qs[idx].checked = !qs[idx].checked;
-    this.saveRoundField(r, { prepQuestionsJson: JSON.stringify(qs) });
-  }
-
-  /** 添加备考问题。 */
-  addPrepQuestion(r: InterviewRound, text: string): void {
-    const t = text.trim();
-    if (!t) return;
-    const qs = this.getPrepQuestions(r);
-    qs.push({ text: t, checked: false });
-    this.saveRoundField(r, { prepQuestionsJson: JSON.stringify(qs) });
-  }
-
-  /** 删除备考问题。 */
-  removePrepQuestion(r: InterviewRound, idx: number): void {
-    const qs = this.getPrepQuestions(r);
-    qs.splice(idx, 1);
-    this.saveRoundField(r, { prepQuestionsJson: JSON.stringify(qs) });
-  }
-
-  /** 添加邮件(粘贴)。 */
-  addRoundEmail(r: InterviewRound, subject: string, from: string, snippet: string): void {
-    const s = subject.trim();
-    if (!s) return;
-    const emails = this.getRoundEmails(r);
-    emails.push({ subject: s, from: from.trim(), date: new Date().toISOString().slice(0, 10), snippet: snippet.trim() });
-    this.saveRoundField(r, { emailsJson: JSON.stringify(emails) });
-  }
-
-  /** 删除邮件。 */
-  removeRoundEmail(r: InterviewRound, idx: number): void {
-    const emails = this.getRoundEmails(r);
-    emails.splice(idx, 1);
-    this.saveRoundField(r, { emailsJson: JSON.stringify(emails) });
-  }
-
-  /** 工作区内直接保存录音链接 + 文稿(不用进编辑表单)。 */
-  saveRoundTranscript(r: InterviewRound, recordingUrl: string, transcript: string): void {
-    const url = recordingUrl.trim();
-    const text = transcript.trim();
-    if (!url && !text) {
-      this.snack.open(this.t('pb.round.transcriptEmpty'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
-    const tag = 'transcript-' + r.id;
-    this.busy.set(tag);
-    const body = {
-      stage: r.stage,
-      scheduledDate: r.scheduledDate || null,
-      interviewers: r.interviewers || null,
-      format: r.format || null,
-      location: r.location || null,
-      outcome: r.outcome,
-      notes: r.notes || null,
-      feedback: r.feedback || null,
-      meetingLink: r.meetingLink || null,
-      scheduledTime: r.scheduledTime || null,
-      prepQuestionsJson: r.prepQuestionsJson || null,
-      emailsJson: r.emailsJson || null,
-      transcript: text || null,
-      recordingUrl: url || null
-    };
-    this.api.put<void>(`/api/interviews/${this.id()}/rounds/${r.id}`, body).subscribe({
-      next: () => {
-        if (this.busy() === tag) this.busy.set(null);
-        this.snack.open(this.t('pb.round.transcriptSaved'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => {
-        if (this.busy() === tag) this.busy.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 4000 });
-      }
-    });
-  }
-
-  /** 合成轮次 → 创建正式轮次,把条目上的日期/面试官/形式/地点带过去。 */
-  convertSyntheticToReal(): void {
-    const e = this.entry();
-    if (!e || this.busy()) return;
-    this.busy.set('round');
-    this.api.post<{ id: string }>(`/api/interviews/${this.id()}/rounds`, {
-      stage: 'Technical'
-    }).subscribe({
-      next: (created) => {
-        // 第二步:把条目基本信息回填到新轮次
-        this.api.put<void>(`/api/interviews/${this.id()}/rounds/${created.id}`, {
-          stage: 'Technical',
-          scheduledDate: e.interviewDate || null,
-          interviewers: e.interviewers || null,
-          format: e.interviewFormat || null,
-          location: e.location || null,
-          outcome: 'Pending',
-          notes: null,
-          feedback: null,
-          meetingLink: null,
-          scheduledTime: null,
-          prepQuestionsJson: null,
-          emailsJson: null,
-          transcript: null,
-          recordingUrl: null
-        }).subscribe({
-          next: () => {
-            this.busy.set(null);
-            this.snack.open(this.t('pb.round.converted'), this.t('common.close'), { duration: 3000 });
-            this.load(false);
-          },
-          error: (err: Error) => {
-            this.busy.set(null);
-            this.snack.open(err.message, this.t('common.close'), { duration: 5000 });
-          }
-        });
-      },
-      error: (err: Error) => {
-        this.busy.set(null);
-        this.snack.open(err.message, this.t('common.close'), { duration: 5000 });
-      }
-    });
-  }
-
-  /** 保存 round 单个字段(不经过编辑草稿,直接 PUT)。 */
-  private saveRoundField(r: InterviewRound, patch: Partial<InterviewRound>): void {
-    const body = {
-      stage: r.stage,
-      scheduledDate: r.scheduledDate || null,
-      interviewers: r.interviewers || null,
-      format: r.format || null,
-      location: r.location || null,
-      outcome: r.outcome,
-      notes: r.notes || null,
-      feedback: r.feedback || null,
-      meetingLink: r.meetingLink || null,
-      scheduledTime: r.scheduledTime || null,
-      prepQuestionsJson: r.prepQuestionsJson || null,
-      emailsJson: r.emailsJson || null,
-      transcript: r.transcript || null,
-      recordingUrl: r.recordingUrl || null,
-      ...patch
-    };
-    this.api.put<void>(`/api/interviews/${this.id()}/rounds/${r.id}`, body).subscribe({
-      next: () => this.load(false),
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 4000 })
-    });
-  }
-
-  /** 生成 .ics 日历文件下载。 */
-  downloadIcs(r: InterviewRound): void {
-    const e = this.entry();
-    const title = `${e?.companyName ?? ''} - ${e?.role ?? ''} - Round ${r.order}`;
-    const date = (r.scheduledDate ?? '').replace(/-/g, '');
-    const time = (r.scheduledTime ?? '09:00').replace(':', '');
-    const dtStart = date ? `${date}T${time}00` : '';
-    // 默认 1 小时
-    const endH = String(Number(time.slice(0, 2)) + 1).padStart(2, '0');
-    const dtEnd = date ? `${date}T${endH}${time.slice(2)}00` : '';
-    const lines = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//YourInterview//Round//EN',
-      'BEGIN:VEVENT',
-      `UID:round-${r.id}@your-interview`,
-      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
-      dtStart ? `DTSTART:${dtStart}` : '',
-      dtEnd ? `DTEND:${dtEnd}` : '',
-      `SUMMARY:${title}`,
-      r.meetingLink ? `DESCRIPTION:Join: ${r.meetingLink}` : '',
-      r.meetingLink ? `URL:${r.meetingLink}` : '',
-      r.interviewers ? `DESCRIPTION:Interviewers: ${r.interviewers}` : '',
-      'END:VEVENT', 'END:VCALENDAR'
-    ].filter(Boolean);
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `round-${r.order}.ics`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  /** 跳到 Guidance tab。 */
-  goToGuidance(): void {
-    this.selectedTab.set(2); // Guidance 是第 3 个 tab
-  }
-
-  saveRound(r: InterviewRound): void {
-    const d = this.roundDrafts[r.id];
-    if (!d) return;
-    this.busy.set('round');
-    this.api.put<void>(`/api/interviews/${this.id()}/rounds/${r.id}`, {
-      stage: d.stage,
-      scheduledDate: d.scheduledDate || null,
-      interviewers: d.interviewers || null,
-      format: d.format || null,
-      location: d.location || null,
-      outcome: d.outcome,
-      notes: d.notes || null,
-      feedback: d.feedback || null,
-      meetingLink: d.meetingLink || null,
-      scheduledTime: d.scheduledTime || null,
-      prepQuestionsJson: d.prepQuestionsJson || null,
-      emailsJson: d.emailsJson || null,
-      transcript: d.transcript || null,
-      recordingUrl: d.recordingUrl || null
-    }).subscribe({
-      next: () => {
-        this.busy.set(null);
-        delete this.roundDrafts[r.id];
-        this.snack.open(this.t('pb.round.saved'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => {
-        this.busy.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-      }
-    });
-  }
-
-  removeRound(r: InterviewRound): void {
-    if (!confirm(this.t('pb.round.confirmDelete').replace('{n}', String(r.order)))) return;
-
-    this.api.delete<void>(`/api/interviews/${this.id()}/rounds/${r.id}`).subscribe({
-      next: () => {
-        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
-    });
-  }
-
-  // ---------------------------------------------------------------- 编辑
-
-  private fillEditForm(d: InterviewDetail): void {
-    this.editForm = {
-      companyName: d.companyName ?? '',
-      role: d.role ?? '',
-      roundNo: d.roundNo ?? 1,
-      interviewDate: d.interviewDate ?? '',
-      interviewFormat: d.interviewFormat ?? '',
-      interviewers: d.interviewers ?? '',
-      location: d.location ?? '',
-      result: d.result ?? '',
-      jdText: d.jdText ?? '',
-      jdSummary: d.jdSummary ?? '',
-      companyProfile: d.companyProfile ?? '',
-      notes: d.notes ?? ''
-    };
-  }
-
-  saveEdit(): void {
-    if (!this.editForm.companyName.trim() || !this.editForm.role.trim()) {
-      this.snack.open(this.t('pb.edit.requiredFields'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
-
-    this.busy.set('edit');
-    this.api.put<void>(`/api/interviews/${this.id()}`, {
-      companyName: this.editForm.companyName.trim(),
-      role: this.editForm.role.trim(),
-      roundNo: this.editForm.roundNo || 1,
-      interviewDate: this.editForm.interviewDate || null,
-      interviewFormat: this.editForm.interviewFormat || null,
-      interviewers: this.editForm.interviewers || null,
-      location: this.editForm.location || null,
-      result: this.editForm.result || null,
-      jdText: this.editForm.jdText || null,
-      jdSummary: this.editForm.jdSummary || null,
-      companyProfile: this.editForm.companyProfile || null,
-      notes: this.editForm.notes || null
-    }).subscribe({
-      next: () => {
-        this.busy.set(null);
-        this.snack.open(this.t('pb.edit.saved'), this.t('common.close'), { duration: 3000 });
-        this.load(false);
-      },
-      error: (e: Error) => {
-        this.busy.set(null);
-        this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
-      }
-    });
-  }
-
-  // ---------------------------------------------------------------- 展示辅助
-
-  statusLabel(s: string): string {
-    const key = 'pb.status.' + s;
-    const translated = this.i18n.t(key);
-    return translated !== key ? translated : s;
-  }
-
-  /** 候选导入副标题:"已选 3 / 10 · 重复条目会自动跳过"。 */
-  importSub(): string {
-    return this.i18n.t('pb.import.sub')
-      .replace('{selected}', String(this.selectedCandidates().length))
-      .replace('{total}', String(this.candidates().length));
-  }
-
-  statusClass(s: string): string {
-    if (s === 'Analyzed') return 'ok';
-    if (s === 'Failed') return 'bad';
-    if (s === 'Transcribing' || s === 'Analyzing') return 'busy';
-    if (s === 'Transcribed' || s === 'AssetsUploaded') return 'ready';
-    return 'idle';
-  }
-
-  scoreClass(score: number | undefined): string {
-    if (score === undefined || score === null) return 'none';
-    if (score >= 75) return 'good';
-    if (score >= 55) return 'mid';
-    return 'bad';
-  }
-
-  humanSize(bytes: number): string {
-    if (!bytes) return '—';
-    const mb = bytes / 1024 / 1024;
-    if (mb >= 1) return `${mb.toFixed(1)} MB`;
-    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  }
-
-  humanDuration(sec: number | undefined): string {
-    if (!sec) return '';
-    const m = Math.floor(sec / 60);
-    const s = Math.round(sec % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
-  /**
-   * 解析后端的 JSON 数组字段(如 missedPointsJson)。
-   *
-   * 一定要 try/catch:这是 AI 产出的自由文本,历史上出现过被截断的半截 JSON。
-   * 解析失败就当成空数组 —— 页面绝不能因为一个字段格式不对整块崩掉。
-   */
-  parseList(json: string | undefined): string[] {
-    if (!json) return [];
-    try {
-      const parsed: unknown = JSON.parse(json);
-      if (Array.isArray(parsed)) {
-        return parsed.map((x) => typeof x === 'string' ? x : JSON.stringify(x));
-      }
-      return [];
+      await this.api.put(`/api/interviews/${e.id}`, {
+        companyName: this.bCompany(),
+        role: this.bRole(),
+        companyProfile: e.companyProfile ?? null,
+        jdText: e.jdText ?? null,
+        jdSummary: e.jdSummary ?? null,
+        roundNo: e.roundNo,
+        interviewDate: e.interviewDate ?? null,
+        interviewFormat: e.interviewFormat ?? null,
+        interviewers: e.interviewers ?? null,
+        location: e.location ?? null,
+        result: this.bResult() || null,
+        notes: this.bNotes() || null,
+        questionsToAskJson: e.questionsToAskJson ?? null,
+        debriefJson: e.debriefJson ?? null
+      }).toPromise();
+      this.editingBasic.set(false);
+      this.snack.open('已保存', '关闭', { duration: 2000 });
+      await this.load();
     } catch {
-      return [];
+      this.snack.open('保存失败', '关闭', { duration: 3000 });
     }
   }
 
-  /** 详情页也支持刷新按钮,顺便复用同一套错误处理。 */
-  refresh(): void {
-    this.load();
+  async deleteEntry(): Promise<void> {
+    if (!this.confirmDelete()) { this.confirmDelete.set(true); return; }
+    try {
+      await this.api.delete(`/api/interviews/${this.id()}`).toPromise();
+      void this.router.navigate(['/playbook']);
+    } catch {
+      this.snack.open('删除失败', '关闭', { duration: 3000 });
+    }
   }
 
-  // ★ #17:面后复盘 (localStorage,按 entry id 存)
-  readonly showDebrief = signal(false);
-  readonly debriefForm = signal({ questions: '', rating: 3, stuck: '' });
+  // ---------------- 复盘与待办 ----------------
 
-  loadDebrief(): void {
+  async addAction(): Promise<void> {
+    const title = this.newActionTitle().trim();
+    if (!title) return;
+    try {
+      await this.api.post(`/api/interviews/${this.id()}/actions`, { title }).toPromise();
+      this.newActionTitle.set('');
+      await this.load();
+    } catch {
+      this.snack.open('添加失败', '关闭', { duration: 3000 });
+    }
+  }
+
+  async toggleAction(actionId: string): Promise<void> {
+    await this.api.put(`/api/interviews/${this.id()}/actions/${actionId}/toggle`, {}).toPromise()
+      .catch(() => undefined);
+    await this.load();
+  }
+
+  async deleteAction(actionId: string): Promise<void> {
+    await this.api.delete(`/api/interviews/${this.id()}/actions/${actionId}`).toPromise()
+      .catch(() => undefined);
+    await this.load();
+  }
+
+  async saveDebrief(): Promise<void> {
     const e = this.entry();
-    if (!e?.id) return;
-    // ★ 优先后端,回退 localStorage (迁移期兼容)
-    const backendJson = (e as any).debriefJson;
-    if (backendJson) {
-      try {
-        this.debriefForm.set(JSON.parse(backendJson));
-      } catch { /* ignore */ }
-    } else {
-      try {
-        const saved = JSON.parse(localStorage.getItem(`pb.debrief.${e.id}`) || 'null');
-        if (saved) this.debriefForm.set(saved);
-      } catch { /* ignore */ }
+    if (!e) return;
+    try {
+      await this.api.put(`/api/interviews/${e.id}`, {
+        companyName: e.companyName,
+        role: e.role,
+        companyProfile: e.companyProfile ?? null,
+        jdText: e.jdText ?? null,
+        jdSummary: e.jdSummary ?? null,
+        roundNo: e.roundNo,
+        interviewDate: e.interviewDate ?? null,
+        interviewFormat: e.interviewFormat ?? null,
+        interviewers: e.interviewers ?? null,
+        location: e.location ?? null,
+        result: e.result ?? null,
+        notes: e.notes ?? null,
+        questionsToAskJson: e.questionsToAskJson ?? null,
+        debriefJson: JSON.stringify({ text: this.debriefDraft() })
+      }).toPromise();
+      this.snack.open('复盘已保存', '关闭', { duration: 2000 });
+    } catch {
+      this.snack.open('保存失败', '关闭', { duration: 3000 });
     }
-    this.showDebrief.set(true);
   }
-  saveDebrief(): void {
-    const e = this.entry();
-    if (!e?.id) return;
-    const json = JSON.stringify(this.debriefForm());
-    // ★ 写后端
-    this.api.put(`/api/interviews/${e.id}`, { ...e, debriefJson: json }).subscribe({
-      next: () => {
-        // 成功后清掉 localStorage 旧数据
-        try { localStorage.removeItem(`pb.debrief.${e.id}`); } catch { /* ignore */ }
-        this.showDebrief.set(false);
-      },
-      error: (err: Error) => {
-        // 失败则回退 localStorage,不丢数据
-        try { localStorage.setItem(`pb.debrief.${e.id}`, json); } catch { /* ignore */ }
-        this.snack.open('后端保存失败,已暂存本地: ' + err.message, '关闭', { duration: 5000 });
-      }
-    });
-  }
-  updateDebrief(field: 'questions' | 'rating' | 'stuck', value: any): void {
-    const cur = this.debriefForm();
-    if (field === 'rating') {
-      const n = Math.round(Number(value));
-      if (!Number.isFinite(n)) return;
-      value = Math.min(5, Math.max(1, n));
-    }
-    this.debriefForm.set({ ...cur, [field]: value });
-  }
-  /** ★ #17:卡点一键转 Tech Stack 复习卡 */
-  async stuckToCards(): Promise<void> {
-    const stuck = this.debriefForm().stuck.trim();
-    if (!stuck) return;
-    const lines = stuck.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10);
-    let ok = 0;
-    for (const line of lines) {
-      try {
-        await this.api.post('/api/knowledge', {
-          title: `复盘卡点: ${line.slice(0, 50)}`,
-          question: line,
-          topic: 'Interview Debrief',
-          category: '复盘',
-          mastery: 'ToDo'
-        }).toPromise();
-        ok++;
-      } catch { /* 单条失败跳过 */ }
-    }
-    this.snack.open(
-      ok === lines.length ? `已创建 ${ok} 张复习卡` : `创建 ${ok}/${lines.length} 张,部分失败`,
-      '关闭', { duration: 3000 });
-  }
+}
 
-  /** ★ 打通:Playbook 题目 → AI Practice 口语练习。 */
-  practiceQuestion(q: { questionText: string }): void {
-    this.router.navigate(['/practice'], {
-      queryParams: { q: q.questionText.slice(0, 200) }
-    });
+function parseDebrief(json: string | null | undefined): string {
+  if (!json) return '';
+  try {
+    const j = JSON.parse(json) as { text?: string; notes?: string };
+    return j.text ?? j.notes ?? '';
+  } catch {
+    return json;
   }
+}
+
+function countPendingFromAssets(e: InterviewDetail): number {
+  return (e.assets ?? []).filter(a => {
+    if (a.roundId) return false;
+    try {
+      const m = JSON.parse(a.metaJson ?? '{}') as { arrangement?: unknown; handlingStatus?: string };
+      return !!m.arrangement && m.handlingStatus !== 'Done' && m.handlingStatus !== 'Ignored';
+    } catch { return false; }
+  }).length;
 }

@@ -143,19 +143,22 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                     } else {
                         html = document.body.innerHTML.slice(0, 200000);
                     }
-                    // 公司介绍：About the company 卡片
+                    // 公司介绍：About the company 卡片（多种结构兼容）
                     let companyDesc = '';
-                    const aboutHeaders = document.querySelectorAll('h2, h3');
-                    for (const h of aboutHeaders) {
-                        if (/about the company/i.test(h.textContent)) {
-                            let sib = h.nextElementSibling;
-                            let parts = [];
-                            while (sib && parts.length < 5) {
-                                if (sib.textContent.trim()) parts.push(sib.innerHTML);
-                                sib = sib.nextElementSibling;
+                    const allText = document.body.innerText || '';
+                    const aboutMatch = allText.match(/About the company\s*\n([\s\S]{100,3000}?)(?=\n\s*(?:About the job|See more|Show less|$))/i);
+                    if (aboutMatch) {
+                        companyDesc = aboutMatch[1].trim().replace(/\n+/g, '\n');
+                    } else {
+                        const aboutHeaders = document.querySelectorAll('h2, h3, section');
+                        for (const h of aboutHeaders) {
+                            if (/about the company/i.test(h.textContent)) {
+                                const parent = h.closest('section') || h.parentElement;
+                                if (parent) {
+                                    companyDesc = parent.innerHTML;
+                                    break;
+                                }
                             }
-                            companyDesc = parts.join('\n');
-                            break;
                         }
                     }
                     // 元数据：薪资/工作模式/职位类型（pill chips）
@@ -169,13 +172,15 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                         if (!salary && /\$[\d,]+/.test(t) && /\/yr|\/hr|per year|per hour/i.test(t)) {
                             salary = t;
                         }
-                        // 工作模式
-                        if (!workMode && /^(Hybrid|Remote|On-site)$/i.test(t)) {
-                            workMode = t;
+                        // 工作模式（兼容 ✓ Hybrid、Hybrid 等）
+                        if (!workMode && /(Hybrid|Remote|On-site)/i.test(t) && t.length < 20) {
+                            const m = t.match(/(Hybrid|Remote|On-site)/i);
+                            if (m) workMode = m[1];
                         }
-                        // 职位类型
-                        if (!jobType && /^(Full-time|Part-time|Contract|Temporary)$/i.test(t)) {
-                            jobType = t;
+                        // 职位类型（兼容 ✓ Full-time 等）
+                        if (!jobType && /(Full-time|Part-time|Contract|Temporary)/i.test(t) && t.length < 20) {
+                            const m = t.match(/(Full-time|Part-time|Contract|Temporary)/i);
+                            if (m) jobType = m[1];
                         }
                         if (salary && workMode && jobType) break;
                     }

@@ -411,7 +411,7 @@ export class SmartAddDialogComponent {
           salary: parsedData.salary, workMode: parsedData.workMode, priority: 'Medium',
           link: parsedData.link, jdSummary: parsedData.jdSummary, matchKeywords: '',
           logoUrl: parsedData.logoUrl ?? '',
-          deadline: null, status: 'Saved', jdText: parsedData.jdText,
+          deadline: null, status: 'Applied', jdText: parsedData.jdText,
           companyDescription: parsedData.companyDescription,
           requirements: parsedData.requirements,
           benefits: parsedData.benefits,
@@ -455,7 +455,7 @@ export class SmartAddDialogComponent {
   } = {
     company: '', role: '', location: '', salary: '', workMode: null, jobType: '',
     priority: 'Medium', link: '', jdSummary: '', matchKeywords: '',
-    deadline: null, status: 'Saved', jdText: null,
+    deadline: null, status: 'Applied', jdText: null,
     companyDescription: '', requirements: '', benefits: '', workAuthorization: '',
     logoUrl: ''
   };
@@ -517,7 +517,7 @@ export class SmartAddDialogComponent {
           salary: r.salary ?? '', workMode: r.workMode, priority: r.priority ?? 'Medium',
           link: r.link ?? '', jdSummary: r.jdSummary ?? '', matchKeywords: r.matchKeywords ?? '',
           deadline: r.deadline ? r.deadline.slice(0, 10) : null,
-          status: 'Saved', jdText: r.jdText,
+          status: 'Applied', jdText: r.jdText,
           companyDescription: r.companyDescription ?? '',
           requirements: r.requirements ?? '',
           benefits: r.benefits ?? '',

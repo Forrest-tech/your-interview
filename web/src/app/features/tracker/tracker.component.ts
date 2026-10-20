@@ -2166,7 +2166,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
     }
     .notes-card h3 { font-size: 16px; font-weight: 700; color: #1A1D23; margin: 0 0 16px; }
     .notes-card .nc-head { display: flex; align-items: center; justify-content: space-between; }
-    .tab-body { padding: 24px 32px; min-height: 100%; box-sizing: border-box; }
+    .tab-body { padding: 24px 32px; box-sizing: border-box; }
     .tab-body > section:first-child { margin-top: 0; }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }

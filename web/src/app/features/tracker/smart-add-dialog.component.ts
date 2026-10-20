@@ -395,14 +395,27 @@ export class SmartAddDialogComponent {
         // 用抓取结果填充表单（复用 parsed 结构）
         // 2026-10-19:保留原 URL 在 link 字段，raw 保留 JD 文本用于保存
         const fetchedUrl = url;
-        this.parsed.set({
+        const parsedData = {
           company: r.company ?? '', role: r.role ?? '', location: r.location ?? '',
           salary: r.salary ?? '', workMode: r.workMode ?? '', jobType: r.jobType ?? '',
           jdSummary: r.jdSummary ?? '', requirements: r.requirements ?? '',
           benefits: r.benefits ?? '', companyDescription: r.companyDescription ?? '',
           link: fetchedUrl, jdText: r.jdText ?? '', sourceKind: 'LinkedIn', status: r.status ?? '',
           message: '', confidence: {}
-        } as any);
+        } as any;
+        this.parsed.set(parsedData);
+        // 2026-10-19:同步 jd 表单（模板绑的是 jd，不是 parsed），实现自动填充
+        this.jd = {
+          company: parsedData.company, role: parsedData.role, location: parsedData.location,
+          salary: parsedData.salary, workMode: parsedData.workMode, priority: 'Medium',
+          link: parsedData.link, jdSummary: parsedData.jdSummary, matchKeywords: '',
+          deadline: null, status: 'Saved', jdText: parsedData.jdText,
+          companyDescription: parsedData.companyDescription,
+          requirements: parsedData.requirements,
+          benefits: parsedData.benefits,
+          workAuthorization: '', jobType: parsedData.jobType ?? ''
+        };
+        this.status.set(parsedData.status || 'OK');
         // 同步 raw 为 jdText，保存时落库；保留 URL 供 Re-parse 用
         if (r.jdText) {
           this.raw = r.jdText;

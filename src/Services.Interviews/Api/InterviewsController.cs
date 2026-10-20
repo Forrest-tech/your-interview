@@ -130,9 +130,12 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
                 && double.TryParse(dRaw, out var d) && d >= 0)
                 duration = d;
 
+            Guid? roundId = form.TryGetValue("roundId", out var ridRaw)
+                && Guid.TryParse(ridRaw.FirstOrDefault(), out var rid) ? rid : null;
             var cmd = new UploadAssetFileCommand(id, file.FileName,
                 string.IsNullOrWhiteSpace(file.ContentType) ? null : file.ContentType,
-                duration, form["sourceLanguage"].FirstOrDefault(), file.OpenReadStream());
+                duration, form["sourceLanguage"].FirstOrDefault(), file.OpenReadStream(),
+                roundId, form["phase"].FirstOrDefault());
 
             var r = await sender.Send(cmd, ct);
             return r.IsSuccess
@@ -160,7 +163,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         var jr = await sender.Send(new AttachAssetCommand(id, kind, fileName,
             body.ContentType, body.SizeBytes, body.StoragePath, body.BlobUrl, transcriptText,
             body.TranscriptSegmentsJson, body.DurationSeconds, body.SourceLanguage ?? "en",
-            body.Sha256), ct);
+            body.Sha256, body.RoundId, body.Phase), ct);
         return jr.IsSuccess
             ? Results.Created($"/api/interviews/{id}", new { id = jr.Value })
             : jr.ToProblemDetails();
@@ -448,6 +451,29 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 2026-10-19:生成某轮备考方案(AI),存为 Kind=PrepDoc / Phase=Pre 的轮次资产。
+    /// 面试前输入 JD/公司/简历/机经/要求;下一轮自动带入之前所有轮次数据。
+    /// </summary>
+    [HttpPost("{id:guid}/rounds/{roundId:guid}/prep-plan")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> GeneratePrepPlan(Guid id, Guid roundId,
+        [FromBody] GeneratePrepPlanBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new GeneratePrepPlanCommand(id, roundId,
+            body.JdText, body.ResumeText, body.Experiences, body.Requirements), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>2026-10-19:取某轮最新的备考方案(在线阅读)。</summary>
+    [HttpGet("{id:guid}/rounds/{roundId:guid}/prep-plan")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> GetPrepPlan(Guid id, Guid roundId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetPrepPlanQuery(id, roundId), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>指导材料:手动触发 AI 生成新版本(版本号自动 +1)。</summary>
     [HttpPost("{id:guid}/guidance/generate")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
@@ -570,7 +596,13 @@ public sealed record AttachAssetBody(
     string Kind, string FileName, string? ContentType = null, long SizeBytes = 0,
     string? StoragePath = null, string? BlobUrl = null, string? TranscriptText = null,
     string? TranscriptSegmentsJson = null, double? DurationSeconds = null,
-    string? SourceLanguage = null, string? Sha256 = null, string? TextContent = null);
+    string? SourceLanguage = null, string? Sha256 = null, string? TextContent = null,
+    // 2026-10-19:资产按 Round 管理,新增上传必填 RoundId
+    Guid? RoundId = null, string? Phase = null);
+
+public sealed record GeneratePrepPlanBody(
+    string? JdText = null, string? ResumeText = null, string? Experiences = null,
+    string? Requirements = null);
 
 public sealed record TranscriptBody(string FullText, string? SegmentsJson = null);
 

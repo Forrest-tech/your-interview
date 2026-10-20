@@ -60,6 +60,27 @@ export interface BriefEntry {
   questionsToAskJson?: string;
   questions?: BriefQuestion[];
   rounds?: BriefRound[];
+  assets?: BriefAsset[];
+}
+
+/**
+ * 轮次资产(2026-10-19):后端 AssetDto 的子集。
+ * roundId 为 null = 历史遗留未归类材料;phase = Pre(面试前) / Post(面试后)。
+ */
+export interface BriefAsset {
+  id: string;
+  kind: string;
+  fileName: string;
+  contentType?: string;
+  sizeBytes: number;
+  blobUrl?: string;
+  durationSeconds?: number;
+  sourceLanguage?: string;
+  hasTranscript: boolean;
+  transcriptLength: number;
+  uploadedAt: string;
+  roundId?: string | null;
+  phase?: string | null;
 }
 
 /** A7 邮件条目 —— 与后端 RoundEmailItem 的 JSON 键一致。 */

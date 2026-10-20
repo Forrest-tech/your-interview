@@ -153,7 +153,7 @@
     <!-- ---------- 页签 ---------- -->
     <mat-tab-group class="tabs" animationDuration="150ms"
                    [selectedIndex]="selectedTab()"
-                   (selectedIndexChange)="selectedTab.set($event)">
+                   (selectedIndexChange)="onTabChange($event)">
 
       <!-- ============ 概览 ============ -->
       <mat-tab [label]="t('sub.overview')">
@@ -373,7 +373,7 @@
       <!-- ============ 轮次(缺口1:一家公司多轮) ============ -->
       <mat-tab [label]="tn('pb.tab.rounds', displayRounds().length)">
         <div class="tab-body">
-          <app-rounds-timeline [entryId]="id()" (jumpToBrief)="selectedTab.set(2)"></app-rounds-timeline>
+          <app-rounds-timeline #roundsTl [entryId]="id()" (jumpToBrief)="selectedTab.set(2)"></app-rounds-timeline>
         </div>
       </mat-tab>
 
@@ -562,6 +562,23 @@
                 <mat-card-subtitle>{{ t('pb.asset.uploadSub') }}</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
+                <div class="upload-opts">
+                  <mat-form-field appearance="outline" class="round-select">
+                    <mat-label>{{ t('pb.asset.roundPh') }}</mat-label>
+                    <mat-select [ngModel]="uploadRoundId()" (ngModelChange)="uploadRoundId.set($event)">
+                      @for (r of displayRounds(); track r.id) {
+                        <mat-option [value]="r.id">Round {{ r.order }} · {{ r.stage }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="phase-select">
+                    <mat-label>{{ t('pb.asset.phasePh') }}</mat-label>
+                    <mat-select [ngModel]="uploadPhase()" (ngModelChange)="uploadPhase.set($event)">
+                      <mat-option value="Pre">{{ t('pb.asset.phasePre') }}</mat-option>
+                      <mat-option value="Post">{{ t('pb.asset.phasePost') }}</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                </div>
                 <input type="file" accept="audio/*"
                        (change)="onFileSelected($event)"
                        [disabled]="busy() !== null" />
@@ -613,7 +630,47 @@
             </mat-card>
           }
 
-          @for (a of assets(); track a.id) {
+          <!-- 2026-10-19:资产总览 —— 按轮次分组 + 阶段/类型筛选，点击定位到轮次 -->
+          <mat-card class="panel asset-filters">
+            <mat-card-content class="filter-row">
+              <mat-form-field appearance="outline" class="filter-select">
+                <mat-label>{{ t('pb.asset.filterPhase') }}</mat-label>
+                <mat-select [ngModel]="assetPhaseFilter()" (ngModelChange)="assetPhaseFilter.set($event)">
+                  <mat-option value="all">{{ t('pb.asset.filterAll') }}</mat-option>
+                  <mat-option value="Pre">{{ t('pb.asset.phasePre') }}</mat-option>
+                  <mat-option value="Post">{{ t('pb.asset.phasePost') }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="filter-select">
+                <mat-label>{{ t('pb.asset.filterKind') }}</mat-label>
+                <mat-select [ngModel]="assetKindFilter()" (ngModelChange)="assetKindFilter.set($event)">
+                  <mat-option value="all">{{ t('pb.asset.filterAll') }}</mat-option>
+                  <mat-option value="Audio">{{ t('pb.asset.kindAudio') }}</mat-option>
+                  <mat-option value="Transcript">{{ t('pb.asset.kindTranscript') }}</mat-option>
+                  <mat-option value="Text">{{ t('pb.asset.kindText') }}</mat-option>
+                  <mat-option value="PrepDoc">{{ t('pb.asset.kindPrepDoc') }}</mat-option>
+                  <mat-option value="Email">{{ t('pb.asset.kindEmail') }}</mat-option>
+                  <mat-option value="Feedback">{{ t('pb.asset.kindFeedback') }}</mat-option>
+                  <mat-option value="Other">{{ t('pb.asset.kindOther') }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </mat-card-content>
+          </mat-card>
+
+          @for (g of assetGroups(); track g.roundId) {
+            <div class="asset-group">
+              <div class="asset-group-head">
+                <mat-icon inline>folder_open</mat-icon>
+                <strong>{{ g.label }}</strong>
+                <span class="dim small">({{ g.assets.length }})</span>
+                <span class="spacer"></span>
+                @if (g.roundId !== '__legacy') {
+                  <button mat-button (click)="jumpToRound(g.roundId)">
+                    <mat-icon>arrow_forward</mat-icon> {{ t('pb.asset.gotoRound') }}
+                  </button>
+                }
+              </div>
+              @for (a of g.assets; track a.id) {
             <mat-card class="asset">
               <div class="asset-head">
                 <mat-icon class="asset-icon">
@@ -677,6 +734,8 @@
                 </div>
               }
             </mat-card>
+              }
+            </div>
           }
         </div>
       </mat-tab>

@@ -35,7 +35,25 @@ public enum AssetKind
     /// <summary>自己写的面试纪要,不需要 STT,直接进分析。</summary>
     Notes,
     /// <summary>粘贴的纯文本(A6):不需要 STT,直接进分析。</summary>
-    Text
+    Text,
+    /// <summary>备考方案(2026-10-19):AI 生成的备考文档,内容存 TranscriptText(Markdown)。</summary>
+    PrepDoc,
+    /// <summary>邮件(2026-10-19):预约邮件/反馈邮件的全文粘贴。</summary>
+    Email,
+    /// <summary>面试反馈(2026-10-19):电话/邮件/口头反馈的记录。</summary>
+    Feedback,
+    /// <summary>其它材料(2026-10-19):兜底分类。</summary>
+    Other
+}
+
+/// <summary>
+/// 材料所处阶段(2026-10-19,资产按 Round 管理):
+/// Pre = 面试前(备考文档/预约邮件/recruiter 电话),Post = 面试后(录音/转录/反馈)。
+/// </summary>
+public enum AssetPhase
+{
+    Pre,
+    Post
 }
 
 /// <summary>
@@ -251,15 +269,21 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public InterviewAsset AttachAsset(AssetKind kind, string fileName, string? contentType,
         long sizeBytes, string? storagePath, string? blobUrl, string? transcriptText = null,
         string? transcriptSegmentsJson = null, double? durationSeconds = null,
-        string sourceLanguage = "en", string? sha256 = null)
+        string sourceLanguage = "en", string? sha256 = null,
+        Guid? roundId = null, AssetPhase? phase = null)
     {
         if (Status == InterviewStatus.Analyzing || Status == InterviewStatus.Transcribing)
             throw new InvalidOperationException($"当前状态 {Status} 不允许变更材料,请等待流程结束");
 
+        if (roundId is not null && !_rounds.Any(r => r.Id == roundId.Value))
+            throw new InvalidOperationException("关联的轮次不存在");
+
         var asset = new InterviewAsset(Id, kind, fileName, contentType, sizeBytes, storagePath,
-            blobUrl, durationSeconds, sourceLanguage, sha256);
+            blobUrl, durationSeconds, sourceLanguage, sha256, roundId, phase);
 
         // 文本类材料直接就是"已转写"状态,不需要走 STT
+        // 2026-10-19:PrepDoc/Email/Feedback/Other 是轮次上下文(备考/邮件/反馈),
+        // 不是候选人语音 —— 只登记,不推进 Transcribed 状态,不进分析管线。
         if (kind is AssetKind.Transcript or AssetKind.Notes or AssetKind.Text)
         {
             if (string.IsNullOrWhiteSpace(transcriptText))
@@ -268,6 +292,12 @@ public sealed class InterviewEntry : AuditableAggregateRoot
             if (Status == InterviewStatus.Draft) TransitionTo(InterviewStatus.AssetsUploaded);
             TransitionTo(InterviewStatus.Transcribed);
             TranscribedAt = DateTimeOffset.UtcNow;
+        }
+        else if (kind is AssetKind.PrepDoc or AssetKind.Email or AssetKind.Feedback or AssetKind.Other)
+        {
+            if (string.IsNullOrWhiteSpace(transcriptText))
+                throw new InvalidOperationException("文本类材料必须提供内容");
+            asset.SetTranscript(transcriptText, transcriptSegmentsJson);
         }
         else if (!string.IsNullOrWhiteSpace(transcriptText))
         {
@@ -584,7 +614,8 @@ public sealed class InterviewAsset : Entity
 
     internal InterviewAsset(Guid interviewEntryId, AssetKind kind, string fileName,
         string? contentType, long sizeBytes, string? storagePath, string? blobUrl,
-        double? durationSeconds, string sourceLanguage, string? sha256 = null)
+        double? durationSeconds, string sourceLanguage, string? sha256 = null,
+        Guid? roundId = null, AssetPhase? phase = null)
     {
         InterviewEntryId = interviewEntryId;
         Kind = kind;
@@ -596,6 +627,8 @@ public sealed class InterviewAsset : Entity
         DurationSeconds = durationSeconds;
         SourceLanguage = sourceLanguage;
         Sha256 = sha256;
+        RoundId = roundId;
+        Phase = phase;
         // 刚落盘的文件必然完整(写入即校验);巡检会持续维护这个结论
         FileExists = storagePath is not null;
         IntegrityStatus = storagePath is not null ? AssetIntegrity.Ok : null;
@@ -605,6 +638,13 @@ public sealed class InterviewAsset : Entity
 
     public Guid InterviewEntryId { get; private set; }
     public AssetKind Kind { get; private set; }
+
+    /// <summary>关联轮次(2026-10-19,资产按 Round 管理)。null = 历史遗留未归类材料。</summary>
+    public Guid? RoundId { get; private set; }
+
+    /// <summary>Pre = 面试前,Post = 面试后。null = 历史遗留未归类材料。</summary>
+    public AssetPhase? Phase { get; private set; }
+
     public string FileName { get; private set; } = string.Empty;
     public string? ContentType { get; private set; }
     public long SizeBytes { get; private set; }

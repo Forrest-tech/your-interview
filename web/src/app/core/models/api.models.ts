@@ -427,6 +427,10 @@ export interface InterviewAsset {
   integrityStatus?: string | null;
   /** 最近一次巡检时间(上传即首次校验)。 */
   lastVerifiedAt?: string | null;
+  /** 2026-10-19:资产按 Round 管理。null = 历史遗留未归类材料。 */
+  roundId?: string | null;
+  /** Pre = 面试前，Post = 面试后。 */
+  phase?: string | null;
 }
 
 export interface InterviewDetail extends InterviewEntry {

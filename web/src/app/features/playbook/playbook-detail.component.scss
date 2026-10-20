@@ -870,3 +870,12 @@ mat-progress-bar {
   cursor: help;
   white-space: nowrap;
 }
+
+/* 2026-10-19:资产总览 —— 按轮次分组 + 筛选 */
+.asset-group { margin: 12px 0; }
+.asset-group-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.asset-filters .filter-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.asset-filters .filter-select { min-width: 160px; }
+.upload-opts { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.upload-opts .round-select { min-width: 200px; }
+.upload-opts .phase-select { min-width: 140px; }

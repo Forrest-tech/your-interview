@@ -12,13 +12,31 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ApiClient } from '../../../../core/api/api-client';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import type { BriefEntry, BriefRound, RoundEmailItem } from './brief.models';
+import type { BriefAsset, BriefEntry, BriefRound, RoundEmailItem } from './brief.models';
 import {
   applyParams, daysUntil, makeBriefT, nextRound, outcomeClass,
-  parseJsonList, todayStr,
+  parseJsonList, renderMarkdown, todayStr,
 } from './brief.helpers';
+import { PrepPlanDialogComponent } from '../../prep-plan-dialog.component';
+import { PasteTextDialogComponent } from '../../paste-text-dialog.component';
+
+/** 备考方案 DTO —— 与后端 PrepPlanDto 对齐。 */
+interface PrepPlan {
+  assetId: string;
+  entryId: string;
+  roundId: string;
+  roundOrder: number;
+  markdown: string;
+  model?: string;
+  generatedAt: string;
+}
+
+/** 资产阶段。 */
+type AssetPhase = 'Pre' | 'Post';
 
 /** 轮次行内编辑表单 —— 字段与后端 UpdateRoundBody 对齐。 */
 interface RoundEditForm {
@@ -55,18 +73,21 @@ interface RoundEditForm {
     MatCardModule, MatButtonModule, MatIconModule, MatChipsModule,
     MatFormFieldModule, MatInputModule, MatSelectModule,
     MatProgressBarModule, MatSnackBarModule, MatDividerModule,
-    MatCheckboxModule,
+    MatCheckboxModule, MatDialogModule, MatProgressSpinnerModule,
   ],
   templateUrl: './rounds-timeline.component.html',
   styleUrl: './rounds-timeline.component.scss',
 })
 export class RoundsTimelineComponent implements OnInit {
+  /** 强类型阶段常量(模板 @for 直接用字面量数组会被推断为 string) */
+  readonly phases: ('Pre' | 'Post')[] = ['Pre', 'Post'];
   entryId = input.required<string>();
   @Output() jumpToBrief = new EventEmitter<void>();
 
   private readonly api = inject(ApiClient);
   private readonly i18n = inject(I18nService);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
   t = makeBriefT(this.i18n);
   fmt = (key: string, params: Record<string, string | number>): string =>
     applyParams(this.t(key), params);
@@ -284,7 +305,7 @@ export class RoundsTimelineComponent implements OnInit {
     const fileName = `round-${r.order}-transcript.txt`;
     this.api.post<{ id: string }>(
       `/api/interviews/${this.entryId()}/assets`,
-      { textContent: text, fileName }).subscribe({
+      { textContent: text, fileName, roundId: r.id, phase: 'Post' }).subscribe({
       next: () => this.snack.open(
         this.t('pb.br.rounds.sentToAnalysis'), this.t('common.close'), { duration: 4000 }),
       error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 }),
@@ -299,7 +320,8 @@ export class RoundsTimelineComponent implements OnInit {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    this.api.upload<{ id: string }>(`/api/interviews/${this.entryId()}/assets`, file).subscribe({
+    this.api.upload<{ id: string }>(`/api/interviews/${this.entryId()}/assets`, file,
+      { roundId: r.id, phase: 'Post' }).subscribe({
       next: (res) => {
         input.value = '';
         const audioUrl = `/api/interviews/${this.entryId()}/assets/${res.id}/audio`;
@@ -427,6 +449,144 @@ export class RoundsTimelineComponent implements OnInit {
     return r.transcript ?? this.extras[r.id]?.transcript ?? '';
   }
 
+  // ================= 轮次资产（2026-10-19：按 Round 管理） =================
+  /** 全部资产（与 rounds 同一次 GET 下发）。 */
+  readonly assets = signal<BriefAsset[]>([]);
+
+  /** 某轮某阶段的资产。 */
+  assetsForRound(roundId: string, phase: AssetPhase): BriefAsset[] {
+    return this.assets()
+      .filter((a) => a.roundId === roundId && (a.phase ?? '').toLowerCase() === phase.toLowerCase())
+      .sort((a, b) => a.uploadedAt.localeCompare(b.uploadedAt));
+  }
+
+  /** 本轮是否已有备考方案资产(决定显示生成还是查看入口)。 */
+  hasPrepDoc(roundId: string): boolean {
+    return this.assetsForRound(roundId, 'Pre').some((a) => a.kind === 'PrepDoc');
+  }
+
+  /** 资产类型中文标签。 */
+  kindLabel(kind: string): string {
+    const map: Record<string, string> = {
+      Audio: '录音', Transcript: '转写', Text: '文本', Notes: '纪要',
+      PrepDoc: '备考文档', Email: '邮件', Feedback: '反馈', Other: '其他',
+    };
+    return map[kind] ?? kind;
+  }
+
+  /** 上传文件到指定轮次+阶段（context 创建：自动带 roundId/phase）。 */
+  uploadRoundAsset(r: BriefRound, phase: AssetPhase, ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || this.busy()) return;
+    this.busy.set('asset-' + r.id + phase);
+    this.api.upload<{ id: string }>(
+      `/api/interviews/${this.entryId()}/assets`, file,
+      { roundId: r.id, phase })
+      .subscribe({
+        next: () => {
+          input.value = '';
+          this.busy.set(null);
+          this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2500 });
+          this.load();
+        },
+        error: (e: Error) => {
+          input.value = '';
+          this.busy.set(null);
+          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+        },
+      });
+  }
+
+  /** 粘贴文本到指定轮次+阶段：先选类型（默认文本），再进对话框。 */
+  pasteRoundText(r: BriefRound, phase: AssetPhase): void {
+    const kind = phase === 'Pre' ? 'Email' : 'Text';
+    const ref = this.dialog.open(PasteTextDialogComponent, { width: '640px' });
+    ref.afterClosed().subscribe((text: string | null) => {
+      if (!text || this.busy()) return;
+      this.busy.set('asset-' + r.id + phase);
+      this.api.post<{ id: string }>(
+        `/api/interviews/${this.entryId()}/assets`,
+        { textContent: text, fileName: `round-${r.order}-${phase.toLowerCase()}.txt`, kind, roundId: r.id, phase })
+        .subscribe({
+          next: () => {
+            this.busy.set(null);
+            this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2500 });
+            this.load();
+          },
+          error: (e: Error) => {
+            this.busy.set(null);
+            this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+          },
+        });
+    });
+  }
+
+  // ================= 备考方案（2026-10-19） =================
+  /** roundId → 最新备考方案。 */
+  readonly prepPlans = signal<Record<string, PrepPlan>>({});
+  readonly prepOpen = signal<string | null>(null);
+  readonly prepHtmlOpen = signal<string | null>(null);
+
+  /** 某轮备考方案的渲染 HTML。 */
+  prepPlanHtml(r: BriefRound): string {
+    return renderMarkdown(this.prepPlans()[r.id]?.markdown ?? '');
+  }
+
+  /** 打开输入对话框 → 生成备考方案 → 存为轮次资产。 */
+  openPrepDialog(r: BriefRound): void {
+    const prevCount = this.sortedRounds().filter((x) => x.order < r.order).length;
+    const ref = this.dialog.open(PrepPlanDialogComponent, {
+      width: '640px',
+      data: { roundOrder: r.order, jdHint: '', prevRoundsCount: prevCount },
+    });
+    ref.afterClosed().subscribe((input: {
+      jdText: string; resumeText: string; experiences: string; requirements: string;
+    } | null) => {
+      if (!input || this.busy()) return;
+      this.busy.set('prep-' + r.id);
+      this.api.post<PrepPlan>(
+        `/api/interviews/${this.entryId()}/rounds/${r.id}/prep-plan`, input)
+        .subscribe({
+          next: (p) => {
+            this.busy.set(null);
+            this.prepPlans.update((m) => ({ ...m, [r.id]: p }));
+            this.prepOpen.set(r.id);
+            this.prepHtmlOpen.set(r.id);
+            this.load(); // 刷新资产列表（新 PrepDoc 资产）
+            this.snack.open(this.t('pb.br.saved'), this.t('common.close'), { duration: 2500 });
+          },
+          error: (e: Error) => {
+            this.busy.set(null);
+            this.snack.open(e.message, this.t('common.close'), { duration: 6000 });
+          },
+        });
+    });
+  }
+
+  /** 加载某轮已有的备考方案（在线阅读）。 */
+  loadPrepPlan(r: BriefRound): void {
+    if (this.prepPlans()[r.id]) {
+      this.prepHtmlOpen.set(this.prepHtmlOpen() === r.id ? null : r.id);
+      return;
+    }
+    this.api.get<PrepPlan>(
+      `/api/interviews/${this.entryId()}/rounds/${r.id}/prep-plan`)
+      .subscribe({
+        next: (p) => {
+          this.prepPlans.update((m) => ({ ...m, [r.id]: p }));
+          this.prepHtmlOpen.set(r.id);
+        },
+        error: () => this.snack.open(this.t('pb.br.prep.empty'), this.t('common.close'), { duration: 3000 }),
+      });
+  }
+
+  /** 导出 PDF：浏览器打印（与 Guidance 导出同模式）。 */
+  exportPrepPdf(r: BriefRound): void {
+    this.prepHtmlOpen.set(r.id);
+    setTimeout(() => window.print(), 300);
+  }
+
   // ---------------- 展示辅助 ----------------
   outcomeClass = outcomeClass;
 
@@ -455,6 +615,14 @@ export class RoundsTimelineComponent implements OnInit {
     this.jumpToBrief.emit();
   }
 
+  /** 2026-10-19:被 Assets 总览调用 —— 平滑滚动到指定轮次卡片。 */
+  focusRound(roundId: string): void {
+    setTimeout(() => {
+      document.getElementById('round-card-' + roundId)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  }
+
   // ---------------- 数据 ----------------
   ngOnInit(): void {
     this.load();
@@ -481,6 +649,8 @@ export class RoundsTimelineComponent implements OnInit {
             };
           }
           this.rounds.set(rs);
+          // 轮次资产（2026-10-19）：与 rounds 同一次 GET 下发
+          this.assets.set(e?.assets ?? []);
           // 无真实轮次但 entry 有 RoundNo(老数据):合成一条展示用,跟 tab 计数的 displayRounds 保持一致
           if (rs.length === 0 && e?.roundNo) {
             this.syntheticRound.set({

@@ -235,6 +235,13 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<DateTimeOffset?>("LastVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Phase")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<Guid?>("RoundId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Sha256")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -267,6 +274,8 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
 
                     b.HasIndex("StoragePath");
 
+                    b.HasIndex("InterviewEntryId", "RoundId");
+
                     b.ToTable("assets", "interviews");
                 });
 
@@ -298,11 +307,11 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .HasMaxLength(20000)
                         .HasColumnType("character varying(20000)");
 
-                    b.Property<string>("DebriefJson")
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DebriefJson")
+                        .HasColumnType("text");
 
                     b.Property<string>("FailureReason")
                         .HasMaxLength(4000)
@@ -486,6 +495,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ChecklistJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("EmailsJson")
                         .HasColumnType("text");
 
@@ -530,9 +542,6 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<string>("RecordingUrl")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("ChecklistJson")
-                        .HasColumnType("text");
 
                     b.Property<DateOnly?>("ScheduledDate")
                         .HasColumnType("date");

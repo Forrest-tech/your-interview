@@ -148,7 +148,11 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.TranscriptText).HasMaxLength(500000);
             e.Property(x => x.TranscriptSegmentsJson).HasColumnType("text");
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+            // 2026-10-19:资产按 Round 管理。历史材料 RoundId/Phase 保持 null,不强制回填。
+            e.Property(x => x.RoundId);
+            e.Property(x => x.Phase).HasConversion<string>().HasMaxLength(10);
             e.HasIndex(x => x.InterviewEntryId);
+            e.HasIndex(x => new { x.InterviewEntryId, x.RoundId });
             e.HasIndex(x => x.StoragePath);                       // 巡检按路径反查;软删条目清理孤儿文件也走它
         });
 

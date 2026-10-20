@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, computed, inject, signal
+  Component, OnDestroy, OnInit, ViewChild, computed, inject, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -89,6 +89,15 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   /** 当前选中的 tab(0=Overview, 1=Rounds, 2=Guidance, 3=Questions, 4=Analysis, 5=Assets, 6=Edit)。 */
   readonly selectedTab = signal(0);
+
+  /** tab 切换：进入 Assets 总览时刷新条目（Rounds 里新传的资产要能立刻看到）。 */
+  onTabChange(idx: number): void {
+    this.selectedTab.set(idx);
+    if (idx === 5) this.load(false); // Assets 是第 6 个 tab
+  }
+
+  /** Rounds 时间线组件（Assets 总览点资产 → 跳转定位用，2026-10-19）。 */
+  @ViewChild('roundsTl') roundsTl?: RoundsTimelineComponent;
 
   readonly id = signal('');
   readonly loading = signal(true);
@@ -191,6 +200,67 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
   }
   readonly assets = computed(() => this.entry()?.assets ?? []);
   readonly rounds = computed(() => this.entry()?.rounds ?? []);
+
+  // ================= 资产总览（2026-10-19：按 Round 分组 + 筛选） =================
+  /** Assets tab 上传区：轮次（必填）/ 阶段。 */
+  readonly uploadRoundId = signal('');
+  readonly uploadPhase = signal('Post');
+  /** 筛选：阶段（all/Pre/Post）、类型（all/kind）。 */
+  readonly assetPhaseFilter = signal('all');
+  readonly assetKindFilter = signal('all');
+
+  /** 轮次 id → 轮次序号（分组标题用）。 */
+  readonly roundOrderOf = computed(() => {
+    const m: Record<string, number> = {};
+    for (const r of this.rounds()) m[r.id] = r.order;
+    return m;
+  });
+
+  /** 过滤后的资产。 */
+  readonly filteredAssets = computed(() => {
+    const pf = this.assetPhaseFilter();
+    const kf = this.assetKindFilter();
+    return this.assets().filter((a) => {
+      if (pf !== 'all' && (a.phase ?? '').toLowerCase() !== pf.toLowerCase()) return false;
+      if (kf !== 'all' && (a.kind ?? '').toLowerCase() !== kf.toLowerCase()) return false;
+      return true;
+    });
+  });
+
+  /** 资产分组：[{roundId, roundOrder, label, assets}]，无轮次的放最后「未归类」。 */
+  readonly assetGroups = computed(() => {
+    const groups = new Map<string, InterviewAsset[]>();
+    for (const a of this.filteredAssets()) {
+      const key = a.roundId ?? '__legacy';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(a);
+    }
+    const orderOf = this.roundOrderOf();
+    return [...groups.entries()]
+      .map(([roundId, items]) => ({
+        roundId,
+        roundOrder: roundId === '__legacy' ? Number.MAX_SAFE_INTEGER : (orderOf[roundId] ?? 0),
+        label: roundId === '__legacy' ? this.t('pb.asset.legacyGroup') : `Round ${orderOf[roundId] ?? '?'}`,
+        assets: [...items].sort((x, y) => x.uploadedAt.localeCompare(y.uploadedAt)),
+      }))
+      .sort((a, b) => a.roundOrder - b.roundOrder);
+  });
+
+  /** Assets 总览点资产 → 跳到 Rounds tab 并定位轮次。 */
+  jumpToRound(roundId: string): void {
+    if (roundId === '__legacy') return;
+    this.selectedTab.set(1); // Rounds 是第 2 个 tab
+    this.roundsTl?.focusRound(roundId);
+  }
+
+  /** 资产类型标签。 */
+  assetKindLabel(kind: string): string {
+    const map: Record<string, string> = {
+      Audio: '录音', Transcript: '转写', Text: '文本', Notes: '纪要',
+      PrepDoc: '备考文档', Email: '邮件', Feedback: '反馈', Other: '其他',
+    };
+    return map[kind] ?? kind;
+  }
 
   /** 每轮的通过概率(roundId -> PassProbability),懒加载。 */
   readonly passProbs = signal<Record<string, PassProbability>>({});
@@ -756,9 +826,16 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
     const file = input.files?.[0];
     if (!file) return;
 
+    const roundId = this.uploadRoundId();
+    if (!roundId) {
+      this.snack.open(this.t('pb.asset.pickRound'), this.t('common.close'), { duration: 4000 });
+      input.value = '';
+      return;
+    }
     this.busy.set('upload');
     this.api.upload<{ id: string }>(
-      `/api/interviews/${this.id()}/assets`, file)
+      `/api/interviews/${this.id()}/assets`, file,
+      { roundId, phase: this.uploadPhase() })
       .subscribe({
         next: () => {
           input.value = '';   // 清空,否则同名文件第二次选不会触发 change
@@ -776,13 +853,18 @@ export class PlaybookDetailComponent implements OnInit, OnDestroy {
 
   /** 粘贴文本建资产(A6):对话框收文本 → POST { textContent } → Kind=Text 登记。 */
   pasteTextAsset(): void {
+    const roundId = this.uploadRoundId();
+    if (!roundId) {
+      this.snack.open(this.t('pb.asset.pickRound'), this.t('common.close'), { duration: 4000 });
+      return;
+    }
     const ref = this.dialog.open(PasteTextDialogComponent, { width: '640px' });
     ref.afterClosed().subscribe((text: string | null) => {
       if (!text) return;
       this.busy.set('upload');
       this.api.post<{ id: string }>(
         `/api/interviews/${this.id()}/assets`,
-        { textContent: text })
+        { textContent: text, roundId, phase: this.uploadPhase() })
         .subscribe({
           next: () => {
             this.busy.set(null);

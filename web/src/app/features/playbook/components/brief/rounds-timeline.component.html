@@ -91,7 +91,7 @@
 
     <div class="tl">
       @for (r of sortedRounds(); track r.id) {
-        <div class="tl-item">
+        <div class="tl-item" [id]="'round-card-' + r.id">
           <div class="tl-dot" [class]="outcomeClass(r.outcome)"></div>
           <mat-card class="tl-card">
             <div class="tl-row-head">
@@ -365,6 +365,79 @@
                     {{ item.text }}
                   </mat-checkbox>
                 }
+              }
+            </div>
+
+            <!-- ★ 本轮材料（2026-10-19：资产按 Round 管理，上下文创建） -->
+            <div class="round-assets">
+              <div class="ra-head">
+                <span class="lbl"><mat-icon inline>folder_open</mat-icon> {{ t('pb.br.rounds.assetsTitle') }}</span>
+              </div>
+
+              @for (phase of phases; track phase) {
+                <div class="ra-phase">
+                  <div class="ra-phase-head">
+                    <span>{{ t(phase === 'Pre' ? 'pb.br.rounds.phasePre' : 'pb.br.rounds.phasePost') }}</span>
+                    <span class="dim small">{{ t(phase === 'Pre' ? 'pb.br.rounds.preHint' : 'pb.br.rounds.postHint') }}</span>
+                  </div>
+
+                  @if (assetsForRound(r.id, phase).length === 0) {
+                    <p class="dim small">{{ t('pb.br.rounds.assetsEmpty') }}</p>
+                  } @else {
+                    <ul class="ra-list">
+                      @for (a of assetsForRound(r.id, phase); track a.id) {
+                        <li>
+                          <mat-icon inline>{{ a.kind === 'Audio' ? 'audiotrack' : 'description' }}</mat-icon>
+                          <span class="ra-name">{{ a.fileName }}</span>
+                          <span class="chip idle">{{ kindLabel(a.kind) }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+
+                  <div class="ra-actions">
+                    <label class="upload-btn">
+                      <input type="file" hidden (change)="uploadRoundAsset(r, phase, $event)">
+                      <span mat-stroked-button>
+                        <mat-icon>upload</mat-icon> {{ t('pb.br.rounds.uploadFile') }}
+                      </span>
+                    </label>
+                    <button mat-stroked-button (click)="pasteRoundText(r, phase)">
+                      <mat-icon>content_paste</mat-icon> {{ t('pb.br.rounds.pasteText') }}
+                    </button>
+                  </div>
+
+                  <!-- 备考方案：仅 Pre 区 -->
+                  @if (phase === 'Pre') {
+                    <div class="ra-prep">
+                      <div class="ra-prep-head">
+                        <span class="lbl"><mat-icon inline>auto_stories</mat-icon> {{ t('pb.br.prep.title') }}</span>
+                        <span class="spacer"></span>
+                        <button mat-stroked-button color="primary"
+                                (click)="openPrepDialog(r)"
+                                [disabled]="busy() === 'prep-' + r.id">
+                          <mat-icon>auto_awesome</mat-icon>
+                          {{ prepPlans()[r.id] ? t('pb.br.prep.regenerate') : t('pb.br.prep.generate') }}
+                        </button>
+                        @if (!prepPlans()[r.id] && hasPrepDoc(r.id)) {
+                          <button mat-button (click)="loadPrepPlan(r)">{{ t('pb.br.prep.title') }}</button>
+                        }
+                        @if (prepPlans()[r.id]) {
+                          <button mat-stroked-button (click)="exportPrepPdf(r)">
+                            <mat-icon>picture_as_pdf</mat-icon> {{ t('pb.br.prep.exportPdf') }}
+                          </button>
+                        }
+                      </div>
+                      @if (busy() === 'prep-' + r.id) {
+                        <p class="dim small"><mat-spinner diameter="16" style="display:inline-block;vertical-align:middle"></mat-spinner> {{ t('pb.br.prep.generating') }}</p>
+                      }
+                      @if (prepPlans()[r.id] && prepHtmlOpen() === r.id) {
+                        <div class="prep-body" [innerHTML]="prepPlanHtml(r)"></div>
+                        <p class="dim small">{{ t('pb.br.prep.generatedAt') }}: {{ prepPlans()[r.id].generatedAt }}</p>
+                      }
+                    </div>
+                  }
+                </div>
               }
             </div>
 

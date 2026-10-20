@@ -161,3 +161,40 @@ export function extractKeywords(text: string, topN = 24): Keyword[] {
     .sort((a, b) => b.count - a.count || b.word.length - a.word.length)
     .slice(0, topN);
 }
+
+/**
+ * 极简 Markdown → 安全 HTML(标题/加粗/行内代码/列表/段落)。
+ * 与 playbook-detail 的 renderMarkdown 同款逻辑,先转义防 XSS。
+ * 备考方案在线阅读 + 打印导出用。
+ */
+export function renderMarkdown(md: string): string {
+  const esc = (md ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = (s: string): string => s
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  const lines = esc.split('\n');
+  const out: string[] = [];
+  let inList = false;
+  for (const line of lines) {
+    const t = line.trim();
+    if (/^#{1,3}\s/.test(t)) {
+      if (inList) { out.push('</ul>'); inList = false; }
+      const level = t.match(/^#+/)![0].length;
+      out.push(`<h${level + 1}>${inline(t.replace(/^#+\s*/, ''))}</h${level + 1}>`);
+    } else if (/^[-*]\s/.test(t)) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push(`<li>${inline(t.replace(/^[-*]\s*/, ''))}</li>`);
+    } else if (/^\d+[.)]\s/.test(t)) {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push(`<p class="md-num">${inline(t)}</p>`);
+    } else if (t === '') {
+      if (inList) { out.push('</ul>'); inList = false; }
+    } else {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push(`<p>${inline(t)}</p>`);
+    }
+  }
+  if (inList) out.push('</ul>');
+  return out.join('\n');
+}

@@ -522,7 +522,8 @@ export class SmartAddDialogComponent {
           requirements: r.requirements ?? '',
           benefits: r.benefits ?? '',
           workAuthorization: r.workAuthorization ?? '',
-          jobType: r.jobType ?? ''
+          jobType: r.jobType ?? '',
+          logoUrl: (r as any).logoUrl ?? ''
         };
       }));
     } else {

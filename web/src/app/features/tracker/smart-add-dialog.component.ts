@@ -401,6 +401,7 @@ export class SmartAddDialogComponent {
           jdSummary: r.jdSummary ?? '', requirements: r.requirements ?? '',
           benefits: r.benefits ?? '', companyDescription: r.companyDescription ?? '',
           link: fetchedUrl, jdText: r.jdText ?? '', sourceKind: 'LinkedIn', status: r.status ?? '',
+          logoUrl: r.logoUrl ?? '',
           message: '', confidence: {}
         } as any;
         this.parsed.set(parsedData);
@@ -409,6 +410,7 @@ export class SmartAddDialogComponent {
           company: parsedData.company, role: parsedData.role, location: parsedData.location,
           salary: parsedData.salary, workMode: parsedData.workMode, priority: 'Medium',
           link: parsedData.link, jdSummary: parsedData.jdSummary, matchKeywords: '',
+          logoUrl: parsedData.logoUrl ?? '',
           deadline: null, status: 'Saved', jdText: parsedData.jdText,
           companyDescription: parsedData.companyDescription,
           requirements: parsedData.requirements,

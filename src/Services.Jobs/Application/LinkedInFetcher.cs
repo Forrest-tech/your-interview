@@ -179,13 +179,20 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                         }
                         if (salary && workMode && jobType) break;
                     }
+                    // 公司 logo：职位头部公司 logo img
+                    let logoUrl = '';
+                    const logoImg = document.querySelector('.jobs-details__main-content img')
+                        || document.querySelector('[class*=company-logo] img')
+                        || document.querySelector('img[alt*=logo i]');
+                    if (logoImg) logoUrl = logoImg.src || '';
                     return {
                         html: html,
                         title: document.title,
                         salary: salary,
                         workMode: workMode,
                         jobType: jobType,
-                        companyDesc: companyDesc
+                        companyDesc: companyDesc,
+                        logoUrl: logoUrl
                     };
                 }");
                 var html = result.GetProperty("html").GetString() ?? "";
@@ -194,6 +201,7 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                 var liSalary = result.TryGetProperty("salary", out var s) ? s.GetString() ?? "" : "";
                 var liWorkMode = result.TryGetProperty("workMode", out var w) ? w.GetString() ?? "" : "";
                 var liJobType = result.TryGetProperty("jobType", out var j) ? j.GetString() ?? "" : "";
+                var liLogo = result.TryGetProperty("logoUrl", out var l) ? l.GetString() ?? "" : "";
                 await page.CloseAsync();
 
                 // 保存登录态
@@ -214,6 +222,9 @@ public sealed class LinkedInFetcher : IAsyncDisposable
                     html = $"<meta name=\"li-workmode\" content=\"{System.Net.WebUtility.HtmlEncode(liWorkMode)}\">\n" + html;
                 if (!string.IsNullOrWhiteSpace(liJobType))
                     html = $"<meta name=\"li-jobtype\" content=\"{System.Net.WebUtility.HtmlEncode(liJobType)}\">\n" + html;
+                // 公司 logo
+                if (!string.IsNullOrWhiteSpace(liLogo))
+                    html = $"<meta name=\"li-logo\" content=\"{System.Net.WebUtility.HtmlEncode(liLogo)}\">\n" + html;
                 // 公司介绍拼到后面，解析器提取
                 if (!string.IsNullOrWhiteSpace(companyDesc))
                     html += $"\n<!--COMPANY_DESC-->\n<div class=\"linkedin-company-desc\">{companyDesc}</div>";

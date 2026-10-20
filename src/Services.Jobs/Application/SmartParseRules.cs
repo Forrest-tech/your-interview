@@ -42,7 +42,7 @@ public sealed record ParsedJdDto(
     string? JdText, string? CompanyDescription, string? Requirements, string? Benefits,
     string? WorkAuthorization,
     DateOnly? Deadline, string? DetectedSource,
-    Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview);
+    Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview, string? LogoUrl = null);
 
 // ============================ 邀请邮件解析(需求 6.2.3) ============================
 
@@ -50,7 +50,7 @@ public sealed record ParsedInviteDto(
     string Status, string Message,
     string? Company, string? Role, int? RoundNo, string? Stage,
     DateTimeOffset? ScheduledAt, string? Location, string? Format, string? Interviewer,
-    string? RawLink, Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview);
+    string? RawLink, Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview, string? LogoUrl = null);
 
 // ============================================================================
 //  确定性解析器:JD
@@ -205,6 +205,7 @@ public static class JdPasteParser
         string? liSalary = null;
         string? liWorkMode = null;
         string? liJobType = null;
+        string? liLogo = null;
         if (isHtml)
         {
             var titleMatch = Regex.Match(raw, @"<title>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -228,6 +229,8 @@ public static class JdPasteParser
             if (wmMatch.Success) liWorkMode = System.Net.WebUtility.HtmlDecode(wmMatch.Groups[1].Value);
             var jtMatch = Regex.Match(raw, @"<meta name=""li-jobtype"" content=""(.*?)""", RegexOptions.IgnoreCase);
             if (jtMatch.Success) liJobType = System.Net.WebUtility.HtmlDecode(jtMatch.Groups[1].Value);
+            var logoMatch = Regex.Match(raw, @"<meta name=""li-logo"" content=""(.*?)""", RegexOptions.IgnoreCase);
+            if (logoMatch.Success) liLogo = System.Net.WebUtility.HtmlDecode(logoMatch.Groups[1].Value);
         }
         var text = isHtml ? HtmlToText(raw.Trim()) : StripLinkedInNoise(raw.Trim());
         var isUrl = kind == PasteKind.Url;
@@ -353,7 +356,7 @@ public static class JdPasteParser
             link, jdText, companyDescription, requirements, benefits,
             workAuthorization,
             deadline, detected ?? (isUrl ? "未知站点" : null),
-            conf, false, false);
+            conf, false, false, liLogo);
     }
 
     public static int CountFilled(ParsedJdDto d)

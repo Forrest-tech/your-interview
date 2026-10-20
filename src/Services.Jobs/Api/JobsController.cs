@@ -318,6 +318,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
                 parsed.Benefits,
                 parsed.CompanyDescription,
                 parsed.Link,
+                parsed.LogoUrl,
                 JdText = html
             });
         }

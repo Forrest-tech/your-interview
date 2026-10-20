@@ -1251,6 +1251,11 @@ public sealed class AddRoundCommandHandler(InterviewsDbContext db)
             e.UpdateRound(r.Id, request.Stage, request.ScheduledDate, request.Interviewers,
                 request.Format, request.Location, InterviewRoundOutcome.Pending, null, null);
         }
+        // 2026-10-20 v2 修复:开始时间此前被丢弃 —— 统一入口/沟通建轮次都带时间,必须落库。
+        if (!string.IsNullOrWhiteSpace(request.ScheduledTime))
+        {
+            r.UpdateDetails(null, request.ScheduledTime, null, null, null, null);
+        }
         await db.SaveChangesAsync(ct);
         return Result.Success(r.Id);
     }
@@ -2170,6 +2175,23 @@ public sealed class GetPrepPlanQueryHandler(InterviewsDbContext db)
 
 /// <summary>改材料归属:RoundId=null → 条目级(沟通记录)。</summary>
 public sealed record ReassignAssetCommand(Guid EntryId, Guid AssetId, Guid? RoundId) : IRequest<Result>;
+
+/// <summary>删除材料(2026-10-20 v2 补齐)。</summary>
+public sealed record DeleteAssetCommand(Guid EntryId, Guid AssetId) : IRequest<Result>;
+
+public sealed class DeleteAssetCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<DeleteAssetCommand, Result>
+{
+    public async Task<Result> Handle(DeleteAssetCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        try { e.RemoveAsset(request.AssetId); }
+        catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Asset.Delete", ex.Message)); }
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
 
 public sealed class ReassignAssetCommandHandler(InterviewsDbContext db)
     : IRequestHandler<ReassignAssetCommand, Result>

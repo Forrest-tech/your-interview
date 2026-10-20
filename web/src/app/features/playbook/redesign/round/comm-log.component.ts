@@ -33,7 +33,7 @@ import { MaterialsListComponent } from './materials-list.component';
       }
 
       @if (useJobs()) {
-        @if (!items().length) {
+        @if (!items().length && !looseAssets().length) {
           <p class="empty">还没有沟通记录。用上方「＋ 添加材料」粘贴第一封邮件或记一条电话备注。</p>
         }
         @for (c of visibleJobsItems(); track c.id) {
@@ -95,6 +95,12 @@ import { MaterialsListComponent } from './materials-list.component';
             }
           </article>
         }
+        @if (looseAssets().length) {
+          <h4 class="loose-title">条目级材料(未关联到具体轮次)</h4>
+          <p class="hint">这些材料直接存在面试条目下(比如从某轮改归属过来的),用每件的「归属」下拉可以移回轮次。</p>
+          <app-materials-list [entryId]="entry().id" [assets]="looseAssets()"
+                              [rounds]="entry().rounds ?? []" (changed)="reload()" />
+        }
       } @else {
         <p class="hint">这个条目没有关联 Tracker 投递,沟通记录用条目级材料承载(与轮次材料同一套,可互相改归属)。</p>
         <app-materials-list [entryId]="entry().id" [assets]="entryAssets()"
@@ -131,6 +137,7 @@ import { MaterialsListComponent } from './materials-list.component';
                background: color-mix(in srgb, #e6a23c 6%, transparent); }
     .arr-title { font-size: 13px; font-weight: 600; }
     .arr-actions { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+    .loose-title { font-size: 14px; margin: 18px 0 4px; }
     .move-row { margin-top: 9px; font-size: 12px; color: var(--yi-text-muted, #777); }
     .fld.sm { border: 1px solid var(--yi-border, #ccc); border-radius: 7px; padding: 4px 7px;
               font-size: 12px; background: transparent; color: inherit; margin-left: 6px; }
@@ -152,6 +159,14 @@ export class CommLogComponent {
     [...(this.entry().rounds ?? [])].sort((a, b) => a.order - b.order));
   readonly entryAssets = computed(() =>
     (this.entry().assets ?? []).filter(a => !a.roundId));
+  /** 已关联投递时:没有 Jobs 镜像行的条目级材料(communicationId 未回填的)。 */
+  readonly looseAssets = computed(() =>
+    this.entryAssets().filter(a => {
+      try {
+        const m = JSON.parse(a.metaJson ?? '{}') as AssetMeta;
+        return !m.communicationId;
+      } catch { return true; }
+    }));
   readonly visibleJobsItems = computed(() =>
     this.items().filter(c => !c.meta.movedToRoundId));
   readonly pendingItems = computed(() =>
@@ -168,7 +183,7 @@ export class CommLogComponent {
         : this.entryAssets().filter(a => {
             try {
               const m = JSON.parse(a.metaJson ?? '{}') as AssetMeta;
-              return !!m.arrangement && m.handlingStatus !== 'Done' && m.handlingStatus !== 'Ignored';
+              return !!m.arrangement && m.handlingStatus === 'Pending';
             } catch { return false; }
           }).length);
     });

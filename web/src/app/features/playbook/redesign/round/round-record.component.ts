@@ -337,7 +337,7 @@ export class RoundRecordComponent {
       }
       const list = this.speakerList();
       if (list.length && !list.includes(this.renameFrom())) this.renameFrom.set(list[0]);
-    });
+    }, { allowSignalWrites: true });
   }
 
   private async loadTranscript(): Promise<void> {

@@ -175,17 +175,18 @@ export class QaImportComponent {
     this.busy.set(true);
     try {
       const res = await this.api.importCandidates({
-        sourceInterviewEntryId: this.entry().id,
-        sourceCompanyName: this.entry().companyName,
-        sourceDate: this.round().scheduledDate ?? undefined,
-        sourceRoundNo: this.round().order,
-        sourceRoundStage: this.round().stage,
-        sourceJobApplicationId: this.entry().jobApplicationId ?? undefined,
+        entryId: this.entry().id,
+        company: this.entry().companyName,
+        date: this.round().scheduledDate ?? undefined,
+        roundNo: this.round().order,
+        roundStage: this.round().stage,
+        applicationId: this.entry().jobApplicationId ?? undefined,
         items: sel.map(c => ({
           question: c.question.questionText,
-          myAnswer: bestAnswerOf(c.question),
+          answer: bestAnswerOf(c.question),
           category: c.category || 'General',
-          difficulty: c.question.difficulty ?? 3
+          difficulty: c.question.difficulty ?? 3,
+          clientKey: c.question.id
         }))
       }).toPromise();
       this.snack.open(

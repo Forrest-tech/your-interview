@@ -179,7 +179,7 @@ export class PlaybookDetailComponent {
         const pending = rs.find(r => r.outcome === 'Pending');
         this.selectedRoundId.set((pending ?? rs[rs.length - 1]).id);
       }
-    });
+    }, { allowSignalWrites: true });
   }
 
   async load(): Promise<void> {
@@ -395,7 +395,7 @@ function countPendingFromAssets(e: InterviewDetail): number {
     if (a.roundId) return false;
     try {
       const m = JSON.parse(a.metaJson ?? '{}') as { arrangement?: unknown; handlingStatus?: string };
-      return !!m.arrangement && m.handlingStatus !== 'Done' && m.handlingStatus !== 'Ignored';
+      return !!m.arrangement && m.handlingStatus === 'Pending';
     } catch { return false; }
   }).length;
 }

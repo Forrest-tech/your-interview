@@ -310,22 +310,33 @@ export class PrepReportComponent {
       if (key === this.loadedKey) return;
       this.loadedKey = key;
       if (r?.sections.length && !this.activeSec()) this.activeSec.set(r.sections[0].id);
-      const ids = new Set<string>();
-      for (const s of r?.sections ?? []) {
-        for (const q of s.questions ?? []) if (q.knowledgeId) ids.add(q.knowledgeId);
-      }
-      if (ids.size) {
-        this.api.listKnowledge().subscribe({
-          next: items => {
-            const map = new Map(this.knowledge());
-            for (const it of items) if (ids.has(it.id)) map.set(it.id, it);
-            this.knowledge.set(map);
-            this.topics.set([...new Set(items.map(i => i.topic).filter(Boolean))].sort());
-          },
-          error: () => undefined
-        });
-      }
-    });
+      // 拉全量 Tech Stack:分类候选 + 把备考题与已有条目按(来源条目+题面)对齐 ——
+      // 对齐上的题就是同一条记录:显示「已在 Tech Stack」,答案读写都走那一份,
+      // 并把 knowledgeId 回写进报告,之后不再重复匹配。
+      this.api.listKnowledge().subscribe({
+        next: items => {
+          const map = new Map<string, KnowledgeItem>();
+          for (const it of items) map.set(it.id, it);
+          this.knowledge.set(map);
+          this.topics.set([...new Set(items.map(i => i.topic).filter(Boolean))].sort());
+          const rep = this.report();
+          if (!rep) return;
+          let dirty = false;
+          const next: PrepReport = JSON.parse(JSON.stringify(rep)) as PrepReport;
+          for (const sec of next.sections) {
+            for (const q of sec.questions ?? []) {
+              if (q.knowledgeId) continue;
+              const hit = items.find(k =>
+                k.sourceInterviewEntryId === this.entry().id &&
+                (k.question ?? '').trim().toLowerCase() === q.question.trim().toLowerCase());
+              if (hit) { q.knowledgeId = hit.id; dirty = true; }
+            }
+          }
+          if (dirty) void this.persist(next);
+        },
+        error: () => undefined
+      });
+    }, { allowSignalWrites: true });
   }
 
   @HostListener('window:scroll')
@@ -474,20 +485,20 @@ export class PrepReportComponent {
     try {
       const std = prepStdText(q.stdTechnical).text || prepStdText(q.stdSpoken).text;
       const res = await this.api.importCandidates({
-        sourceInterviewEntryId: this.entry().id,
-        sourceCompanyName: this.entry().companyName,
-        sourceDate: this.round().scheduledDate ?? undefined,
-        sourceRoundNo: this.round().order,
-        sourceRoundStage: this.round().stage,
-        sourceJobApplicationId: this.entry().jobApplicationId ?? undefined,
+        entryId: this.entry().id,
+        company: this.entry().companyName,
+        date: this.round().scheduledDate ?? undefined,
+        roundNo: this.round().order,
+        roundStage: this.round().stage,
+        applicationId: this.entry().jobApplicationId ?? undefined,
         items: [{
           question: q.question,
-          myAnswer: std || q.myAnswer || undefined,
+          answer: std || q.myAnswer || undefined,
           category: cat,
           difficulty: 3
         }]
       }).toPromise();
-      const newId = res?.itemIds?.[0];
+      const newId = res?.ids?.[0];
       if (newId) {
         const r = this.report();
         if (r) {

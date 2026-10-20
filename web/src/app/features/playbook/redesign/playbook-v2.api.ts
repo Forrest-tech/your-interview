@@ -154,30 +154,59 @@ export class PlaybookV2Api {
 
   // ---------------- Tech Stack(Knowledge) ----------------
 
-  listKnowledge(): Observable<KnowledgeItem[]> {
-    return this.api.get<KnowledgeItem[]>('/api/knowledge');
+  /** 列表接口是分页信封 {items,...};entryId 可按来源条目过滤。 */
+  listKnowledge(entryId?: string): Observable<KnowledgeItem[]> {
+    const params: Record<string, unknown> = { pageSize: 100 };
+    if (entryId) params['entryId'] = entryId;
+    return this.api.get<{ items: KnowledgeItem[] }>('/api/knowledge', params)
+      .pipe(map(r => r.items ?? []));
   }
 
   getKnowledge(id: string): Observable<KnowledgeItem> {
     return this.api.get<KnowledgeItem>(`/api/knowledge/${id}`);
   }
 
+  /** 导入契约与后端 InterviewCandidateRow 对齐:title/topic 必填,答案进 betterAnswer。 */
   importCandidates(body: {
-    sourceInterviewEntryId?: string;
-    sourceCompanyName?: string;
-    sourceDate?: string;
-    sourceRoundNo?: number;
-    sourceRoundStage?: string;
-    sourceJobApplicationId?: string;
-    items: { question: string; myAnswer?: string; category?: string; difficulty?: number }[];
-  }): Observable<{ created: number; skipped: number; itemIds: string[] }> {
-    return this.api.post('/api/knowledge/import-candidates', body);
+    entryId?: string;
+    company?: string;
+    date?: string;
+    roundNo?: number;
+    roundStage?: string;
+    applicationId?: string;
+    items: {
+      question: string; answer?: string; category: string;
+      difficulty?: number; importance?: number; clientKey?: string;
+    }[];
+  }): Observable<{ created: number; skipped: number; total: number; ids: string[] }> {
+    return this.api.post('/api/knowledge/import-candidates', {
+      entryId: body.entryId ?? null,
+      company: body.company ?? null,
+      date: body.date ?? null,
+      roundNo: body.roundNo ?? null,
+      roundStage: body.roundStage ?? null,
+      applicationId: body.applicationId ?? null,
+      items: body.items.map(i => ({
+        title: i.question.slice(0, 80),
+        topic: i.category,
+        question: i.question,
+        difficulty: i.difficulty ?? 3,
+        importance: i.importance ?? 3,
+        betterAnswer: i.answer ?? null,
+        clientKey: i.clientKey ?? null
+      }))
+    });
   }
 
+  /** 后端是两个端点:/answer 只写 myAnswer,/better-answer 只写 betterAnswer。 */
   updateKnowledgeAnswer(id: string, body: {
     answer?: string; betterAnswer?: string; editNote?: string;
   }): Observable<unknown> {
-    return this.api.put(`/api/knowledge/${id}/answer`, body);
+    if (body.betterAnswer !== undefined) {
+      return this.api.put(`/api/knowledge/${id}/better-answer`,
+        { betterAnswer: body.betterAnswer });
+    }
+    return this.api.put(`/api/knowledge/${id}/answer`, { myAnswer: body.answer ?? null });
   }
 
   addKnowledgeSource(id: string, body: Record<string, unknown>): Observable<unknown> {

@@ -536,6 +536,15 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>v2:删除一件材料(此前全站无此入口,材料页签补齐)。</summary>
+    [HttpDelete("{id:guid}/assets/{assetId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> DeleteAsset(Guid id, Guid assetId, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteAssetCommand(id, assetId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     /// <summary>v2:保存逐题复盘 JSON(标准答案用户编辑也走这里)。</summary>
     [HttpPut("{id:guid}/questions/{questionId:guid}/review")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]

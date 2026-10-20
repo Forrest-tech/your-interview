@@ -200,7 +200,7 @@ export class RoundCardComponent {
         this.tab.set(r.outcome === 'Pending' ? 'prep' : 'record');
         this.editing.set(false);
       }
-    });
+    }, { allowSignalWrites: true });
   }
 
   outcomeLabel(o: string): string {

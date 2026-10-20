@@ -312,6 +312,15 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         return asset;
     }
 
+    /// <summary>删除一件材料(2026-10-20 v2 材料页签补齐 —— 此前全站没有删材料入口)。</summary>
+    public void RemoveAsset(Guid assetId)
+    {
+        var asset = _assets.FirstOrDefault(a => a.Id == assetId)
+            ?? throw new InvalidOperationException("材料不存在");
+        _assets.Remove(asset);
+        Touch();
+    }
+
     /// <summary>开始转写(用户点「开始转写」,或 Worker 状态推进时调用)。</summary>
     public void StartTranscription()
     {

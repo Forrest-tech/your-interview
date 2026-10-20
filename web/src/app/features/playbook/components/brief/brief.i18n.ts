@@ -77,6 +77,12 @@ export const BRIEF_I18N: Record<string, { zh: string; en: string; fr?: string }>
   'pb.br.rounds.confirmDelete': { zh: '确认删除这一轮吗？', en: 'Delete this round?' },
   'pb.br.rounds.deleted': { zh: '已删除', en: 'Deleted' },
   'pb.br.rounds.empty': { zh: '还没有轮次记录', en: 'No rounds recorded yet' },
+  'pb.br.rounds.addTranscript': { zh: '添加转写稿', en: 'Add transcript', fr: 'Ajouter la transcription' },
+  'pb.br.rounds.addRecording': { zh: '添加录音', en: 'Add recording', fr: 'Ajouter un enregistrement' },
+  'pb.br.rounds.addPrepQ': { zh: '添加面前问题', en: 'Add pre-interview questions', fr: 'Ajouter des questions' },
+  'pb.br.rounds.addChecklist': { zh: '添加准备清单', en: 'Add prep checklist', fr: 'Ajouter une liste' },
+  'pb.br.rounds.moreActions': { zh: '更多操作', en: 'More actions', fr: 'Plus d\u2019actions' },
+  'pb.br.rounds.editRound': { zh: '编辑本轮', en: 'Edit round', fr: 'Modifier ce tour' },
 
   // ---------- 轮次材料（2026-10-19，资产按 Round 管理） ----------
   'pb.br.rounds.assetsTitle': { zh: '本轮材料', en: 'Round materials' },

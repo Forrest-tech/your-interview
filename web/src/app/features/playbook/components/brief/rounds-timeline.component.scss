@@ -35,9 +35,10 @@
 .tl-dot.warn { background: #f9a825; }
 .tl-dot.bad { background: #c62828; }
 .tl-dot.idle { background: #9e9e9e; }
-.tl-card { padding: 4px 0; }
+.tl-card { padding: 4px 0; border-radius: 12px; --mdc-elevated-card-container-shape: 12px; }
 
-.tl-row-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px 0; }
+.tl-row-head { display: flex; align-items: center; gap: 4px; padding: 12px 8px 0 16px; }
+.tl-title { flex: 1; }
 .tl-title { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .tl-date { font-weight: 600; }
 .badge {
@@ -57,27 +58,54 @@
 .edit-grid .wide { grid-column: 1 / -1; }
 .row-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 16px; }
 
+/* ===== 2026-10-19 重构：Round 卡片区块设计系统 ===== */
+.sec { padding: 12px 16px; }
+.sec + .sec { border-top: 1px solid #f1f2f4; }
+.sec-head { display: flex; align-items: center; min-height: 28px; margin-bottom: 2px; }
+.sec-title { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: rgba(0,0,0,.72); }
+.sec-title > mat-icon { font-size: 17px; width: 17px; height: 17px; color: rgba(0,0,0,.48); }
+.count { font-size: 11px; font-weight: 500; color: rgba(0,0,0,.55); background: #f1f3f5; border-radius: 10px; padding: 1px 7px; }
+
+/* 区块次要动作：桌面 hover 现，移动端常驻半透明 */
+.act { width: 28px; height: 28px; line-height: 28px; opacity: 0; transition: opacity .15s ease; }
+.sec .act mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.sec:hover .act, .sec:focus-within .act,
+.email-row:hover .act, .email-row:focus-within .act { opacity: 1; }
+@media (hover: none) {
+  .sec .act { opacity: .6; }
+}
+
+/* 顶部 kebab：轮次唯一编辑/删除入口 */
+.kebab { opacity: 0; transition: opacity .15s ease; }
+.tl-card:hover .kebab, .tl-card:focus-within .kebab { opacity: 1; }
+.tl-card .kebab mat-icon { font-size: 20px; width: 20px; height: 20px; }
+@media (hover: none) {
+  .kebab { opacity: .6; }
+}
+
+/* 紧凑空状态：一行高的虚线添加卡 */
+.add-row { display: flex; align-items: center; gap: 6px; width: 100%; height: 36px; padding: 0 10px; margin-top: 4px; background: transparent; border: 1px dashed #d8d8d8; border-radius: 8px; color: rgba(0,0,0,.55); font-size: 13px; font-family: inherit; cursor: pointer; }
+.add-row mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.add-row:hover { background: rgba(0,0,0,.03); border-color: #b9b9b9; color: rgba(0,0,0,.85); }
+
 /* 邮件 */
-.emails { padding: 8px 16px 0; }
-.emails-head { display: flex; align-items: center; margin-bottom: 4px; }
-.email-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; margin: 8px 0; }
-.email-form .wide { grid-column: 1 / -1; }
-.email-form .row-actions { grid-column: 1 / -1; padding: 0; }
 .email-list { display: flex; flex-direction: column; }
-.email-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid #f0f0f0; }
+.email-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid #f4f4f4; }
+.email-row:first-child { border-top: none; padding-top: 4px; }
 .email-main { flex: 1; min-width: 0; }
 .email-top { display: flex; gap: 10px; align-items: baseline; }
 .email-subject { font-size: 14px; margin-top: 2px; }
 .email-snippet { font-size: 13px; margin-top: 2px; }
+.email-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; margin: 8px 0 4px; }
+.email-form .wide { grid-column: 1 / -1; }
+.email-form .row-actions { grid-column: 1 / -1; padding: 0; }
 
 /* 转写稿 */
-.transcript { padding: 4px 16px 0; }
 .transcript-text {
   white-space: pre-wrap; font-family: inherit; font-size: 13px;
-  background: #fafafa; border: 1px solid #eee; border-radius: 6px;
+  background: #fafafa; border: 1px solid #eee; border-radius: 8px;
   padding: 12px; max-height: 320px; overflow: auto; margin: 4px 0 0;
 }
-/* ★ R07 打通:转写/录音操作行 */
 .tr-actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 .tr-send { margin-top: 8px; }
 .upload-btn { cursor: pointer; display: inline-flex; }
@@ -88,23 +116,28 @@
   font-size: 14px; color: rgba(0,0,0,0.87);
 }
 .upload-btn:hover [mat-stroked-button] { background: rgba(0,0,0,0.04); }
+.sec audio { width: 100%; margin-top: 4px; }
 
-.tl-actions { display: flex; align-items: center; padding: 4px 8px 8px; }
+/* 面前问题 / 准备清单 */
+.pq-list { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
+.pq-list li { margin: 3px 0; line-height: 1.6; }
+.cl-list { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
 
-.add-card { display: flex; gap: 12px; align-items: center; padding: 12px 16px; }
-.err-card { display: flex; gap: 12px; align-items: center; padding: 16px; }
-
-/* 2026-10-19:轮次材料 + 备考方案 */
-.round-assets { margin-top: 12px; border-top: 1px dashed #e0e0e0; padding-top: 10px; }
-.ra-head .lbl { font-weight: 600; }
-.ra-phase { margin: 10px 0; padding: 10px 12px; background: #fafafa; border-radius: 8px; }
-.ra-phase-head { display: flex; gap: 10px; align-items: baseline; font-weight: 600; margin-bottom: 6px; }
-.ra-list { list-style: none; margin: 6px 0; padding: 0; }
-.ra-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+/* 本轮材料：Phase 分组 */
+.phase { margin-top: 8px; background: #fafbfc; border: 1px solid #eff0f2; border-radius: 10px; padding: 10px 12px; }
+.phase-head { display: flex; align-items: center; gap: 8px; }
+.phase-name { font-size: 13px; font-weight: 600; color: rgba(0,0,0,.75); }
+.phase-hint { font-size: 12px; color: rgba(0,0,0,.48); margin: 2px 0 0; }
+.ra-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.ra-list li { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+.ra-list li mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(0,0,0,.5); }
 .ra-name { font-size: 14px; }
-.ra-actions { display: flex; gap: 8px; margin-top: 8px; }
-.ra-prep { margin-top: 12px; border-top: 1px dashed #ddd; padding-top: 10px; }
-.ra-prep-head { display: flex; align-items: center; gap: 8px; }
+.chip { font-size: 11px; font-weight: 500; background: #f1f3f5; border-radius: 8px; padding: 1px 8px; color: rgba(0,0,0,.55); }
+.phase-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.phase-actions .mat-mdc-stroked-button { height: 32px; font-size: 13px; }
+.phase-actions .upload-btn [mat-stroked-button] { height: 32px; line-height: 32px; font-size: 13px; }
+.prep-block { margin-top: 10px; border-top: 1px dashed #e3e4e6; padding-top: 8px; }
+.prep-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .prep-body { margin-top: 10px; font-size: 14px; line-height: 1.7; max-height: 480px; overflow-y: auto; }
 .prep-body h2, .prep-body h3, .prep-body h4 { margin: 12px 0 6px; }
 .prep-body p { margin: 4px 0; }
@@ -112,3 +145,4 @@
 @media print {
   .prep-body { max-height: none; overflow: visible; }
 }
+

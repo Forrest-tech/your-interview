@@ -13,6 +13,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ApiClient } from '../../../../core/api/api-client';
 import { I18nService } from '../../../../core/i18n/i18n.service';
@@ -73,7 +74,7 @@ interface RoundEditForm {
     MatCardModule, MatButtonModule, MatIconModule, MatChipsModule,
     MatFormFieldModule, MatInputModule, MatSelectModule,
     MatProgressBarModule, MatSnackBarModule, MatDividerModule,
-    MatCheckboxModule, MatDialogModule, MatProgressSpinnerModule,
+    MatCheckboxModule, MatDialogModule, MatProgressSpinnerModule, MatMenuModule,
   ],
   templateUrl: './rounds-timeline.component.html',
   styleUrl: './rounds-timeline.component.scss',

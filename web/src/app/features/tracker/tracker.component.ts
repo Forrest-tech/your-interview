@@ -1653,7 +1653,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             <button mat-button (click)="cancelEditJdSummary()">{{ t('common.cancel') }}</button>
           </div>
         } @else {
-          <div class="about-job-body" [class.collapsed]="!aboutJobExpanded()">
+          <div class="about-job-body">
           <!-- Job Description -->
           <div class="jd-subhead">{{ t('tracker.dJobDescHeader') }}</div>
           @if (richBlocks(jdSummaryDisplay()).length > 0) {
@@ -1690,9 +1690,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             }
           }
           </div>
-          <button class="more-link" (click)="aboutJobExpanded.set(!aboutJobExpanded())">
-            {{ aboutJobExpanded() ? t('common.showLess') : t('common.showMore') }}
-          </button>
+
         }
       </section>
 

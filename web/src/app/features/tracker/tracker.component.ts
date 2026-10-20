@@ -29,6 +29,7 @@ import { Application, ApplicationStatus, AnswerTemplate, Communication, Communic
 import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
 import { SmartAddDialogComponent } from './smart-add-dialog.component';
 import { extractPdfText } from '../../core/utils/pdf-text';
+import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
 
 /** 状态下拉的选项 —— 顺序即漏斗顺序,下拉里也按流程排,避免用户找"面试中"要找半天。 */
 const STATUS_ORDER: ApplicationStatus[] = [
@@ -1541,7 +1542,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
   imports: [
     CommonModule, MatDialogModule, MatButtonModule, MatIconModule,
     MatChipsModule, MatDividerModule, FormsModule, MatProgressBarModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule
+    MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule,
+    PdfContentViewerComponent
   ],
   template: `
     <h2 mat-dialog-title class="detail-header">
@@ -1840,8 +1842,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             <span>{{ resumeFileName() }}</span>
           </div>
           <!-- PDF 查看器:单页显示,滚动翻页 -->
-          @if (resumeFileUrl()) {
-            <iframe class="doc-pdf-viewer" [src]="resumeFileUrl()" title="Resume PDF"></iframe>
+          @if (resumePdfRawUrl()) {
+            <app-pdf-content-viewer [pdfUrl]="resumePdfRawUrl()"></app-pdf-content-viewer>
           }
         } @else {
           <p class="field-hint">{{ t('tracker.dResumeHint') }}</p>
@@ -2575,6 +2577,7 @@ export class ApplicationDetailDialogComponent {
   /** Documents tab: 简历文件名和 PDF URL（null = 无文件） */
   readonly resumeFileName = signal<string | null>(null);
   readonly resumeFileUrl = signal<SafeResourceUrl | null>(null);
+  readonly resumePdfRawUrl = signal<string | null>(null);
 
   /**
    * Documents tab: 有效简历来源。
@@ -2612,11 +2615,13 @@ export class ApplicationDetailDialogComponent {
           this.api.getBlob(`/api/jobs/applications/${this.app.id}/resume-file`).subscribe({
             next: (blob) => {
               const url = URL.createObjectURL(blob);
+              this.resumePdfRawUrl.set(url);
               this.resumeFileUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
             },
-            error: () => { this.resumeFileUrl.set(null); }
+            error: () => { this.resumePdfRawUrl.set(null); this.resumeFileUrl.set(null); }
           });
         } else {
+          this.resumePdfRawUrl.set(null);
           this.resumeFileUrl.set(null);
         }
       },

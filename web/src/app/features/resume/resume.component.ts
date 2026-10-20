@@ -11,6 +11,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { ApiClient } from '../../core/api/api-client';
 import { extractPdfText } from '../../core/utils/pdf-text';
+import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
 
 /**
  * 简历配置页(独立页面,不再放在 profile/account 里)。
@@ -26,7 +27,7 @@ import { extractPdfText } from '../../core/utils/pdf-text';
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatCardModule, MatIconModule,
-    MatButtonModule, MatFormFieldModule, MatInputModule
+    MatButtonModule, MatFormFieldModule, MatInputModule, PdfContentViewerComponent
   ],
   templateUrl: './resume.component.html',
   styleUrl: './resume.component.scss'
@@ -45,6 +46,7 @@ export class ResumeComponent implements OnInit {
   private pendingPdf: File | null = null;
   /** PDF 预览 URL(blob)。null = 后端没有存 PDF。 */
   readonly resumePdfUrl = signal<SafeResourceUrl | null>(null);
+  readonly resumePdfRawUrl = signal<string | null>(null);
   savedResumePreview = signal('');
   savedResumeDate = signal('');
   private readonly resumeKey = 'yi-my-resume';
@@ -85,9 +87,10 @@ export class ResumeComponent implements OnInit {
     this.api.getBlob('/api/jobs/resume-file').subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
+        this.resumePdfRawUrl.set(url);
         this.resumePdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
       },
-      error: () => { this.resumePdfUrl.set(null); /* 没有 PDF 就不显示,不阻断 */ }
+      error: () => { this.resumePdfRawUrl.set(null); this.resumePdfUrl.set(null); /* 没有 PDF 就不显示,不阻断 */ }
     });
   }
 
@@ -140,6 +143,7 @@ export class ResumeComponent implements OnInit {
     this.resumeDraft = '';
     this.resumeFileName.set('');
     this.pendingPdf = null;
+    this.resumePdfRawUrl.set(null);
     this.resumePdfUrl.set(null);
     this.refreshResumePreview();
     // 同步清空后端

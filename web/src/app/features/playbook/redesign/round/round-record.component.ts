@@ -14,7 +14,7 @@ import { QaZoomService } from '../../../../core/qa-zoom/qa-zoom.service';
 import { TtsPlayerService } from '../../../../core/tts/tts-player.service';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { makeV2Fmt, makeV2T } from '../v2.helpers';
+import { isAudioAsset, makeV2Fmt, makeV2T } from '../v2.helpers';
 import {
   DimReview, QuestionReview, RoundReview, TranscriptSegment,
   parseQuestionReview, safeJson, serializeQuestionReview
@@ -316,7 +316,7 @@ export class RoundRecordComponent {
   readonly roundAssets = computed(() =>
     (this.entry().assets ?? []).filter(a => a.roundId === this.round().id));
   readonly audioAsset = computed(() =>
-    this.roundAssets().find(a => a.kind === 'Audio') ?? null);
+    this.roundAssets().find(a => isAudioAsset(a)) ?? null);
   readonly hasTranscript = computed(() => this.segments().length > 0);
   readonly questions = computed(() =>
     (this.entry().questions ?? [])

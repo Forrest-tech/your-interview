@@ -112,3 +112,14 @@ function decodeEntities(s: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
 }
+
+/**
+ * 文件资产里区分真录音与截图:两者共用同一条文件管线落库(kind 都是 Audio),
+ * 判别靠 contentType 优先、扩展名兜底 —— 否则截图会被当成录音塞进播放器
+ * (2026-10-21 审计实测:同轮先落截图再传录音时,实录播放条指向了 PNG)。
+ */
+export function isAudioAsset(a: { kind: string; contentType?: string | null; fileName?: string | null }): boolean {
+  if (a.kind !== 'Audio') return false;
+  if (a.contentType) return a.contentType.startsWith('audio/');
+  return /\.(mp3|m4a|wav|webm|ogg)$/i.test(a.fileName ?? '');
+}

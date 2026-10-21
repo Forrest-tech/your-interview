@@ -12,7 +12,7 @@ import {
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { formatLabel, joinNames, makeV2T } from '../v2.helpers';
+import { formatLabel, isAudioAsset, joinNames, makeV2T } from '../v2.helpers';
 
 /**
  * 材料列表(2026-10-20 定稿):本轮(或条目级)的全部原始件。
@@ -63,7 +63,7 @@ import { formatLabel, joinNames, makeV2T } from '../v2.helpers';
         }
 
         <div class="mat-actions">
-          @if (a.kind === 'Audio') {
+          @if (isAudioAsset(a)) {
             <button type="button" class="mini-btn" (click)="loadFile(a)">{{ t('pb.v2.m.playAudio') }}</button>
           }
           @if (hasBody(a)) {
@@ -78,7 +78,7 @@ import { formatLabel, joinNames, makeV2T } from '../v2.helpers';
         </div>
 
         @if (fileUrl(a.id); as url) {
-          @if (a.kind === 'Audio') { <audio controls [src]="url" class="player"></audio> }
+          @if (isAudioAsset(a)) { <audio controls [src]="url" class="player"></audio> }
           @else { <img [src]="url" class="shot-img" [alt]="t('pb.v2.m.imgAltMaterial')"> }
         }
         @if (shotUrl() && shotFor() === a.id) {
@@ -153,6 +153,7 @@ export class MaterialsListComponent {
   }
 
   readonly formatLabel = formatLabel;
+  readonly isAudioAsset = isAudioAsset;
 
   joinNamesOf(names: string[]): string {
     return joinNames(this.i18n, names);

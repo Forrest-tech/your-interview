@@ -347,7 +347,8 @@ export class RoundsTimelineComponent implements OnInit {
     }
   }
   saveTranscript(r: BriefRound): void {
-    this.updateRoundDetails(r, { transcript: this.transcriptDraft[r.id] || null }, () => this.transcriptOpen.set(null));
+    // COD-04 部分更新协议:草稿清空须发空串(后端存 null);发 null 会被当作「未提供」而保留旧值。
+    this.updateRoundDetails(r, { transcript: this.transcriptDraft[r.id] || '' }, () => this.transcriptOpen.set(null));
   }
 
   /**
@@ -415,7 +416,8 @@ export class RoundsTimelineComponent implements OnInit {
     }
   }
   saveRecording(r: BriefRound): void {
-    this.updateRoundDetails(r, { recordingUrl: this.recordingDraft[r.id] || null }, () => this.recordingOpen.set(null));
+    // COD-04 部分更新协议:草稿清空须发空串(后端存 null);发 null 会被当作「未提供」而保留旧值。
+    this.updateRoundDetails(r, { recordingUrl: this.recordingDraft[r.id] || '' }, () => this.recordingOpen.set(null));
   }
 
   /** ★ 面前问题 */

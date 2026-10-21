@@ -272,11 +272,13 @@ export class RoundCardComponent {
       await this.api.updateRound(this.entry().id, this.round().id, {
         stage: this.eStage(),
         scheduledDate: this.eDate() || null,
-        scheduledTime: this.eTime() || null,
+        // COD-04 部分更新协议:扩展字段传空串 = 清空、缺省/null = 保持。
+        // 本表单显式编辑这两个字段,清空须发空串,不能再用 || null(会被后端当作保持)。
+        scheduledTime: this.eTime(),
         interviewers: this.eInterviewers() || null,
         format: this.eFormat() || null,
         location: this.eLocation() || null,
-        meetingLink: this.eLink() || null,
+        meetingLink: this.eLink(),
         outcome: this.eOutcome(),
         feedback: this.eFeedback() || null
       }).toPromise();

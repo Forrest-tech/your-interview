@@ -1063,19 +1063,27 @@ public sealed class InterviewRound : Entity
         Feedback = feedback;
     }
 
-    /// <summary>更新轮次扩展信息(会议链接/时间/备考/邮件/文稿/录音/清单)。</summary>
+    /// <summary>
+    /// 更新轮次扩展信息(会议链接/时间/备考/邮件/文稿/录音/清单)—— 部分更新协议(COD-04):
+    /// 每个字段 null = 调用方未提供,保持原值;空字符串 = 明确清空(存 null);非空 = 赋值。
+    /// 此前无条件整字段赋值,前端只传基础字段保存一次即静默抹除转写/备考题/邮件/录音。
+    /// </summary>
     internal void UpdateDetails(string? meetingLink, string? scheduledTime,
         string? prepQuestionsJson, string? emailsJson, string? transcript, string? recordingUrl,
         string? checklistJson = null)
     {
-        MeetingLink = meetingLink;
-        ScheduledTime = scheduledTime;
-        PrepQuestionsJson = prepQuestionsJson;
-        EmailsJson = emailsJson;
-        Transcript = transcript;
-        RecordingUrl = recordingUrl;
-        if (checklistJson != null) ChecklistJson = checklistJson;
+        MeetingLink = ApplyPartial(meetingLink, MeetingLink);
+        ScheduledTime = ApplyPartial(scheduledTime, ScheduledTime);
+        PrepQuestionsJson = ApplyPartial(prepQuestionsJson, PrepQuestionsJson);
+        EmailsJson = ApplyPartial(emailsJson, EmailsJson);
+        Transcript = ApplyPartial(transcript, Transcript);
+        RecordingUrl = ApplyPartial(recordingUrl, RecordingUrl);
+        ChecklistJson = ApplyPartial(checklistJson, ChecklistJson);
     }
+
+    /// <summary>部分更新单字段:未提供(null)保持、空串清空、非空赋值。</summary>
+    private static string? ApplyPartial(string? provided, string? current)
+        => provided is null ? current : provided.Length == 0 ? null : provided;
 
     /// <summary>只记结果,不动其它字段 —— 结果回写不该清掉已填的时间/面试官/形式。</summary>
     internal void RecordOutcome(InterviewRoundOutcome outcome) => Outcome = outcome;

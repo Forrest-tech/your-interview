@@ -333,6 +333,11 @@ public sealed record AddRoundCommand(
     string? Interviewers = null, string? Format = null, string? Location = null,
     string? ScheduledTime = null) : IRequest<Result<Guid>>;
 
+/// <summary>
+/// 更新轮次。扩展字段(MeetingLink 起的 7 个)走部分更新协议(COD-04):
+/// null/缺省 = 未提供、保持原值;空字符串 = 清空;非空 = 赋值。
+/// Controller 的 UpdateRoundBody 与本命令同为可空字段,「未提供」信息逐层不丢失。
+/// </summary>
 public sealed record UpdateRoundCommand(
     Guid EntryId, Guid RoundId, string Stage, DateOnly? ScheduledDate, string? Interviewers,
     string? Format, string? Location, string Outcome, string? Notes,

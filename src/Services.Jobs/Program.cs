@@ -124,8 +124,8 @@ var app = builder.Build();
 app.UseServiceDefaults(ServiceName);
 app.MapControllers();
 
-try { await JobsDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger); }
-catch (Exception ex) { app.Logger.LogError(ex, "Jobs 数据库初始化失败 —— 服务继续启动"); }
+// COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync(ServiceName, JobsDbSeeder.MigrateAndSeedAsync);
 
 app.Run();
 

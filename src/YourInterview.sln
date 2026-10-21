@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Analysis.Work
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.Interviews.Tests", "Services.Interviews.Tests\YourInterview.Services.Interviews.Tests.csproj", "{A6DF7A28-66D1-44C6-8FD1-3FDC645A6EFB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.BuildingBlocks.Tests", "BuildingBlocks.Tests\YourInterview.BuildingBlocks.Tests.csproj", "{703C9C4F-A2B8-4F80-8FE5-4ABB844B4A3E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -96,5 +98,9 @@ Global
 		{A6DF7A28-66D1-44C6-8FD1-3FDC645A6EFB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A6DF7A28-66D1-44C6-8FD1-3FDC645A6EFB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6DF7A28-66D1-44C6-8FD1-3FDC645A6EFB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{703C9C4F-A2B8-4F80-8FE5-4ABB844B4A3E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{703C9C4F-A2B8-4F80-8FE5-4ABB844B4A3E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{703C9C4F-A2B8-4F80-8FE5-4ABB844B4A3E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{703C9C4F-A2B8-4F80-8FE5-4ABB844B4A3E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -199,6 +201,53 @@ public static class ServiceDefaults
         }));
 
         return app;
+    }
+
+    /// <summary>
+    /// 启动迁移/种子的统一处置(COD-14,票02):失败即启动失败(fail-fast)。
+    ///
+    /// ★ 为什么选进程退出而不是「记日志继续启动 + /health 报错」:
+    ///   REQ-01 已实证旧口径的危害 —— 迁移链断裂后服务带着缺表/缺列的库继续启动,
+    ///   /health/live 照常 200,问题延后到用户操作时才以满屏 500 暴露,且无自恢复路径。
+    ///   本系统是单机部署,没有编排层做滚动/金丝雀,「半启动」没有任何消费者:
+    ///   宁可进程在 app.Run() 之前抛回原异常直接退出,让部署脚本/看门狗第一时间发现。
+    ///   七个业务服务一律经此入口,口径一致,不再逐个 Program.cs 各写一份 try/catch。
+    /// </summary>
+    /// <param name="migrateAndSeed">服务的 MigrateAndSeedAsync 委托(迁移+种子)。</param>
+    /// <param name="logger">记录 Error 级失败日志的 logger(通常为 app.Logger)。</param>
+    /// <param name="serviceName">服务名,仅用于日志定位。</param>
+    public static async Task RunStartupMigrationsOrFailAsync(
+        Func<Task> migrateAndSeed, ILogger logger, string serviceName)
+    {
+        ArgumentNullException.ThrowIfNull(migrateAndSeed);
+        ArgumentNullException.ThrowIfNull(logger);
+        try
+        {
+            await migrateAndSeed();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "{Service} 数据库初始化(迁移/种子)失败 —— 启动中止(fail-fast):" +
+                "迁移未完成时带病启动只会让接口以 500 暴露问题,进程直接退出,请修好数据库后重启",
+                serviceName);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="RunStartupMigrationsOrFailAsync(Func{Task}, ILogger, string)"/> 的 Program.cs 便捷重载:
+    /// 各服务只需一行 `await app.RunStartupMigrationsOrFailAsync("xxx-api", XxxDbSeeder.MigrateAndSeedAsync);`
+    /// </summary>
+    public static Task RunStartupMigrationsOrFailAsync(
+        this WebApplication app, string serviceName,
+        Func<IServiceProvider, IConfiguration, ILogger, Task> migrateAndSeed)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(migrateAndSeed);
+        return RunStartupMigrationsOrFailAsync(
+            () => migrateAndSeed(app.Services, app.Configuration, app.Logger),
+            app.Logger, serviceName);
     }
 
     /// <summary>

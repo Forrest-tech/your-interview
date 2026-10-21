@@ -156,14 +156,8 @@ app.UseServiceDefaults(ServiceName);
 app.MapControllers();
 
 // ---------- 启动时迁移 + 种子 ----------
-try
-{
-    await IdentityDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger);
-}
-catch (Exception ex)
-{
-    app.Logger.LogError(ex, "Identity 数据库初始化失败(数据库不可用?)—— 服务继续启动,稍后重试");
-}
+// COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync(ServiceName, IdentityDbSeeder.MigrateAndSeedAsync);
 
 app.Run();
 

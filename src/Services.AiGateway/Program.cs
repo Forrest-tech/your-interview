@@ -90,7 +90,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-try { await AiGatewayDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger); }
-catch (Exception ex) { app.Logger.LogError(ex, "AiGateway 数据库初始化失败 —— 服务继续启动"); }
+// COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync("aigateway-api", AiGatewayDbSeeder.MigrateAndSeedAsync);
 
 app.Run();

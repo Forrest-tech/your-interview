@@ -70,8 +70,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// 建表 + 灌种子(迁移失败不阻塞启动,便于本地调试)
-try { await KnowledgeDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger); }
-catch (Exception ex) { app.Logger.LogError(ex, "Knowledge 数据库初始化失败 —— 服务继续启动"); }
+// 建表 + 灌种子。COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync("knowledge-api", KnowledgeDbSeeder.MigrateAndSeedAsync);
 
 app.Run();

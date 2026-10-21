@@ -59,6 +59,16 @@ type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
         @if (round().location) { · {{ round().location }} }
       </div>
 
+      @if (round().scheduledDate) {
+        <div class="cal-bar" data-testid="round-cal-bar">
+          <mat-icon>event</mat-icon>
+          <span>{{ t('pb.v2.r.calInApp') }}</span>
+          <span class="cal-remind">{{ t('pb.v2.r.calReminders') }}</span>
+          <span class="spacer"></span>
+          <button type="button" class="mini-btn" (click)="toggleEdit()">{{ t('pb.v2.r.editRound') }}</button>
+        </div>
+      }
+
       @if (editing()) {
         <div class="edit-grid">
           <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [ngModel]="eStage()" (ngModelChange)="eStage.set($event)"></label>
@@ -128,6 +138,10 @@ type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
     .rc-meta { font-size: 12.5px; color: var(--yi-text-muted, #888); }
     .spacer { flex: 1; }
     .rc-outcome { font-size: 13px; color: var(--yi-text-muted, #777); margin-top: 5px; }
+    .cal-bar { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 13px;
+               border: 1px dashed var(--yi-border, #bbb); border-radius: 10px; padding: 7px 12px; }
+    .cal-bar mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--yi-accent, #3f51b5); }
+    .cal-bar .cal-remind { color: var(--yi-text-muted, #777); }
     .rc-outcome a { color: var(--yi-accent, #3f51b5); }
     .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
                 border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; }

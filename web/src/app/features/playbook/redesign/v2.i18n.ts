@@ -108,6 +108,8 @@ export const V2_I18N: Record<string, { zh: string; en: string; fr: string }> = {
   'pb.v2.r.matNote': { zh: '本轮全部原始件:邮件 / 录音 / 转写 / 备注 / 指导材料都在这里,旧材料按面试前/后归置。', en: 'All originals for this round: emails / recordings / transcripts / notes / guidance — older items are filed by before/after the interview.', fr: 'Tous les originaux du tour : e-mails / enregistrements / transcriptions / notes / guides ; les anciens sont classés avant/après l’entretien.' },
   'pb.v2.r.uploadFile': { zh: '上传文件', en: 'Upload file', fr: 'Envoyer un fichier' },
   'pb.v2.r.addMaterialHere': { zh: '＋ 添加材料到本轮', en: '+ Add material to this round', fr: '+ Ajouter un document à ce tour' },
+  'pb.v2.r.calInApp': { zh: '已加入应用内日历', en: 'In the in-app calendar', fr: 'Dans le calendrier intégré' },
+  'pb.v2.r.calReminders': { zh: '提醒:提前 1 天 + 提前 1 小时', en: 'Reminders: 1 day + 1 hour before', fr: 'Rappels : 1 jour et 1 heure avant' },
   'pb.v2.r.exportTitle': { zh: '导出本轮实录', en: 'Export round record', fr: 'Exporter le compte rendu du tour' },
   'pb.v2.r.fileSuffix': { zh: '实录', en: 'record', fr: 'compte-rendu' },
   'pb.v2.r.tgTranscript': { zh: '对话原文', en: 'Transcript', fr: 'Transcription' },

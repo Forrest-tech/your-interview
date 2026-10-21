@@ -1,4 +1,47 @@
 <div class="page">
+  <!-- 左侧条目导航(定稿第八节):分组口径与列表页同一套 helper;点击只切路由不整页刷新 -->
+  <aside class="entry-nav" data-testid="entry-nav">
+    <div class="nav-group">
+      <div class="nav-group-title">
+        <span>{{ t('pb.section.active') }}</span>
+        <span class="count-badge">{{ navActive().length }}</span>
+      </div>
+      <div class="nav-items">
+        @for (e of navActive(); track e.id) {
+          <button type="button" class="nav-item" [class.on]="e.id === id()"
+                  (click)="goEntry(e.id)">
+            <span class="nav-company">{{ e.companyName }}</span>
+            <span class="nav-role">{{ e.role }}</span>
+          </button>
+        }
+      </div>
+    </div>
+    <div class="nav-group">
+      <button type="button" class="nav-group-toggle" data-testid="nav-completed-toggle"
+              [attr.aria-expanded]="navCompletedOpen()"
+              (click)="navCompletedOpen.set(!navCompletedOpen())">
+        <mat-icon>{{ navCompletedOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+        <span>{{ t('pb.section.completed') }}</span>
+        <span class="count-badge">{{ navCompleted().length }}</span>
+      </button>
+      @if (navCompletedOpen()) {
+        <div class="nav-items">
+          @for (e of navCompleted(); track e.id) {
+            <button type="button" class="nav-item" [class.on]="e.id === id()"
+                    (click)="goEntry(e.id)">
+              <span class="nav-company">{{ e.companyName }}</span>
+              <span class="nav-role">{{ e.role }}</span>
+              @if (navOutcome(e); as oc) {
+                <span class="result-badge" [class]="oc">{{ e.result }}</span>
+              }
+            </button>
+          }
+        </div>
+      }
+    </div>
+  </aside>
+
+  <div class="page-main">
   <a mat-button class="back" routerLink="/playbook">
     <mat-icon>arrow_back</mat-icon> {{ t('pb.v2.d.back') }}
   </a>
@@ -21,18 +64,15 @@
             <h1>{{ e.companyName }} · {{ e.role }}</h1>
             <span class="status-badge">{{ statusText() }}</span>
           </div>
-          <p class="ehead-meta">
-            @if (application(); as app) {
-              {{ fmt('pb.v2.d.appliedOn', { date: (app.appliedDate ?? '').slice(0, 10) || '—' }) }}
-              @if (app.source) { · {{ fmt('pb.v2.d.viaSource', { src: app.source }) }} }
-              @if (recruiterLine()) { · {{ t('pb.v2.d.recruiter') }} {{ recruiterLine() }} }
-              · {{ fmt('pb.v2.d.readinessPct', { n: readiness() }) }}
-              @if (lastContactDate()) { · {{ t('pb.v2.d.lastContact') }} {{ lastContactDate() }} }
-            } @else {
-              {{ fmt('pb.v2.d.readinessPct', { n: readiness() }) }}
-              @if (recruiterLine()) { · {{ t('pb.v2.d.recruiter') }} {{ recruiterLine() }} }
-              @if (lastContactDate()) { · {{ t('pb.v2.d.lastContact') }} {{ lastContactDate() }} }
-            }
+          <!-- 元信息五项常驻(2026-10-21 定稿第一节,覆盖 X1 的"无值隐藏"):
+               投递日期 / 来源 / 准备度 / Recruiter / 最近联系永远渲染带标签,
+               无值显示「—」(与四格条 Resume Score 同风格);不再分关联/未关联两套。 -->
+          <p class="ehead-meta" data-testid="header-meta">
+            <span class="meta-item">{{ t('pb.v2.d.metaApplied') }} {{ (application()?.appliedDate ?? '').slice(0, 10) || '—' }}</span>
+            · <span class="meta-item">{{ t('pb.v2.d.metaSource') }} {{ application()?.source || '—' }}</span>
+            · <span class="meta-item">{{ t('pb.v2.d.metaReadiness') }} {{ readiness() }}%</span>
+            · <span class="meta-item">{{ t('pb.v2.d.recruiter') }} {{ recruiterLine() || '—' }}</span>
+            · <span class="meta-item">{{ t('pb.v2.d.lastContact') }} {{ lastContactDate() || '—' }}</span>
           </p>
           @if (editingBasic()) {
             <div class="basic-edit">
@@ -47,7 +87,15 @@
             </div>
           }
         </div>
-      <!-- 岗位四格条(展开说明行收在四格条容器内部底部) -->
+        </div>
+        @if (nextStep(); as ns) {
+          <aside class="next-card" data-testid="next-step-card">
+            <div class="nc-label">{{ t('pb.v2.d.nextLabel') }}</div>
+            <div class="nc-text">{{ ns.text }}</div>
+          </aside>
+        }
+      </header>
+      <!-- 岗位四格条:上区通栏行(展开说明行收在四格条容器内部底部) -->
       <div class="strip-wrap">
         <section class="strip" data-testid="info-strip">
           <button type="button" class="cell" (click)="toggleCell('jd')">
@@ -67,7 +115,7 @@
           </button>
           <button type="button" class="cell" (click)="toggleCell('score')">
             <span class="cell-label">{{ t('pb.v2.d.stripScore') }}</span>
-            <span class="cell-body big">{{ application()?.resumeScore != null ? application()!.resumeScore : '—' }}</span>
+            <span class="cell-body big">{{ resumeScore() != null ? resumeScore() : '—' }}</span>
             <span class="cell-more">{{ expandedCell() === 'score' ? t('pb.v2.d.collapse') : t('pb.v2.d.howDerived') }}</span>
           </button>
         </section>
@@ -77,12 +125,16 @@
               @case ('jd') { <pre class="full-text">{{ jdFullText() || t('pb.v2.d.jdFullEmpty') }}</pre> }
               @case ('company') { <pre class="full-text">{{ companyCellText() || t('pb.v2.d.companyFullEmpty') }}</pre> }
               @case ('resume') {
-                <p class="full-note">{{ fmt('pb.v2.d.resumeNote', { name: resumeFile()?.fileName || t('pb.v2.d.resumeUnlinked') }) }}</p>
+                <p class="full-note resume-title">{{ resumeFile()?.fileName || t('pb.v2.d.resumeUnlinked') }}</p>
+                @if (resumePdfUrl()) {
+                  <app-pdf-content-viewer [pdfUrl]="resumePdfUrl()"></app-pdf-content-viewer>
+                } @else if (resumeFile()?.textContent || baseResumeText()) {
+                  <pre class="full-text">{{ resumeFile()?.textContent || baseResumeText() }}</pre>
+                }
               }
               @case ('score') {
                 <p class="full-note">
-                  {{ t('pb.v2.d.scoreNoteBase') }}@if (application()?.resumeScore != null) { {{ fmt('pb.v2.d.scoreThis', { n: application()!.resumeScore! }) }} } @else { {{ t('pb.v2.d.scoreNotAnalyzed') }} }
-                  @if (application()?.matchKeywords) { {{ fmt('pb.v2.d.scoreKeywords', { kw: application()!.matchKeywords! }) }} }
+                  {{ t('pb.v2.d.scoreNoteBase') }}@if (resumeMatch(); as m) { {{ fmt('pb.v2.d.scoreThis', { n: m.score }) }} {{ fmt('pb.v2.d.scoreKeywords', { kw: m.hit.join(', ') }) }} } @else { {{ t('pb.v2.d.scoreNotAnalyzed') }} }
                   @if (application()?.passRateEstimate) { {{ fmt('pb.v2.d.scorePassRate', { v: application()!.passRateEstimate! }) }} }
                 </p>
               }
@@ -108,14 +160,6 @@
           </button>
         </mat-menu>
       </div>
-        </div>
-        @if (nextStep(); as ns) {
-          <aside class="next-card" data-testid="next-step-card">
-            <div class="nc-label">{{ t('pb.v2.d.nextLabel') }}</div>
-            <div class="nc-text">{{ ns.text }}</div>
-          </aside>
-        }
-      </header>
     </section>
 
     <!-- ② 统一入口 -->
@@ -224,4 +268,5 @@
       }
     </section>
   }
+  </div>
 </div>

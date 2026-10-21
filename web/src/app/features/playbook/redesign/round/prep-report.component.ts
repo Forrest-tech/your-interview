@@ -48,14 +48,19 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
               / {{ fmt('pb.v2.p.srcPast', { n: r.sources?.pastQuestions ?? 0 }) }}
               / {{ fmt('pb.v2.p.srcWeak', { n: r.sources?.weaknesses ?? 0 }) }}
             </div>
+            @if (r.sources?.details?.length) {
+              <div class="ph-sub src-details" data-testid="prep-source-details">
+                @for (d of r.sources!.details!; track d.key) {
+                  <span class="src-detail">{{ sourceLabel(d.key) }}: {{ t('pb.v2.srcst.' + d.status) }}@if (d.count != null) { ({{ d.count }}) }</span>
+                }
+              </div>
+            }
           } @else {
-            <div class="ph-sub">{{ t('pb.v2.p.defaultSub') }}</div>
+            <div class="ph-sub">{{ t('pb.v2.p.fwNote') }}</div>
           }
         </div>
         <span class="spacer"></span>
         <app-qa-zoom></app-qa-zoom>
-        <button mat-stroked-button (click)="openIntel()">{{ t('pb.v2.p.intelSearch') }}</button>
-        <button mat-stroked-button (click)="openGlassdoor()">{{ t('pb.v2.p.glassdoor') }}</button>
         @if (report()) {
           <button mat-stroked-button (click)="openExport()">{{ t('pb.v2.p.exportPrep') }}</button>
         }
@@ -80,16 +85,16 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
           </label>
           <p class="hint">{{ t('pb.v2.p.genHint') }}</p>
         </div>
-      } @else {
+      }
         <div class="prep-body">
           <nav class="toc">
-            @for (s of report()!.sections; track s.id) {
+            @for (s of displayReport()!.sections; track s.id) {
               <button type="button" class="toc-item" [class.on]="activeSec() === s.id"
                       (click)="jumpTo(s.id)">{{ s.title }}</button>
             }
           </nav>
           <div class="sections">
-            @for (s of report()!.sections; track s.id) {
+            @for (s of displayReport()!.sections; track s.id) {
               <section class="psec" [id]="'prep-sec-' + s.id" data-testid="prep-section">
                 <h4>{{ s.title }}</h4>
                 @for (b of s.blocks ?? []; track $index) {
@@ -212,66 +217,67 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
             }
           </div>
         </div>
-      }
     </div>
   `,
   styles: [`
     .prep { padding: 4px 2px; }
-    .qa-text { font-size: calc(14.5px * var(--qa-scale, 1)); line-height: 1.65; }
+    .qa-text { font-size: calc(15px * var(--qa-scale, 1)); line-height: 1.65; }
     .pre { white-space: pre-wrap; }
     .prep-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
-    .ph-title { font-size: 15px; font-weight: 700; }
-    .ph-sub { font-size: 12px; color: var(--yi-text-muted, #888); margin-top: 2px; max-width: 560px; }
+    .ph-title { font-size: 16px; font-weight: 600; }
+    .ph-sub { font-size: 13px; color: var(--yi-text-muted, #888); margin-top: 2px; max-width: 560px; }
+    .ph-sub.src-details { display: flex; gap: 2px 14px; flex-wrap: wrap; max-width: none; }
+    .src-detail { white-space: nowrap; }
     .spacer { flex: 1; }
-    .notice { font-size: 12.5px; color: var(--yi-text-muted, #777); }
+    .notice { font-size: 13px; color: var(--yi-text-muted, #777); }
     .notice.warn { color: #b3261e; }
     .gen-box { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; max-width: 720px; }
-    .gen-box label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px;
+    .gen-box label { display: flex; flex-direction: column; gap: 5px; font-size: 13px;
                      color: var(--yi-text-muted, #777); }
     .fld { border: 1px solid var(--yi-border, #ccc); border-radius: 8px; padding: 8px 10px;
-           font-size: 13px; background: transparent; color: inherit; box-sizing: border-box; }
-    .fld.sm { padding: 5px 8px; font-size: 12.5px; }
-    .hint { font-size: 12px; color: var(--yi-text-muted, #999); }
+           font-size: 14px; background: transparent; color: inherit; box-sizing: border-box; }
+    .fld.sm { padding: 5px 8px; font-size: 14px; }
+    .hint { font-size: 13px; color: var(--yi-text-muted, #999); }
     .prep-body { display: grid; grid-template-columns: 170px 1fr; gap: 20px; margin-top: 12px; }
     @media (max-width: 760px) { .prep-body { grid-template-columns: 1fr; } .toc { position: static !important; flex-direction: row !important; flex-wrap: wrap; } }
     .toc { position: sticky; top: 8px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
     .toc-item { text-align: left; border: none; background: transparent; color: inherit; cursor: pointer;
-                font-size: 12.5px; padding: 6px 9px; border-radius: 7px; }
+                font-size: 14px; padding: 6px 9px; border-radius: 7px; }
     .toc-item.on { background: color-mix(in srgb, var(--yi-accent, #3f51b5) 14%, transparent); font-weight: 700; }
     .psec { margin-bottom: 22px; scroll-margin-top: 10px; }
-    .psec h4 { font-size: 15px; margin: 0 0 8px; }
+    .psec h4 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
     .script-box { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 8px 0; }
-    .sb-title { font-size: 12.5px; font-weight: 700; color: var(--yi-text-muted, #777); margin-bottom: 4px; }
+    .sb-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); margin-bottom: 4px; }
     .script-box p { margin: 2px 0 8px; }
-    .pts { margin: 4px 0 8px; padding-left: 20px; font-size: 13.5px; line-height: 1.65; }
+    .pts { margin: 4px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.65; }
     .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
     .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
-                border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; }
-    .mine-tag { font-size: 10.5px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+                border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 500; cursor: pointer; }
+    .mine-tag { font-size: 12px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
                 border-radius: 999px; padding: 1px 7px; }
     .pq { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 9px 0; }
     .pq.weak { border-color: #e57373; background: color-mix(in srgb, #e57373 5%, transparent); }
     .pq-head { display: flex; gap: 8px; align-items: flex-start; }
-    .weak-pin { font-size: 11px; font-weight: 700; color: #c62828; white-space: nowrap; margin-top: 3px; }
+    .weak-pin { font-size: 12px; font-weight: 700; color: #c62828; white-space: nowrap; margin-top: 3px; }
     .pq-text { font-weight: 600; }
     .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
-    .tag { font-size: 11px; border: 1px solid var(--yi-border, #ccc); border-radius: 999px; padding: 1px 8px;
+    .tag { font-size: 12px; border: 1px solid var(--yi-border, #ccc); border-radius: 999px; padding: 1px 8px;
            color: var(--yi-text-muted, #777); }
     .sync-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
-    .sync-tag { font-size: 11px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+    .sync-tag { font-size: 12px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
                 border-radius: 999px; padding: 2px 9px; }
-    .sync-note { font-size: 11.5px; color: var(--yi-text-muted, #888); }
+    .sync-note { font-size: 13px; color: var(--yi-text-muted, #888); }
     .sync-answer { margin-top: 6px; }
-    .sa-label { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #777); }
+    .sa-label { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); }
     .sync-answer p { margin: 4px 0; }
     .std-line { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
-    .std-label { font-size: 12px; font-weight: 700; color: var(--yi-accent, #3f51b5); }
+    .std-label { font-size: 13px; font-weight: 700; color: var(--yi-accent, #3f51b5); }
     .std-p { margin: 4px 0 2px; }
     .join-row { display: flex; gap: 10px; align-items: flex-end; margin-top: 10px; flex-wrap: wrap;
                 border-top: 1px dashed var(--yi-border, #ddd); padding-top: 10px; }
-    .join-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px;
+    .join-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
                       color: var(--yi-text-muted, #777); }
-    .join-note { font-size: 11.5px; color: var(--yi-text-muted, #999); }
+    .join-note { font-size: 13px; color: var(--yi-text-muted, #999); }
   `]
 })
 export class PrepReportComponent {
@@ -306,9 +312,80 @@ export class PrepReportComponent {
 
   readonly report = computed(() => safeJson<PrepReport>(this.round().prepReportJson));
 
+  /**
+   * 展示用报告:已生成 → 用生成的;未生成 → 默认框架(2026-10-21 定稿 4.1)。
+   * 框架是确定性模板:与生成报告同构(八段 + 左目录 + 滚动高亮),文案全走
+   * v2.i18n 三语键,不调 AI、不落库;生成入口(gen-box)保留在框架上方。
+   */
+  readonly displayReport = computed<PrepReport | null>(
+    () => this.report() ?? this.frameworkReport());
+
+  private frameworkReport(): PrepReport {
+    const pts = (keys: string[]): PrepBlock[] =>
+      [{ type: 'points', items: keys.map(k => this.t(k)) }];
+    const sec = (id: string, name: string, keys: string[]): PrepSection => ({
+      id, title: this.t(`pb.v2.p.fw.${name}.title`), blocks: pts(keys), questions: []
+    });
+    const p = (name: string, n: number): string[] =>
+      Array.from({ length: n }, (_, i) => `pb.v2.p.fw.${name}.p${i + 1}`);
+    const tech: PrepSection = {
+      id: 'tech-qa',
+      title: this.t('pb.v2.p.fw.techQa.title'),
+      blocks: [
+        ...pts(p('techQa', 3)),
+        {
+          type: 'points', title: this.t('pb.v2.p.fw.focusTitle'),
+          items: [1, 2, 3].map(i => this.t(`pb.v2.p.fw.focus.${this.stageFocusCat()}.p${i}`))
+        }
+      ],
+      questions: []
+    };
+    return {
+      sections: [
+        sec('greeting', 'greeting', p('greeting', 4)),
+        sec('intro-listen', 'introListen', p('introListen', 4)),
+        sec('self-intro', 'selfIntro', p('selfIntro', 4)),
+        sec('deep-dive', 'deepDive', p('deepDive', 4)),
+        tech,
+        sec('behavioral', 'behavioral', p('behavioral', 4)),
+        sec('ask-back', 'askBack', p('askBack', 4)),
+        sec('closing', 'closing', p('closing', 4))
+      ]
+    };
+  }
+
+  /** 技术问答段的 stage 适配:按轮次 stage 关键词归类重点。 */
+  private stageFocusCat(): 'screen' | 'technical' | 'design' | 'behavioral' | 'final' | 'default' {
+    const st = (this.round().stage ?? '').toLowerCase();
+    if (/screen|phone|recruit|hr/.test(st)) return 'screen';
+    if (/design|architect|system/.test(st)) return 'design';
+    if (/behav|culture|fit/.test(st)) return 'behavioral';
+    if (/final|hiring|manager|onsite|panel/.test(st)) return 'final';
+    if (/tech|cod|engineer|deep/.test(st)) return 'technical';
+    return 'default';
+  }
+
+  /** Sources 明细行的标签(后端 details.key → 文案键)。 */
+  sourceLabel(key: string): string {
+    switch (key) {
+      case 'questionBank': return this.t('pb.v2.p.srcQb');
+      case 'company': return this.t('pb.v2.p.srcCompany');
+      case 'web': return this.t('pb.v2.p.srcWeb');
+      case 'glassdoor': return this.t('pb.v2.p.srcGlassdoor');
+      case 'manualExperiences': return this.t('pb.v2.p.srcManual');
+      default: return key;
+    }
+  }
+
   private loadedKey = '';
 
   constructor() {
+    // 默认框架(未生成)时目录也要有默认高亮段 —— 与生成报告同一口径。
+    effect(() => {
+      const secs = this.displayReport()?.sections;
+      if (secs?.length && !this.activeSec()) this.activeSec.set(secs[0].id);
+    }, { allowSignalWrites: true });
+
     effect(() => {
       const r = this.report();
       const key = this.round().id + ':' + (r?.generatedAt ?? '');
@@ -346,7 +423,7 @@ export class PrepReportComponent {
 
   @HostListener('window:scroll')
   onScroll(): void {
-    const r = this.report();
+    const r = this.displayReport();
     if (!r) return;
     let current = this.activeSec();
     for (const s of r.sections) {
@@ -393,7 +470,9 @@ export class PrepReportComponent {
       const r = await this.api.generatePrepReport(this.entry().id, this.round().id, {
         jdText: this.entry().jdText ?? null,
         resumeText: this.resumeDraft().trim() || null,
-        experiences: this.experiencesDraft().trim() || null
+        experiences: this.experiencesDraft().trim() || null,
+        // 生成语言跟随系统语言(账号 preferredLanguage 决定界面语言,同一口径)
+        language: this.i18n.lang()
       }).toPromise();
       const parsed = safeJson<PrepReport>(r?.prepReportJson);
       this.notice.set(parsed?.generatedBy === 'local-aggregation'
@@ -536,23 +615,7 @@ export class PrepReportComponent {
     this.changed.emit();
   }
 
-  // ---------------- 机经对话框 / 导出 ----------------
-
-  // ---------------- 机经来源(外部搜索,与旧版头部同款入口,按定稿移入备考) ----------------
-
-  openIntel(): void {
-    const c = this.entry().companyName?.trim();
-    if (!c) return;
-    const q = encodeURIComponent(`${c} interview questions`);
-    window.open(`https://www.google.com/search?q=${q}`, '_blank', 'noopener');
-  }
-
-  openGlassdoor(): void {
-    const c = this.entry().companyName?.trim();
-    if (!c) return;
-    window.open(`https://www.glassdoor.com/Search/results.htm?keyword=${encodeURIComponent(c)}`,
-      '_blank', 'noopener');
-  }
+  // ---------------- 导出 ----------------
 
   openExport(): void {
     const e = this.entry();

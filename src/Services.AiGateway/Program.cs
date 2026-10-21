@@ -37,6 +37,18 @@ builder.Services.AddHttpClient("llm", c =>
     ConnectTimeout = TimeSpan.FromSeconds(20),
 });
 
+// 备考数据源外部检索(Tavily / Serper):短请求,20 秒足够。
+builder.Services.AddHttpClient("prep-search", c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(20);
+});
+
+// 截图视觉 OCR:图片 + 模型推理,给 90 秒。
+builder.Services.AddHttpClient("vision", c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(90);
+});
+
 // 客户端工厂:按协议(openai-compatible / azure-openai / anthropic)派发。
 // 单例安全 —— 只持有 IHttpClientFactory 与 ILoggerFactory。
 builder.Services.AddSingleton<YourInterview.SharedContracts.Ai.ILlmClientFactory,

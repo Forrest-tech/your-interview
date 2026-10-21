@@ -47,6 +47,8 @@ export interface AssetMeta {
   handlingStatus?: 'Pending' | 'Done' | 'Ignored' | string;
   /** 粘贴截图(原图)的资产 id —— 截图是本材料的附件,不是独立类型。 */
   screenshotAssetId?: string;
+  /** 邮件主题聚合标识(归一化主题 key,定稿第九节):同主题往来共用,供展示聚合。 */
+  threadKey?: string;
   /** 关联到的 Interviews 材料 id(沟通镜像行指回材料本体)。 */
   assetId?: string;
   /** 已被移入某轮次的材料:沟通时间线不再重复展示。 */
@@ -152,6 +154,15 @@ export interface PrepSection {
   questions?: PrepQuestionItem[];
 }
 
+/** 备考数据源逐项状态(2026-10-21:后端 sources.details,与 AiGateway 口径一致)。 */
+export interface PrepSourceDetail {
+  key: 'questionBank' | 'company' | 'web' | 'glassdoor' | 'manualExperiences' | string;
+  /** fetched 已抓取 / disabled 未启用 / notConfigured 未配置 / noData 无数据 / failed 抓取失败 */
+  status: 'fetched' | 'disabled' | 'notConfigured' | 'noData' | 'failed' | string;
+  count?: number;
+  links?: string[];
+}
+
 export interface PrepReport {
   generatedAt?: string;
   generatedBy?: string;
@@ -162,6 +173,7 @@ export interface PrepReport {
     resume?: boolean;
     pastQuestions?: number;
     weaknesses?: number;
+    details?: PrepSourceDetail[];
   };
   sections: PrepSection[];
 }

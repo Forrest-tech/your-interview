@@ -30,6 +30,13 @@ public sealed class PrepPlanFlowTests : IAsyncLifetime
             return Task.FromResult(new AiCompletionResult(
                 "# 备考方案\n- 重点:URL shortener", "fake-model", 10, 20, 5));
         }
+
+        public Task<PrepSourceSettingsDto> GetPrepSourceSettingsAsync(CancellationToken ct)
+            => Task.FromResult(new PrepSourceSettingsDto(true, true, false, false, null, false, null, null));
+
+        public Task<PrepSourceSearchDto> SearchPrepSourcesAsync(string source, string company,
+            string? role, string? stage, CancellationToken ct)
+            => Task.FromResult(new PrepSourceSearchDto(source, "disabled", null, [], null));
     }
 
     public async Task InitializeAsync()

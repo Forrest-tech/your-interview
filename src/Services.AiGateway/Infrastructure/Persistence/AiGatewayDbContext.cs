@@ -17,6 +17,7 @@ public sealed class AiGatewayDbContext(DbContextOptions<AiGatewayDbContext> opti
     public const string Schema = "aigateway";
 
     public DbSet<AiSetting> AiSettings => Set<AiSetting>();
+    public DbSet<PrepSourceSetting> PrepSourceSettings => Set<PrepSourceSetting>();
     public DbSet<AiCallLog> CallLogs => Set<AiCallLog>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -36,6 +37,16 @@ public sealed class AiGatewayDbContext(DbContextOptions<AiGatewayDbContext> opti
             e.Property(x => x.Endpoint).HasMaxLength(1024);
             e.Property(x => x.ApiVersion).HasMaxLength(50);
             e.Property(x => x.DisplayName).HasMaxLength(200);
+        });
+
+        // 备考数据源配置(2026-10-21):开关 + 搜索服务商/密钥,一人一条。
+        b.Entity<PrepSourceSetting>(e =>
+        {
+            e.ToTable("prep_source_settings");
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.SearchProvider).HasMaxLength(50);
+            // 密钥用 text,理由同 AiSetting.ApiKey(厂商 key 长度差异大)。
+            e.Property(x => x.SearchApiKey).HasColumnType("text");
         });
 
         // 调用日志:只记元数据,绝不记 prompt 全文与 key。

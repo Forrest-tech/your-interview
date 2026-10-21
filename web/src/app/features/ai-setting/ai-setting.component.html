@@ -207,6 +207,72 @@
     </ul>
   </section>
 
+  <!-- 备考数据源(2026-10-21):生成备考报告时按公司+岗位自动匹配抓取,
+       取代旧的"点按钮跳外链"。开关存 AiGateway 用户级配置,跟随账号。 -->
+  <section class="sp-card" data-testid="prep-sources-card">
+    <h2 class="sp-card-title">
+      <mat-icon>travel_explore</mat-icon>
+      <span>{{ t('prepSrc.title') }}</span>
+    </h2>
+
+    <p class="sp-card-desc">{{ t('prepSrc.desc') }}</p>
+
+    <div class="ps-toggles">
+      <mat-checkbox [ngModel]="psQb()" (ngModelChange)="psQb.set($event)">
+        {{ t('prepSrc.qb') }}
+      </mat-checkbox>
+      <mat-checkbox [ngModel]="psCompany()" (ngModelChange)="psCompany.set($event)">
+        {{ t('prepSrc.company') }}
+      </mat-checkbox>
+      <mat-checkbox [ngModel]="psWeb()" (ngModelChange)="psWeb.set($event)">
+        {{ t('prepSrc.web') }}
+      </mat-checkbox>
+      <mat-checkbox [ngModel]="psGlassdoor()" (ngModelChange)="psGlassdoor.set($event)">
+        {{ t('prepSrc.glassdoor') }}
+      </mat-checkbox>
+    </div>
+
+    <div class="form-grid">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('prepSrc.provider') }}</mat-label>
+        <mat-select [ngModel]="psProvider()" (ngModelChange)="psProvider.set($event)">
+          <mat-option value="tavily">Tavily</mat-option>
+          <mat-option value="serper">Serper</mat-option>
+        </mat-select>
+        <mat-hint>{{ t('prepSrc.providerHint') }}</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('prepSrc.keyLabel') }}</mat-label>
+        <input matInput type="password" autocomplete="off" spellcheck="false"
+               [ngModel]="psKey()"
+               (ngModelChange)="psKey.set($event)"
+               [placeholder]="t('prepSrc.keyPlaceholder')">
+        <mat-hint>{{ t('prepSrc.keyHint') }}</mat-hint>
+      </mat-form-field>
+    </div>
+
+    <div class="act-row">
+      <button mat-flat-button color="primary" [disabled]="psBusy()" (click)="savePrepSources()">
+        <mat-icon>save</mat-icon>
+        <span>{{ t('setting.save') }}</span>
+      </button>
+      @if (psHint()) {
+        <span class="saved-hint" [class.err]="psHintKind() === 'err'">{{ psHint() }}</span>
+      }
+    </div>
+
+    <p class="remote-line" [class.on]="psStatus()?.hasSearchKey">
+      @if (psStatus()?.hasSearchKey) {
+        <mat-icon>check_circle</mat-icon>
+        <span>{{ t('prepSrc.keyConfigured') }} <strong>{{ psStatus()?.maskedSearchKey }}</strong> ({{ psStatus()?.searchProvider }})</span>
+      } @else {
+        <mat-icon>info_outline</mat-icon>
+        <span>{{ t('prepSrc.keyMissing') }}</span>
+      }
+    </p>
+  </section>
+
   <!-- 配置教程(2026-09-16 Forrest:参考他提供的截图,给 Speech Key 页补上教程)
        ⚠️ 内容以微软官方为准 —— 这里只复述通用步骤,不编造价格细节。 -->
   <section class="sp-card tut-card">

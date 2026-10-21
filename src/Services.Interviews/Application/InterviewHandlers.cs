@@ -2549,10 +2549,18 @@ public sealed class ExtractRoundQuestionsCommandHandler(InterviewsDbContext db, 
     }
 }
 
-/// <summary>生成结构化备考报告(AI 优先;AI 未配置时本地聚合兜底并标注 generatedBy)。</summary>
+/// <summary>生成结构化备考报告(AI 优先;AI 未配置时本地聚合兜底并标注 generatedBy)。
+/// 2026-10-21:生成语言跟随账号语言(Language 参数);数据源按 AiGateway 的用户级
+/// 「备考数据源」配置接入 —— 题库/公司背景开关决定内部输入,网络面经/Glassdoor
+/// 经网关检索后才进提示词,状态如实写进报告 sources.details,绝不编造面经。</summary>
 public sealed record GeneratePrepReportCommand(
     Guid EntryId, Guid RoundId, string? JdText = null, string? ResumeText = null,
-    string? Experiences = null) : IRequest<Result<string>>;
+    string? Experiences = null, string? Language = null) : IRequest<Result<string>>;
+
+/// <summary>一次生成实际用到的数据源上下文(配置开关 + 外部检索结果)。</summary>
+internal sealed record PrepSourceContext(
+    bool QuestionBankEnabled, bool CompanyBackgroundEnabled,
+    PrepSourceSearchDto? Web, PrepSourceSearchDto? Glassdoor);
 
 public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAiGatewayClient ai)
     : IRequestHandler<GeneratePrepReportCommand, Result<string>>
@@ -2564,27 +2572,32 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
         var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
         if (round is null) return Result.Failure<string>(Error.NotFound("轮次"));
 
+        var lang = NormalizeLanguage(request.Language);
+        var ctx = await LoadSourceContext(e, round, ct);
+        var sources = BuildSources(e, request, ctx);
+
         string reportJson;
         try
         {
-            var prompt = BuildAiPrompt(e, round, request);
-            var completion = await ai.CompleteAsync("round-prep-report", prompt, PrepReportSystemPrompt, 0.5, 8000, ct);
+            var prompt = BuildAiPrompt(e, round, request, ctx, lang);
+            var completion = await ai.CompleteAsync("round-prep-report", prompt, SystemPromptFor(lang), 0.5, 8000, ct);
             var json = GenerateRoundReviewCommandHandler.ExtractJson(completion.Text);
             if (json is null) throw new AiGatewayException("AI 返回内容无法解析为 JSON");
             using var doc = JsonDocument.Parse(json); // 校验合法性
             var root = JsonNode.Parse(json)!.AsObject();
             root["generatedAt"] = DateTimeOffset.UtcNow.ToString("o");
             root["generatedBy"] = completion.Model;
+            root["sources"] = sources;
             reportJson = root.ToJsonString();
         }
         catch (AiGatewayException)
         {
             // AI 未配置/失败:本地聚合兜底(JD/简历/历史原题/短板都是真实输入,只是不经 LLM 组织)
-            reportJson = BuildLocalReport(e, round, request);
+            reportJson = BuildLocalReport(e, round, request, ctx, lang, sources);
         }
         catch (JsonException)
         {
-            reportJson = BuildLocalReport(e, round, request);
+            reportJson = BuildLocalReport(e, round, request, ctx, lang, sources);
         }
 
         e.SetRoundPrepReport(round.Id, reportJson);
@@ -2592,92 +2605,252 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
         return Result.Success(reportJson);
     }
 
-    private const string PrepReportSystemPrompt =
-        "你是北美科技公司面试教练。只输出一个 JSON 对象,不要额外文字。\n" +
-        "结构:{\"sections\":[{\"id\":\"greeting|intro-listen|self-intro|deep-dive|tech-qa|behavioral|ask-back|closing\",\"title\":\"段标题\",\"blocks\":[{\"type\":\"script|points|qa-ref|list\",\"title\":\"可选\",\"text\":\"正文(script/points 用)\",\"items\":[\"要点数组(list 用)\"]}],\"questions\":[{\"question\":\"题面\",\"category\":\"分类\",\"sourceTags\":[\"机经|原题|短板|JD\"],\"weaknessRelated\":true/false,\"stdSpoken\":\"口语版标准答案\",\"stdTechnical\":\"技术版标准答案\"}]}" +
-        "要求:按真实面试流程顺序输出全部 8 段(greeting 开场寒暄、intro-listen 听对方介绍、self-intro 自我介绍(60秒与2分钟两版稿放 blocks)、deep-dive 项目深挖、tech-qa 技术问答(题目放 questions)、behavioral 行为题 STAR、ask-back 反问环节、closing 收尾与注意事项)。" +
-        "技术问答题目来源:JD 关键词、公司机经、候选人历史原题、已识别短板(短板题 weaknessRelated=true)。标准答案用北美面试口径,第一人称口语版 + 要点技术版。";
+    // ---------------- 语言 ----------------
 
-    private static string BuildAiPrompt(InterviewEntry e, InterviewRound round, GeneratePrepReportCommand req)
+    /// <summary>生成语言归一化:只认 zh/en/fr,其余(含空)按 en —— 与前端三语口径一致。</summary>
+    internal static string NormalizeLanguage(string? language) =>
+        language?.Trim().ToLowerInvariant() switch { "zh" => "zh", "fr" => "fr", _ => "en" };
+
+    private static string LanguageName(string lang) => lang switch
+    {
+        "zh" => "Simplified Chinese (简体中文)",
+        "fr" => "French (Français)",
+        _ => "English"
+    };
+
+    private static string SystemPromptFor(string lang) =>
+        "You are an interview coach for North American tech companies. Output exactly one JSON object, no other text.\n" +
+        $"OUTPUT LANGUAGE: every natural-language value (titles, text, items, questions, standard answers) MUST be written in {LanguageName(lang)}. JSON keys and section ids stay exactly as specified below.\n" +
+        "Structure: {\"sections\":[{\"id\":\"greeting|intro-listen|self-intro|deep-dive|tech-qa|behavioral|ask-back|closing\",\"title\":\"section title\",\"blocks\":[{\"type\":\"script|points|qa-ref|list\",\"title\":\"optional\",\"text\":\"body for script/points\",\"items\":[\"bullets for list\"]}],\"questions\":[{\"question\":\"...\",\"category\":\"...\",\"sourceTags\":[\"...\"],\"weaknessRelated\":true/false,\"stdSpoken\":\"spoken standard answer\",\"stdTechnical\":\"technical standard answer\"}]}]}\n" +
+        "Output all 8 sections in real interview order: greeting, intro-listen, self-intro (60-second and 2-minute script versions in blocks), deep-dive, tech-qa (questions in questions), behavioral (STAR), ask-back, closing.\n" +
+        "Technical questions may only be grounded in: JD keywords, the fetched interview experiences given in the prompt, the candidate's past questions, and identified weaknesses (weaknessRelated=true). Never invent interview experiences or attribute statements to a source that did not say them. Standard answers: first-person spoken version + bullet-style technical version, North American interview style.";
+
+    // ---------------- 数据源上下文 ----------------
+
+    /// <summary>
+    /// 读 AiGateway 的备考数据源配置;已启用的外部源当场检索。
+    /// 网关不可达时内部源按默认口径、外部源标 failed —— 不编造、不阻断生成。
+    /// </summary>
+    private async Task<PrepSourceContext> LoadSourceContext(InterviewEntry e, InterviewRound round, CancellationToken ct)
+    {
+        try
+        {
+            var s = await ai.GetPrepSourceSettingsAsync(ct);
+            PrepSourceSearchDto? web = null, glassdoor = null;
+            if (s.WebExperiencesEnabled) web = await SafeSearch("web", e, round, ct);
+            if (s.GlassdoorEnabled) glassdoor = await SafeSearch("glassdoor", e, round, ct);
+            return new PrepSourceContext(s.QuestionBankEnabled, s.CompanyBackgroundEnabled, web, glassdoor);
+        }
+        catch (AiGatewayException)
+        {
+            return new PrepSourceContext(true, true,
+                new PrepSourceSearchDto("web", "failed", null, [], null),
+                new PrepSourceSearchDto("glassdoor", "failed", null, [], null));
+        }
+    }
+
+    private async Task<PrepSourceSearchDto> SafeSearch(string source, InterviewEntry e, InterviewRound round, CancellationToken ct)
+    {
+        try { return await ai.SearchPrepSourcesAsync(source, e.CompanyName, e.Role, round.Stage, ct); }
+        catch (AiGatewayException) { return new PrepSourceSearchDto(source, "failed", null, [], null); }
+    }
+
+    /// <summary>
+    /// 报告 sources:旧字段(jd/company/experiences/resume/pastQuestions/weaknesses)
+    /// 保持兼容;details 逐项给真实状态(fetched/disabled/notConfigured/noData/failed)
+    /// 与外部来源链接 —— 前端 Sources 行按它展示,不许猜。
+    /// </summary>
+    private static JsonObject BuildSources(InterviewEntry e, GeneratePrepReportCommand req, PrepSourceContext ctx)
+    {
+        var pastCount = ctx.QuestionBankEnabled ? e.Questions.Count : 0;
+        var companyUsed = ctx.CompanyBackgroundEnabled && !string.IsNullOrWhiteSpace(e.CompanyProfile);
+        var details = new JsonArray
+        {
+            Detail("questionBank",
+                !ctx.QuestionBankEnabled ? "disabled" : pastCount > 0 ? "fetched" : "noData", pastCount),
+            Detail("company",
+                !ctx.CompanyBackgroundEnabled ? "disabled" : companyUsed ? "fetched" : "noData", null),
+            Detail("web", ctx.Web?.Status ?? "disabled", ctx.Web?.Results.Count,
+                ctx.Web?.Results.Select(r => r.Url)),
+            Detail("glassdoor", ctx.Glassdoor?.Status ?? "disabled", ctx.Glassdoor?.Results.Count,
+                ctx.Glassdoor?.Results.Select(r => r.Url)),
+            Detail("manualExperiences",
+                !string.IsNullOrWhiteSpace(req.Experiences) ? "fetched" : "noData", null)
+        };
+        return new JsonObject
+        {
+            ["jd"] = !string.IsNullOrWhiteSpace(req.JdText) || !string.IsNullOrWhiteSpace(e.JdText) || !string.IsNullOrWhiteSpace(e.JdSummary),
+            ["company"] = companyUsed,
+            ["experiences"] = ctx.Web?.Status == "fetched" || ctx.Glassdoor?.Status == "fetched"
+                || !string.IsNullOrWhiteSpace(req.Experiences),
+            ["resume"] = !string.IsNullOrWhiteSpace(req.ResumeText),
+            ["pastQuestions"] = pastCount,
+            ["weaknesses"] = e.Weaknesses.Count,
+            ["details"] = details
+        };
+    }
+
+    private static JsonObject Detail(string key, string status, int? count, IEnumerable<string>? links = null)
+    {
+        var o = new JsonObject { ["key"] = key, ["status"] = status };
+        if (count is not null) o["count"] = count.Value;
+        if (links is not null)
+        {
+            var arr = new JsonArray();
+            foreach (var l in links) arr.Add(l);
+            o["links"] = arr;
+        }
+        return o;
+    }
+
+    // ---------------- 提示词 ----------------
+
+    private static string BuildAiPrompt(InterviewEntry e, InterviewRound round,
+        GeneratePrepReportCommand req, PrepSourceContext ctx, string lang)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"# 备考目标:{e.CompanyName} —— {e.Role}(Round {round.Order} / {round.Stage})");
-        if (!string.IsNullOrWhiteSpace(round.Interviewers)) sb.AppendLine($"面试官:{round.Interviewers}");
-        if (!string.IsNullOrWhiteSpace(round.Format)) sb.AppendLine($"形式:{round.Format}");
+        sb.AppendLine($"# Prep target: {e.CompanyName} — {e.Role} (Round {round.Order} / {round.Stage})");
+        sb.AppendLine($"Output language: {LanguageName(lang)}");
+        if (!string.IsNullOrWhiteSpace(round.Interviewers)) sb.AppendLine($"Interviewers: {round.Interviewers}");
+        if (!string.IsNullOrWhiteSpace(round.Format)) sb.AppendLine($"Format: {round.Format}");
         var jd = !string.IsNullOrWhiteSpace(req.JdText) ? req.JdText
             : !string.IsNullOrWhiteSpace(e.JdText) ? e.JdText : e.JdSummary;
         if (!string.IsNullOrWhiteSpace(jd)) sb.AppendLine($"## JD\n{Trunc(jd!, 6000)}");
-        if (!string.IsNullOrWhiteSpace(e.CompanyProfile)) sb.AppendLine($"## 公司背景\n{Trunc(e.CompanyProfile, 3000)}");
-        if (!string.IsNullOrWhiteSpace(req.ResumeText)) sb.AppendLine($"## 本投递简历\n{Trunc(req.ResumeText, 6000)}");
-        if (!string.IsNullOrWhiteSpace(req.Experiences)) sb.AppendLine($"## 全网机经(用户粘贴)\n{Trunc(req.Experiences, 5000)}");
-        var past = e.Questions.Take(30).ToList();
-        if (past.Count > 0)
+        if (ctx.CompanyBackgroundEnabled && !string.IsNullOrWhiteSpace(e.CompanyProfile))
+            sb.AppendLine($"## Company background\n{Trunc(e.CompanyProfile, 3000)}");
+        if (!string.IsNullOrWhiteSpace(req.ResumeText)) sb.AppendLine($"## Submitted resume\n{Trunc(req.ResumeText, 6000)}");
+        if (!string.IsNullOrWhiteSpace(req.Experiences)) sb.AppendLine($"## Interview experiences pasted by the user\n{Trunc(req.Experiences, 5000)}");
+        AppendFetched(sb, "## Fetched web interview experiences (search results; ground questions only in these)", ctx.Web);
+        AppendFetched(sb, "## Fetched Glassdoor interview experiences (search results; ground questions only in these)", ctx.Glassdoor);
+        if (ctx.QuestionBankEnabled)
         {
-            sb.AppendLine("## 历史面试原题(类似岗位真实问过)");
-            foreach (var q in past) sb.AppendLine($"- {Trunc(q.QuestionText, 250)}");
+            var past = e.Questions.Take(30).ToList();
+            if (past.Count > 0)
+            {
+                sb.AppendLine("## Past questions from similar roles (question bank)");
+                foreach (var q in past) sb.AppendLine($"- {Trunc(q.QuestionText, 250)}");
+            }
         }
         if (e.Weaknesses.Count > 0)
         {
-            sb.AppendLine("## 已识别技术短板");
+            sb.AppendLine("## Identified technical weaknesses");
             foreach (var w in e.Weaknesses.Take(15)) sb.AppendLine($"- {w.Title}:{Trunc(w.Suggestion ?? w.Detail ?? "", 150)}");
         }
         return sb.ToString();
     }
 
-    /// <summary>本地聚合报告:结构与 AI 版一致,题目来自历史原题 + 卡壳题,短板题标红置顶。</summary>
-    internal static string BuildLocalReport(InterviewEntry e, InterviewRound round, GeneratePrepReportCommand req)
+    private static void AppendFetched(StringBuilder sb, string heading, PrepSourceSearchDto? search)
     {
+        if (search is null || search.Status != "fetched" || search.Results.Count == 0) return;
+        sb.AppendLine(heading);
+        foreach (var r in search.Results.Take(5))
+            sb.AppendLine($"- {Trunc(r.Title, 200)} ({r.Url})\n  {Trunc(r.Snippet, 500)}");
+    }
+
+    // ---------------- 本地兜底(三语,跟随生成语言) ----------------
+
+    /// <summary>本地聚合报告:结构与 AI 版一致;题库关 → 不带原题,公司背景关 → sources 如实标 disabled。</summary>
+    internal static string BuildLocalReport(InterviewEntry e, InterviewRound round,
+        GeneratePrepReportCommand req, PrepSourceContext ctx, string lang, JsonObject sources)
+    {
+        var t = LocalTexts.For(lang);
         var questions = new List<object>();
-        var weaknessTitles = e.Weaknesses.Select(w => w.Title).ToList();
-        foreach (var q in e.Questions.OrderByDescending(q => q.GotStuck).Take(20))
+        if (ctx.QuestionBankEnabled)
         {
-            var weak = q.GotStuck || weaknessTitles.Any(t =>
-                q.QuestionText.Contains(t, StringComparison.OrdinalIgnoreCase));
-            questions.Add(new
+            var weaknessTitles = e.Weaknesses.Select(w => w.Title).ToList();
+            foreach (var q in e.Questions.OrderByDescending(q => q.GotStuck).Take(20))
             {
-                question = q.QuestionText,
-                category = q.Category.ToString(),
-                sourceTags = new[] { "原题" },
-                weaknessRelated = weak,
-                stdSpoken = (string?)null,
-                stdTechnical = q.RecommendedAnswer,
-                knowledgeId = (Guid?)null
-            });
+                var weak = q.GotStuck || weaknessTitles.Any(x =>
+                    q.QuestionText.Contains(x, StringComparison.OrdinalIgnoreCase));
+                questions.Add(new
+                {
+                    question = q.QuestionText,
+                    category = q.Category.ToString(),
+                    sourceTags = new[] { t.PastTag },
+                    weaknessRelated = weak,
+                    stdSpoken = (string?)null,
+                    stdTechnical = q.RecommendedAnswer,
+                    knowledgeId = (Guid?)null
+                });
+            }
         }
+        var fetchedItems = new List<string>();
+        foreach (var s in new[] { ctx.Web, ctx.Glassdoor })
+        {
+            if (s is null || s.Status != "fetched") continue;
+            foreach (var r in s.Results.Take(5)) fetchedItems.Add($"{r.Title} — {r.Url}");
+        }
+        var techBlocks = new List<object>();
+        if (fetchedItems.Count > 0)
+            techBlocks.Add(new { type = "list", title = t.FetchedTitle, items = fetchedItems.ToArray() });
+
         var sections = new object[]
         {
-            new { id = "greeting", title = "1 · 开场寒暄", blocks = new object[] {
-                new { type = "points", items = new[] { "提前 5 分钟进入会议", "开场一句:Hi, thanks for taking the time to speak with me today." } } }, questions = Array.Empty<object>() },
-            new { id = "intro-listen", title = "2 · 听对方介绍", blocks = new object[] {
-                new { type = "points", items = new[] { "记下团队规模、在招岗位的职责边界、当前项目关键词", "回应一句:That sounds great — the part about X is exactly what I've been doing." } } }, questions = Array.Empty<object>() },
-            new { id = "self-intro", title = "3 · 自我介绍", blocks = new object[] {
-                new { type = "script", title = "60 秒版(请按你的简历改写后朗读练习)", text = (string?)null } }, questions = Array.Empty<object>() },
-            new { id = "deep-dive", title = "4 · 项目深挖", blocks = new object[] {
-                new { type = "points", items = new[] { "准备 1 个核心项目的背景-难点-方案-结果四段式讲法", "数字先行:规模、性能提升、影响范围" } } }, questions = Array.Empty<object>() },
-            new { id = "tech-qa", title = "5 · 技术问答", blocks = Array.Empty<object>(), questions = questions.ToArray() },
-            new { id = "behavioral", title = "6 · 行为题 STAR", blocks = new object[] {
-                new { type = "points", items = new[] { "每个故事按 Situation-Task-Action-Result 讲,Result 带数字", "准备:冲突、失败、赶工、学新技术 各一个" } } }, questions = Array.Empty<object>() },
-            new { id = "ask-back", title = "7 · 反问环节", blocks = new object[] {
-                new { type = "list", items = new[] { "这个岗位前 90 天最重要的交付是什么?", "团队现在最大的技术挑战是什么?", "这个 role 的成功怎么衡量?" } } }, questions = Array.Empty<object>() },
-            new { id = "closing", title = "8 · 收尾与注意事项", blocks = new object[] {
-                new { type = "points", items = new[] { "结束前重申兴趣:Based on what I've heard, this role is exactly what I'm looking for.", "当天:提前测试设备与网络,水杯与简历放手边" } } }, questions = Array.Empty<object>() },
+            new { id = "greeting", title = t.Titles[0], blocks = new object[] {
+                new { type = "points", items = t.Greeting } }, questions = Array.Empty<object>() },
+            new { id = "intro-listen", title = t.Titles[1], blocks = new object[] {
+                new { type = "points", items = t.IntroListen } }, questions = Array.Empty<object>() },
+            new { id = "self-intro", title = t.Titles[2], blocks = new object[] {
+                new { type = "script", title = t.SelfIntroTitle, text = (string?)null } }, questions = Array.Empty<object>() },
+            new { id = "deep-dive", title = t.Titles[3], blocks = new object[] {
+                new { type = "points", items = t.DeepDive } }, questions = Array.Empty<object>() },
+            new { id = "tech-qa", title = t.Titles[4], blocks = techBlocks.ToArray(), questions = questions.ToArray() },
+            new { id = "behavioral", title = t.Titles[5], blocks = new object[] {
+                new { type = "points", items = t.Behavioral } }, questions = Array.Empty<object>() },
+            new { id = "ask-back", title = t.Titles[6], blocks = new object[] {
+                new { type = "list", items = t.AskBack } }, questions = Array.Empty<object>() },
+            new { id = "closing", title = t.Titles[7], blocks = new object[] {
+                new { type = "points", items = t.Closing } }, questions = Array.Empty<object>() },
         };
         var report = new
         {
             generatedAt = DateTimeOffset.UtcNow.ToString("o"),
             generatedBy = "local-aggregation",
-            sources = new
-            {
-                jd = !string.IsNullOrWhiteSpace(req.JdText) || !string.IsNullOrWhiteSpace(e.JdText) || !string.IsNullOrWhiteSpace(e.JdSummary),
-                company = !string.IsNullOrWhiteSpace(e.CompanyProfile),
-                experiences = !string.IsNullOrWhiteSpace(req.Experiences),
-                resume = !string.IsNullOrWhiteSpace(req.ResumeText),
-                pastQuestions = e.Questions.Count,
-                weaknesses = e.Weaknesses.Count
-            },
+            sources,
             sections
         };
         return JsonSerializer.Serialize(report);
+    }
+
+    /// <summary>本地兜底文案三套(zh/en/fr)—— 与系统三语口径一致,禁止只写中文。</summary>
+    private sealed record LocalTexts(
+        string[] Titles, string[] Greeting, string[] IntroListen, string SelfIntroTitle,
+        string[] DeepDive, string[] Behavioral, string[] AskBack, string[] Closing,
+        string PastTag, string FetchedTitle)
+    {
+        public static LocalTexts For(string lang) => lang switch
+        {
+            "zh" => new LocalTexts(
+                new[] { "1 · 开场寒暄", "2 · 听对方介绍", "3 · 自我介绍", "4 · 项目深挖", "5 · 技术问答", "6 · 行为题 STAR", "7 · 反问环节", "8 · 收尾与注意事项" },
+                new[] { "提前 5 分钟进入会议", "开场一句:Hi, thanks for taking the time to speak with me today." },
+                new[] { "记下团队规模、在招岗位的职责边界、当前项目关键词", "回应一句:That sounds great — the part about X is exactly what I've been doing." },
+                "60 秒版(请按你的简历改写后朗读练习)",
+                new[] { "准备 1 个核心项目的背景-难点-方案-结果四段式讲法", "数字先行:规模、性能提升、影响范围" },
+                new[] { "每个故事按 Situation-Task-Action-Result 讲,Result 带数字", "准备:冲突、失败、赶工、学新技术 各一个" },
+                new[] { "这个岗位前 90 天最重要的交付是什么?", "团队现在最大的技术挑战是什么?", "这个 role 的成功怎么衡量?" },
+                new[] { "结束前重申兴趣:Based on what I've heard, this role is exactly what I'm looking for.", "当天:提前测试设备与网络,水杯与简历放手边" },
+                "原题", "抓取到的面经来源"),
+            "fr" => new LocalTexts(
+                new[] { "1 · Accueil", "2 · Écouter leur présentation", "3 · Présentation", "4 · Projets en détail", "5 · Questions techniques", "6 · Comportement (STAR)", "7 · Vos questions", "8 · Conclusion et rappels" },
+                new[] { "Rejoignez la réunion 5 minutes à l'avance", "Ouverture : Hi, thanks for taking the time to speak with me today." },
+                new[] { "Notez la taille de l'équipe, les responsabilités du poste et les mots-clés du projet actuel", "Répondez : That sounds great — the part about X is exactly what I've been doing." },
+                "Version 60 secondes (à adapter à votre CV et à pratiquer à voix haute)",
+                new[] { "Préparez un projet clé en quatre temps : contexte → défi → approche → résultats", "Les chiffres d'abord : échelle, gains de performance, portée" },
+                new[] { "Chaque histoire suit Situation-Tâche-Action-Résultat, avec des chiffres dans le résultat", "Préparez : un conflit, un échec, une urgence, un nouvel apprentissage" },
+                new[] { "Quelles sont les livraisons les plus importantes des 90 premiers jours ?", "Quel est le plus grand défi technique de l'équipe en ce moment ?", "Comment mesure-t-on la réussite dans ce poste ?" },
+                new[] { "Réaffirmez votre intérêt : Based on what I've heard, this role is exactly what I'm looking for.", "Le jour même : testez l'équipement et le réseau à l'avance, eau et CV à portée de main" },
+                "Question passée", "Sources de retours récupérées"),
+            _ => new LocalTexts(
+                new[] { "1 · Warm-up", "2 · Hear their introduction", "3 · Self-introduction", "4 · Project deep-dive", "5 · Technical Q&A", "6 · Behavioral (STAR)", "7 · Questions to ask", "8 · Wrap-up & reminders" },
+                new[] { "Join the meeting 5 minutes early", "Open with: Hi, thanks for taking the time to speak with me today." },
+                new[] { "Note the team size, the role's responsibilities, and current project keywords", "Respond with: That sounds great — the part about X is exactly what I've been doing." },
+                "60-second version (adapt it to your resume and practise aloud)",
+                new[] { "Prepare one core project as background → challenge → approach → results", "Lead with numbers: scale, performance gains, impact" },
+                new[] { "Tell every story as Situation-Task-Action-Result, with numbers in the Result", "Prepare one story each: conflict, failure, deadline crunch, learning something new" },
+                new[] { "What are the most important deliverables in the first 90 days?", "What is the team's biggest technical challenge right now?", "How is success measured for this role?" },
+                new[] { "Restate your interest: Based on what I've heard, this role is exactly what I'm looking for.", "On the day: test your equipment and network early; water and resume within reach" },
+                "Past question", "Fetched experience sources")
+        };
     }
 
     private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];

@@ -1,3 +1,7 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -301,4 +305,367 @@ public sealed class CompleteCommandHandler(
 public sealed class AiKeyProviderHolder(IAiKeyProvider provider)
 {
     public IAiKeyProvider Provider { get; } = provider;
+}
+
+// ============================================================================
+//  备考数据源(2026-10-21):配置 + 外部检索
+//
+//  取代旧的「点按钮跳 Google / Glassdoor 外链」:备考生成时由系统按
+//  公司 + 岗位自动检索已启用的数据源,结果(标题/链接/摘要)进生成输入。
+//  ⚠️ 诚实红线:外部源未启用 → disabled;没配服务商/密钥 → notConfigured;
+//     检索失败 → failed;有结果才 fetched。任何状态都不编造面经内容 ——
+//     生成侧只能引用这里返回的真实检索结果。
+// ============================================================================
+
+/// <summary>备考数据源配置回显。⚠️ 搜索密钥只回掩码,同 AiSettingStatusDto 口径。</summary>
+public sealed record PrepSourceSettingsDto(
+    bool QuestionBankEnabled, bool CompanyBackgroundEnabled,
+    bool WebExperiencesEnabled, bool GlassdoorEnabled,
+    string? SearchProvider, bool HasSearchKey, string? MaskedSearchKey,
+    DateTimeOffset? UpdatedAt);
+
+/// <summary>一条外部检索结果(标题 / 原文链接 / 摘要摘录)。</summary>
+public sealed record PrepSourceResultDto(string Title, string Url, string Snippet);
+
+/// <summary>
+/// 一次外部源检索的真实状态:
+/// fetched 已抓取(Results 非空) / disabled 未启用 / notConfigured 未配置密钥 /
+/// noData 检索成功但无结果 / failed 检索失败。
+/// </summary>
+public sealed record PrepSourceSearchDto(
+    string Source, string Status, string? Provider,
+    IReadOnlyList<PrepSourceResultDto> Results, string? Message);
+
+public sealed record GetPrepSourceSettingsQuery(Guid UserId) : IRequest<Result<PrepSourceSettingsDto>>;
+
+public sealed class GetPrepSourceSettingsQueryHandler(AiGatewayDbContext db)
+    : IRequestHandler<GetPrepSourceSettingsQuery, Result<PrepSourceSettingsDto>>
+{
+    public async Task<Result<PrepSourceSettingsDto>> Handle(GetPrepSourceSettingsQuery request, CancellationToken ct)
+    {
+        var row = await db.PrepSourceSettings.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == request.UserId, ct);
+        // 无记录 = 默认口径:内部开、外部关、未配置搜索服务。
+        if (row is null)
+            return Result.Success(new PrepSourceSettingsDto(true, true, false, false, null, false, null, null));
+        return Result.Success(ToDto(row));
+    }
+
+    internal static PrepSourceSettingsDto ToDto(PrepSourceSetting row) => new(
+        row.QuestionBankEnabled, row.CompanyBackgroundEnabled,
+        row.WebExperiencesEnabled, row.GlassdoorEnabled,
+        row.SearchProvider,
+        !string.IsNullOrWhiteSpace(row.SearchApiKey),
+        string.IsNullOrWhiteSpace(row.SearchApiKey) ? null : Mask(row.SearchApiKey!),
+        row.UpdatedAt);
+
+    private static string Mask(string key)
+    {
+        if (key.Length <= 8) return new string('•', key.Length);
+        return key[..3] + new string('•', 6) + key[^4..];
+    }
+}
+
+/// <summary>保存备考数据源配置。SearchApiKey 为空/掩码 = 不改原密钥。</summary>
+public sealed record SavePrepSourceSettingsCommand(
+    Guid UserId, bool QuestionBankEnabled, bool CompanyBackgroundEnabled,
+    bool WebExperiencesEnabled, bool GlassdoorEnabled,
+    string? SearchProvider, string? SearchApiKey) : IRequest<Result<PrepSourceSettingsDto>>;
+
+public sealed class SavePrepSourceSettingsCommandHandler(AiGatewayDbContext db)
+    : IRequestHandler<SavePrepSourceSettingsCommand, Result<PrepSourceSettingsDto>>
+{
+    public async Task<Result<PrepSourceSettingsDto>> Handle(SavePrepSourceSettingsCommand request, CancellationToken ct)
+    {
+        var provider = string.IsNullOrWhiteSpace(request.SearchProvider)
+            ? null : request.SearchProvider.Trim().ToLowerInvariant();
+        if (provider is not null && provider is not "tavily" and not "serper")
+            return Result.Failure<PrepSourceSettingsDto>(
+                Error.Validation("PrepSources.Provider", "搜索服务商只支持 tavily / serper。"));
+
+        // 掩码串(含 •)是回显值,不是凭据 —— 当作"不改"处理,防把掩码写进库覆盖真 key。
+        var key = string.IsNullOrWhiteSpace(request.SearchApiKey) || request.SearchApiKey.Contains('•')
+            ? null : request.SearchApiKey.Trim();
+
+        var row = await db.PrepSourceSettings.FirstOrDefaultAsync(x => x.UserId == request.UserId, ct);
+        if (row is null)
+        {
+            row = new PrepSourceSetting(request.UserId);
+            db.PrepSourceSettings.Add(row);
+        }
+        row.Update(request.QuestionBankEnabled, request.CompanyBackgroundEnabled,
+            request.WebExperiencesEnabled, request.GlassdoorEnabled, provider, key);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(GetPrepSourceSettingsQueryHandler.ToDto(row));
+    }
+}
+
+/// <summary>按公司 + 岗位检索一个外部数据源(web / glassdoor)。</summary>
+public sealed record SearchPrepSourcesCommand(
+    Guid UserId, string Source, string Company, string? Role, string? Stage)
+    : IRequest<Result<PrepSourceSearchDto>>;
+
+public sealed class SearchPrepSourcesCommandHandler(
+    AiGatewayDbContext db, IHttpClientFactory httpFactory,
+    ILogger<SearchPrepSourcesCommandHandler> logger)
+    : IRequestHandler<SearchPrepSourcesCommand, Result<PrepSourceSearchDto>>
+{
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+
+    public async Task<Result<PrepSourceSearchDto>> Handle(SearchPrepSourcesCommand request, CancellationToken ct)
+    {
+        var source = request.Source.Trim().ToLowerInvariant();
+        if (source is not "web" and not "glassdoor")
+            return Result.Failure<PrepSourceSearchDto>(
+                Error.Validation("PrepSources.Source", "source 只支持 web / glassdoor。"));
+
+        var row = await db.PrepSourceSettings.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == request.UserId, ct);
+        var enabled = source == "glassdoor" ? row?.GlassdoorEnabled == true : row?.WebExperiencesEnabled == true;
+        if (!enabled)
+            return Result.Success(new PrepSourceSearchDto(source, "disabled", row?.SearchProvider, [], null));
+
+        var provider = row?.SearchProvider;
+        var apiKey = row?.SearchApiKey;
+        if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(apiKey))
+            return Result.Success(new PrepSourceSearchDto(source, "notConfigured", provider, [], null));
+
+        var query = source == "glassdoor"
+            ? $"{request.Company} {request.Role} interview questions glassdoor"
+            : $"{request.Company} {request.Role} interview questions experiences";
+        if (!string.IsNullOrWhiteSpace(request.Stage))
+            query += $" {request.Stage}";
+
+        try
+        {
+            var results = provider == "tavily"
+                ? await SearchTavily(apiKey!, query, source == "glassdoor", ct)
+                : await SearchSerper(apiKey!, query, source == "glassdoor", ct);
+            return Result.Success(new PrepSourceSearchDto(source,
+                results.Count > 0 ? "fetched" : "noData", provider, results, null));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            // 失败如实标注,绝不用编造内容顶替(调用方据此在 Sources 行标 failed)。
+            logger.LogWarning(ex, "备考数据源检索失败 source={Source} provider={Provider}", source, provider);
+            return Result.Success(new PrepSourceSearchDto(source, "failed", provider, [],
+                "搜索服务暂时不可用或密钥无效。"));
+        }
+    }
+
+    private async Task<List<PrepSourceResultDto>> SearchTavily(string apiKey, string query, bool glassdoor, CancellationToken ct)
+    {
+        var payload = new JsonObject
+        {
+            ["api_key"] = apiKey,
+            ["query"] = query,
+            ["max_results"] = 5,
+            ["search_depth"] = "basic",
+            ["include_answer"] = false
+        };
+        if (glassdoor) payload["include_domains"] = new JsonArray("glassdoor.com");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.tavily.com/search")
+        {
+            Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
+        };
+        var client = httpFactory.CreateClient("prep-search");
+        using var resp = await client.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"Tavily 返回 {(int)resp.StatusCode}");
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        var list = new List<PrepSourceResultDto>();
+        if (doc.RootElement.TryGetProperty("results", out var arr))
+        {
+            foreach (var el in arr.EnumerateArray())
+            {
+                var url = el.TryGetProperty("url", out var u) ? u.GetString() : null;
+                if (string.IsNullOrWhiteSpace(url)) continue;
+                list.Add(new PrepSourceResultDto(
+                    el.TryGetProperty("title", out var t) ? t.GetString() ?? url : url,
+                    url,
+                    Trunc(el.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "", 600)));
+            }
+        }
+        return list;
+    }
+
+    private async Task<List<PrepSourceResultDto>> SearchSerper(string apiKey, string query, bool glassdoor, CancellationToken ct)
+    {
+        var q = glassdoor ? query + " site:glassdoor.com" : query;
+        var payload = new JsonObject { ["q"] = q, ["num"] = 5 };
+        using var req = new HttpRequestMessage(HttpMethod.Post, "https://google.serper.dev/search")
+        {
+            Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
+        };
+        req.Headers.Add("X-API-KEY", apiKey);
+        var client = httpFactory.CreateClient("prep-search");
+        using var resp = await client.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"Serper 返回 {(int)resp.StatusCode}");
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        var list = new List<PrepSourceResultDto>();
+        if (doc.RootElement.TryGetProperty("organic", out var arr))
+        {
+            foreach (var el in arr.EnumerateArray())
+            {
+                var url = el.TryGetProperty("link", out var u) ? u.GetString() : null;
+                if (string.IsNullOrWhiteSpace(url)) continue;
+                list.Add(new PrepSourceResultDto(
+                    el.TryGetProperty("title", out var t) ? t.GetString() ?? url : url,
+                    url,
+                    Trunc(el.TryGetProperty("snippet", out var c) ? c.GetString() ?? "" : "", 600)));
+            }
+        }
+        return list;
+    }
+
+    private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];
+}
+
+// ============================ 视觉 OCR(截图 → 文字) ============================
+//
+// 定稿默认规则①「截图解析走现有 AI 网关视觉读图」(2026-10-21):统一入口粘贴的
+// 邮件/转写截图先在这里经用户已配置的 LLM 做视觉转写,拿到的文字再回前端走
+// 与粘文字完全相同的解析管线。网关此前只有文本补全通道(LlmRequest 是纯文本),
+// 这里补一个最小视觉通道:直接按协议组 chat 请求体,不改共享 LlmRequest 形状。
+// 支持 openai-compatible(多模态 content parts)与 anthropic(image block);
+// azure-openai 的部署式 URL 不同,本版如实回 unsupported,不假装能识别。
+// 模型与密钥走用户既有 AiSetting,不新引第三方、不另存密钥。
+
+public sealed record ExtractImageTextCommand(Guid UserId, string ImageBase64, string? MimeType)
+    : IRequest<ImageTextDto>;
+
+/// <summary>Status: ok / notConfigured / unsupported / failed —— 失败只回状态,
+/// 本地化文案在前端;绝不编造识别结果。</summary>
+public sealed record ImageTextDto(string Status, string? Text);
+
+public sealed class ExtractImageTextCommandHandler(
+    AiGatewayDbContext db, IHttpClientFactory httpFactory,
+    ILogger<ExtractImageTextCommandHandler> logger)
+    : IRequestHandler<ExtractImageTextCommand, ImageTextDto>
+{
+    private const string OcrPrompt =
+        "Transcribe ALL visible text in this image exactly, line by line, in reading order. " +
+        "If the image shows an email, keep its header lines as plain 'Key: value' lines " +
+        "(From / Sent / Date / Subject / To), then a blank line, then the body text. " +
+        "Output ONLY the transcribed text — no commentary, no code fences.";
+
+    public async Task<ImageTextDto> Handle(ExtractImageTextCommand request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.ImageBase64) || request.ImageBase64.Length > 16 * 1024 * 1024)
+            return new ImageTextDto("failed", null);
+        var row = await db.AiSettings.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == request.UserId, ct);
+        if (row is null || string.IsNullOrWhiteSpace(row.ApiKey) || string.IsNullOrWhiteSpace(row.Model))
+            return new ImageTextDto("notConfigured", null);
+        var mime = string.IsNullOrWhiteSpace(request.MimeType) ? "image/png" : request.MimeType.Trim();
+        try
+        {
+            return (row.Protocol ?? "").Trim().ToLowerInvariant() switch
+            {
+                "anthropic" => await ViaAnthropic(row, request.ImageBase64, mime, ct),
+                "openai-compatible" => await ViaOpenAiCompatible(row, request.ImageBase64, mime, ct),
+                _ => new ImageTextDto("unsupported", null),
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            logger.LogWarning(ex, "视觉 OCR 调用失败(协议 {Protocol})", row.Protocol);
+            return new ImageTextDto("failed", null);
+        }
+    }
+
+    private async Task<ImageTextDto> ViaOpenAiCompatible(
+        AiSetting row, string b64, string mime, CancellationToken ct)
+    {
+        var baseUrl = (row.BaseUrl ?? "").TrimEnd('/');
+        if (baseUrl.Length == 0) return new ImageTextDto("failed", null);
+        var payload = new
+        {
+            model = row.Model,
+            temperature = 0,
+            messages = new[]
+            {
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "text", text = OcrPrompt },
+                        new { type = "image_url", image_url = new { url = $"data:{mime};base64,{b64}" } },
+                    },
+                },
+            },
+        };
+        using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/chat/completions")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", row.ApiKey.Trim());
+        var client = httpFactory.CreateClient("vision");
+        using var resp = await client.SendAsync(req, ct);
+        var raw = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            logger.LogWarning("视觉 OCR 上游 {Status}:{Body}", (int)resp.StatusCode, Trunc(raw, 300));
+            return new ImageTextDto("failed", null);
+        }
+        using var doc = JsonDocument.Parse(raw);
+        var text = doc.RootElement.GetProperty("choices")[0]
+            .GetProperty("message").GetProperty("content").GetString();
+        return string.IsNullOrWhiteSpace(text)
+            ? new ImageTextDto("failed", null)
+            : new ImageTextDto("ok", text);
+    }
+
+    private async Task<ImageTextDto> ViaAnthropic(
+        AiSetting row, string b64, string mime, CancellationToken ct)
+    {
+        var baseUrl = string.IsNullOrWhiteSpace(row.BaseUrl)
+            ? "https://api.anthropic.com/v1" : row.BaseUrl.TrimEnd('/');
+        var payload = new
+        {
+            model = row.Model,
+            max_tokens = 4096,
+            messages = new[]
+            {
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "image", source = new { type = "base64", media_type = mime, data = b64 } },
+                        new { type = "text", text = OcrPrompt },
+                    },
+                },
+            },
+        };
+        using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/messages")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
+        };
+        req.Headers.Add("x-api-key", row.ApiKey.Trim());
+        req.Headers.Add("anthropic-version", "2023-06-01");
+        var client = httpFactory.CreateClient("vision");
+        using var resp = await client.SendAsync(req, ct);
+        var raw = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            logger.LogWarning("视觉 OCR(anthropic)上游 {Status}:{Body}", (int)resp.StatusCode, Trunc(raw, 300));
+            return new ImageTextDto("failed", null);
+        }
+        using var doc = JsonDocument.Parse(raw);
+        var sb = new StringBuilder();
+        if (doc.RootElement.TryGetProperty("content", out var blocks))
+            foreach (var b in blocks.EnumerateArray())
+                if (b.TryGetProperty("type", out var tp) && tp.GetString() == "text"
+                    && b.TryGetProperty("text", out var tx))
+                    sb.Append(tx.GetString());
+        var text = sb.ToString();
+        return string.IsNullOrWhiteSpace(text)
+            ? new ImageTextDto("failed", null)
+            : new ImageTextDto("ok", text);
+    }
+
+    private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];
 }

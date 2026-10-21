@@ -1392,6 +1392,37 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'Priority: saved here (database) > environment variables > config file. Effective immediately, no restart needed.',
     fr: 'Priorité : enregistré ici (base) > variables d’env. > fichier de config. Effet immédiat, sans redémarrage.'
   },
+  // ---------- 备考数据源(2026-10-21) ----------
+  'prepSrc.title': { zh: '备考数据源', en: 'Prep data sources', fr: 'Sources de données de préparation' },
+  'prepSrc.desc': {
+    zh: '生成备考报告时,系统会按公司 + 岗位自动匹配下面已启用的数据源,不用再手工去搜面经。外部源抓不到会如实标注,不会编造内容。',
+    en: 'When a prep report is generated, the system automatically matches the enabled sources below by company + role — no more manual searching. Sources that cannot be fetched are labelled honestly; nothing is fabricated.',
+    fr: 'À la génération d’un rapport, le système interroge automatiquement les sources activées ci-dessous par entreprise + poste. Les sources inaccessibles sont signalées honnêtement ; rien n’est inventé.'
+  },
+  'prepSrc.qb': { zh: '题库匹配(内部:历史原题)', en: 'Question bank matching (internal: past questions)', fr: 'Banque de questions (interne : questions passées)' },
+  'prepSrc.company': { zh: '公司背景(内部:JD / 公司介绍 + AI 整理)', en: 'Company background (internal: JD / company intro + AI synthesis)', fr: 'Contexte entreprise (interne : offre / présentation + synthèse IA)' },
+  'prepSrc.web': { zh: '网络面经(外部搜索)', en: 'Web interview experiences (external search)', fr: 'Retours d’entretien web (recherche externe)' },
+  'prepSrc.glassdoor': { zh: 'Glassdoor 面经(外部搜索,限定 glassdoor.com)', en: 'Glassdoor experiences (external search, glassdoor.com only)', fr: 'Retours Glassdoor (recherche externe, glassdoor.com uniquement)' },
+  'prepSrc.provider': { zh: '搜索服务商', en: 'Search provider', fr: 'Fournisseur de recherche' },
+  'prepSrc.providerHint': {
+    zh: '外部源经该服务检索公开页面。Tavily / Serper 二选一,填对应的 API Key。',
+    en: 'External sources are retrieved through this service. Pick Tavily or Serper and enter its API key.',
+    fr: 'Les sources externes passent par ce service. Choisissez Tavily ou Serper et saisissez sa clé API.'
+  },
+  'prepSrc.keyLabel': { zh: '搜索服务 API Key', en: 'Search API key', fr: 'Clé API de recherche' },
+  'prepSrc.keyPlaceholder': { zh: '粘贴搜索服务的密钥(留空 = 不改已保存的)', en: 'Paste the search provider key (leave empty to keep the saved one)', fr: 'Collez la clé du fournisseur (vide = conserver celle enregistrée)' },
+  'prepSrc.keyHint': {
+    zh: '只存服务端(AiGateway),与 LLM 密钥同一保管方式;任何接口只回掩码。',
+    en: 'Stored server-side only (AiGateway), same custody as the LLM key; APIs only ever return a mask.',
+    fr: 'Côté serveur uniquement (AiGateway), même garde que la clé LLM ; les API ne renvoient qu’un masque.'
+  },
+  'prepSrc.saved': { zh: '备考数据源已保存', en: 'Prep data sources saved', fr: 'Sources de préparation enregistrées' },
+  'prepSrc.keyConfigured': { zh: '搜索服务已配置:', en: 'Search configured:', fr: 'Recherche configurée :' },
+  'prepSrc.keyMissing': {
+    zh: '尚未配置搜索服务密钥 —— 外部源启用后会标「未配置」,不会假装抓取。',
+    en: 'No search key yet — enabled external sources will be labelled “not configured” instead of pretending to fetch.',
+    fr: 'Aucune clé de recherche — les sources externes activées seront marquées « non configuré » au lieu de simuler une récupération.'
+  },
   'setting.back': { zh: '返回 AI 面试练习', en: 'Back to AI Practice', fr: 'Retour à la pratique IA' },
   'setting.title': { zh: 'AI 语音设置', en: 'AI Voice Settings', fr: 'Paramètres vocaux IA' },
   // 2026-09-16(Forrest 本轮第 6 条):设置页不再负责"选朗读引擎" ——

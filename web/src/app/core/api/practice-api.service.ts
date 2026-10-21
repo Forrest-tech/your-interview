@@ -144,6 +144,28 @@ export interface AiCredentialIn {
   displayName?: string | null;
 }
 
+/**
+ * 备考数据源配置(AiGateway 用户级,2026-10-21)。
+ * ⚠️ 搜索密钥同 LLM 口径:只回掩码,永不下发明文。
+ */
+export interface PrepSourceSettingsDto {
+  questionBankEnabled: boolean;
+  companyBackgroundEnabled: boolean;
+  webExperiencesEnabled: boolean;
+  glassdoorEnabled: boolean;
+  /** tavily | serper | null(未配置) */
+  searchProvider: string | null;
+  hasSearchKey: boolean;
+  maskedSearchKey: string | null;
+  updatedAt: string | null;
+}
+
+/** 截图视觉 OCR 结果(AiGateway,2026-10-21):status ok 时 text 为识别全文。 */
+export interface ImageTextDto {
+  status: 'ok' | 'notConfigured' | 'unsupported' | 'failed' | string;
+  text: string | null;
+}
+
 // ---------- Azure 语音设置 ----------
 
 export interface SpeechSettingStatusDto {
@@ -442,6 +464,35 @@ export class PracticeApi {
   /** 删除 LLM 配置(回到未配置状态)。 */
   deleteAiSettings(): Observable<void> {
     return this.api.delete<void>('/api/ai/settings');
+  }
+
+  // ---------- 备考数据源(2026-10-21:AiGateway 用户级配置) ----------
+
+  /** 读备考数据源配置(开关 + 搜索服务;密钥只回掩码)。 */
+  getPrepSourceSettings(): Observable<PrepSourceSettingsDto> {
+    return this.api.get<PrepSourceSettingsDto>('/api/ai/prep-sources/settings');
+  }
+
+  /** 保存备考数据源配置。searchApiKey 为空 = 不改原密钥。 */
+  savePrepSourceSettings(body: {
+    questionBankEnabled: boolean;
+    companyBackgroundEnabled: boolean;
+    webExperiencesEnabled: boolean;
+    glassdoorEnabled: boolean;
+    searchProvider: string | null;
+    searchApiKey: string | null;
+  }): Observable<PrepSourceSettingsDto> {
+    return this.api.put<PrepSourceSettingsDto>('/api/ai/prep-sources/settings', body);
+  }
+
+  // ---------- 截图视觉 OCR(2026-10-21:AiGateway 视觉通道) ----------
+
+  /**
+   * 把截图经用户配置的视觉模型转成文字。status 如实返回:
+   * ok / notConfigured / unsupported / failed —— 失败时 text 为 null,不编造。
+   */
+  extractImageText(imageBase64: string, mimeType: string): Observable<ImageTextDto> {
+    return this.api.post<ImageTextDto>('/api/ai/vision/extract-text', { imageBase64, mimeType });
   }
 
   // ---------- 示范朗读(TTS) ----------

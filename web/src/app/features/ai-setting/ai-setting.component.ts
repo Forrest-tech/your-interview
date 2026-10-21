@@ -3,13 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
-import { PracticeApi, AiProviderPresetDto } from '../../core/api/practice-api.service';
+import { PracticeApi, AiProviderPresetDto, PrepSourceSettingsDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 /**
@@ -42,7 +43,7 @@ const REGION_KEY = 'practice.azureRegion';
   imports: [
     CommonModule, FormsModule, RouterLink,
     MatIconModule, MatButtonModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule
+    MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatTooltipModule
   ],
   templateUrl: './ai-setting.component.html',
   styleUrl: './ai-setting.component.scss'
@@ -153,6 +154,9 @@ export class AiSettingComponent {
 
     // 同样拉一次 LLM 配置状态与预设列表
     this.loadAiStatus();
+
+    // 备考数据源配置
+    this.loadPrepSources();
   }
 
     /** 区域变更同样落盘。 */
@@ -467,6 +471,67 @@ export class AiSettingComponent {
         }
       },
       error: () => { /* 同上 */ }
+    });
+  }
+
+  // ==================== 备考数据源(2026-10-21) ====================
+  // 备考报告生成时按公司 + 岗位自动匹配的数据源开关,存 AiGateway(用户级,
+  // 跟随账号)。搜索密钥同 LLM 口径:只入不出、只回掩码;输入框留空 = 不改。
+
+  readonly psQb = signal(true);
+  readonly psCompany = signal(true);
+  readonly psWeb = signal(false);
+  readonly psGlassdoor = signal(false);
+  readonly psProvider = signal<string>('tavily');
+  /** 搜索密钥输入框。⚠️ 只用于提交,不落 localStorage;回填的是掩码,提交时按"不改"处理。 */
+  readonly psKey = signal('');
+  readonly psStatus = signal<PrepSourceSettingsDto | null>(null);
+  readonly psBusy = signal(false);
+  readonly psHint = signal('');
+  readonly psHintKind = signal<'ok' | 'err'>('ok');
+
+  loadPrepSources(): void {
+    this.practiceApi.getPrepSourceSettings().subscribe({
+      next: (st) => {
+        this.psStatus.set(st);
+        this.psQb.set(st.questionBankEnabled);
+        this.psCompany.set(st.companyBackgroundEnabled);
+        this.psWeb.set(st.webExperiencesEnabled);
+        this.psGlassdoor.set(st.glassdoorEnabled);
+        if (st.searchProvider) this.psProvider.set(st.searchProvider);
+        this.psKey.set(st.maskedSearchKey ?? '');
+      },
+      error: () => { /* 后端没起:用默认口径,页面仍可用 */ }
+    });
+  }
+
+  savePrepSources(): void {
+    if (this.psBusy()) return;
+    this.psBusy.set(true);
+    const key = this.psKey().trim();
+    this.practiceApi.savePrepSourceSettings({
+      questionBankEnabled: this.psQb(),
+      companyBackgroundEnabled: this.psCompany(),
+      webExperiencesEnabled: this.psWeb(),
+      glassdoorEnabled: this.psGlassdoor(),
+      searchProvider: this.psProvider() || null,
+      // 空或掩码(含 •) = 不改原密钥(后端同口径再判一次)
+      searchApiKey: key && !key.includes('•') ? key : null
+    }).subscribe({
+      next: (st) => {
+        this.psStatus.set(st);
+        this.psKey.set(st.maskedSearchKey ?? '');
+        this.psBusy.set(false);
+        this.psHintKind.set('ok');
+        this.psHint.set(this.t('prepSrc.saved'));
+        setTimeout(() => this.psHint.set(''), 2600);
+      },
+      error: (e) => {
+        this.psBusy.set(false);
+        this.psHintKind.set('err');
+        this.psHint.set(this.t('setting.saveFail') + this.errText(e));
+        setTimeout(() => this.psHint.set(''), 3500);
+      }
     });
   }
 

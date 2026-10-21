@@ -313,6 +313,15 @@
 }
 .fact-list strong { color: #3b4351; }
 
+/* ---------- 备考数据源开关组 ---------- */
+.ps-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+  font-size: 13.5px;
+}
+
 /* ---------- 窄屏 ---------- */
 @media (max-width: 720px) {
   .setting-page { padding: 16px 14px 40px; }

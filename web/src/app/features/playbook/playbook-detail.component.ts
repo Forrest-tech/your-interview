@@ -1,5 +1,5 @@
 import {
-  Component, computed, effect, inject, signal, viewChild
+  Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -11,18 +11,28 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  Application, InterviewDetail, InterviewRound, Paged
+  Application, Company, InterviewDetail, InterviewEntry, InterviewRound, Paged
 } from '../../core/models/api.models';
+import { computeMatch, MatchResult } from '../../core/match/resume-match';
+import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
 import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
-  htmlToPlainText, makeV2Fmt, makeV2T
+  entryEndKey, entryResultOutcome, htmlToPlainText, makeV2Fmt, makeV2T
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
 
-interface ResumeFileItem { id: string; fileName: string; isPrimary?: boolean; }
+interface ResumeFileItem {
+  id: string;
+  fileName: string;
+  /** tailored | base | none —— 与 Tracker 有效简历接口同口径。 */
+  kind: string;
+  /** 有效简历的提取文本(评分与无 PDF 时的全文展示共用)。 */
+  textContent?: string | null;
+  isPrimary?: boolean;
+}
 
 /**
  * Playbook 详情页(2026-10-20 最终定稿 v2 全新设计):
@@ -39,14 +49,16 @@ interface ResumeFileItem { id: string; fileName: string; isPrimary?: boolean; }
   imports: [
     CommonModule, FormsModule, RouterLink,
     MatButtonModule, MatIconModule, MatMenuModule,
-    IntakePanelComponent, RoundCardComponent, CommLogComponent
+    IntakePanelComponent, RoundCardComponent, CommLogComponent,
+    PdfContentViewerComponent
   ],
   templateUrl: './playbook-detail.component.html',
   styleUrl: './playbook-detail.component.scss'
 })
-export class PlaybookDetailComponent {
+export class PlaybookDetailComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly api = inject(ApiClient);
   private readonly v2 = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
@@ -56,8 +68,53 @@ export class PlaybookDetailComponent {
 
   readonly id = signal('');
   readonly entry = signal<InterviewDetail | null>(null);
+
+  // ---------------- 左侧条目导航(2026-10-21 定稿第八节) ----------------
+  // 分组判定与列表页同一套:v2.helpers 的 entryResultOutcome / entryEndKey,
+  // 两处不许各写一份。导航只是切换路由(/playbook/:id),不整页刷新。
+  readonly navEntries = signal<InterviewEntry[]>([]);
+  readonly navCompletedOpen = signal(false);
+  readonly navActive = computed(() =>
+    this.navEntries().filter(e => entryResultOutcome(e.result) === null));
+  readonly navCompleted = computed(() =>
+    this.navEntries()
+      .filter(e => entryResultOutcome(e.result) !== null)
+      .sort((a, b) => entryEndKey(b).localeCompare(entryEndKey(a))));
+  private navLoaded = false;
+
+  navOutcome(e: InterviewEntry) { return entryResultOutcome(e.result); }
+
+  goEntry(entryId: string): void {
+    if (entryId === this.id()) return;
+    void this.router.navigate(['/playbook', entryId]);
+  }
+
+  /** 全量拉取(与列表页同口径:分组要横跨全部条目,服务端分页会把两组切乱)。 */
+  private async loadNav(): Promise<void> {
+    try {
+      const size = 200;
+      const acc: InterviewEntry[] = [];
+      for (let page = 1; page <= 10; page++) {
+        const p = await this.api.get<Paged<InterviewEntry>>('/api/interviews',
+          { page, pageSize: size }).toPromise();
+        const items = p?.items ?? [];
+        acc.push(...items);
+        if (acc.length >= (p?.total ?? acc.length) || items.length === 0) break;
+      }
+      this.navEntries.set(acc);
+      // 当前条目在 Completed 组时默认展开该组,否则高亮看不见
+      const cur = acc.find(e => e.id === this.id());
+      if (cur && entryResultOutcome(cur.result) !== null) this.navCompletedOpen.set(true);
+    } catch { /* 导航拉不到不阻断详情页 */ }
+  }
   readonly application = signal<Application | null>(null);
   readonly resumeFile = signal<ResumeFileItem | null>(null);
+  /** 有效简历 PDF 的 object URL(展开面板内嵌预览用);换条目/销毁时回收。 */
+  readonly resumePdfUrl = signal<string | null>(null);
+  /** 基础简历全文(与 Tracker 同口径:有效简历无文本时回落它算分)。 */
+  readonly baseResumeText = signal<string | null>(null);
+  /** Jobs Company 记录的公司情报(Company.Profile —— Tracker 公司情报存这里)。 */
+  readonly companyProfileText = signal<string | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
 
@@ -121,10 +178,33 @@ export class PlaybookDetailComponent {
     const full = this.jdFullText();
     return full ? full.slice(0, 90) + '…' : '';
   });
-  /** 四格条公司格:条目公司介绍 → 投递的公司介绍。 */
+  /**
+   * 四格条公司格:条目公司介绍 → 投递的公司介绍 → Jobs Company 情报(Profile)。
+   * 第三层是 2026-10-21 补的同源:公司情报在 Tracker 里维护在 Company 记录上,
+   * 此前详情页只看前两处,情报明明存在却显示「暂无公司介绍」。
+   */
   readonly companyCellText = computed(() =>
     htmlToPlainText(this.entry()?.companyProfile)
-    || htmlToPlainText(this.application()?.companyDescription));
+    || htmlToPlainText(this.application()?.companyDescription)
+    || htmlToPlainText(this.companyProfileText()));
+
+  /**
+   * Resume Score —— 与 Tracker 同源同值(2026-10-21):
+   * Tracker 的分数不是落库字段 resumeScore,而是详情打开时用「有效简历文本
+   * (投递版优先)+ JD(全文优先、回落摘要)」喂共享 computeMatch 现算的;
+   * 这里用完全相同的输入与同一函数(core/match/resume-match),所以同值。
+   * 输入缺任一(JD 或简历文本)→ 与 Tracker 一样不出分,显示 “—”。
+   */
+  readonly resumeMatch = computed<MatchResult | null>(() => {
+    const app = this.application();
+    if (!app) return null;
+    const jd = (app.jdText ?? '').trim() || (app.jdSummary ?? '').trim();
+    const resume = this.resumeFile()?.textContent ?? this.baseResumeText();
+    if (!jd || !resume) return null;
+    return computeMatch(resume, jd);
+  });
+
+  readonly resumeScore = computed(() => this.resumeMatch()?.score ?? null);
 
   readonly selectedRound = computed(() => {
     const rs = this.rounds();
@@ -194,7 +274,9 @@ export class PlaybookDetailComponent {
       const id = pm.get('id');
       if (id && id !== this.id()) {
         this.id.set(id);
+        this.host.nativeElement.scrollTop = 0;
         void this.load();
+        if (!this.navLoaded) { this.navLoaded = true; void this.loadNav(); }
       }
     });
     // 首次加载后选默认轮次:第一个未开始的,否则最近一轮。
@@ -231,24 +313,68 @@ export class PlaybookDetailComponent {
 
   private loadApplication(appId: string): void {
     this.api.get<Application>(`/api/jobs/applications/${appId}`).subscribe({
-      next: app => this.application.set(app),
+      next: app => {
+        this.application.set(app);
+        if (app.companyId) this.loadCompanyProfile(app.companyId);
+      },
       error: () => undefined
     });
     this.loadResumeFile(appId);
+    this.loadBaseResumeText();
+  }
+
+  /** Jobs Company 情报(Profile):与 Tracker 详情里单独查 Company 的口径一致。 */
+  private loadCompanyProfile(companyId: string): void {
+    this.api.get<Company>(`/api/jobs/companies/${companyId}`).subscribe({
+      next: c => this.companyProfileText.set(c?.profile ?? null),
+      error: () => undefined
+    });
+  }
+
+  /** 基础简历全文(Tracker 同源:/api/jobs/resume-text)。 */
+  private loadBaseResumeText(): void {
+    this.api.get<{ resumeText: string | null }>('/api/jobs/resume-text').subscribe({
+      next: r => this.baseResumeText.set(r?.resumeText ?? null),
+      error: () => undefined
+    });
   }
 
   /**
    * 本投递简历:走 Jobs 的「有效简历」接口(单数 resume —— tailored 优先、
    * 无 tailored 时回落基础简历,与 Tracker 同源)。
    * 此前误调不存在的 resume-files 列表接口,永远 404、永远显示未关联。
+   * 2026-10-21:不再只取 fileName —— kind/textContent 一并留住(算分 + 无 PDF
+   * 时全文展示),并按 Tracker 同法取 resume-file 二进制在展开面板内嵌预览。
    */
   private loadResumeFile(appId: string): void {
-    this.api.get<{ fileName?: string | null }>(`/api/jobs/applications/${appId}/resume`)
+    this.api.get<{ kind?: string; fileName?: string | null; textContent?: string | null }>(
+      `/api/jobs/applications/${appId}/resume`)
       .subscribe({
-        next: r => this.resumeFile.set(
-          r?.fileName ? { id: appId, fileName: r.fileName } : null),
+        next: r => {
+          const kind = r?.kind === 'tailored' || r?.kind === 'base' ? r.kind : 'none';
+          this.resumeFile.set(r?.fileName
+            ? { id: appId, fileName: r.fileName, kind, textContent: r.textContent ?? null }
+            : null);
+          this.setResumePdfUrl(null);
+          if (kind !== 'none') {
+            this.api.getBlob(`/api/jobs/applications/${appId}/resume-file`).subscribe({
+              next: blob => this.setResumePdfUrl(URL.createObjectURL(blob)),
+              error: () => this.setResumePdfUrl(null)
+            });
+          }
+        },
         error: () => undefined
       });
+  }
+
+  private setResumePdfUrl(url: string | null): void {
+    const old = this.resumePdfUrl();
+    if (old && old !== url) URL.revokeObjectURL(old);
+    this.resumePdfUrl.set(url);
+  }
+
+  ngOnDestroy(): void {
+    this.setResumePdfUrl(null);
   }
 
   /**
@@ -277,6 +403,8 @@ export class PlaybookDetailComponent {
       const app = hits[0];
       this.application.set(app);
       this.loadResumeFile(app.id);
+      if (app.companyId) this.loadCompanyProfile(app.companyId);
+      this.loadBaseResumeText();
       void this.refreshPendingComm(app.id);
       try {
         await this.api.post(`/api/interviews/${e.id}/link-application`,
@@ -300,6 +428,7 @@ export class PlaybookDetailComponent {
   async onChildChanged(): Promise<void> {
     const keepRound = this.selectedRoundId();
     await this.load();
+    void this.loadNav();
     if (keepRound && this.rounds().some(r => r.id === keepRound)) {
       this.selectedRoundId.set(keepRound);
     }

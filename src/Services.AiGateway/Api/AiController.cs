@@ -74,6 +74,54 @@ public sealed class AiController(ISender sender, ICurrentUser currentUser) : Con
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    // ---------------------------- 备考数据源(2026-10-21) ----------------------------
+
+    /// <summary>读当前用户的备考数据源配置(搜索密钥只回掩码)。</summary>
+    [HttpGet("prep-sources/settings")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    public async Task<IResult> GetPrepSourceSettings(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetPrepSourceSettingsQuery(Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>保存备考数据源配置(开关 + 搜索服务商/密钥;密钥为空 = 不改)。</summary>
+    [HttpPut("prep-sources/settings")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> SavePrepSourceSettings([FromBody] PrepSourceSettingsBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SavePrepSourceSettingsCommand(Me,
+            body.QuestionBankEnabled, body.CompanyBackgroundEnabled,
+            body.WebExperiencesEnabled, body.GlassdoorEnabled,
+            body.SearchProvider, body.SearchApiKey), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 按公司 + 岗位检索一个外部数据源。状态如实返回
+    /// (fetched/disabled/notConfigured/noData/failed),不编造内容。
+    /// </summary>
+    [HttpPost("prep-sources/search")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> SearchPrepSources([FromBody] PrepSourceSearchBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new SearchPrepSourcesCommand(Me, body.Source, body.Company, body.Role, body.Stage), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 截图视觉 OCR —— 把图片经用户配置的视觉模型转成文字(定稿规则①)。
+    /// 状态如实返回(ok/notConfigured/unsupported/failed),失败不编造文本。
+    /// </summary>
+    [HttpPost("vision/extract-text")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    [RequestSizeLimit(16 * 1024 * 1024)]
+    public async Task<IResult> ExtractImageText([FromBody] ImageTextBody body, CancellationToken ct)
+    {
+        var dto = await sender.Send(new ExtractImageTextCommand(Me, body.ImageBase64, body.MimeType), ct);
+        return Microsoft.AspNetCore.Http.Results.Ok(dto);
+    }
+
     // ---------------------------- 补全转发(核心) ----------------------------
 
     /// <summary>
@@ -99,3 +147,12 @@ public sealed record AiSettingsBody(string Protocol, string? ApiKey, string? Bas
 /// <summary>补全请求体。</summary>
 public sealed record CompleteBody(string Purpose, string Prompt, string? SystemPrompt = null,
     double? Temperature = null, int? MaxTokens = null, bool PreferJson = false);
+
+/// <summary>备考数据源配置提交体。SearchApiKey 为空表示"不改密钥"。</summary>
+public sealed record PrepSourceSettingsBody(bool QuestionBankEnabled, bool CompanyBackgroundEnabled,
+    bool WebExperiencesEnabled, bool GlassdoorEnabled, string? SearchProvider, string? SearchApiKey);
+
+/// <summary>备考数据源检索请求体(source: web | glassdoor)。</summary>
+public sealed record PrepSourceSearchBody(string Source, string Company, string? Role, string? Stage);
+
+public sealed record ImageTextBody(string ImageBase64, string? MimeType);

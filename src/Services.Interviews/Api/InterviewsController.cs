@@ -613,7 +613,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         [FromBody] GeneratePrepReportBody? body, CancellationToken ct)
     {
         var r = await sender.Send(new GeneratePrepReportCommand(id, roundId,
-            body?.JdText, body?.ResumeText, body?.Experiences), ct);
+            body?.JdText, body?.ResumeText, body?.Experiences, body?.Language), ct);
         return r.IsSuccess ? Results.Ok(new { prepReportJson = r.Value }) : r.ToProblemDetails();
     }
 
@@ -770,7 +770,8 @@ public sealed record ReviewJsonBody(string? ReviewJson);
 public sealed record PrepReportBody(string? PrepReportJson);
 
 public sealed record GeneratePrepReportBody(
-    string? JdText = null, string? ResumeText = null, string? Experiences = null);
+    string? JdText = null, string? ResumeText = null, string? Experiences = null,
+    string? Language = null);
 
 public sealed record RenameSpeakerBody(string From, string To);
 

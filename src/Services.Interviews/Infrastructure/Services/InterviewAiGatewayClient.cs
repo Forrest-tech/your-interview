@@ -29,6 +29,21 @@ public sealed class AiGatewayException(string message, bool isConfigurationError
     public bool IsConfigurationError { get; } = isConfigurationError;
 }
 
+/// <summary>备考数据源配置(与 AiGateway PrepSourceSettingsDto 同字段)。</summary>
+public sealed record PrepSourceSettingsDto(
+    bool QuestionBankEnabled, bool CompanyBackgroundEnabled,
+    bool WebExperiencesEnabled, bool GlassdoorEnabled,
+    string? SearchProvider, bool HasSearchKey, string? MaskedSearchKey,
+    DateTimeOffset? UpdatedAt);
+
+/// <summary>一条外部检索结果。</summary>
+public sealed record PrepSourceResultDto(string Title, string Url, string Snippet);
+
+/// <summary>一次外部源检索的状态与结果(状态口径见 AiGateway)。</summary>
+public sealed record PrepSourceSearchDto(
+    string Source, string Status, string? Provider,
+    IReadOnlyList<PrepSourceResultDto> Results, string? Message);
+
 public interface IAiGatewayClient
 {
     /// <summary>
@@ -37,6 +52,13 @@ public interface IAiGatewayClient
     /// </summary>
     Task<AiCompletionResult> CompleteAsync(string purpose, string prompt, string? systemPrompt,
         double? temperature, int? maxTokens, CancellationToken ct);
+
+    /// <summary>读当前用户的备考数据源配置(开关 + 搜索服务是否已配)。</summary>
+    Task<PrepSourceSettingsDto> GetPrepSourceSettingsAsync(CancellationToken ct);
+
+    /// <summary>按公司 + 岗位检索一个外部数据源(web / glassdoor),状态如实返回。</summary>
+    Task<PrepSourceSearchDto> SearchPrepSourcesAsync(string source, string company,
+        string? role, string? stage, CancellationToken ct);
 }
 
 public sealed class InterviewAiGatewayClient(
@@ -100,6 +122,56 @@ public sealed class InterviewAiGatewayClient(
             throw new AiGatewayException("AI 返回了空内容。请重试,或检查所选模型是否可用。", false);
 
         return dto;
+    }
+
+    public async Task<PrepSourceSettingsDto> GetPrepSourceSettingsAsync(CancellationToken ct)
+    {
+        var raw = await SendJsonAsync(HttpMethod.Get, "/api/ai/prep-sources/settings", null, ct);
+        return JsonSerializer.Deserialize<PrepSourceSettingsDto>(raw, JsonOpts)
+            ?? throw new AiGatewayException("AiGateway 返回了空的备考数据源配置。", false);
+    }
+
+    public async Task<PrepSourceSearchDto> SearchPrepSourcesAsync(string source, string company,
+        string? role, string? stage, CancellationToken ct)
+    {
+        var body = new { source, company, role, stage };
+        var raw = await SendJsonAsync(HttpMethod.Post, "/api/ai/prep-sources/search", body, ct);
+        return JsonSerializer.Deserialize<PrepSourceSearchDto>(raw, JsonOpts)
+            ?? throw new AiGatewayException("AiGateway 返回了空的检索结果。", false);
+    }
+
+    /// <summary>带 JWT 透传的 JSON 请求(备考数据源端点共用)。失败抛 AiGatewayException。</summary>
+    private async Task<string> SendJsonAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(method, path);
+        if (body is not null)
+            req.Content = new StringContent(JsonSerializer.Serialize(body, JsonOpts), Encoding.UTF8, "application/json");
+        var auth = httpContextAccessor.HttpContext?.Request.Headers.Authorization.ToString();
+        if (!string.IsNullOrWhiteSpace(auth))
+            req.Headers.TryAddWithoutValidation("Authorization", auth);
+
+        HttpResponseMessage resp;
+        try
+        {
+            resp = await http.SendAsync(req, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new AiGatewayException($"无法连接 AiGateway:{ex.Message}", false, ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new AiGatewayException("AiGateway 请求超时。", false, ex);
+        }
+
+        var raw = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var msg = ExtractProblemDetail(raw) ?? $"AiGateway 返回 {(int)resp.StatusCode}。";
+            logger.LogWarning("AiGateway 请求失败({Path} {Status}):{Msg}", path, (int)resp.StatusCode, msg);
+            throw new AiGatewayException(msg, false);
+        }
+        return raw;
     }
 
     /// <summary>从 ProblemDetails 里抠出人类可读消息。</summary>

@@ -119,6 +119,7 @@ export class PlaybookV2Api {
 
   generatePrepReport(entryId: string, roundId: string, body: {
     jdText?: string | null; resumeText?: string | null; experiences?: string | null;
+    language?: string | null;
   }): Observable<{ prepReportJson: string }> {
     return this.api.post<{ prepReportJson: string }>(
       `${this.base(entryId)}/rounds/${roundId}/prep-report/generate`, body);

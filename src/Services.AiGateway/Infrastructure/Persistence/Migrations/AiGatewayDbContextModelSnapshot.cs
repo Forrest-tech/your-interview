@@ -70,6 +70,42 @@ namespace YourInterview.Services.AiGateway.Infrastructure.Persistence.Migrations
                     b.ToTable("ai_settings", "aigateway");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.AiGateway.Domain.PrepSourceSetting", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("CompanyBackgroundEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("GlassdoorEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("QuestionBankEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SearchApiKey")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SearchProvider")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("WebExperiencesEnabled")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("prep_source_settings", "aigateway");
+                });
+
             modelBuilder.Entity("YourInterview.Services.AiGateway.Infrastructure.Persistence.AiCallLog", b =>
                 {
                     b.Property<Guid>("Id")

@@ -23,6 +23,9 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
 
 type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
 
+/** 轮次阶段口径:与 rounds-timeline / Tracker smart-add / Tech Stack 共用的同一套取值。 */
+const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
+
 /**
  * Round 工作卡(2026-10-20 定稿):头行(第 N 轮 · 阶段 · 时间 · 面试官 · 编辑/删除)
  * + 结果行 + 内页签(按时序固定:备考报告 → 面试实录 → 问答入库(计数) → 材料(计数))。
@@ -71,7 +74,11 @@ type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
 
       @if (editing()) {
         <div class="edit-grid">
-          <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [ngModel]="eStage()" (ngModelChange)="eStage.set($event)"></label>
+          <label>{{ t('pb.v2.r.fStage') }}
+            <select class="fld" data-testid="round-stage-select" [ngModel]="eStage()" (ngModelChange)="eStage.set($event)">
+              @for (s of stageOptions(); track s) { <option [value]="s">{{ stageLabel(s) }}</option> }
+            </select>
+          </label>
           <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="eDate()" (ngModelChange)="eDate.set($event)"></label>
           <label>{{ t('pb.v2.r.fTime') }} <input class="fld" placeholder="11:00" [ngModel]="eTime()" (ngModelChange)="eTime.set($event)"></label>
           <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="eInterviewers()" (ngModelChange)="eInterviewers.set($event)"></label>
@@ -134,33 +141,33 @@ type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
   styles: [`
     .card { padding: 2px 2px 0; margin-top: 14px; }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .rc-head h3 { margin: 0; font-size: 17px; }
-    .rc-meta { font-size: 12.5px; color: var(--yi-text-muted, #888); }
+    .rc-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+    .rc-meta { font-size: 13px; color: var(--yi-text-muted, #888); }
     .spacer { flex: 1; }
-    .rc-outcome { font-size: 13px; color: var(--yi-text-muted, #777); margin-top: 5px; }
-    .cal-bar { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 13px;
+    .rc-outcome { font-size: 14px; color: var(--yi-text-muted, #777); margin-top: 5px; }
+    .cal-bar { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 14px;
                border: 1px dashed var(--yi-border, #bbb); border-radius: 10px; padding: 7px 12px; }
     .cal-bar mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--yi-accent, #3f51b5); }
     .cal-bar .cal-remind { color: var(--yi-text-muted, #777); }
     .rc-outcome a { color: var(--yi-accent, #3f51b5); }
     .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
-                border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; }
+                border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 500; cursor: pointer; }
     .edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
                  gap: 10px 14px; margin: 12px 0; }
-    .edit-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px;
+    .edit-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
                        color: var(--yi-text-muted, #777); }
     .edit-grid .wide { grid-column: span 2; }
     .fld { border: 1px solid var(--yi-border, #ccc); border-radius: 8px; padding: 7px 9px;
-           font-size: 13px; background: transparent; color: inherit; }
+           font-size: 14px; background: transparent; color: inherit; }
     .row { display: flex; gap: 8px; align-items: center; }
     .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e0e0e0); margin: 14px 0 10px; flex-wrap: wrap; }
-    .rtab { border: none; background: transparent; color: inherit; font-size: 13.5px; cursor: pointer;
+    .rtab { border: none; background: transparent; color: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
             padding: 8px 13px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; }
     .rtab.on { border-bottom-color: var(--yi-accent, #3f51b5); font-weight: 700; }
-    .cnt { font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--yi-text, #222) 10%, transparent);
+    .cnt { font-size: 12px; font-weight: 700; background: color-mix(in srgb, var(--yi-text, #222) 10%, transparent);
            border-radius: 999px; padding: 1px 7px; margin-left: 5px; }
     .mat-head-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .mh-note { font-size: 12.5px; color: var(--yi-text-muted, #888); }
+    .mh-note { font-size: 13px; color: var(--yi-text-muted, #888); }
     .file-label { display: inline-flex; align-items: center; }
   `]
 })
@@ -208,6 +215,21 @@ export class RoundCardComponent {
   ]);
 
   readonly formatLabel = formatLabel;
+
+  /** Stage 下拉选项:标准口径在前;存量阶段值不在口径内时(如 Coding / Deep Dive)
+   *  动态补为第一个选项并保持选中,显示不丢、保存前不被改写。 */
+  readonly stageOptions = computed(() => {
+    const cur = this.eStage().trim();
+    return cur && !ROUND_STAGE_OPTIONS.includes(cur)
+      ? [cur, ...ROUND_STAGE_OPTIONS]
+      : [...ROUND_STAGE_OPTIONS];
+  });
+
+  stageLabel(s: string): string {
+    const key = 'ts.stage.' + s;
+    const v = this.t(key);
+    return v === key ? s : v;
+  }
 
   constructor() {
     // 轮次切换时按阶段选默认页签:未开始 → 备考;已结束 → 实录。

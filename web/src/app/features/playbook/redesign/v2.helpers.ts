@@ -144,6 +144,21 @@ export function derivePhase(
   return isEmail ? 'Pre' : 'Post';
 }
 
+/**
+ * 邮件主题归一化(2026-10-21 定稿第九节,批量解析预览聚合与 Communications
+ * 聚合展示共用同一口径):剥掉 Re:/Fwd:/Fw:/回复:/转发: 等回复转发前缀
+ * (可叠多层)后比对。display 保留原文大小写(展示用),key 为小写(分组用)。
+ */
+export function normalizeThreadSubject(subject?: string | null): { display: string; key: string } {
+  let s = (subject ?? '').replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < 6; i++) {
+    const m = s.match(/^(re|fwd|fw|回复|转发|答复)\s*[:：]\s*/i);
+    if (!m) break;
+    s = s.slice(m[0].length).trim();
+  }
+  return { display: s, key: s.toLowerCase() };
+}
+
 // ============================================================================
 //  条目结果归类 —— 列表页分组与详情页左侧导航共用同一套判定(2026-10-21)。
 //

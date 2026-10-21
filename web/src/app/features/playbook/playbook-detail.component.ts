@@ -17,7 +17,7 @@ import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
-  htmlToPlainText, joinNames, makeV2Fmt, makeV2T
+  htmlToPlainText, makeV2Fmt, makeV2T
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
@@ -81,35 +81,34 @@ export class PlaybookDetailComponent {
   readonly rounds = computed(() =>
     [...(this.entry()?.rounds ?? [])].sort((a, b) => a.order - b.order));
 
-  /** 头部联系人行:各轮面试官汇总(Recruiter 沟通对象在沟通记录里)。 */
-  readonly recruiterLine = computed(() => {
-    const names = new Set<string>();
-    for (const r of this.rounds()) {
-      for (const n of (r.interviewers ?? '').split(/[,、/]/)) {
-        const t = n.trim();
-        if (t) names.add(t);
-      }
-    }
-    return joinNames(this.i18n, [...names]);
-  });
-
   /**
-   * 最近联系(定稿头部五项之一,v2 一度漏掉):各轮 emailsJson 里日期最近
-   * 一封邮件的日期 —— 与旧版头部 latestEmail 同一口径、同一底层数据。
+   * 最近一封邮件(同一条记录同时供 Recruiter 与「最近联系」取数):
+   * 各轮 emailsJson 里日期最近的一封 —— 与旧版头部 latestEmail 同一口径、同一底层数据。
    */
-  readonly lastContactDate = computed(() => {
-    let best = '';
+  readonly latestEmail = computed(() => {
+    let best: { from: string; date: string } | null = null;
     for (const r of this.entry()?.rounds ?? []) {
       try {
-        const list = JSON.parse(r.emailsJson ?? '[]') as { date?: string }[];
+        const list = JSON.parse(r.emailsJson ?? '[]') as { from?: string; date?: string }[];
         for (const m of list ?? []) {
           const d = (m.date ?? '').slice(0, 10);
-          if (d > best) best = d;
+          if (!m.from && !d) continue;
+          if (!best || (d && d > best.date)) best = { from: m.from ?? '', date: d };
         }
       } catch { /* 坏 JSON 跳过该轮 */ }
     }
-    return best || null;
+    return best;
   });
+
+  /**
+   * 头部 Recruiter(2026-10-21 用户裁决定版口径):= 最近一封邮件/沟通的发件人
+   * (recruiter 本人,如 Khalil),不是各轮面试官汇总 —— 面试官只在各轮内逐人呈现。
+   * 没有任何邮件记录时该项不显示(与其它元信息缺失时的处理一致)。
+   */
+  readonly recruiterLine = computed(() => this.latestEmail()?.from || null);
+
+  /** 最近联系:与 Recruiter 同一条最新邮件记录的日期。 */
+  readonly lastContactDate = computed(() => this.latestEmail()?.date || null);
 
   /** 四格条 JD 全文:条目自身 → 关联 Tracker 投递,展示前统一清洗 HTML。 */
   readonly jdFullText = computed(() =>

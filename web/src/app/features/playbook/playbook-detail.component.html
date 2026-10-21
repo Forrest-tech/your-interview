@@ -30,7 +30,7 @@
               @if (lastContactDate()) { · {{ t('pb.v2.d.lastContact') }} {{ lastContactDate() }} }
             } @else {
               {{ fmt('pb.v2.d.readinessPct', { n: readiness() }) }}
-              @if (recruiterLine()) { · {{ t('pb.v2.d.interviewers') }} {{ recruiterLine() }} }
+              @if (recruiterLine()) { · {{ t('pb.v2.d.recruiter') }} {{ recruiterLine() }} }
               @if (lastContactDate()) { · {{ t('pb.v2.d.lastContact') }} {{ lastContactDate() }} }
             }
           </p>

@@ -488,7 +488,7 @@ export class PrepReportComponent {
     }
     this.busy.set(true);
     try {
-      const std = prepStdText(q.stdTechnical).text || prepStdText(q.stdSpoken).text;
+      const std = prepJoinAnswer(q);
       const res = await this.api.importCandidates({
         entryId: this.entry().id,
         company: this.entry().companyName,
@@ -505,6 +505,14 @@ export class PrepReportComponent {
       }).toPromise();
       const newId = res?.ids?.[0];
       if (newId) {
+        // 把新建条目并回本地题库映射:同步区读的是这份 map,不刷新就会把
+        // 刚带答案加入的题显示成「题库里还没有答案」(2026-10-21 审计 X3)。
+        const fresh = await this.api.getKnowledge(newId).toPromise().catch(() => null);
+        if (fresh) {
+          const map = new Map(this.knowledge());
+          map.set(fresh.id, fresh);
+          this.knowledge.set(map);
+        }
         const r = this.report();
         if (r) {
           const next: PrepReport = JSON.parse(JSON.stringify(r)) as PrepReport;
@@ -599,4 +607,17 @@ export class PrepReportComponent {
       blocks
     };
   }
+}
+
+/**
+ * 「＋ 加入 Tech Stack」带上的初始答案(2026-10-21 用户裁决):用户编辑版优先、
+ * 其次 AI 技术版 —— 取值顺序与问答入库 bestAnswerOf 完全一致:
+ * 技术版(用户→AI)→ 口语版(用户→AI)→ 我的回答。字符串形态的标准答案是 AI 稿。
+ */
+function prepJoinAnswer(q: PrepQuestionItem): string {
+  const parts = (v: PrepQuestionItem['stdTechnical']): { ai?: string | null; user?: string | null } =>
+    typeof v === 'string' ? { ai: v } : (v ?? {});
+  const te = parts(q.stdTechnical);
+  const sp = parts(q.stdSpoken);
+  return te.user || te.ai || sp.user || sp.ai || q.myAnswer || '';
 }

@@ -143,3 +143,35 @@ export function derivePhase(
   }
   return isEmail ? 'Pre' : 'Post';
 }
+
+// ============================================================================
+//  条目结果归类 —— 列表页分组与详情页左侧导航共用同一套判定(2026-10-21)。
+//
+//  定稿第七/八节:result 是自由文本(域约定 Passed | Rejected | Pending |
+//  Ghosted,详情页也是自由输入),不能"非空即完成" —— 填了 Pending/等回复
+//  的条目还在流程里。口径:先排未落定(pending/waiting/等回复…),再按关键词
+//  判终局:rejected(红) / positive(绿:offer·passed·通过·录用) /
+//  closed(中性:Ghosted·放弃·取消·结束)。关键词都不命中的自由文本一律
+//  返回 null 留在 In Progress —— 宁可漏分,不可错分。
+//  ⚠️ 判定只许在这里实现一份:列表页 PlaybookComponent.resultOutcome 与
+//     详情页导航都调它,不许任何一处再抄一份正则。
+// ============================================================================
+
+/** 结果归类:终局三态,或 null = 仍在进行中。 */
+export type EntryResultOutcome = 'rejected' | 'positive' | 'closed' | null;
+
+export function entryResultOutcome(result: string | null | undefined): EntryResultOutcome {
+  const raw = (result ?? '').trim();
+  if (!raw) return null;
+  const s = raw.toLowerCase();
+  if (/(pending|waiting|awaiting|in progress|等回复|等待|进行中)/.test(s)) return null;
+  if (/(reject|denied|declin|fail|被拒|拒绝|没过|未通过|淘汰|黄了)/.test(s)) return 'rejected';
+  if (/(offer|hired|accepted|录用|录取|通过|成功)/.test(s) || /\bpass/.test(s)) return 'positive';
+  if (/(ghost|withdraw|cancel|closed|ended|done|放弃|取消|失联|无回复|结束|完结)/.test(s)) return 'closed';
+  return null;
+}
+
+/** Completed 排序键:InterviewDate(回落 CreatedAt 日期)—— 与列表页口径一致。 */
+export function entryEndKey(e: { interviewDate?: string | null; createdAt?: string | null }): string {
+  return e.interviewDate || (e.createdAt ?? '').slice(0, 10);
+}

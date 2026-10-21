@@ -18,6 +18,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
 import { BRIEF_I18N } from './components/brief/brief.i18n';
+import { entryEndKey, entryResultOutcome } from './redesign/v2.helpers';
 import type { CoverageRow } from './components/brief/brief.models';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -124,16 +125,42 @@ export class PlaybookComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly entries = signal<InterviewEntry[]>([]);
 
-  /** 进行中:没有填最终结果的 */
-  readonly activeEntries = computed(() =>
-    this.entries().filter(e => !e.result || e.result.trim().length === 0));
+  /**
+   * 结果归类(定稿第七节,2026-10-21 用户拍板):
+   * result 是自由文本(域约定 Passed | Rejected | Pending | Ghosted,详情页也是自由输入),
+   * 不能"非空即完成"——填了 Pending/等回复 的条目还在流程里。
+   * 口径:先排未落定(pending/waiting/等回复…),再按关键词判终局:
+   *   rejected(红) / positive(绿:offer·passed·通过·录用) / closed(中性:Ghosted·放弃·取消·结束)。
+   * 关键词都不命中的自由文本一律返回 null 留在 In Progress —— 宁可漏分,不可错分。
+   */
+  resultOutcome(e: InterviewEntry): 'rejected' | 'positive' | 'closed' | null {
+    // 判定实现只此一份:redesign/v2.helpers 的 entryResultOutcome ——
+    // 详情页左侧导航用同一个函数,两处不许各抄一份正则(2026-10-21 定稿第八节)。
+    return entryResultOutcome(e.result);
+  }
 
-  /** 已结束:填了最终结果的(Offer/Rejected/Withdrawn 等) */
+  /** 进行中:没有落定最终结果的(含轮次全完但还在等回复的) */
+  readonly activeEntries = computed(() =>
+    this.entries().filter(e => this.resultOutcome(e) === null));
+
+  /**
+   * 已结束:最终结果已落定。按结束时间倒序 —— 列表 DTO 没有 UpdatedAt/结果时间,
+   * 用 InterviewDate(回落 CreatedAt)作结束时间代理,与后端列表默认排序口径一致。
+   */
   readonly completedEntries = computed(() =>
-    this.entries().filter(e => e.result && e.result.trim().length > 0));
-  readonly total = signal(0);
-  readonly page = signal(1);
-  readonly pageSize = signal(12);
+    this.entries()
+      .filter(e => this.resultOutcome(e) !== null)
+      .sort((a, b) => this.endKey(b).localeCompare(this.endKey(a))));
+
+  private endKey(e: InterviewEntry): string {
+    return entryEndKey(e);
+  }
+
+  /** Completed 区默认折叠,点标题展开/收起。 */
+  readonly completedOpen = signal(false);
+  toggleCompleted(): void {
+    this.completedOpen.update(v => !v);
+  }
 
   /** 旁路数据:公司聚合与统计。失败时留空,页面不报错。 */
   readonly companies = signal<CompanySummary[]>([]);
@@ -176,11 +203,6 @@ export class PlaybookComponent implements OnInit {
     { value: '其他', labelKey: 'pb.format.other' }
   ];
 
-  readonly totalPages = computed(() =>
-    Math.max(1, Math.ceil(this.total() / this.pageSize())));
-  readonly canPrev = computed(() => this.page() > 1);
-  readonly canNext = computed(() => this.page() < this.totalPages());
-
   /** 新建对话框状态与表单。 */
   readonly dialogOpen = signal(false);
   readonly saving = signal(false);
@@ -213,34 +235,56 @@ export class PlaybookComponent implements OnInit {
 
   // ---------------------------------------------------------------- 数据加载
 
+  /**
+   * 全量拉取(定稿第七节):分组要横跨全部条目,服务端分页会把两区切乱,
+   * 故按后端上限 200/页循环拉完筛选结果(个人数据量远低于上限的倍数级)。
+   */
   load(): void {
     this.loading.set(true);
     this.error.set(null);
 
-    this.api.get<Paged<InterviewEntry>>('/api/interviews', {
-      page: this.page(),
-      pageSize: this.pageSize(),
-      company: this.companyFilter || undefined,
-      status: this.statusFilter || undefined
-    }).subscribe({
-      next: (p) => {
-        this.entries.set(p.items ?? []);
-        this.total.set(p.total ?? 0);
-        this.loading.set(false);
-      },
-      error: (e: Error) => {
-        // 主数据失败才是真失败 —— 必须让用户看见并给重试按钮
-        this.error.set(e.message);
-        this.loading.set(false);
-      }
-    });
+    const size = 200;
+    const fetchPage = (page: number, acc: InterviewEntry[]): void => {
+      this.api.get<Paged<InterviewEntry>>('/api/interviews', {
+        page,
+        pageSize: size,
+        // 后端只认 companyId(Guid):公司名先经聚合列表解析,解析不到就不带条件
+        // (旧代码传 company=<名字> 后端根本不认,筛选一直是空转 —— 本次顺手修掉)
+        companyId: this.companyFilter
+          ? this.companies().find(c => c.companyName === this.companyFilter)?.companyId
+          : undefined,
+        status: this.statusFilter || undefined
+      }).subscribe({
+        next: (p) => {
+          const items = [...acc, ...(p.items ?? [])];
+          const totalCount = p.total ?? items.length;
+          if (items.length < totalCount && (p.items ?? []).length > 0 && page < 10) {
+            fetchPage(page + 1, items);
+            return;
+          }
+          this.entries.set(items);
+          this.loading.set(false);
+        },
+        error: (e: Error) => {
+          // 主数据失败才是真失败 —— 必须让用户看见并给重试按钮
+          this.error.set(e.message);
+          this.loading.set(false);
+        }
+      });
+    };
+    fetchPage(1, []);
   }
 
   /** 公司聚合:用于过滤下拉。失败退化为空列表。 */
   private loadCompanies(): void {
     this.api.get<CompanySummary[]>('/api/interviews/companies')
       .pipe(catchError(() => of([] as CompanySummary[])))
-      .subscribe((list) => this.companies.set(list ?? []));
+      .subscribe((list) => {
+        this.companies.set(list ?? []);
+        // 公司名→Id 的解析依赖这份聚合:若筛选已先设好(如从 Tracker 带 ?company= 跳入),
+        // 聚合到达后重查一次,筛选才真正生效。
+        if (this.companyFilter) this.load();
+      });
   }
 
   /** 统计:失败就当没有,不显示统计条即可。 */
@@ -283,7 +327,6 @@ export class PlaybookComponent implements OnInit {
   // ---------------------------------------------------------------- 筛选与翻页
 
   applyFilter(): void {
-    this.page.set(1);
     this.load();
   }
 
@@ -291,18 +334,6 @@ export class PlaybookComponent implements OnInit {
     this.companyFilter = '';
     this.statusFilter = '';
     this.applyFilter();
-  }
-
-  prevPage(): void {
-    if (!this.canPrev()) return;
-    this.page.update((p) => p - 1);
-    this.load();
-  }
-
-  nextPage(): void {
-    if (!this.canNext()) return;
-    this.page.update((p) => p + 1);
-    this.load();
   }
 
   // ---------------------------------------------------------------- 新建
@@ -403,8 +434,6 @@ export class PlaybookComponent implements OnInit {
         this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
         this.editing.set(false);
         this.selectedIds.set([]);
-        // 删掉当前页最后一条时页码可能越界,回退一页更自然
-        if (this.entries().length <= ids.length && this.page() > 1) this.page.update((p) => p - 1);
         this.load();
         this.loadStats();
       },
@@ -418,14 +447,6 @@ export class PlaybookComponent implements OnInit {
     const key = 'pb.status.' + s;
     const translated = this.i18n.t(key);
     return translated !== key ? translated : s;
-  }
-
-  /** 翻页信息:"第 1 / 3 页 · 共 25 条"。 */
-  pagerInfo(): string {
-    return this.i18n.t('pb.pager.info')
-      .replace('{page}', String(this.page()))
-      .replace('{totalPages}', String(this.totalPages()))
-      .replace('{total}', String(this.total()));
   }
 
   /** 状态色档 —— 让"卡住不动"的条目一眼能挑出来。 */

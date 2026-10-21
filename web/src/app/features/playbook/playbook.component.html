@@ -250,12 +250,20 @@
     </div>
   }
   @if (completedEntries().length > 0) {
-    <h3 class="section-title">{{ t('pb.section.completed') }}</h3>
-    <div class="grid completed">
-      @for (e of completedEntries(); track e.id) {
-        <ng-container *ngTemplateOutlet="entryCard; context: { $implicit: e }"></ng-container>
-      }
-    </div>
+    <button type="button" class="section-toggle" data-testid="completed-toggle"
+            [attr.aria-expanded]="completedOpen()" [title]="t('common.collapse')"
+            (click)="toggleCompleted()">
+      <mat-icon>{{ completedOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+      <span>{{ t('pb.section.completed') }}</span>
+      <span class="count-badge">{{ completedEntries().length }}</span>
+    </button>
+    @if (completedOpen()) {
+      <div class="grid completed">
+        @for (e of completedEntries(); track e.id) {
+          <ng-container *ngTemplateOutlet="entryCard; context: { $implicit: e }"></ng-container>
+        }
+      </div>
+    }
   }
 
   <!-- 条目卡片模板 -->
@@ -277,6 +285,9 @@
             <span class="role">{{ e.role }}</span>
           </div>
           <span class="status-pill" [class]="statusClass(e.status)"><span class="dot"></span>{{ statusLabel(e.status) }}</span>
+          @if (resultOutcome(e); as oc) {
+            <span class="result-badge" [class]="oc" data-testid="result-badge">{{ e.result }}</span>
+          }
         </div>
 
         <div class="meta">
@@ -322,18 +333,6 @@
         </div>
       </mat-card>
   </ng-template>
-
-  @if (total() > 0) {
-    <div class="pager">
-      <button mat-stroked-button [disabled]="!canPrev()" (click)="prevPage()">
-        <mat-icon>chevron_left</mat-icon> {{ t('common.prevPage') }}
-      </button>
-      <span class="pager-info">{{ pagerInfo() }}</span>
-      <button mat-stroked-button [disabled]="!canNext()" (click)="nextPage()">
-        {{ t('common.nextPage') }} <mat-icon>chevron_right</mat-icon>
-      </button>
-    </div>
-  }
 
   <!-- 新建对话框:用固定层而不是 cdk Dialog,
        少一层 dialog config 样板,也让这个组件自包含不依赖外部入口 -->

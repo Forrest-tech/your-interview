@@ -141,15 +141,60 @@
   margin-bottom: 24px;
 }
 
-/* 进行中/已结束 分区标题 */
+/* 进行中/已结束 分区标题 —— 字号对齐站内列表基准(Tracker 分区头 16px/600) */
 .section-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   margin: 4px 0 12px;
   padding-left: 2px;
 }
 /* 已结束的卡片稍微收敛 */
 .grid.completed .entry { opacity: 0.85; }
+
+/* Completed 折叠标题:与 .section-title 同字号,整行可点 */
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 4px 0 12px;
+  padding: 2px 2px 2px 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+
+  mat-icon { font-size: 20px; width: 20px; height: 20px; color: #667085; }
+
+  .count-badge {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #475467;
+  }
+}
+
+/* 结果徽章(仅 Completed 卡):结果原文 + 语义色,比状态 pill 更醒目 */
+.result-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+
+  &.rejected { background: #fdecec; color: #c62828; border-color: #f5c6c6; }
+  &.positive { background: #e6f7ee; color: #157f3d; border-color: #bfe8cf; }
+  &.closed { background: #e8f1fd; color: #1565c0; border-color: #c4dcfa; }
+}
 
 /* ============ 条目卡片(现代 SaaS 风) ============ */
 .entry {
@@ -202,8 +247,8 @@
     gap: 2px;
 
     .company {
-      font-size: 16.5px;
-      font-weight: 650;
+      font-size: 16px;
+      font-weight: 700;
       color: #101828;
       white-space: nowrap;
       overflow: hidden;
@@ -252,7 +297,7 @@
     flex-wrap: wrap;
     gap: 12px;
     margin: 2px 0 14px 56px;
-    font-size: 12.5px;
+    font-size: 13px;
     color: #98a2b3;
 
     span {
@@ -292,7 +337,7 @@
     }
 
     .overall-lbl {
-      font-size: 11px;
+      font-size: 12px;
       color: #98a2b3;
       margin-top: 5px;
     }
@@ -315,7 +360,7 @@
   }
 
   .bar-lbl {
-    font-size: 11px;
+    font-size: 12px;
     color: #98a2b3;
     white-space: nowrap;
     overflow: hidden;
@@ -359,7 +404,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    font-size: 12.5px;
+    font-size: 12px;
     color: #667085;
 
     span {
@@ -402,19 +447,6 @@
 .none { color: #c3c9d2; }
 
 
-
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 8px 0 24px;
-
-  .pager-info {
-    font-size: 13px;
-    color: #666;
-  }
-}
 
 /* ---- 对话框 ---- */
 .overlay {

@@ -16,6 +16,8 @@ import { I18nService } from '../../../../core/i18n/i18n.service';
 import { derivePhase, joinNames, makeV2Fmt, makeV2T } from '../v2.helpers';
 
 export type IntakeType = 'email' | 'transcript' | 'note';
+/** 「录音·转写文本」类型内部的二选一模式:一次只呈现/保存一种来源。 */
+export type TranscriptMode = 'upload' | 'text';
 type Target = { kind: 'round'; roundId: string } | { kind: 'comm' } | { kind: 'new' };
 
 const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'other'];
@@ -23,6 +25,9 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
 /**
  * 条目级统一入口(2026-10-20 定稿):
  * 类型只有三种 —— 邮件 / 录音·转写文本 / 备注(电话记录写进后两种)。
+ * 「录音·转写文本」内部是明确二选一(2026-10-21 用户强调):分段切换
+ * 「上传录音」|「粘贴转写文本」,一次只显示一种输入、保存只取当前模式的来源;
+ * 切换模式不清空另一模式的内容,粘贴音频/文本会自动对齐到对应模式。
  * 流程:粘贴 → 解析预览(先分类再提取,可改)→ 归属确认(系统按面试官/日期建议,
  * 可改;选新建轮次且有时间则建轮次并进应用内日历)→ 保存。
  * 任何类型都可附一张截图原图 —— 截图是附件,不是类型。
@@ -67,12 +72,24 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
           } @else {
             <p class="hint">{{ t('pb.v2.i.hintNote') }}</p>
           }
+          @if (type() === 'transcript') {
+            <div class="type-tabs mode-tabs" role="tablist" data-testid="transcript-mode-tabs">
+              <button type="button" role="tab" class="ttab" data-testid="mode-upload"
+                      [class.on]="transcriptMode() === 'upload'"
+                      (click)="setTranscriptMode('upload')">{{ t('pb.v2.i.modeUpload') }}</button>
+              <button type="button" role="tab" class="ttab" data-testid="mode-text"
+                      [class.on]="transcriptMode() === 'text'"
+                      (click)="setTranscriptMode('text')">{{ t('pb.v2.i.modeText') }}</button>
+            </div>
+          }
           <input class="fld" [placeholder]="t('pb.v2.i.titlePh')"
                  [ngModel]="title()" (ngModelChange)="title.set($event)">
-          <textarea class="paste" rows="9"
-                    [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
-                    [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
-          @if (type() === 'transcript') {
+          @if (type() !== 'transcript' || transcriptMode() === 'text') {
+            <textarea class="paste" rows="9"
+                      [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
+                      [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
+          }
+          @if (type() === 'transcript' && transcriptMode() === 'upload') {
             <div class="audio-row">
               <label class="file-btn">
                 <mat-icon>mic</mat-icon> {{ t('pb.v2.i.attachAudio') }}
@@ -95,17 +112,21 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             @if (!shotFile()) { <span class="shot-hint">{{ t('pb.v2.i.shotHint') }}</span> }
             <span class="spacer"></span>
             <button mat-stroked-button (click)="close()">{{ t('common.cancel') }}</button>
-            <button mat-raised-button color="primary" [disabled]="(!text().trim() && !audioFile()) || busy()"
+            <button mat-raised-button color="primary" [disabled]="!canParse() || busy()"
                     (click)="parse()">{{ t('pb.v2.i.parsePreview') }}</button>
           </div>
         } @else {
           <!-- 解析预览 -->
           <div class="preview" data-testid="intake-preview">
-            @if (audioFile()) {
+            @if (previewAudio()) {
               <p class="audio-info" data-testid="intake-audio-info">
+                {{ t('pb.v2.i.sourceAudio') }}<br>
                 {{ fmt('pb.v2.i.audioInfo', { name: audioName(), size: audioSizeText() }) }}<br>
                 {{ t('pb.v2.i.audioWillTranscribe') }}
               </p>
+            }
+            @if (type() === 'transcript' && transcriptMode() === 'text') {
+              <p class="hint" data-testid="intake-source-text">{{ t('pb.v2.i.sourceText') }}</p>
             }
             <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
             @if (type() === 'email') {
@@ -204,6 +225,7 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
     .panel-head h3 { margin: 0; font-size: 16px; }
     .icon-btn { border: none; background: transparent; cursor: pointer; color: inherit; display: inline-flex; }
     .type-tabs { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+    .mode-tabs { margin: 4px 0 2px; }
     .ttab { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
             border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
     .ttab.on { background: var(--yi-accent, #3f51b5); color: #fff; border-color: transparent; }
@@ -281,6 +303,8 @@ export class IntakePanelComponent {
   readonly open = signal(false);
   readonly step = signal<'input' | 'preview'>('input');
   readonly type = signal<IntakeType>('email');
+  /** 录音类型二选一模式,默认文本(主流程是粘转写);切换不清空另一模式已填内容。 */
+  readonly transcriptMode = signal<TranscriptMode>('text');
   readonly title = signal('');
   readonly text = signal('');
   readonly shotFile = signal<File | null>(null);
@@ -330,6 +354,7 @@ export class IntakePanelComponent {
   /** 父组件调用:打开面板,可预置类型与目标轮次。 */
   openPanel(type: IntakeType = 'email', roundId?: string): void {
     this.type.set(type);
+    this.transcriptMode.set('text');
     this.step.set('input');
     this.errorMsg.set(null);
     this.presetRoundId.set(roundId ?? null);
@@ -348,10 +373,11 @@ export class IntakePanelComponent {
     this.step.set('input');
   }
 
-  onShot(ev: Event): void {
-    const f = (ev.target as HTMLInputElement).files?.[0] ?? null;
-    if (f) this.setShot(f);
-    (ev.target as HTMLInputElement).value = '';
+  async onShot(ev: Event): Promise<void> {
+    const input = ev.target as HTMLInputElement;
+    const f = input.files?.[0] ?? null;
+    if (f) this.setShot(await detachFile(f));
+    input.value = '';
   }
 
   /**
@@ -378,17 +404,22 @@ export class IntakePanelComponent {
 
   /**
    * 粘贴分发(文档级监听,面板打开期间焦点在页面任意位置都接得住):
-   * - 剪贴板带图片文件 → 接住作截图附件(与文件选择同一状态/保存路径);
-   * - 带音频文件 → 「录音·转写」类型下接住作录音附件(与 Upload a recording
-   *   同一状态/保存路径);其它类型下不接,只提示去录音类型粘;
-   * - 纯文字 → 不拦截:聚焦在输入框/文本域时浏览器默认粘贴照常落入该字段,
-   *   无字段聚焦时默认粘贴本就无处可落,面板不代填、不吞字;
+   * - 剪贴板带图片文件 → 接住作截图附件(与文件选择同一状态/保存路径,两模式通用);
+   * - 带音频文件 → 「录音·转写」类型下接住作录音附件并自动切到「上传录音」模式
+   *   (与 Upload a recording 同一状态/保存路径);其它类型下不接,只提示去录音类型粘;
+   * - 纯文字 → 原则上不拦截:聚焦在输入框/文本域时浏览器默认粘贴照常落入该字段,
+   *   无字段聚焦时默认粘贴本就无处可落,面板不代填、不吞字。唯一例外:录音类型当前
+   *   在「上传录音」模式且转写文本为空、焦点又不在任何字段上时,自动切到
+   *   「粘贴转写文本」模式并把文字落进文本框 —— 二选一的来源由粘贴内容自动对齐;
    * - 其它文件 → 忽略。
    */
   onPaste(ev: ClipboardEvent): void {
     if (!this.open()) return;
     const file = firstClipboardFile(ev.clipboardData);
-    if (!file) return;
+    if (!file) {
+      this.maybeAutoSwitchTextPaste(ev);
+      return;
+    }
     if (file.type.startsWith('image/')) {
       ev.preventDefault();
       const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
@@ -401,11 +432,29 @@ export class IntakePanelComponent {
     }
     if (isAudioFile(file)) {
       ev.preventDefault();
-      if (this.type() === 'transcript') this.setAudio(file);
-      else {
+      if (this.type() === 'transcript') {
+        this.setAudio(file);
+        this.setTranscriptMode('upload');
+      } else {
         this.snack.open(this.t('pb.v2.i.pasteAudioWrongType'), this.t('common.close'), { duration: 3500 });
       }
     }
+  }
+
+  /**
+   * 纯文字粘贴的自动对齐:录音类型在上传模式、转写文本为空、且焦点不在任何
+   * 输入字段上时,切到文本模式并落入粘贴文字;其余情况一律不拦截(见 onPaste 注释)。
+   */
+  private maybeAutoSwitchTextPaste(ev: ClipboardEvent): void {
+    if (this.type() !== 'transcript' || this.transcriptMode() !== 'upload') return;
+    if (this.text().trim()) return;
+    const ae = document.activeElement as HTMLElement | null;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    const clip = (ev.clipboardData?.getData('text/plain') ?? '').trim();
+    if (!clip) return;
+    ev.preventDefault();
+    this.text.set(ev.clipboardData!.getData('text/plain'));
+    this.setTranscriptMode('text');
   }
 
   /** 录音附件统一入口(文件选择与粘贴共用同一份状态/保存路径)。 */
@@ -413,10 +462,10 @@ export class IntakePanelComponent {
     this.audioFile.set(f);
   }
 
-  onAudio(ev: Event): void {
+  async onAudio(ev: Event): Promise<void> {
     const input = ev.target as HTMLInputElement;
     const f = input.files?.[0] ?? null;
-    if (f) this.setAudio(f);
+    if (f) this.setAudio(await detachFile(f));
     input.value = '';
   }
 
@@ -432,9 +481,28 @@ export class IntakePanelComponent {
     return this.rounds().find(r => r.id === roundId)?.scheduledDate ?? null;
   }
 
-  /** 录音模式:转写类型 + 已选录音 —— 与粘贴文本二选一,录音优先。 */
+  /** 当前是否处于「上传录音」模式(仅录音类型下有意义):呈现、解析、保存都只认它。 */
+  readonly inUploadMode = computed(() =>
+    this.type() === 'transcript' && this.transcriptMode() === 'upload');
+  /** 预览步是否呈现录音来源(上传模式且已附录音)。 */
+  readonly previewAudio = computed(() => this.inUploadMode() && !!this.audioFile());
+
+  /** 录音模式判定:转写类型 + 当前选中「上传录音」—— 与文本二选一,只取当前模式。 */
   private isAudioMode(): boolean {
-    return this.type() === 'transcript' && !!this.audioFile();
+    return this.inUploadMode();
+  }
+
+  /** 「解析预览」可用性:上传模式要有录音,其余情况要有文本。 */
+  canParse(): boolean {
+    if (this.type() === 'transcript') {
+      return this.transcriptMode() === 'upload' ? !!this.audioFile() : !!this.text().trim();
+    }
+    return !!this.text().trim();
+  }
+
+  /** 二选一切换:只切呈现与保存来源,不清空另一模式已填的内容(防误切丢失)。 */
+  setTranscriptMode(m: TranscriptMode): void {
+    this.transcriptMode.set(m);
   }
 
   // ---------------- 解析 ----------------
@@ -745,6 +813,17 @@ export function parseSegments(raw: string): TranscriptSegment[] {
     else merged.push({ ...s });
   }
   return merged;
+}
+
+/**
+ * 把文件选择拿到的 File 立刻读进内存另存一份独立 File。
+ * input 的 File 内容与该 input 元素绑定:切到解析预览步后 input 被销毁,
+ * 保存时再序列化原 File 只剩 0 字节(后端报"没有收到文件")—— 实测教训。
+ * 粘贴来的 File 来自 DataTransfer、不绑元素,无需此处理。
+ */
+async function detachFile(f: File): Promise<File> {
+  const buf = await f.arrayBuffer();
+  return new File([buf], f.name, { type: f.type, lastModified: f.lastModified });
 }
 
 function fmtFileSize(bytes: number): string {

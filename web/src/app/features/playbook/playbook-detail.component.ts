@@ -255,8 +255,11 @@ export class PlaybookDetailComponent {
    */
   private async tryMatchApplication(e: InterviewDetail): Promise<void> {
     try {
+      // 不用服务端 search 先过滤:search 是原文包含匹配,公司名只要差一个空格/
+      // 标点(条目手填 vs Tracker 抓取)候选就会被滤掉,归一化匹配无从谈起。
+      // 拉最近 50 条在客户端做归一化全等匹配(恰好 1 条才回填)。
       const page = await this.api.get<Paged<Application>>('/api/jobs/applications', {
-        search: e.companyName, page: 1, pageSize: 50
+        page: 1, pageSize: 50
       }).toPromise();
       const norm = (v: string) => v.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
       const hits = (page?.items ?? []).filter(a =>

@@ -50,8 +50,15 @@ public sealed class LocalInterviewAudioStore(IConfiguration config,
     /// </summary>
     private readonly string _root = ResolveRoot(config);
 
-    /// <summary>允许的音频扩展名。白名单拒绝 —— 别让 .exe 伪装成材料混进存储区。</summary>
-    public static readonly string[] AllowedExtensions = [".m4a", ".mp3", ".wav", ".webm", ".ogg"];
+    /// <summary>
+    /// 允许的文件扩展名。白名单拒绝 —— 别让 .exe 伪装成材料混进存储区。
+    /// 音频是录音本体;图片是统一入口的截图附件(与录音共用同一存储/取回管线,
+    /// 靠材料 meta 的 screenshotAssetId 引用),2026-10-21 补入。
+    /// </summary>
+    public static readonly string[] AllowedExtensions = [
+        ".m4a", ".mp3", ".wav", ".webm", ".ogg",
+        ".png", ".jpg", ".jpeg", ".gif", ".webp"
+    ];
 
     /// <summary>单文件上限 200MB:约两小时 m4a,足够覆盖一场马拉松面试,同时挡住误传。</summary>
     public const long MaxFileBytes = 200 * 1024 * 1024;
@@ -185,7 +192,7 @@ public sealed class LocalInterviewAudioStore(IConfiguration config,
         var e = ext?.ToLowerInvariant() ?? string.Empty;
         if (!AllowedExtensions.Contains(e))
             throw new InvalidOperationException(
-                $"不支持的音频格式 {e}。允许:{string.Join("/", AllowedExtensions)}");
+                $"不支持的文件格式 {e}。允许:{string.Join("/", AllowedExtensions)}");
         return e;
     }
 }

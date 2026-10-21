@@ -136,6 +136,11 @@
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  /* 行高下限 = 卡片内容高:卡片 .entry 带 overflow:hidden,其自动最小尺寸为 0,
+     auto 行高会被定高 flex 列里的剩余空间压扁(实测 279px/行被压到 85px/行,
+     内容被裁、网格永不溢出、内部滚动永不触发)。给行高设 max-content 下限后
+     行高恢复内容高,网格按设计意图内部滚动。 */
+  grid-auto-rows: minmax(max-content, auto);
   gap: 16px;
   align-content: start;
   margin-bottom: 24px;

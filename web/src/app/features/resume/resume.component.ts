@@ -175,7 +175,8 @@ export class ResumeComponent implements OnInit {
       const metaRaw = localStorage.getItem(this.resumeMetaKey);
       const meta = metaRaw ? JSON.parse(metaRaw) : {};
       if (text.trim()) {
-        this.savedResumePreview.set(text.slice(0, 300) + (text.length > 300 ? '...' : ''));
+        // 只作"有已存文本简历"的状态标志用(编辑态/卡片头显隐),不再截取摘录展示。
+        this.savedResumePreview.set(text);
         this.savedResumeDate.set(meta.savedAt ? new Date(meta.savedAt).toLocaleDateString() : '');
         if (meta.fileName) this.resumeFileName.set(meta.fileName);
       } else {

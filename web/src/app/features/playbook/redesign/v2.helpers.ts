@@ -123,3 +123,23 @@ export function isAudioAsset(a: { kind: string; contentType?: string | null; fil
   if (a.contentType) return a.contentType.startsWith('audio/');
   return /\.(mp3|m4a|wav|webm|ogg)$/i.test(a.fileName ?? '');
 }
+
+/**
+ * 材料 Before/After(面试前/后)判定(2026-10-21 用户裁决,展示与落值共用同一规则):
+ * 材料日期与所属轮次日期按日比较 —— 严格早于轮次日 → Pre、严格晚于 → Post;
+ * 同日或任一日期缺失(无从比较)→ 回落旧类型规则(邮件 Pre、其余 Post)。
+ * 存量材料不做数据迁移:展示时按同一规则推导纠正,新保存的材料落值也走此函数。
+ */
+export function derivePhase(
+  isEmail: boolean,
+  materialDate?: string | null,
+  roundDate?: string | null
+): 'Pre' | 'Post' {
+  const md = (materialDate ?? '').slice(0, 10);
+  const rd = (roundDate ?? '').slice(0, 10);
+  if (md && rd) {
+    if (md < rd) return 'Pre';
+    if (md > rd) return 'Post';
+  }
+  return isEmail ? 'Pre' : 'Post';
+}

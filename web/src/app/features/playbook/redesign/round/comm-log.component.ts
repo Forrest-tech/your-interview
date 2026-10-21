@@ -11,7 +11,7 @@ import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, CommItem } from '../v2.models';
 import { MaterialsListComponent } from './materials-list.component';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
+import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
 
 /**
  * 沟通记录(2026-10-20 定稿,条目级时间线):
@@ -332,12 +332,14 @@ export class CommLogComponent {
       await this.api.reassignAsset(this.entry().id, c.meta.assetId, roundId).toPromise();
       return;
     }
+    // phase 落值与展示推导同一规则:沟通发生日 vs 目标轮次日期(不再写死 Pre)。
+    const targetRound = (this.entry().rounds ?? []).find(r => r.id === roundId);
     const attached = await this.api.attachAsset(this.entry().id, {
       kind: c.type === 'Email' ? 'Text' : 'Notes',
       fileName: c.subject || this.typeLabel(c.type),
       transcriptText: c.content,
       roundId,
-      phase: 'Pre',
+      phase: derivePhase(c.type === 'Email', c.occurredAt, targetRound?.scheduledDate),
       metaJson: JSON.stringify({ ...c.meta, communicationId: c.id })
     }).toPromise();
     if (attached?.id) {

@@ -12,7 +12,7 @@ import {
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { formatLabel, isAudioAsset, joinNames, makeV2T } from '../v2.helpers';
+import { derivePhase, formatLabel, isAudioAsset, joinNames, makeV2T } from '../v2.helpers';
 
 /**
  * 材料列表(2026-10-20 定稿):本轮(或条目级)的全部原始件。
@@ -32,7 +32,7 @@ import { formatLabel, isAudioAsset, joinNames, makeV2T } from '../v2.helpers';
         <div class="mat-head">
           <span class="kind-chip">{{ kindLabel(a) }}</span>
           <span class="mat-name">{{ a.fileName }}</span>
-          @if (a.phase) { <span class="phase">{{ a.phase === 'Pre' ? t('pb.v2.m.phasePre') : t('pb.v2.m.phasePost') }}</span> }
+          @if (phaseOf(a); as ph) { <span class="phase">{{ ph === 'Pre' ? t('pb.v2.m.phasePre') : t('pb.v2.m.phasePost') }}</span> }
           <span class="mat-date">{{ displayDate(a) }}</span>
           <span class="spacer"></span>
           <label class="assign">{{ t('pb.v2.m.assign') }}
@@ -150,6 +150,25 @@ export class MaterialsListComponent {
 
   metaOf(a: InterviewAsset): AssetMeta | null {
     return safeJson<AssetMeta>(a.metaJson);
+  }
+
+  /** 邮件类材料(与 kindLabel 同一判别口径,供 phase 推导回落规则用)。 */
+  private isEmailAsset(a: InterviewAsset): boolean {
+    const m = this.metaOf(a);
+    return m?.channel === 'email' || (a.kind === 'Text' && !!m?.category);
+  }
+
+  /**
+   * Before/After 展示值(2026-10-21 用户裁决):有归属轮次时按「材料日期 vs
+   * 轮次日期」推导(见 derivePhase),存量写错的 phase 在展示时就被纠正,
+   * 不做数据迁移;无归属轮次(条目级材料)无从比较,保持存量值。
+   */
+  phaseOf(a: InterviewAsset): 'Pre' | 'Post' | null {
+    const stored = a.phase === 'Pre' || a.phase === 'Post' ? a.phase : null;
+    if (!a.roundId) return stored;
+    const round = this.rounds().find(r => r.id === a.roundId);
+    if (!round) return stored;
+    return derivePhase(this.isEmailAsset(a), this.displayDate(a), round.scheduledDate);
   }
 
   readonly formatLabel = formatLabel;

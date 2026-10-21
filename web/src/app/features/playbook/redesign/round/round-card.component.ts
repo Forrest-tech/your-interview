@@ -19,7 +19,7 @@ import { MaterialsListComponent } from './materials-list.component';
 import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
 import { ExportBlock, ExportDoc } from '../export/export-doc';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
+import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
 
 type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
 
@@ -277,7 +277,9 @@ export class RoundCardComponent {
     const input = ev.target as HTMLInputElement;
     const f = input.files?.[0];
     if (!f) return;
-    this.api.uploadFile(this.entry().id, f, { roundId: this.round().id, phase: 'Post' }).subscribe({
+    // phase 落值与展示推导同一规则:按上传日(即材料日期)vs 本轮日期 derivePhase。
+    const phase = derivePhase(false, new Date().toISOString().slice(0, 10), this.round().scheduledDate);
+    this.api.uploadFile(this.entry().id, f, { roundId: this.round().id, phase }).subscribe({
       next: () => {
         this.snack.open(this.t('pb.v2.r.uploaded'), this.t('common.close'), { duration: 2200 });
         input.value = '';

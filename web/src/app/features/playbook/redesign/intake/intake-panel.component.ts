@@ -33,7 +33,18 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule],
   template: `
     @if (open()) {
-      <section class="panel" data-testid="intake-panel">
+      <section class="panel" data-testid="intake-panel" (paste)="onPaste($event)">
+        <ng-template #shotTpl>
+          @if (shotFile()) {
+            <div class="shot-box" data-testid="shot-box">
+              <img class="shot-thumb" [src]="shotPreviewUrl()" [alt]="shotName()">
+              <span class="shot-name">{{ shotName() }}</span>
+              <button type="button" class="icon-btn" (click)="clearShot()" [attr.aria-label]="t('pb.v2.i.removeShot')">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
+        </ng-template>
         <div class="panel-head">
           <h3>{{ t('pb.v2.d.addMaterial') }}</h3>
           <button type="button" class="icon-btn" (click)="close()" [attr.aria-label]="t('common.close')">
@@ -61,20 +72,42 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
           <textarea class="paste" rows="9"
                     [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
                     [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
+          @if (type() === 'transcript') {
+            <div class="audio-row">
+              <label class="file-btn">
+                <mat-icon>mic</mat-icon> {{ t('pb.v2.i.attachAudio') }}
+                <input type="file" accept=".mp3,.m4a,.wav,.webm,.ogg,audio/*" hidden (change)="onAudio($event)">
+              </label>
+              @if (audioFile()) {
+                <span class="shot-name">{{ fmt('pb.v2.i.audioInfo', { name: audioName(), size: audioSizeText() }) }}</span>
+                <button type="button" class="icon-btn" (click)="removeAudio()" [attr.aria-label]="t('pb.v2.i.removeAudio')">
+                  <mat-icon>close</mat-icon>
+                </button>
+              }
+            </div>
+          }
+          <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
           <div class="row">
             <label class="file-btn">
               <mat-icon>image</mat-icon> {{ t('pb.v2.i.attachShot') }}
               <input type="file" accept="image/*" hidden (change)="onShot($event)">
             </label>
-            @if (shotName()) { <span class="shot-name">{{ shotName() }}</span> }
+            @if (!shotFile()) { <span class="shot-hint">{{ t('pb.v2.i.shotHint') }}</span> }
             <span class="spacer"></span>
             <button mat-stroked-button (click)="close()">{{ t('common.cancel') }}</button>
-            <button mat-raised-button color="primary" [disabled]="!text().trim() || busy()"
+            <button mat-raised-button color="primary" [disabled]="(!text().trim() && !audioFile()) || busy()"
                     (click)="parse()">{{ t('pb.v2.i.parsePreview') }}</button>
           </div>
         } @else {
           <!-- 解析预览 -->
           <div class="preview" data-testid="intake-preview">
+            @if (audioFile()) {
+              <p class="audio-info" data-testid="intake-audio-info">
+                {{ fmt('pb.v2.i.audioInfo', { name: audioName(), size: audioSizeText() }) }}<br>
+                {{ t('pb.v2.i.audioWillTranscribe') }}
+              </p>
+            }
+            <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
             @if (type() === 'email') {
               <div class="pv-grid">
                 <label>{{ t('pb.v2.i.fCategory') }}
@@ -186,6 +219,14 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
                 border: 1px dashed var(--yi-border, #bbb); border-radius: 8px; padding: 6px 10px; }
     .file-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
     .shot-name { font-size: 12px; color: var(--yi-text-muted, #777); }
+    .shot-hint { font-size: 12px; color: var(--yi-text-muted, #999); }
+    .shot-box { display: inline-flex; align-items: center; gap: 9px; margin-top: 10px;
+                border: 1px solid var(--yi-border, #ccc); border-radius: 10px; padding: 6px 10px 6px 6px; }
+    .shot-thumb { width: 54px; height: 40px; object-fit: cover; border-radius: 6px; display: block; }
+    .audio-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .audio-row .file-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
+    .audio-info { font-size: 13px; line-height: 1.6; border: 1px dashed var(--yi-border, #bbb);
+                  border-radius: 10px; padding: 9px 12px; margin: 4px 0 10px; }
     .pv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 14px; margin: 8px 0; }
     .pv-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--yi-text-muted, #777); }
     .sec { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #777); margin: 14px 0 6px; }
@@ -225,6 +266,9 @@ export class IntakePanelComponent {
   readonly text = signal('');
   readonly shotFile = signal<File | null>(null);
   readonly shotName = signal('');
+  readonly shotPreviewUrl = signal<string | null>(null);
+  readonly audioFile = signal<File | null>(null);
+  readonly audioName = computed(() => this.audioFile()?.name ?? '');
 
   // 预览字段
   readonly category = signal('invitation');
@@ -280,8 +324,71 @@ export class IntakePanelComponent {
 
   onShot(ev: Event): void {
     const f = (ev.target as HTMLInputElement).files?.[0] ?? null;
+    if (f) this.setShot(f);
+    (ev.target as HTMLInputElement).value = '';
+  }
+
+  /**
+   * 截图附件统一入口(文件选择与粘贴共用同一份状态/保存路径):
+   * 附件只留一张,后来的替换先前的并给提示;缩略图用 object URL 即时预览。
+   */
+  setShot(f: File): void {
+    const replaced = !!this.shotFile();
+    if (this.shotPreviewUrl()) URL.revokeObjectURL(this.shotPreviewUrl()!);
     this.shotFile.set(f);
-    this.shotName.set(f ? f.name : '');
+    this.shotName.set(f.name);
+    this.shotPreviewUrl.set(URL.createObjectURL(f));
+    if (replaced) {
+      this.snack.open(this.t('pb.v2.i.shotReplaced'), this.t('common.close'), { duration: 2500 });
+    }
+  }
+
+  clearShot(): void {
+    if (this.shotPreviewUrl()) URL.revokeObjectURL(this.shotPreviewUrl()!);
+    this.shotPreviewUrl.set(null);
+    this.shotFile.set(null);
+    this.shotName.set('');
+  }
+
+  /**
+   * 面板内粘贴(定稿:截图可"粘"进来):剪贴板带图片 → 接住作截图附件并
+   * preventDefault;纯文字不拦截,保持默认粘贴落入当前聚焦的输入框/文本域。
+   * 事件绑在面板根节点,焦点在面板内任意位置都接得住图片。
+   */
+  onPaste(ev: ClipboardEvent): void {
+    const items = ev.clipboardData?.items;
+    let raw: File | null = null;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) { raw = items[i].getAsFile(); break; }
+      }
+    }
+    if (!raw) return;
+    ev.preventDefault();
+    const ext = (raw.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    const name = `${this.t('pb.v2.i.clipName')}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
+      `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
+    this.setShot(new File([raw], name, { type: raw.type }));
+  }
+
+  onAudio(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const f = input.files?.[0] ?? null;
+    if (f) this.audioFile.set(f);
+    input.value = '';
+  }
+
+  removeAudio(): void { this.audioFile.set(null); }
+
+  audioSizeText(): string {
+    return fmtFileSize(this.audioFile()?.size ?? 0);
+  }
+
+  /** 录音模式:转写类型 + 已选录音 —— 与粘贴文本二选一,录音优先。 */
+  private isAudioMode(): boolean {
+    return this.type() === 'transcript' && !!this.audioFile();
   }
 
   // ---------------- 解析 ----------------
@@ -290,6 +397,13 @@ export class IntakePanelComponent {
     const raw = this.text();
     this.errorMsg.set(null);
     this.duplicate.set(false);
+    if (this.isAudioMode()) {
+      // 录音没有可解析的文本:预览只呈现文件信息 + 归属,不假装已解析出内容。
+      this.segments.set([]);
+      if (!this.fDate()) this.fDate.set(todayStr());
+      this.step.set('preview');
+      return;
+    }
     if (this.type() === 'email') this.parseEmail(raw);
     else if (this.type() === 'transcript') this.parseTranscript(raw);
     else this.parseNote(raw);
@@ -364,6 +478,21 @@ export class IntakePanelComponent {
         roundId = created!.id;
       }
 
+      if (this.isAudioMode()) {
+        // 录音与材料页签走同一个上传端点/资产类型(Audio),落到所选归属,
+        // 保存后由转写管线处理(实录页签可见),这里不生成任何文本资产。
+        // 同附的截图照常同归属落库(独立资产,不与录音做 meta 关联)。
+        const shot0 = this.shotFile();
+        if (shot0) {
+          await this.api.uploadFile(entry.id, shot0,
+            { roundId: roundId ?? '', phase: '' }).toPromise();
+        }
+        await this.api.uploadFile(entry.id, this.audioFile()!,
+          { roundId: roundId ?? '', phase: roundId ? 'Post' : '' }).toPromise();
+        this.finishSave();
+        return;
+      }
+
       // 截图先传(原图作为附件资产,归到同一目标)
       let shotId: string | undefined;
       const shot = this.shotFile();
@@ -409,19 +538,24 @@ export class IntakePanelComponent {
         }
       }
 
-      this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2500 });
-      this.text.set('');
-      this.title.set('');
-      this.shotFile.set(null);
-      this.shotName.set('');
-      this.open.set(false);
-      this.step.set('input');
-      this.saved.emit();
+      this.finishSave();
     } catch (e) {
       this.errorMsg.set(this.fmt('pb.v2.i.saveFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.i.unknownError') }));
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /** 保存成功后的统一收尾(文本/录音两条路径共用)。 */
+  private finishSave(): void {
+    this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2500 });
+    this.text.set('');
+    this.title.set('');
+    this.clearShot();
+    this.audioFile.set(null);
+    this.open.set(false);
+    this.step.set('input');
+    this.saved.emit();
   }
 
   private buildMeta(shotId?: string): AssetMeta {
@@ -552,4 +686,10 @@ export function parseSegments(raw: string): TranscriptSegment[] {
     else merged.push({ ...s });
   }
   return merged;
+}
+
+function fmtFileSize(bytes: number): string {
+  if (!bytes) return '0 KB';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

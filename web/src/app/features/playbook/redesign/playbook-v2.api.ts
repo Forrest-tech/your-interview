@@ -42,7 +42,13 @@ export class PlaybookV2Api {
   }
 
   uploadFile(entryId: string, file: File, extra: Record<string, string>): Observable<InterviewAsset> {
-    return this.api.upload<InterviewAsset>(`${this.base(entryId)}/assets/upload`, file, extra);
+    // 后端只有 POST {id}/assets 一个文件端点(multipart 形态)。此前误拼
+    // /assets/upload —— 该路由不存在,录音/截图上传一直 404 从未成功。
+    // 空字符串字段不要发:后端把缺失字段按 null 处理,而空串 phase 会被
+    // 验证器当作非法值拦下(归属为空时 roundId/phase 就该缺席)。
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(extra)) if (v) clean[k] = v;
+    return this.api.upload<InterviewAsset>(`${this.base(entryId)}/assets`, file, clean);
   }
 
   reassignAsset(entryId: string, assetId: string, roundId: string | null): Observable<unknown> {

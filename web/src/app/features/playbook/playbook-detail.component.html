@@ -1,224 +1,229 @@
 <div class="page">
   <a mat-button class="back" routerLink="/playbook">
-    <mat-icon>arrow_back</mat-icon> 返回列表
+    <mat-icon>arrow_back</mat-icon> {{ t('pb.v2.d.back') }}
   </a>
 
   @if (loading() && !entry()) {
-    <p class="state">加载中…</p>
+    <p class="state">{{ t('pb.v2.d.loading') }}</p>
   }
   @if (loadError()) {
     <p class="state err">{{ loadError() }}</p>
   }
   @if (entry(); as e) {
 
-    <!-- ① 条目头 -->
-    <header class="ehead" data-testid="entry-header">
-      <div class="ehead-main">
-        <div class="ehead-titles">
-          <h1>{{ e.companyName }} · {{ e.role }}</h1>
-          <span class="status-badge">{{ statusText() }}</span>
-        </div>
-        <p class="ehead-meta">
-          @if (application(); as app) {
-            投递 {{ (app.appliedDate ?? '').slice(0, 10) || '—' }}
-            @if (app.source) { · 通过 {{ app.source }} }
-            @if (recruiterLine()) { · Recruiter {{ recruiterLine() }} }
-            · 准备度 {{ readiness() }}%
-          } @else {
-            准备度 {{ readiness() }}%
-            @if (recruiterLine()) { · 面试官 {{ recruiterLine() }} }
-          }
-        </p>
-        <div class="ehead-actions">
-          <button mat-raised-button color="primary" (click)="openIntake('email')">
-            ＋ 添加材料
-          </button>
-          <button mat-stroked-button (click)="goMock()">AI 模拟面试</button>
-          <button mat-stroked-button (click)="openJd()">打开岗位 JD</button>
-          <button mat-icon-button [matMenuTriggerFor]="moreMenu" aria-label="更多操作">
-            <mat-icon>more_vert</mat-icon>
-          </button>
-          <mat-menu #moreMenu="matMenu">
-            <button mat-menu-item (click)="startEditBasic()">编辑基本信息</button>
-            <button mat-menu-item (click)="openIntake('note')">记一条备注</button>
-            <button mat-menu-item (click)="deleteEntry()" class="danger-item">
-              {{ confirmDelete() ? '确认删除这个条目?' : '删除条目' }}
-            </button>
-          </mat-menu>
-        </div>
-        @if (editingBasic()) {
-          <div class="basic-edit">
-            <label>公司 <input class="fld" [ngModel]="bCompany()" (ngModelChange)="bCompany.set($event)"></label>
-            <label>岗位 <input class="fld" [ngModel]="bRole()" (ngModelChange)="bRole.set($event)"></label>
-            <label>结果 <input class="fld" placeholder="如:等回复 / 已通过 / 未通过" [ngModel]="bResult()" (ngModelChange)="bResult.set($event)"></label>
-            <label class="wide">备注 <input class="fld" [ngModel]="bNotes()" (ngModelChange)="bNotes.set($event)"></label>
-            <div class="be-actions">
-              <button mat-raised-button color="primary" (click)="saveBasic()">保存</button>
-              <button mat-button (click)="editingBasic.set(false)">取消</button>
-            </div>
+    <!-- 上区:条目信息(头 + 四格条 + 按钮行,单一边框容器) -->
+    <section class="zone zone-entry">
+      <!-- ① 条目头 -->
+      <header class="ehead" data-testid="entry-header">
+        <div class="ehead-main">
+          <div class="ehead-titles">
+            <h1>{{ e.companyName }} · {{ e.role }}</h1>
+            <span class="status-badge">{{ statusText() }}</span>
           </div>
+          <p class="ehead-meta">
+            @if (application(); as app) {
+              {{ fmt('pb.v2.d.appliedOn', { date: (app.appliedDate ?? '').slice(0, 10) || '—' }) }}
+              @if (app.source) { · {{ fmt('pb.v2.d.viaSource', { src: app.source }) }} }
+              @if (recruiterLine()) { · {{ t('pb.v2.d.recruiter') }} {{ recruiterLine() }} }
+              · {{ fmt('pb.v2.d.readinessPct', { n: readiness() }) }}
+            } @else {
+              {{ fmt('pb.v2.d.readinessPct', { n: readiness() }) }}
+              @if (recruiterLine()) { · {{ t('pb.v2.d.interviewers') }} {{ recruiterLine() }} }
+            }
+          </p>
+          @if (editingBasic()) {
+            <div class="basic-edit">
+              <label>{{ t('pb.v2.d.fCompany') }} <input class="fld" [ngModel]="bCompany()" (ngModelChange)="bCompany.set($event)"></label>
+              <label>{{ t('pb.v2.d.fRole') }} <input class="fld" [ngModel]="bRole()" (ngModelChange)="bRole.set($event)"></label>
+              <label>{{ t('pb.v2.d.fResult') }} <input class="fld" [placeholder]="t('pb.v2.d.fResultPh')" [ngModel]="bResult()" (ngModelChange)="bResult.set($event)"></label>
+              <label class="wide">{{ t('pb.v2.d.fNotes') }} <input class="fld" [ngModel]="bNotes()" (ngModelChange)="bNotes.set($event)"></label>
+              <div class="be-actions">
+                <button mat-raised-button color="primary" (click)="saveBasic()">{{ t('common.save') }}</button>
+                <button mat-button (click)="editingBasic.set(false)">{{ t('common.cancel') }}</button>
+              </div>
+            </div>
+          }
+        </div>
+
+        @if (nextStep(); as ns) {
+          <aside class="next-card" data-testid="next-step-card">
+            <div class="nc-label">{{ t('pb.v2.d.nextLabel') }}</div>
+            <div class="nc-text">{{ ns.text }}</div>
+            @if (ns.btn) {
+              <button mat-raised-button color="primary" (click)="doNextStep()">{{ ns.btn }}</button>
+            }
+          </aside>
+        }
+      </header>
+
+      <!-- 岗位四格条(展开说明行收在四格条容器内部底部) -->
+      <div class="strip-wrap">
+        <section class="strip" data-testid="info-strip">
+          <button type="button" class="cell" (click)="toggleCell('jd')">
+            <span class="cell-label">{{ t('pb.v2.d.stripJd') }}</span>
+            <span class="cell-body">{{ jdCellText() || t('pb.v2.d.stripJdEmpty') }}</span>
+            <span class="cell-more">{{ expandedCell() === 'jd' ? t('pb.v2.d.collapse') : t('pb.v2.d.expandFull') }}</span>
+          </button>
+          <button type="button" class="cell" (click)="toggleCell('company')">
+            <span class="cell-label">{{ t('pb.v2.d.stripCompany') }}</span>
+            <span class="cell-body">{{ companyCellText() ? companyCellText().slice(0, 90) + (companyCellText().length > 90 ? '…' : '') : t('pb.v2.d.stripCompanyEmpty') }}</span>
+            <span class="cell-more">{{ expandedCell() === 'company' ? t('pb.v2.d.collapse') : t('pb.v2.d.expandFull') }}</span>
+          </button>
+          <button type="button" class="cell" (click)="toggleCell('resume')">
+            <span class="cell-label">{{ t('pb.v2.d.stripResume') }}</span>
+            <span class="cell-body">{{ resumeFile()?.fileName || t('pb.v2.d.stripResumeEmpty') }}</span>
+            <span class="cell-more">{{ expandedCell() === 'resume' ? t('pb.v2.d.collapse') : t('pb.v2.d.view') }}</span>
+          </button>
+          <button type="button" class="cell" (click)="toggleCell('score')">
+            <span class="cell-label">{{ t('pb.v2.d.stripScore') }}</span>
+            <span class="cell-body big">{{ application()?.resumeScore != null ? application()!.resumeScore : '—' }}</span>
+            <span class="cell-more">{{ expandedCell() === 'score' ? t('pb.v2.d.collapse') : t('pb.v2.d.howDerived') }}</span>
+          </button>
+        </section>
+        @if (expandedCell(); as cell) {
+          <section class="strip-detail">
+            @switch (cell) {
+              @case ('jd') { <pre class="full-text">{{ jdFullText() || t('pb.v2.d.jdFullEmpty') }}</pre> }
+              @case ('company') { <pre class="full-text">{{ companyCellText() || t('pb.v2.d.companyFullEmpty') }}</pre> }
+              @case ('resume') {
+                <p class="full-note">{{ fmt('pb.v2.d.resumeNote', { name: resumeFile()?.fileName || t('pb.v2.d.resumeUnlinked') }) }}</p>
+              }
+              @case ('score') {
+                <p class="full-note">
+                  {{ t('pb.v2.d.scoreNoteBase') }}@if (application()?.resumeScore != null) { {{ fmt('pb.v2.d.scoreThis', { n: application()!.resumeScore! }) }} } @else { {{ t('pb.v2.d.scoreNotAnalyzed') }} }
+                  @if (application()?.matchKeywords) { {{ fmt('pb.v2.d.scoreKeywords', { kw: application()!.matchKeywords! }) }} }
+                  @if (application()?.passRateEstimate) { {{ fmt('pb.v2.d.scorePassRate', { v: application()!.passRateEstimate! }) }} }
+                </p>
+              }
+            }
+          </section>
         }
       </div>
 
-      @if (nextStep(); as ns) {
-        <aside class="next-card" data-testid="next-step-card">
-          <div class="nc-label">下一步</div>
-          <div class="nc-text">{{ ns.text }}</div>
-          @if (ns.btn) {
-            <button mat-raised-button color="primary" (click)="doNextStep()">{{ ns.btn }}</button>
-          }
-        </aside>
-      }
-    </header>
-
-    <!-- 岗位四格条 -->
-    <section class="strip" data-testid="info-strip">
-      <button type="button" class="cell" (click)="toggleCell('jd')">
-        <span class="cell-label">JD 摘要</span>
-        <span class="cell-body">{{ e.jdSummary || (e.jdText ? e.jdText.slice(0, 90) + '…' : '暂无 JD,点开可查看') }}</span>
-        <span class="cell-more">{{ expandedCell() === 'jd' ? '收起' : '展开全文' }}</span>
-      </button>
-      <button type="button" class="cell" (click)="toggleCell('company')">
-        <span class="cell-label">公司</span>
-        <span class="cell-body">{{ e.companyProfile ? e.companyProfile.slice(0, 90) + (e.companyProfile.length > 90 ? '…' : '') : '暂无公司介绍' }}</span>
-        <span class="cell-more">{{ expandedCell() === 'company' ? '收起' : '展开全文' }}</span>
-      </button>
-      <button type="button" class="cell" (click)="toggleCell('resume')">
-        <span class="cell-label">本投递简历</span>
-        <span class="cell-body">{{ resumeFile()?.fileName || '未关联简历文件' }}</span>
-        <span class="cell-more">{{ expandedCell() === 'resume' ? '收起' : '查看' }}</span>
-      </button>
-      <button type="button" class="cell" (click)="toggleCell('score')">
-        <span class="cell-label">Resume Score</span>
-        <span class="cell-body big">{{ application()?.resumeScore != null ? application()!.resumeScore : '—' }}</span>
-        <span class="cell-more">{{ expandedCell() === 'score' ? '收起' : '怎么来的' }}</span>
-      </button>
+      <!-- 按钮行(上区最后一行) -->
+      <div class="ehead-actions">
+        <button mat-raised-button color="primary" (click)="openIntake('email')">
+          {{ t('pb.v2.d.addMaterial') }}
+        </button>
+        <button mat-stroked-button (click)="goMock()">{{ t('pb.v2.d.mock') }}</button>
+        <button mat-stroked-button (click)="openJd()">{{ t('pb.v2.d.openJd') }}</button>
+        <button mat-icon-button [matMenuTriggerFor]="moreMenu" [attr.aria-label]="t('pb.v2.d.moreActions')">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        <mat-menu #moreMenu="matMenu">
+          <button mat-menu-item (click)="startEditBasic()">{{ t('pb.v2.d.editBasic') }}</button>
+          <button mat-menu-item (click)="openIntake('note')">{{ t('pb.v2.d.addNote') }}</button>
+          <button mat-menu-item (click)="deleteEntry()" class="danger-item">
+            {{ confirmDelete() ? t('pb.v2.d.confirmDeleteEntry') : t('pb.v2.d.deleteEntry') }}
+          </button>
+        </mat-menu>
+      </div>
     </section>
-    @if (expandedCell(); as cell) {
-      <section class="strip-detail">
-        @switch (cell) {
-          @case ('jd') { <pre class="full-text">{{ e.jdText || e.jdSummary || '暂无 JD 全文。' }}</pre> }
-          @case ('company') { <pre class="full-text">{{ e.companyProfile || '暂无公司介绍。' }}</pre> }
-          @case ('resume') {
-            <p class="full-note">
-              本次投递使用的简历:{{ resumeFile()?.fileName || '未关联文件' }}。
-              在 Tracker 的投递详情里可查看/更换简历文件与简历全文。
-            </p>
-          }
-          @case ('score') {
-            <p class="full-note">
-              Resume Score 来自 Tracker 的 JD 匹配分析
-              @if (application()?.resumeScore != null) { :本次 {{ application()!.resumeScore }} 分 }
-              @else { :尚未分析 }。
-              @if (application()?.matchKeywords) { 命中关键词:{{ application()!.matchKeywords }}。 }
-              @if (application()?.passRateEstimate) { 预估通过率:{{ application()!.passRateEstimate }}。 }
-            </p>
-          }
-        }
-      </section>
-    }
 
     <!-- ② 统一入口 -->
     <app-intake-panel [entry]="e" (saved)="onChildChanged()" />
 
-    <!-- ③ 页面页签:轮次 / 沟通记录 -->
-    <nav class="page-tabs" role="tablist">
-      <button type="button" role="tab" class="ptab" [class.on]="pageTab() === 'rounds'"
-              (click)="pageTab.set('rounds')">轮次</button>
-      <button type="button" role="tab" class="ptab" [class.on]="pageTab() === 'comm'"
-              (click)="pageTab.set('comm')" data-testid="comm-tab">
-        沟通记录
-        @if (pendingComm() > 0) {
-          <span class="red-dot" data-testid="comm-red-dot">{{ pendingComm() }}</span>
-        }
-      </button>
-    </nav>
-
-    @if (pageTab() === 'rounds') {
-      @if (pendingComm() > 0) {
-        <button type="button" class="comm-banner" (click)="pageTab.set('comm')"
-                data-testid="rounds-comm-banner">
-          沟通记录里有 {{ pendingComm() }} 条新安排还没处理 →
+    <!-- 下区:轮次工作区(页签 + stepper + Round + 复盘与待办,单一边框容器) -->
+    <section class="zone zone-work">
+      <!-- ③ 页面页签:轮次 / 沟通记录 -->
+      <nav class="page-tabs" role="tablist">
+        <button type="button" role="tab" class="ptab" [class.on]="pageTab() === 'rounds'"
+                (click)="pageTab.set('rounds')">{{ t('pb.v2.d.tabRounds') }}</button>
+        <button type="button" role="tab" class="ptab" [class.on]="pageTab() === 'comm'"
+                (click)="pageTab.set('comm')" data-testid="comm-tab">
+          {{ t('pb.v2.d.tabComm') }}
+          @if (pendingComm() > 0) {
+            <span class="red-dot" data-testid="comm-red-dot">{{ pendingComm() }}</span>
+          }
         </button>
-      }
+      </nav>
 
-      <!-- ④ 轮次 stepper -->
-      @if (rounds().length) {
-        <div class="stepper" data-testid="round-stepper">
-          @for (r of rounds(); track r.id) {
-            <button type="button" class="step" [class.on]="selectedRound()?.id === r.id"
-                    (click)="selectedRoundId.set(r.id)">
-              <span class="step-top">
-                <span class="step-badge" [class.passed]="r.outcome === 'Passed'"
-                      [class.failed]="r.outcome === 'Failed'">{{ roundStateIcon(r) }}</span>
-                <span class="step-name">R{{ r.order }} {{ r.stage }}</span>
-              </span>
-              <span class="step-sub">
-                {{ r.scheduledDate ?? '日期待定' }}
-                @if (roundScore(r) != null) { · {{ roundScore(r) }} 分 }
-              </span>
-            </button>
-          }
-          <button type="button" class="step add" (click)="openIntake('email')">
-            <span class="step-name">＋ 加一轮(粘贴邀约邮件)</span>
-            <span class="step-sub">或在下方沟通里建轮次</span>
+      @if (pageTab() === 'rounds') {
+        @if (pendingComm() > 0) {
+          <button type="button" class="comm-banner" (click)="pageTab.set('comm')"
+                  data-testid="rounds-comm-banner">
+            {{ fmt('pb.v2.d.commBanner', { n: pendingComm() }) }}
           </button>
-        </div>
-
-        @if (selectedRound(); as sr) {
-          <app-round-card [entry]="e" [round]="sr"
-                          (changed)="onChildChanged()"
-                          (addMaterialHere)="openIntake('email', $event)" />
         }
-      } @else {
-        <p class="state">还没有轮次。把第一封邀约邮件粘进来,系统会建议你建 Round 1。</p>
-      }
 
-      <!-- ⑤ 复盘与待办(旧功能保留) -->
-      <section class="tail-card">
-        <h3>复盘与待办</h3>
-        <div class="actions-list">
-          @for (a of e.actions ?? []; track a.id) {
-            <div class="action-row">
-              <input type="checkbox" [checked]="a.isDone" (change)="toggleAction(a.id)">
-              <span [class.done]="a.isDone">{{ a.title }}</span>
-              @if (a.dueDate) { <span class="a-due">{{ a.dueDate.slice(0, 10) }}</span> }
-              <span class="spacer"></span>
-              <button type="button" class="icon-btn danger" (click)="deleteAction(a.id)">
-                <mat-icon>delete_outline</mat-icon>
+        <!-- ④ 轮次 stepper -->
+        @if (rounds().length) {
+          <div class="stepper" data-testid="round-stepper">
+            @for (r of rounds(); track r.id) {
+              <button type="button" class="step" [class.on]="selectedRound()?.id === r.id"
+                      (click)="selectedRoundId.set(r.id)">
+                <span class="step-top">
+                  <span class="step-badge" [class.passed]="r.outcome === 'Passed'"
+                        [class.failed]="r.outcome === 'Failed'">{{ roundStateIcon(r) }}</span>
+                  <span class="step-name">R{{ r.order }} {{ r.stage }}</span>
+                </span>
+                <span class="step-sub">
+                  {{ r.scheduledDate ?? t('pb.v2.d.dateTbd') }}
+                  @if (roundScore(r) != null) { · {{ fmt('pb.v2.d.scorePts', { n: roundScore(r)! }) }} }
+                </span>
               </button>
-            </div>
-          }
-          <div class="action-add">
-            <input class="fld" placeholder="加一条待办,如:周四前给 Khalil 发跟进邮件"
-                   [ngModel]="newActionTitle()" (ngModelChange)="newActionTitle.set($event)"
-                   (keyup.enter)="addAction()">
-            <button mat-stroked-button (click)="addAction()">添加</button>
+            }
+            <button type="button" class="step add" (click)="openIntake('email')">
+              <span class="step-name">{{ t('pb.v2.d.addRound') }}</span>
+              <span class="step-sub">{{ t('pb.v2.d.addRoundSub') }}</span>
+            </button>
           </div>
-        </div>
-        <label class="debrief-label">整体复盘(这次面试流程下来,你的总结)</label>
-        <textarea class="fld debrief" rows="4" [ngModel]="debriefDraft()"
-                  (ngModelChange)="debriefDraft.set($event)"
-                  placeholder="写下整体复盘:哪轮最险、对方最在意什么、下次怎么改…"></textarea>
-        <div class="debrief-actions">
-          <button mat-stroked-button (click)="saveDebrief()">保存复盘</button>
-        </div>
-        @if (e.weaknesses?.length) {
-          <div class="weak-list">
-            <div class="weak-title">已识别的短板(来自历次分析)</div>
-            @for (w of e.weaknesses; track w.id) {
-              <div class="weak-row">
-                <span class="weak-sev" [class.s3]="w.severity >= 3">S{{ w.severity }}</span>
-                <span>{{ w.title }}</span>
-                <span class="weak-cat">{{ w.category }}</span>
+
+          @if (selectedRound(); as sr) {
+            <app-round-card [entry]="e" [round]="sr"
+                            (changed)="onChildChanged()"
+                            (addMaterialHere)="openIntake('email', $event)" />
+          }
+        } @else {
+          <p class="state">{{ t('pb.v2.d.noRounds') }}</p>
+        }
+
+        <!-- ⑤ 复盘与待办(与 Round 同一区块,内部分隔线区分) -->
+        <section class="tail-card">
+          <h3>{{ t('pb.v2.d.tailTitle') }}</h3>
+          <div class="actions-list">
+            @for (a of e.actions ?? []; track a.id) {
+              <div class="action-row">
+                <input type="checkbox" [checked]="a.isDone" (change)="toggleAction(a.id)">
+                <span [class.done]="a.isDone">{{ a.title }}</span>
+                @if (a.dueDate) { <span class="a-due">{{ a.dueDate.slice(0, 10) }}</span> }
+                <span class="spacer"></span>
+                <button type="button" class="icon-btn danger" (click)="deleteAction(a.id)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
               </div>
             }
+            <div class="action-add">
+              <input class="fld" [placeholder]="t('pb.v2.d.actionPh')"
+                     [ngModel]="newActionTitle()" (ngModelChange)="newActionTitle.set($event)"
+                     (keyup.enter)="addAction()">
+              <button mat-stroked-button (click)="addAction()">{{ t('common.add') }}</button>
+            </div>
           </div>
-        }
-      </section>
-    } @else {
-      <app-comm-log [entry]="e" (changed)="onChildChanged()"
-                    (pendingCount)="onCommPending($event)" />
-    }
+          <label class="debrief-label">{{ t('pb.v2.d.debriefLabel') }}</label>
+          <textarea class="fld debrief" rows="4" [ngModel]="debriefDraft()"
+                    (ngModelChange)="debriefDraft.set($event)"
+                    [placeholder]="t('pb.v2.d.debriefPh')"></textarea>
+          <div class="debrief-actions">
+            <button mat-stroked-button (click)="saveDebrief()">{{ t('pb.v2.d.saveDebrief') }}</button>
+          </div>
+          @if (e.weaknesses?.length) {
+            <div class="weak-list">
+              <div class="weak-title">{{ t('pb.v2.d.weaknessesTitle') }}</div>
+              @for (w of e.weaknesses; track w.id) {
+                <div class="weak-row">
+                  <span class="weak-sev" [class.s3]="w.severity >= 3">S{{ w.severity }}</span>
+                  <span>{{ w.title }}</span>
+                  <span class="weak-cat">{{ w.category }}</span>
+                </div>
+              }
+            </div>
+          }
+        </section>
+      } @else {
+        <app-comm-log [entry]="e" (changed)="onChildChanged()"
+                      (pendingCount)="onCommPending($event)" />
+      }
+    </section>
   }
 </div>

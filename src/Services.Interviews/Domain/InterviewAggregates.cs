@@ -153,6 +153,18 @@ public sealed class InterviewEntry : AuditableAggregateRoot
 
     public void SetDebrief(string? json) { DebriefJson = json; Touch(); }
 
+    /// <summary>
+    /// 回填 Tracker 投递关联(2026-10-21):只在当前未关联时生效,已有值绝不覆盖。
+    /// 返回是否真的写入(已有关联时 false)。
+    /// </summary>
+    public bool LinkJobApplication(Guid jobApplicationId)
+    {
+        if (JobApplicationId is not null || jobApplicationId == Guid.Empty) return false;
+        JobApplicationId = jobApplicationId;
+        Touch();
+        return true;
+    }
+
     /// <summary>公司情况:规模/业务/技术栈/面试风格/文化(长文本,自己整理)。</summary>
     public string? CompanyProfile { get; private set; }
 

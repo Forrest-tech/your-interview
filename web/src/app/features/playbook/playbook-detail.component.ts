@@ -11,11 +11,14 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  Application, InterviewDetail, InterviewRound
+  Application, InterviewDetail, InterviewRound, Paged
 } from '../../core/models/api.models';
 import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
+import {
+  htmlToPlainText, joinNames, makeV2Fmt, makeV2T
+} from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
 
@@ -48,6 +51,8 @@ export class PlaybookDetailComponent {
   private readonly v2 = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
   readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
+  readonly fmt = makeV2Fmt(this.i18n);
 
   readonly id = signal('');
   readonly entry = signal<InterviewDetail | null>(null);
@@ -85,8 +90,24 @@ export class PlaybookDetailComponent {
         if (t) names.add(t);
       }
     }
-    return [...names].join('、');
+    return joinNames(this.i18n, [...names]);
   });
+
+  /** 四格条 JD 全文:条目自身 → 关联 Tracker 投递,展示前统一清洗 HTML。 */
+  readonly jdFullText = computed(() =>
+    htmlToPlainText(this.entry()?.jdText) || htmlToPlainText(this.application()?.jdText));
+  /** 四格条 JD 摘要格:条目摘要 → 投递摘要 → 全文开头。 */
+  readonly jdCellText = computed(() => {
+    const sum = htmlToPlainText(this.entry()?.jdSummary)
+      || htmlToPlainText(this.application()?.jdSummary);
+    if (sum) return sum;
+    const full = this.jdFullText();
+    return full ? full.slice(0, 90) + '…' : '';
+  });
+  /** 四格条公司格:条目公司介绍 → 投递的公司介绍。 */
+  readonly companyCellText = computed(() =>
+    htmlToPlainText(this.entry()?.companyProfile)
+    || htmlToPlainText(this.application()?.companyDescription));
 
   readonly selectedRound = computed(() => {
     const rs = this.rounds();
@@ -98,9 +119,9 @@ export class PlaybookDetailComponent {
     const e = this.entry();
     if (!e) return '';
     if (e.result) return e.result;
-    if (this.rounds().some(r => r.outcome === 'Pending')) return '进行中';
-    if ((e.status as string) === 'Analyzed') return '已完成';
-    return e.result ?? '已完成';
+    if (this.rounds().some(r => r.outcome === 'Pending')) return this.t('pb.v2.d.statusProgress');
+    if ((e.status as string) === 'Analyzed') return this.t('pb.v2.d.statusDone');
+    return e.result ?? this.t('pb.v2.d.statusDone');
   });
 
   readonly readiness = computed(() => {
@@ -129,8 +150,8 @@ export class PlaybookDetailComponent {
     if (!e) return null;
     if (this.pendingComm() > 0) {
       return {
-        text: `处理沟通记录里的 ${this.pendingComm()} 条新安排`,
-        action: 'comm' as const, btn: '去处理', roundId: undefined as string | undefined
+        text: this.fmt('pb.v2.d.nextPendingComm', { n: this.pendingComm() }),
+        action: 'comm' as const, btn: this.t('pb.v2.d.nextGoHandle'), roundId: undefined as string | undefined
       };
     }
     const today = new Date().toISOString().slice(0, 10);
@@ -138,28 +159,28 @@ export class PlaybookDetailComponent {
       r.outcome === 'Pending' && (!r.scheduledDate || r.scheduledDate >= today));
     if (upcoming) {
       return {
-        text: `备考 Round ${upcoming.order} · ${upcoming.stage}` +
+        text: this.fmt('pb.v2.d.nextPrep', { n: upcoming.order, stage: upcoming.stage }) +
           (upcoming.scheduledDate ? `(${upcoming.scheduledDate}${upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''})` : ''),
-        action: 'prep' as const, btn: '去备考', roundId: upcoming.id as string | undefined
+        action: 'prep' as const, btn: this.t('pb.v2.d.nextGoPrep'), roundId: upcoming.id as string | undefined
       };
     }
     const unreviewed = [...this.rounds()].reverse()
       .find(r => r.outcome !== 'Pending' && !r.reviewJson);
     if (unreviewed) {
       return {
-        text: `Round ${unreviewed.order} 已结束,还没生成复盘分析`,
-        action: 'review' as const, btn: '去复盘', roundId: unreviewed.id as string | undefined
+        text: this.fmt('pb.v2.d.nextReview', { n: unreviewed.order }),
+        action: 'review' as const, btn: this.t('pb.v2.d.nextGoReview'), roundId: unreviewed.id as string | undefined
       };
     }
     const app = this.application();
     if (app?.nextFollowUpAt && app.nextFollowUpAt.slice(0, 10) <= today) {
       return {
-        text: '到了跟进时间,给 Recruiter 发一封简短跟进邮件',
-        action: 'comm' as const, btn: '看沟通记录', roundId: undefined as string | undefined
+        text: this.t('pb.v2.d.nextFollow'),
+        action: 'comm' as const, btn: this.t('pb.v2.d.nextGoComm'), roundId: undefined as string | undefined
       };
     }
     return {
-      text: '暂时没有待办,等对方回复;超过一周没消息可主动跟进一次',
+      text: this.t('pb.v2.d.nextIdle'),
       action: 'none' as const, btn: '', roundId: undefined as string | undefined
     };
   });
@@ -191,25 +212,66 @@ export class PlaybookDetailComponent {
       this.entry.set(e);
       this.debriefDraft.set(parseDebrief(e.debriefJson));
       if (e.jobApplicationId) {
-        this.api.get<Application>(`/api/jobs/applications/${e.jobApplicationId}`).subscribe({
-          next: app => this.application.set(app),
-          error: () => undefined
-        });
-        this.api.get<ResumeFileItem[]>(`/api/jobs/applications/${e.jobApplicationId}/resume-files`)
-          .subscribe({
-            next: files => this.resumeFile.set(
-              files.find(f => f.isPrimary) ?? files[0] ?? null),
-            error: () => undefined
-          });
+        this.loadApplication(e.jobApplicationId);
         void this.refreshPendingComm(e.jobApplicationId);
       } else {
         this.pendingComm.set(countPendingFromAssets(e));
+        void this.tryMatchApplication(e);
       }
     } catch {
-      this.loadError.set('加载失败,请返回列表重试。');
+      this.loadError.set(this.t('pb.v2.d.loadFailed'));
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private loadApplication(appId: string): void {
+    this.api.get<Application>(`/api/jobs/applications/${appId}`).subscribe({
+      next: app => this.application.set(app),
+      error: () => undefined
+    });
+    this.loadResumeFile(appId);
+  }
+
+  /**
+   * 本投递简历:走 Jobs 的「有效简历」接口(单数 resume —— tailored 优先、
+   * 无 tailored 时回落基础简历,与 Tracker 同源)。
+   * 此前误调不存在的 resume-files 列表接口,永远 404、永远显示未关联。
+   */
+  private loadResumeFile(appId: string): void {
+    this.api.get<{ fileName?: string | null }>(`/api/jobs/applications/${appId}/resume`)
+      .subscribe({
+        next: r => this.resumeFile.set(
+          r?.fileName ? { id: appId, fileName: r.fileName } : null),
+        error: () => undefined
+      });
+  }
+
+  /**
+   * 条目未关联投递时:按公司名 + 岗位(归一化后全等)在 Tracker 投递里找候选。
+   * 恰好一条才认定同源 —— 用它展示四格条/简历/分数,并 additive 回填关联
+   * (后端 link-application 只在当前未关联时生效,不覆盖任何已有数据);
+   * 0 条或多条都不配,保持未关联(避免重复投递时乱配)。
+   */
+  private async tryMatchApplication(e: InterviewDetail): Promise<void> {
+    try {
+      const page = await this.api.get<Paged<Application>>('/api/jobs/applications', {
+        search: e.companyName, page: 1, pageSize: 50
+      }).toPromise();
+      const norm = (v: string) => v.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+      const hits = (page?.items ?? []).filter(a =>
+        norm(a.companyName) === norm(e.companyName) && norm(a.role) === norm(e.role));
+      if (hits.length !== 1) return;
+      const app = hits[0];
+      this.application.set(app);
+      this.loadResumeFile(app.id);
+      void this.refreshPendingComm(app.id);
+      try {
+        await this.api.post(`/api/interviews/${e.id}/link-application`,
+          { jobApplicationId: app.id }).toPromise();
+        this.entry.set({ ...e, jobApplicationId: app.id });
+      } catch { /* 回填失败不影响本次展示;下次打开会重新匹配 */ }
+    } catch { /* 匹配失败保持未关联,不阻塞页面 */ }
   }
 
   private async refreshPendingComm(appId: string): Promise<void> {
@@ -310,10 +372,10 @@ export class PlaybookDetailComponent {
         debriefJson: e.debriefJson ?? null
       }).toPromise();
       this.editingBasic.set(false);
-      this.snack.open('已保存', '关闭', { duration: 2000 });
+      this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2000 });
       await this.load();
     } catch {
-      this.snack.open('保存失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.d.saveFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
@@ -323,7 +385,7 @@ export class PlaybookDetailComponent {
       await this.api.delete(`/api/interviews/${this.id()}`).toPromise();
       void this.router.navigate(['/playbook']);
     } catch {
-      this.snack.open('删除失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
@@ -337,7 +399,7 @@ export class PlaybookDetailComponent {
       this.newActionTitle.set('');
       await this.load();
     } catch {
-      this.snack.open('添加失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.d.addFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
@@ -373,9 +435,9 @@ export class PlaybookDetailComponent {
         questionsToAskJson: e.questionsToAskJson ?? null,
         debriefJson: JSON.stringify({ text: this.debriefDraft() })
       }).toPromise();
-      this.snack.open('复盘已保存', '关闭', { duration: 2000 });
+      this.snack.open(this.t('pb.v2.d.debriefSaved'), this.t('common.close'), { duration: 2000 });
     } catch {
-      this.snack.open('保存失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.d.saveFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 }

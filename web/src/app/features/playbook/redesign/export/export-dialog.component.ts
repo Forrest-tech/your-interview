@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -8,6 +8,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   ExportDoc, ExportFormat, FORMAT_EXT, generateExport, downloadBlob
 } from './export-doc';
+import { I18nService } from '../../../../core/i18n/i18n.service';
+import { makeV2Fmt, makeV2T } from '../v2.helpers';
 
 export interface ExportToggle {
   key: string;
@@ -42,22 +44,22 @@ interface ExportPrefs { selected: string[]; format: ExportFormat; }
   template: `
     <h2 mat-dialog-title>{{ data.title }}</h2>
     <mat-dialog-content>
-      @if (data.subtitle) { <p class="sub">{{ data.subtitle }} · 导出后直接下载到本机</p> }
+      @if (data.subtitle) { <p class="sub">{{ data.subtitle }} · {{ t('pb.v2.x.subtitleSuffix') }}</p> }
 
-      <div class="sec-title">包含内容</div>
-      <p class="hint">时间戳是原文自带的,恒显示、恒导出,不用选。</p>
+      <div class="sec-title">{{ t('pb.v2.x.includes') }}</div>
+      <p class="hint">{{ t('pb.v2.x.tsHint') }}</p>
       <div class="opts">
         @for (tg of data.toggles; track tg.key) {
           <mat-checkbox [checked]="selected().has(tg.key)" [disabled]="tg.locked"
                         (change)="toggle(tg.key, $event.checked)">
-            {{ tg.label }}{{ tg.locked ? '(必选)' : '' }}
+            {{ tg.label }}{{ tg.locked ? t('pb.v2.x.required') : '' }}
           </mat-checkbox>
         }
       </div>
 
-      <div class="sec-title">格式</div>
+      <div class="sec-title">{{ t('pb.v2.x.format') }}</div>
       <div class="fcards">
-        @for (f of formats; track f.key) {
+        @for (f of formats(); track f.key) {
           <button type="button" class="fcard" [class.on]="format() === f.key"
                   (click)="format.set(f.key)">
             <div class="fn">{{ f.label }}</div>
@@ -66,7 +68,7 @@ interface ExportPrefs { selected: string[]; format: ExportFormat; }
         }
       </div>
 
-      <div class="sec-title">文件名(可直接修改,扩展名随格式自动变)</div>
+      <div class="sec-title">{{ t('pb.v2.x.fileName') }}</div>
       <div class="fname-row">
         <input class="fname-input" [ngModel]="fileBase()" (ngModelChange)="fileBase.set($event)">
         <span class="ext">{{ FORMAT_EXT[format()] }}</span>
@@ -74,9 +76,9 @@ interface ExportPrefs { selected: string[]; format: ExportFormat; }
       @if (error()) { <p class="err">{{ error() }}</p> }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>取消</button>
+      <button mat-button mat-dialog-close>{{ t('common.cancel') }}</button>
       <button mat-raised-button color="primary" [disabled]="busy()" (click)="doExport()">
-        {{ busy() ? '生成中…' : '导出并下载' }}
+        {{ busy() ? t('pb.v2.x.generating') : t('pb.v2.x.exportDownload') }}
       </button>
     </mat-dialog-actions>
   `,
@@ -102,14 +104,17 @@ export class ExportDialogComponent {
   readonly data = inject(MAT_DIALOG_DATA) as ExportDialogData;
   private readonly ref = inject(MatDialogRef<ExportDialogComponent>);
   private readonly snack = inject(MatSnackBar);
+  private readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
+  readonly fmt = makeV2Fmt(this.i18n);
 
   readonly FORMAT_EXT = FORMAT_EXT;
-  readonly formats: { key: ExportFormat; label: string; ext: string }[] = [
+  readonly formats = computed<{ key: ExportFormat; label: string; ext: string }[]>(() => [
     { key: 'pdf', label: 'PDF', ext: '.pdf' },
     { key: 'docx', label: 'Word', ext: '.docx' },
-    { key: 'jpg', label: '图片', ext: '.jpg 长图' },
+    { key: 'jpg', label: this.t('pb.v2.x.fmtImage'), ext: this.t('pb.v2.x.fmtJpgExt') },
     { key: 'md', label: 'Markdown', ext: '.md' }
-  ];
+  ]);
 
   readonly selected = signal<Set<string>>(new Set());
   readonly format = signal<ExportFormat>('pdf');
@@ -158,10 +163,10 @@ export class ExportDialogComponent {
       const blob = await generateExport(this.format(), doc);
       const name = (this.fileBase().trim() || this.data.fileBase) + FORMAT_EXT[this.format()];
       downloadBlob(blob, name);
-      this.snack.open(`已导出 ${name}`, '关闭', { duration: 3000 });
+      this.snack.open(this.fmt('pb.v2.x.exported', { name }), this.t('common.close'), { duration: 3000 });
       this.ref.close(true);
     } catch (e) {
-      this.error.set('导出失败:' + (e instanceof Error ? e.message : '未知错误'));
+      this.error.set(this.fmt('pb.v2.x.exportFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.x.unknownError') }));
     } finally {
       this.busy.set(false);
     }

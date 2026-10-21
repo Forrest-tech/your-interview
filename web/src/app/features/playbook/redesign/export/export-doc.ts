@@ -294,7 +294,7 @@ export function renderDocCanvas(doc: ExportDoc, width = 900): HTMLCanvasElement 
 export function docToJpg(doc: ExportDoc): Promise<Blob> {
   const canvas = renderDocCanvas(doc);
   return new Promise((resolve, reject) =>
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error('图片生成失败')), 'image/jpeg', 0.92));
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Image generation failed')), 'image/jpeg', 0.92));
 }
 
 // ---------------- PDF(手写,JPEG 页图嵌入) ----------------
@@ -314,7 +314,7 @@ export function docToPdf(doc: ExportDoc): Promise<Blob> {
     slices.push({ canvas: pc, height: h });
   }
   return Promise.all(slices.map(s => new Promise<Blob>((res, rej) =>
-    s.canvas.toBlob(b => b ? res(b) : rej(new Error('PDF 页生成失败')), 'image/jpeg', 0.9))))
+    s.canvas.toBlob(b => b ? res(b) : rej(new Error('PDF page generation failed')), 'image/jpeg', 0.9))))
     .then(async blobs => {
       const bufs = await Promise.all(blobs.map(b => b.arrayBuffer().then(a => new Uint8Array(a))));
       return new Blob([buildPdf(bufs, slices.map(s => s.height), pageW, pageH)],

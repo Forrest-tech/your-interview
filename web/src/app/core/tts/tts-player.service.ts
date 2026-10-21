@@ -1,5 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { PracticeApi } from '../api/practice-api.service';
+import { I18nService } from '../i18n/i18n.service';
 import {
   getCachedAudio, putCachedAudio, ttsKey
 } from '../../features/ai-practice/tts-audio-cache';
@@ -17,6 +18,7 @@ import {
 @Injectable({ providedIn: 'root' })
 export class TtsPlayerService {
   private readonly practiceApi = inject(PracticeApi);
+  private readonly i18n = inject(I18nService);
 
   /** 当前正在播的文本指纹(同一时刻只播一段)。 */
   readonly playingKey = signal<string | null>(null);
@@ -65,14 +67,14 @@ export class TtsPlayerService {
       const audio = new Audio(this.objectUrl);
       this.audio = audio;
       audio.onended = () => this.stop();
-      audio.onerror = () => { this.error.set('音频播放失败'); this.stop(); };
+      audio.onerror = () => { this.error.set(this.i18n.t('tts.audioFailed')); this.stop(); };
       await audio.play();
       this.loadingKey.set(null);
       this.playingKey.set(key);
       this.trackSentences(key, text);
     } catch {
       this.loadingKey.set(null);
-      this.error.set('朗读不可用:请先在 AI Practice 设置里配置 Azure 语音。');
+      this.error.set(this.i18n.t('tts.unavailable'));
     }
   }
 

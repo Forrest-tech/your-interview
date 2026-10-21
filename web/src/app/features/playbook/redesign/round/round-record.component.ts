@@ -13,6 +13,8 @@ import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
 import { QaZoomService } from '../../../../core/qa-zoom/qa-zoom.service';
 import { TtsPlayerService } from '../../../../core/tts/tts-player.service';
 import { PlaybookV2Api } from '../playbook-v2.api';
+import { I18nService } from '../../../../core/i18n/i18n.service';
+import { makeV2Fmt, makeV2T } from '../v2.helpers';
 import {
   DimReview, QuestionReview, RoundReview, TranscriptSegment,
   parseQuestionReview, safeJson, serializeQuestionReview
@@ -35,19 +37,19 @@ interface StdEdit { spoken: string; technical: string; }
   template: `
     <div class="record" [style.--qa-scale]="zoom.scale()">
       <div class="toolbar">
-        <span class="tb-title">对话原文 <span class="orig-tag">原文 · 未修改</span></span>
+        <span class="tb-title">{{ t('pb.v2.rec.transcriptTitle') }} <span class="orig-tag">{{ t('pb.v2.rec.origTag') }}</span></span>
         <span class="spacer"></span>
         <app-qa-zoom></app-qa-zoom>
         @if (audioAsset()) {
           <button mat-stroked-button (click)="toggleTranscribe()" [disabled]="busy()">
-            {{ hasTranscript() ? '重新转写' : '开始转写' }}
+            {{ hasTranscript() ? t('pb.v2.rec.retranscribe') : t('pb.v2.rec.startTranscribe') }}
           </button>
         }
         <button mat-stroked-button (click)="extractQuestions()" [disabled]="busy() || !segments().length">
-          从转写抽取问答
+          {{ t('pb.v2.rec.extractQa') }}
         </button>
         <button mat-raised-button color="primary" (click)="generateReview()" [disabled]="busy()">
-          {{ busy() ? '处理中…' : (roundReview() ? '重新生成分析' : '生成逐题分析') }}
+          {{ busy() ? t('pb.v2.rec.processing') : (roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')) }}
         </button>
       </div>
       @if (notice()) { <p class="notice">{{ notice() }}</p> }
@@ -56,13 +58,13 @@ interface StdEdit { spoken: string; technical: string; }
       <!-- 说话人改名 -->
       @if (speakerList().length) {
         <div class="rename-row">
-          <span class="lbl">说话人改名(全篇生效):</span>
+          <span class="lbl">{{ t('pb.v2.rec.renameLabel') }}</span>
           <select class="fld sm" [ngModel]="renameFrom()" (ngModelChange)="renameFrom.set($event)">
             @for (s of speakerList(); track s) { <option [value]="s">{{ s }}</option> }
           </select>
           <span>→</span>
-          <input class="fld sm" placeholder="真实姓名" [ngModel]="renameTo()" (ngModelChange)="renameTo.set($event)">
-          <button mat-stroked-button (click)="doRename()" [disabled]="!renameTo().trim()">改名</button>
+          <input class="fld sm" [placeholder]="t('pb.v2.rec.renamePh')" [ngModel]="renameTo()" (ngModelChange)="renameTo.set($event)">
+          <button mat-stroked-button (click)="doRename()" [disabled]="!renameTo().trim()">{{ t('pb.v2.rec.rename') }}</button>
         </div>
       }
 
@@ -77,7 +79,7 @@ interface StdEdit { spoken: string; technical: string; }
                   <span class="time">{{ fmtTime(seg.start) }}–{{ fmtTime(seg.end) }}</span>
                   @if (audioAsset()) {
                     <button type="button" class="play-btn" (click)="playSegment($index)"
-                            [title]="playMode() === 'segment' ? '只播本段' : '从此处连播'">▶</button>
+                            [title]="playMode() === 'segment' ? t('pb.v2.rec.playSegOnly') : t('pb.v2.rec.playFromHere')">▶</button>
                   }
                 }
               </div>
@@ -86,22 +88,22 @@ interface StdEdit { spoken: string; technical: string; }
           }
         </div>
       } @else {
-        <p class="empty">本轮还没有转写。用上方「＋ 添加材料 → 录音 / 转写文本」粘贴转写,或在「材料」页签上传录音后点「开始转写」。</p>
+        <p class="empty">{{ t('pb.v2.rec.empty') }}</p>
       }
 
       <!-- 整轮总览 -->
       @if (roundReview(); as rv) {
         <div class="overview" data-testid="round-overview">
           <div class="ov-scores">
-            @if (rv.overall != null) { <div class="ov-big">{{ rv.overall }}<span class="ov-unit">综合分</span></div> }
+            @if (rv.overall != null) { <div class="ov-big">{{ rv.overall }}<span class="ov-unit">{{ t('pb.v2.rec.overallUnit') }}</span></div> }
             @if (rv.passProbability != null) {
-              <div class="ov-pass">通过概率 ≈ {{ rv.passProbability }}%
-                <span class="ai-tag">AI 估计</span></div>
+              <div class="ov-pass">{{ fmt('pb.v2.rec.passProb', { n: rv.passProbability }) }}
+                <span class="ai-tag">{{ t('pb.v2.rec.aiEstimate') }}</span></div>
             }
           </div>
-          @if (rv.passBasis) { <p class="ov-line"><b>估计依据:</b>{{ rv.passBasis }}</p> }
-          @if (rv.strongest) { <p class="ov-line"><b>最强项:</b>{{ rv.strongest }}</p> }
-          @if (rv.weakest) { <p class="ov-line"><b>最大短板:</b>{{ rv.weakest }}</p> }
+          @if (rv.passBasis) { <p class="ov-line"><b>{{ t('pb.v2.rec.basis') }}</b>{{ rv.passBasis }}</p> }
+          @if (rv.strongest) { <p class="ov-line"><b>{{ t('pb.v2.rec.strongest') }}</b>{{ rv.strongest }}</p> }
+          @if (rv.weakest) { <p class="ov-line"><b>{{ t('pb.v2.rec.weakest') }}</b>{{ rv.weakest }}</p> }
           @if (rv.summary) { <p class="ov-line">{{ rv.summary }}</p> }
         </div>
       }
@@ -113,14 +115,14 @@ interface StdEdit { spoken: string; technical: string; }
             <span class="q-idx">Q{{ q.sequence }}</span>
             <span class="q-text qa-text">{{ q.questionText }}</span>
             @if (reviewOf(q)?.overall != null) {
-              <span class="q-score">本题 {{ reviewOf(q)!.overall }} 分</span>
+              <span class="q-score">{{ fmt('pb.v2.rec.qScore', { n: reviewOf(q)!.overall! }) }}</span>
             }
           </div>
-          @if (q.askedBy) { <p class="q-by">提问人:{{ q.askedBy }}</p> }
+          @if (q.askedBy) { <p class="q-by">{{ fmt('pb.v2.rec.askedBy', { name: q.askedBy }) }}</p> }
 
           @if (q.myAnswerText) {
             <div class="my-answer">
-              <div class="ma-label">我的回答 <span class="orig-tag">原文 · 未修改</span></div>
+              <div class="ma-label">{{ t('pb.v2.rec.myAnswer') }} <span class="orig-tag">{{ t('pb.v2.rec.origTag') }}</span></div>
               <p class="qa-text">{{ q.myAnswerText }}</p>
             </div>
           }
@@ -134,15 +136,15 @@ interface StdEdit { spoken: string; technical: string; }
                     @if (d.review.score != null) {
                       <span class="dim-score">{{ d.review.score }}</span>
                     } @else {
-                      <span class="dim-na">不评分</span>
+                      <span class="dim-na">{{ t('pb.v2.rec.notScored') }}</span>
                     }
                   </div>
                   @if (d.review.score != null) {
                     <div class="bar"><div class="bar-fill" [style.width.%]="d.review.score"></div></div>
                     @if (d.review.comment) { <p class="dim-c">{{ d.review.comment }}</p> }
-                    @if (d.review.fix) { <p class="dim-f"><b>改法:</b>{{ d.review.fix }}</p> }
+                    @if (d.review.fix) { <p class="dim-f"><b>{{ t('pb.v2.rec.fix') }}</b>{{ d.review.fix }}</p> }
                   } @else {
-                    <p class="dim-c">{{ d.key === 'pronunciation' ? '无录音,不评分 —— 发音只能靠录音判断,这里不猜测。' : '暂无评价。' }}</p>
+                    <p class="dim-c">{{ d.key === 'pronunciation' ? t('pb.v2.rec.noAudioNote') : t('pb.v2.rec.noComment') }}</p>
                   }
                 </div>
               }
@@ -153,19 +155,19 @@ interface StdEdit { spoken: string; technical: string; }
               <div class="std-block">
                 <div class="std-head">
                   <span class="std-label">{{ std.label }}</span>
-                  @if (std.isUser) { <span class="mine-tag">已按你的版本</span> }
+                  @if (std.isUser) { <span class="mine-tag">{{ t('pb.v2.p.mineTag') }}</span> }
                   <span class="spacer"></span>
                   @if (editingQ() === q.id + ':' + std.key) {
-                    <button mat-stroked-button (click)="saveStd(q, std.key)">保存</button>
-                    <button mat-button (click)="editingQ.set(null)">取消</button>
+                    <button mat-stroked-button (click)="saveStd(q, std.key)">{{ t('common.save') }}</button>
+                    <button mat-button (click)="editingQ.set(null)">{{ t('common.cancel') }}</button>
                   } @else {
                     <button type="button" class="mini-btn" (click)="playStd(q, std)"
                             [disabled]="!std.text">
-                      {{ tts.playingKey() === tts.keyFor(std.text) ? '⏸ 停止' : '▶ 播放' }}
+                      {{ tts.playingKey() === tts.keyFor(std.text) ? t('pb.v2.p.stop') : t('pb.v2.rec.playStd') }}
                     </button>
-                    <button type="button" class="mini-btn" (click)="startEditStd(q, std)">✎ 编辑</button>
+                    <button type="button" class="mini-btn" (click)="startEditStd(q, std)">{{ t('pb.v2.p.edit') }}</button>
                     @if (std.isUser) {
-                      <button type="button" class="mini-btn" (click)="restoreStd(q, std.key)">还原 AI 原版</button>
+                      <button type="button" class="mini-btn" (click)="restoreStd(q, std.key)">{{ t('pb.v2.rec.restoreAi') }}</button>
                     }
                   }
                 </div>
@@ -178,12 +180,12 @@ interface StdEdit { spoken: string; technical: string; }
                     <span [class.sent-on]="isActiveSentence(q, std, $index)">{{ s }} </span>
                   }</p>
                 } @else {
-                  <p class="empty-sm">尚未生成 —— 点上方「生成逐题分析」后会出现。</p>
+                  <p class="empty-sm">{{ t('pb.v2.rec.stdNotGenerated') }}</p>
                 }
               </div>
             }
           } @else {
-            <p class="empty-sm">本题还没有逐题分析。点上方「生成逐题分析」生成四维评价与标准回答。</p>
+            <p class="empty-sm">{{ t('pb.v2.rec.qNoAnalysis') }}</p>
           }
         </article>
       }
@@ -191,10 +193,10 @@ interface StdEdit { spoken: string; technical: string; }
       <!-- 常驻播放条 -->
       @if (audioAsset()) {
         <div class="player-bar">
-          <button mat-stroked-button (click)="ensureAudio()">加载录音播放</button>
+          <button mat-stroked-button (click)="ensureAudio()">{{ t('pb.v2.rec.loadAudio') }}</button>
           @if (audioUrl()) {
             <audio #player controls [src]="audioUrl()" (timeupdate)="onTimeUpdate(player)"></audio>
-            <label class="rate">倍速
+            <label class="rate">{{ t('pb.v2.rec.rate') }}
               <select [ngModel]="rate()" (ngModelChange)="setRate(player, $event)">
                 <option [value]="0.75">0.75×</option>
                 <option [value]="1">1×</option>
@@ -204,7 +206,7 @@ interface StdEdit { spoken: string; technical: string; }
               </select>
             </label>
             <button type="button" class="mini-btn" (click)="playMode.set(playMode() === 'all' ? 'segment' : 'all')">
-              {{ playMode() === 'all' ? '连播全部' : '只播本段' }}
+              {{ playMode() === 'all' ? t('pb.v2.rec.playAll') : t('pb.v2.rec.playSegOnly') }}
             </button>
           }
           <span class="pb-name">{{ audioAsset()?.fileName }}</span>
@@ -292,6 +294,9 @@ export class RoundRecordComponent {
 
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
+  readonly fmt = makeV2Fmt(this.i18n);
   readonly zoom = inject(QaZoomService);
   readonly tts = inject(TtsPlayerService);
 
@@ -351,7 +356,7 @@ export class RoundRecordComponent {
         if (segs?.length) all.push(...segs);
         else if (t?.transcriptText) {
           all.push(...t.transcriptText.split(/\r?\n/).filter(x => x.trim())
-            .map(x => ({ speaker: '转写', text: x.trim() })));
+            .map(x => ({ speaker: this.t('pb.v2.rec.speakerTranscript'), text: x.trim() })));
         }
       } catch { /* 单件失败不阻塞其它材料 */ }
     }
@@ -366,10 +371,10 @@ export class RoundRecordComponent {
     const d = rv.dims ?? {};
     const na: DimReview = { score: null };
     return [
-      { key: 'relevance', label: '切题性', review: d.relevance ?? na },
-      { key: 'depth', label: '技术深度', review: d.depth ?? na },
-      { key: 'expression', label: '表达', review: d.expression ?? na },
-      { key: 'pronunciation', label: '发音', review: d.pronunciation ?? na }
+      { key: 'relevance', label: this.t('pb.v2.dim.relevance'), review: d.relevance ?? na },
+      { key: 'depth', label: this.t('pb.v2.dim.depth'), review: d.depth ?? na },
+      { key: 'expression', label: this.t('pb.v2.dim.expression'), review: d.expression ?? na },
+      { key: 'pronunciation', label: this.t('pb.v2.dim.pronunciation'), review: d.pronunciation ?? na }
     ];
   }
 
@@ -382,8 +387,8 @@ export class RoundRecordComponent {
       isUser: !!std?.user
     });
     return [
-      mk('spoken', '北美标准回答 · 口语版', rv.stdSpoken),
-      mk('technical', '北美标准回答 · 技术版', rv.stdTechnical)
+      mk('spoken', this.t('pb.v2.rec.stdSpokenLabel'), rv.stdSpoken),
+      mk('technical', this.t('pb.v2.rec.stdTechnicalLabel'), rv.stdTechnical)
     ];
   }
 
@@ -430,7 +435,7 @@ export class RoundRecordComponent {
     };
     await this.api.setQuestionReview(this.entry().id, q.id, serializeQuestionReview(next)).toPromise();
     this.editingQ.set(null);
-    this.snack.open('已保存你的版本', '关闭', { duration: 2200 });
+    this.snack.open(this.t('pb.v2.rec.savedYours'), this.t('common.close'), { duration: 2200 });
     this.changed.emit();
   }
 
@@ -441,7 +446,7 @@ export class RoundRecordComponent {
     if (key === 'spoken') next.stdSpoken = { ai: rv.stdSpoken?.ai ?? null, user: null };
     else next.stdTechnical = { ai: rv.stdTechnical?.ai ?? null, user: null };
     await this.api.setQuestionReview(this.entry().id, q.id, serializeQuestionReview(next)).toPromise();
-    this.snack.open('已还原为 AI 原版', '关闭', { duration: 2200 });
+    this.snack.open(this.t('pb.v2.rec.restoredAi'), this.t('common.close'), { duration: 2200 });
     this.changed.emit();
   }
 
@@ -453,11 +458,10 @@ export class RoundRecordComponent {
         await this.api.extractQuestions(this.entry().id, this.round().id).toPromise();
       }
       await this.api.generateRoundReview(this.entry().id, this.round().id).toPromise();
-      this.snack.open('逐题分析已生成', '关闭', { duration: 2500 });
+      this.snack.open(this.t('pb.v2.rec.reviewGenerated'), this.t('common.close'), { duration: 2500 });
       this.changed.emit();
     } catch (e) {
-      this.notice.set('分析生成失败:' + errText(e) +
-        '(沙盒/未配置 AI 时可先用接口写入复盘数据,或配置 AI 网关后重试)');
+      this.notice.set(this.fmt('pb.v2.rec.reviewFailed', { msg: errText(e, this.t('pb.v2.rec.unknownError')) }));
     } finally {
       this.busy.set(false);
     }
@@ -468,11 +472,11 @@ export class RoundRecordComponent {
     try {
       const r = await this.api.extractQuestions(this.entry().id, this.round().id).toPromise();
       this.notice.set(r && r.created > 0
-        ? `已从转写抽出 ${r.created} 道题,进入下方逐题分析与「问答入库」。`
-        : '本轮题目已存在或转写里没有可抽取的问答。');
+        ? this.fmt('pb.v2.rec.extracted', { n: r.created })
+        : this.t('pb.v2.rec.extractNone'));
       this.changed.emit();
     } catch (e) {
-      this.notice.set('抽取失败:' + errText(e));
+      this.notice.set(this.fmt('pb.v2.rec.extractFailed', { msg: errText(e, this.t('pb.v2.rec.unknownError')) }));
     } finally {
       this.busy.set(false);
     }
@@ -484,9 +488,9 @@ export class RoundRecordComponent {
     this.busy.set(true);
     try {
       await this.api.startTranscription(this.entry().id, a.id).toPromise();
-      this.notice.set('转写任务已提交,完成后刷新本页可见分段转写(依赖转写 Worker 与消息队列)。');
+      this.notice.set(this.t('pb.v2.rec.transcribeSubmitted'));
     } catch (e) {
-      this.notice.set('转写提交失败:' + errText(e));
+      this.notice.set(this.fmt('pb.v2.rec.transcribeFailed', { msg: errText(e, this.t('pb.v2.rec.unknownError')) }));
     } finally {
       this.busy.set(false);
     }
@@ -500,11 +504,11 @@ export class RoundRecordComponent {
     try {
       await this.api.renameSpeaker(this.entry().id, this.round().id, from, to).toPromise();
       this.renameTo.set('');
-      this.snack.open(`已把「${from}」全篇改为「${to}」`, '关闭', { duration: 2500 });
+      this.snack.open(this.fmt('pb.v2.rec.renamed', { from, to }), this.t('common.close'), { duration: 2500 });
       this.changed.emit();
       void this.loadTranscript();
     } catch (e) {
-      this.notice.set('改名失败:' + errText(e));
+      this.notice.set(this.fmt('pb.v2.rec.renameFailed', { msg: errText(e, this.t('pb.v2.rec.unknownError')) }));
     } finally {
       this.busy.set(false);
     }
@@ -515,7 +519,7 @@ export class RoundRecordComponent {
     if (!a || this.audioUrl()) return;
     this.api.audioBlob(this.entry().id, a.id).subscribe({
       next: blob => this.audioUrl.set(URL.createObjectURL(blob)),
-      error: () => this.notice.set('录音加载失败(文件可能已丢失)。')
+      error: () => this.notice.set(this.t('pb.v2.rec.audioLoadFailed'))
     });
   }
 
@@ -560,8 +564,8 @@ export class RoundRecordComponent {
   }
 }
 
-function errText(e: unknown): string {
+function errText(e: unknown, unknownLabel = 'Unknown error'): string {
   if (e instanceof Error) return e.message;
   const anyE = e as { error?: { detail?: string; title?: string }; message?: string };
-  return anyE?.error?.detail || anyE?.error?.title || anyE?.message || '未知错误';
+  return anyE?.error?.detail || anyE?.error?.title || anyE?.message || unknownLabel;
 }

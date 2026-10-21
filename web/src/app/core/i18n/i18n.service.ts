@@ -25,6 +25,14 @@ const STORAGE_KEY = 'yi.lang';
  *   代码: t('dash.total')
  */
 const DICT: Record<string, Record<Lang, string>> = {
+  // ---------- Q&A 字号控件 / 标准答案朗读(core 共享件,v2 引入) ----------
+  'zoom.aria': { zh: '问答文本字号', en: 'Q&A text size', fr: 'Taille du texte des Q&R' },
+  'zoom.label': { zh: '字号', en: 'Text size', fr: 'Taille' },
+  'zoom.decrease': { zh: '减小', en: 'Decrease', fr: 'Réduire' },
+  'zoom.increase': { zh: '放大', en: 'Increase', fr: 'Augmenter' },
+  'zoom.inputTitle': { zh: '点击直接输入百分比', en: 'Click to type a percentage', fr: 'Cliquez pour saisir un pourcentage' },
+  'tts.audioFailed': { zh: '音频播放失败', en: 'Audio playback failed', fr: 'Échec de lecture audio' },
+  'tts.unavailable': { zh: '朗读不可用:请先在 AI Practice 设置里配置 Azure 语音。', en: 'Read-aloud unavailable: configure Azure Speech in AI Practice settings first.', fr: 'Lecture indisponible : configurez d’abord Azure Speech dans les réglages d’AI Practice.' },
   // ---------- 顶部主导航 ----------
   'nav.dashboard': { zh: '总览', en: 'Dashboard', fr: 'Tableau de bord' },
   'nav.tracker': { zh: '投递跟踪', en: 'Tracker', fr: 'Suivi' },

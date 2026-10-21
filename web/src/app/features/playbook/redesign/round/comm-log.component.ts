@@ -10,6 +10,8 @@ import { InterviewDetail } from '../../../../core/models/api.models';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, CommItem } from '../v2.models';
 import { MaterialsListComponent } from './materials-list.component';
+import { I18nService } from '../../../../core/i18n/i18n.service';
+import { formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
 
 /**
  * 沟通记录(2026-10-20 定稿,条目级时间线):
@@ -27,14 +29,13 @@ import { MaterialsListComponent } from './materials-list.component';
     <div class="comm">
       @if (pendingItems().length) {
         <div class="pending-banner" data-testid="comm-pending-banner">
-          ⚠ 有 {{ pendingItems().length }} 条沟通里提取到了新安排,还没处理 ——
-          处理完(建轮次 / 同步 / 先放着)这条提醒就消失。
+          {{ fmt('pb.v2.c.pendingBanner', { n: pendingItems().length }) }}
         </div>
       }
 
       @if (useJobs()) {
         @if (!items().length && !looseAssets().length) {
-          <p class="empty">还没有沟通记录。用上方「＋ 添加材料」粘贴第一封邮件或记一条电话备注。</p>
+          <p class="empty">{{ t('pb.v2.c.empty') }}</p>
         }
         @for (c of visibleJobsItems(); track c.id) {
           <article class="citem" [class.pending]="isPending(c)" data-testid="comm-item">
@@ -43,49 +44,49 @@ import { MaterialsListComponent } from './materials-list.component';
               <span class="ci-title">{{ c.subject || typeLabel(c.type) }}</span>
               @if (c.contactName) { <span class="ci-contact">{{ c.contactName }}</span> }
               <span class="ci-date">{{ (c.occurredAt ?? '').slice(0, 10) }}</span>
-              @if (isPending(c)) { <span class="pend-tag">未处理</span> }
-              @else if (c.handlingStatus === 'Ignored') { <span class="done-tag">先放着</span> }
-              @else if (c.handlingStatus === 'Done') { <span class="done-tag">已处理</span> }
+              @if (isPending(c)) { <span class="pend-tag">{{ t('pb.v2.c.pending') }}</span> }
+              @else if (c.handlingStatus === 'Ignored') { <span class="done-tag">{{ t('pb.v2.c.parked') }}</span> }
+              @else if (c.handlingStatus === 'Done') { <span class="done-tag">{{ t('pb.v2.c.done') }}</span> }
               <span class="spacer"></span>
-              <button type="button" class="icon-btn danger" (click)="remove(c)" title="删除">
+              <button type="button" class="icon-btn danger" (click)="remove(c)" [title]="t('common.delete')">
                 <mat-icon>delete_outline</mat-icon>
               </button>
             </div>
-            @if (c.meta.summary) { <p class="ci-summary">摘要:{{ c.meta.summary }}</p> }
+            @if (c.meta.summary) { <p class="ci-summary">{{ t('pb.v2.m.fSummary') }}{{ c.meta.summary }}</p> }
             <p class="ci-body">{{ preview(c.content) }}</p>
             @if (c.content.length > 240) {
               <button type="button" class="mini-btn" (click)="toggleFull(c.id)">
-                {{ fullId() === c.id ? '收起' : '查看全文' }}
+                {{ fullId() === c.id ? t('pb.v2.d.collapse') : t('pb.v2.c.viewFull') }}
               </button>
               @if (fullId() === c.id) { <pre class="ci-full">{{ c.content }}</pre> }
             }
             @if (c.meta.arrangement; as arr) {
               <div class="arr-box">
-                <div class="arr-title">📅 提取到新安排:
-                  {{ arr.date ?? '日期待定' }} {{ arr.time ?? '' }}
+                <div class="arr-title">{{ t('pb.v2.c.arrTitle') }}
+                  {{ arr.date ?? t('pb.v2.d.dateTbd') }} {{ arr.time ?? '' }}
                   {{ arr.stage ? '· ' + arr.stage : '' }}
                   {{ arr.interviewers ? '· ' + arr.interviewers : '' }}
-                  {{ arr.format ? '· ' + arr.format : '' }}
+                  {{ arr.format ? '· ' + formatLabel(t, arr.format) : '' }}
                 </div>
                 @if (isPending(c)) {
                   <div class="arr-actions">
-                    <button mat-raised-button color="primary" (click)="createRoundFrom(c)">建轮次并关联</button>
+                    <button mat-raised-button color="primary" (click)="createRoundFrom(c)">{{ t('pb.v2.c.createRound') }}</button>
                     @if (matchingRound(c); as mr) {
                       <button mat-stroked-button (click)="syncToRound(c, mr.id)">
-                        同步到 Round {{ mr.order }}(改期)
+                        {{ fmt('pb.v2.c.syncToRound', { n: mr.order }) }}
                       </button>
                     }
-                    <button mat-stroked-button (click)="setStatus(c, 'Ignored')">先放着</button>
-                    <button mat-button (click)="setStatus(c, 'Done')">标为已处理</button>
+                    <button mat-stroked-button (click)="setStatus(c, 'Ignored')">{{ t('pb.v2.c.park') }}</button>
+                    <button mat-button (click)="setStatus(c, 'Done')">{{ t('pb.v2.c.markDone') }}</button>
                   </div>
                 }
               </div>
             }
             @if (!c.meta.arrangement) {
               <div class="move-row">
-                <label>移到轮次
+                <label>{{ t('pb.v2.c.moveToRound') }}
                   <select class="fld sm" [ngModel]="''" (ngModelChange)="moveToRound(c, $event)">
-                    <option value="">选择轮次…</option>
+                    <option value="">{{ t('pb.v2.c.pickRound') }}</option>
                     @for (r of rounds(); track r.id) {
                       <option [value]="r.id">Round {{ r.order }} · {{ r.stage }}</option>
                     }
@@ -96,13 +97,13 @@ import { MaterialsListComponent } from './materials-list.component';
           </article>
         }
         @if (looseAssets().length) {
-          <h4 class="loose-title">条目级材料(未关联到具体轮次)</h4>
-          <p class="hint">这些材料直接存在面试条目下(比如从某轮改归属过来的),用每件的「归属」下拉可以移回轮次。</p>
+          <h4 class="loose-title">{{ t('pb.v2.c.looseTitle') }}</h4>
+          <p class="hint">{{ t('pb.v2.c.looseHint') }}</p>
           <app-materials-list [entryId]="entry().id" [assets]="looseAssets()"
                               [rounds]="entry().rounds ?? []" (changed)="reload()" />
         }
       } @else {
-        <p class="hint">这个条目没有关联 Tracker 投递,沟通记录用条目级材料承载(与轮次材料同一套,可互相改归属)。</p>
+        <p class="hint">{{ t('pb.v2.c.noAppHint') }}</p>
         <app-materials-list [entryId]="entry().id" [assets]="entryAssets()"
                             [rounds]="entry().rounds ?? []" (changed)="reload()" />
       }
@@ -150,6 +151,10 @@ export class CommLogComponent {
 
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
+  readonly formatLabel = formatLabel;
+  readonly fmt = makeV2Fmt(this.i18n);
 
   readonly items = signal<CommItem[]>([]);
   readonly fullId = signal<string | null>(null);
@@ -211,8 +216,14 @@ export class CommLogComponent {
   }
 
   typeLabel(t: string): string {
-    return ({ Email: '邮件', Call: '电话', Interview: '面试', Message: '消息', Note: '备注' } as
-      Record<string, string>)[t] ?? t;
+    switch (t) {
+      case 'Email': return this.t('pb.v2.c.typeEmail');
+      case 'Call': return this.t('pb.v2.c.typeCall');
+      case 'Interview': return this.t('pb.v2.c.typeInterview');
+      case 'Message': return this.t('pb.v2.c.typeMessage');
+      case 'Note': return this.t('pb.v2.c.typeNote');
+      default: return t;
+    }
   }
 
   preview(content: string): string {
@@ -246,11 +257,11 @@ export class CommLogComponent {
   async setStatus(c: CommItem, status: 'Done' | 'Ignored'): Promise<void> {
     try {
       await this.persistMeta(c, { ...c.meta, handlingStatus: status }, status);
-      this.snack.open(status === 'Ignored' ? '已先放着' : '已标为已处理', '关闭', { duration: 2000 });
+      this.snack.open(status === 'Ignored' ? this.t('pb.v2.c.parked') : this.t('pb.v2.c.doneSnack'), this.t('common.close'), { duration: 2000 });
       await this.load();
       this.changed.emit();
     } catch {
-      this.snack.open('操作失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.c.opFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
@@ -269,11 +280,11 @@ export class CommLogComponent {
       await this.moveContentIntoRound(c, roundId);
       await this.persistMeta(c,
         { ...c.meta, handlingStatus: 'Done', movedToRoundId: roundId }, 'Done');
-      this.snack.open('已建轮次并关联这条沟通', '关闭', { duration: 2500 });
+      this.snack.open(this.t('pb.v2.c.roundCreated'), this.t('common.close'), { duration: 2500 });
       await this.load();
       this.changed.emit();
     } catch {
-      this.snack.open('建轮次失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.c.createRoundFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
@@ -294,11 +305,11 @@ export class CommLogComponent {
         feedback: round?.feedback ?? null
       }).toPromise();
       await this.persistMeta(c, { ...c.meta, handlingStatus: 'Done' }, 'Done');
-      this.snack.open('已同步到已有轮次', '关闭', { duration: 2500 });
+      this.snack.open(this.t('pb.v2.c.syncedRound'), this.t('common.close'), { duration: 2500 });
       await this.load();
       this.changed.emit();
     } catch {
-      this.snack.open('同步失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.p.syncFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
@@ -307,11 +318,11 @@ export class CommLogComponent {
     try {
       await this.moveContentIntoRound(c, roundId);
       await this.persistMeta(c, { ...c.meta, movedToRoundId: roundId });
-      this.snack.open('已移入所选轮次的材料', '关闭', { duration: 2200 });
+      this.snack.open(this.t('pb.v2.c.movedToRoundMat'), this.t('common.close'), { duration: 2200 });
       await this.load();
       this.changed.emit();
     } catch {
-      this.snack.open('移动失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.c.moveFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
@@ -338,11 +349,11 @@ export class CommLogComponent {
     try {
       const appId = this.entry().jobApplicationId!;
       await this.api.deleteCommunication(appId, c.id).toPromise();
-      this.snack.open('已删除', '关闭', { duration: 2000 });
+      this.snack.open(this.t('pb.v2.m.deleted'), this.t('common.close'), { duration: 2000 });
       await this.load();
       this.changed.emit();
     } catch {
-      this.snack.open('删除失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 }

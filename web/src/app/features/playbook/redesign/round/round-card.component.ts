@@ -17,7 +17,9 @@ import { RoundRecordComponent } from './round-record.component';
 import { QaImportComponent } from './qa-import.component';
 import { MaterialsListComponent } from './materials-list.component';
 import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
-import { ExportBlock, ExportDoc, downloadBlob } from '../export/export-doc';
+import { ExportBlock, ExportDoc } from '../export/export-doc';
+import { I18nService } from '../../../../core/i18n/i18n.service';
+import { formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
 
 type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
 
@@ -38,56 +40,53 @@ type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
       <div class="rc-head">
         <h3>Round {{ round().order }} · {{ round().stage }}</h3>
         <span class="rc-meta">
-          {{ round().scheduledDate ?? '日期待定' }}{{ round().scheduledTime ? ' ' + round().scheduledTime : '' }}
+          {{ round().scheduledDate ?? t('pb.v2.d.dateTbd') }}{{ round().scheduledTime ? ' ' + round().scheduledTime : '' }}
           @if (round().interviewers) { · {{ round().interviewers }} }
-          @if (round().format) { · {{ round().format }} }
+          @if (round().format) { · {{ formatLabel(t, round().format) }} }
         </span>
         <span class="spacer"></span>
         @if (tab() === 'record') {
-          <button mat-stroked-button (click)="openRecordExport()">导出实录</button>
+          <button mat-stroked-button (click)="openRecordExport()">{{ t('pb.v2.r.exportRecord') }}</button>
         }
-        @if (round().scheduledDate) {
-          <button type="button" class="mini-btn" (click)="downloadIcs()">导出 .ics</button>
-        }
-        <button type="button" class="mini-btn" (click)="toggleEdit()">{{ editing() ? '收起' : '编辑本轮' }}</button>
+        <button type="button" class="mini-btn" (click)="toggleEdit()">{{ editing() ? t('pb.v2.d.collapse') : t('pb.v2.r.editRound') }}</button>
       </div>
       <div class="rc-outcome">
-        结果:<b>{{ outcomeLabel(round().outcome) }}</b>
-        @if (roundScore() != null) { · 综合分 <b>{{ roundScore() }}</b> }
-        @if (questionCount()) { · {{ questionCount() }} 道题 }
-        · {{ roundAssets().length }} 件材料
-        @if (round().meetingLink) { · <a [href]="round().meetingLink" target="_blank" rel="noopener">会议链接</a> }
+        {{ t('pb.v2.r.outcome') }}<b>{{ outcomeLabel(round().outcome) }}</b>
+        @if (roundScore() != null) { · {{ t('pb.v2.r.overall') }} <b>{{ roundScore() }}</b> }
+        @if (questionCount()) { · {{ fmt('pb.v2.r.questionsCount', { n: questionCount() }) }} }
+        · {{ fmt('pb.v2.r.assetsCount', { n: roundAssets().length }) }}
+        @if (round().meetingLink) { · <a [href]="round().meetingLink" target="_blank" rel="noopener">{{ t('pb.v2.r.meetingLink') }}</a> }
         @if (round().location) { · {{ round().location }} }
       </div>
 
       @if (editing()) {
         <div class="edit-grid">
-          <label>阶段 <input class="fld" [ngModel]="eStage()" (ngModelChange)="eStage.set($event)"></label>
-          <label>日期 <input class="fld" type="date" [ngModel]="eDate()" (ngModelChange)="eDate.set($event)"></label>
-          <label>时间 <input class="fld" placeholder="11:00" [ngModel]="eTime()" (ngModelChange)="eTime.set($event)"></label>
-          <label>面试官 <input class="fld" [ngModel]="eInterviewers()" (ngModelChange)="eInterviewers.set($event)"></label>
-          <label>形式 <input class="fld" [ngModel]="eFormat()" (ngModelChange)="eFormat.set($event)"></label>
-          <label>地点 <input class="fld" [ngModel]="eLocation()" (ngModelChange)="eLocation.set($event)"></label>
-          <label>会议链接 <input class="fld" [ngModel]="eLink()" (ngModelChange)="eLink.set($event)"></label>
-          <label>结果
+          <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [ngModel]="eStage()" (ngModelChange)="eStage.set($event)"></label>
+          <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="eDate()" (ngModelChange)="eDate.set($event)"></label>
+          <label>{{ t('pb.v2.r.fTime') }} <input class="fld" placeholder="11:00" [ngModel]="eTime()" (ngModelChange)="eTime.set($event)"></label>
+          <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="eInterviewers()" (ngModelChange)="eInterviewers.set($event)"></label>
+          <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [ngModel]="eFormat()" (ngModelChange)="eFormat.set($event)"></label>
+          <label>{{ t('pb.v2.r.fLocation') }} <input class="fld" [ngModel]="eLocation()" (ngModelChange)="eLocation.set($event)"></label>
+          <label>{{ t('pb.v2.r.meetingLink') }} <input class="fld" [ngModel]="eLink()" (ngModelChange)="eLink.set($event)"></label>
+          <label>{{ t('pb.v2.r.fOutcome') }}
             <select class="fld" [ngModel]="eOutcome()" (ngModelChange)="eOutcome.set($event)">
-              <option value="Pending">待进行</option>
-              <option value="Passed">通过</option>
-              <option value="Failed">未通过</option>
-              <option value="Cancelled">取消</option>
+              <option value="Pending">{{ t('pb.v2.r.ocPending') }}</option>
+              <option value="Passed">{{ t('outcome.Passed') }}</option>
+              <option value="Failed">{{ t('outcome.Failed') }}</option>
+              <option value="Cancelled">{{ t('pb.v2.r.ocCancelled') }}</option>
             </select>
           </label>
-          <label class="wide">反馈 / 备注 <input class="fld" [ngModel]="eFeedback()" (ngModelChange)="eFeedback.set($event)"></label>
+          <label class="wide">{{ t('pb.v2.r.fFeedback') }} <input class="fld" [ngModel]="eFeedback()" (ngModelChange)="eFeedback.set($event)"></label>
         </div>
         <div class="row">
-          <button mat-raised-button color="primary" (click)="saveEdit()">保存本轮</button>
+          <button mat-raised-button color="primary" (click)="saveEdit()">{{ t('pb.v2.r.saveRound') }}</button>
           <span class="spacer"></span>
-          <button mat-button color="warn" (click)="deleteRound()">删除本轮</button>
+          <button mat-button color="warn" (click)="deleteRound()">{{ t('pb.v2.r.deleteRound') }}</button>
         </div>
       }
 
       <div class="rtabs" role="tablist">
-        @for (tb of tabs; track tb.key) {
+        @for (tb of tabs(); track tb.key) {
           <button type="button" role="tab" class="rtab" [class.on]="tab() === tb.key"
                   (click)="tab.set(tb.key)">
             {{ tb.label }}@if (tb.count() != null) { <span class="cnt">{{ tb.count() }}</span> }
@@ -109,12 +108,12 @@ type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
         }
         @case ('materials') {
           <div class="mat-head-row">
-            <span class="mh-note">本轮全部原始件:邮件 / 录音 / 转写 / 备注 / 指导材料都在这里,旧材料按面试前/后归置。</span>
+            <span class="mh-note">{{ t('pb.v2.r.matNote') }}</span>
             <span class="spacer"></span>
-            <label class="mini-btn file-label">上传文件
+            <label class="mini-btn file-label">{{ t('pb.v2.r.uploadFile') }}
               <input type="file" hidden (change)="onUpload($event)">
             </label>
-            <button mat-stroked-button (click)="addMaterialHere.emit(round().id)">＋ 添加材料到本轮</button>
+            <button mat-stroked-button (click)="addMaterialHere.emit(round().id)">{{ t('pb.v2.r.addMaterialHere') }}</button>
           </div>
           <app-materials-list [entryId]="entry().id" [assets]="roundAssets()"
                               [rounds]="entry().rounds ?? []" (changed)="changed.emit()" />
@@ -123,7 +122,7 @@ type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
     </section>
   `,
   styles: [`
-    .card { border: 1px solid var(--yi-border, #ddd); border-radius: 16px; padding: 16px 18px; margin-top: 14px; }
+    .card { padding: 2px 2px 0; margin-top: 14px; }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .rc-head h3 { margin: 0; font-size: 17px; }
     .rc-meta { font-size: 12.5px; color: var(--yi-text-muted, #888); }
@@ -160,6 +159,9 @@ export class RoundCardComponent {
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
+  private readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
+  readonly fmt = makeV2Fmt(this.i18n);
 
   readonly tab = signal<RoundTab>('prep');
   readonly editing = signal(false);
@@ -184,12 +186,14 @@ export class RoundCardComponent {
   readonly roundScore = computed(() =>
     safeJson<{ overall?: number | null }>(this.round().reviewJson)?.overall ?? null);
 
-  readonly tabs: { key: RoundTab; label: string; count: () => number | null }[] = [
-    { key: 'prep', label: '备考报告', count: () => null },
-    { key: 'record', label: '面试实录', count: () => null },
-    { key: 'qa', label: '问答入库', count: () => this.questionCount() || null },
-    { key: 'materials', label: '材料', count: () => this.roundAssets().length || null }
-  ];
+  readonly tabs = computed<{ key: RoundTab; label: string; count: () => number | null }[]>(() => [
+    { key: 'prep', label: this.t('pb.v2.r.tabPrep'), count: () => null },
+    { key: 'record', label: this.t('pb.v2.r.tabRecord'), count: () => null },
+    { key: 'qa', label: this.t('pb.v2.r.tabQa'), count: () => this.questionCount() || null },
+    { key: 'materials', label: this.t('pb.v2.r.tabMaterials'), count: () => this.roundAssets().length || null }
+  ]);
+
+  readonly formatLabel = formatLabel;
 
   constructor() {
     // 轮次切换时按阶段选默认页签:未开始 → 备考;已结束 → 实录。
@@ -204,8 +208,13 @@ export class RoundCardComponent {
   }
 
   outcomeLabel(o: string): string {
-    return ({ Pending: '待进行', Passed: '通过', Failed: '未通过', Cancelled: '已取消' } as
-      Record<string, string>)[o] ?? o;
+    switch (o) {
+      case 'Pending': return this.t('pb.v2.r.ocPending');
+      case 'Passed': return this.t('outcome.Passed');
+      case 'Failed': return this.t('outcome.Failed');
+      case 'Cancelled': return this.t('pb.v2.r.ocCancelled');
+      default: return o;
+    }
   }
 
   toggleEdit(): void {
@@ -236,17 +245,17 @@ export class RoundCardComponent {
         feedback: this.eFeedback() || null
       }).toPromise();
       this.editing.set(false);
-      this.snack.open('本轮已保存', '关闭', { duration: 2000 });
+      this.snack.open(this.t('pb.v2.r.roundSaved'), this.t('common.close'), { duration: 2000 });
       this.changed.emit();
     } catch {
-      this.snack.open('保存失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.d.saveFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
   deleteRound(): void {
     this.api.deleteRound(this.entry().id, this.round().id).subscribe({
-      next: () => { this.snack.open('本轮已删除', '关闭', { duration: 2000 }); this.changed.emit(); },
-      error: () => this.snack.open('删除失败', '关闭', { duration: 3000 })
+      next: () => { this.snack.open(this.t('pb.v2.r.roundDeleted'), this.t('common.close'), { duration: 2000 }); this.changed.emit(); },
+      error: () => this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 })
     });
   }
 
@@ -256,19 +265,11 @@ export class RoundCardComponent {
     if (!f) return;
     this.api.uploadFile(this.entry().id, f, { roundId: this.round().id, phase: 'Post' }).subscribe({
       next: () => {
-        this.snack.open('文件已上传到本轮材料', '关闭', { duration: 2200 });
+        this.snack.open(this.t('pb.v2.r.uploaded'), this.t('common.close'), { duration: 2200 });
         input.value = '';
         this.changed.emit();
       },
-      error: () => this.snack.open('上传失败', '关闭', { duration: 3000 })
-    });
-  }
-
-  downloadIcs(): void {
-    this.api.downloadIcs(this.entry().id, this.round().id).subscribe({
-      next: blob => downloadBlob(blob,
-        `${this.entry().companyName}-Round${this.round().order}.ics`),
-      error: () => this.snack.open('日历文件生成失败', '关闭', { duration: 3000 })
+      error: () => this.snack.open(this.t('pb.v2.r.uploadFailed'), this.t('common.close'), { duration: 3000 })
     });
   }
 
@@ -291,15 +292,15 @@ export class RoundCardComponent {
     this.exportSegments = segs;
     const date = new Date().toISOString().slice(0, 10);
     const data: ExportDialogData = {
-      title: '导出本轮实录',
+      title: this.t('pb.v2.r.exportTitle'),
       subtitle: `${e.companyName} · Round ${r.order} ${r.stage}`,
-      fileBase: `${e.companyName}-Round${r.order}-实录-${date}`,
+      fileBase: `${e.companyName}-Round${r.order}-${this.t('pb.v2.r.fileSuffix')}-${date}`,
       storageKey: 'record',
       toggles: [
-        { key: 'transcript', label: '对话原文', locked: true, defaultOn: true },
-        { key: 'analysis', label: '逐题分析', defaultOn: true },
-        { key: 'std', label: '标准回答(我的编辑版)', defaultOn: true },
-        { key: 'summary', label: '总评分与通过概率', defaultOn: true }
+        { key: 'transcript', label: this.t('pb.v2.r.tgTranscript'), locked: true, defaultOn: true },
+        { key: 'analysis', label: this.t('pb.v2.r.tgAnalysis'), defaultOn: true },
+        { key: 'std', label: this.t('pb.v2.r.tgStd'), defaultOn: true },
+        { key: 'summary', label: this.t('pb.v2.r.tgSummary'), defaultOn: true }
       ],
       buildDoc: sel => this.buildRecordDoc(sel)
     };
@@ -319,18 +320,18 @@ export class RoundCardComponent {
 
     if (sel.has('summary') && rv) {
       const lines: string[] = [];
-      if (rv.overall != null) lines.push(`综合分:${rv.overall}`);
-      if (rv.passProbability != null) lines.push(`通过概率 ≈ ${rv.passProbability}%(AI 估计)`);
-      if (rv.passBasis) lines.push(`估计依据:${rv.passBasis}`);
-      if (rv.strongest) lines.push(`最强项:${rv.strongest}`);
-      if (rv.weakest) lines.push(`最大短板:${rv.weakest}`);
+      if (rv.overall != null) lines.push(this.fmt('pb.v2.r.docOverall', { n: rv.overall }));
+      if (rv.passProbability != null) lines.push(this.fmt('pb.v2.r.docPass', { n: rv.passProbability }));
+      if (rv.passBasis) lines.push(this.fmt('pb.v2.r.docBasis', { v: rv.passBasis }));
+      if (rv.strongest) lines.push(this.fmt('pb.v2.r.docStrongest', { v: rv.strongest }));
+      if (rv.weakest) lines.push(this.fmt('pb.v2.r.docWeakest', { v: rv.weakest }));
       if (rv.summary) lines.push(rv.summary);
-      if (lines.length) blocks.push({ kind: 'analysis', title: '整轮总览', lines });
+      if (lines.length) blocks.push({ kind: 'analysis', title: this.t('pb.v2.r.docOverview'), lines });
     }
 
     // 对话原文(必选,时间戳自带、恒导出):整段转写逐段输出。
     if (this.exportSegments.length) {
-      blocks.push({ kind: 'heading', text: '对话原文' });
+      blocks.push({ kind: 'heading', text: this.t('pb.v2.r.docTranscript') });
       for (const s of this.exportSegments) {
         blocks.push({
           kind: 'qa', speaker: s.speaker, text: s.text,
@@ -341,40 +342,42 @@ export class RoundCardComponent {
 
     for (const q of questions) {
       blocks.push({ kind: 'heading', text: `Q${q.sequence} ${q.questionText}` });
-      if (q.askedBy) blocks.push({ kind: 'para', text: `提问人:${q.askedBy}` });
+      if (q.askedBy) blocks.push({ kind: 'para', text: this.fmt('pb.v2.r.docAskedBy', { v: q.askedBy }) });
       blocks.push({
-        kind: 'qa', speaker: q.askedBy ?? '面试官', text: q.questionText,
+        kind: 'qa', speaker: q.askedBy ?? this.t('pb.v2.r.docInterviewer'), text: q.questionText,
         timeLabel: q.askedAtSeconds != null ? fmtClock(q.askedAtSeconds) : undefined
       });
       if (q.myAnswerText) {
-        blocks.push({ kind: 'qa', speaker: '我', text: q.myAnswerText });
+        blocks.push({ kind: 'qa', speaker: this.t('pb.v2.r.docMe'), text: q.myAnswerText });
       }
       const review = parseQuestionReview(q.reviewJson);
       if (sel.has('analysis') && review) {
         const lines: string[] = [];
-        if (review.overall != null) lines.push(`本题分:${review.overall}`);
+        if (review.overall != null) lines.push(this.fmt('pb.v2.r.docQScore', { n: review.overall }));
         const dims = review.dims ?? {};
-        const dimNames: [string, string][] = [
-          ['relevance', '切题性'], ['depth', '技术深度'],
-          ['expression', '表达'], ['pronunciation', '发音']
+        const dimKeys: [string, string][] = [
+          ['relevance', 'pb.v2.dim.relevance'], ['depth', 'pb.v2.dim.depth'],
+          ['expression', 'pb.v2.dim.expression'], ['pronunciation', 'pb.v2.dim.pronunciation']
         ];
-        for (const [k, label] of dimNames) {
+        for (const [k, labelKey] of dimKeys) {
           const d = dims[k as keyof typeof dims];
           if (!d) continue;
-          if (d.score == null) lines.push(`${label}:不评分(无录音)`);
-          else lines.push(`${label}:${d.score} 分${d.comment ? ' —— ' + d.comment : ''}${d.fix ? ' 改法:' + d.fix : ''}`);
+          const label = this.t(labelKey);
+          if (d.score == null) lines.push(this.fmt('pb.v2.dim.noScore', { label }));
+          else lines.push(this.fmt('pb.v2.dim.scored', { label, score: d.score })
+            + `${d.comment ? ' —— ' + d.comment : ''}${d.fix ? ' ' + this.fmt('pb.v2.r.docFix', { v: d.fix }) : ''}`);
         }
-        if (lines.length) blocks.push({ kind: 'analysis', title: '逐题分析', lines });
+        if (lines.length) blocks.push({ kind: 'analysis', title: this.t('pb.v2.r.docQAnalysis'), lines });
       }
       if (sel.has('std') && review) {
         const sp = review.stdSpoken?.user || review.stdSpoken?.ai;
         const te = review.stdTechnical?.user || review.stdTechnical?.ai;
-        if (sp) blocks.push({ kind: 'std', label: '标准回答 · 口语版', text: sp });
-        if (te) blocks.push({ kind: 'std', label: '标准回答 · 技术版', text: te });
+        if (sp) blocks.push({ kind: 'std', label: this.t('pb.v2.r.docStdSpoken'), text: sp });
+        if (te) blocks.push({ kind: 'std', label: this.t('pb.v2.r.docStdTechnical'), text: te });
       }
     }
     return {
-      title: `${e.companyName} · Round ${r.order} ${r.stage} 面试实录`,
+      title: this.fmt('pb.v2.r.docTitle', { company: e.companyName, n: r.order, stage: r.stage }),
       subtitle: `${e.role}${r.scheduledDate ? ' · ' + r.scheduledDate : ''}${r.interviewers ? ' · ' + r.interviewers : ''}`,
       blocks
     };

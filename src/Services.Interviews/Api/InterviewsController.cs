@@ -91,6 +91,19 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 回填 Tracker 投递关联(2026-10-21):详情页发现条目未关联、且按公司名+岗位
+    /// 在 Tracker 里唯一匹配到一条投递时调用。已有关联不覆盖(additive)。
+    /// </summary>
+    [HttpPost("{id:guid}/link-application")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> LinkApplication(Guid id, [FromBody] LinkApplicationBody body,
+        CancellationToken ct)
+    {
+        var r = await sender.Send(new LinkJobApplicationCommand(id, body.JobApplicationId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsDelete)]
     public async Task<IResult> Delete(Guid id, CancellationToken ct)
@@ -725,6 +738,8 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
 }
 
 // ---------------- 请求体 ----------------
+
+public sealed record LinkApplicationBody(Guid JobApplicationId);
 
 public sealed record UpdateEntryBody(
     string CompanyName, string Role, string? CompanyProfile, string? JdText, string? JdSummary,

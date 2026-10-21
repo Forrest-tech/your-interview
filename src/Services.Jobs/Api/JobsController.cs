@@ -319,7 +319,9 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
                 parsed.CompanyDescription,
                 parsed.Link,
                 parsed.LogoUrl,
-                JdText = html
+                // 2026-10-21:此前这里直接回原始整页 HTML,前端存进 jdText 后在
+                // Playbook/Tracker 展示成标签糊脸;改回解析后的结构化纯文本。
+                JdText = parsed.JdText
             });
         }
         catch (Exception ex)

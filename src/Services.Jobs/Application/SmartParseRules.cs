@@ -176,6 +176,12 @@ public static class JdPasteParser
     {
         if (string.IsNullOrWhiteSpace(html)) return string.Empty;
         var t = html;
+        // 2026-10-21:整段丢弃不可见区块 —— 否则 <title>/<style>/<script> 的内容会
+        // 在剥标签后混进正文(存量 Arvato JD 就是整页 HTML 糊脸的来源之一)。
+        t = Regex.Replace(t, @"<!--.*?-->", "", RegexOptions.Singleline);
+        t = Regex.Replace(t, @"<(head|script|style|title|noscript|svg)\b[^>]*>.*?</\1\s*>", "",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        t = Regex.Replace(t, @"<(meta|link|base)\b[^>]*>", "", RegexOptions.IgnoreCase);
         // li → bullet 行
         t = Regex.Replace(t, @"<li[^>]*>", "\n• ", RegexOptions.IgnoreCase);
         t = Regex.Replace(t, @"</li>", "", RegexOptions.IgnoreCase);

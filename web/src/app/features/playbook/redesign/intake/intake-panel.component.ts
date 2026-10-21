@@ -12,24 +12,19 @@ import {
 import { normalizeEmailDate, parsePastedEmail } from '../../components/brief/brief.helpers';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
-import { downloadBlob } from '../export/export-doc';
+import { I18nService } from '../../../../core/i18n/i18n.service';
+import { joinNames, makeV2Fmt, makeV2T } from '../v2.helpers';
 
 export type IntakeType = 'email' | 'transcript' | 'note';
 type Target = { kind: 'round'; roundId: string } | { kind: 'comm' } | { kind: 'new' };
 
-const CATEGORIES = [
-  { key: 'invitation', label: '面试邀约' },
-  { key: 'reschedule', label: '改期' },
-  { key: 'rejection', label: '拒绝' },
-  { key: 'followup', label: '跟进' },
-  { key: 'other', label: '其它' }
-];
+const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'other'];
 
 /**
  * 条目级统一入口(2026-10-20 定稿):
  * 类型只有三种 —— 邮件 / 录音·转写文本 / 备注(电话记录写进后两种)。
  * 流程:粘贴 → 解析预览(先分类再提取,可改)→ 归属确认(系统按面试官/日期建议,
- * 可改;选新建轮次且有时间则建轮次+日历+.ics)→ 保存。
+ * 可改;选新建轮次且有时间则建轮次并进应用内日历)→ 保存。
  * 任何类型都可附一张截图原图 —— 截图是附件,不是类型。
  */
 @Component({
@@ -40,14 +35,14 @@ const CATEGORIES = [
     @if (open()) {
       <section class="panel" data-testid="intake-panel">
         <div class="panel-head">
-          <h3>＋ 添加材料</h3>
-          <button type="button" class="icon-btn" (click)="close()" aria-label="关闭">
+          <h3>{{ t('pb.v2.d.addMaterial') }}</h3>
+          <button type="button" class="icon-btn" (click)="close()" [attr.aria-label]="t('common.close')">
             <mat-icon>close</mat-icon>
           </button>
         </div>
 
         <div class="type-tabs" role="tablist">
-          @for (tb of typeTabs; track tb.key) {
+          @for (tb of typeTabs(); track tb.key) {
             <button type="button" role="tab" class="ttab" [class.on]="type() === tb.key"
                     (click)="setType(tb.key)">{{ tb.label }}</button>
           }
@@ -55,79 +50,79 @@ const CATEGORIES = [
 
         @if (step() === 'input') {
           @if (type() === 'email') {
-            <p class="hint">把邮件全文粘贴进来(含发件人/日期/主题行最好),点「解析预览」先看系统提取对不对,再确认归属。</p>
+            <p class="hint">{{ t('pb.v2.i.hintEmail') }}</p>
           } @else if (type() === 'transcript') {
-            <p class="hint">粘贴通话/面试的转写文本(一行一段,行首写说话人,如「Jimmy Patague:…」)。有录音文件请在本轮「材料」页签上传 —— 录音是一整段文件,不在这里切分。</p>
+            <p class="hint">{{ t('pb.v2.i.hintTranscript') }}</p>
           } @else {
-            <p class="hint">电话沟通、口头约定、临时想法都记这里。带明确时间的面试安排,保存时可直接建成轮次。</p>
+            <p class="hint">{{ t('pb.v2.i.hintNote') }}</p>
           }
-          <input class="fld" placeholder="标题(可留空,保存时自动生成)"
+          <input class="fld" [placeholder]="t('pb.v2.i.titlePh')"
                  [ngModel]="title()" (ngModelChange)="title.set($event)">
           <textarea class="paste" rows="9"
-                    [placeholder]="type() === 'email' ? '粘贴邮件全文…' : type() === 'transcript' ? '粘贴转写文本…' : '写下这条备注…'"
+                    [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
                     [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
           <div class="row">
             <label class="file-btn">
-              <mat-icon>image</mat-icon> 附一张截图(原图,可选)
+              <mat-icon>image</mat-icon> {{ t('pb.v2.i.attachShot') }}
               <input type="file" accept="image/*" hidden (change)="onShot($event)">
             </label>
             @if (shotName()) { <span class="shot-name">{{ shotName() }}</span> }
             <span class="spacer"></span>
-            <button mat-stroked-button (click)="close()">取消</button>
+            <button mat-stroked-button (click)="close()">{{ t('common.cancel') }}</button>
             <button mat-raised-button color="primary" [disabled]="!text().trim() || busy()"
-                    (click)="parse()">解析预览</button>
+                    (click)="parse()">{{ t('pb.v2.i.parsePreview') }}</button>
           </div>
         } @else {
           <!-- 解析预览 -->
           <div class="preview" data-testid="intake-preview">
             @if (type() === 'email') {
               <div class="pv-grid">
-                <label>分类
+                <label>{{ t('pb.v2.i.fCategory') }}
                   <select class="fld" [ngModel]="category()" (ngModelChange)="category.set($event)">
-                    @for (c of categories; track c.key) { <option [value]="c.key">{{ c.label }}</option> }
+                    @for (c of categories(); track c.key) { <option [value]="c.key">{{ c.label }}</option> }
                   </select>
                 </label>
-                <label>主题 <input class="fld" [ngModel]="fSubject()" (ngModelChange)="fSubject.set($event)"></label>
-                <label>发件人 <input class="fld" [ngModel]="fFrom()" (ngModelChange)="fFrom.set($event)"></label>
-                <label>邮件日期 <input class="fld" type="date" [ngModel]="fDate()" (ngModelChange)="fDate.set($event)"></label>
-                <label>面试时间 <input class="fld" placeholder="如 2026-10-07 11:00" [ngModel]="fWhen()" (ngModelChange)="fWhen.set($event)"></label>
-                <label>面试官 <input class="fld" placeholder="逗号分隔" [ngModel]="fInterviewers()" (ngModelChange)="fInterviewers.set($event)"></label>
-                <label>形式
+                <label>{{ t('pb.v2.i.fSubject') }} <input class="fld" [ngModel]="fSubject()" (ngModelChange)="fSubject.set($event)"></label>
+                <label>{{ t('pb.v2.i.fFrom') }} <input class="fld" [ngModel]="fFrom()" (ngModelChange)="fFrom.set($event)"></label>
+                <label>{{ t('pb.v2.i.fEmailDate') }} <input class="fld" type="date" [ngModel]="fDate()" (ngModelChange)="fDate.set($event)"></label>
+                <label>{{ t('pb.v2.i.fWhen') }} <input class="fld" [placeholder]="t('pb.v2.i.fWhenPh')" [ngModel]="fWhen()" (ngModelChange)="fWhen.set($event)"></label>
+                <label>{{ t('pb.v2.i.fInterviewers') }} <input class="fld" [placeholder]="t('pb.v2.i.commaPh')" [ngModel]="fInterviewers()" (ngModelChange)="fInterviewers.set($event)"></label>
+                <label>{{ t('pb.v2.i.fFormat') }}
                   <select class="fld" [ngModel]="fFormat()" (ngModelChange)="fFormat.set($event)">
-                    <option value="">未识别</option>
-                    <option value="线上视频">线上视频</option>
-                    <option value="线上做题平台">线上做题平台</option>
-                    <option value="电话">电话</option>
-                    <option value="现场">现场</option>
+                    <option value="">{{ t('pb.v2.fmt.unknown') }}</option>
+                    <option value="线上视频">{{ t('pb.v2.fmt.video') }}</option>
+                    <option value="线上做题平台">{{ t('pb.v2.fmt.platform') }}</option>
+                    <option value="电话">{{ t('pb.v2.fmt.phone') }}</option>
+                    <option value="现场">{{ t('pb.v2.fmt.onsite') }}</option>
                   </select>
                 </label>
               </div>
             } @else {
               <div class="pv-grid">
-                <label>发生日期 <input class="fld" type="date" [ngModel]="fDate()" (ngModelChange)="fDate.set($event)"></label>
-                <label>参与人 <input class="fld" placeholder="逗号分隔" [ngModel]="fInterviewers()" (ngModelChange)="fInterviewers.set($event)"></label>
+                <label>{{ t('pb.v2.i.fOccurredDate') }} <input class="fld" type="date" [ngModel]="fDate()" (ngModelChange)="fDate.set($event)"></label>
+                <label>{{ t('pb.v2.i.fParticipants') }} <input class="fld" [placeholder]="t('pb.v2.i.commaPh')" [ngModel]="fInterviewers()" (ngModelChange)="fInterviewers.set($event)"></label>
               </div>
               @if (segments().length) {
-                <p class="hint">识别到 {{ segments().length }} 段对话,说话人:{{ speakerNames() }}。保存后可在「面试实录」里批量改名。</p>
+                <p class="hint">{{ fmt('pb.v2.i.segsFound', { n: segments().length, names: speakerNames() }) }}</p>
               }
               <label class="check-row">
                 <input type="checkbox" [ngModel]="hasArrangement()" (ngModelChange)="hasArrangement.set($event)">
-                这条里有一个待安排的面试(会出现在沟通记录的待处理里)
+                {{ t('pb.v2.i.hasArrangement') }}
               </label>
               @if (hasArrangement()) {
                 <div class="pv-grid">
-                  <label>安排日期 <input class="fld" type="date" [ngModel]="arrDate()" (ngModelChange)="arrDate.set($event)"></label>
-                  <label>时间 <input class="fld" placeholder="如 14:00" [ngModel]="arrTime()" (ngModelChange)="arrTime.set($event)"></label>
-                  <label>阶段 <input class="fld" placeholder="如 Final / Design" [ngModel]="arrStage()" (ngModelChange)="arrStage.set($event)"></label>
+                  <label>{{ t('pb.v2.i.arrDate') }} <input class="fld" type="date" [ngModel]="arrDate()" (ngModelChange)="arrDate.set($event)"></label>
+                  <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.arrTimePh')" [ngModel]="arrTime()" (ngModelChange)="arrTime.set($event)"></label>
+                  <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.arrStagePh')" [ngModel]="arrStage()" (ngModelChange)="arrStage.set($event)"></label>
                 </div>
               }
             }
 
             @if (duplicate()) {
-              <p class="warn">⚠ 这封邮件似乎已经存过了(发件人 + 日期 + 主题相同)。仍可保存,但请确认不是重复粘贴。</p>
+              <p class="warn">{{ t('pb.v2.i.dupWarn') }}</p>
             }
 
-            <div class="sec">归属(系统建议已选中,可改)</div>
+            <div class="sec">{{ t('pb.v2.i.assignTitle') }}</div>
             <div class="targets">
               @for (r of rounds(); track r.id) {
                 <label class="tgt">
@@ -137,37 +132,32 @@ const CATEGORIES = [
               }
               <label class="tgt">
                 <input type="radio" name="tgt" [checked]="target().kind === 'comm'" (change)="target.set({kind:'comm'})">
-                沟通记录(条目级,不属于某一轮)
+                {{ t('pb.v2.i.targetComm') }}
               </label>
               <label class="tgt">
                 <input type="radio" name="tgt" [checked]="target().kind === 'new'" (change)="target.set({kind:'new'})">
-                新建一个轮次
+                {{ t('pb.v2.i.targetNew') }}
               </label>
             </div>
             @if (target().kind === 'new') {
               <div class="pv-grid">
-                <label>日期 <input class="fld" type="date" [ngModel]="nrDate()" (ngModelChange)="nrDate.set($event)"></label>
-                <label>时间 <input class="fld" placeholder="如 11:00" [ngModel]="nrTime()" (ngModelChange)="nrTime.set($event)"></label>
-                <label>阶段 <input class="fld" placeholder="如 Coding" [ngModel]="nrStage()" (ngModelChange)="nrStage.set($event)"></label>
-                <label>面试官 <input class="fld" [ngModel]="nrInterviewers()" (ngModelChange)="nrInterviewers.set($event)"></label>
-                <label>形式 <input class="fld" placeholder="线上视频 / 电话 / 现场" [ngModel]="nrFormat()" (ngModelChange)="nrFormat.set($event)"></label>
+                <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="nrDate()" (ngModelChange)="nrDate.set($event)"></label>
+                <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.nrTimePh')" [ngModel]="nrTime()" (ngModelChange)="nrTime.set($event)"></label>
+                <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.nrStagePh')" [ngModel]="nrStage()" (ngModelChange)="nrStage.set($event)"></label>
+                <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="nrInterviewers()" (ngModelChange)="nrInterviewers.set($event)"></label>
+                <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [placeholder]="t('pb.v2.i.nrFormatPh')" [ngModel]="nrFormat()" (ngModelChange)="nrFormat.set($event)"></label>
               </div>
-              <p class="hint">保存后该轮次会同时出现在本页轮次列表与应用内日历;有日期时会提供 .ics 下载(提醒:提前 1 天 + 提前 1 小时)。</p>
+              <p class="hint">{{ t('pb.v2.i.newRoundHint') }}</p>
             }
 
             <div class="row">
-              <button mat-stroked-button (click)="step.set('input')">← 返回修改原文</button>
+              <button mat-stroked-button (click)="step.set('input')">{{ t('pb.v2.i.backEdit') }}</button>
               <span class="spacer"></span>
-              <button mat-stroked-button (click)="close()">取消</button>
+              <button mat-stroked-button (click)="close()">{{ t('common.cancel') }}</button>
               <button mat-raised-button color="primary" [disabled]="busy()" (click)="save()">
-                {{ busy() ? '保存中…' : '保存' }}
+                {{ busy() ? t('pb.v2.i.saving') : t('common.save') }}
               </button>
             </div>
-            @if (savedRoundIcs()) {
-              <p class="ok-row">✓ 已保存。
-                <button type="button" class="link-btn" (click)="downloadIcs()">下载 .ics 日历文件</button>
-              </p>
-            }
             @if (errorMsg()) { <p class="err">{{ errorMsg() }}</p> }
           </div>
         }
@@ -216,13 +206,17 @@ export class IntakePanelComponent {
 
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
+  readonly fmt = makeV2Fmt(this.i18n);
 
-  readonly categories = CATEGORIES;
-  readonly typeTabs: { key: IntakeType; label: string }[] = [
-    { key: 'email', label: '邮件' },
-    { key: 'transcript', label: '录音 / 转写文本' },
-    { key: 'note', label: '备注' }
-  ];
+  readonly categories = computed(() =>
+    CATEGORY_KEYS.map(key => ({ key, label: this.t('pb.v2.cat.' + key) })));
+  readonly typeTabs = computed<{ key: IntakeType; label: string }[]>(() => [
+    { key: 'email', label: this.t('pb.v2.i.typeEmail') },
+    { key: 'transcript', label: this.t('pb.v2.i.typeTranscript') },
+    { key: 'note', label: this.t('pb.v2.i.typeNote') }
+  ]);
 
   readonly open = signal(false);
   readonly step = signal<'input' | 'preview'>('input');
@@ -255,13 +249,12 @@ export class IntakePanelComponent {
   readonly busy = signal(false);
   readonly errorMsg = signal<string | null>(null);
   readonly duplicate = signal(false);
-  readonly savedRoundIcs = signal<{ entryId: string; roundId: string } | null>(null);
 
   readonly rounds = computed(() =>
     [...(this.entry().rounds ?? [])].sort((a, b) => a.order - b.order));
 
   speakerNames(): string {
-    return [...new Set(this.segments().map(s => s.speaker))].join('、');
+    return joinNames(this.i18n, [...new Set(this.segments().map(s => s.speaker))]);
   }
 
   isTargetRound(id: string): boolean {
@@ -274,7 +267,6 @@ export class IntakePanelComponent {
     this.type.set(type);
     this.step.set('input');
     this.errorMsg.set(null);
-    this.savedRoundIcs.set(null);
     this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
     this.open.set(true);
   }
@@ -370,7 +362,6 @@ export class IntakePanelComponent {
           format: this.nrFormat() || null
         }).toPromise();
         roundId = created!.id;
-        if (this.nrDate()) this.savedRoundIcs.set({ entryId: entry.id, roundId });
       }
 
       // 截图先传(原图作为附件资产,归到同一目标)
@@ -387,8 +378,8 @@ export class IntakePanelComponent {
       const kind = this.type() === 'email' ? 'Text'
         : this.type() === 'transcript' ? 'Transcript' : 'Notes';
       const fileName = this.title().trim()
-        || (this.type() === 'email' ? (this.fSubject() || '邮件') : '')
-        || (this.type() === 'transcript' ? '转写文本' : '备注');
+        || (this.type() === 'email' ? (this.fSubject() || this.t('pb.v2.i.typeEmail')) : '')
+        || (this.type() === 'transcript' ? this.t('pb.v2.i.nameTranscript') : this.t('pb.v2.i.typeNote'));
       const segs = this.type() === 'transcript' ? this.segments() : [];
       const attached = await this.api.attachAsset(entry.id, {
         kind,
@@ -418,16 +409,16 @@ export class IntakePanelComponent {
         }
       }
 
-      this.snack.open('已保存', '关闭', { duration: 2500 });
+      this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2500 });
       this.text.set('');
       this.title.set('');
       this.shotFile.set(null);
       this.shotName.set('');
-      if (!this.savedRoundIcs()) { this.open.set(false); }
+      this.open.set(false);
       this.step.set('input');
       this.saved.emit();
     } catch (e) {
-      this.errorMsg.set('保存失败:' + (e instanceof Error ? e.message : '未知错误'));
+      this.errorMsg.set(this.fmt('pb.v2.i.saveFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.i.unknownError') }));
     } finally {
       this.busy.set(false);
     }
@@ -468,15 +459,6 @@ export class IntakePanelComponent {
       meta.handlingStatus = 'Pending';
     }
     return meta;
-  }
-
-  downloadIcs(): void {
-    const ics = this.savedRoundIcs();
-    if (!ics) return;
-    this.api.downloadIcs(ics.entryId, ics.roundId).subscribe({
-      next: blob => downloadBlob(blob, 'interview.ics'),
-      error: () => this.snack.open('日历文件生成失败', '关闭', { duration: 3000 })
-    });
   }
 }
 

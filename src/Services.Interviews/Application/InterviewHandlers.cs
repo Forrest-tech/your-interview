@@ -208,6 +208,9 @@ public sealed record UpdateEntryCommand(
 
 public sealed record DeleteEntryCommand(Guid Id) : IRequest<Result>;
 
+/// <summary>回填 Tracker 投递关联:additive —— 条目已有关联时不覆盖,原样返回成功。</summary>
+public sealed record LinkJobApplicationCommand(Guid Id, Guid JobApplicationId) : IRequest<Result>;
+
 public sealed record AttachAssetCommand(
     Guid EntryId, string Kind, string FileName, string? ContentType, long SizeBytes,
     string? StoragePath, string? BlobUrl, string? TranscriptText, string? TranscriptSegmentsJson,
@@ -881,6 +884,19 @@ public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
             e.SetDebrief(request.DebriefJson);
 
         await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public sealed class LinkJobApplicationCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<LinkJobApplicationCommand, Result>
+{
+    public async Task<Result> Handle(LinkJobApplicationCommand request, CancellationToken ct)
+    {
+        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        if (e.LinkJobApplication(request.JobApplicationId))
+            await db.SaveChangesAsync(ct);
         return Result.Success();
     }
 }

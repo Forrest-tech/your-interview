@@ -11,6 +11,8 @@ import {
 } from '../../../../core/models/api.models';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
+import { I18nService } from '../../../../core/i18n/i18n.service';
+import { formatLabel, joinNames, makeV2T } from '../v2.helpers';
 
 /**
  * 材料列表(2026-10-20 定稿):本轮(或条目级)的全部原始件。
@@ -23,25 +25,25 @@ import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule],
   template: `
     @if (!assets().length) {
-      <p class="empty">这里还没有材料。用上方「＋ 添加材料」粘贴,或直接上传文件。</p>
+      <p class="empty">{{ t('pb.v2.m.empty') }}</p>
     }
     @for (a of assets(); track a.id) {
       <article class="mat" data-testid="material-item">
         <div class="mat-head">
           <span class="kind-chip">{{ kindLabel(a) }}</span>
           <span class="mat-name">{{ a.fileName }}</span>
-          @if (a.phase) { <span class="phase">{{ a.phase === 'Pre' ? '面试前' : '面试后' }}</span> }
+          @if (a.phase) { <span class="phase">{{ a.phase === 'Pre' ? t('pb.v2.m.phasePre') : t('pb.v2.m.phasePost') }}</span> }
           <span class="mat-date">{{ displayDate(a) }}</span>
           <span class="spacer"></span>
-          <label class="assign">归属
+          <label class="assign">{{ t('pb.v2.m.assign') }}
             <select class="fld sm" [ngModel]="a.roundId ?? ''" (ngModelChange)="reassign(a, $event)">
-              <option value="">沟通记录(条目级)</option>
+              <option value="">{{ t('pb.v2.m.commOption') }}</option>
               @for (r of rounds(); track r.id) {
                 <option [value]="r.id">Round {{ r.order }} · {{ r.stage }}</option>
               }
             </select>
           </label>
-          <button type="button" class="icon-btn danger" (click)="remove(a)" title="删除">
+          <button type="button" class="icon-btn danger" (click)="remove(a)" [title]="t('common.delete')">
             <mat-icon>delete_outline</mat-icon>
           </button>
         </div>
@@ -49,38 +51,38 @@ import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
         @if (metaOf(a); as m) {
           @if (m.category || m.interviewAt || m.from) {
             <div class="parsed">
-              @if (m.category) { <span>分类:<b>{{ categoryLabel(m.category) }}</b></span> }
-              @if (m.from) { <span>发件人:<b>{{ m.from }}</b></span> }
-              @if (m.date) { <span>日期:<b>{{ m.date }}</b></span> }
-              @if (m.interviewAt) { <span>面试时间:<b>{{ m.interviewAt }}</b></span> }
-              @if (m.interviewers?.length) { <span>面试官:<b>{{ m.interviewers!.join('、') }}</b></span> }
-              @if (m.format) { <span>形式:<b>{{ m.format }}</b></span> }
-              @if (m.summary) { <span class="sum">摘要:{{ m.summary }}</span> }
+              @if (m.category) { <span>{{ t('pb.v2.m.fCategory') }}<b>{{ categoryLabel(m.category) }}</b></span> }
+              @if (m.from) { <span>{{ t('pb.v2.m.fFrom') }}<b>{{ m.from }}</b></span> }
+              @if (m.date) { <span>{{ t('pb.v2.m.fDate') }}<b>{{ m.date }}</b></span> }
+              @if (m.interviewAt) { <span>{{ t('pb.v2.m.fWhen') }}<b>{{ m.interviewAt }}</b></span> }
+              @if (m.interviewers?.length) { <span>{{ t('pb.v2.m.fInterviewers') }}<b>{{ joinNamesOf(m.interviewers!) }}</b></span> }
+              @if (m.format) { <span>{{ t('pb.v2.m.fFormat') }}<b>{{ formatLabel(t, m.format) }}</b></span> }
+              @if (m.summary) { <span class="sum">{{ t('pb.v2.m.fSummary') }}{{ m.summary }}</span> }
             </div>
           }
         }
 
         <div class="mat-actions">
           @if (a.kind === 'Audio') {
-            <button type="button" class="mini-btn" (click)="loadFile(a)">▶ 播放录音</button>
+            <button type="button" class="mini-btn" (click)="loadFile(a)">{{ t('pb.v2.m.playAudio') }}</button>
           }
           @if (hasBody(a)) {
             <button type="button" class="mini-btn" (click)="toggleBody(a)">
-              {{ expandedId() === a.id ? '收起原文' : '查看原文' }}
+              {{ expandedId() === a.id ? t('pb.v2.m.collapseBody') : t('pb.v2.m.viewBody') }}
             </button>
           }
           @if (metaOf(a)?.screenshotAssetId) {
-            <button type="button" class="mini-btn" (click)="loadShot(a)">查看截图</button>
+            <button type="button" class="mini-btn" (click)="loadShot(a)">{{ t('pb.v2.m.viewShot') }}</button>
           }
-          @if (a.fileExists === false) { <span class="lost">⚠ 文件已丢失(巡检标记)</span> }
+          @if (a.fileExists === false) { <span class="lost">{{ t('pb.v2.m.fileLost') }}</span> }
         </div>
 
         @if (fileUrl(a.id); as url) {
           @if (a.kind === 'Audio') { <audio controls [src]="url" class="player"></audio> }
-          @else { <img [src]="url" class="shot-img" alt="材料文件"> }
+          @else { <img [src]="url" class="shot-img" [alt]="t('pb.v2.m.imgAltMaterial')"> }
         }
         @if (shotUrl() && shotFor() === a.id) {
-          <img [src]="shotUrl()" class="shot-img" alt="粘贴的截图原图">
+          <img [src]="shotUrl()" class="shot-img" [alt]="t('pb.v2.m.imgAltShot')">
         }
         @if (expandedId() === a.id) {
           <div class="body-box">
@@ -136,6 +138,8 @@ export class MaterialsListComponent {
 
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
 
   readonly expandedId = signal<string | null>(null);
   readonly bodyText = signal('');
@@ -148,24 +152,29 @@ export class MaterialsListComponent {
     return safeJson<AssetMeta>(a.metaJson);
   }
 
+  readonly formatLabel = formatLabel;
+
+  joinNamesOf(names: string[]): string {
+    return joinNames(this.i18n, names);
+  }
+
   kindLabel(a: InterviewAsset): string {
     const m = this.metaOf(a);
-    if (m?.channel === 'email' || (a.kind === 'Text' && m?.category)) return '邮件';
+    if (m?.channel === 'email' || (a.kind === 'Text' && m?.category)) return this.t('pb.v2.m.kindEmail');
     switch (a.kind) {
-      case 'Audio': return '录音';
-      case 'Transcript': return '转写';
-      case 'Notes': return '备注';
-      case 'Text': return '文本';
-      case 'Guidance': return '指导材料';
+      case 'Audio': return this.t('pb.v2.m.kindAudio');
+      case 'Transcript': return this.t('pb.v2.m.kindTranscript');
+      case 'Notes': return this.t('pb.v2.m.kindNotes');
+      case 'Text': return this.t('pb.v2.m.kindText');
+      case 'Guidance': return this.t('pb.v2.m.kindGuidance');
       default: return a.kind;
     }
   }
 
   categoryLabel(c: string): string {
-    return ({
-      invitation: '面试邀约', reschedule: '改期', rejection: '拒绝',
-      followup: '跟进', other: '其它'
-    } as Record<string, string>)[c] ?? c;
+    const key = 'pb.v2.cat.' + c;
+    const v = this.t(key);
+    return v === key ? c : v;
   }
 
   displayDate(a: InterviewAsset): string {
@@ -189,7 +198,7 @@ export class MaterialsListComponent {
         next.set(a.id, URL.createObjectURL(blob));
         this.fileUrls.set(next);
       },
-      error: () => this.snack.open('文件加载失败(可能已丢失)', '关闭', { duration: 3000 })
+      error: () => this.snack.open(this.t('pb.v2.m.fileLoadFailed'), this.t('common.close'), { duration: 3000 })
     });
   }
 
@@ -199,22 +208,22 @@ export class MaterialsListComponent {
     if (this.shotFor() === a.id && this.shotUrl()) { this.shotUrl.set(null); return; }
     this.api.audioBlob(this.entryId(), shotId).subscribe({
       next: blob => { this.shotUrl.set(URL.createObjectURL(blob)); this.shotFor.set(a.id); },
-      error: () => this.snack.open('截图加载失败', '关闭', { duration: 3000 })
+      error: () => this.snack.open(this.t('pb.v2.m.shotLoadFailed'), this.t('common.close'), { duration: 3000 })
     });
   }
 
   toggleBody(a: InterviewAsset): void {
     if (this.expandedId() === a.id) { this.expandedId.set(null); return; }
     this.expandedId.set(a.id);
-    this.bodyText.set('加载中…');
+    this.bodyText.set(this.t('pb.v2.d.loading'));
     this.bodySegs.set([]);
     this.api.getTranscript(this.entryId(), a.id).subscribe({
       next: t => {
         const segs = safeJson<TranscriptSegment[]>(t.segmentsJson);
         if (segs?.length) this.bodySegs.set(segs);
-        this.bodyText.set(t.transcriptText ?? '(无原文)');
+        this.bodyText.set(t.transcriptText ?? this.t('pb.v2.m.noBody'));
       },
-      error: () => this.bodyText.set('(原文读取失败)')
+      error: () => this.bodyText.set(this.t('pb.v2.m.bodyFailed'))
     });
   }
 
@@ -223,17 +232,17 @@ export class MaterialsListComponent {
     if ((a.roundId ?? null) === target) return;
     this.api.reassignAsset(this.entryId(), a.id, target).subscribe({
       next: () => {
-        this.snack.open(target ? '已移入所选轮次' : '已移到沟通记录', '关闭', { duration: 2200 });
+        this.snack.open(target ? this.t('pb.v2.m.movedToRound') : this.t('pb.v2.m.movedToComm'), this.t('common.close'), { duration: 2200 });
         this.changed.emit();
       },
-      error: () => this.snack.open('改归属失败', '关闭', { duration: 3000 })
+      error: () => this.snack.open(this.t('pb.v2.m.reassignFailed'), this.t('common.close'), { duration: 3000 })
     });
   }
 
   remove(a: InterviewAsset): void {
     this.api.deleteAsset(this.entryId(), a.id).subscribe({
-      next: () => { this.snack.open('已删除', '关闭', { duration: 2000 }); this.changed.emit(); },
-      error: () => this.snack.open('删除失败', '关闭', { duration: 3000 })
+      next: () => { this.snack.open(this.t('pb.v2.m.deleted'), this.t('common.close'), { duration: 2000 }); this.changed.emit(); },
+      error: () => this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 })
     });
   }
 }

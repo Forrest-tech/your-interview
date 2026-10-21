@@ -18,6 +18,8 @@ import {
   PrepBlock, PrepQuestionItem, PrepReport, PrepSection, prepStdText, safeJson
 } from '../v2.models';
 import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
+import { I18nService } from '../../../../core/i18n/i18n.service';
+import { makeV2Fmt, makeV2T } from '../v2.helpers';
 import { ExportBlock, ExportDoc } from '../export/export-doc';
 
 /**
@@ -35,30 +37,30 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     <div class="prep" [style.--qa-scale]="zoom.scale()">
       <div class="prep-head">
         <div>
-          <div class="ph-title">备考报告</div>
+          <div class="ph-title">{{ t('pb.v2.p.title') }}</div>
           @if (report(); as r) {
             <div class="ph-sub">
-              生成于 {{ (r.generatedAt ?? '').slice(0, 16).replace('T', ' ') }}
-              · 数据来源:JD {{ r.sources?.jd ? '✓' : '—' }}
-              / 公司背景 {{ r.sources?.company ? '✓' : '—' }}
-              / 机经 {{ r.sources?.experiences ? '✓' : '—' }}
-              / 本投递简历 {{ r.sources?.resume ? '✓' : '—' }}
-              / 往期原题 {{ r.sources?.pastQuestions ?? 0 }} 道
-              / 短板 {{ r.sources?.weaknesses ?? 0 }} 项
+              {{ fmt('pb.v2.p.generatedAt', { when: (r.generatedAt ?? '').slice(0, 16).replace('T', ' ') }) }}
+              · {{ t('pb.v2.p.sourcesLabel') }}:{{ t('pb.v2.p.srcJd') }} {{ r.sources?.jd ? '✓' : '—' }}
+              / {{ t('pb.v2.p.srcCompany') }} {{ r.sources?.company ? '✓' : '—' }}
+              / {{ t('pb.v2.p.srcExp') }} {{ r.sources?.experiences ? '✓' : '—' }}
+              / {{ t('pb.v2.p.srcResume') }} {{ r.sources?.resume ? '✓' : '—' }}
+              / {{ fmt('pb.v2.p.srcPast', { n: r.sources?.pastQuestions ?? 0 }) }}
+              / {{ fmt('pb.v2.p.srcWeak', { n: r.sources?.weaknesses ?? 0 }) }}
             </div>
           } @else {
-            <div class="ph-sub">按真实面试流程生成:寒暄 → 自我介绍 → 项目深挖 → 技术问答 → 行为题 → 反问 → 收尾。</div>
+            <div class="ph-sub">{{ t('pb.v2.p.defaultSub') }}</div>
           }
         </div>
         <span class="spacer"></span>
         <app-qa-zoom></app-qa-zoom>
-        <button mat-stroked-button (click)="openIntel()">全网面经搜索</button>
-        <button mat-stroked-button (click)="openGlassdoor()">Glassdoor 面经</button>
+        <button mat-stroked-button (click)="openIntel()">{{ t('pb.v2.p.intelSearch') }}</button>
+        <button mat-stroked-button (click)="openGlassdoor()">{{ t('pb.v2.p.glassdoor') }}</button>
         @if (report()) {
-          <button mat-stroked-button (click)="openExport()">导出备考报告</button>
+          <button mat-stroked-button (click)="openExport()">{{ t('pb.v2.p.exportPrep') }}</button>
         }
         <button mat-raised-button color="primary" (click)="generate()" [disabled]="busy()">
-          {{ busy() ? '生成中…' : (report() ? '重新生成' : '生成备考报告') }}
+          {{ busy() ? t('pb.v2.p.generating') : (report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')) }}
         </button>
       </div>
       @if (notice()) { <p class="notice">{{ notice() }}</p> }
@@ -66,17 +68,17 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
 
       @if (!report()) {
         <div class="gen-box">
-          <label>过往面经 / 经历材料(可选,粘贴文本 —— 机经的一手来源)
+          <label>{{ t('pb.v2.p.genExpLabel') }}
             <textarea rows="4" class="fld" [ngModel]="experiencesDraft()"
                       (ngModelChange)="experiencesDraft.set($event)"
-                      placeholder="粘贴这个岗位的面经、你准备的项目经历要点…"></textarea>
+                      [placeholder]="t('pb.v2.p.genExpPh')"></textarea>
           </label>
-          <label>本投递简历要点(可选)
+          <label>{{ t('pb.v2.p.genResumeLabel') }}
             <textarea rows="3" class="fld" [ngModel]="resumeDraft()"
                       (ngModelChange)="resumeDraft.set($event)"
-                      placeholder="留空则只用 JD 与题库生成"></textarea>
+                      [placeholder]="t('pb.v2.p.genResumePh')"></textarea>
           </label>
-          <p class="hint">生成会综合:JD、公司背景、粘贴的机经、本投递简历、题库里过去类似岗位的原题、你的技术短板。</p>
+          <p class="hint">{{ t('pb.v2.p.genHint') }}</p>
         </div>
       } @else {
         <div class="prep-body">
@@ -98,17 +100,17 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                         <textarea class="fld qa-text" rows="6" [ngModel]="blockDraft()"
                                   (ngModelChange)="blockDraft.set($event)"></textarea>
                         <div class="row">
-                          <button mat-raised-button color="primary" (click)="saveBlock(s, $index)">保存</button>
-                          <button mat-button (click)="editingBlock.set(null)">取消</button>
+                          <button mat-raised-button color="primary" (click)="saveBlock(s, $index)">{{ t('common.save') }}</button>
+                          <button mat-button (click)="editingBlock.set(null)">{{ t('common.cancel') }}</button>
                         </div>
                       } @else {
                         <p class="qa-text pre">{{ b.userText || b.text }}</p>
                         <div class="row">
                           <button type="button" class="mini-btn" (click)="playText(b.userText || b.text || '')">
-                            {{ tts.playingKey() === tts.keyFor(b.userText || b.text || '') ? '⏸ 停止' : '▶ 朗读' }}
+                            {{ tts.playingKey() === tts.keyFor(b.userText || b.text || '') ? t('pb.v2.p.stop') : t('pb.v2.p.play') }}
                           </button>
-                          <button type="button" class="mini-btn" (click)="editBlock(s, $index, b)">✎ 编辑</button>
-                          @if (b.userText) { <span class="mine-tag">已按你的版本</span> }
+                          <button type="button" class="mini-btn" (click)="editBlock(s, $index, b)">{{ t('pb.v2.p.edit') }}</button>
+                          @if (b.userText) { <span class="mine-tag">{{ t('pb.v2.p.mineTag') }}</span> }
                         </div>
                       }
                     </div>
@@ -124,7 +126,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                 @for (q of sortedQuestions(s); track $index) {
                   <article class="pq" [class.weak]="q.weaknessRelated" data-testid="prep-question">
                     <div class="pq-head">
-                      @if (q.weaknessRelated) { <span class="weak-pin">📌 短板相关</span> }
+                      @if (q.weaknessRelated) { <span class="weak-pin">{{ t('pb.v2.p.weakPin') }}</span> }
                       <span class="pq-text qa-text">{{ q.question }}</span>
                     </div>
                     @if (q.sourceTags?.length) {
@@ -132,24 +134,24 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                     }
                     @if (q.knowledgeId) {
                       <div class="sync-row">
-                        <span class="sync-tag">已在 Tech Stack</span>
-                        <span class="sync-note">答案与 Tech Stack 是同一份,在这里改会同步回去</span>
+                        <span class="sync-tag">{{ t('pb.v2.p.inStack') }}</span>
+                        <span class="sync-note">{{ t('pb.v2.p.syncNote') }}</span>
                       </div>
                       <div class="sync-answer">
-                        <div class="sa-label">Tech Stack 里的答案</div>
+                        <div class="sa-label">{{ t('pb.v2.p.stackAnswerLabel') }}</div>
                         @if (editingSyncQ() === q.knowledgeId) {
                           <textarea class="fld qa-text" rows="5" [ngModel]="syncDraft()"
                                     (ngModelChange)="syncDraft.set($event)"></textarea>
                           <div class="row">
-                            <button mat-raised-button color="primary" (click)="saveSyncAnswer(q)">保存并同步</button>
-                            <button mat-button (click)="editingSyncQ.set(null)">取消</button>
+                            <button mat-raised-button color="primary" (click)="saveSyncAnswer(q)">{{ t('pb.v2.p.saveSync') }}</button>
+                            <button mat-button (click)="editingSyncQ.set(null)">{{ t('common.cancel') }}</button>
                           </div>
                         } @else {
-                          <p class="qa-text pre">{{ knowledgeAnswer(q.knowledgeId) || '(Tech Stack 里暂无答案)' }}</p>
+                          <p class="qa-text pre">{{ knowledgeAnswer(q.knowledgeId) || t('pb.v2.p.stackNoAnswer') }}</p>
                           <div class="row">
                             <button type="button" class="mini-btn"
-                                    (click)="playText(knowledgeAnswer(q.knowledgeId))">▶ 朗读</button>
-                            <button type="button" class="mini-btn" (click)="editSyncAnswer(q)">✎ 编辑(同步 Tech Stack)</button>
+                                    (click)="playText(knowledgeAnswer(q.knowledgeId))">{{ t('pb.v2.p.play') }}</button>
+                            <button type="button" class="mini-btn" (click)="editSyncAnswer(q)">{{ t('pb.v2.p.editSync') }}</button>
                           </div>
                         }
                       </div>
@@ -158,7 +160,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                         @if (std.text || true) {
                           <div class="std-line">
                             <span class="std-label">{{ std.label }}</span>
-                            @if (std.isUser) { <span class="mine-tag">已按你的版本</span> }
+                            @if (std.isUser) { <span class="mine-tag">{{ t('pb.v2.p.mineTag') }}</span> }
                             <span class="spacer"></span>
                             <button type="button" class="mini-btn" [disabled]="!std.text"
                                     (click)="playText(std.text)">▶</button>
@@ -170,8 +172,8 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                                       (ngModelChange)="prepStdDraft.set($event)"></textarea>
                             <div class="row">
                               <button mat-raised-button color="primary"
-                                      (click)="savePrepStd(s, q, std.key)">保存</button>
-                              <button mat-button (click)="editingPrepStd.set(null)">取消</button>
+                                      (click)="savePrepStd(s, q, std.key)">{{ t('common.save') }}</button>
+                              <button mat-button (click)="editingPrepStd.set(null)">{{ t('common.cancel') }}</button>
                             </div>
                           } @else if (std.text) {
                             <p class="qa-text pre std-p">{{ std.text }}</p>
@@ -179,19 +181,19 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                         }
                       }
                       <div class="join-row">
-                        <label>分类
+                        <label>{{ t('pb.v2.p.category') }}
                           <input class="fld sm" list="prep-topics"
                                  [ngModel]="joinCategory()[q.question]"
                                  (ngModelChange)="setJoinCat(q.question, $event)"
-                                 placeholder="如 C# / .NET">
+                                 [placeholder]="t('pb.v2.p.categoryPh')">
                           <datalist id="prep-topics">
                             @for (tp of topics(); track tp) { <option [value]="tp"></option> }
                           </datalist>
                         </label>
                         <button mat-stroked-button (click)="joinStack(s, q)" [disabled]="busy()">
-                          加入 Tech Stack
+                          {{ t('pb.v2.p.joinStack') }}
                         </button>
-                        <span class="join-note">来源自动标注:{{ entry().companyName }} · Round {{ round().order }} · {{ round().scheduledDate ?? '' }}</span>
+                        <span class="join-note">{{ fmt('pb.v2.p.sourceAuto', { company: entry().companyName, n: round().order, date: round().scheduledDate ?? '' }) }}</span>
                       </div>
                     }
                   </article>
@@ -201,8 +203,8 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
 
             @if (guidanceAssets().length) {
               <section class="psec">
-                <h4>指导材料(历史)</h4>
-                <p class="hint">这些是之前生成的指导材料,完整件在「材料」页签里:</p>
+                <h4>{{ t('pb.v2.p.guidanceTitle') }}</h4>
+                <p class="hint">{{ t('pb.v2.p.guidanceHint') }}</p>
                 <ul class="pts">
                   @for (g of guidanceAssets(); track g.id) { <li>{{ g.fileName }}</li> }
                 </ul>
@@ -281,6 +283,9 @@ export class PrepReportComponent {
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
+  private readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
+  readonly fmt = makeV2Fmt(this.i18n);
   readonly zoom = inject(QaZoomService);
   readonly tts = inject(TtsPlayerService);
 
@@ -370,8 +375,8 @@ export class PrepReportComponent {
     const sp = prepStdText(q.stdSpoken);
     const te = prepStdText(q.stdTechnical);
     return [
-      { key: 'spoken', label: '口语版', text: sp.text, isUser: sp.isUser },
-      { key: 'technical', label: '技术版', text: te.text, isUser: te.isUser }
+      { key: 'spoken', label: this.t('pb.v2.p.spoken'), text: sp.text, isUser: sp.isUser },
+      { key: 'technical', label: this.t('pb.v2.p.technical'), text: te.text, isUser: te.isUser }
     ];
   }
 
@@ -392,11 +397,11 @@ export class PrepReportComponent {
       }).toPromise();
       const parsed = safeJson<PrepReport>(r?.prepReportJson);
       this.notice.set(parsed?.generatedBy === 'local-aggregation'
-        ? '已用本地聚合生成(AI 网关未配置/未返回):内容来自 JD、题库往期原题与短板,接入 AI 后重新生成可得到完整稿子。'
-        : '备考报告已生成。');
+        ? this.t('pb.v2.p.localNotice')
+        : this.t('pb.v2.p.generatedOk'));
       this.changed.emit();
     } catch (e) {
-      this.notice.set('生成失败:' + (e instanceof Error ? e.message : '未知错误'));
+      this.notice.set(this.fmt('pb.v2.p.generateFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.rec.unknownError') }));
     } finally {
       this.busy.set(false);
     }
@@ -463,9 +468,9 @@ export class PrepReportComponent {
         this.knowledge.set(map);
       }
       this.editingSyncQ.set(null);
-      this.snack.open('已同步到 Tech Stack', '关闭', { duration: 2200 });
+      this.snack.open(this.t('pb.v2.p.synced'), this.t('common.close'), { duration: 2200 });
     } catch {
-      this.snack.open('同步失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.p.syncFailed'), this.t('common.close'), { duration: 3000 });
     } finally {
       this.busy.set(false);
     }
@@ -478,7 +483,7 @@ export class PrepReportComponent {
   async joinStack(s: PrepSection, q: PrepQuestionItem): Promise<void> {
     const cat = (this.joinCategory()[q.question] || q.category || '').trim();
     if (!cat) {
-      this.snack.open('先选一个分类再加入 Tech Stack', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.p.needCategory'), this.t('common.close'), { duration: 3000 });
       return;
     }
     this.busy.set(true);
@@ -507,12 +512,12 @@ export class PrepReportComponent {
           const item = sec?.questions?.find(x => x.question === q.question);
           if (item) { item.knowledgeId = newId; await this.persist(next); }
         }
-        this.snack.open('已加入 Tech Stack', '关闭', { duration: 2500 });
+        this.snack.open(this.t('pb.v2.p.joined'), this.t('common.close'), { duration: 2500 });
       } else {
-        this.snack.open('该题已在 Tech Stack 里(按来源+题面判重跳过)', '关闭', { duration: 3000 });
+        this.snack.open(this.t('pb.v2.p.alreadyIn'), this.t('common.close'), { duration: 3000 });
       }
     } catch {
-      this.snack.open('加入失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.p.joinFailed'), this.t('common.close'), { duration: 3000 });
     } finally {
       this.busy.set(false);
     }
@@ -546,13 +551,13 @@ export class PrepReportComponent {
     const r = this.round();
     const date = new Date().toISOString().slice(0, 10);
     const data: ExportDialogData = {
-      title: '导出备考报告',
+      title: this.t('pb.v2.p.exportPrep'),
       subtitle: `${e.companyName} · Round ${r.order} ${r.stage}`,
-      fileBase: `${e.companyName}-Round${r.order}-备考-${date}`,
+      fileBase: `${e.companyName}-Round${r.order}-${this.t('pb.v2.p.fileSuffix')}-${date}`,
       storageKey: 'prep',
       toggles: [
-        { key: 'flow', label: '流程稿与要点(寒暄/介绍/反问/收尾)', defaultOn: true },
-        { key: 'qa', label: '题目与标准答案', defaultOn: true }
+        { key: 'flow', label: this.t('pb.v2.p.tgFlow'), defaultOn: true },
+        { key: 'qa', label: this.t('pb.v2.p.tgQa'), defaultOn: true }
       ],
       buildDoc: sel => this.buildExportDoc(sel)
     };
@@ -583,13 +588,13 @@ export class PrepReportComponent {
         const sp = prepStdText(q.stdSpoken);
         const te = prepStdText(q.stdTechnical);
         const linked = q.knowledgeId ? this.knowledgeAnswer(q.knowledgeId) : '';
-        if (linked) blocks.push({ kind: 'std', label: '标准答案(Tech Stack)', text: linked });
-        if (sp.text) blocks.push({ kind: 'std', label: '口语版', text: sp.text });
-        if (te.text) blocks.push({ kind: 'std', label: '技术版', text: te.text });
+        if (linked) blocks.push({ kind: 'std', label: this.t('pb.v2.p.docStdStack'), text: linked });
+        if (sp.text) blocks.push({ kind: 'std', label: this.t('pb.v2.p.spoken'), text: sp.text });
+        if (te.text) blocks.push({ kind: 'std', label: this.t('pb.v2.p.technical'), text: te.text });
       }
     }
     return {
-      title: `${e.companyName} · Round ${r.order} ${r.stage} 备考报告`,
+      title: this.fmt('pb.v2.p.docTitle', { company: e.companyName, n: r.order, stage: r.stage }),
       subtitle: `${e.role}${r.scheduledDate ? ' · ' + r.scheduledDate : ''}`,
       blocks
     };

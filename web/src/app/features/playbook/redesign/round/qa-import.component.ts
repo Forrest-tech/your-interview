@@ -11,6 +11,8 @@ import {
 } from '../../../../core/models/api.models';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { parseQuestionReview } from '../v2.models';
+import { I18nService } from '../../../../core/i18n/i18n.service';
+import { makeV2Fmt, makeV2T } from '../v2.helpers';
 
 interface Candidate {
   question: InterviewQuestion;
@@ -38,20 +40,20 @@ const BEHAVIORAL_HINTS = [
     <div class="qa-import">
       <div class="qi-head">
         <div>
-          <div class="qi-title">把本轮问答沉淀进 Tech Stack</div>
-          <p class="qi-sub">技术题默认勾选、行为题默认不勾;分类可逐条改。导入后在备考报告与 Tech Stack 里都是同一条记录。</p>
+          <div class="qi-title">{{ t('pb.v2.q.title') }}</div>
+          <p class="qi-sub">{{ t('pb.v2.q.sub') }}</p>
         </div>
         <span class="spacer"></span>
-        <button mat-stroked-button (click)="extract()" [disabled]="busy()">从转写抽取问答</button>
+        <button mat-stroked-button (click)="extract()" [disabled]="busy()">{{ t('pb.v2.rec.extractQa') }}</button>
         <button mat-raised-button color="primary" (click)="importSelected()"
                 [disabled]="busy() || !selectedCount()">
-          入库所选({{ selectedCount() }})
+          {{ fmt('pb.v2.q.importSelected', { n: selectedCount() }) }}
         </button>
       </div>
       @if (notice()) { <p class="notice">{{ notice() }}</p> }
 
       @if (!candidates().length) {
-        <p class="empty">本轮还没有题目。先在「面试实录」里粘贴/生成转写,再点「从转写抽取问答」——或者用「＋ 添加材料」把问答记成转写文本。</p>
+        <p class="empty">{{ t('pb.v2.q.empty') }}</p>
       }
       @for (c of candidates(); track c.question.id) {
         <div class="cand" data-testid="qa-candidate">
@@ -59,14 +61,14 @@ const BEHAVIORAL_HINTS = [
                         (change)="toggle(c, $event.checked)"></mat-checkbox>
           <div class="cand-main">
             <div class="cand-q">{{ c.question.questionText }}
-              @if (scoreOf(c.question) != null) { <span class="cand-score">本题 {{ scoreOf(c.question) }} 分</span> }
-              @if (c.alreadyIn) { <span class="in-tag">已在 Tech Stack</span> }
+              @if (scoreOf(c.question) != null) { <span class="cand-score">{{ fmt('pb.v2.rec.qScore', { n: scoreOf(c.question)! }) }}</span> }
+              @if (c.alreadyIn) { <span class="in-tag">{{ t('pb.v2.p.inStack') }}</span> }
             </div>
-            @if (c.question.askedBy) { <div class="cand-by">提问人:{{ c.question.askedBy }}</div> }
+            @if (c.question.askedBy) { <div class="cand-by">{{ fmt('pb.v2.rec.askedBy', { name: c.question.askedBy }) }}</div> }
             @if (c.question.myAnswerText) {
               <div class="cand-a">{{ c.question.myAnswerText }}</div>
             }
-            <label class="cand-cat">分类
+            <label class="cand-cat">{{ t('pb.v2.p.category') }}
               <input class="fld sm" list="qa-topics" [ngModel]="c.category"
                      (ngModelChange)="c.category = $event" [disabled]="c.alreadyIn">
             </label>
@@ -109,6 +111,9 @@ export class QaImportComponent {
 
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly i18n = inject(I18nService);
+  readonly t = makeV2T(this.i18n);
+  readonly fmt = makeV2Fmt(this.i18n);
 
   readonly busy = signal(false);
   readonly notice = signal<string | null>(null);
@@ -160,10 +165,10 @@ export class QaImportComponent {
     try {
       const r = await this.api.extractQuestions(this.entry().id, this.round().id).toPromise();
       this.notice.set(r && r.created > 0
-        ? `已抽出 ${r.created} 道题。` : '没有抽到新题(本轮已有题目或转写为空)。');
+        ? this.fmt('pb.v2.q.extracted', { n: r.created }) : this.t('pb.v2.q.extractNone'));
       this.changed.emit();
     } catch (e) {
-      this.notice.set('抽取失败:' + (e instanceof Error ? e.message : '未知错误'));
+      this.notice.set(this.fmt('pb.v2.rec.extractFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.rec.unknownError') }));
     } finally {
       this.busy.set(false);
     }
@@ -190,13 +195,14 @@ export class QaImportComponent {
         }))
       }).toPromise();
       this.snack.open(
-        `已入库 ${res?.created ?? 0} 道${res?.skipped ? `,跳过重复 ${res.skipped} 道` : ''}`,
-        '关闭', { duration: 3000 });
+        this.fmt('pb.v2.q.imported', { n: res?.created ?? 0 })
+          + (res?.skipped ? this.fmt('pb.v2.q.importedSkipped', { n: res.skipped }) : ''),
+        this.t('common.close'), { duration: 3000 });
       const items = await this.api.listKnowledge().toPromise();
       if (items) this.knowledgeItems.set(items);
       this.changed.emit();
     } catch {
-      this.snack.open('入库失败', '关闭', { duration: 3000 });
+      this.snack.open(this.t('pb.v2.q.importFailed'), this.t('common.close'), { duration: 3000 });
     } finally {
       this.busy.set(false);
     }

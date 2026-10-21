@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { QaZoomService } from './qa-zoom.service';
+import { I18nService } from '../i18n/i18n.service';
 
 /**
  * 字号控件:− / 百分比(点击可直接输入)/ ＋。
@@ -12,22 +13,22 @@ import { QaZoomService } from './qa-zoom.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="qa-zoom" role="group" aria-label="问答文本字号">
-      <span class="qa-zoom-label">字号</span>
+    <div class="qa-zoom" role="group" [attr.aria-label]="i18n.t('zoom.aria')">
+      <span class="qa-zoom-label">{{ i18n.t('zoom.label') }}</span>
       <button type="button" class="zbtn" (click)="zoom.decrease()"
-              [disabled]="zoom.level() <= 80" title="减小">−</button>
+              [disabled]="zoom.level() <= 80" [title]="i18n.t('zoom.decrease')">−</button>
       @if (editing()) {
         <input class="zpct-input" type="text" inputmode="numeric"
                [ngModel]="draft()" (ngModelChange)="onDraft($event)"
                (keyup.enter)="commit()" (keyup.escape)="editing.set(false)"
                (blur)="commit()" autofocus>
       } @else {
-        <button type="button" class="zpct" (click)="startEdit()" title="点击直接输入百分比">
+        <button type="button" class="zpct" (click)="startEdit()" [title]="i18n.t('zoom.inputTitle')">
           {{ zoom.level() }}%
         </button>
       }
       <button type="button" class="zbtn" (click)="zoom.increase()"
-              [disabled]="zoom.level() >= 400" title="放大">＋</button>
+              [disabled]="zoom.level() >= 400" [title]="i18n.t('zoom.increase')">＋</button>
     </div>
   `,
   styles: [`
@@ -45,6 +46,7 @@ import { QaZoomService } from './qa-zoom.service';
 })
 export class QaZoomComponent {
   readonly zoom = inject(QaZoomService);
+  readonly i18n = inject(I18nService);
   readonly editing = signal(false);
   readonly draft = signal('');
 

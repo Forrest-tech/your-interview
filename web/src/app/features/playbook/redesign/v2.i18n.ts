@@ -347,8 +347,6 @@ export const V2_I18N: Record<string, { zh: string; en: string; fr: string }> = {
   'pb.v2.i.pasteTranscriptPh': { zh: '粘贴转写文本,或直接 Ctrl+V 粘贴截图 / 录音文件…', en: 'Paste the transcript, or paste a screenshot / recording file with Ctrl+V…', fr: 'Collez la transcription, ou collez une capture / un fichier audio avec Ctrl+V…' },
   'pb.v2.i.pasteNotePh': { zh: '写下这条备注,或直接 Ctrl+V 粘贴截图…', en: 'Write this note, or paste a screenshot with Ctrl+V…', fr: 'Écrivez cette note, ou collez une capture avec Ctrl+V…' },
   'pb.v2.i.pasteAudioWrongType': { zh: '录音文件请在「录音·转写」类型下粘贴', en: 'Paste recording files under the “Recording / transcript” type', fr: 'Collez les fichiers audio sous le type « Enregistrement / transcription »' },
-  'pb.v2.i.attachShot': { zh: '附一张截图(原图,可选)', en: 'Attach a screenshot (original, optional)', fr: 'Joindre une capture (originale, optionnel)' },
-  'pb.v2.i.shotHint': { zh: '截图也可直接 Ctrl+V 粘贴到面板里', en: 'You can also paste a screenshot straight into this panel with Ctrl+V', fr: 'Vous pouvez aussi coller une capture directement dans ce panneau avec Ctrl+V' },
   'pb.v2.i.shotReplaced': { zh: '截图已替换为新的一张', en: 'Screenshot replaced with the new one', fr: 'Capture remplacée par la nouvelle' },
   'pb.v2.i.removeShot': { zh: '移除截图', en: 'Remove screenshot', fr: 'Retirer la capture' },
   'pb.v2.i.clipName': { zh: '剪贴板图片', en: 'clipboard-image', fr: 'image-presse-papiers' },

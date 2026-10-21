@@ -32,7 +32,8 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
  * 可改;选新建轮次且有时间则建轮次并进应用内日历)→ 保存。
  * 面板不设标题输入框:标题一律保存时自动生成 —— 邮件取主题(无主题回落
  * 发件人/首行)、录音取文件名、转写取首段说话人行、备注取首行(见 autoFileName)。
- * 任何类型都可附一张截图原图 —— 截图是附件,不是类型。
+ * 任何类型都可附一张截图原图 —— 截图是附件,不是类型;进入方式只有粘贴:
+ * 直接粘进文本框,缩略图在框内底部呈现,没有单独的截图文件按钮。
  */
 @Component({
   selector: 'app-intake-panel',
@@ -43,9 +44,9 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
       <section class="panel" data-testid="intake-panel">
         <ng-template #shotTpl>
           @if (shotFile()) {
-            <div class="shot-box" data-testid="shot-box">
+            <div class="shot-strip" data-testid="shot-box">
               <img class="shot-thumb" [src]="shotPreviewUrl()" [alt]="shotName()">
-              <span class="shot-name">{{ shotName() }}</span>
+              <span class="shot-name">{{ shotName() }} · {{ shotSizeText() }}</span>
               <button type="button" class="icon-btn" (click)="clearShot()" [attr.aria-label]="t('pb.v2.i.removeShot')">
                 <mat-icon>close</mat-icon>
               </button>
@@ -85,9 +86,12 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             </div>
           }
           @if (type() !== 'transcript' || transcriptMode() === 'text') {
-            <textarea class="paste" rows="9"
-                      [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
-                      [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
+            <div class="paste-box">
+              <textarea class="paste" rows="9"
+                        [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
+                        [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
+              <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
+            </div>
           }
           @if (type() === 'transcript' && transcriptMode() === 'upload') {
             <div class="audio-row">
@@ -102,14 +106,9 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
                 </button>
               }
             </div>
+            <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
           }
-          <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
           <div class="row">
-            <label class="file-btn">
-              <mat-icon>image</mat-icon> {{ t('pb.v2.i.attachShot') }}
-              <input type="file" accept="image/*" hidden (change)="onShot($event)">
-            </label>
-            @if (!shotFile()) { <span class="shot-hint">{{ t('pb.v2.i.shotHint') }}</span> }
             <span class="spacer"></span>
             <button mat-stroked-button (click)="close()">{{ t('common.cancel') }}</button>
             <button mat-raised-button color="primary" [disabled]="!canParse() || busy()"
@@ -232,18 +231,23 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
     .hint { font-size: 12.5px; color: var(--yi-text-muted, #777); margin: 6px 0; }
     .fld { width: 100%; border: 1px solid var(--yi-border, #ccc); border-radius: 8px;
            padding: 8px 10px; font-size: 13px; background: transparent; color: inherit; box-sizing: border-box; }
-    .paste { width: 100%; border: 1px solid var(--yi-border, #ccc); border-radius: 10px; padding: 10px 12px;
+    /* 文本框与粘入的截图同属一个带边框容器:截图不是框外附件行,
+       而是直接粘在框里 —— 缩略图条出现在框内底部。 */
+    .paste-box { border: 1px solid var(--yi-border, #ccc); border-radius: 10px; margin-top: 8px; overflow: hidden; }
+    .paste-box:focus-within { border-color: var(--yi-accent, #3f51b5); }
+    .paste { width: 100%; border: none; border-radius: 0; padding: 10px 12px;
              font-size: 13px; line-height: 1.55; background: transparent; color: inherit;
-             box-sizing: border-box; resize: vertical; margin-top: 8px; }
+             box-sizing: border-box; resize: vertical; display: block; outline: none; }
+    .paste-box .shot-strip { display: flex; border: none; border-top: 1px solid var(--yi-border, #e3e3e3);
+                             border-radius: 0; margin-top: 0; padding: 6px 8px; }
     .row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
     .spacer { flex: 1; }
     .file-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer;
                 border: 1px dashed var(--yi-border, #bbb); border-radius: 8px; padding: 6px 10px; }
     .file-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
     .shot-name { font-size: 12px; color: var(--yi-text-muted, #777); }
-    .shot-hint { font-size: 12px; color: var(--yi-text-muted, #999); }
-    .shot-box { display: inline-flex; align-items: center; gap: 9px; margin-top: 10px;
-                border: 1px solid var(--yi-border, #ccc); border-radius: 10px; padding: 6px 10px 6px 6px; }
+    .shot-strip { display: inline-flex; align-items: center; gap: 9px; margin-top: 10px;
+                  border: 1px solid var(--yi-border, #ccc); border-radius: 10px; padding: 6px 10px 6px 6px; }
     .shot-thumb { width: 54px; height: 40px; object-fit: cover; border-radius: 6px; display: block; }
     .audio-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .audio-row .file-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
@@ -372,16 +376,9 @@ export class IntakePanelComponent {
     this.step.set('input');
   }
 
-  async onShot(ev: Event): Promise<void> {
-    const input = ev.target as HTMLInputElement;
-    const f = input.files?.[0] ?? null;
-    if (f) this.setShot(await detachFile(f));
-    input.value = '';
-  }
-
   /**
-   * 截图附件统一入口(文件选择与粘贴共用同一份状态/保存路径):
-   * 附件只留一张,后来的替换先前的并给提示;缩略图用 object URL 即时预览。
+   * 截图附件入口(只有粘贴一条路,没有文件选择按钮):附件只留一张,后来的
+   * 替换先前的并给提示;缩略图用 object URL 即时预览,呈现在文本框容器内底部。
    */
   setShot(f: File): void {
     const replaced = !!this.shotFile();
@@ -403,7 +400,7 @@ export class IntakePanelComponent {
 
   /**
    * 粘贴分发(文档级监听,面板打开期间焦点在页面任意位置都接得住):
-   * - 剪贴板带图片文件 → 接住作截图附件(与文件选择同一状态/保存路径,两模式通用);
+   * - 剪贴板带图片文件 → 接住作截图附件,缩略图呈现在文本框容器内(两模式通用);
    * - 带音频文件 → 「录音·转写」类型下接住作录音附件并自动切到「上传录音」模式
    *   (与 Upload a recording 同一状态/保存路径);其它类型下不接,只提示去录音类型粘;
    * - 纯文字 → 原则上不拦截:聚焦在输入框/文本域时浏览器默认粘贴照常落入该字段,
@@ -469,6 +466,10 @@ export class IntakePanelComponent {
   }
 
   removeAudio(): void { this.audioFile.set(null); }
+
+  shotSizeText(): string {
+    return fmtFileSize(this.shotFile()?.size ?? 0);
+  }
 
   audioSizeText(): string {
     return fmtFileSize(this.audioFile()?.size ?? 0);

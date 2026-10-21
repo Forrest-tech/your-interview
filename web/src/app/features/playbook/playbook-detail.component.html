@@ -15,6 +15,7 @@
     <section class="zone zone-entry">
       <!-- ① 条目头 -->
       <header class="ehead" data-testid="entry-header">
+        <div class="ehead-left">
         <div class="ehead-main">
           <div class="ehead-titles">
             <h1>{{ e.companyName }} · {{ e.role }}</h1>
@@ -26,9 +27,11 @@
               @if (app.source) { · {{ fmt('pb.v2.d.viaSource', { src: app.source }) }} }
               @if (recruiterLine()) { · {{ t('pb.v2.d.recruiter') }} {{ recruiterLine() }} }
               · {{ fmt('pb.v2.d.readinessPct', { n: readiness() }) }}
+              @if (lastContactDate()) { · {{ t('pb.v2.d.lastContact') }} {{ lastContactDate() }} }
             } @else {
               {{ fmt('pb.v2.d.readinessPct', { n: readiness() }) }}
               @if (recruiterLine()) { · {{ t('pb.v2.d.interviewers') }} {{ recruiterLine() }} }
+              @if (lastContactDate()) { · {{ t('pb.v2.d.lastContact') }} {{ lastContactDate() }} }
             }
           </p>
           @if (editingBasic()) {
@@ -44,18 +47,6 @@
             </div>
           }
         </div>
-
-        @if (nextStep(); as ns) {
-          <aside class="next-card" data-testid="next-step-card">
-            <div class="nc-label">{{ t('pb.v2.d.nextLabel') }}</div>
-            <div class="nc-text">{{ ns.text }}</div>
-            @if (ns.btn) {
-              <button mat-raised-button color="primary" (click)="doNextStep()">{{ ns.btn }}</button>
-            }
-          </aside>
-        }
-      </header>
-
       <!-- 岗位四格条(展开说明行收在四格条容器内部底部) -->
       <div class="strip-wrap">
         <section class="strip" data-testid="info-strip">
@@ -99,7 +90,6 @@
           </section>
         }
       </div>
-
       <!-- 按钮行(上区最后一行) -->
       <div class="ehead-actions">
         <button mat-raised-button color="primary" (click)="openIntake('email')">
@@ -118,6 +108,14 @@
           </button>
         </mat-menu>
       </div>
+        </div>
+        @if (nextStep(); as ns) {
+          <aside class="next-card" data-testid="next-step-card">
+            <div class="nc-label">{{ t('pb.v2.d.nextLabel') }}</div>
+            <div class="nc-text">{{ ns.text }}</div>
+          </aside>
+        }
+      </header>
     </section>
 
     <!-- ② 统一入口 -->

@@ -52,12 +52,14 @@
 
 /* ---------- ① 条目头 ---------- */
 .ehead {
-  display: grid;
-  grid-template-columns: 1fr 300px;
+  display: flex;
   gap: 18px;
-  align-items: start;
-  @media (max-width: 820px) { grid-template-columns: 1fr; }
+  align-items: flex-start;
+  @media (max-width: 820px) { flex-direction: column; }
 }
+/* 左列是纵向流:标题/元信息 → 四格条 → 按钮行,逐段贴紧;
+   右侧下一步卡独立一列、顶部对齐,不再把整行撑高、在左列下方留空带。 */
+.ehead-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ehead-titles { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ehead-titles h1 { font-size: 23px; margin: 0; }
 .status-badge {
@@ -79,11 +81,14 @@
 .danger-item { color: #b3261e !important; }
 
 .next-card {
+  width: 300px;
+  flex: none;
+  @media (max-width: 820px) { width: auto; align-self: stretch; }
   border: 1.5px solid var(--yi-accent, #3f51b5);
   border-radius: 14px;
   padding: 14px 16px;
   .nc-label { font-size: 11px; font-weight: 800; letter-spacing: .08em; color: var(--yi-accent, #3f51b5); }
-  .nc-text { font-size: 15px; font-weight: 600; line-height: 1.5; margin: 6px 0 10px; }
+  .nc-text { font-size: 15px; font-weight: 600; line-height: 1.5; margin: 6px 0 0; }
 }
 
 /* ---------- 岗位四格条 ---------- */
@@ -113,6 +118,18 @@
   /* 展开说明行是四格条容器内部的底部行,不再靠负 margin 贴在框外。 */
   border-top: 1px solid var(--yi-border);
   padding: 13px 16px;
+  /* 展开面板封顶 + 框内滚动(2026-10-21 设计稿确认参数):长 JD/公司介绍/简历与分数说明
+     都在面板内部滚动,不再把整页撑长。滚动条纯 webkit 方案 —— 不要加
+     scrollbar-width/scrollbar-color,Chrome 会因此忽略 ::-webkit-scrollbar 样式。 */
+  .full-text, .full-note {
+    max-height: min(420px, 45vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    &::-webkit-scrollbar { width: 10px; }
+    &::-webkit-scrollbar-track { background: #e7eaee; border-radius: 5px; }
+    &::-webkit-scrollbar-thumb { background: #7d8797; border-radius: 5px; }
+    &::-webkit-scrollbar-thumb:hover { background: #3f51b5; }
+  }
   .full-text { white-space: pre-wrap; font-family: inherit; font-size: 13px; line-height: 1.65; margin: 0; }
   .full-note { font-size: 13px; line-height: 1.65; margin: 0; }
 }

@@ -93,6 +93,24 @@ export class PlaybookDetailComponent {
     return joinNames(this.i18n, [...names]);
   });
 
+  /**
+   * 最近联系(定稿头部五项之一,v2 一度漏掉):各轮 emailsJson 里日期最近
+   * 一封邮件的日期 —— 与旧版头部 latestEmail 同一口径、同一底层数据。
+   */
+  readonly lastContactDate = computed(() => {
+    let best = '';
+    for (const r of this.entry()?.rounds ?? []) {
+      try {
+        const list = JSON.parse(r.emailsJson ?? '[]') as { date?: string }[];
+        for (const m of list ?? []) {
+          const d = (m.date ?? '').slice(0, 10);
+          if (d > best) best = d;
+        }
+      } catch { /* 坏 JSON 跳过该轮 */ }
+    }
+    return best || null;
+  });
+
   /** 四格条 JD 全文:条目自身 → 关联 Tracker 投递,展示前统一清洗 HTML。 */
   readonly jdFullText = computed(() =>
     htmlToPlainText(this.entry()?.jdText) || htmlToPlainText(this.application()?.jdText));
@@ -149,10 +167,7 @@ export class PlaybookDetailComponent {
     const e = this.entry();
     if (!e) return null;
     if (this.pendingComm() > 0) {
-      return {
-        text: this.fmt('pb.v2.d.nextPendingComm', { n: this.pendingComm() }),
-        action: 'comm' as const, btn: this.t('pb.v2.d.nextGoHandle'), roundId: undefined as string | undefined
-      };
+      return { text: this.fmt('pb.v2.d.nextPendingComm', { n: this.pendingComm() }) };
     }
     const today = new Date().toISOString().slice(0, 10);
     const upcoming = this.rounds().find(r =>
@@ -160,29 +175,19 @@ export class PlaybookDetailComponent {
     if (upcoming) {
       return {
         text: this.fmt('pb.v2.d.nextPrep', { n: upcoming.order, stage: upcoming.stage }) +
-          (upcoming.scheduledDate ? `(${upcoming.scheduledDate}${upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''})` : ''),
-        action: 'prep' as const, btn: this.t('pb.v2.d.nextGoPrep'), roundId: upcoming.id as string | undefined
+          (upcoming.scheduledDate ? `(${upcoming.scheduledDate}${upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''})` : '')
       };
     }
     const unreviewed = [...this.rounds()].reverse()
       .find(r => r.outcome !== 'Pending' && !r.reviewJson);
     if (unreviewed) {
-      return {
-        text: this.fmt('pb.v2.d.nextReview', { n: unreviewed.order }),
-        action: 'review' as const, btn: this.t('pb.v2.d.nextGoReview'), roundId: unreviewed.id as string | undefined
-      };
+      return { text: this.fmt('pb.v2.d.nextReview', { n: unreviewed.order }) };
     }
     const app = this.application();
     if (app?.nextFollowUpAt && app.nextFollowUpAt.slice(0, 10) <= today) {
-      return {
-        text: this.t('pb.v2.d.nextFollow'),
-        action: 'comm' as const, btn: this.t('pb.v2.d.nextGoComm'), roundId: undefined as string | undefined
-      };
+      return { text: this.t('pb.v2.d.nextFollow') };
     }
-    return {
-      text: this.t('pb.v2.d.nextIdle'),
-      action: 'none' as const, btn: '', roundId: undefined as string | undefined
-    };
+    return { text: this.t('pb.v2.d.nextIdle') };
   });
 
   constructor() {
@@ -248,22 +253,27 @@ export class PlaybookDetailComponent {
   }
 
   /**
-   * 条目未关联投递时:按公司名 + 岗位(归一化后全等)在 Tracker 投递里找候选。
+   * 条目未关联投递时:按公司名 + 岗位在 Tracker 投递里找候选。
    * 恰好一条才认定同源 —— 用它展示四格条/简历/分数,并 additive 回填关联
    * (后端 link-application 只在当前未关联时生效,不覆盖任何已有数据);
    * 0 条或多条都不配,保持未关联(避免重复投递时乱配)。
+   *
+   * 匹配口径(2026-10-21 放宽):真实岗位标题常带变体 —— 级别前缀
+   * (Senior/Lead…)、"at <公司>" 后缀、" — 城市" 后缀、括号注记、标点差异,
+   * 上一版"归一化全等"对这些变体全部失败、头部元信息整行缺失。现归一化时
+   * 先剥掉这些噪音再比对,并允许一方词串包含另一方;公司名走同一归一化。
+   * 防误配的总闸不变:候选必须恰好 1 条。
    */
   private async tryMatchApplication(e: InterviewDetail): Promise<void> {
     try {
       // 不用服务端 search 先过滤:search 是原文包含匹配,公司名只要差一个空格/
       // 标点(条目手填 vs Tracker 抓取)候选就会被滤掉,归一化匹配无从谈起。
-      // 拉最近 50 条在客户端做归一化全等匹配(恰好 1 条才回填)。
+      // 拉最近 50 条在客户端做归一化匹配(恰好 1 条才回填)。
       const page = await this.api.get<Paged<Application>>('/api/jobs/applications', {
         page: 1, pageSize: 50
       }).toPromise();
-      const norm = (v: string) => v.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
       const hits = (page?.items ?? []).filter(a =>
-        norm(a.companyName) === norm(e.companyName) && norm(a.role) === norm(e.role));
+        nameMatches(a.companyName, e.companyName) && roleMatches(a.role, e.role, a.companyName, e.companyName));
       if (hits.length !== 1) return;
       const app = hits[0];
       this.application.set(app);
@@ -314,16 +324,6 @@ export class PlaybookDetailComponent {
     const link = this.application()?.link;
     if (link) { window.open(link, '_blank', 'noopener'); return; }
     this.expandedCell.set(this.expandedCell() === 'jd' ? null : 'jd');
-  }
-
-  doNextStep(): void {
-    const ns = this.nextStep();
-    if (!ns) return;
-    if (ns.action === 'comm') this.pageTab.set('comm');
-    else if ((ns.action === 'prep' || ns.action === 'review') && ns.roundId) {
-      this.selectedRoundId.set(ns.roundId);
-      this.pageTab.set('rounds');
-    }
   }
 
   toggleCell(cell: 'jd' | 'company' | 'resume' | 'score'): void {
@@ -463,4 +463,46 @@ function countPendingFromAssets(e: InterviewDetail): number {
       return !!m.arrangement && m.handlingStatus === 'Pending';
     } catch { return false; }
   }).length;
+}
+
+/** 名称归一化:小写、去括号注记、标点变空格、分词后重组(词间单空格)。 */
+function wordsNorm(raw: string | null | undefined): string {
+  const s = (raw ?? '').toLowerCase()
+    .replace(/[（(][^）)]*[）)]/g, ' ')
+    .replace(/[\p{P}\p{S}]+/gu, ' ');
+  return s.split(/\s+/).filter(Boolean).join(' ');
+}
+
+/** 相等,或一方词串完整包含另一方(两边都非空才谈包含)。 */
+function eqOrContains(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+/** 公司名匹配:归一化后相等或互相包含。 */
+function nameMatches(a: string, b: string): boolean {
+  return eqOrContains(wordsNorm(a), wordsNorm(b));
+}
+
+const LEVEL_WORDS = new Set([
+  'senior', 'sr', 'lead', 'principal', 'staff', 'junior', 'jr', 'intermediate', 'associate'
+]);
+
+/**
+ * 岗位归一化:在 wordsNorm 基础上再剥三类噪音 ——
+ * "at <公司>" 后缀、" — <城市>" 类破折号后缀、开头的级别词(Senior/Lead…)。
+ */
+function roleNorm(raw: string | null | undefined, company: string | null | undefined): string {
+  let s = (raw ?? '').toLowerCase();
+  const comp = (company ?? '').trim().toLowerCase();
+  if (comp) s = s.split(` at ${comp}`).join(' ');
+  s = s.replace(/\s+[—–]\s+.*$/, ' ');
+  const words = wordsNorm(s).split(' ').filter(Boolean);
+  while (words.length > 1 && LEVEL_WORDS.has(words[0])) words.shift();
+  return words.join(' ');
+}
+
+/** 岗位匹配:各自按"对方的公司名"剥后缀后归一化,再相等或互相包含。 */
+function roleMatches(appRole: string, entryRole: string, appCompany: string, entryCompany: string): boolean {
+  return eqOrContains(roleNorm(appRole, appCompany), roleNorm(entryRole, entryCompany));
 }

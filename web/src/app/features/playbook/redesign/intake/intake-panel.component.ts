@@ -291,6 +291,8 @@ export class IntakePanelComponent {
   readonly nrFormat = signal('');
 
   readonly busy = signal(false);
+  /** 「添加到本轮」快捷入口的显式预设轮次:解析建议不得覆盖它。 */
+  readonly presetRoundId = signal<string | null>(null);
   readonly errorMsg = signal<string | null>(null);
   readonly duplicate = signal(false);
 
@@ -311,6 +313,7 @@ export class IntakePanelComponent {
     this.type.set(type);
     this.step.set('input');
     this.errorMsg.set(null);
+    this.presetRoundId.set(roundId ?? null);
     this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
     this.open.set(true);
   }
@@ -422,9 +425,12 @@ export class IntakePanelComponent {
     this.fInterviewers.set(names.join(', '));
     this.fFormat.set(extractFormat(p.body ?? raw));
     // 建议归属:面试日期命中某轮 → 该轮;否则邀约类建议新建/沟通,其余进沟通记录。
+    // 但显式预设(材料页签「添加到本轮」)优先于内容建议,不许被解析覆盖。
     const datePart = (when ?? '').slice(0, 10);
     const hit = this.rounds().find(r => r.scheduledDate && r.scheduledDate === datePart);
-    if (hit) this.target.set({ kind: 'round', roundId: hit.id });
+    if (this.presetRoundId()) {
+      this.target.set({ kind: 'round', roundId: this.presetRoundId()! });
+    } else if (hit) this.target.set({ kind: 'round', roundId: hit.id });
     else if (this.category() === 'invitation' && when) {
       this.target.set({ kind: 'new' });
       this.nrDate.set(datePart);

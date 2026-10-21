@@ -11,14 +11,40 @@ import {
 } from '../../../../core/models/api.models';
 import { normalizeEmailDate, parsePastedEmail } from '../../components/brief/brief.helpers';
 import { PlaybookV2Api } from '../playbook-v2.api';
+import { PracticeApi } from '../../../../core/api/practice-api.service';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, joinNames, makeV2Fmt, makeV2T } from '../v2.helpers';
+import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject } from '../v2.helpers';
 
 export type IntakeType = 'email' | 'transcript' | 'note';
 /** 「录音·转写文本」类型内部的二选一模式:一次只呈现/保存一种来源。 */
 export type TranscriptMode = 'upload' | 'text';
 type Target = { kind: 'round'; roundId: string } | { kind: 'comm' } | { kind: 'new' };
+
+/** 一张已粘入的截图(多图共存,定稿第九节):原图文件 + 缩略图 object URL。 */
+interface ShotItem { file: File; name: string; url: string; }
+
+/** 批量解析里的一封邮件卡片:逐张 OCR 抽出的字段,预览里可改/可移除/可重试。 */
+interface EmailCard {
+  id: number;
+  shotIndex: number;
+  status: 'ok' | 'failed';
+  /** 失败时展示的本地化文案键(识别失败/未配置/不支持/未识别出邮件)。 */
+  errorKey: string;
+  category: string;
+  subject: string;
+  from: string;
+  date: string;
+  when: string;
+  interviewers: string;
+  format: string;
+  /** 保存为材料正文的全文(OCR 转写原文,与粘文字时保存 raw 同口径)。 */
+  body: string;
+  duplicate: boolean;
+}
+
+/** 预览聚合组:同归一化主题的卡片,组内时间正序。 */
+interface EmailCardGroup { key: string; subject: string; cards: EmailCard[]; }
 
 const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'other'];
 
@@ -32,8 +58,10 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
  * 可改;选新建轮次且有时间则建轮次并进应用内日历)→ 保存。
  * 面板不设标题输入框:标题一律保存时自动生成 —— 邮件取主题(无主题回落
  * 发件人/首行)、录音取文件名、转写取首段说话人行、备注取首行(见 autoFileName)。
- * 任何类型都可附一张截图原图 —— 截图是附件,不是类型;进入方式只有粘贴:
- * 直接粘进文本框,缩略图在框内底部呈现,没有单独的截图文件按钮。
+ * 截图是附件,不是类型;进入方式只有粘贴:直接粘进文本框,缩略图在框内
+ * 底部呈现,没有单独的截图文件按钮。截图可多张共存(定稿第九节):再粘只
+ * 追加不替换,每张可单独移除。Email 类型文字为空时,Parse 对全部截图逐张
+ * 走 AI 网关视觉 OCR → 与粘文字同一解析管线出卡片,预览按归一化主题聚合。
  */
 @Component({
   selector: 'app-intake-panel',
@@ -43,13 +71,17 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
     @if (open()) {
       <section class="panel" data-testid="intake-panel">
         <ng-template #shotTpl>
-          @if (shotFile()) {
+          @if (shots().length) {
             <div class="shot-strip" data-testid="shot-box">
-              <img class="shot-thumb" [src]="shotPreviewUrl()" [alt]="shotName()">
-              <span class="shot-name">{{ shotName() }} · {{ shotSizeText() }}</span>
-              <button type="button" class="icon-btn" (click)="clearShot()" [attr.aria-label]="t('pb.v2.i.removeShot')">
-                <mat-icon>close</mat-icon>
-              </button>
+              @for (s of shots(); track s.url; let i = $index) {
+                <span class="shot-item" data-testid="shot-item">
+                  <img class="shot-thumb" [src]="s.url" [alt]="s.name">
+                  <span class="shot-name">{{ s.name }} · {{ sizeText(s.file) }}</span>
+                  <button type="button" class="icon-btn" (click)="removeShot(i)" [attr.aria-label]="t('pb.v2.i.removeShot')">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </span>
+              }
             </div>
           }
         </ng-template>
@@ -109,9 +141,10 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
           }
           <div class="row">
+            @if (ocrBusy()) { <span class="hint">{{ t('pb.v2.i.ocrRunning') }}</span> }
             <span class="spacer"></span>
             <button mat-stroked-button (click)="close()">{{ t('common.cancel') }}</button>
-            <button mat-raised-button color="primary" [disabled]="!canParse() || busy()"
+            <button mat-raised-button color="primary" [disabled]="!canParse() || busy() || ocrBusy()"
                     (click)="parse()">{{ t('pb.v2.i.parsePreview') }}</button>
           </div>
         } @else {
@@ -127,6 +160,66 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             @if (type() === 'transcript' && transcriptMode() === 'text') {
               <p class="hint" data-testid="intake-source-text">{{ t('pb.v2.i.sourceText') }}</p>
             }
+            @if (batch(); as cards) {
+              <!-- 批量解析预览(定稿第九节):来源标注 + 按归一化主题聚合,
+                   组内时间正序、组间按最新时间倒序;每卡可改字段/移除,
+                   识别失败的卡只标自己,可重试/移除,不拖垮整批。 -->
+              <p class="hint" data-testid="intake-batch-summary">
+                {{ t('pb.v2.i.srcScreenshot') }} · {{ fmt('pb.v2.i.batchSummary', { n: cards.length, g: batchGroups().length }) }}
+              </p>
+              @for (g of batchGroups(); track g.key) {
+                <div class="bgroup" data-testid="batch-group">
+                  <div class="bgroup-head">
+                    <span class="bgroup-subject">{{ g.subject || t('pb.v2.i.noSubject') }}</span>
+                    <span class="bgroup-count">{{ fmt('pb.v2.i.batchCount', { n: g.cards.length }) }}</span>
+                  </div>
+                  @for (card of g.cards; track card.id) {
+                    <div class="bcard" data-testid="batch-card">
+                      <img class="shot-thumb lg" [src]="shots()[card.shotIndex]?.url" [alt]="shots()[card.shotIndex]?.name">
+                      @if (card.status === 'failed') {
+                        <div class="bcard-main">
+                          <p class="err">{{ t(card.errorKey) }}</p>
+                          <div class="row tight">
+                            <button mat-stroked-button [disabled]="ocrBusy()" (click)="retryCard(card)">{{ t('pb.v2.i.retry') }}</button>
+                            <button mat-button (click)="removeCard(card)">{{ t('pb.v2.i.removeCard') }}</button>
+                          </div>
+                        </div>
+                      } @else {
+                        <div class="bcard-main">
+                          <div class="pv-grid">
+                            <label>{{ t('pb.v2.i.fCategory') }}
+                              <select class="fld" [ngModel]="card.category" (ngModelChange)="updateCard(card, 'category', $event)">
+                                @for (c of categories(); track c.key) { <option [value]="c.key">{{ c.label }}</option> }
+                              </select>
+                            </label>
+                            <label>{{ t('pb.v2.i.fSubject') }} <input class="fld" [ngModel]="card.subject" (ngModelChange)="updateCard(card, 'subject', $event)"></label>
+                            <label>{{ t('pb.v2.i.fFrom') }} <input class="fld" [ngModel]="card.from" (ngModelChange)="updateCard(card, 'from', $event)"></label>
+                            <label>{{ t('pb.v2.i.fEmailDate') }} <input class="fld" type="date" [ngModel]="card.date" (ngModelChange)="updateCard(card, 'date', $event)"></label>
+                            <label>{{ t('pb.v2.i.fWhen') }} <input class="fld" [placeholder]="t('pb.v2.i.fWhenPh')" [ngModel]="card.when" (ngModelChange)="updateCard(card, 'when', $event)"></label>
+                            <label>{{ t('pb.v2.i.fInterviewers') }} <input class="fld" [placeholder]="t('pb.v2.i.commaPh')" [ngModel]="card.interviewers" (ngModelChange)="updateCard(card, 'interviewers', $event)"></label>
+                            <label>{{ t('pb.v2.i.fFormat') }}
+                              <select class="fld" [ngModel]="card.format" (ngModelChange)="updateCard(card, 'format', $event)">
+                                <option value="">{{ t('pb.v2.fmt.unknown') }}</option>
+                                <option value="线上视频">{{ t('pb.v2.fmt.video') }}</option>
+                                <option value="线上做题平台">{{ t('pb.v2.fmt.platform') }}</option>
+                                <option value="电话">{{ t('pb.v2.fmt.phone') }}</option>
+                                <option value="现场">{{ t('pb.v2.fmt.onsite') }}</option>
+                              </select>
+                            </label>
+                          </div>
+                          @if (card.duplicate) { <p class="warn slim">{{ t('pb.v2.i.dupSuspect') }}</p> }
+                          <pre class="bcard-body">{{ card.body }}</pre>
+                          <div class="row tight">
+                            <span class="spacer"></span>
+                            <button mat-button (click)="removeCard(card)">{{ t('pb.v2.i.removeCard') }}</button>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            } @else {
             <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
             @if (type() === 'email') {
               <div class="pv-grid">
@@ -173,6 +266,7 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
 
             @if (duplicate()) {
               <p class="warn">{{ t('pb.v2.i.dupWarn') }}</p>
+            }
             }
 
             <div class="sec">{{ t('pb.v2.i.assignTitle') }}</div>
@@ -248,8 +342,9 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
                 border: 1px dashed var(--yi-border, #bbb); border-radius: 8px; padding: 6px 10px; }
     .file-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
     .shot-name { font-size: 13px; color: var(--yi-text-muted, #777); }
-    .shot-strip { display: inline-flex; align-items: center; gap: 9px; margin-top: 10px;
-                  border: 1px solid var(--yi-border, #ccc); border-radius: 10px; padding: 6px 10px 6px 6px; }
+    .shot-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .shot-item { display: inline-flex; align-items: center; gap: 9px;
+                 border: 1px solid var(--yi-border, #ccc); border-radius: 10px; padding: 6px 10px 6px 6px; }
     .shot-thumb { width: 54px; height: 40px; object-fit: cover; border-radius: 6px; display: block; }
     .audio-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .audio-row .file-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
@@ -263,6 +358,25 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
     .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 8px 0; cursor: pointer; }
     .warn { background: #fff7e0; border: 1px solid #e6c86e; color: #6d5410; border-radius: 8px;
             padding: 8px 12px; font-size: 13px; line-height: 1.5; }
+    .warn.slim { padding: 5px 10px; margin: 6px 0; }
+    /* 批量预览(定稿第九节):主题组 + 邮件卡 */
+    .bgroup { margin: 12px 0; }
+    .bgroup-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+    .bgroup-subject { font-size: 14px; font-weight: 600; }
+    .bgroup-count { font-size: 12px; font-weight: 700; color: #475467; background: #eef2f7;
+                    border-radius: 999px; padding: 1px 9px; }
+    .bcard { display: flex; gap: 12px; border: 1px solid var(--yi-border, #ddd);
+             border-radius: 12px; padding: 10px 12px; margin: 8px 0; align-items: flex-start; }
+    .bcard .shot-thumb.lg { width: 92px; height: 68px; flex: none; }
+    .bcard-main { flex: 1; min-width: 0; }
+    .bcard-body { white-space: pre-wrap; font-size: 13px; line-height: 1.55; font-family: inherit;
+                  max-height: 150px; overflow-y: auto; margin: 6px 0 0;
+                  border-top: 1px dashed var(--yi-border, #ddd); padding-top: 7px; }
+    .bcard-body::-webkit-scrollbar { width: 10px; }
+    .bcard-body::-webkit-scrollbar-track { background: #e7eaee; border-radius: 5px; }
+    .bcard-body::-webkit-scrollbar-thumb { background: #7d8797; border-radius: 5px; }
+    .bcard-body::-webkit-scrollbar-thumb:hover { background: #3f51b5; }
+    .row.tight { margin-top: 6px; }
     .err { color: #b3261e; font-size: 13px; }
     .ok-row { font-size: 14px; color: #2e7d32; }
     .link-btn { border: none; background: none; color: var(--yi-accent, #3f51b5); cursor: pointer;
@@ -274,6 +388,7 @@ export class IntakePanelComponent {
   @Output() readonly saved = new EventEmitter<void>();
 
   private readonly api = inject(PlaybookV2Api);
+  private readonly aiApi = inject(PracticeApi);
   private readonly snack = inject(MatSnackBar);
   private readonly i18n = inject(I18nService);
   readonly t = makeV2T(this.i18n);
@@ -312,9 +427,13 @@ export class IntakePanelComponent {
   /** 录音类型二选一模式,默认文本(主流程是粘转写);切换不清空另一模式已填内容。 */
   readonly transcriptMode = signal<TranscriptMode>('text');
   readonly text = signal('');
-  readonly shotFile = signal<File | null>(null);
-  readonly shotName = signal('');
-  readonly shotPreviewUrl = signal<string | null>(null);
+  /** 已粘入的截图(多张共存,定稿第九节):再粘只追加,每张可单独移除。 */
+  readonly shots = signal<ShotItem[]>([]);
+  /** Email 批量解析的卡片组;非 null = 当前预览是批量模式(文字为空+有截图)。 */
+  readonly batch = signal<EmailCard[] | null>(null);
+  /** 逐张 OCR 进行中(解析按钮禁用 + 进度提示)。 */
+  readonly ocrBusy = signal(false);
+  private cardSeq = 0;
   readonly audioFile = signal<File | null>(null);
   readonly audioName = computed(() => this.audioFile()?.name ?? '');
 
@@ -379,25 +498,25 @@ export class IntakePanelComponent {
   }
 
   /**
-   * 截图附件入口(只有粘贴一条路,没有文件选择按钮):附件只留一张,后来的
-   * 替换先前的并给提示;缩略图用 object URL 即时预览,呈现在文本框容器内底部。
+   * 截图附件入口(只有粘贴一条路,没有文件选择按钮):多张共存(定稿第九节)——
+   * 再粘只追加、不替换、不提示;每张在框内缩略图条里单独呈现/移除。
+   * 缩略图用 object URL 即时预览,呈现在文本框容器内底部。
    */
   setShot(f: File): void {
-    const replaced = !!this.shotFile();
-    if (this.shotPreviewUrl()) URL.revokeObjectURL(this.shotPreviewUrl()!);
-    this.shotFile.set(f);
-    this.shotName.set(f.name);
-    this.shotPreviewUrl.set(URL.createObjectURL(f));
-    if (replaced) {
-      this.snack.open(this.t('pb.v2.i.shotReplaced'), this.t('common.close'), { duration: 2500 });
-    }
+    this.shots.update(list => [...list, { file: f, name: f.name, url: URL.createObjectURL(f) }]);
   }
 
-  clearShot(): void {
-    if (this.shotPreviewUrl()) URL.revokeObjectURL(this.shotPreviewUrl()!);
-    this.shotPreviewUrl.set(null);
-    this.shotFile.set(null);
-    this.shotName.set('');
+  removeShot(index: number): void {
+    this.shots.update(list => {
+      const it = list[index];
+      if (it) URL.revokeObjectURL(it.url);
+      return list.filter((_, j) => j !== index);
+    });
+  }
+
+  clearShots(): void {
+    for (const s of this.shots()) URL.revokeObjectURL(s.url);
+    this.shots.set([]);
   }
 
   /**
@@ -413,25 +532,30 @@ export class IntakePanelComponent {
    */
   onPaste(ev: ClipboardEvent): void {
     if (!this.open()) return;
-    const file = firstClipboardFile(ev.clipboardData);
-    if (!file) {
+    const files = allClipboardFiles(ev.clipboardData);
+    if (!files.length) {
       this.maybeAutoSwitchTextPaste(ev);
       return;
     }
-    if (file.type.startsWith('image/')) {
+    const images = files.filter(f => f.type.startsWith('image/'));
+    if (images.length) {
       ev.preventDefault();
-      const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-      const d = new Date();
-      const p = (n: number) => String(n).padStart(2, '0');
-      const name = `${this.t('pb.v2.i.clipName')}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
-        `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
-      this.setShot(new File([file], name, { type: file.type }));
+      // 一次粘多张全部接住(多图共存,定稿第九节);同秒多张以序号后缀避同名。
+      images.forEach((img, i) => {
+        const ext = (img.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        const d = new Date();
+        const p = (n: number) => String(n).padStart(2, '0');
+        const name = `${this.t('pb.v2.i.clipName')}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
+          `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${images.length > 1 ? '-' + (i + 1) : ''}.${ext}`;
+        this.setShot(new File([img], name, { type: img.type }));
+      });
       return;
     }
-    if (isAudioFile(file)) {
+    const audio = files.find(isAudioFile);
+    if (audio) {
       ev.preventDefault();
       if (this.type() === 'transcript') {
-        this.setAudio(file);
+        this.setAudio(audio);
         this.setTranscriptMode('upload');
       } else {
         this.snack.open(this.t('pb.v2.i.pasteAudioWrongType'), this.t('common.close'), { duration: 3500 });
@@ -469,8 +593,8 @@ export class IntakePanelComponent {
 
   removeAudio(): void { this.audioFile.set(null); }
 
-  shotSizeText(): string {
-    return fmtFileSize(this.shotFile()?.size ?? 0);
+  sizeText(f: File | null | undefined): string {
+    return fmtFileSize(f?.size ?? 0);
   }
 
   audioSizeText(): string {
@@ -494,12 +618,15 @@ export class IntakePanelComponent {
     return this.inUploadMode();
   }
 
-  /** 「解析预览」可用性:上传模式要有录音,其余情况要有文本。 */
+  /**
+   * 「解析预览」可用性:上传模式要有录音;其余模式有文本或任一截图即可
+   * (截图走视觉 OCR 进同一解析管线,定稿第九节)。
+   */
   canParse(): boolean {
-    if (this.type() === 'transcript') {
-      return this.transcriptMode() === 'upload' ? !!this.audioFile() : !!this.text().trim();
+    if (this.type() === 'transcript' && this.transcriptMode() === 'upload') {
+      return !!this.audioFile();
     }
-    return !!this.text().trim();
+    return !!this.text().trim() || this.shots().length > 0;
   }
 
   /** 二选一切换:只切呈现与保存来源,不清空另一模式已填的内容(防误切丢失)。 */
@@ -509,10 +636,18 @@ export class IntakePanelComponent {
 
   // ---------------- 解析 ----------------
 
-  parse(): void {
-    const raw = this.text();
+  /**
+   * 解析分流:
+   * - 录音上传模式:无文本可解析,预览只呈现文件信息 + 归属(原行为);
+   * - Email 且文字为空、有截图:逐张视觉 OCR → 批量卡片预览(定稿第九节);
+   * - 备注/转写文本且文字为空、有截图:OCR 全部截图拼成文本,回落到与粘文字
+   *   完全相同的管线;全失败则留在输入步报错,不静默;
+   * - 有文字:原同步解析(文字为内容、截图为附件,不变)。
+   */
+  async parse(): Promise<void> {
     this.errorMsg.set(null);
     this.duplicate.set(false);
+    this.batch.set(null);
     if (this.isAudioMode()) {
       // 录音没有可解析的文本:预览只呈现文件信息 + 归属,不假装已解析出内容。
       this.segments.set([]);
@@ -520,10 +655,206 @@ export class IntakePanelComponent {
       this.step.set('preview');
       return;
     }
+    if (this.type() === 'email' && !this.text().trim() && this.shots().length) {
+      await this.parseEmailBatch();
+      return;
+    }
+    if (!this.text().trim() && this.shots().length) {
+      if (!(await this.ocrIntoText())) return;
+    }
+    const raw = this.text();
     if (this.type() === 'email') this.parseEmail(raw);
     else if (this.type() === 'transcript') this.parseTranscript(raw);
     else this.parseNote(raw);
     this.step.set('preview');
+  }
+
+  /** 一张截图 → 网关视觉 OCR。任何失败如实回 status,绝不编造文本。 */
+  private async ocrShot(s: ShotItem): Promise<{ status: string; text: string | null }> {
+    try {
+      const { b64, mime } = await fileToBase64(s.file);
+      const r = await this.aiApi.extractImageText(b64, mime).toPromise();
+      return { status: r?.status ?? 'failed', text: r?.text ?? null };
+    } catch {
+      return { status: 'failed', text: null };
+    }
+  }
+
+  private ocrErrorKey(status: string): string {
+    switch (status) {
+      case 'notConfigured': return 'pb.v2.i.ocrNotConfigured';
+      case 'unsupported': return 'pb.v2.i.ocrUnsupported';
+      default: return 'pb.v2.i.ocrFailed';
+    }
+  }
+
+  /** 备注/转写:把全部截图 OCR 拼成文本走原管线;全失败返回 false 并已置错误。 */
+  private async ocrIntoText(): Promise<boolean> {
+    this.ocrBusy.set(true);
+    try {
+      const parts: string[] = [];
+      let lastStatus = 'failed';
+      for (const s of this.shots()) {
+        const r = await this.ocrShot(s);
+        if (r.status === 'ok' && r.text) parts.push(r.text);
+        else lastStatus = r.status;
+      }
+      if (!parts.length) {
+        this.errorMsg.set(this.t(this.ocrErrorKey(lastStatus)));
+        return false;
+      }
+      this.text.set(parts.join('\n\n'));
+      return true;
+    } finally {
+      this.ocrBusy.set(false);
+    }
+  }
+
+  /** 既有材料里是否已有同 dedupeKey(发件人+日期+主题)的邮件。 */
+  private assetDupExists(key: string): boolean {
+    return (this.entry().assets ?? []).some(a => {
+      try {
+        const m = JSON.parse(a.metaJson ?? '{}') as AssetMeta;
+        return m.dedupeKey === key;
+      } catch { return false; }
+    });
+  }
+
+  private blankCard(shotIndex: number, errorKey: string): EmailCard {
+    return {
+      id: ++this.cardSeq, shotIndex, status: 'failed', errorKey,
+      category: 'other', subject: '', from: '', date: '', when: '',
+      interviewers: '', format: '', body: '', duplicate: false
+    };
+  }
+
+  /** OCR 文本 → 邮件卡片:与粘文字 parseEmail 同一套抽取器,不另起口径。 */
+  private cardFromText(shotIndex: number, raw: string): EmailCard {
+    const p = parsePastedEmail(raw);
+    const body = p.body ?? raw;
+    const card: EmailCard = {
+      id: ++this.cardSeq, shotIndex, status: 'ok', errorKey: '',
+      category: classifyEmail(p.subject ?? '', body),
+      subject: p.subject ?? '',
+      from: p.from ?? '',
+      date: p.date ? (normalizeEmailDate(p.date) || '') : '',
+      when: extractInterviewWhen(body) ?? '',
+      interviewers: extractInterviewerNames(body).join(', '),
+      format: extractFormat(body),
+      body: raw,
+      duplicate: false
+    };
+    // 头部三件套全空 = 没识别出邮件内容(如粘错图):按失败卡处理,可重试/移除。
+    if (!card.subject && !card.from && !card.date) {
+      card.status = 'failed';
+      card.errorKey = 'pb.v2.i.ocrNoEmail';
+    }
+    return card;
+  }
+
+  /** Email 批量解析:逐张 OCR、逐张容错,最后按主题聚合呈现(见 batchGroups)。 */
+  private async parseEmailBatch(): Promise<void> {
+    this.ocrBusy.set(true);
+    try {
+      const cards: EmailCard[] = [];
+      const seen = new Set<string>();
+      const list = this.shots();
+      for (let i = 0; i < list.length; i++) {
+        const r = await this.ocrShot(list[i]);
+        if (r.status !== 'ok' || !r.text) {
+          cards.push(this.blankCard(i, this.ocrErrorKey(r.status)));
+          continue;
+        }
+        const card = this.cardFromText(i, r.text);
+        if (card.status === 'ok') {
+          const key = dedupeKey(card.from, card.date, card.subject);
+          card.duplicate = this.assetDupExists(key) || seen.has(key);
+          seen.add(key);
+        }
+        cards.push(card);
+      }
+      this.batch.set(cards);
+      // 整批同一归属:显式预设优先;否则默认沟通记录(与单封解析的兜底一致)。
+      if (this.presetRoundId()) {
+        this.target.set({ kind: 'round', roundId: this.presetRoundId()! });
+      } else {
+        this.target.set({ kind: 'comm' });
+      }
+      this.step.set('preview');
+    } finally {
+      this.ocrBusy.set(false);
+    }
+  }
+
+  /**
+   * 预览聚合(定稿第九节):按归一化主题(剥 Re:/Fwd:)分组,组内时间正序
+   * (无日期垫底),组间按组内最新时间倒序;失败卡各自成组沉底,不混进主题组。
+   */
+  readonly batchGroups = computed<EmailCardGroup[]>(() => {
+    const cards = this.batch() ?? [];
+    const map = new Map<string, EmailCard[]>();
+    for (const c of cards) {
+      const key = c.status === 'ok'
+        ? (normalizeThreadSubject(c.subject).key || `card-${c.id}`)
+        : `card-${c.id}`;
+      const arr = map.get(key) ?? [];
+      arr.push(c);
+      map.set(key, arr);
+    }
+    const groups = [...map.entries()].map(([key, arr]) => {
+      const sorted = [...arr].sort((a, b) =>
+        (a.date || '9999-99') < (b.date || '9999-99') ? -1 : 1);
+      return {
+        key,
+        subject: normalizeThreadSubject(sorted[0].subject).display,
+        cards: sorted,
+        latest: sorted.reduce((m, c) => (c.date > m ? c.date : m), '')
+      };
+    });
+    groups.sort((a, b) => (a.latest < b.latest ? 1 : -1));
+    return groups.map(({ key, subject, cards: cs }) => ({ key, subject, cards: cs }));
+  });
+
+  /** 卡片字段编辑:改后重算疑似重复并触发重分组(computed 随 batch 引用更新)。 */
+  updateCard(card: EmailCard, field: 'category' | 'subject' | 'from' | 'date' | 'when' | 'interviewers' | 'format',
+             value: string): void {
+    card[field] = value;
+    if (field === 'subject' || field === 'from' || field === 'date') {
+      const key = dedupeKey(card.from, card.date, card.subject);
+      card.duplicate = this.assetDupExists(key)
+        || (this.batch() ?? []).some(c => c.id !== card.id && c.status === 'ok'
+          && dedupeKey(c.from, c.date, c.subject) === key);
+    }
+    this.batch.update(list => (list ? [...list] : list));
+  }
+
+  removeCard(card: EmailCard): void {
+    this.batch.update(list => (list ? list.filter(c => c.id !== card.id) : list));
+  }
+
+  /** 失败卡重试:只重跑它那一张图的 OCR,成功则用新抽取覆盖(失败卡无用户编辑可丢)。 */
+  async retryCard(card: EmailCard): Promise<void> {
+    const s = this.shots()[card.shotIndex];
+    if (!s) return;
+    this.ocrBusy.set(true);
+    try {
+      const r = await this.ocrShot(s);
+      if (r.status !== 'ok' || !r.text) {
+        card.errorKey = this.ocrErrorKey(r.status);
+      } else {
+        const fresh = this.cardFromText(card.shotIndex, r.text);
+        if (fresh.status !== 'ok') {
+          card.errorKey = fresh.errorKey;
+        } else {
+          Object.assign(card, fresh, { id: card.id });
+          const key = dedupeKey(card.from, card.date, card.subject);
+          card.duplicate = this.assetDupExists(key);
+        }
+      }
+    } finally {
+      this.ocrBusy.set(false);
+      this.batch.update(list => (list ? [...list] : list));
+    }
   }
 
   private parseEmail(raw: string): void {
@@ -552,15 +883,9 @@ export class IntakePanelComponent {
       this.nrInterviewers.set(names.join(', '));
       this.nrFormat.set(this.fFormat());
     } else this.target.set({ kind: 'comm' });
-    // 重复检测:发件人+日期+主题
+    // 重复检测:发件人+日期+主题(与批量卡片共用同一判定)
     const key = dedupeKey(p.from ?? '', this.fDate(), p.subject ?? '');
-    const dup = (this.entry().assets ?? []).some(a => {
-      try {
-        const m = JSON.parse(a.metaJson ?? '{}') as AssetMeta;
-        return m.dedupeKey === key;
-      } catch { return false; }
-    });
-    this.duplicate.set(dup);
+    this.duplicate.set(this.assetDupExists(key));
   }
 
   private parseTranscript(raw: string): void {
@@ -604,13 +929,25 @@ export class IntakePanelComponent {
         // phase 与材料展示推导同一规则(derivePhase):按发生日期 vs 轮次日期。
         const audioPhase = roundId
           ? derivePhase(false, this.fDate() || todayStr(), this.roundDateOf(roundId, t)) : '';
-        const shot0 = this.shotFile();
-        if (shot0) {
-          await this.api.uploadFile(entry.id, shot0,
+        for (const s of this.shots()) {
+          await this.api.uploadFile(entry.id, s.file,
             { roundId: roundId ?? '', phase: audioPhase }).toPromise();
         }
         await this.api.uploadFile(entry.id, this.audioFile()!,
           { roundId: roundId ?? '', phase: audioPhase }).toPromise();
+        this.finishSave();
+        return;
+      }
+
+      // 批量邮件(定稿第九节):每封各成一条材料/沟通,共用主题聚合标识。
+      // 全部卡片识别失败时没有可保存内容 —— 留在预览报错,不假装已保存。
+      if (this.type() === 'email' && this.batch()) {
+        if (!(this.batch() ?? []).some(c => c.status === 'ok')) {
+          this.errorMsg.set(this.t('pb.v2.i.nothingToSave'));
+          this.busy.set(false);
+          return;
+        }
+        await this.saveBatch(entry, roundId, t);
         this.finishSave();
         return;
       }
@@ -621,13 +958,13 @@ export class IntakePanelComponent {
         ? derivePhase(this.type() === 'email', this.fDate() || todayStr(), this.roundDateOf(roundId, t))
         : null;
 
-      // 截图先传(原图作为附件资产,归到同一目标,phase 与主材料一致)
+      // 截图先传(原图作为附件资产,归到同一目标,phase 与主材料一致;
+      // 多张全传,第一张的 id 记进 meta.screenshotAssetId 作主截图)
       let shotId: string | undefined;
-      const shot = this.shotFile();
-      if (shot) {
-        const up = await this.api.uploadFile(entry.id, shot,
+      for (const s of this.shots()) {
+        const up = await this.api.uploadFile(entry.id, s.file,
           { roundId: roundId ?? '', phase: matPhase ?? '' }).toPromise();
-        shotId = up?.id;
+        if (shotId === undefined) shotId = up?.id;
       }
 
       const meta = this.buildMeta(shotId);
@@ -672,11 +1009,87 @@ export class IntakePanelComponent {
     }
   }
 
+  /**
+   * 批量保存(定稿第九节):每封成功卡各成一条材料 —— 各自上传自己的截图作
+   * screenshotAssetId、正文为 OCR 全文、meta 带共用 threadKey(归一化主题);
+   * 归属为沟通且条目关联投递时,逐封镜像到 Jobs 沟通时间线(与单封同路径)。
+   * 失败卡不保存(用户可在预览里重试/移除后再存)。
+   */
+  private async saveBatch(entry: InterviewDetail, roundId: string | null, t: Target): Promise<void> {
+    const cards = (this.batch() ?? []).filter(c => c.status === 'ok');
+    for (const card of cards) {
+      const phase = roundId
+        ? derivePhase(true, card.date || todayStr(), this.roundDateOf(roundId, t))
+        : null;
+      let shotId: string | undefined;
+      const shot = this.shots()[card.shotIndex];
+      if (shot) {
+        const up = await this.api.uploadFile(entry.id, shot.file,
+          { roundId: roundId ?? '', phase: phase ?? '' }).toPromise();
+        shotId = up?.id;
+      }
+      const meta = this.buildCardMeta(card, shotId);
+      const attached = await this.api.attachAsset(entry.id, {
+        kind: 'Text',
+        fileName: trimSummary(card.subject) || trimSummary(card.from) || this.t('pb.v2.i.typeEmail'),
+        transcriptText: card.body,
+        transcriptSegmentsJson: null,
+        roundId,
+        phase,
+        metaJson: JSON.stringify(meta)
+      }).toPromise();
+      const assetId = attached!.id;
+      if (!roundId && entry.jobApplicationId) {
+        const comm = await this.api.createCommunication(entry.jobApplicationId, {
+          type: 'Email',
+          subject: card.subject || null,
+          content: card.body,
+          contactName: card.from || null,
+          occurredAt: new Date(`${card.date || todayStr()}T12:00:00`).toISOString(),
+          metaJson: JSON.stringify({ ...meta, assetId }),
+          handlingStatus: meta.arrangement ? 'Pending' : null
+        }).toPromise();
+        if (comm?.id) {
+          await this.api.updateAssetMeta(entry.id, assetId,
+            { ...meta, communicationId: comm.id }).toPromise().catch(() => undefined);
+        }
+      }
+    }
+  }
+
+  /** 批量卡片的 meta:与 buildMeta 的邮件分支同字段,多带 threadKey 聚合标识。 */
+  private buildCardMeta(card: EmailCard, shotId?: string): AssetMeta {
+    const names = card.interviewers.split(/[,、,]/).map(s => s.trim()).filter(Boolean);
+    const meta: AssetMeta = {
+      channel: 'email',
+      date: card.date || undefined,
+      interviewers: names.length ? names : undefined,
+      screenshotAssetId: shotId,
+      category: card.category,
+      subject: card.subject || undefined,
+      from: card.from || undefined,
+      interviewAt: card.when || undefined,
+      format: card.format || undefined,
+      dedupeKey: dedupeKey(card.from, card.date, card.subject),
+      threadKey: normalizeThreadSubject(card.subject).key || undefined
+    };
+    if (card.category === 'invitation' && card.when) {
+      meta.arrangement = {
+        date: card.when.slice(0, 10),
+        time: card.when.slice(11, 16) || undefined,
+        interviewers: names.join(', ') || undefined,
+        format: card.format || undefined
+      };
+    }
+    return meta;
+  }
+
   /** 保存成功后的统一收尾(文本/录音两条路径共用)。 */
   private finishSave(): void {
     this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2500 });
     this.text.set('');
-    this.clearShot();
+    this.clearShots();
+    this.batch.set(null);
     this.audioFile.set(null);
     this.open.set(false);
     this.setDocPaste(false);
@@ -721,6 +1134,8 @@ export class IntakePanelComponent {
       meta.interviewAt = this.fWhen() || undefined;
       meta.format = this.fFormat() || undefined;
       meta.dedupeKey = dedupeKey(meta.from ?? '', meta.date ?? '', meta.subject ?? '');
+      // 与批量保存同口径:单封粘贴也带主题聚合标识,Communications 一并聚合。
+      meta.threadKey = normalizeThreadSubject(meta.subject ?? '').key || undefined;
       if (this.category() === 'invitation' && this.fWhen()) {
         meta.arrangement = {
           date: this.fWhen().slice(0, 10),
@@ -864,17 +1279,32 @@ function fmtFileSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** 剪贴板里的第一个文件(files 列表优先,其次 items 的 file 项);纯文字粘贴返回 null。 */
-function firstClipboardFile(cd: DataTransfer | null): File | null {
-  if (!cd) return null;
-  if (cd.files && cd.files.length) return cd.files[0];
+/** 剪贴板里的全部文件(files 列表优先,其次 items 的 file 项);纯文字粘贴返回空数组。 */
+function allClipboardFiles(cd: DataTransfer | null): File[] {
+  if (!cd) return [];
+  if (cd.files && cd.files.length) return Array.from(cd.files);
+  const out: File[] = [];
   for (let i = 0; i < cd.items.length; i++) {
     if (cd.items[i].kind === 'file') {
       const f = cd.items[i].getAsFile();
-      if (f) return f;
+      if (f) out.push(f);
     }
   }
-  return null;
+  return out;
+}
+
+/** File → base64(视觉 OCR 入参):走 FileReader 的 data URL,剥掉前缀只留正文。 */
+function fileToBase64(f: File): Promise<{ b64: string; mime: string }> {
+  return new Promise((resolve, reject) => {
+    const rd = new FileReader();
+    rd.onload = () => {
+      const url = String(rd.result ?? '');
+      const comma = url.indexOf(',');
+      resolve({ b64: comma >= 0 ? url.slice(comma + 1) : url, mime: f.type || 'image/png' });
+    };
+    rd.onerror = () => reject(rd.error);
+    rd.readAsDataURL(f);
+  });
 }
 
 /** 音频文件判别:MIME 优先,Finder 复制等场景 MIME 可能为空,用扩展名兜底。 */

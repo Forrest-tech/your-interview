@@ -11,7 +11,7 @@ import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, CommItem } from '../v2.models';
 import { MaterialsListComponent } from './materials-list.component';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
+import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject } from '../v2.helpers';
 
 /**
  * 沟通记录(2026-10-20 定稿,条目级时间线):
@@ -37,7 +37,14 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
         @if (!items().length && !looseAssets().length) {
           <p class="empty">{{ t('pb.v2.c.empty') }}</p>
         }
-        @for (c of visibleJobsItems(); track c.id) {
+        @for (g of groupedJobsItems(); track g.key) {
+          @if (g.items.length > 1) {
+            <div class="thread-head" data-testid="comm-thread-head">
+              <span class="thread-subject">🧵 {{ g.subject }}</span>
+              <span class="thread-count">{{ fmt('pb.v2.c.threadCount', { n: g.items.length }) }}</span>
+            </div>
+          }
+          @for (c of g.items; track c.id) {
           <article class="citem" [class.pending]="isPending(c)" data-testid="comm-item">
             <div class="ci-head">
               <span class="ci-icon">{{ typeIcon(c.type) }}</span>
@@ -95,6 +102,7 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
               </div>
             }
           </article>
+          }
         }
         @if (looseAssets().length) {
           <h4 class="loose-title">{{ t('pb.v2.c.looseTitle') }}</h4>
@@ -111,37 +119,42 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
   `,
   styles: [`
     .comm { padding: 6px 2px; }
+    .thread-head { display: flex; align-items: center; gap: 9px; margin: 16px 0 2px; }
+    .thread-subject { font-size: 14px; font-weight: 600; }
+    .thread-count { font-size: 12px; font-weight: 700; color: #475467; background: #eef2f7;
+                    border-radius: 999px; padding: 1px 9px; }
     .pending-banner { background: #fdecea; border: 1px solid #f0b8b2; color: #7c1d16;
-                        border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+                        border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 12px; }
     .empty, .hint { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .empty { font-size: 14px; }
     .citem { border: 1px solid var(--yi-border, #ddd); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
     .citem.pending { border-color: #e57373; }
     .ci-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
     .ci-icon { font-size: 15px; }
-    .ci-title { font-size: 13.5px; font-weight: 600; }
-    .ci-contact, .ci-date { font-size: 12px; color: var(--yi-text-muted, #888); }
-    .pend-tag { font-size: 10.5px; font-weight: 700; color: #b3261e; border: 1px solid #f0b8b2;
+    .ci-title { font-size: 14px; font-weight: 600; }
+    .ci-contact, .ci-date { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .pend-tag { font-size: 12px; font-weight: 700; color: #b3261e; border: 1px solid #f0b8b2;
                 border-radius: 999px; padding: 1px 8px; }
-    .done-tag { font-size: 10.5px; font-weight: 600; color: var(--yi-text-muted, #888);
+    .done-tag { font-size: 12px; font-weight: 600; color: var(--yi-text-muted, #888);
                 border: 1px solid var(--yi-border, #ccc); border-radius: 999px; padding: 1px 8px; }
     .spacer { flex: 1; }
     .icon-btn { border: none; background: transparent; cursor: pointer; color: inherit; display: inline-flex; }
     .icon-btn.danger { color: #b3261e; }
     .icon-btn mat-icon { font-size: 19px; width: 19px; height: 19px; }
-    .ci-summary { font-size: 12.5px; color: var(--yi-text-muted, #666); margin: 7px 0 0; }
-    .ci-body { font-size: 13px; line-height: 1.6; margin: 6px 0 0; white-space: pre-wrap; }
-    .ci-full { white-space: pre-wrap; font-size: 12.5px; line-height: 1.6; font-family: inherit;
+    .ci-summary { font-size: 13px; color: var(--yi-text-muted, #666); margin: 7px 0 0; }
+    .ci-body { font-size: 14px; line-height: 1.6; margin: 6px 0 0; white-space: pre-wrap; }
+    .ci-full { white-space: pre-wrap; font-size: 14px; line-height: 1.6; font-family: inherit;
                border-top: 1px dashed var(--yi-border, #ddd); padding-top: 8px; }
     .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
-                border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; margin-top: 6px; }
+                border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 6px; }
     .arr-box { border: 1px dashed #e6a23c; border-radius: 10px; padding: 10px 12px; margin-top: 10px;
                background: color-mix(in srgb, #e6a23c 6%, transparent); }
-    .arr-title { font-size: 13px; font-weight: 600; }
+    .arr-title { font-size: 14px; font-weight: 600; }
     .arr-actions { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
-    .loose-title { font-size: 14px; margin: 18px 0 4px; }
-    .move-row { margin-top: 9px; font-size: 12px; color: var(--yi-text-muted, #777); }
+    .loose-title { font-size: 16px; font-weight: 600; margin: 18px 0 4px; }
+    .move-row { margin-top: 9px; font-size: 13px; color: var(--yi-text-muted, #777); }
     .fld.sm { border: 1px solid var(--yi-border, #ccc); border-radius: 7px; padding: 4px 7px;
-              font-size: 12px; background: transparent; color: inherit; margin-left: 6px; }
+              font-size: 14px; background: transparent; color: inherit; margin-left: 6px; }
   `]
 })
 export class CommLogComponent {
@@ -174,6 +187,38 @@ export class CommLogComponent {
     }));
   readonly visibleJobsItems = computed(() =>
     this.items().filter(c => !c.meta.movedToRoundId));
+  /**
+   * 主题聚合展示(定稿第九节):按 threadKey(保存时落的归一化主题)分组,
+   * 存量无 threadKey 的按主题现场归一化兜底;无主题的各自独立不成组。
+   * 组内按发生时间正序(完整往来),组间按组内最新时间倒序;单条组不带组头,
+   * 呈现与原平铺一致。聚合只影响展示,底层仍是单条沟通数据。
+   */
+  readonly groupedJobsItems = computed(() => {
+    const map = new Map<string, CommItem[]>();
+    for (const c of this.visibleJobsItems()) {
+      const key = c.meta.threadKey
+        ? 'th:' + c.meta.threadKey
+        : c.subject
+          ? 'th:' + normalizeThreadSubject(c.subject).key
+          : 'solo:' + c.id;
+      const arr = map.get(key) ?? [];
+      arr.push(c);
+      map.set(key, arr);
+    }
+    const groups = [...map.entries()].map(([key, arr]) => {
+      const sorted = [...arr].sort((a, b) =>
+        (a.occurredAt ?? '') < (b.occurredAt ?? '') ? -1 : 1);
+      return {
+        key,
+        subject: normalizeThreadSubject(sorted[0].subject ?? '').display
+          || this.typeLabel(sorted[0].type),
+        items: sorted,
+        latest: sorted.reduce((m, c) => ((c.occurredAt ?? '') > m ? c.occurredAt : m), '')
+      };
+    });
+    groups.sort((a, b) => (a.latest < b.latest ? 1 : -1));
+    return groups.map(({ key, subject, items }) => ({ key, subject, items }));
+  });
   readonly pendingItems = computed(() =>
     this.visibleJobsItems().filter(c => PlaybookV2Api.isPending(c)));
 

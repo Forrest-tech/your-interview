@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Output, computed, inject, input, signal
+  Component, DestroyRef, EventEmitter, Output, computed, inject, input, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -13,7 +13,7 @@ import { normalizeEmailDate, parsePastedEmail } from '../../components/brief/bri
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { joinNames, makeV2Fmt, makeV2T } from '../v2.helpers';
+import { derivePhase, joinNames, makeV2Fmt, makeV2T } from '../v2.helpers';
 
 export type IntakeType = 'email' | 'transcript' | 'note';
 type Target = { kind: 'round'; roundId: string } | { kind: 'comm' } | { kind: 'new' };
@@ -33,7 +33,7 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule],
   template: `
     @if (open()) {
-      <section class="panel" data-testid="intake-panel" (paste)="onPaste($event)">
+      <section class="panel" data-testid="intake-panel">
         <ng-template #shotTpl>
           @if (shotFile()) {
             <div class="shot-box" data-testid="shot-box">
@@ -251,6 +251,25 @@ export class IntakePanelComponent {
   readonly t = makeV2T(this.i18n);
   readonly fmt = makeV2Fmt(this.i18n);
 
+  /**
+   * 文档级粘贴监听(仅面板打开期间挂载,关闭/销毁即摘除):用户打开面板后
+   * 往往直接 Ctrl+V,焦点还在 body 上 —— 绑在面板节点上的监听收不到事件,
+   * 必须在 document 上接,再按剪贴板内容分发(见 onPaste)。
+   */
+  private readonly docPasteHandler = (ev: ClipboardEvent) => this.onPaste(ev);
+  private docPasteOn = false;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.setDocPaste(false));
+  }
+
+  private setDocPaste(on: boolean): void {
+    if (on === this.docPasteOn) return;
+    this.docPasteOn = on;
+    if (on) document.addEventListener('paste', this.docPasteHandler);
+    else document.removeEventListener('paste', this.docPasteHandler);
+  }
+
   readonly categories = computed(() =>
     CATEGORY_KEYS.map(key => ({ key, label: this.t('pb.v2.cat.' + key) })));
   readonly typeTabs = computed<{ key: IntakeType; label: string }[]>(() => [
@@ -316,9 +335,13 @@ export class IntakePanelComponent {
     this.presetRoundId.set(roundId ?? null);
     this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
     this.open.set(true);
+    this.setDocPaste(true);
   }
 
-  close(): void { this.open.set(false); }
+  close(): void {
+    this.open.set(false);
+    this.setDocPaste(false);
+  }
 
   setType(t: IntakeType): void {
     this.type.set(t);
@@ -354,32 +377,46 @@ export class IntakePanelComponent {
   }
 
   /**
-   * 面板内粘贴(定稿:截图可"粘"进来):剪贴板带图片 → 接住作截图附件并
-   * preventDefault;纯文字不拦截,保持默认粘贴落入当前聚焦的输入框/文本域。
-   * 事件绑在面板根节点,焦点在面板内任意位置都接得住图片。
+   * 粘贴分发(文档级监听,面板打开期间焦点在页面任意位置都接得住):
+   * - 剪贴板带图片文件 → 接住作截图附件(与文件选择同一状态/保存路径);
+   * - 带音频文件 → 「录音·转写」类型下接住作录音附件(与 Upload a recording
+   *   同一状态/保存路径);其它类型下不接,只提示去录音类型粘;
+   * - 纯文字 → 不拦截:聚焦在输入框/文本域时浏览器默认粘贴照常落入该字段,
+   *   无字段聚焦时默认粘贴本就无处可落,面板不代填、不吞字;
+   * - 其它文件 → 忽略。
    */
   onPaste(ev: ClipboardEvent): void {
-    const items = ev.clipboardData?.items;
-    let raw: File | null = null;
-    if (items) {
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith('image/')) { raw = items[i].getAsFile(); break; }
+    if (!this.open()) return;
+    const file = firstClipboardFile(ev.clipboardData);
+    if (!file) return;
+    if (file.type.startsWith('image/')) {
+      ev.preventDefault();
+      const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+      const d = new Date();
+      const p = (n: number) => String(n).padStart(2, '0');
+      const name = `${this.t('pb.v2.i.clipName')}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
+        `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
+      this.setShot(new File([file], name, { type: file.type }));
+      return;
+    }
+    if (isAudioFile(file)) {
+      ev.preventDefault();
+      if (this.type() === 'transcript') this.setAudio(file);
+      else {
+        this.snack.open(this.t('pb.v2.i.pasteAudioWrongType'), this.t('common.close'), { duration: 3500 });
       }
     }
-    if (!raw) return;
-    ev.preventDefault();
-    const ext = (raw.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-    const d = new Date();
-    const p = (n: number) => String(n).padStart(2, '0');
-    const name = `${this.t('pb.v2.i.clipName')}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
-      `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
-    this.setShot(new File([raw], name, { type: raw.type }));
+  }
+
+  /** 录音附件统一入口(文件选择与粘贴共用同一份状态/保存路径)。 */
+  setAudio(f: File): void {
+    this.audioFile.set(f);
   }
 
   onAudio(ev: Event): void {
     const input = ev.target as HTMLInputElement;
     const f = input.files?.[0] ?? null;
-    if (f) this.audioFile.set(f);
+    if (f) this.setAudio(f);
     input.value = '';
   }
 
@@ -387,6 +424,12 @@ export class IntakePanelComponent {
 
   audioSizeText(): string {
     return fmtFileSize(this.audioFile()?.size ?? 0);
+  }
+
+  /** 目标轮次的日期(phase 推导用):已有轮次取其 scheduledDate,新建轮次取表单日期。 */
+  private roundDateOf(roundId: string, t: Target): string | null {
+    if (t.kind === 'new') return this.nrDate() || null;
+    return this.rounds().find(r => r.id === roundId)?.scheduledDate ?? null;
   }
 
   /** 录音模式:转写类型 + 已选录音 —— 与粘贴文本二选一,录音优先。 */
@@ -488,23 +531,32 @@ export class IntakePanelComponent {
         // 录音与材料页签走同一个上传端点/资产类型(Audio),落到所选归属,
         // 保存后由转写管线处理(实录页签可见),这里不生成任何文本资产。
         // 同附的截图照常同归属落库(独立资产,不与录音做 meta 关联)。
+        // phase 与材料展示推导同一规则(derivePhase):按发生日期 vs 轮次日期。
+        const audioPhase = roundId
+          ? derivePhase(false, this.fDate() || todayStr(), this.roundDateOf(roundId, t)) : '';
         const shot0 = this.shotFile();
         if (shot0) {
           await this.api.uploadFile(entry.id, shot0,
-            { roundId: roundId ?? '', phase: '' }).toPromise();
+            { roundId: roundId ?? '', phase: audioPhase }).toPromise();
         }
         await this.api.uploadFile(entry.id, this.audioFile()!,
-          { roundId: roundId ?? '', phase: roundId ? 'Post' : '' }).toPromise();
+          { roundId: roundId ?? '', phase: audioPhase }).toPromise();
         this.finishSave();
         return;
       }
 
-      // 截图先传(原图作为附件资产,归到同一目标)
+      // phase 落值与展示推导同一规则(derivePhase):材料日期 vs 轮次日期,
+      // 不再写死"邮件一律 Pre"—— 面试后的反馈邮件要落到 After。
+      const matPhase = roundId
+        ? derivePhase(this.type() === 'email', this.fDate() || todayStr(), this.roundDateOf(roundId, t))
+        : null;
+
+      // 截图先传(原图作为附件资产,归到同一目标,phase 与主材料一致)
       let shotId: string | undefined;
       const shot = this.shotFile();
       if (shot) {
         const up = await this.api.uploadFile(entry.id, shot,
-          { roundId: roundId ?? '', phase: '' }).toPromise();
+          { roundId: roundId ?? '', phase: matPhase ?? '' }).toPromise();
         shotId = up?.id;
       }
 
@@ -522,7 +574,7 @@ export class IntakePanelComponent {
         transcriptText: raw,
         transcriptSegmentsJson: segs.length ? JSON.stringify(segs) : null,
         roundId,
-        phase: roundId ? (this.type() === 'email' ? 'Pre' : 'Post') : null,
+        phase: matPhase,
         metaJson: JSON.stringify(meta)
       }).toPromise();
       const assetId = attached!.id;
@@ -560,6 +612,7 @@ export class IntakePanelComponent {
     this.clearShot();
     this.audioFile.set(null);
     this.open.set(false);
+    this.setDocPaste(false);
     this.step.set('input');
     this.saved.emit();
   }
@@ -698,4 +751,23 @@ function fmtFileSize(bytes: number): string {
   if (!bytes) return '0 KB';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** 剪贴板里的第一个文件(files 列表优先,其次 items 的 file 项);纯文字粘贴返回 null。 */
+function firstClipboardFile(cd: DataTransfer | null): File | null {
+  if (!cd) return null;
+  if (cd.files && cd.files.length) return cd.files[0];
+  for (let i = 0; i < cd.items.length; i++) {
+    if (cd.items[i].kind === 'file') {
+      const f = cd.items[i].getAsFile();
+      if (f) return f;
+    }
+  }
+  return null;
+}
+
+/** 音频文件判别:MIME 优先,Finder 复制等场景 MIME 可能为空,用扩展名兜底。 */
+function isAudioFile(f: File): boolean {
+  if (f.type.startsWith('audio/')) return true;
+  return /\.(mp3|m4a|wav|webm|ogg)$/i.test(f.name ?? '');
 }

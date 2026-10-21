@@ -30,6 +30,8 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
  * 切换模式不清空另一模式的内容,粘贴音频/文本会自动对齐到对应模式。
  * 流程:粘贴 → 解析预览(先分类再提取,可改)→ 归属确认(系统按面试官/日期建议,
  * 可改;选新建轮次且有时间则建轮次并进应用内日历)→ 保存。
+ * 面板不设标题输入框:标题一律保存时自动生成 —— 邮件取主题(无主题回落
+ * 发件人/首行)、录音取文件名、转写取首段说话人行、备注取首行(见 autoFileName)。
  * 任何类型都可附一张截图原图 —— 截图是附件,不是类型。
  */
 @Component({
@@ -68,7 +70,7 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
           @if (type() === 'email') {
             <p class="hint">{{ t('pb.v2.i.hintEmail') }}</p>
           } @else if (type() === 'transcript') {
-            <p class="hint">{{ t('pb.v2.i.hintTranscript') }}</p>
+            <p class="hint">{{ transcriptMode() === 'upload' ? t('pb.v2.i.hintTranscriptUpload') : t('pb.v2.i.hintTranscriptText') }}</p>
           } @else {
             <p class="hint">{{ t('pb.v2.i.hintNote') }}</p>
           }
@@ -82,8 +84,6 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
                       (click)="setTranscriptMode('text')">{{ t('pb.v2.i.modeText') }}</button>
             </div>
           }
-          <input class="fld" [placeholder]="t('pb.v2.i.titlePh')"
-                 [ngModel]="title()" (ngModelChange)="title.set($event)">
           @if (type() !== 'transcript' || transcriptMode() === 'text') {
             <textarea class="paste" rows="9"
                       [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
@@ -305,7 +305,6 @@ export class IntakePanelComponent {
   readonly type = signal<IntakeType>('email');
   /** 录音类型二选一模式,默认文本(主流程是粘转写);切换不清空另一模式已填内容。 */
   readonly transcriptMode = signal<TranscriptMode>('text');
-  readonly title = signal('');
   readonly text = signal('');
   readonly shotFile = signal<File | null>(null);
   readonly shotName = signal('');
@@ -632,9 +631,7 @@ export class IntakePanelComponent {
       const raw = this.text();
       const kind = this.type() === 'email' ? 'Text'
         : this.type() === 'transcript' ? 'Transcript' : 'Notes';
-      const fileName = this.title().trim()
-        || (this.type() === 'email' ? (this.fSubject() || this.t('pb.v2.i.typeEmail')) : '')
-        || (this.type() === 'transcript' ? this.t('pb.v2.i.nameTranscript') : this.t('pb.v2.i.typeNote'));
+      const fileName = this.autoFileName(raw);
       const segs = this.type() === 'transcript' ? this.segments() : [];
       const attached = await this.api.attachAsset(entry.id, {
         kind,
@@ -651,7 +648,7 @@ export class IntakePanelComponent {
       if (!roundId && entry.jobApplicationId) {
         const comm = await this.api.createCommunication(entry.jobApplicationId, {
           type: this.type() === 'email' ? 'Email' : this.type() === 'transcript' ? 'Call' : 'Note',
-          subject: this.type() === 'email' ? (this.fSubject() || null) : (this.title().trim() || null),
+          subject: this.type() === 'email' ? (this.fSubject() || null) : fileName,
           content: raw,
           contactName: this.fFrom() || this.fInterviewers() || null,
           occurredAt: new Date(`${this.fDate() || todayStr()}T12:00:00`).toISOString(),
@@ -676,13 +673,33 @@ export class IntakePanelComponent {
   private finishSave(): void {
     this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2500 });
     this.text.set('');
-    this.title.set('');
     this.clearShot();
     this.audioFile.set(null);
     this.open.set(false);
     this.setDocPaste(false);
     this.step.set('input');
     this.saved.emit();
+  }
+
+  /**
+   * 自动标题(面板无标题框,保存时一律自动生成):
+   * 邮件 → 主题,无主题回落发件人、再回落正文首行;转写 → 首段「说话人:原文」
+   * (无分段时回落首行);备注 → 首行。都截到 60 字防材料名过长;全空时用类型名兜底,
+   * 保证落库 fileName 非空(后端 FileName NotEmpty)。
+   */
+  private autoFileName(raw: string): string {
+    if (this.type() === 'email') {
+      return trimSummary(this.fSubject())
+        || trimSummary(this.fFrom())
+        || firstLineSummary(raw)
+        || this.t('pb.v2.i.typeEmail');
+    }
+    if (this.type() === 'transcript') {
+      const segs = this.segments();
+      const first = segs.length ? `${segs[0].speaker}: ${segs[0].text}` : '';
+      return trimSummary(first) || firstLineSummary(raw) || this.t('pb.v2.i.nameTranscript');
+    }
+    return firstLineSummary(raw) || this.t('pb.v2.i.typeNote');
   }
 
   private buildMeta(shotId?: string): AssetMeta {
@@ -788,6 +805,18 @@ function extractInterviewerNames(text: string): string[] {
 
 function guessStage(category: string, _entry: InterviewDetail): string {
   return category === 'invitation' ? 'Interview' : 'Screen';
+}
+
+/** 自动标题截断:折叠空白,超过 60 字截断加省略号;空串原样返回(供回落链判断)。 */
+function trimSummary(s: string): string {
+  const t = (s ?? '').replace(/\s+/g, ' ').trim();
+  return t.length > 60 ? t.slice(0, 60).trimEnd() + '…' : t;
+}
+
+/** 正文首个非空行作摘要(转写/备注/邮件兜底的自动标题)。 */
+function firstLineSummary(raw: string): string {
+  const line = (raw ?? '').split(/\r?\n/).map(s => s.trim()).find(s => s.length > 0) ?? '';
+  return trimSummary(line);
 }
 
 /** 把粘贴的转写文本切段:「说话人:内容」逐行;认不出说话人的行并入上一段。 */

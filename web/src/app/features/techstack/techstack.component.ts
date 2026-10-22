@@ -1062,6 +1062,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
               .replace('{grade}', this.reviewLabel(result))
               .replace('{date}', this.fmtDate(outcome.nextReviewAt)));
           this.applyReviewOutcome(item.id, outcome);
+          this.recordReviewActivity(); // ★ #9:记录复习活动(热力图)——与 grade() 同接线,此前 Log review 漏调致热力图无痕(票81)
         },
         error: (e: Error) => {
           this.acting.set(false);

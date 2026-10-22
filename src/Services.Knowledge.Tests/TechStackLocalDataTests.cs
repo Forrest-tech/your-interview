@@ -252,4 +252,33 @@ public sealed class TechStackLocalDataTests : IAsyncLifetime
             .Handle(new RecordReviewActivityCommand(Other, "2026-08-15"), default);
         otherRecord.Value.Count.Should().Be(1); // 他人自己的第一条,不受我方影响
     }
+
+    [Fact] // boundary: 空账号(Guid.Empty)——record 只落 Guid.Empty 名下,不串入真实账号(票81 补特征测试;后端逻辑未改)
+    public async Task Record_EmptyUserId_IsolatedBucket()
+    {
+        if (!_available) return;
+        var emptyDb = NewDb(Guid.Empty);
+        try
+        {
+            var r = await new RecordReviewActivityCommandHandler(emptyDb)
+                .Handle(new RecordReviewActivityCommand(Guid.Empty, "2026-07-04"), default);
+            r.Value.Should().Be(new ReviewActivityDto("2026-07-04", 1));
+
+            var emptyRows = (await new GetReviewActivityQueryHandler(emptyDb)
+                .Handle(new GetReviewActivityQuery(Guid.Empty), default)).Value;
+            emptyRows.Should().Contain(new ReviewActivityDto("2026-07-04", 1));
+
+            var ownerRows = (await new GetReviewActivityQueryHandler(_db)
+                .Handle(new GetReviewActivityQuery(Owner), default)).Value;
+            ownerRows.Should().NotContain(a => a.Date == "2026-07-04");
+        }
+        finally
+        {
+            var rows = await emptyDb.ReviewActivities.IgnoreQueryFilters()
+                .Where(a => a.UserId == Guid.Empty).ToListAsync();
+            emptyDb.ReviewActivities.RemoveRange(rows);
+            await emptyDb.SaveChangesAsync();
+            await emptyDb.DisposeAsync();
+        }
+    }
 }

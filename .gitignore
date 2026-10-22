@@ -72,3 +72,7 @@ artifacts/
 # --- agent working docs(本地过程文档,不入库) ---
 replica/
 web/proxy.local.json
+
+# --- 覆盖率产物(CI/本地跑出来的报告,不入库;基线本身入库见 scripts/coverage-baseline.txt) ---
+coverage/
+web/.tmp-check/

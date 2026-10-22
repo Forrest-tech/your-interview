@@ -1,0 +1,176 @@
+# =============================================================================
+# CI(票 88 / 系统提升 A1)
+#
+# 仓库此前零 CI。本流水线只做守护,不改产品代码:
+#   - 触发:push / PR 到 develop-new-features(**不是 main** —— main 合并另需 Forrest 点头)
+#   - 后端:build + 全量测试(7 个测试项目)+ 覆盖率门(只升不降)
+#   - 前端:tsc --noEmit + ng build
+#
+# 覆盖率口径复用票 28 已落地的基建,不另立一套:
+#   - 各 *.Tests.csproj 已接入 coverlet.msbuild(中央版本 Directory.Packages.props)
+#   - 合并走 scripts/merge-coverage.py,**不用** coverlet 自带 --merge-with
+#     (各项目分别构建时 ModuleHash 会变,merge-with 匹配不上会丢模块,票 28 实测)
+#   - 基线记在 scripts/coverage-baseline.txt,改基线必须提交本文件(留痕可审查)
+#
+# ⚠️ 关于通道选择:scripts/run-coverage.sh 用 coverlet.console 包装 xunit console
+#    runner,是因为助手侧 VM 的 vstest↔testhost 通道被 egress 代理污染。
+#    GitHub-hosted runner 不是那个环境,这里走标准 `dotnet test` 通道,更稳也更省事。
+#    若日后 CI 实测 vstest 通道有问题,再切回 run-coverage.sh(需覆盖其硬编码的
+#    DOTNET_ROOT / COVERLET / XUNIT_CONSOLE 三处路径)。
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [develop-new-features]
+  pull_request:
+    branches: [develop-new-features]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend · build + 全量测试 + 覆盖率门
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    services:
+      # DB 门控套件必须先有 schema 才能跑,否则假红/假绿(run-coverage.sh 头注既定规程)
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yourinterview
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        ports: ['5672:5672']
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 后端 build(全解决方案)
+        run: dotnet build src/YourInterview.sln -c Debug --nologo
+
+      - name: 等 PostgreSQL 就绪
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for i in $(seq 1 30); do
+            pg_isready -h localhost -p 5432 -U postgres && break
+            sleep 2
+          done
+
+      - name: 建 7 个服务 schema
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d yourinterview -v ON_ERROR_STOP=1 -c '
+            CREATE SCHEMA IF NOT EXISTS identity;
+            CREATE SCHEMA IF NOT EXISTS jobs;
+            CREATE SCHEMA IF NOT EXISTS interviews;
+            CREATE SCHEMA IF NOT EXISTS knowledge;
+            CREATE SCHEMA IF NOT EXISTS assessment;
+            CREATE SCHEMA IF NOT EXISTS analytics;
+            CREATE SCHEMA IF NOT EXISTS aigateway;
+          '
+
+      - name: 装 dotnet-ef
+        run: dotnet tool install --global dotnet-ef --version 8.*
+
+      - name: 应用 7 个服务的迁移
+        run: |
+          set -euo pipefail
+          CS='Host=localhost;Port=5432;Database=yourinterview;Username=postgres;Password=postgres'
+          while read -r proj schema; do
+            dotnet ef database update --project "src/$proj" --no-build \
+              --connection "$CS;Search Path=$schema"
+          done <<'EOF'
+          Services.Identity identity
+          Services.Jobs jobs
+          Services.Interviews interviews
+          Services.Knowledge knowledge
+          Services.Assessment assessment
+          Services.Analytics analytics
+          Services.AiGateway aigateway
+          EOF
+
+      - name: 全量测试 + 覆盖率采集(7 个测试项目)
+        run: |
+          set -euo pipefail
+          mkdir -p coverage
+          for p in \
+            Services.Jobs.Tests \
+            Services.Interviews.Tests \
+            Services.Knowledge.Tests \
+            Services.Assessment.Tests \
+            Services.Analytics.Tests \
+            BuildingBlocks.Tests \
+            Analysis.Worker.Tests; do
+            dotnet test "src/$p" -c Debug --no-build --nologo \
+              /p:CollectCoverage=true \
+              /p:CoverletOutputFormat=opencover \
+              /p:CoverletOutput="$PWD/coverage/$p/"
+          done
+
+      - name: 合并覆盖率 + 门(只升不降)
+        run: |
+          set -euo pipefail
+          LINE=$(python3 scripts/merge-coverage.py coverage/*/coverage.opencover.xml \
+                 | grep '^OVERALL:' || true)
+          if [ -z "$LINE" ]; then
+            echo "::error::merge-coverage.py 未产出 OVERALL 行"
+            exit 1
+          fi
+          PCT=$(echo "$LINE" | grep -oE '[0-9]+\.[0-9]+%$' | tr -d '%')
+          BASE=$(tr -d '[:space:]' < scripts/coverage-baseline.txt)
+          echo "整体行覆盖: 实测 ${PCT}%  基线 ${BASE}%"
+          echo "coverage=${PCT}" >> "$GITHUB_STEP_SUMMARY"
+          if awk -v a="$PCT" -v b="$BASE" 'BEGIN{exit !(a+0 < b+0)}'; then
+            echo "::error::覆盖率下降 ${PCT}% < 基线 ${BASE}%(只升不降)"
+            exit 1
+          fi
+
+  frontend:
+    name: Frontend · tsc + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+
+      - name: tsc --noEmit
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: ng build
+        working-directory: web
+        # pdfjs-dist 是 CommonJS 会产生 optimization bailout warning —— warning 不算红
+        run: npx ng build

@@ -106,11 +106,13 @@ public sealed class ListSessionsQueryHandler(AssessmentDbContext db)
                 scored.Count,
                 x.OverallScore,
                 x.StartedAt, x.CompletedAt,
+                // COD-12/票23:已评分但 Issues 全为空集时分组序列为空 —— 取 null,
+                // 与本字段未评分口径及 Complete 的 FirstOrDefault 先例一致(原 .First() 抛异常冒 500)
                 scored.Count == 0 ? null : scored
                     .SelectMany(q2 => q2.Issues)
                     .GroupBy(i => i.Dimension)
                     .OrderByDescending(g => g.Average(i => i.Severity))
-                    .First().Key);
+                    .FirstOrDefault()?.Key);
         }).ToList();
 
         return Result.Success(new PagedResult<SessionListItemDto>(dtos, total,

@@ -187,6 +187,17 @@ export function entryResultOutcome(outcome: string | null | undefined): EntryRes
   }
 }
 
+/**
+ * 详情页头部徽章文案键(票80):与分组共用 entryResultOutcome 单一事实源。
+ * 无终局(Pending / null / 未知)→ 进行中键;终局 → 对应枚举的全局文案键
+ * (终局时 entryResultOutcome 非 null 保证 outcome 必为五枚举之一)。
+ * 不判读 result 原文、不看条目分析状态(status),冲突时以 outcome 为准。
+ */
+export function entryStatusBadgeKey(outcome: string | null | undefined): string {
+  if (entryResultOutcome(outcome) === null) return 'pb.v2.d.statusProgress';
+  return `pb.roundOutcome.${outcome}`;
+}
+
 /** Completed 排序键:InterviewDate(回落 CreatedAt 日期)—— 与列表页口径一致。 */
 export function entryEndKey(e: { interviewDate?: string | null; createdAt?: string | null }): string {
   return e.interviewDate || (e.createdAt ?? '').slice(0, 10);

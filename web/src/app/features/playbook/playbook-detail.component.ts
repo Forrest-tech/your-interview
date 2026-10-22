@@ -19,7 +19,7 @@ import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
-  entryEndKey, entryResultOutcome, htmlToPlainText, makeV2Fmt, makeV2T
+  entryEndKey, entryResultOutcome, entryStatusBadgeKey, htmlToPlainText, makeV2Fmt, makeV2T
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
@@ -213,13 +213,13 @@ export class PlaybookDetailComponent implements OnDestroy {
     return rs.find(r => r.id === this.selectedRoundId()) ?? rs[rs.length - 1];
   });
 
+  // 票80:头部徽章与分组共用同一事实源 —— 只经 e.outcome 取键
+  // (entryStatusBadgeKey → entryResultOutcome),不再判读 result 原文、
+  // 分析状态(Analyzed)或默认 Completed 兜底。
   readonly statusText = computed(() => {
     const e = this.entry();
     if (!e) return '';
-    if (e.result) return e.result;
-    if (this.rounds().some(r => r.outcome === 'Pending')) return this.t('pb.v2.d.statusProgress');
-    if ((e.status as string) === 'Analyzed') return this.t('pb.v2.d.statusDone');
-    return e.result ?? this.t('pb.v2.d.statusDone');
+    return this.t(entryStatusBadgeKey(e.outcome));
   });
 
   readonly readiness = computed(() => {

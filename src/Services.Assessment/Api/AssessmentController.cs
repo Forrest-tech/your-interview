@@ -478,7 +478,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     ///    这样"评分"与"存分"两件事解耦:网络抖动时不会重复花额度。
     /// </summary>
     [HttpPost("recordings/{id:guid}/score")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> SaveRecordingScore(Guid id, [FromBody] RecordingScoreBody body,
         CancellationToken ct)
     {
@@ -627,7 +627,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     ///    并告知用户"Azure 不可用",绝不静默冒充。
     /// </summary>
     [HttpPost("tts")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Synthesize([FromBody] TtsBody body, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(body.Text))

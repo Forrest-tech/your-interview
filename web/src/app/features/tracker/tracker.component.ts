@@ -1660,7 +1660,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         </button>
       </div>
 
-      <!-- 字段网格: Location, Salary / Job type, URL -->
+      <!-- 字段网格: Location, Salary / Job type, Work authorization / Applied date, URL / Work mode -->
       <div class="fields">
         <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
         <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
@@ -1677,6 +1677,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             } @else { — }
           </span>
         </div>
+        <div class="field"><span class="flabel">{{ t('tracker.saWorkMode') }}</span><span class="fvalue">{{ detail.workMode || '—' }}</span></div>
       </div>
 
       <!-- 2026-10-19:Simplify 风格 —— 无 "About the job" 大标题,JD 正文直接跟字段网格 -->

@@ -39,7 +39,12 @@ x-service-build: &service-build
   context: .
   dockerfile: Dockerfile.service
 
+# ★ 票93(B4):依赖等待必须包含数据库。此前只等 rabbitmq —— 消息队列起来了、
+#   库还没就绪时,服务会带着连不上库的状态被判定可用,正是"页面能开但 API 全 500"
+#   这类假成功的来源之一。
 x-service-deps: &service-deps
+  postgres:
+    condition: service_healthy
   rabbitmq:
     condition: service_healthy
 
@@ -52,6 +57,33 @@ x-service-health: &service-health
   start_period: 60s
 
 services:
+  # ★ 票93(B4):数据库纳入编排。
+  #   此前 compose 头注释号称"一键起全套(数据库 + 消息队列 + …)",但库其实**不在**
+  #   compose 里 —— 连库走 host.docker.internal(宿主机 PG)。结果是"一条命令起不来
+  #   全套":宿主机没起 PG 就全盘 500,而报错根本指不到库上。
+  #   现在把 PG 也纳入编排,并**把 5432 发布到宿主**:这样既保持各服务现有连接串
+  #   (host.docker.internal:5432)一字不改(宿主机进程模式仍可用),又让 compose
+  #   真正自包含。
+  #   ⚠️ 前置:宿主 5432 端口需空闲。若本机已有 PG 在用,改这里的端口映射即可。
+  postgres:
+    image: postgres:16-alpine
+    container_name: yourinterview-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD_LOCAL:-postgres}
+      POSTGRES_DB: yourinterview
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # 容器里没有 pg_isready 之外的依赖,直接探;必须等它 healthy 其它服务才起
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres} -d yourinterview"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: yourinterview-rabbit
@@ -335,6 +367,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 volumes:
+  pgdata:
   rabbitdata:
   analysis-work:
   # ★ 练习录音不再用数据卷 —— 改挂宿主机目录(见 assessment.volumes 的说明)。

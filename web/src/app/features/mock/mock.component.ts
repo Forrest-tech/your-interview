@@ -68,13 +68,15 @@ export class MockComponent implements OnInit {
   form: NewSessionForm = this.emptyForm();
 
   /**
-   * 后端 SessionMode 枚举值:TopicDrill / CompanyStyle / WeaknessFocus / FullMock。
-   * 任务里写的 WeaknessDrill 在后端不存在,以实际枚举为准 —— 传错值后端会静默
-   * 回退到 TopicDrill,导致"我明明选了薄弱点强化却出了通用题"这种难查的 bug。
+   * 后端 SessionMode 枚举值:TopicDrill / CompanyStyle / WeaknessFocus / FullLoop。
+   * 任务里写的 WeaknessDrill 在后端不存在,以实际枚举为准 —— 提交值必须与枚举
+   * 逐字一致:后端对非法 mode 直接回 400(票 63 起,不再静默回退 TopicDrill)。
+   * (历史教训:这里曾误写 FullMock —— 后端无此值,当时又静默回退,导致用户选的
+   * 「完整模拟」实际建成了主题专项会话。)
    */
   readonly modeOptions = computed(() => [
     { value: 'TopicDrill', label: this.t('mock.modeTopicDrill'), hint: this.t('mock.modeTopicDrillHint') },
-    { value: 'FullMock', label: this.t('mock.modeFullMock'), hint: this.t('mock.modeFullMockHint') },
+    { value: 'FullLoop', label: this.t('mock.modeFullMock'), hint: this.t('mock.modeFullMockHint') },
     { value: 'WeaknessFocus', label: this.t('mock.modeWeakness'), hint: this.t('mock.modeWeaknessHint') },
     { value: 'CompanyStyle', label: this.t('mock.modeCompanyStyle'), hint: this.t('mock.modeCompanyStyleHint') }
   ]);
@@ -215,9 +217,12 @@ export class MockComponent implements OnInit {
   modeLabel(mode: string): string {
     const keyMap: Record<string, string> = {
       TopicDrill: 'mock.modeTopicDrill',
+      // 显示别名:FullMock 是票 63 前表单的旧提交值(后端从无此枚举,当时被静默
+      // 回退成 TopicDrill 落库,故实际不会有 FullMock 的已存会话)—— 保留同键映射
+      // 只作防御,保证任何来源的该字符串都不直出枚举原文。
       FullMock: 'mock.modeFullMock',
       // 后端 SessionMode 的完整模拟值是 FullLoop(见 AssessmentAggregates),
-      // 与表单值 FullMock 共用同一本地化名,保证已存会话标签不直出枚举。
+      // 也是表单现在的提交值,与上面的显示别名共用同一本地化名。
       FullLoop: 'mock.modeFullMock',
       WeaknessFocus: 'mock.modeWeakness',
       CompanyStyle: 'mock.modeCompanyStyle'

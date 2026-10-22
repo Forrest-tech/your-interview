@@ -48,7 +48,19 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
     public async Task<IResult> Create([FromBody] CreateSessionBody body, CancellationToken ct)
     {
-        var mode = Enum.TryParse<SessionMode>(body.Mode, true, out var m) ? m : SessionMode.TopicDrill;
+        // 票 63:mode 必须是 SessionMode 的合法枚举名(解析口径见 SessionModeParsing,
+        // 有单测钉住)—— 解析失败回 400 字段级校验错误,不再静默回退 TopicDrill
+        // (旧行为下前端误传 FullMock 时,用户选的「完整模拟」实际建成主题专项
+        // 会话且无任何提示)。
+        if (!SessionModeParsing.TryParse(body.Mode, out var mode))
+            return Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["Mode"] = [$"不支持的练习模式 '{body.Mode}'。合法值:{SessionModeParsing.ValidNames}。"]
+                },
+                title: "Validation failure",
+                statusCode: StatusCodes.Status400BadRequest);
+
         var r = await sender.Send(new CreateSessionCommand(Me, body.Title, mode, body.Topic,
             body.CompanyStyle, body.TargetQuestionCount, body.Language ?? "en"), ct);
         return r.IsSuccess

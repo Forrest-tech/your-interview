@@ -2,10 +2,11 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable, catchError, forkJoin, map, of, switchMap, tap } from 'rxjs';
 
 import { ApiClient } from './api-client';
+import { AuthService } from '../auth/auth.service';
 import {
-  CustomCategoryDto, ReviewActivityDto, ReviewActivityMap,
-  localDateKey, parseCustomCategories, parseReviewActivity, shouldImport,
-  toActivityEntries, toActivityMap,
+  CustomCategoryDto, EnsureState, ReviewActivityDto, ReviewActivityMap,
+  localDateKey, parseCustomCategories, parseReviewActivity, shouldAttemptImport,
+  shouldEnsureLoad, toActivityEntries, toActivityMap,
 } from './techstack-local.helpers';
 
 interface ImportResult { imported: number; total: number }
@@ -26,10 +27,20 @@ interface ImportResult { imported: number; total: number }
  *   - 本地旧键**保留不清除**(票14/15 先例):后端成为真源后不再读取,
  *     留作本地最后一份兜底副本;
  *   - 后端不可达时回落本地旧数据展示(不打标、不冒充已同步)。
+ *
+ * 票82 修正(一次性闩锁三病):
+ *   - **失败不闩锁**:后端不可达/导入失败后状态回 idle,下次进页面自动
+ *     重试(旧实现失败也置 loaded,同一 SPA 会话内导入永不重试,界面还
+ *     用本地回落数据装作正常 —— 静默丢导入机会);
+ *   - **按账号闩锁**:loaded 只对加载时的用户有效;登出后换账号在同一
+ *     SPA 会话登录(根单例不重建)会自动重载并导入新用户的旧数据
+ *     (旧实现直接 return,新用户看到的是上一账号的残留信号数据);
+ *   - **未登录不触发**:无登录用户时 ensureLoaded 直接 no-op,不烧闩锁。
  */
 @Injectable({ providedIn: 'root' })
 export class TechStackLocalService {
   private readonly api = inject(ApiClient);
+  private readonly auth = inject(AuthService);
 
   private static readonly CATEGORIES_KEY = 'ts.customCategories';
   private static readonly ACTIVITY_KEY = 'ts.reviewActivity';
@@ -41,12 +52,21 @@ export class TechStackLocalService {
   /** 全应用唯一一份复习活动状态(本地日期串 → 次数)。 */
   readonly reviewActivity = signal<ReviewActivityMap>({});
 
-  private state: 'idle' | 'loading' | 'loaded' = 'idle';
+  private state: EnsureState = 'idle';
+  /** state==='loaded' 时对应的用户(票82:换账号必须重载)。 */
+  private loadedUserId: string | null = null;
 
-  /** 首次调用:读后端两类数据 → (未导入过且本地有旧数据时)一次性导入 → 以后端为准刷新。 */
+  /**
+   * 首次调用:读后端两类数据 → (未导入过且本地有旧数据时)一次性导入 → 以后端为准刷新。
+   * 票82:是否发起由 shouldEnsureLoad 判定(未登录/在飞/已为本用户加载 → 跳过);
+   * 本轮只有在「两类都完整结束(导入成功或无需导入)」时才闩锁 loaded,
+   * 任一失败回 idle —— 下次进页面重试,旧键与标记原样保留。
+   */
   ensureLoaded(): void {
-    if (this.state !== 'idle') return;
+    const uid = this.auth.user()?.id ?? null;
+    if (!shouldEnsureLoad(this.state, this.loadedUserId, uid)) return;
     this.state = 'loading';
+    const runUserId = uid;
 
     forkJoin({
       cats: this.api.get<CustomCategoryDto[]>('/api/knowledge/custom-categories')
@@ -55,18 +75,32 @@ export class TechStackLocalService {
         .pipe(catchError(() => of(null))),
     }).subscribe(({ cats, acts }) => {
       if (cats === null || acts === null) {
-        // 后端不可达:回落本地旧数据展示
+        // 后端不可达:回落本地旧数据展示,但不闩锁(下次进页面重试导入)
         this.customCategories.set(this.readLocalCategories());
         this.reviewActivity.set(this.readLocalActivity());
-        this.state = 'loaded';
+        this.settle(runUserId, false);
         return;
       }
-      this.importCategoriesIfNeeded((cats ?? []).map((c) => c.name))
-        .subscribe((names) => this.customCategories.set(names));
-      this.importActivityIfNeeded(toActivityMap(acts ?? []))
-        .subscribe((m) => this.reviewActivity.set(m));
-      this.state = 'loaded';
+      forkJoin({
+        catsRes: this.importCategoriesIfNeeded((cats ?? []).map((c) => c.name), runUserId !== null),
+        actRes: this.importActivityIfNeeded(toActivityMap(acts ?? []), runUserId !== null),
+      }).subscribe(({ catsRes, actRes }) => {
+        this.customCategories.set(catsRes.names);
+        this.reviewActivity.set(actRes.map);
+        // 部分成功同理:失败的那类下次只重试它自己(成功类已打标不再重发)
+        this.settle(runUserId, catsRes.complete && actRes.complete);
+      });
     });
+  }
+
+  /** 本轮结束结算:完整且仍是同一用户才闩锁 loaded,否则回 idle 待重试。 */
+  private settle(runUserId: string | null, complete: boolean): void {
+    if (complete && runUserId !== null && (this.auth.user()?.id ?? null) === runUserId) {
+      this.loadedUserId = runUserId;
+      this.state = 'loaded';
+    } else {
+      this.state = 'idle';
+    }
   }
 
   /** 新增空分类:乐观更新信号,后端 PUT 失败则回读后端真源纠正。 */
@@ -118,33 +152,48 @@ export class TechStackLocalService {
 
   // ---------- 内部 ----------
 
-  private importCategoriesIfNeeded(serverNames: string[]): Observable<string[]> {
+  private importCategoriesIfNeeded(
+    serverNames: string[], authenticated: boolean
+  ): Observable<{ names: string[]; complete: boolean }> {
     const local = this.readLocalCategories();
-    if (!shouldImport(this.isImported(TechStackLocalService.CATEGORIES_IMPORTED_KEY), local.length)) {
-      return of(serverNames);
+    if (!shouldAttemptImport(authenticated,
+      this.isImported(TechStackLocalService.CATEGORIES_IMPORTED_KEY), local.length)) {
+      return of({ names: serverNames, complete: true });
     }
+    let landed = false;
     return this.api.post<ImportResult>('/api/knowledge/custom-categories/import', { names: local }).pipe(
-      tap(() => this.markImported(TechStackLocalService.CATEGORIES_IMPORTED_KEY)),
+      // 落服务端才打标;打标后即使回读失败,本类也算完成(下次加载自然可见)
+      tap(() => {
+        landed = true;
+        this.markImported(TechStackLocalService.CATEGORIES_IMPORTED_KEY);
+      }),
       switchMap(() => this.api.get<CustomCategoryDto[]>('/api/knowledge/custom-categories')),
-      map((rows) => (rows ?? []).map((c) => c.name)),
-      // 导入失败:不打标(下次加载重试),本次先用后端已有数据
-      catchError(() => of(serverNames)),
+      map((rows) => ({ names: (rows ?? []).map((c) => c.name), complete: true })),
+      // 导入失败:不打标、complete=false(上层不闩锁,下次加载重试),本次先用后端已有数据
+      catchError(() => of({ names: serverNames, complete: landed })),
     );
   }
 
-  private importActivityIfNeeded(serverMap: ReviewActivityMap): Observable<ReviewActivityMap> {
+  private importActivityIfNeeded(
+    serverMap: ReviewActivityMap, authenticated: boolean
+  ): Observable<{ map: ReviewActivityMap; complete: boolean }> {
     const local = this.readLocalActivity();
-    if (!shouldImport(this.isImported(TechStackLocalService.ACTIVITY_IMPORTED_KEY),
+    if (!shouldAttemptImport(authenticated,
+      this.isImported(TechStackLocalService.ACTIVITY_IMPORTED_KEY),
       Object.keys(local).length)) {
-      return of(serverMap);
+      return of({ map: serverMap, complete: true });
     }
+    let landed = false;
     return this.api.post<ImportResult>('/api/knowledge/review-activity/import', {
       entries: toActivityEntries(local),
     }).pipe(
-      tap(() => this.markImported(TechStackLocalService.ACTIVITY_IMPORTED_KEY)),
+      tap(() => {
+        landed = true;
+        this.markImported(TechStackLocalService.ACTIVITY_IMPORTED_KEY);
+      }),
       switchMap(() => this.api.get<ReviewActivityDto[]>('/api/knowledge/review-activity')),
-      map((rows) => toActivityMap(rows ?? [])),
-      catchError(() => of(serverMap)),
+      map((rows) => ({ map: toActivityMap(rows ?? []), complete: true })),
+      catchError(() => of({ map: serverMap, complete: landed })),
     );
   }
 

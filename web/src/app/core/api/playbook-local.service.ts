@@ -2,10 +2,11 @@ import { Injectable, inject, signal } from '@angular/core';
 import { catchError, map, of, switchMap, tap } from 'rxjs';
 
 import { ApiClient } from './api-client';
+import { AuthService } from '../auth/auth.service';
 import {
-  PlaybookStarStory, StarStoryDto,
-  collectLegacyDebriefs, collectLegacyPasted, parseStarStories, shouldImport,
-  toLocalStory, toStoryInput,
+  EnsureState, PlaybookStarStory, StarStoryDto,
+  collectLegacyDebriefs, collectLegacyPasted, parseStarStories, shouldAttemptImport,
+  shouldEnsureLoad, toLocalStory, toStoryInput,
 } from './playbook-local.helpers';
 
 interface ImportResult { imported: number; total: number }
@@ -26,10 +27,16 @@ interface ImportResult { imported: number; total: number }
  *     双保险 —— 标记丢失也不会产生重复行;
  *   - 本地旧键**保留不清除**(票14 先例):后端成为真源后不再读取,留作本地
  *     最后一份兜底副本;Tracker 备份导出仍读这些键,行为不变。
+ *
+ * 票82 同型修正(与 TechStackLocalService 同口径):一次性闩锁改为
+ * 「失败不闩锁(回 idle 下次重试)+ 按账号闩锁(换账号重载)+ 未登录不触发」;
+ * importLegacyOnce 旧实现同步置 done —— POST 成败未定即封死本会话重试,
+ * 改为两类都结算后才置 done,任一失败回 idle(已成功类已打标不会重发)。
  */
 @Injectable({ providedIn: 'root' })
 export class PlaybookLocalService {
   private readonly api = inject(ApiClient);
+  private readonly auth = inject(AuthService);
 
   private static readonly STAR_KEY = 'pb.starStories';
   private static readonly STAR_IMPORTED_KEY = 'pb.localData.imported.starStories';
@@ -39,19 +46,29 @@ export class PlaybookLocalService {
   /** 全应用唯一一份故事库状态(Playbook 列表页消费)。 */
   readonly starStories = signal<PlaybookStarStory[]>([]);
 
-  private storiesState: 'idle' | 'loading' | 'loaded' = 'idle';
+  private storiesState: EnsureState = 'idle';
+  /** storiesState==='loaded' 时对应的用户(票82:换账号必须重载)。 */
+  private storiesUserId: string | null = null;
   private legacyState: 'idle' | 'running' | 'done' = 'idle';
+  /** legacyState==='done' 时对应的用户(票82)。 */
+  private legacyUserId: string | null = null;
 
-  /** 首次调用:读后端故事 → (未导入过且本地有旧数据时)一次性导入 → 以后端为准刷新。 */
+  /**
+   * 首次调用:读后端故事 → (未导入过且本地有旧数据时)一次性导入 → 以后端为准刷新。
+   * 票82:发起由 shouldEnsureLoad 判定;完整结束才闩锁 loaded,失败回 idle 重试。
+   */
   ensureStarStoriesLoaded(): void {
-    if (this.storiesState !== 'idle') return;
+    const uid = this.auth.user()?.id ?? null;
+    if (!shouldEnsureLoad(this.storiesState, this.storiesUserId, uid)) return;
     this.storiesState = 'loading';
+    let complete = true;
 
     this.api.get<StarStoryDto[]>('/api/interviews/star-stories').pipe(
       switchMap((rows) => {
         const serverStories = (rows ?? []).map(toLocalStory);
         const local = this.readLocalStories();
-        if (!shouldImport(this.isImported(PlaybookLocalService.STAR_IMPORTED_KEY), local.length)) {
+        if (!shouldAttemptImport(uid !== null,
+          this.isImported(PlaybookLocalService.STAR_IMPORTED_KEY), local.length)) {
           return of(serverStories);
         }
         return this.api.post<ImportResult>('/api/interviews/star-stories/import', {
@@ -60,15 +77,26 @@ export class PlaybookLocalService {
           tap(() => this.markImported(PlaybookLocalService.STAR_IMPORTED_KEY)),
           switchMap(() => this.api.get<StarStoryDto[]>('/api/interviews/star-stories')),
           map((rows2) => (rows2 ?? []).map(toLocalStory)),
-          // 导入失败:不打标(下次加载重试),本次展示先用后端已有数据
-          catchError(() => of(serverStories))
+          // 导入失败:不打标、不闩锁(下次加载重试),本次展示先用后端已有数据
+          catchError(() => {
+            complete = false;
+            return of(serverStories);
+          })
         );
       }),
-      // 后端不可达:回落本地旧数据展示(不打标、不冒充已同步)
-      catchError(() => of(this.readLocalStories()))
+      // 后端不可达:回落本地旧数据展示(不打标、不闩锁、不冒充已同步)
+      catchError(() => {
+        complete = false;
+        return of(this.readLocalStories());
+      })
     ).subscribe((stories) => {
       this.starStories.set(stories);
-      this.storiesState = 'loaded';
+      if (complete && uid !== null && (this.auth.user()?.id ?? null) === uid) {
+        this.storiesUserId = uid;
+        this.storiesState = 'loaded';
+      } else {
+        this.storiesState = 'idle';
+      }
     });
   }
 
@@ -95,28 +123,52 @@ export class PlaybookLocalService {
   /**
    * 历史孤儿键一次性导入(复盘 + 粘贴材料)。两类各自打标、各自幂等,
    * 一类失败不挡另一类;失败不打标,下次进 Playbook 列表页重试。
+   * 票82:done 只在「两类都已结算且无失败、且仍是同一用户」时置位;
+   * 任一失败回 idle —— 已成功的那类已打标,重试时不会重发。
    */
   importLegacyOnce(): void {
-    if (this.legacyState !== 'idle') return;
-    this.legacyState = 'running';
+    const uid = this.auth.user()?.id ?? null;
+    if (!uid) return;
+    if (this.legacyState === 'running') return;
+    if (this.legacyState === 'done' && this.legacyUserId === uid) return;
 
     const pairs = this.snapshotLocalPairs();
+    const jobs: { key: string; url: string; items: unknown[] }[] = [];
 
     const debriefs = collectLegacyDebriefs(pairs);
-    if (shouldImport(this.isImported(PlaybookLocalService.DEBRIEF_IMPORTED_KEY), debriefs.length)) {
-      this.api.post<ImportResult>('/api/interviews/legacy-debriefs/import', { items: debriefs })
-        .pipe(catchError(() => of(null)))
-        .subscribe((r) => { if (r) this.markImported(PlaybookLocalService.DEBRIEF_IMPORTED_KEY); });
+    if (shouldAttemptImport(true, this.isImported(PlaybookLocalService.DEBRIEF_IMPORTED_KEY), debriefs.length)) {
+      jobs.push({ key: PlaybookLocalService.DEBRIEF_IMPORTED_KEY, url: '/api/interviews/legacy-debriefs/import', items: debriefs });
     }
 
     const pasted = collectLegacyPasted(pairs);
-    if (shouldImport(this.isImported(PlaybookLocalService.PASTED_IMPORTED_KEY), pasted.length)) {
-      this.api.post<ImportResult>('/api/interviews/legacy-pasted/import', { items: pasted })
-        .pipe(catchError(() => of(null)))
-        .subscribe((r) => { if (r) this.markImported(PlaybookLocalService.PASTED_IMPORTED_KEY); });
+    if (shouldAttemptImport(true, this.isImported(PlaybookLocalService.PASTED_IMPORTED_KEY), pasted.length)) {
+      jobs.push({ key: PlaybookLocalService.PASTED_IMPORTED_KEY, url: '/api/interviews/legacy-pasted/import', items: pasted });
     }
 
-    this.legacyState = 'done';
+    if (jobs.length === 0) {
+      this.legacyUserId = uid;
+      this.legacyState = 'done';
+      return;
+    }
+
+    this.legacyState = 'running';
+    let remaining = jobs.length;
+    let failed = false;
+    for (const job of jobs) {
+      this.api.post<ImportResult>(job.url, { items: job.items })
+        .pipe(catchError(() => of(null)))
+        .subscribe((r) => {
+          if (r) this.markImported(job.key); else failed = true;
+          if (--remaining === 0) {
+            if (!failed && (this.auth.user()?.id ?? null) === uid) {
+              this.legacyUserId = uid;
+              this.legacyState = 'done';
+            } else {
+              this.legacyState = 'idle';
+            }
+          }
+        });
+    }
   }
 
   // ---------- 内部 ----------

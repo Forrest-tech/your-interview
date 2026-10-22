@@ -76,6 +76,30 @@ export function shouldImport(importedFlag: boolean, localCount: number): boolean
   return !importedFlag && localCount > 0;
 }
 
+/** ensure 类一次性加载的状态机(票14/15/16 三面同口径,票82 统一)。 */
+export type EnsureState = 'idle' | 'loading' | 'loaded';
+
+/**
+ * 是否应发起(或重新发起)一次性加载(票82,口径同 techstack-local.helpers):
+ * 未登录不触发;在飞不重复;idle 总是发起;loaded 只对加载时那个用户
+ * 有效,换账号必须重载。失败回 idle 由服务层保证(不闩锁)。
+ */
+export function shouldEnsureLoad(
+  state: EnsureState, loadedUserId: string | null, currentUserId: string | null
+): boolean {
+  if (!currentUserId) return false;
+  if (state === 'loading') return false;
+  if (state === 'idle') return true;
+  return loadedUserId !== currentUserId;
+}
+
+/** 是否应尝试一次性导入:须已登录、未打标、本地确有旧数据(票82)。 */
+export function shouldAttemptImport(
+  authenticated: boolean, importedFlag: boolean, localCount: number
+): boolean {
+  return authenticated && shouldImport(importedFlag, localCount);
+}
+
 /**
  * 从 localStorage 键值对快照里收集历史复盘(pb.debrief.<条目Guid>)。
  * payloadJson = 本地原值逐字(不解析不改写 —— 无损归档);键后缀不是 Guid、

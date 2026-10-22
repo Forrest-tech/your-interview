@@ -29,6 +29,30 @@ export function shouldImport(importedFlag: boolean, localCount: number): boolean
   return !importedFlag && localCount > 0;
 }
 
+/** ensure 类一次性加载的状态机(票14/15/16 三面同口径,票82 统一)。 */
+export type EnsureState = 'idle' | 'loading' | 'loaded';
+
+/**
+ * 是否应发起(或重新发起)一次性加载(票82,口径同 techstack-local.helpers):
+ * 未登录不触发;在飞不重复;idle 总是发起;loaded 只对加载时那个用户
+ * 有效,换账号必须重载。失败回 idle 由服务层保证(不闩锁)。
+ */
+export function shouldEnsureLoad(
+  state: EnsureState, loadedUserId: string | null, currentUserId: string | null
+): boolean {
+  if (!currentUserId) return false;
+  if (state === 'loading') return false;
+  if (state === 'idle') return true;
+  return loadedUserId !== currentUserId;
+}
+
+/** 是否应尝试一次性导入:须已登录、未打标、本地确有旧数据(票82)。 */
+export function shouldAttemptImport(
+  authenticated: boolean, importedFlag: boolean, localCount: number
+): boolean {
+  return authenticated && shouldImport(importedFlag, localCount);
+}
+
 /**
  * 本地收藏中「后端还没有」的部分(导入候选)。保持本地顺序,输入内重复只算一次。
  * 后端导入本身也幂等,这是前端侧的第一道去重(少发无用 id)。

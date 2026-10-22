@@ -92,6 +92,40 @@ export function shouldImport(importedFlag: boolean, localCount: number): boolean
   return !importedFlag && localCount > 0;
 }
 
+/** ensure 类一次性加载的状态机(票14/15/16 三面同口径,票82 统一)。 */
+export type EnsureState = 'idle' | 'loading' | 'loaded';
+
+/**
+ * 是否应发起(或重新发起)一次性加载(票82):
+ *   - 未登录(currentUserId 为空)永不触发 —— 无令牌窗口不烧闩锁,
+ *     登录后由页面 ngOnInit 再调一次时自然补上;
+ *   - 在飞(loading)不重复发起;
+ *   - idle 总是发起;
+ *   - loaded 只对「加载时那个用户」有效 —— 换账号(登出后另一用户在
+ *     同一 SPA 会话内登录,单例服务不重建)必须重载,否则新用户看不到
+ *     自己的数据、旧数据也不会导入(票82 场景 C 实测)。
+ */
+export function shouldEnsureLoad(
+  state: EnsureState, loadedUserId: string | null, currentUserId: string | null
+): boolean {
+  if (!currentUserId) return false;
+  if (state === 'loading') return false;
+  if (state === 'idle') return true;
+  return loadedUserId !== currentUserId;
+}
+
+/**
+ * 是否应尝试一次性导入(票82 边界矩阵:登录态 × 导入标记 × 本地有无):
+ * 须已登录、未打标、本地确有旧数据,三者缺一不发。
+ * 导入失败不打标,由 shouldEnsureLoad 的「失败回 idle」保证下次重试,
+ * 旧键全程保留不删(落服务端后也只打标,不删键)。
+ */
+export function shouldAttemptImport(
+  authenticated: boolean, importedFlag: boolean, localCount: number
+): boolean {
+  return authenticated && shouldImport(importedFlag, localCount);
+}
+
 /** 复习映射 → 导入条目(日期升序,形状对齐后端 ImportReviewActivityBody)。 */
 export function toActivityEntries(map: ReviewActivityMap): ReviewActivityDto[] {
   return Object.keys(map).sort().map((date) => ({ date, count: map[date] }));

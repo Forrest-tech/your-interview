@@ -2,7 +2,10 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable, catchError, map, of, switchMap, tap } from 'rxjs';
 
 import { TrackerApi, ApplicationQuestionDto } from './tracker-api.service';
-import { mergeFavoriteIds, parseStringArray, shouldImport } from './tracker-preferences.helpers';
+import { AuthService } from '../auth/auth.service';
+import {
+  EnsureState, mergeFavoriteIds, parseStringArray, shouldAttemptImport, shouldEnsureLoad,
+} from './tracker-preferences.helpers';
 
 /**
  * Tracker 收藏 + 按投递自备问题的**单一读写路径**(COD-10a/票14)。
@@ -20,10 +23,16 @@ import { mergeFavoriteIds, parseStringArray, shouldImport } from './tracker-pref
  *     去重、自备问题按正文去重),双保险 —— 即使标记丢失,重复导入也不会产生重复行;
  *   - 本地旧键**保留不清除**:后端数据成为真源后它们不再被读取,留作用户本地的
  *     最后一份兜底副本;清除没有任何收益,保留零风险(展示只读后端)。
+ *
+ * 票82 同型修正(与 TechStackLocalService 同口径):一次性闩锁改为
+ * 「失败不闩锁(回 idle 下次重试)+ 按账号闩锁(换账号重载)+ 未登录不触发」,
+ * 旧实现失败也置 loaded 且不认账号,同一 SPA 会话内导入永不重试、
+ * 换账号看到上一账号的收藏残留。
  */
 @Injectable({ providedIn: 'root' })
 export class TrackerPreferencesService {
   private readonly trackerApi = inject(TrackerApi);
+  private readonly auth = inject(AuthService);
 
   private static readonly FAV_KEY = 'yi-tracker-favorites';
   private static readonly FAV_IMPORTED_KEY = 'yi-tracker-favorites-imported';
@@ -33,37 +42,57 @@ export class TrackerPreferencesService {
   /** 全应用唯一一份收藏状态(列表与详情共用)。 */
   readonly favorites = signal<Set<string>>(new Set());
 
-  private favoritesState: 'idle' | 'loading' | 'loaded' = 'idle';
+  private favoritesState: EnsureState = 'idle';
+  /** favoritesState==='loaded' 时对应的用户(票82:换账号必须重载)。 */
+  private favoritesUserId: string | null = null;
 
   isFavorite(id: string): boolean {
     return this.favorites().has(id);
   }
 
-  /** 首次调用时:读后端收藏 → (未导入过且本地有旧数据时)一次性导入 → 以后端为准刷新。 */
+  /**
+   * 首次调用时:读后端收藏 → (未导入过且本地有旧数据时)一次性导入 → 以后端为准刷新。
+   * 票82:发起由 shouldEnsureLoad 判定;本轮完整结束才闩锁 loaded,
+   * 导入失败/后端不可达回 idle,下次进 Tracker 自动重试。
+   */
   ensureFavoritesLoaded(): void {
-    if (this.favoritesState !== 'idle') return;
+    const uid = this.auth.user()?.id ?? null;
+    if (!shouldEnsureLoad(this.favoritesState, this.favoritesUserId, uid)) return;
     this.favoritesState = 'loading';
+    let complete = true;
 
     this.trackerApi.listFavorites().pipe(
       switchMap((rows) => {
         const serverIds = rows.map((r) => r.applicationId);
         const local = this.readLocalFavorites();
-        if (!shouldImport(this.isImported(TrackerPreferencesService.FAV_IMPORTED_KEY), local.length)) {
+        if (!shouldAttemptImport(uid !== null,
+          this.isImported(TrackerPreferencesService.FAV_IMPORTED_KEY), local.length)) {
           return of(serverIds);
         }
         return this.trackerApi.importFavorites(local).pipe(
           tap(() => this.markImported(TrackerPreferencesService.FAV_IMPORTED_KEY)),
           switchMap(() => this.trackerApi.listFavorites()),
           map((rows2) => rows2.map((r) => r.applicationId)),
-          // 导入失败:不打标(下次加载重试),本次展示先用「后端 ∪ 本地」不丢数据
-          catchError(() => of(mergeFavoriteIds(serverIds, local)))
+          // 导入失败:不打标、不闩锁(下次加载重试),本次展示先用「后端 ∪ 本地」不丢数据
+          catchError(() => {
+            complete = false;
+            return of(mergeFavoriteIds(serverIds, local));
+          })
         );
       }),
-      // 后端不可达:回落本地旧数据展示(不打标、不冒充已同步)
-      catchError(() => of(this.readLocalFavorites()))
+      // 后端不可达:回落本地旧数据展示(不打标、不闩锁、不冒充已同步)
+      catchError(() => {
+        complete = false;
+        return of(this.readLocalFavorites());
+      })
     ).subscribe((ids) => {
       this.favorites.set(new Set(ids));
-      this.favoritesState = 'loaded';
+      if (complete && uid !== null && (this.auth.user()?.id ?? null) === uid) {
+        this.favoritesUserId = uid;
+        this.favoritesState = 'loaded';
+      } else {
+        this.favoritesState = 'idle';
+      }
     });
   }
 
@@ -94,7 +123,8 @@ export class TrackerPreferencesService {
   loadQuestions(applicationId: string): Observable<ApplicationQuestionDto[]> {
     const importedKey = TrackerPreferencesService.QUESTION_IMPORTED_PREFIX + applicationId;
     const local = this.readLocalQuestions(applicationId);
-    if (!shouldImport(this.isImported(importedKey), local.length)) {
+    // 票82:未登录不尝试导入(本方法无闩锁,失败本就下次打开重试,口径不变)
+    if (!shouldAttemptImport(this.auth.user() !== null, this.isImported(importedKey), local.length)) {
       return this.trackerApi.listQuestions(applicationId);
     }
     return this.trackerApi.importQuestions(applicationId, local).pipe(

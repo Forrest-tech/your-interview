@@ -160,6 +160,50 @@ export function normalizeThreadSubject(subject?: string | null): { display: stri
 }
 
 // ============================================================================
+//  轮次日期序展示编号 —— 票30(REQ-10):
+//  存储 order 是创建序(后端 AddRound = max+1 落库),只作数据关联键保留;
+//  展示编号改为日期序位置:有日期轮次按 scheduledDate 升序、同日按 order
+//  (= 创建序),无日期轮次排在有日期之后、按 order。补录的早日期轮次因此
+//  拿到小编号,不再因为创建晚而成大编号排末尾。
+//  日期只做 YYYY-MM-DD 字符串比较,绝不构造 Date —— 避免时区偏移把日期挪一天。
+// ============================================================================
+
+/** 轮次排序所需的最小结构(InterviewRound 满足)。 */
+export interface RoundDateSortable {
+  id: string;
+  order: number;
+  scheduledDate?: string | null;
+}
+
+/** 取 scheduledDate 的日期部;须合 YYYY-MM-DD 形态才算有日期,否则 ''(无日期)。 */
+export function roundDateKey(r: RoundDateSortable): string {
+  const d = (r.scheduledDate ?? '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+}
+
+export function compareRoundsByDate(a: RoundDateSortable, b: RoundDateSortable): number {
+  const da = roundDateKey(a);
+  const db = roundDateKey(b);
+  if (da && db && da !== db) return da < db ? -1 : 1;
+  if (da && !db) return -1;
+  if (!da && db) return 1;
+  // 同日 / 都无日期:按 order(= 创建序);order 再同按 id 保证全序稳定
+  if (a.order !== b.order) return a.order - b.order;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** 日期序排序副本(不改原数组)。 */
+export function sortRoundsByDate<T extends RoundDateSortable>(rounds: readonly T[]): T[] {
+  return [...rounds].sort(compareRoundsByDate);
+}
+
+/** 展示编号 = 轮次在日期序中的位置(1 起);不在列表中时回落存储 order。 */
+export function roundDisplayNo(rounds: readonly RoundDateSortable[], round: RoundDateSortable): number {
+  const idx = sortRoundsByDate(rounds).findIndex(r => r.id === round.id);
+  return idx >= 0 ? idx + 1 : round.order;
+}
+
+// ============================================================================
 //  条目结果归类 —— 票05(ARC-14)起判读收归后端单一事实源:
 //  条目列表/详情 DTO 的 outcome 由后端 DeriveOutcome 派生(当前轮轮次枚举
 //  为准 → Result 受控词表精确解析 → 与票04 Jobs 侧 LegacyOutcomeTextAdapter

@@ -6,12 +6,12 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { InterviewDetail } from '../../../../core/models/api.models';
+import { InterviewDetail, InterviewRound } from '../../../../core/models/api.models';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, CommItem } from '../v2.models';
 import { MaterialsListComponent } from './materials-list.component';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject } from '../v2.helpers';
+import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, sortRoundsByDate } from '../v2.helpers';
 
 /**
  * 沟通记录(2026-10-20 定稿,条目级时间线):
@@ -80,7 +80,7 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject } 
                     <button mat-raised-button color="primary" (click)="createRoundFrom(c)">{{ t('pb.v2.c.createRound') }}</button>
                     @if (matchingRound(c); as mr) {
                       <button mat-stroked-button (click)="syncToRound(c, mr.id)">
-                        {{ fmt('pb.v2.c.syncToRound', { n: mr.order }) }}
+                        {{ fmt('pb.v2.c.syncToRound', { n: mr.no }) }}
                       </button>
                     }
                     <button mat-stroked-button (click)="setStatus(c, 'Ignored')">{{ t('pb.v2.c.park') }}</button>
@@ -95,7 +95,7 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject } 
                   <select class="fld sm" [ngModel]="''" (ngModelChange)="moveToRound(c, $event)">
                     <option value="">{{ t('pb.v2.c.pickRound') }}</option>
                     @for (r of rounds(); track r.id) {
-                      <option [value]="r.id">Round {{ r.order }} · {{ r.stage }}</option>
+                      <option [value]="r.id">Round {{ roundNo(r) }} · {{ r.stage }}</option>
                     }
                   </select>
                 </label>
@@ -173,8 +173,12 @@ export class CommLogComponent {
   readonly fullId = signal<string | null>(null);
 
   readonly useJobs = computed(() => !!this.entry().jobApplicationId);
-  readonly rounds = computed(() =>
-    [...(this.entry().rounds ?? [])].sort((a, b) => a.order - b.order));
+  // 票30(REQ-10):与详情页 stepper 同一日期序、同一展示编号
+  readonly rounds = computed(() => sortRoundsByDate(this.entry().rounds ?? []));
+
+  roundNo(r: InterviewRound): number {
+    return roundDisplayNo(this.rounds(), r);
+  }
   readonly entryAssets = computed(() =>
     (this.entry().assets ?? []).filter(a => !a.roundId));
   /** 已关联投递时:没有 Jobs 镜像行的条目级材料(communicationId 未回填的)。 */
@@ -279,12 +283,12 @@ export class CommLogComponent {
     this.fullId.set(this.fullId() === id ? null : id);
   }
 
-  matchingRound(c: CommItem): { id: string; order: number } | null {
+  matchingRound(c: CommItem): { id: string; no: number } | null {
     const stage = c.meta.arrangement?.stage?.toLowerCase();
     if (!stage) return null;
     const hit = this.rounds().find(r => r.stage.toLowerCase().includes(stage)
       || stage.includes(r.stage.toLowerCase()));
-    return hit ? { id: hit.id, order: hit.order } : null;
+    return hit ? { id: hit.id, no: roundDisplayNo(this.rounds(), hit) } : null;
   }
 
   private async persistMeta(c: CommItem, meta: AssetMeta, status?: string): Promise<void> {

@@ -41,7 +41,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   template: `
     <section class="card" data-testid="round-card">
       <div class="rc-head">
-        <h3>Round {{ round().order }} · {{ round().stage }}</h3>
+        <h3>Round {{ displayNo() ?? round().order }} · {{ round().stage }}</h3>
         <span class="rc-meta">
           {{ round().scheduledDate ?? t('pb.v2.d.dateTbd') }}{{ round().scheduledTime ? ' ' + round().scheduledTime : '' }}
           @if (round().interviewers) { · {{ round().interviewers }} }
@@ -174,6 +174,8 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
 export class RoundCardComponent {
   readonly entry = input.required<InterviewDetail>();
   readonly round = input.required<InterviewRound>();
+  /** 票30(REQ-10):展示编号(日期序位置),由详情页传入;缺省回落存储 order(其他调用方零感知)。 */
+  readonly displayNo = input<number | null>(null);
   @Output() readonly changed = new EventEmitter<void>();
   @Output() readonly addMaterialHere = new EventEmitter<string>();
 

@@ -19,7 +19,8 @@ import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
-  entryEndKey, entryResultOutcome, entryStatusBadgeKey, htmlToPlainText, makeV2Fmt, makeV2T
+  entryEndKey, entryResultOutcome, entryStatusBadgeKey, htmlToPlainText, makeV2Fmt, makeV2T,
+  roundDisplayNo, sortRoundsByDate
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
@@ -136,8 +137,14 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly bResult = signal('');
   readonly bNotes = signal('');
 
-  readonly rounds = computed(() =>
-    [...(this.entry()?.rounds ?? [])].sort((a, b) => a.order - b.order));
+  // 票30(REQ-10):展示顺序 = 日期序(有日期升序在前、无日期按创建序在后),
+  // 存储 order 只作创建序代理与数据关联键,不再直接决定展示顺序/编号。
+  readonly rounds = computed(() => sortRoundsByDate(this.entry()?.rounds ?? []));
+
+  /** 展示编号:轮次在日期序中的位置(与 stepper 的 $index+1 同一口径)。 */
+  roundNo(r: InterviewRound): number {
+    return roundDisplayNo(this.rounds(), r);
+  }
 
   /**
    * 最近一封邮件(同一条记录同时供 Recruiter 与「最近联系」取数):
@@ -254,14 +261,14 @@ export class PlaybookDetailComponent implements OnDestroy {
       r.outcome === 'Pending' && (!r.scheduledDate || r.scheduledDate >= today));
     if (upcoming) {
       return {
-        text: this.fmt('pb.v2.d.nextPrep', { n: upcoming.order, stage: upcoming.stage }) +
+        text: this.fmt('pb.v2.d.nextPrep', { n: this.roundNo(upcoming), stage: upcoming.stage }) +
           (upcoming.scheduledDate ? `(${upcoming.scheduledDate}${upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''})` : '')
       };
     }
     const unreviewed = [...this.rounds()].reverse()
       .find(r => r.outcome !== 'Pending' && !r.reviewJson);
     if (unreviewed) {
-      return { text: this.fmt('pb.v2.d.nextReview', { n: unreviewed.order }) };
+      return { text: this.fmt('pb.v2.d.nextReview', { n: this.roundNo(unreviewed) }) };
     }
     const app = this.application();
     if (app?.nextFollowUpAt && app.nextFollowUpAt.slice(0, 10) <= today) {

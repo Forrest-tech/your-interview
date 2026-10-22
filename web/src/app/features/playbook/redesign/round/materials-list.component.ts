@@ -12,7 +12,7 @@ import {
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, formatLabel, isAudioAsset, joinNames, makeV2T } from '../v2.helpers';
+import { derivePhase, formatLabel, isAudioAsset, joinNames, makeV2T, roundDisplayNo } from '../v2.helpers';
 
 /**
  * 材料列表(2026-10-20 定稿):本轮(或条目级)的全部原始件。
@@ -39,7 +39,7 @@ import { derivePhase, formatLabel, isAudioAsset, joinNames, makeV2T } from '../v
             <select class="fld sm" [ngModel]="a.roundId ?? ''" (ngModelChange)="reassign(a, $event)">
               <option value="">{{ t('pb.v2.m.commOption') }}</option>
               @for (r of rounds(); track r.id) {
-                <option [value]="r.id">Round {{ r.order }} · {{ r.stage }}</option>
+                <option [value]="r.id">Round {{ roundNo(r) }} · {{ r.stage }}</option>
               }
             </select>
           </label>
@@ -134,6 +134,11 @@ export class MaterialsListComponent {
   readonly entryId = input.required<string>();
   readonly assets = input.required<InterviewAsset[]>();
   readonly rounds = input<InterviewRound[]>([]);
+
+  /** 票30(REQ-10):归属下拉编号与详情页 stepper 同一日期序口径(helper 内部自排序,input 顺序无关)。 */
+  roundNo(r: InterviewRound): number {
+    return roundDisplayNo(this.rounds(), r);
+  }
   @Output() readonly changed = new EventEmitter<void>();
 
   private readonly api = inject(PlaybookV2Api);

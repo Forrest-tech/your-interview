@@ -197,7 +197,7 @@
                 <span class="step-top">
                   <span class="step-badge" [class.passed]="r.outcome === 'Passed'"
                         [class.failed]="r.outcome === 'Failed'">{{ roundStateIcon(r) }}</span>
-                  <span class="step-name">R{{ r.order }} {{ r.stage }}</span>
+                  <span class="step-name">R{{ $index + 1 }} {{ r.stage }}</span>
                 </span>
                 <span class="step-sub">
                   {{ r.scheduledDate ?? t('pb.v2.d.dateTbd') }}
@@ -212,7 +212,7 @@
           </div>
 
           @if (selectedRound(); as sr) {
-            <app-round-card [entry]="e" [round]="sr"
+            <app-round-card [entry]="e" [round]="sr" [displayNo]="roundNo(sr)"
                             (changed)="onChildChanged()"
                             (addMaterialHere)="openIntake('email', $event)" />
           }

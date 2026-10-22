@@ -14,7 +14,7 @@ import { PlaybookV2Api } from '../playbook-v2.api';
 import { PracticeApi } from '../../../../core/api/practice-api.service';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject } from '../v2.helpers';
+import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, sortRoundsByDate } from '../v2.helpers';
 
 export type IntakeType = 'email' | 'transcript' | 'note';
 /** 「录音·转写文本」类型内部的二选一模式:一次只呈现/保存一种来源。 */
@@ -289,7 +289,7 @@ export const SHARED_OCR_BASE_URL: string =
               @for (r of rounds(); track r.id) {
                 <label class="tgt">
                   <input type="radio" name="tgt" [checked]="isTargetRound(r.id)" (change)="target.set({kind:'round', roundId: r.id})">
-                  Round {{ r.order }} · {{ r.stage }}{{ r.scheduledDate ? ' · ' + r.scheduledDate : '' }}
+                  Round {{ roundNo(r) }} · {{ r.stage }}{{ r.scheduledDate ? ' · ' + r.scheduledDate : '' }}
                 </label>
               }
               <label class="tgt">
@@ -310,6 +310,7 @@ export const SHARED_OCR_BASE_URL: string =
                 <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [placeholder]="t('pb.v2.i.nrFormatPh')" [ngModel]="nrFormat()" (ngModelChange)="nrFormat.set($event)"></label>
               </div>
               <p class="hint">{{ t('pb.v2.i.newRoundHint') }}</p>
+              <p class="hint" data-testid="new-round-defaults-hint">{{ t('pb.v2.i.newRoundDefaultsHint') }}</p>
             }
 
             <div class="row">
@@ -488,8 +489,12 @@ export class IntakePanelComponent {
   readonly errorMsg = signal<string | null>(null);
   readonly duplicate = signal(false);
 
-  readonly rounds = computed(() =>
-    [...(this.entry().rounds ?? [])].sort((a, b) => a.order - b.order));
+  // 票30(REQ-10):归属列表与详情页 stepper 同一日期序、同一展示编号
+  readonly rounds = computed(() => sortRoundsByDate(this.entry().rounds ?? []));
+
+  roundNo(r: InterviewRound): number {
+    return roundDisplayNo(this.rounds(), r);
+  }
 
   speakerNames(): string {
     return joinNames(this.i18n, [...new Set(this.segments().map(s => s.speaker))]);

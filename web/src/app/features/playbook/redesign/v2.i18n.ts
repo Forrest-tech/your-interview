@@ -470,6 +470,7 @@ export const V2_I18N: Record<string, { zh: string; en: string; fr: string }> = {
   'pb.v2.i.nrTimePh': { zh: '如 11:00', en: 'e.g. 11:00', fr: 'ex. 11:00' },
   'pb.v2.i.nrFormatPh': { zh: '线上视频 / 电话 / 现场', en: 'Online video / phone / on-site', fr: 'Vidéo en ligne / téléphone / sur place' },
   'pb.v2.i.newRoundHint': { zh: '保存后该轮次会同时出现在本页轮次列表与应用内日历(提醒:提前 1 天 + 提前 1 小时)。', en: 'After saving, the round appears in this page’s round list and the in-app calendar (reminders: 1 day and 1 hour before).', fr: 'Après l’enregistrement, le tour apparaît dans la liste des tours de cette page et dans le calendrier intégré (rappels : 1 jour et 1 heure avant).' },
+  'pb.v2.i.newRoundDefaultsHint': { zh: '默认值:阶段留空时默认 Technical;日期为过去时结果默认 Pending。之后可在轮次卡里修改。', en: 'Defaults: if the stage is left empty it defaults to Technical; if the date is in the past, the result defaults to Pending. You can change both later in the round card.', fr: 'Valeurs par défaut : si le stade est laissé vide, il vaut Technical ; si la date est passée, le résultat vaut Pending. Modifiable ensuite dans la fiche du tour.' },
   'pb.v2.i.backEdit': { zh: '← 返回修改原文', en: '← Back to edit the original', fr: '← Retour au texte original' },
   'pb.v2.i.saving': { zh: '保存中…', en: 'Saving…', fr: 'Enregistrement…' },
   'pb.v2.i.savedOk': { zh: '✓ 已保存。', en: '✓ Saved.', fr: '✓ Enregistré.' },

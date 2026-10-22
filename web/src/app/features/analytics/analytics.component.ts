@@ -15,6 +15,7 @@ import { catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AbilityTrend, Dashboard } from '../../core/models/api.models';
+import { hasScoredRadarData, weakestRadarPoints } from '../../core/models/radar.helpers';
 
 /** 漏斗阶段的颜色档:越靠后越"贵",用同一色系由浅到深表示推进。 */
 const FUNNEL_COLORS = ['#9fa8da', '#7986cb', '#5c6bc0', '#3f51b5', '#303f9f'];
@@ -106,9 +107,10 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
     }).sort((a, b) => b.total - a.total);
   });
 
-  readonly weakest = computed(() =>
-    [...this.radarPoints()].sort((a, b) => a.current - b.current).slice(0, 3)
-  );
+  /** REQ-08:是否有 scored 数据——无数据时弱项区走 an.noRadar 空态,不列 Top 3、不渲染 Best。 */
+  readonly hasScoredData = computed(() => hasScoredRadarData(this.radarPoints()));
+
+  readonly weakest = computed(() => weakestRadarPoints(this.radarPoints()));
 
   /** 趋势只做粗粒度摘要 —— 先把"在变好还是变差"说清楚,曲线细节留给图表。 */
   readonly trendSummary = computed(() => {

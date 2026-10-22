@@ -715,7 +715,8 @@ export interface RadarPoint {
   dimension: string;
   nameZh: string;
   current: number;
-  best: number;
+  /** 后端 int?:无快照时为 null(JSON 中直接省略),见 radar.helpers.ts 的守卫口径。 */
+  best: number | null;
   previous: number;
   changeFromPrevious: number;
 }

@@ -278,6 +278,12 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
 
     private void MarkNewChildrenAsAdded()
     {
+        // ★ 票69:先 DetectChanges 让子实体状态物化 —— 本钩子跑在 base.SaveChanges
+        //   的变更检测之前,未经检测时新子实体可能尚未被跟踪/状态未定,下面的
+        //   Detached / Modified 修正都会漏掉它(原 Detached 分支失效的原因之一)。
+        //   DetectChanges 在保存流程里本就会执行且幂等,提前跑不改变语义。
+        ChangeTracker.DetectChanges();
+
         // 只处理"聚合内新建的子实体":它们的 Id 是新建的、但导航属性让 EF 认为是已存在。
         // 这里按类型精确处理,比通用反射更可预测(通用方案容易误标 Unchanged 的实体)。
         foreach (var entry in ChangeTracker.Entries<MockQuestion>().ToList())
@@ -286,9 +292,73 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
         foreach (var entry in ChangeTracker.Entries<DimensionIssue>().ToList())
             if (entry.State == EntityState.Detached) entry.State = EntityState.Added;
 
+        // ★ 票69:MockQuestion / DimensionIssue 的 Guid 主键在构造函数里预赋值,
+        //   EF 在「已跟踪的父聚合上新增子实体」时还会把它们误判成 Modified
+        //   (实测状态转储:全新会话加题,两道新题均为 Modified)—— 生成 UPDATE
+        //   命中 0 行 → DbUpdateConcurrencyException → 被全局映射成 409,
+        //   于是「建会话后首加题」恒回并发冲突。上面的 Detached 分支抓不到这种。
+        //   判定口径与 BuildingBlocks.NewChildEntityFixer 一致:直接查库,行不存在
+        //   才是真新建 → 标 Added;行已存在 = 真改字段,保持 Modified(xmin 真冲突
+        //   仍走 UPDATE 0 行 → 409,票07 口径不回退)。只限这两类子实体,
+        //   不套用共享 fixer 的全上下文版 —— PracticeMaterial 等其他实体的
+        //   保存行为不在本票改动面内。
+        FlipModifiedNewChild<MockQuestion>();
+        FlipModifiedNewChild<DimensionIssue>();
+
         // 2026-09-15 第十七轮:PatchScore() 只加子实体而不改聚合根状态,
         // 不显式标 Added 就会被 EF 当成"已存在",不写 INSERT —— 这是本项目踩过的坑。
         foreach (var entry in ChangeTracker.Entries<PracticeRecordingScore>().ToList())
             if (entry.State == EntityState.Detached) entry.State = EntityState.Added;
+    }
+
+    /// <summary>
+    /// 票69:把「被 EF 误判成 Modified 的新子实体」标回 Added。
+    /// 只翻库里确实没有这一行的条目;真被修改的既有实体(RowExists=true)保持 Modified。
+    /// </summary>
+    private void FlipModifiedNewChild<TEntity>() where TEntity : class
+    {
+        foreach (var entry in ChangeTracker.Entries<TEntity>().ToList())
+        {
+            if (entry.State != EntityState.Modified) continue;
+            if (entry.Metadata.FindPrimaryKey() is null) continue;
+
+            var keyProps = entry.Metadata.FindPrimaryKey()!.Properties;
+            if (keyProps.Count != 1 || keyProps[0].ClrType != typeof(Guid)) continue;
+
+            var id = (Guid)entry.Property(keyProps[0].Name).CurrentValue!;
+            if (id == Guid.Empty) continue;
+
+            if (!RowExists(entry.Metadata.GetTableName(),
+                    entry.Metadata.GetSchema() ?? Schema, keyProps[0].Name, id))
+                entry.State = EntityState.Added;
+        }
+    }
+
+    /// <summary>
+    /// 原生 SQL 查行存在性(不经 EF 跟踪,避免递归)。查询失败时按「已存在」处理:
+    /// 宁可维持原状态报并发错,也不要错误地重复 INSERT(同 NewChildEntityFixer 口径)。
+    /// </summary>
+    private bool RowExists(string? table, string schema, string keyColumn, Guid id)
+    {
+        if (table is null) return true;
+        try
+        {
+            var conn = Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                conn.Open();
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SELECT 1 FROM \"{schema}\".\"{table}\" WHERE \"{keyColumn}\" = @id LIMIT 1";
+            var p = cmd.CreateParameter();
+            p.ParameterName = "@id";
+            p.Value = id;
+            cmd.Parameters.Add(p);
+
+            return cmd.ExecuteScalar() is not null;
+        }
+        catch
+        {
+            return true;
+        }
     }
 }

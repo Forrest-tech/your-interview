@@ -942,7 +942,9 @@ public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(UpdateEntryCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
+        // 票04:UpdateBasicInfo 要按 RoundNo 找对应轮次的定论枚举填结构化 outcome,
+        // 必须带 Rounds 加载,否则 _rounds 为空、事件永远无枚举。
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         e.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,

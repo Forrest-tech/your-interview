@@ -78,6 +78,8 @@ public sealed class InterviewsIntegrationEventPublisher(
     /// 面试结果登记(M1.5)→ 回写 Tracker:对应轮次 Outcome 更新,被拒时申请转 Rejected。
     /// UserId 取领域事件自带(聚合产生事件时带入条目 UserId),不依赖 ICurrentUser ——
     /// 消费者作用域内转发时 HttpContext 为空,旧写法会发 Guid.Empty(COD-01 §5.3)。
+    /// 票04(REQ-02+ARC-07):结构化 Outcome 由领域事件的轮次枚举直接映射填充,
+    /// Result 自由文本只保留作展示/日志 —— 发布端禁止再走文本关键词映射。
     /// </summary>
     public async Task Handle(DomainEventNotification<InterviewOutcomeRecordedDomainEvent> n,
         CancellationToken ct)
@@ -87,6 +89,23 @@ public sealed class InterviewsIntegrationEventPublisher(
             e.EntryId, e.RoundNo, e.Result, e.ApplicationId);
 
         await publish.Publish(new SharedContracts.Events.InterviewOutcomeRecorded(
-            e.ApplicationId, e.EntryId, e.UserId, e.RoundNo, e.Result), ct);
+            e.ApplicationId, e.EntryId, e.UserId, e.RoundNo, e.Result,
+            e.Outcome is null ? null : MapOutcome(e.Outcome.Value)), ct);
     }
+
+    /// <summary>
+    /// 领域轮次枚举 → SharedContracts 契约枚举(票04):值域逐值对齐,这里做显式映射,
+    /// 任一侧改枚举都必须回到这里对账,不许靠数值强转或文本猜测。
+    /// </summary>
+    private static SharedContracts.Events.InterviewOutcome MapOutcome(InterviewRoundOutcome outcome)
+        => outcome switch
+        {
+            InterviewRoundOutcome.Pending => SharedContracts.Events.InterviewOutcome.Pending,
+            InterviewRoundOutcome.Passed => SharedContracts.Events.InterviewOutcome.Passed,
+            InterviewRoundOutcome.Rejected => SharedContracts.Events.InterviewOutcome.Rejected,
+            InterviewRoundOutcome.Ghosted => SharedContracts.Events.InterviewOutcome.Ghosted,
+            InterviewRoundOutcome.Cancelled => SharedContracts.Events.InterviewOutcome.Cancelled,
+            InterviewRoundOutcome.NoShow => SharedContracts.Events.InterviewOutcome.NoShow,
+            _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "未知轮次结果")
+        };
 }

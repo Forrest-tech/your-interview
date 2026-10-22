@@ -412,7 +412,10 @@ public sealed class JobApplication : AuditableAggregateRoot
     public InterviewRound AddRound(string stage, DateOnly? scheduledDate, string? interviewer,
         string? format, string? notes)
     {
-        var round = new InterviewRound(Id, _rounds.Count + 1, stage, scheduledDate, interviewer, format, notes);
+        // 票04:结果回写补建的投影轮次号可不连续(如只有第 2 轮),新轮次号必须取 max+1,
+        // 用 Count+1 会与已有投影轮次撞号(Interviews 侧 AddRound 同口径)。
+        var round = new InterviewRound(Id, _rounds.Count == 0 ? 1 : _rounds.Max(r => r.Order) + 1,
+            stage, scheduledDate, interviewer, format, notes);
         _rounds.Add(round);
         if (Status is ApplicationStatus.Applied or ApplicationStatus.Screen)
             ChangeStatusCore(ApplicationStatus.Interview, $"新增面试轮次:{stage}", null, fromAddRound: true);
@@ -439,23 +442,61 @@ public sealed class JobApplication : AuditableAggregateRoot
     }
 
     /// <summary>
-    /// 面试结果回写(M1.5):把实战机经里登记的结果落到对应轮次。
+    /// 面试结果回写(M1.5;票04 REQ-02+ARC-07 重写语义):把实战机经里登记的结果落到对应轮次。
     /// 轮次按 Order 匹配(M1.4 自动建的草稿 RoundNo = 轮次号,天然对齐)。
-    /// 被拒时申请整体转 Rejected —— 用户写下"被拒"就是明确判断,不该再靠手工切状态。
+    ///
+    /// Jobs 侧没有对应轮次时**按轮号补建投影**(轮次主数据在 Interviews,这里只是
+    /// Tracker 侧投影):旧实现直接抛 KeyNotFound、消费者吞掉跳过 —— Playbook 已填
+    /// 结果,Tracker 却停在 Saved、interviewed=0,同屏矛盾(REQ-02)。补建投影
+    /// **不发邀请事件**(RaiseInvitation):这是回写,不是新登记一轮,
+    /// 发了会让 Interviews 反向建草稿形成回环。
+    ///
+    /// 状态语义(与枚举一一对应,不再只处理 Failed@Interview 一种组合):
+    ///   Failed   → Saved/Applied/Screen/Interview 一律转 Rejected(用户写下"被拒"就是明确判断);
+    ///   Passed   → Saved/Applied/Screen 沿状态机走到 Interview(面过是事实,计数口径同源);
+    ///   Ghosted  → Saved/Applied/Screen/Interview 沿状态机走到 Ghosted;
+    ///   其余结果(Pending/Cancelled/NoShow)只落投影,不动申请状态;
+    ///   Offer/Accepted/Paused/Withdrawn 等用户已推进/已决定的状态不被回写覆盖。
     /// </summary>
     public void RecordRoundOutcome(int roundOrder, RoundOutcome outcome, string? note)
     {
-        var round = _rounds.FirstOrDefault(r => r.Order == roundOrder)
-            ?? throw new KeyNotFoundException($"第 {roundOrder} 轮不存在,无法回写结果");
+        var round = _rounds.FirstOrDefault(r => r.Order == roundOrder);
+        if (round is null)
+        {
+            round = new InterviewRound(Id, roundOrder, "Technical", null, null, null, note);
+            _rounds.Add(round);
+        }
 
         round.RecordOutcome(outcome);
 
-        if (outcome == RoundOutcome.Failed && Status == ApplicationStatus.Interview)
-            // note 进流转历史,rejectionReason 进拒因字段 —— 两者都要,别只留一半
-            ChangeStatus(ApplicationStatus.Rejected, note ?? $"第 {roundOrder} 轮面试未通过",
-                rejectionReason: note ?? $"第 {roundOrder} 轮面试未通过");
-        else
-            Touch();
+        switch (outcome)
+        {
+            case RoundOutcome.Failed when Status is ApplicationStatus.Saved
+                or ApplicationStatus.Applied or ApplicationStatus.Screen
+                or ApplicationStatus.Interview:
+                // note 进流转历史,rejectionReason 进拒因字段 —— 两者都要,别只留一半
+                ChangeStatus(ApplicationStatus.Rejected, note ?? $"第 {roundOrder} 轮面试未通过",
+                    rejectionReason: note ?? $"第 {roundOrder} 轮面试未通过");
+                break;
+            case RoundOutcome.Passed when Status is ApplicationStatus.Saved
+                or ApplicationStatus.Applied or ApplicationStatus.Screen:
+                // Saved 不能一步到 Interview:先逐级到 Applied,再进 Interview。
+                // 进 Interview 必须走 fromAddRound 静默路径 —— 普通 ChangeStatus 会
+                // 顺带发「下一轮邀请」让 Interviews 反向建一张新草稿(回写不成回环)。
+                if (Status == ApplicationStatus.Saved)
+                    ChangeStatus(ApplicationStatus.Applied, note ?? $"第 {roundOrder} 轮面试已通过");
+                ChangeStatusCore(ApplicationStatus.Interview, note ?? $"第 {roundOrder} 轮面试已通过",
+                    null, fromAddRound: true);
+                break;
+            case RoundOutcome.Ghosted when Status is ApplicationStatus.Saved
+                or ApplicationStatus.Applied or ApplicationStatus.Screen
+                or ApplicationStatus.Interview:
+                TryWalkToStatus(ApplicationStatus.Ghosted, note ?? $"第 {roundOrder} 轮后无回复");
+                break;
+            default:
+                Touch();
+                break;
+        }
     }
 }
 
@@ -539,7 +580,7 @@ public enum ApplicationStatus
 
 public enum Priority { Low = 0, Medium = 1, High = 2, Critical = 3 }
 
-public enum RoundOutcome { Pending = 0, Passed = 1, Failed = 2, Cancelled = 3, NoShow = 4 }
+public enum RoundOutcome { Pending = 0, Passed = 1, Failed = 2, Cancelled = 3, NoShow = 4, Ghosted = 5 }
 
 public sealed record JobApplicationStatusChangedDomainEvent(
     Guid ApplicationId, Guid CompanyId, string FromStatus, string ToStatus,

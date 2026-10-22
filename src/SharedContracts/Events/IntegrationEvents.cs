@@ -73,16 +73,37 @@ public sealed record InterviewInviteRecorded(
 ) : IntegrationEvent;
 
 /// <summary>
+/// 轮次结果的结构化契约(REQ-02+ARC-07,票04)。
+/// 值域与 Interviews 的 InterviewRoundOutcome 逐值对齐(同名同序),
+/// 两侧在各自边界做显式映射:Interviews 发布端由轮次枚举直接映射填充;
+/// Jobs 消费端映射到 Jobs 的 RoundOutcome(Rejected → Failed)。
+/// 禁止任何一端再用自由文本关键词猜测结果 —— 关键词回落只允许存在于
+/// Jobs 侧单一 adapter,且只服务无枚举的旧事件(见 Jobs EventConsumers)。
+/// </summary>
+public enum InterviewOutcome
+{
+    Pending = 0,
+    Passed = 1,
+    Rejected = 2,
+    Ghosted = 3,
+    Cancelled = 4,
+    NoShow = 5
+}
+
+/// <summary>
 /// Interviews:用户在条目上登记了面试结果(通过/被拒/…)→
 /// Jobs 回写对应轮次的 Outcome;被拒时申请自动转 Rejected(M1.5)。
-/// Result 是用户原话(自由文本),关键词→Outcome 的映射在消费端。
+/// Result 是用户原话(自由文本),仅作展示/日志;结构化结果走 Outcome(票04 起)。
+/// Outcome 为 null = 契约升级前发出的旧事件(或发布端无结构化事实源),
+/// 消费端按旧事件回落路径处理。
 /// </summary>
 public sealed record InterviewOutcomeRecorded(
     Guid ApplicationId,
     Guid EntryId,
     Guid UserId,
     int RoundNo,
-    string Result
+    string Result,
+    InterviewOutcome? Outcome = null
 ) : IntegrationEvent;
 
 /// <summary>Knowledge:某技术条目掌握度变化 → Analytics 刷新能力雷达。</summary>

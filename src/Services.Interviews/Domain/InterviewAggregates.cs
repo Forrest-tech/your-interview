@@ -277,8 +277,17 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Touch();
 
         if (outcomeRecorded)
+        {
+            // 票04(REQ-02+ARC-07):结构化 outcome 只认轮次枚举这一事实源 ——
+            // 对应轮次已有定论(非 Pending)时把枚举带进事件,发布端直接映射;
+            // 轮次尚无定论时留空:发布端禁止拿自由文本猜枚举,
+            // 由 Jobs 侧单一 adapter 按旧事件回落处理 Result 原文。
+            var roundOutcome = _rounds.FirstOrDefault(r => r.Order == RoundNo)?.Outcome;
             RaiseDomainEvent(new InterviewOutcomeRecordedDomainEvent(
-                Id, JobApplicationId!.Value, RoundNo, result!, UserId));
+                Id, JobApplicationId!.Value, RoundNo, result!, UserId,
+                roundOutcome is not null and not InterviewRoundOutcome.Pending
+                    ? roundOutcome : null));
+        }
     }
 
     /// <summary>挂上一份材料(录音或文本)。会自动把 Draft 推进到 AssetsUploaded。</summary>
@@ -617,8 +626,18 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     {
         var r = _rounds.FirstOrDefault(x => x.Id == roundId)
             ?? throw new InvalidOperationException("轮次不存在");
+        var outcomeChanged = r.Outcome != outcome;
         r.Update(stage, scheduledDate, interviewers, format, location, outcome, notes, feedback);
         Touch();
+
+        // 票04(REQ-02+ARC-07):轮次结果变更 = 结构化事实,直接带轮次枚举发回写事件。
+        // 此前只有条目级自由文本 Result 变更才发事件,用户在轮次卡上填结果
+        // (结构化下拉)根本传不到 Tracker —— 同屏矛盾的一半根源。
+        // 守卫:未关联投递不发;结果没变不发(邀约建稿/AddRound 补字段等内部
+        // 调用都以原 outcome 保存,不会误触发)。
+        if (outcomeChanged && JobApplicationId is not null)
+            RaiseDomainEvent(new InterviewOutcomeRecordedDomainEvent(
+                Id, JobApplicationId.Value, r.Order, outcome.ToString(), UserId, outcome));
     }
 
     public void RemoveRound(Guid roundId)
@@ -1275,7 +1294,7 @@ public sealed record InterviewAnalysisFailedDomainEvent(Guid EntryId, string Rea
 /// </summary>
 public sealed record InterviewOutcomeRecordedDomainEvent(
     Guid EntryId, Guid ApplicationId, int RoundNo, string Result,
-    Guid UserId = default) : DomainEventBase;
+    Guid UserId = default, InterviewRoundOutcome? Outcome = null) : DomainEventBase;
 
 // ============================ 分析回写用的 DTO(领域层不依赖 Application) ============================
 

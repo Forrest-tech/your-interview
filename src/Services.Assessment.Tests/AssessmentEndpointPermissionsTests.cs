@@ -19,12 +19,25 @@ namespace YourInterview.Services.Assessment.Tests;
 /// 同权;不改 MockManage(User 无此权,改之即回退,违反票面「Admin/User 正常」);
 /// 仓库无 MockWrite 且既有常量够用,不新增常量、不动种子、无迁移。
 ///
+/// 票86 追补(同根 COD-15):票 25 盘点票面外发现 #14/#34 在此落地 ——
+///  · #14 AssessPronunciation(POST pronunciation/assess,练习页跟读评分、
+///    消费 Azure 付费评估)改挂 MockAnswer —— 与本类既有两目标端点同为
+///    练习参与流,口径一致;
+///  · #34 TestSpeech(POST speech/test,真连 Azure 测「已保存的 key」)
+///    改挂 MockManage —— 定责依据(读码,evidence-86/STATUS.md §8):
+///    前端 PracticeApi.testSpeech() 零组件调用方,练习页从不调用;
+///    设置页实际凭据流是 test-credential(已 MockManage);凭据验证同族
+///    (PUT speech/settings、POST speech/test-credential、AiGateway
+///    test-credential)全挂 MockManage,speech/test 为唯一例外,故对齐
+///    MockManage。User 无 MockManage 改后 403,但 User 无 UI 路径可达
+///    本端点,不构成可用功能回退;#14 的 User 不回退由 MockAnswer 保证。
+/// 原 OutOfScopeEndpoints_LockedAtMockRead 锁定据此移除,两端点移入
+/// 下方目标断言(票 55 先例:改挂时同步改断言并注明依据)。
+///
 /// 本组为纯反射/纯数据断言,不连 DB:
 ///  · 目标端点 policy == perm:mock.answer(COD-15 本体);
 ///  · 邻居特征锁定(总纲第八节回归验邻居):读端点仍 MockRead、管理写仍
-///    MockManage、上传录音仍 MockAnswer;票面外两端点 AssessPronunciation /
-///    TestSpeech 锁定现状 MockRead —— 它们已另立票 86,本票零容忍不扩围,
-///    票 86 改挂时此处断言须同步改并注明依据(票 55 先例);
+///    MockManage、上传录音仍 MockAnswer;
 ///  · DefaultPermissions 组合:Viewer 有读无答、User/PowerUser/Admin 有答、
 ///    Service 对 mock 三权全无 —— 这是「改挂 MockAnswer 后只有 Viewer 被挡」
 ///    的数据依据;
@@ -60,6 +73,18 @@ public sealed class AssessmentEndpointPermissionsTests
         => PolicyOf(nameof(AssessmentController.Synthesize))
             .Should().Be(PermissionPolicy.Prefix + Permissions.MockAnswer);
 
+    // ---------- 票86 本体:盘点 #14/#34 ----------
+
+    [Fact] // 票86 #14:跟读发音评估是练习参与流且消费 Azure 付费评估
+    public void AssessPronunciation_RequiresMockAnswer()
+        => PolicyOf(nameof(AssessmentController.AssessPronunciation))
+            .Should().Be(PermissionPolicy.Prefix + Permissions.MockAnswer);
+
+    [Fact] // 票86 #34:测已保存凭据属设置/凭据验证流,与 test-credential 同族同权
+    public void TestSpeech_RequiresMockManage()
+        => PolicyOf(nameof(AssessmentController.TestSpeech))
+            .Should().Be(PermissionPolicy.Prefix + Permissions.MockManage);
+
     // ---------- 邻居特征锁定:读端点不变(仍 MockRead) ----------
 
     [Theory] // 邻居回归:读路径逐字不变,Viewer/User 读能力不受本票影响
@@ -67,15 +92,6 @@ public sealed class AssessmentEndpointPermissionsTests
     [InlineData(nameof(AssessmentController.GetMaterials))]
     [InlineData(nameof(AssessmentController.GetRecordingScore))]
     public void ReadEndpoints_StillRequireMockRead(string methodName)
-        => PolicyOf(methodName)
-            .Should().Be(PermissionPolicy.Prefix + Permissions.MockRead);
-
-    // ---------- 邻居特征锁定:票面外两端点锁现状(票 86 范围,本票不动) ----------
-
-    [Theory] // 不变项:盘点 §2 #14/#34,已立票 86;票 86 落地时改此处并注明依据
-    [InlineData(nameof(AssessmentController.AssessPronunciation))]
-    [InlineData(nameof(AssessmentController.TestSpeech))]
-    public void OutOfScopeEndpoints_LockedAtMockRead(string methodName)
         => PolicyOf(methodName)
             .Should().Be(PermissionPolicy.Prefix + Permissions.MockRead);
 
@@ -90,9 +106,17 @@ public sealed class AssessmentEndpointPermissionsTests
     [InlineData(nameof(AssessmentController.Create))]
     [InlineData(nameof(AssessmentController.SaveMaterials))]
     [InlineData(nameof(AssessmentController.DeleteRecording))]
+    [InlineData(nameof(AssessmentController.TestSpeechCredential))] // 票86 定责同族锚点:候选凭据测试本就 MockManage
+    [InlineData(nameof(AssessmentController.SaveSpeechSettings))]
     public void ManageEndpoints_StillRequireMockManage(string methodName)
         => PolicyOf(methodName)
             .Should().Be(PermissionPolicy.Prefix + Permissions.MockManage);
+
+    [Theory] // 票86 #34 角色依据:Admin/PowerUser 持 MockManage,改挂后仍可达(不变)
+    [InlineData(Roles.Admin)]
+    [InlineData(Roles.PowerUser)]
+    public void ManageRoles_ContainMockManage(string role)
+        => Roles.DefaultPermissions[role].Should().Contain(Permissions.MockManage);
 
     // ---------- DefaultPermissions 组合:改挂后的角色能力依据 ----------
 
@@ -152,6 +176,22 @@ public sealed class AssessmentEndpointPermissionsTests
             {
                 ClaimType = CustomClaims.Permission,
                 AllowedValues = new string?[] { Permissions.MockAnswer }
+            });
+    }
+
+    [Fact] // 票86 #34 策略存在性:perm:mock.manage 必须已注册(同 MockAnswer 钉法)
+    public void PermissionPolicies_ContainMockManagePolicyRequiringPermClaim()
+    {
+        var options = new AuthorizationOptions();
+        PermissionPolicy.AddPermissionPolicies(options);
+
+        var policy = options.GetPolicy(PermissionPolicy.Prefix + Permissions.MockManage);
+        policy.Should().NotBeNull("perm:mock.manage 策略应由 AddPermissionPolicies 注册");
+        policy!.Requirements.OfType<ClaimsAuthorizationRequirement>().Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new
+            {
+                ClaimType = CustomClaims.Permission,
+                AllowedValues = new string?[] { Permissions.MockManage }
             });
     }
 

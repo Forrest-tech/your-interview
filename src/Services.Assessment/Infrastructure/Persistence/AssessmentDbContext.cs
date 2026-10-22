@@ -64,6 +64,12 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.HasIndex(x => new { x.UserId, x.StartedAt });
             e.HasIndex(x => x.Status);
 
+            // ★ 修复票 66:软删除过滤器 —— 与 PracticeMaterial(下方)同口径。
+            //   MarkDeleted() 只置 IsDeleted,此前本实体漏配过滤器,已删会话仍能被
+            //   GET/列表/统计读到、删后写路径也照常成功。配上后所有查询默认只看
+            //   未删会话(写路径先查会话→查不到即 404);排查/恢复时 IgnoreQueryFilters()。
+            e.HasQueryFilter(x => !x.IsDeleted);
+
             e.UseXminAsConcurrencyToken();
         });
 

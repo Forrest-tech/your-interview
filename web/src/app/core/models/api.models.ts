@@ -72,6 +72,8 @@ export interface Application {
   role: string;
   location?: string;
   salary?: string;
+  /** 工作方式 (Remote / Hybrid / Onsite;后端 DTO 一直有返回,此前模型漏声明导致编辑回填无从引用)。 */
+  workMode?: string | null;
   status: ApplicationStatus;
   priority?: string;
   /** 投递来源(如 LinkedIn / Indeed / 官网)。 */

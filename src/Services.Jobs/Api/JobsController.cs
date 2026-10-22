@@ -113,7 +113,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         var r = await sender.Send(new UpdateApplicationCommand(Me, id, body.Role, body.Location, body.Link,
             body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline,
             body.AppliedDate, body.CompanyDescription, body.WorkAuthorization, null,
-            body.Requirements, body.Benefits), ct);
+            body.Requirements, body.Benefits, body.JdText), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -374,7 +374,9 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public sealed record UpdateApplicationBody(string Role, string? Location, string? Link, string? Salary,
         string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority, DateOnly? Deadline,
         DateOnly? AppliedDate, string? CompanyDescription, string? WorkAuthorization,
-        string? Requirements = null, string? Benefits = null);
+        string? Requirements = null, string? Benefits = null,
+        // FUN-02:编辑负载补齐 JD 全文。不带该字段 (null) 时后端保持原值,见 UpdateApplicationCommand。
+        string? JdText = null);
     public sealed record ChangeStatusBody(string Status, string? Note, string? RejectionReason);
     /// <summary>JD 全文提交。空串由领域方法归一为 null。</summary>
     public sealed record JdContentBody(string? JdText, string? JdSourceUrl);

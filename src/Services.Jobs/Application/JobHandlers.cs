@@ -118,14 +118,20 @@ public sealed record CreateApplicationCommand(Guid UserId, Guid CompanyId, strin
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Priority = null,
     DateOnly? AppliedDate = null, string? Status = null, string? CompanyDescription = null,
     string? WorkAuthorization = null, string? JobType = null,
-    string? Requirements = null, string? Benefits = null)
+    string? Requirements = null, string? Benefits = null,
+    // FUN-02:手动建单填的 JD 全文与备注此前无处可放 (命令里根本没有这两个字段),
+    // 前端发不发都会丢。尾部可选参数补齐,既有调用方不受影响。
+    string? JdText = null, string? Notes = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateApplicationCommand(Guid UserId, Guid Id, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority,
     DateOnly? Deadline, DateOnly? AppliedDate = null, string? CompanyDescription = null,
     string? WorkAuthorization = null, string? JobType = null,
-    string? Requirements = null, string? Benefits = null)
+    string? Requirements = null, string? Benefits = null,
+    // FUN-02:JD 全文纳入全量更新。语义: null = 调用方未提供该字段,保持原值
+    // (详情页局部保存不带 jdText,不能误清); 非 null (含空串) = 明确的新值,空串归一为清空。
+    string? JdText = null)
     : IRequest<Result>;
 
 public sealed record ChangeApplicationStatusCommand(Guid UserId, Guid Id, string Status, string? Note, string? RejectionReason)
@@ -184,6 +190,9 @@ public sealed class CreateApplicationCommandValidator : AbstractValidator<Create
         RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.Role).NotEmpty().MaximumLength(300).WithMessage("岗位名称必填");
         RuleFor(x => x.Link).MaximumLength(2048);
+        // FUN-02:与列上限对齐 (JdText 40000 / Notes 8000),超长给明确 400 而不是落库 500。
+        RuleFor(x => x.JdText).MaximumLength(40000);
+        RuleFor(x => x.Notes).MaximumLength(8000);
         RuleFor(x => x.Priority).Must(p => p is null || Enum.TryParse<Priority>(p, true, out _))
             .WithMessage("优先级必须是 Low / Medium / High / Critical");
     }
@@ -479,6 +488,13 @@ public sealed class CreateApplicationCommandHandler(JobsDbContext db)
         if (!string.IsNullOrWhiteSpace(request.Benefits))
             app.SetBenefits(request.Benefits);
 
+        // FUN-02:手动建单的 JD 全文与备注随建单落库 (出处 URL 不借用 Link 字段,保持 null)。
+        if (!string.IsNullOrWhiteSpace(request.JdText))
+            app.SetJdContent(request.JdText, null);
+
+        if (!string.IsNullOrWhiteSpace(request.Notes))
+            app.SetNotes(request.Notes);
+
         if (request.AppliedDate.HasValue)
             app.SetAppliedDate(request.AppliedDate);
 
@@ -514,6 +530,10 @@ public sealed class UpdateApplicationCommandHandler(JobsDbContext db)
             request.WorkMode, request.Source, request.JdSummary, request.Notes,
             request.CompanyDescription, request.WorkAuthorization, request.JobType,
             request.Requirements, request.Benefits);
+        // FUN-02:JdText 为 null 表示调用方未提供 (局部保存),保持原值与出处;
+        // 非 null 才按新值覆盖 (空串在 SetJdContent 内归一为清空)。
+        if (request.JdText is not null)
+            a.SetJdContent(request.JdText, a.JdSourceUrl);
         a.SetDeadline(request.Deadline);
         if (request.AppliedDate.HasValue)
             a.SetAppliedDate(request.AppliedDate);

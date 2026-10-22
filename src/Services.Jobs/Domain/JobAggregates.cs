@@ -348,6 +348,16 @@ public sealed class JobApplication : AuditableAggregateRoot
     }
 
     /// <summary>
+    /// 设置备注。独立方法,理由同 SetJdContent:手动建单时备注随单落库,
+    /// 不该逼迫调用方走整份 UpdateDetails。空串归一为 null。
+    /// </summary>
+    public void SetNotes(string? notes)
+    {
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes;
+        Touch();
+    }
+
+    /// <summary>
     /// 设置公司介绍。独立方法:Smart paste 抓到公司介绍是高频动作,
     /// 不该逼迫调用方传齐所有投递字段。空串归一为 null。
     /// </summary>

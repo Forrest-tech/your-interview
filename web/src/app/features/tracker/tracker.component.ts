@@ -1324,9 +1324,16 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     ref.afterClosed().subscribe((form?: ApplicationForm | null) => {
       if (!form) return;
-      if (app) this.update(app.id, form);
+      if (app) this.update(app, form);
       else this.create(form);
     });
+  }
+
+  /** ★ #6:文档版本存入 notes 前缀 [DOCS:...] —— 建单与编辑共用同一口径。 */
+  private composeNotes(form: ApplicationForm): string | null {
+    return form.sentDocuments?.trim()
+      ? `[DOCS:${form.sentDocuments.trim()}] ${form.notes || ''}`.trim()
+      : (form.notes || null);
   }
 
   private create(form: ApplicationForm): void {
@@ -1343,7 +1350,11 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
           source: null,
           jdSummary: null,
           priority: form.priority || null,
-          appliedDate: form.appliedDate || null
+          appliedDate: form.appliedDate || null,
+          // FUN-02:手动建单填的 JD 与备注随建单负载一并提交 —— 此前根本不发,
+          // 保存后抽屉恒显示 "No JD yet"、API jdText/notes 为空。
+          jdText: form.jdText?.trim() || null,
+          notes: this.composeNotes(form)
         }).subscribe({
           next: (app) => this.afterCreate(app, form),
           error: (e: Error) => this.notify(e.message, true)
@@ -1353,7 +1364,9 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  /** 建完投递后,补齐初始状态(走合法路径逐步流转)/备注/外联留言,再刷新看板。 */
+  /** 建完投递后,补齐初始状态(走合法路径逐步流转)/外联留言,再刷新看板。
+   *  备注与 JD 已随 create 负载落库 (FUN-02),不再补发全量 PUT —— 旧做法只在
+   *  form.notes 非空时才发,且新建返回对象只有 id、全量 PUT 反而可能误清字段。 */
   private afterCreate(app: Application, form: ApplicationForm): void {
     const tasks: Observable<unknown>[] = [];
     const path = STATUS_PATH_FROM_SAVED[form.status] ?? [];
@@ -1364,9 +1377,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
           { status: s, note: this.t('tracker.historyCreated') }).pipe(catchError(() => of(null)))
       );
       tasks.push(concat(...steps$));
-    }
-    if (form.notes) {
-      tasks.push(this.updateAppPayload(app.id, form).pipe(catchError(() => of(null))));
     }
     if (form.needsConnectFirst || form.outreachMessage) {
       tasks.push(this.api.put<void>(`/api/jobs/applications/${app.id}/outreach`,
@@ -1379,9 +1389,10 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     forkJoin(tasks).subscribe({ next: done, error: done });
   }
 
-  private update(id: string, form: ApplicationForm): void {
+  private update(existing: Application, form: ApplicationForm): void {
+    const id = existing.id;
     const tasks: Observable<unknown>[] = [
-      this.updateAppPayload(id, form).pipe(catchError((e: Error) => { this.notify(e.message, true); return of(null); }))
+      this.updateAppPayload(existing, form).pipe(catchError((e: Error) => { this.notify(e.message, true); return of(null); }))
     ];
     if (form.needsConnectFirst || form.outreachMessage) {
       tasks.push(this.api.put<void>(`/api/jobs/applications/${id}/outreach`,
@@ -1392,24 +1403,31 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     forkJoin(tasks).subscribe({ next: done, error: done });
   }
 
-  /** 把表单字段拼成 UpdateApplication 所需的完整负载(后端要求全量)。 */
-  private updateAppPayload(id: string, form: ApplicationForm): Observable<unknown> {
-    // ★ #6:文档版本存入 notes 前缀 [DOCS:...]
-    const notes = form.sentDocuments?.trim()
-      ? `[DOCS:${form.sentDocuments.trim()}] ${form.notes || ''}`.trim()
-      : (form.notes || null);
-    return this.api.put<void>(`/api/jobs/applications/${id}`, {
+  /**
+   * 把表单字段拼成 UpdateApplication 所需的完整负载(后端要求全量)。
+   * FUN-02:表单有的字段带真实值 (含 jdText —— 此前根本不发,编辑填的 JD 静默丢失);
+   * 表单没有的字段 (workMode/source/jdSummary/deadline 及详情长字段) 从现有投递
+   * 回填 —— 硬编码 null 在全量 PUT 下会把已有值误清。
+   */
+  private updateAppPayload(existing: Application, form: ApplicationForm): Observable<unknown> {
+    return this.api.put<void>(`/api/jobs/applications/${existing.id}`, {
       role: form.role,
       location: form.location || null,
       link: form.link || null,
       salary: form.salary || null,
-      workMode: null,
-      source: null,
-      jdSummary: null,
-      notes: notes,
+      workMode: existing.workMode ?? null,
+      source: existing.source ?? null,
+      jdSummary: existing.jdSummary ?? null,
+      notes: this.composeNotes(form),
       priority: form.priority || null,
       appliedDate: form.appliedDate || null,
-      deadline: null
+      deadline: existing.deadline ?? null,
+      // 始终发送 (空串 = 用户清空 JD,后端归一为 null;不发则后端保持原值)
+      jdText: form.jdText?.trim() ?? '',
+      companyDescription: existing.companyDescription ?? null,
+      workAuthorization: existing.workAuthorization ?? null,
+      requirements: existing.requirements ?? null,
+      benefits: existing.benefits ?? null
     });
   }
 
@@ -3121,6 +3139,8 @@ export class ApplicationDetailDialogComponent {
     this.notesSaving.set(true);
     this.api.put(`/api/jobs/applications/${this.app.id}`, {
       role: d.role, location: d.location, link: d.link, salary: d.salary,
+      // FUN-02 附带:全量 PUT 下缺省即 null,会误清已有 workMode/source —— 从详情回填
+      workMode: d.workMode ?? null, source: d.source ?? null,
       jdSummary: d.jdSummary,
       notes: this.notesDraft.trim() || null, priority: d.priority,
       deadline: d.deadline, appliedDate: d.appliedDate,
@@ -3317,6 +3337,8 @@ export class ApplicationDetailDialogComponent {
     this.jdSummarySaving.set(true);
     this.api.put(`/api/jobs/applications/${this.app.id}`, {
       role: d.role, location: d.location, link: d.link, salary: d.salary,
+      // FUN-02 附带:同 saveNotes,回填表单外的 workMode/source 防全量 PUT 误清
+      workMode: d.workMode ?? null, source: d.source ?? null,
       jdSummary: this.jdSummaryDraft.trim() || null, notes: d.notes,
       priority: d.priority, deadline: d.deadline, appliedDate: d.appliedDate,
     }).subscribe({

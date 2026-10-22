@@ -189,37 +189,48 @@ public sealed class SmartParseRulesJdTests
         Assert.Equal("C#, .NET, PostgreSQL", d.MatchKeywords);
     }
 
-    [Fact] // known-gap → 票 29:同行内联 "Benefits: …" 解不出(AUDIT REQ-09 形态 B,SmartParseRules 段落提取只认独立标题行)
-    public void Parse_InlineBenefitsForm_KnownGap_Ticket29_BenefitsNull()
-    {
-        var d = JdPasteParser.Parse(JdInlineBenefits, PasteKind.Text);
-        Assert.Null(d.Benefits);
-    }
-
-    [Fact] // known-gap → 票 29:无 "About the job" 标题时摘要以元数据行开头(AUDIT REQ-09 形态 B)
-    public void Parse_InlineBenefitsForm_KnownGap_Ticket29_SummaryStartsWithMetadataLine()
+    [Fact] // 票 29 翻绿 (原 KnownGap_Ticket29):同行内联 "Benefits: …" 现可解出 (AUDIT REQ-09 形态 B)。
+           // 改动依据:缺陷在 ExtractSection 只认整行标题,已修为标题+冒号+同行内容形态;断言按 JD 原文逐字核对,非放宽。
+    public void Parse_InlineBenefitsForm_BenefitsExtractedFromInlineLine()
     {
         var d = JdPasteParser.Parse(JdInlineBenefits, PasteKind.Text);
         Assert.Equal(
-            "Toronto, ON - Hybrid - Full-time Salary: $120,000 - $150,000 per year " +
+            "Health insurance, dental coverage, RRSP matching, and flexible working hours for all employees.",
+            d.Benefits);
+    }
+
+    [Fact] // 票 29 翻绿 (原 KnownGap_Ticket29):无 "About the job" 标题时摘要以正文开头,不再以元数据行开头。
+           // 改动依据:缺陷在 Summary 前导跳行不认复合元数据行/薪资标签行,已修 IsMetadataLine;期望值=JD 正文首句原文。
+    public void Parse_InlineBenefitsForm_SummaryStartsWithProseNotMetadata()
+    {
+        var d = JdPasteParser.Parse(JdInlineBenefits, PasteKind.Text);
+        Assert.Equal(
             "We are looking for a Senior Backend Developer to join our platform team in Toronto building APIs with C# .NET and PostgreSQL for thousands of customers.",
             d.JdSummary);
     }
 
-    [Fact] // known-gap → 票 29 / FUN-09:此形态下公司名解不出(响应无 company、UI 公司框为空)
-    public void Parse_InlineBenefitsForm_KnownGap_Ticket29_CompanyMissing()
+    [Fact] // 票 29 翻绿 (原 KnownGap_Ticket29 / FUN-09):形态 B 原文通篇无公司名 —— 正确行为是留空不编造
+           // (既有口径"猜错比留空更糟"),且其余字段照常解出、草稿状态不因缺公司名整单失败。
+           // 改动依据:FUN-09"保存被卡"的真根因是公司名明明在原文 (company-first / role 行后带地点后缀)
+           // 却解不出 —— 由 Parse_CompanyFirstForm_* / Parse_RoleFirstForm_CompanyWithLocationSuffix_* 两例钉住;
+           // 本例断言从"锁定缺失现状"改为"诚实留空 + 草稿可用"。
+    public void Parse_InlineBenefitsForm_CompanyHonestlyEmpty_DraftStillUsable()
     {
         var d = JdPasteParser.Parse(JdInlineBenefits, PasteKind.Text);
         Assert.Null(d.Company);
+        Assert.Equal(ParseOutcome.Ok, d.Status);
+        Assert.Equal(5, JdPasteParser.CountFilled(d));
     }
 
     // ================= 形态 C:公司名误判(REQ-09 缺口形态) =================
 
-    [Fact] // known-gap → 票 29:公司名误判为段落标题 "About the Job"(AUDIT REQ-09 形态 C 原文)
-    public void Parse_NoStandardHeaderForm_KnownGap_Ticket29_CompanyMisreadAsAboutTheJob()
+    [Fact] // 票 29 翻绿 (原 KnownGap_Ticket29):公司名不再误判为段落标题 "About the Job"(AUDIT REQ-09 形态 C 原文)。
+           // 改动依据:缺陷在 CompanyAfterRole 不排除段落标题行,已修 ValidateCompanyCandidate;
+           // 形态 C 原文无公司名,期望由错误的 "About the Job" 改为留空,其余断言 (Role/Status/关键词/摘要) 不变。
+    public void Parse_NoStandardHeaderForm_CompanyNotMisreadAsAboutTheJob()
     {
         var d = JdPasteParser.Parse(JdNoStandardHeader, PasteKind.Text);
-        Assert.Equal("About the Job", d.Company);
+        Assert.Null(d.Company);
         Assert.Equal("Senior Software Engineer", d.Role);
         Assert.Equal(ParseOutcome.Partial, d.Status);
         Assert.Equal("React, TypeScript, Node.js, AWS", d.MatchKeywords);

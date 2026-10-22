@@ -285,6 +285,8 @@ public static class JdPasteParser
         if (company is null && role is not null)
         {
             company = CompanyAfterRole(lines, role);
+            // 票 29 (REQ-09/FUN-09):company-first 形态公司行在 role 行之前,同样是无标签公司名
+            company ??= CompanyBeforeRole(lines, role);
             if (company is not null) conf.TryAdd("company", 60);
         }
 
@@ -634,11 +636,46 @@ public static class JdPasteParser
             if (lines[i].Contains(role, StringComparison.OrdinalIgnoreCase)) { idx = i; break; }
         }
         if (idx < 0 || idx + 1 >= lines.Count) return null;
-        var cand = lines[idx + 1].Trim();
+        return ValidateCompanyCandidate(lines[idx + 1]);
+    }
+
+    /// <summary>
+    /// 票 29 (REQ-09/FUN-09):company-first 形态 —— 公司名在 role 行的上一行
+    /// ("Globex Corporation\nSenior Backend Developer\nToronto, ON (Hybrid)")。
+    /// 旧兜底只看 role 的下一行,这种最常见的公司官网排版永远解不出公司名,
+    /// 草稿公司框为空、保存被卡 (FUN-09)。校验口径与 CompanyAfterRole 共用。
+    /// </summary>
+    private static string? CompanyBeforeRole(IList<string> lines, string? role)
+    {
+        if (role is null) return null;
+        var idx = -1;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (lines[i].Contains(role, StringComparison.OrdinalIgnoreCase)) { idx = i; break; }
+        }
+        if (idx <= 0) return null;
+        return ValidateCompanyCandidate(lines[idx - 1]);
+    }
+
+    /// <summary>
+    /// 无标签公司名候选行校验 (role 相邻行共用)。
+    /// 票 29 (REQ-09) 两处修正:
+    ///  1. 段落标题行不是公司名 —— "About the Job" 曾被误判为公司 (形态 C);
+    ///  2. 公司名后带 "· 地点 (模式)" / "| 地点" / " - 地点" 后缀时 (FUN-09 role-first 形态
+    ///     "Globex Corporation · Toronto, ON (Hybrid)"),旧逻辑被 LocationCityState 整行
+    ///     排除 —— 先剥元数据后缀段再校验第一段。
+    /// </summary>
+    private static string? ValidateCompanyCandidate(string rawLine)
+    {
+        var cand = rawLine.Trim();
+        // 剥元数据后缀段:"公司 · 地点" / "公司 | 地点" / "公司 - 地点 (模式)"
+        var seg = Regex.Split(cand, @"\s*[·|]\s*|\s+-\s+");
+        if (seg.Length > 1) cand = seg[0].Trim();
         // 排除:太长、含岗位关键词、是地点/薪资/标签行
         if (cand.Length is < 2 or > 60) return null;
         if (RoleWords.IsMatch(cand)) return null;
-        if (cand.Contains(':')) return null;
+        if (cand.Contains(':') || cand.Contains('：')) return null;
+        if (IsSectionHeader(cand)) return null;
         if (SalaryRange.IsMatch(cand) || SalarySingle.IsMatch(cand)) return null;
         if (LocationCityState.IsMatch(cand)) return null;
         // 排除纯描述句(太长或含动词开头)
@@ -961,12 +998,45 @@ public static class JdPasteParser
     private static bool IsSummarySkipLine(string line)
     {
         if (IsFooterLine(line)) return true;
+        // 票 29 (REQ-09):元数据行不是正文 —— 无标准标题形态下摘要曾以
+        // "Toronto, ON - Hybrid - Full-time" / "Salary: ..." 开头 (形态 B)
+        if (IsMetadataLine(line)) return true;
         var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         // 2026-10-19:4 词以下才是碎片;4-7 词的短句可能是正文(如 "We are hiring a Senior .NET Developer.")
         if (words.Length < 4) return true;
         return Regex.IsMatch(line,
             @"posted\s|reference number|job details?|apply now|show more",
             RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
+    /// 元数据行判定 (只用于摘要前导跳行,正文中间不受影响):
+    ///  1. 带标签的字段行:"Salary: ..." / "Location: ..." / "Apply by: ..." 等;
+    ///  2. 复合元数据行:由 " - " / "·" / "|" 分隔的 2+ 段,每段都是地点/工作模式/
+    ///     岗位性质/薪资之一 (如 "Toronto, ON - Hybrid - Full-time")。
+    /// 正文句不会整行由元数据段拼成,故不会误伤。
+    /// </summary>
+    private static bool IsMetadataLine(string line)
+    {
+        var t = line.Trim();
+        if (t.Length == 0 || t.Length > 120) return false;
+        if (Regex.IsMatch(t,
+                @"^(salary|pay|compensation|location|job\s*type|employment\s*type|work\s*mode|apply\s*by|deadline|closing\s*date)\s*[:：]",
+                RegexOptions.IgnoreCase))
+            return true;
+        var segs = Regex.Split(t, @"\s*·\s*|\s*\|\s*|\s+-\s+");
+        if (segs.Length < 2) return false;
+        foreach (var s in segs)
+        {
+            var seg = s.Trim().Trim('(', ')');
+            if (seg.Length == 0) return false;
+            if (LocationCityState.IsMatch(seg)) continue;
+            if (Regex.IsMatch(seg, @"^(hybrid|remote|onsite|on-site|in-office|work from home)$", RegexOptions.IgnoreCase)) continue;
+            if (NormalizeJobType(seg) is not null) continue;
+            if (SalaryRange.IsMatch(seg) || SalarySingle.IsMatch(seg) || SalaryHourly.IsMatch(seg)) continue;
+            return false;
+        }
+        return true;
     }
 
     /// <summary>
@@ -1044,17 +1114,27 @@ public static class JdPasteParser
         {
             var t = lines[i].Trim().TrimEnd(':', '：');
             var hit = false;
+            string? inline = null;
             foreach (var h in headers)
             {
                 if (string.Equals(t, h, StringComparison.OrdinalIgnoreCase)) { hit = true; break; }
+                // 票 29 (REQ-09):同行内联形态 "Benefits: <内容>" —— 标题与内容同行,
+                // 旧逻辑只认整行等于标题,内联内容永远解不出 (形态 B benefits=null)。
+                var im = Regex.Match(lines[i],
+                    $@"^\s*{Regex.Escape(h)}\s*[:：]\s*(.+)$", RegexOptions.IgnoreCase);
+                if (im.Success) { hit = true; inline = im.Groups[1].Value.Trim(); break; }
             }
             if (!hit) continue;
 
             var sb = new List<string>();
+            if (!string.IsNullOrWhiteSpace(inline)) sb.Add(inline);
             for (var j = i + 1; j < lines.Count; j++)
             {
                 var l = lines[j].Trim();
                 if (IsSectionHeader(l)) break;
+                // 带字段标签的行 (Apply by:/Salary:/Location:...) 是元数据,不是段落内容 ——
+                // 段落收集到此为止 (内联形态下段后紧跟的截止日期行曾被吞进 benefits)
+                if (IsLabeledFieldLine(l)) break;
                 // 2026-10-19:福利/任职要求段遇到页脚噪音时停止(LinkedIn 粘贴文本尾部)
                 if (IsSectionFooterNoise(l)) break;
                 if (l.Length > 0) sb.Add(l);
@@ -1065,6 +1145,12 @@ public static class JdPasteParser
         }
         return null;
     }
+
+    /// <summary>以已知字段标签开头的行 (元数据行),段落内容收集到此为止。</summary>
+    private static bool IsLabeledFieldLine(string line)
+        => Regex.IsMatch(line.Trim(),
+            @"^(apply\s*by|deadline|closing\s*date|salary|pay|compensation|location|company|employer|organization|role|title|position|job\s*title|job\s*type|employment\s*type|work\s*authorization|work\s*authorisation|eligibility|citizenship|公司|地点|职位|岗位|工作地点|办公地点|申请截止|截止)\s*[:：]",
+            RegexOptions.IgnoreCase);
 
     /// <summary>
     /// 段落尾部噪音:LInkedIn 粘贴文本的页脚(GDPR、SmartRecruiters、Premium 广告等),遇到即停止收集。

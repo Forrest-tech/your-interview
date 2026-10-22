@@ -17,8 +17,11 @@ namespace YourInterview.Services.Knowledge.Api;
 [ApiController]
 [Route("api/knowledge")]
 [Authorize]
-public sealed class KnowledgeController(ISender sender) : ControllerBase
+public sealed class KnowledgeController(ISender sender, ICurrentUser currentUser) : ControllerBase
 {
+    /// <summary>当前用户(COD-01/票03):所有查询/命令显式带入,Handler 按 (Id, UserId) 收口。</summary>
+    private Guid Me => currentUser.RequireUserId();
+
     // ---------------- 查询 ----------------
 
     /// <summary>分页查询知识点。dueOnly=true 只返回今天该复习的。</summary>
@@ -32,7 +35,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
         [FromQuery] bool includeDeleted = false,
         CancellationToken ct = default)
     {
-        var r = await sender.Send(new ListKnowledgeQuery(page, pageSize, topic, mastery, source,
+        var r = await sender.Send(new ListKnowledgeQuery(Me, page, pageSize, topic, mastery, source,
             tag, search, dueOnly, company, entryId, includeDeleted), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
@@ -42,7 +45,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
     public async Task<IResult> Get(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new GetKnowledgeItemQuery(id), ct);
+        var r = await sender.Send(new GetKnowledgeItemQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -51,7 +54,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
     public async Task<IResult> Topics(CancellationToken ct)
     {
-        var r = await sender.Send(new GetTopicsQuery(), ct);
+        var r = await sender.Send(new GetTopicsQuery(Me), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -60,7 +63,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
     public async Task<IResult> Stats(CancellationToken ct)
     {
-        var r = await sender.Send(new GetKnowledgeStatsQuery(), ct);
+        var r = await sender.Send(new GetKnowledgeStatsQuery(Me), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -69,7 +72,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
     public async Task<IResult> Due([FromQuery] int days = 7, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetDuePlanQuery(days), ct);
+        var r = await sender.Send(new GetDuePlanQuery(Me, days), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -78,7 +81,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
     public async Task<IResult> Sources(CancellationToken ct)
     {
-        var r = await sender.Send(new GetSourceCompaniesQuery(), ct);
+        var r = await sender.Send(new GetSourceCompaniesQuery(Me), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -87,7 +90,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
     public async Task<IResult> Trail(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new GetSourceTrailQuery(id), ct);
+        var r = await sender.Send(new GetSourceTrailQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -96,7 +99,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
     public async Task<IResult> Duplicates([FromQuery] int maxGroups = 50, CancellationToken ct = default)
     {
-        var r = await sender.Send(new FindDuplicatesQuery(maxGroups), ct);
+        var r = await sender.Send(new FindDuplicatesQuery(Me, maxGroups), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -105,7 +108,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> Merge([FromBody] MergeBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new MergeDuplicatesCommand(body.KeepId, body.MergeId), ct);
+        var r = await sender.Send(new MergeDuplicatesCommand(Me, body.KeepId, body.MergeId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -118,7 +121,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     public async Task<IResult> ImportCandidates([FromBody] ImportCandidatesBody body, CancellationToken ct)
     {
         var r = await sender.Send(new ImportInterviewCandidatesCommand(
-            body.EntryId, body.Company, body.Date, body.RoundNo, body.RoundStage,
+            Me, body.EntryId, body.Company, body.Date, body.RoundNo, body.RoundStage,
             body.ApplicationId, body.Items ?? new List<InterviewCandidateRow>()), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
@@ -129,7 +132,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> Create([FromBody] CreateKnowledgeCommand body, CancellationToken ct)
     {
-        var r = await sender.Send(body, ct);
+        var r = await sender.Send(body with { UserId = Me }, ct);
         return r.IsSuccess
             ? Results.Created($"/api/knowledge/{r.Value}", new { id = r.Value })
             : r.ToProblemDetails();
@@ -139,7 +142,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> Update(Guid id, [FromBody] UpdateKnowledgeBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateKnowledgeCommand(id, body.Title, body.Topic,
+        var r = await sender.Send(new UpdateKnowledgeCommand(Me, id, body.Title, body.Topic,
             body.SubTopic, body.Question, body.Difficulty, body.Importance, body.TagsJson,
             body.ConceptExplanation, body.MyAnswer, body.BetterAnswer, body.KeyPointsJson,
             body.CommonMistakesJson, body.FollowUpsJson, body.ReferencesJson, body.SourcesJson), ct);
@@ -153,7 +156,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> UpdateMyAnswer(Guid id, [FromBody] UpdateMyAnswerBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateMyAnswerCommand(id, body.MyAnswer), ct);
+        var r = await sender.Send(new UpdateMyAnswerCommand(Me, id, body.MyAnswer), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -164,7 +167,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> UpdateBetterAnswer(Guid id, [FromBody] UpdateBetterAnswerBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateBetterAnswerCommand(id, body.BetterAnswer), ct);
+        var r = await sender.Send(new UpdateBetterAnswerCommand(Me, id, body.BetterAnswer), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -175,7 +178,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> UpdateQuestion(Guid id, [FromBody] UpdateQuestionBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateQuestionCommand(id, body.Question), ct);
+        var r = await sender.Send(new UpdateQuestionCommand(Me, id, body.Question), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -186,7 +189,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> UpdateFromTech(Guid id, [FromBody] UpdateFromTechBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateFromTechCommand(id, body.Question, body.BetterAnswer), ct);
+        var r = await sender.Send(new UpdateFromTechCommand(Me, id, body.Question, body.BetterAnswer), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -194,7 +197,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeDelete)]
     public async Task<IResult> Delete(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteKnowledgeCommand(id), ct);
+        var r = await sender.Send(new DeleteKnowledgeCommand(Me, id), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -203,7 +206,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> Restore(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new RestoreKnowledgeCommand(id), ct);
+        var r = await sender.Send(new RestoreKnowledgeCommand(Me, id), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -212,7 +215,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> RenameTopic([FromBody] RenameTopicBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new RenameTopicCommand(body.OldName, body.NewName), ct);
+        var r = await sender.Send(new RenameTopicCommand(Me, body.OldName, body.NewName), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -221,7 +224,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> DeleteTopic(string name, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteTopicCommand(name), ct);
+        var r = await sender.Send(new DeleteTopicCommand(Me, name), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -230,7 +233,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> Review(Guid id, [FromBody] ReviewBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new RecordReviewCommand(id, body.Result, body.ConfidenceBefore,
+        var r = await sender.Send(new RecordReviewCommand(Me, id, body.Result, body.ConfidenceBefore,
             body.ConfidenceAfter, body.Note, body.DurationSeconds), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
@@ -240,7 +243,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> ChangeMastery(Guid id, [FromBody] MasteryBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ChangeMasteryCommand(id, body.Mastery), ct);
+        var r = await sender.Send(new ChangeMasteryCommand(Me, id, body.Mastery), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -249,7 +252,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> AttachRelation(Guid id, [FromBody] RelationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new AttachRelationCommand(id, body.RelatedItemId,
+        var r = await sender.Send(new AttachRelationCommand(Me, id, body.RelatedItemId,
             body.RelationType, body.Note), ct);
         return r.IsSuccess
             ? Results.Created($"/api/knowledge/{id}", new { id = r.Value })
@@ -261,7 +264,7 @@ public sealed class KnowledgeController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> Import([FromBody] ImportBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ImportKnowledgeCommand(body.Items), ct);
+        var r = await sender.Send(new ImportKnowledgeCommand(Me, body.Items), ct);
         return r.IsSuccess ? Results.Ok(new { imported = r.Value }) : r.ToProblemDetails();
     }
 }

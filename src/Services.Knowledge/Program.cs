@@ -31,6 +31,10 @@ builder.Services.AddHealthChecks().AddDbContextCheck<KnowledgeDbContext>("postgr
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 builder.Services.AddScoped<KnowledgeMasteryChangedPublisher>();
 
+// COD-01/票03:此前 Knowledge 根本没注册 ICurrentUser —— DbContext 全局过滤器与
+// Handler 谓词都以它为归属来源,缺了它过滤器只能 fail-closed 到零行。
+builder.Services.AddCurrentUser();
+
 // ---------- 鉴权 ----------
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("缺少 Jwt:SigningKey");

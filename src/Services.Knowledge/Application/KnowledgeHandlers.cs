@@ -62,21 +62,21 @@ public sealed record DuePlanDto(DateOnly Date, List<KnowledgeListItemDto> Items)
 // ============================ 查询 ============================
 
 public sealed record ListKnowledgeQuery(
-    int Page = 1, int PageSize = 20, string? Topic = null, string? Mastery = null,
+    Guid UserId, int Page = 1, int PageSize = 20, string? Topic = null, string? Mastery = null,
     string? Source = null, string? Tag = null, string? Search = null, bool DueOnly = false,
     string? Company = null, Guid? EntryId = null, bool IncludeDeleted = false)
     : IRequest<Result<PagedResult<KnowledgeListItemDto>>>;
 
-public sealed record GetKnowledgeItemQuery(Guid Id) : IRequest<Result<KnowledgeItemDto>>;
+public sealed record GetKnowledgeItemQuery(Guid UserId, Guid Id) : IRequest<Result<KnowledgeItemDto>>;
 
-public sealed record GetTopicsQuery : IRequest<Result<IReadOnlyList<TopicSummaryDto>>>;
+public sealed record GetTopicsQuery(Guid UserId) : IRequest<Result<IReadOnlyList<TopicSummaryDto>>>;
 
-public sealed record GetKnowledgeStatsQuery : IRequest<Result<KnowledgeStatsDto>>;
+public sealed record GetKnowledgeStatsQuery(Guid UserId) : IRequest<Result<KnowledgeStatsDto>>;
 
-public sealed record GetDuePlanQuery(int Days = 7) : IRequest<Result<IReadOnlyList<DuePlanDto>>>;
+public sealed record GetDuePlanQuery(Guid UserId, int Days = 7) : IRequest<Result<IReadOnlyList<DuePlanDto>>>;
 
 /// <summary>来源公司清单(需求 6.4.4:按"这题来自哪家公司"反查)。</summary>
-public sealed record GetSourceCompaniesQuery : IRequest<Result<IReadOnlyList<SourceCompanyDto>>>;
+public sealed record GetSourceCompaniesQuery(Guid UserId) : IRequest<Result<IReadOnlyList<SourceCompanyDto>>>;
 
 public sealed record SourceCompanyDto(string Company, int Count, int MasteredCount,
     int DueCount, DateOnly? LastDate);
@@ -93,7 +93,7 @@ internal sealed class SourceEntryJson
 /// 除了自身来源信息,还带出"同一场面试一起导进来的其他题" ——
 /// 复习时最有用的不是孤立的一题,而是"那一场我被问住的这一串"。
 /// </summary>
-public sealed record GetSourceTrailQuery(Guid Id) : IRequest<Result<SourceTrailDto>>;
+public sealed record GetSourceTrailQuery(Guid UserId, Guid Id) : IRequest<Result<SourceTrailDto>>;
 
 public sealed record SourceTrailDto(
     Guid ItemId, string? Company, DateOnly? Date, int? RoundNo, string? RoundStage,
@@ -101,17 +101,17 @@ public sealed record SourceTrailDto(
     IReadOnlyList<KnowledgeListItemDto> Siblings);
 
 /// <summary>重复条目检测(需求 6.4.3 去重)。同分类 + 标题归一后相同即视为重复。</summary>
-public sealed record FindDuplicatesQuery(int MaxGroups = 50) : IRequest<Result<IReadOnlyList<DuplicateGroupDto>>>;
+public sealed record FindDuplicatesQuery(Guid UserId, int MaxGroups = 50) : IRequest<Result<IReadOnlyList<DuplicateGroupDto>>>;
 
 public sealed record DuplicateGroupDto(string Topic, string Key, IReadOnlyList<KnowledgeListItemDto> Items);
 
 /// <summary>合并两条重复条目:把被合并方的复习次数与空字段并进保留方,再软删被合并方。</summary>
-public sealed record MergeDuplicatesCommand(Guid KeepId, Guid MergeId) : IRequest<Result>;
+public sealed record MergeDuplicatesCommand(Guid UserId, Guid KeepId, Guid MergeId) : IRequest<Result>;
 
 // ============================ 命令 ============================
 
 public sealed record CreateKnowledgeCommand(
-    string Title, string Topic, string? SubTopic, string Question, string Source = "Personal",
+    Guid UserId, string Title, string Topic, string? SubTopic, string Question, string Source = "Personal",
     int Difficulty = 3, int Importance = 3, string? TagsJson = null,
     string? ConceptExplanation = null, string? MyAnswer = null, string? BetterAnswer = null,
     string? KeyPointsJson = null, string? CommonMistakesJson = null, string? FollowUpsJson = null,
@@ -121,45 +121,45 @@ public sealed record CreateKnowledgeCommand(
     Guid? SourceJobApplicationId = null) : IRequest<Result<Guid>>;
 
 public sealed record UpdateKnowledgeCommand(
-    Guid Id, string Title, string Topic, string? SubTopic, string Question,
+    Guid UserId, Guid Id, string Title, string Topic, string? SubTopic, string Question,
     int Difficulty, int Importance, string? TagsJson, string? ConceptExplanation,
     string? MyAnswer, string? BetterAnswer, string? KeyPointsJson, string? CommonMistakesJson,
     string? FollowUpsJson, string? ReferencesJson, string? SourcesJson = null) : IRequest<Result>;
 
 /// <summary>只更新我的回答(Playbook Q&A 页签用,避免全量 PUT 误清空)。</summary>
-public sealed record UpdateMyAnswerCommand(Guid Id, string? MyAnswer) : IRequest<Result>;
+public sealed record UpdateMyAnswerCommand(Guid UserId, Guid Id, string? MyAnswer) : IRequest<Result>;
 
 /// <summary>只更新推荐答案(AI Practice From Tech 编辑写回用)。</summary>
-public sealed record UpdateBetterAnswerCommand(Guid Id, string? BetterAnswer) : IRequest<Result>;
+public sealed record UpdateBetterAnswerCommand(Guid UserId, Guid Id, string? BetterAnswer) : IRequest<Result>;
 
 /// <summary>只更新题目(AI Practice From Tech 重命名写回用)。</summary>
-public sealed record UpdateQuestionCommand(Guid Id, string? Question) : IRequest<Result>;
+public sealed record UpdateQuestionCommand(Guid UserId, Guid Id, string? Question) : IRequest<Result>;
 
 /// <summary>From Tech 一次写回题目+推荐答案(避免并发 xmin 冲突)。</summary>
-public sealed record UpdateFromTechCommand(Guid Id, string? Question, string? BetterAnswer) : IRequest<Result>;
+public sealed record UpdateFromTechCommand(Guid UserId, Guid Id, string? Question, string? BetterAnswer) : IRequest<Result>;
 
-public sealed record DeleteKnowledgeCommand(Guid Id) : IRequest<Result>;
-public sealed record RestoreKnowledgeCommand(Guid Id) : IRequest<Result>;
+public sealed record DeleteKnowledgeCommand(Guid UserId, Guid Id) : IRequest<Result>;
+public sealed record RestoreKnowledgeCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
 /// <summary>重命名分类:返回受影响的条目数。新名字已存在时即为合并。</summary>
-public sealed record RenameTopicCommand(string OldName, string NewName) : IRequest<Result<int>>;
+public sealed record RenameTopicCommand(Guid UserId, string OldName, string NewName) : IRequest<Result<int>>;
 
 /// <summary>删除分类:名下条目的 Topic 置空。返回受影响的条目数。</summary>
-public sealed record DeleteTopicCommand(string Name) : IRequest<Result<int>>;
+public sealed record DeleteTopicCommand(Guid UserId, string Name) : IRequest<Result<int>>;
 
 public sealed record RecordReviewCommand(
-    Guid Id, string Result, int? ConfidenceBefore = null, int? ConfidenceAfter = null,
+    Guid UserId, Guid Id, string Result, int? ConfidenceBefore = null, int? ConfidenceAfter = null,
     string? Note = null, int? DurationSeconds = null) : IRequest<Result<ReviewOutcomeDto>>;
 
 public sealed record ReviewOutcomeDto(DateTimeOffset? NextReviewAt, int IntervalDays,
     double EasinessFactor, string Mastery, int RepetitionStreak);
 
-public sealed record ChangeMasteryCommand(Guid Id, string Mastery) : IRequest<Result>;
+public sealed record ChangeMasteryCommand(Guid UserId, Guid Id, string Mastery) : IRequest<Result>;
 
-public sealed record AttachRelationCommand(Guid Id, Guid RelatedItemId, string RelationType,
+public sealed record AttachRelationCommand(Guid UserId, Guid Id, Guid RelatedItemId, string RelationType,
     string? Note = null) : IRequest<Result<Guid>>;
 
-public sealed record ImportKnowledgeCommand(List<ImportKnowledgeRow> Items) : IRequest<Result<int>>;
+public sealed record ImportKnowledgeCommand(Guid UserId, List<ImportKnowledgeRow> Items) : IRequest<Result<int>>;
 
 public sealed record ImportKnowledgeRow(string Title, string Topic, string Question,
     string? SubTopic = null, int Difficulty = 3, int Importance = 3,
@@ -180,7 +180,7 @@ public sealed record ImportKnowledgeRow(string Title, string Topic, string Quest
 /// "用户点第二次导入" 应当是安静地什么都没发生,而不是弹一个红条。
 /// </summary>
 public sealed record ImportInterviewCandidatesCommand(
-    Guid? EntryId, string? Company, DateOnly? Date, int? RoundNo, string? RoundStage,
+    Guid UserId, Guid? EntryId, string? Company, DateOnly? Date, int? RoundNo, string? RoundStage,
     Guid? ApplicationId, IReadOnlyList<InterviewCandidateRow> Items)
     : IRequest<Result<CandidateImportResultDto>>;
 
@@ -306,10 +306,10 @@ public sealed class ListKnowledgeQueryHandler(KnowledgeDbContext db, TimeProvide
         var page = request.Page < 1 ? 1 : request.Page;
         var size = request.PageSize is < 1 or > 200 ? 20 : request.PageSize;
 
-        var q = db.Items.AsNoTracking().AsQueryable();
+        var q = db.Items.AsNoTracking().Where(x => x.UserId == request.UserId).AsQueryable();
 
         if (request.IncludeDeleted)
-            q = q.IgnoreQueryFilters().Where(x => x.IsDeleted);
+            q = q.IgnoreQueryFilters().Where(x => x.IsDeleted && x.UserId == request.UserId);
 
         if (!string.IsNullOrWhiteSpace(request.Topic))
             q = q.Where(x => x.Topic == request.Topic);
@@ -377,7 +377,7 @@ public sealed class GetKnowledgeItemQueryHandler(KnowledgeDbContext db, TimeProv
         var k = await db.Items.AsNoTracking()
             .Include(x => x.ReviewLogs)
             .Include(x => x.Relations)
-            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
 
         return k is null
             ? Result.Failure<KnowledgeItemDto>(Error.NotFound("知识点"))
@@ -394,6 +394,7 @@ public sealed class GetTopicsQueryHandler(KnowledgeDbContext db, TimeProvider cl
         var now = clock.GetUtcNow();
 
         var rows = await db.Items.AsNoTracking()
+            .Where(x => x.UserId == request.UserId)
             .GroupBy(x => x.Topic)
             .Select(g => new TopicSummaryDto(
                 g.Key,
@@ -418,8 +419,12 @@ public sealed class GetKnowledgeStatsQueryHandler(KnowledgeDbContext db, TimePro
         var weekEnd = now.AddDays(7);
         var weekStart = now.AddDays(-7);
 
-        var items = await db.Items.AsNoTracking().ToListAsync(ct);
-        var logs = await db.ReviewLogs.AsNoTracking().ToListAsync(ct);
+        var items = await db.Items.AsNoTracking()
+            .Where(x => x.UserId == request.UserId).ToListAsync(ct);
+        // 复习日志是子表(无 UserId):按当前用户的条目 Id 集合收口
+        var ownedIds = db.Items.Where(x => x.UserId == request.UserId).Select(x => x.Id);
+        var logs = await db.ReviewLogs.AsNoTracking()
+            .Where(l => ownedIds.Contains(l.ItemId)).ToListAsync(ct);
 
         var byMastery = items.GroupBy(x => x.Mastery.ToString())
             .Select(g => new MasteryBucketDto(g.Key, g.Count()))
@@ -481,7 +486,8 @@ public sealed class GetDuePlanQueryHandler(KnowledgeDbContext db, TimeProvider c
         var items = await db.Items.AsNoTracking()
             .Include(x => x.ReviewLogs)
             .Include(x => x.Relations)
-            .Where(x => x.NextReviewAt == null || x.NextReviewAt <= horizon)
+            .Where(x => x.UserId == request.UserId
+                && (x.NextReviewAt == null || x.NextReviewAt <= horizon))
             .ToListAsync(ct);
 
         // 逾期的统一归到"今天",让复习计划不出现过去的日期
@@ -512,7 +518,8 @@ public sealed class CreateKnowledgeCommandHandler(KnowledgeDbContext db)
             source = KnowledgeSource.Personal;
 
         var item = new KnowledgeItem(request.Title, request.Topic, request.Question, source,
-            subTopic: request.SubTopic, difficulty: request.Difficulty, importance: request.Importance);
+            subTopic: request.SubTopic, difficulty: request.Difficulty, importance: request.Importance,
+            userId: request.UserId);
 
         item.UpdateDetails(request.Title, request.Topic, request.SubTopic, request.Question,
             request.Difficulty, request.Importance, request.TagsJson,
@@ -541,7 +548,7 @@ public sealed class UpdateKnowledgeCommandHandler(KnowledgeDbContext db)
 {
     public async Task<Result> Handle(UpdateKnowledgeCommand request, CancellationToken ct)
     {
-        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
 
         k.UpdateDetails(request.Title, request.Topic, request.SubTopic, request.Question,
@@ -561,7 +568,7 @@ public sealed class DeleteKnowledgeCommandHandler(KnowledgeDbContext db)
 {
     public async Task<Result> Handle(DeleteKnowledgeCommand request, CancellationToken ct)
     {
-        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
         k.MarkDeleted();
         await db.SaveChangesAsync(ct);
@@ -575,7 +582,7 @@ public sealed class RestoreKnowledgeCommandHandler(KnowledgeDbContext db)
     public async Task<Result> Handle(RestoreKnowledgeCommand request, CancellationToken ct)
     {
         var k = await db.Items.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
         k.Restore();
         await db.SaveChangesAsync(ct);
@@ -588,7 +595,7 @@ public sealed class UpdateMyAnswerCommandHandler(KnowledgeDbContext db)
 {
     public async Task<Result> Handle(UpdateMyAnswerCommand request, CancellationToken ct)
     {
-        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
         k.SetMyAnswer(request.MyAnswer);
         await db.SaveChangesAsync(ct);
@@ -601,7 +608,7 @@ public sealed class UpdateBetterAnswerCommandHandler(KnowledgeDbContext db)
 {
     public async Task<Result> Handle(UpdateBetterAnswerCommand request, CancellationToken ct)
     {
-        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
         k.SetBetterAnswer(request.BetterAnswer);
         await db.SaveChangesAsync(ct);
@@ -614,7 +621,7 @@ public sealed class UpdateQuestionCommandHandler(KnowledgeDbContext db)
 {
     public async Task<Result> Handle(UpdateQuestionCommand request, CancellationToken ct)
     {
-        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
         k.SetQuestion(request.Question);
         await db.SaveChangesAsync(ct);
@@ -627,7 +634,7 @@ public sealed class UpdateFromTechCommandHandler(KnowledgeDbContext db)
 {
     public async Task<Result> Handle(UpdateFromTechCommand request, CancellationToken ct)
     {
-        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
         k.SetTitle(request.Question);
         k.SetBetterAnswer(request.BetterAnswer);
@@ -649,7 +656,7 @@ public sealed class RenameTopicCommandHandler(KnowledgeDbContext db)
             return Result.Success(0);
 
         var items = await db.Items
-            .Where(x => x.Topic != null && x.Topic.ToLower() == oldName.ToLower())
+            .Where(x => x.UserId == request.UserId && x.Topic != null && x.Topic.ToLower() == oldName.ToLower())
             .ToListAsync(ct);
         foreach (var k in items) k.SetTopic(newName);
         await db.SaveChangesAsync(ct);
@@ -667,7 +674,7 @@ public sealed class DeleteTopicCommandHandler(KnowledgeDbContext db)
             return Result.Failure<int>(Error.Validation("Topic.Empty", "分类名不能为空"));
 
         var items = await db.Items
-            .Where(x => x.Topic != null && x.Topic.ToLower() == name.ToLower())
+            .Where(x => x.UserId == request.UserId && x.Topic != null && x.Topic.ToLower() == name.ToLower())
             .ToListAsync(ct);
         foreach (var k in items) k.SetTopic(null);
         await db.SaveChangesAsync(ct);
@@ -681,7 +688,7 @@ public sealed class RecordReviewCommandHandler(KnowledgeDbContext db, TimeProvid
     public async Task<Result<ReviewOutcomeDto>> Handle(RecordReviewCommand request,
         CancellationToken ct)
     {
-        var k = await db.Items.Include(x => x.ReviewLogs).FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.Include(x => x.ReviewLogs).FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure<ReviewOutcomeDto>(Error.NotFound("知识点"));
 
         if (!Enum.TryParse<ReviewResult>(request.Result, true, out var result))
@@ -707,7 +714,7 @@ public sealed class ChangeMasteryCommandHandler(KnowledgeDbContext db)
 {
     public async Task<Result> Handle(ChangeMasteryCommand request, CancellationToken ct)
     {
-        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
 
         if (!Enum.TryParse<MasteryLevel>(request.Mastery, true, out var level))
@@ -724,13 +731,13 @@ public sealed class AttachRelationCommandHandler(KnowledgeDbContext db)
 {
     public async Task<Result<Guid>> Handle(AttachRelationCommand request, CancellationToken ct)
     {
-        var k = await db.Items.Include(x => x.Relations).FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var k = await db.Items.Include(x => x.Relations).FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure<Guid>(Error.NotFound("知识点"));
 
         if (request.Id == request.RelatedItemId)
             return Result.Failure<Guid>(Error.Validation("Relation.SelfReference", "不能关联自己"));
 
-        if (!await db.Items.AnyAsync(x => x.Id == request.RelatedItemId, ct))
+        if (!await db.Items.AnyAsync(x => x.Id == request.RelatedItemId && x.UserId == request.UserId, ct))
             return Result.Failure<Guid>(Error.Validation("Relation.TargetNotFound", "关联的知识点不存在"));
 
         if (!Enum.TryParse<KnowledgeRelationType>(request.RelationType, true, out var type))
@@ -760,14 +767,15 @@ public sealed class ImportKnowledgeCommandHandler(KnowledgeDbContext db)
                 continue;   // 跳过无效行而不是整体失败 —— 批量导入要容错
 
             // 幂等:同 topic + 同 title 视为已存在,不重复插
-            if (await db.Items.AnyAsync(x => x.Topic == row.Topic && x.Title == row.Title, ct))
+            if (await db.Items.AnyAsync(x => x.UserId == request.UserId && x.Topic == row.Topic && x.Title == row.Title, ct))
                 continue;
 
             if (!Enum.TryParse<KnowledgeSource>(row.Source, true, out var source))
                 source = KnowledgeSource.Personal;
 
             var item = new KnowledgeItem(row.Title, row.Topic, row.Question, source,
-                subTopic: row.SubTopic, difficulty: row.Difficulty, importance: row.Importance);
+                subTopic: row.SubTopic, difficulty: row.Difficulty, importance: row.Importance,
+                userId: request.UserId);
 
             item.UpdateDetails(row.Title, row.Topic, row.SubTopic, row.Question,
                 row.Difficulty, row.Importance, null,
@@ -818,6 +826,7 @@ public sealed class GetSourceCompaniesQueryHandler(KnowledgeDbContext db, TimePr
         // 不同提供器对 DateOnly 的 Max() 支持不一致,为了一个"最后面试日期"
         // 去赌 SQL 翻译不值得;这里是个人规模的知识库(几百到几千条),内存聚合足够快。
         var rows = await db.Items.AsNoTracking()
+            .Where(x => x.UserId == request.UserId)
             .Where(x => (x.SourceCompanyName != null && x.SourceCompanyName != string.Empty)
                      || (x.SourcesJson != null && x.SourcesJson != string.Empty))
             .Select(x => new
@@ -892,7 +901,7 @@ public sealed class GetSourceTrailQueryHandler(KnowledgeDbContext db, TimeProvid
     public async Task<Result<SourceTrailDto>> Handle(GetSourceTrailQuery request, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
-        var item = await db.Items.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var item = await db.Items.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (item is null) return Result.Failure<SourceTrailDto>(Error.NotFound("知识点"));
 
         // 同场面试一起进来的题:这是"反查"真正有价值的部分 ——
@@ -901,7 +910,8 @@ public sealed class GetSourceTrailQueryHandler(KnowledgeDbContext db, TimeProvid
         if (item.SourceInterviewEntryId is not null && item.SourceInterviewEntryId != Guid.Empty)
         {
             var rows = await db.Items.AsNoTracking()
-                .Where(x => x.SourceInterviewEntryId == item.SourceInterviewEntryId && x.Id != item.Id)
+                .Where(x => x.UserId == request.UserId
+                    && x.SourceInterviewEntryId == item.SourceInterviewEntryId && x.Id != item.Id)
                 .OrderBy(x => x.SourceRoundNo ?? 0)
                 .ThenByDescending(x => x.Importance)
                 .Take(50)
@@ -927,6 +937,7 @@ public sealed class FindDuplicatesQueryHandler(KnowledgeDbContext db, TimeProvid
         // 归一化要去掉标点,数据库里做不到(不同 DB 的正则能力不一致),
         // 所以只把 (id, topic, title) 三列拉回内存做分组 —— 知识库是个人规模,这一列很轻。
         var rows = await db.Items.AsNoTracking()
+            .Where(x => x.UserId == request.UserId)
             .Select(x => new { x.Id, x.Topic, x.Title })
             .ToListAsync(ct);
 
@@ -940,7 +951,7 @@ public sealed class FindDuplicatesQueryHandler(KnowledgeDbContext db, TimeProvid
         if (groups.Count == 0) return Result.Success<IReadOnlyList<DuplicateGroupDto>>([]);
 
         var ids = groups.SelectMany(g => g.Select(x => x.Id)).ToList();
-        var full = await db.Items.AsNoTracking().Where(x => ids.Contains(x.Id)).ToListAsync(ct);
+        var full = await db.Items.AsNoTracking().Where(x => x.UserId == request.UserId && ids.Contains(x.Id)).ToListAsync(ct);
         var byId = full.ToDictionary(x => x.Id);
 
         var result = groups.Select(g => new DuplicateGroupDto(
@@ -961,9 +972,9 @@ public sealed class MergeDuplicatesCommandHandler(KnowledgeDbContext db)
         if (request.KeepId == request.MergeId)
             return Result.Failure(Error.Validation("Merge.Self", "不能与自己合并"));
 
-        var keep = await db.Items.FirstOrDefaultAsync(x => x.Id == request.KeepId, ct);
+        var keep = await db.Items.FirstOrDefaultAsync(x => x.Id == request.KeepId && x.UserId == request.UserId, ct);
         if (keep is null) return Result.Failure(Error.NotFound("要保留的知识点"));
-        var dup = await db.Items.FirstOrDefaultAsync(x => x.Id == request.MergeId, ct);
+        var dup = await db.Items.FirstOrDefaultAsync(x => x.Id == request.MergeId && x.UserId == request.UserId, ct);
         if (dup is null) return Result.Failure(Error.NotFound("要合并的知识点"));
 
         // 合并策略:保留方已有的字段一律不动(用户的编辑优先),
@@ -1012,7 +1023,7 @@ public sealed class ImportInterviewCandidatesCommandHandler(KnowledgeDbContext d
         if (request.EntryId is not null && request.EntryId != Guid.Empty)
         {
             var rows = await db.Items.AsNoTracking()
-                .Where(x => x.SourceInterviewEntryId == request.EntryId)
+                .Where(x => x.UserId == request.UserId && x.SourceInterviewEntryId == request.EntryId)
                 .Select(x => new { x.Title, x.Topic, x.ImportKey })
                 .ToListAsync(ct);
             foreach (var r in rows)
@@ -1032,7 +1043,7 @@ public sealed class ImportInterviewCandidatesCommandHandler(KnowledgeDbContext d
         if (keys.Count > 0)
         {
             var hit = await db.Items.AsNoTracking()
-                .Where(x => x.ImportKey != null && keys.Contains(x.ImportKey))
+                .Where(x => x.UserId == request.UserId && x.ImportKey != null && keys.Contains(x.ImportKey))
                 .Select(x => x.ImportKey!)
                 .ToListAsync(ct);
             foreach (var h in hit) seen.Add("key:" + h);
@@ -1058,7 +1069,8 @@ public sealed class ImportInterviewCandidatesCommandHandler(KnowledgeDbContext d
 
             var item = new KnowledgeItem(row.Title, row.Topic, row.Question,
                 KnowledgeSource.FromInterview, subTopic: row.SubTopic,
-                difficulty: row.Difficulty, importance: row.Importance);
+                difficulty: row.Difficulty, importance: row.Importance,
+                userId: request.UserId);
 
             item.UpdateDetails(row.Title, row.Topic, row.SubTopic, row.Question,
                 row.Difficulty, row.Importance, row.TagsJson,

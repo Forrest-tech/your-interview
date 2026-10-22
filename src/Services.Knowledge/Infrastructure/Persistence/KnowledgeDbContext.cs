@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Knowledge.Domain;
 
 namespace YourInterview.Services.Knowledge.Infrastructure.Persistence;
@@ -8,9 +9,17 @@ namespace YourInterview.Services.Knowledge.Infrastructure.Persistence;
 /// 独立 schema "knowledge" —— 对应 database-per-service:服务之间不共享表,
 /// 谁的表谁改 schema,不再出现"改一列全公司排队"的老共享库问题。
 /// </summary>
-public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> options) : DbContext(options)
+public sealed class KnowledgeDbContext(
+    DbContextOptions<KnowledgeDbContext> options,
+    ICurrentUser? currentUser = null) : DbContext(options)
 {
     public const string Schema = "knowledge";
+
+    /// <summary>
+    /// 当前请求用户(COD-01/票03 全局过滤器用)。无 HTTP 上下文时为 null,
+    /// 过滤器 fail-closed 匹配零行 —— 非请求路径必须 IgnoreQueryFilters + 显式归属校验。
+    /// </summary>
+    public Guid? CurrentUserId { get; } = currentUser?.UserId;
 
     public DbSet<KnowledgeItem> Items => Set<KnowledgeItem>();
     public DbSet<KnowledgeReviewLog> ReviewLogs => Set<KnowledgeReviewLog>();
@@ -102,8 +111,10 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
             e.HasIndex(x => x.SourceCompanyName);
             e.HasIndex(x => x.ImportKey);
 
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.UserId).IsRequired();   // COD-01 contract:回填后收紧为非空
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
 
             e.HasMany(x => x.ReviewLogs).WithOne().HasForeignKey(r => r.ItemId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Relations).WithOne().HasForeignKey(r => r.ItemId).OnDelete(DeleteBehavior.Cascade);

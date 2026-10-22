@@ -143,6 +143,9 @@ namespace YourInterview.Services.Knowledge.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -164,6 +167,8 @@ namespace YourInterview.Services.Knowledge.Infrastructure.Persistence.Migrations
                     b.HasIndex("SourceInterviewEntryId");
 
                     b.HasIndex("Topic");
+
+                    b.HasIndex("UserId");
 
                     b.HasIndex("Mastery", "NextReviewAt");
 

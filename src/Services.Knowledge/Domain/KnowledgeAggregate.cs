@@ -35,8 +35,10 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
         KnowledgeSource source = KnowledgeSource.Personal,
         string? subTopic = null,
         int difficulty = 3,
-        int importance = 3)
+        int importance = 3,
+        Guid userId = default)
     {
+        UserId = userId;
         if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException("知识点标题不能为空", nameof(title));
         if (string.IsNullOrWhiteSpace(topic)) throw new ArgumentException("知识点分类不能为空", nameof(topic));
 
@@ -55,6 +57,9 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
     }
 
     // ---------- 基本信息 ----------
+
+    /// <summary>归属用户(COD-01/票03):知识条目按用户隔离,复习日志/关联经本聚合根归属。</summary>
+    public Guid UserId { get; private set; }
 
     public string Title { get; private set; } = string.Empty;
     /// <summary>分类,如 C# / Angular / SQL / 微服务 / 系统设计 / 行为题。前端左侧目录树按它分组。</summary>

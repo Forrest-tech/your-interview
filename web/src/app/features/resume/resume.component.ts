@@ -12,6 +12,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { ApiClient } from '../../core/api/api-client';
 import { extractPdfText } from '../../core/utils/pdf-text';
 import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
+import { resumeSaveBlock } from './resume.helpers';
 
 /**
  * 简历配置页(独立页面,不再放在 profile/account 里)。
@@ -109,6 +110,12 @@ export class ResumeComponent implements OnInit {
   }
 
   saveResume(): void {
+    // 空存前端拦截:后端对空文本必回 400(Resume.Empty),先用人话拦下,
+    // 不发注定失败的请求;有待上传 PDF 时放行(文件路径不靠文本守卫)。
+    if (resumeSaveBlock(this.resumeDraft, !!this.pendingPdf) === 'empty-text') {
+      this.snack.open(this.t('profile.resumeEmptyHint'), this.t('common.close'), { duration: 4000 });
+      return;
+    }
     const text = this.resumeDraft;
     try {
       localStorage.setItem(this.resumeKey, text);

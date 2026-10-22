@@ -50,6 +50,16 @@
     }
   }
 
+  .saved-resume-text {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    max-height: 480px;
+    overflow-y: auto;
+  }
 }
 
 .resume-upload-row {

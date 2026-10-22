@@ -600,15 +600,28 @@ mat-form-field { width: 100%; }
   margin-right: 4px;
 }
 
-/* ★ 批量操作 */
+/* ★ 批量操作:REQ-11 一行紧凑工具条 —— 必须显式 flex-direction:row,
+   否则 mat-card 自带 column 会把子项纵向堆叠成大面板(改前实测 328px)。 */
 .bulk-bar {
-  display: flex; align-items: center; gap: 12px;
-  padding: 8px 16px; margin-bottom: 14px;
+  display: flex; flex-direction: row; flex-wrap: nowrap;
+  align-items: center; gap: 8px;
+  padding: 6px 12px; margin-bottom: 14px; min-height: 48px;
+  box-sizing: border-box; overflow-x: auto;
   background: #e8eaf6; border: 1px solid #c5cae9;
   position: sticky; top: 0; z-index: 10;
 }
-.bulk-count { font-weight: 600; font-size: 14px; }
-.bulk-status { width: 160px; }
+.bulk-bar > * { flex-shrink: 0; }
+.bulk-bar .spacer { flex: 1 1 auto; flex-shrink: 1; }
+.bulk-bar .mat-mdc-outlined-button, .bulk-bar .mat-mdc-button {
+  height: 36px; white-space: nowrap;
+}
+.bulk-count { font-weight: 600; font-size: 14px; white-space: nowrap; }
+.bulk-status {
+  width: 170px;
+  --mat-form-field-container-height: 40px;
+  --mat-form-field-container-vertical-padding: 8px;
+  font-size: 13px;
+}
 .bulk-status .mat-mdc-form-field-subscript-wrapper { display: none; }
 .bulk-bar .spacer { flex: 1; }
 .select-box { margin-right: 4px; }

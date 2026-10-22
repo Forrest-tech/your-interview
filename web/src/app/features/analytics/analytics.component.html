@@ -59,6 +59,9 @@
             <span><i class="dot best"></i> {{ t('an.bestLevel') }}</span>
           </div>
 
+          @if (!hasScoredData()) {
+            <p class="empty">{{ t('an.noRadar') }}</p>
+          } @else {
           <div class="weak-list">
             <div class="weak-title">{{ t('an.weakTitle') }}</div>
             @for (r of weakest(); track r.dimension) {
@@ -75,6 +78,7 @@
               </div>
             }
           </div>
+          }
         }
       </mat-card-content>
     </mat-card>

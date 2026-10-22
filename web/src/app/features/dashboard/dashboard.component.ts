@@ -9,6 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ApiClient } from '../../core/api/api-client';
 import { ActionCenter, Application, ApplicationStatus, Dashboard, UpcomingRound } from '../../core/models/api.models';
+import { weakestRadarPoints } from '../../core/models/radar.helpers';
 import { AuthService } from '../../core/auth/auth.service';
 
 /** 行动中心卡片。 */
@@ -47,10 +48,8 @@ export class DashboardComponent implements OnInit {
   /** ★ 即将到来的面试轮次。 */
   readonly upcomingRounds = signal<UpcomingRound[]>([]);
 
-  readonly weakest = computed(() => {
-    const radar = this.dashboard()?.radar ?? [];
-    return [...radar].sort((a, b) => a.current - b.current).slice(0, 3);
-  });
+  /** REQ-08:无 scored 数据时为空——雷达面板走 dash.noAnalysis 空态,行动中心不出弱项卡。 */
+  readonly weakest = computed(() => weakestRadarPoints(this.dashboard()?.radar ?? []));
 
   readonly insight = computed(() => this.dashboard()?.insight?.headline ?? '');
   readonly suggestedAction = computed(() => this.dashboard()?.insight?.suggestedAction ?? '');

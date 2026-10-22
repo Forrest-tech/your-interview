@@ -56,7 +56,7 @@ public sealed class GetCoverLetterQueryHandler(JobsDbContext db)
     public async Task<Result<CoverLetterDto?>> Handle(GetCoverLetterQuery request, CancellationToken ct)
     {
         var letter = await db.CoverLetters.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
+            .FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (letter is null) return Result.Success<CoverLetterDto?>(null);
 
         // 当前简历版本 —— 用于判断"这封信是基于旧版简历生成的"
@@ -87,7 +87,7 @@ public sealed class GetCoverLetterReadinessQueryHandler(JobsDbContext db)
     public async Task<Result<CoverLetterReadinessDto>> Handle(GetCoverLetterReadinessQuery request, CancellationToken ct)
     {
         var app = await db.Applications.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
         if (app is null)
             return Result.Failure<CoverLetterReadinessDto>(Error.NotFound("投递记录"));
 
@@ -95,7 +95,7 @@ public sealed class GetCoverLetterReadinessQueryHandler(JobsDbContext db)
             .FirstOrDefaultAsync(x => x.UserId == request.UserId, ct);
 
         var company = await db.Companies.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == app.CompanyId, ct);
+            .FirstOrDefaultAsync(x => x.Id == app.CompanyId && x.UserId == request.UserId, ct);
 
         var hasResume = resume is not null && !string.IsNullOrWhiteSpace(resume.Content);
         var hasJd = !string.IsNullOrWhiteSpace(app.JdText);
@@ -132,11 +132,11 @@ public sealed class SaveCoverLetterCommandHandler(JobsDbContext db)
 {
     public async Task<Result<CoverLetterDto>> Handle(SaveCoverLetterCommand request, CancellationToken ct)
     {
-        var app = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+        var app = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
         if (app is null)
             return Result.Failure<CoverLetterDto>(Error.NotFound("投递记录"));
 
-        var letter = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
+        var letter = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         var content = request.Content.Trim();
 
         if (letter is null)
@@ -166,7 +166,7 @@ public sealed class MarkCoverLetterFinalCommandHandler(JobsDbContext db)
 {
     public async Task<Result<CoverLetterDto>> Handle(MarkCoverLetterFinalCommand request, CancellationToken ct)
     {
-        var letter = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
+        var letter = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (letter is null)
             return Result.Failure<CoverLetterDto>(Error.NotFound("求职信"));
 
@@ -181,15 +181,15 @@ public sealed class MarkCoverLetterFinalCommandHandler(JobsDbContext db)
     }
 }
 
-/// <summary>删除求职信。幂等:不存在也算成功。</summary>
-public sealed record DeleteCoverLetterCommand(Guid ApplicationId) : IRequest<Result>;
+/// <summary>删除求职信。幂等:不存在也算成功。COD-03:必须带 UserId 校验归属(同组端点此前唯一漏网)。</summary>
+public sealed record DeleteCoverLetterCommand(Guid ApplicationId, Guid UserId) : IRequest<Result>;
 
 public sealed class DeleteCoverLetterCommandHandler(JobsDbContext db)
     : IRequestHandler<DeleteCoverLetterCommand, Result>
 {
     public async Task<Result> Handle(DeleteCoverLetterCommand request, CancellationToken ct)
     {
-        var letter = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
+        var letter = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (letter is not null)
         {
             letter.MarkDeleted();

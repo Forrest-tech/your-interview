@@ -122,6 +122,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -131,6 +134,8 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ApplicationId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("application_communications", "jobs");
                 });
@@ -218,6 +223,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Website")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
@@ -230,7 +238,11 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("Name");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "Name")
                         .IsUnique();
 
                     b.ToTable("companies", "jobs");
@@ -466,6 +478,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("WorkAuthorization")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -485,6 +500,8 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
 
                     b.HasIndex("Status", "Priority");
 

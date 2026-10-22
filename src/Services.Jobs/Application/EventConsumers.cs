@@ -34,11 +34,19 @@ public sealed class InterviewOutcomeRecordedConsumer(
             return;
         }
 
-        var app = await db.Applications.Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == e.ApplicationId, context.CancellationToken);
+        // COD-01:消费者无 HTTP 上下文,全局过滤器 fail-closed —— 必须 IgnoreQueryFilters
+        // 按 Id 取,再以事件自带的 UserId 显式校验归属,不一致记日志跳过(不进死信)。
+        var app = await db.Applications.IgnoreQueryFilters().Include(x => x.Rounds)
+            .FirstOrDefaultAsync(x => x.Id == e.ApplicationId && !x.IsDeleted, context.CancellationToken);
         if (app is null)
         {
             logger.LogWarning("申请 {AppId} 不存在(可能已删),结果回写跳过", e.ApplicationId);
+            return;
+        }
+        if (app.UserId != e.UserId)
+        {
+            logger.LogWarning("申请 {AppId} 归属用户与事件用户 {UserId} 不一致,结果回写跳过",
+                e.ApplicationId, e.UserId);
             return;
         }
 

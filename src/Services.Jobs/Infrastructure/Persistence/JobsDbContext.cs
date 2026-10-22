@@ -1,12 +1,22 @@
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Persistence;
+using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Jobs.Domain;
 
 namespace YourInterview.Services.Jobs.Infrastructure.Persistence;
 
-public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbContext(options)
+public sealed class JobsDbContext(
+    DbContextOptions<JobsDbContext> options,
+    ICurrentUser? currentUser = null) : DbContext(options)
 {
     public const string Schema = "jobs";
+
+    /// <summary>
+    /// 当前请求用户(COD-01/票03 全局过滤器用)。EF 查询过滤器引用本属性:
+    /// 无 HTTP 上下文(后台/消费者)时为 null,过滤器 fail-closed 匹配零行,
+    /// 非请求路径必须 IgnoreQueryFilters + 事件 UserId 显式校验。
+    /// </summary>
+    public Guid? CurrentUserId { get; } = currentUser?.UserId;
 
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<JobApplication> Applications => Set<JobApplication>();
@@ -63,10 +73,12 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             // 但设上限避免无界增长拖垮行存储。
             e.Property(x => x.Profile).HasMaxLength(20000);
             e.Property(x => x.ProfileSourcesJson).HasMaxLength(4000);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
-            // 公司名唯一(同一用户视角;当前为单租户账号空间)
-            e.HasIndex(x => x.Name).IsUnique();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+            // 公司名按用户唯一(COD-01 contract):同名公司在不同用户下各自一份
+            e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();
         });
 
         // 用户简历正文(2026-09-18)
@@ -120,8 +132,10 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.CompanyId);
             e.HasIndex(x => new { x.Status, x.Priority });
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
             e.HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.History).WithOne().HasForeignKey(h => h.ApplicationId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Rounds).WithOne().HasForeignKey(r => r.ApplicationId).OnDelete(DeleteBehavior.Cascade);
@@ -222,8 +236,10 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             // 2026-10-20 Playbook v2:解析元数据 + 安排处理状态。
             e.Property(x => x.MetaJson).HasColumnType("text");
             e.Property(x => x.HandlingStatus).HasMaxLength(20);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
             e.HasIndex(x => x.ApplicationId);
             e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
         });

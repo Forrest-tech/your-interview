@@ -11,8 +11,10 @@ public sealed class Company : AuditableAggregateRoot
     private Company() { }
 
     public Company(string name, string? website = null, string? industry = null,
-        string? location = null, string? logoUrl = null, string? notes = null)
+        string? location = null, string? logoUrl = null, string? notes = null,
+        Guid userId = default)
     {
+        UserId = userId;
         Name = name;
         Website = website;
         Industry = industry;
@@ -21,6 +23,9 @@ public sealed class Company : AuditableAggregateRoot
         Notes = notes;
         IsBlacklisted = false;
     }
+
+    /// <summary>归属用户(COD-01/票03):公司按用户隔离,同名公司在不同用户下各自一份。</summary>
+    public Guid UserId { get; private set; }
 
     public string Name { get; private set; } = string.Empty;
     public string? Website { get; private set; }
@@ -105,8 +110,10 @@ public sealed class JobApplication : AuditableAggregateRoot
     private JobApplication() { }
 
     public JobApplication(Guid companyId, string role, string? location = null, string? link = null,
-        string? salary = null, string? workMode = null, string? source = null, string? jdSummary = null)
+        string? salary = null, string? workMode = null, string? source = null, string? jdSummary = null,
+        Guid userId = default)
     {
+        UserId = userId;
         CompanyId = companyId;
         Role = role;
         Location = location;
@@ -119,6 +126,9 @@ public sealed class JobApplication : AuditableAggregateRoot
         Priority = Priority.Medium;
         RecordStatusChange(ApplicationStatus.Saved, "创建记录");
     }
+
+    /// <summary>归属用户(COD-01/票03):投递按用户隔离。</summary>
+    public Guid UserId { get; private set; }
 
     public Guid CompanyId { get; private set; }
     public string Role { get; private set; } = string.Empty;
@@ -269,7 +279,7 @@ public sealed class JobApplication : AuditableAggregateRoot
             RejectionReason = rejectionReason;
 
         RaiseDomainEvent(new JobApplicationStatusChangedDomainEvent(
-            Id, CompanyId, from.ToString(), target.ToString()));
+            Id, CompanyId, from.ToString(), target.ToString(), UserId));
 
         // 邀请登记(直接切状态,还没登记具体轮次):视为"下一轮"的邀请。
         // Rounds 里已有 2 轮却直接切 Interview → 第 3 轮草稿。
@@ -417,7 +427,7 @@ public sealed class JobApplication : AuditableAggregateRoot
     private void RaiseInvitation(int roundNo, string? stage, DateOnly? scheduledDate,
         string? interviewer, string? format)
         => RaiseDomainEvent(new InterviewInvitationRecordedDomainEvent(
-            Id, CompanyId, Role, roundNo, stage, scheduledDate, interviewer, format));
+            Id, CompanyId, Role, roundNo, stage, scheduledDate, interviewer, format, UserId));
 
     public void UpdateRound(Guid roundId, string? stage, DateOnly? date, string? interviewer,
         string? format, RoundOutcome outcome, string? notes)
@@ -532,7 +542,8 @@ public enum Priority { Low = 0, Medium = 1, High = 2, Critical = 3 }
 public enum RoundOutcome { Pending = 0, Passed = 1, Failed = 2, Cancelled = 3, NoShow = 4 }
 
 public sealed record JobApplicationStatusChangedDomainEvent(
-    Guid ApplicationId, Guid CompanyId, string FromStatus, string ToStatus)
+    Guid ApplicationId, Guid CompanyId, string FromStatus, string ToStatus,
+    Guid UserId = default)
     : DomainEventBase;
 
 /// <summary>
@@ -541,7 +552,8 @@ public sealed record JobApplicationStatusChangedDomainEvent(
 /// </summary>
 public sealed record InterviewInvitationRecordedDomainEvent(
     Guid ApplicationId, Guid CompanyId, string Role, int RoundNo,
-    string? Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format)
+    string? Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format,
+    Guid UserId = default)
     : DomainEventBase;
 
 /// <summary>
@@ -653,8 +665,10 @@ public sealed class ApplicationCommunication : AuditableAggregateRoot
     private ApplicationCommunication() { }
 
     public ApplicationCommunication(Guid applicationId, string type, string? subject, string content,
-        string? contactName, string? contactEmail, DateTimeOffset occurredAt)
+        string? contactName, string? contactEmail, DateTimeOffset occurredAt,
+        Guid userId = default)
     {
+        UserId = userId;
         ApplicationId = applicationId;
         Type = type;
         Subject = subject;
@@ -665,6 +679,9 @@ public sealed class ApplicationCommunication : AuditableAggregateRoot
     }
 
     public Guid ApplicationId { get; private set; }
+
+    /// <summary>归属用户(COD-01/票03):写入时从所属投递盖章,与投递同主人。</summary>
+    public Guid UserId { get; private set; }
 
     /// <summary>Email / Call / Interview / Message / Note。</summary>
     public string Type { get; private set; } = string.Empty;

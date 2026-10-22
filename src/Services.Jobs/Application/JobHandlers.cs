@@ -64,7 +64,7 @@ public sealed record MonthlyCount(string Month, int Applications, int Interviews
 
 // ============================ 查询 ============================
 
-public sealed record ListCompaniesQuery(string? Search, bool IncludeBlacklisted = false)
+public sealed record ListCompaniesQuery(Guid UserId, string? Search, bool IncludeBlacklisted = false)
     : IRequest<Result<IReadOnlyList<CompanyDto>>>;
 
 /// <summary>
@@ -72,87 +72,87 @@ public sealed record ListCompaniesQuery(string? Search, bool IncludeBlacklisted 
 /// 独立命令而非并入 UpdateApplicationCommand —— 粘贴 JD 是高频动作,
 /// 不该要求调用方传齐 Role/Salary 等字段(两端都会互相覆盖)。
 /// </summary>
-public sealed record SetJdContentCommand(Guid Id, string? JdText, string? JdSourceUrl)
+public sealed record SetJdContentCommand(Guid UserId, Guid Id, string? JdText, string? JdSourceUrl)
     : IRequest<Result>;
 
 /// <summary>设置公司情报长文本。与 UpdateCompanyCommand 分开,理由同上。</summary>
-public sealed record SetCompanyProfileCommand(Guid Id, string? Profile, string? ProfileSourcesJson)
+public sealed record SetCompanyProfileCommand(Guid UserId, Guid Id, string? Profile, string? ProfileSourcesJson)
     : IRequest<Result>;
 
-public sealed record GetCompanyQuery(Guid Id) : IRequest<Result<CompanyDto>>;
+public sealed record GetCompanyQuery(Guid UserId, Guid Id) : IRequest<Result<CompanyDto>>;
 
 public sealed record ListApplicationsQuery(
-    string? Search, string? Status, string? Priority, Guid? CompanyId,
+    Guid UserId, string? Search, string? Status, string? Priority, Guid? CompanyId,
     string? SortBy = "updated", int Page = 1, int PageSize = 50,
     bool? Archived = null)
     : IRequest<Result<PagedResult<ApplicationDto>>>;
 
-public sealed record GetApplicationQuery(Guid Id) : IRequest<Result<ApplicationDto>>;
+public sealed record GetApplicationQuery(Guid UserId, Guid Id) : IRequest<Result<ApplicationDto>>;
 
-public sealed record GetTrackerStatsQuery : IRequest<Result<TrackerStats>>;
+public sealed record GetTrackerStatsQuery(Guid UserId) : IRequest<Result<TrackerStats>>;
 
-public sealed record GetUpcomingFollowUpsQuery(int Days = 7) : IRequest<Result<IReadOnlyList<ApplicationDto>>>;
+public sealed record GetUpcomingFollowUpsQuery(Guid UserId, int Days = 7) : IRequest<Result<IReadOnlyList<ApplicationDto>>>;
 
-public sealed record GetDeadlinesQuery(int Days = 14) : IRequest<Result<IReadOnlyList<ApplicationDto>>>;
+public sealed record GetDeadlinesQuery(Guid UserId, int Days = 14) : IRequest<Result<IReadOnlyList<ApplicationDto>>>;
 
 /// <summary>
 /// 行动中心聚合:一次请求给全仪表盘"今天该做什么"所需的 Jobs 侧数据。
 /// 只聚合 Jobs 自有数据(待跟进 / 临近截止 / 状态分布 / 总数),不跨服务,无迁移。
 /// </summary>
-public sealed record GetActionCenterQuery(int FollowUpDays = 7, int DeadlineDays = 14)
+public sealed record GetActionCenterQuery(Guid UserId, int FollowUpDays = 7, int DeadlineDays = 14)
     : IRequest<Result<ActionCenterDto>>;
 
 // ============================ 命令 ============================
 
-public sealed record CreateCompanyCommand(string Name, string? Website, string? Industry,
+public sealed record CreateCompanyCommand(Guid UserId, string Name, string? Website, string? Industry,
     string? Location, string? LogoUrl, string? Notes, string CompanyType = "Unknown", int? EmployeeCount = null)
     : IRequest<Result<Guid>>;
 
-public sealed record UpdateCompanyCommand(Guid Id, string Name, string? Website, string? Industry,
+public sealed record UpdateCompanyCommand(Guid UserId, Guid Id, string Name, string? Website, string? Industry,
     string? Location, string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted)
     : IRequest<Result>;
 
-public sealed record DeleteCompanyCommand(Guid Id) : IRequest<Result>;
+public sealed record DeleteCompanyCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
-public sealed record CreateApplicationCommand(Guid CompanyId, string Role, string? Location, string? Link,
+public sealed record CreateApplicationCommand(Guid UserId, Guid CompanyId, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Priority = null,
     DateOnly? AppliedDate = null, string? Status = null, string? CompanyDescription = null,
     string? WorkAuthorization = null, string? JobType = null,
     string? Requirements = null, string? Benefits = null)
     : IRequest<Result<Guid>>;
 
-public sealed record UpdateApplicationCommand(Guid Id, string Role, string? Location, string? Link,
+public sealed record UpdateApplicationCommand(Guid UserId, Guid Id, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority,
     DateOnly? Deadline, DateOnly? AppliedDate = null, string? CompanyDescription = null,
     string? WorkAuthorization = null, string? JobType = null,
     string? Requirements = null, string? Benefits = null)
     : IRequest<Result>;
 
-public sealed record ChangeApplicationStatusCommand(Guid Id, string Status, string? Note, string? RejectionReason)
+public sealed record ChangeApplicationStatusCommand(Guid UserId, Guid Id, string Status, string? Note, string? RejectionReason)
     : IRequest<Result>;
 
-public sealed record DeleteApplicationCommand(Guid Id) : IRequest<Result>;
-public sealed record ArchiveApplicationCommand(Guid Id) : IRequest<Result>;
-public sealed record UnarchiveApplicationCommand(Guid Id) : IRequest<Result>;
+public sealed record DeleteApplicationCommand(Guid UserId, Guid Id) : IRequest<Result>;
+public sealed record ArchiveApplicationCommand(Guid UserId, Guid Id) : IRequest<Result>;
+public sealed record UnarchiveApplicationCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
-public sealed record SetApplicationAnalysisCommand(Guid Id, int? ResumeScore, string? PassRateEstimate,
+public sealed record SetApplicationAnalysisCommand(Guid UserId, Guid Id, int? ResumeScore, string? PassRateEstimate,
     string? MatchKeywords) : IRequest<Result>;
 
-public sealed record SetOutreachCommand(Guid Id, string? PosterName, bool NeedsConnectFirst, string? Message)
+public sealed record SetOutreachCommand(Guid UserId, Guid Id, string? PosterName, bool NeedsConnectFirst, string? Message)
     : IRequest<Result>;
 
-public sealed record MarkOutreachSentCommand(Guid Id) : IRequest<Result>;
+public sealed record MarkOutreachSentCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
-public sealed record ScheduleFollowUpCommand(Guid Id, DateTimeOffset? At) : IRequest<Result>;
+public sealed record ScheduleFollowUpCommand(Guid UserId, Guid Id, DateTimeOffset? At) : IRequest<Result>;
 
-public sealed record AddInterviewRoundCommand(Guid ApplicationId, string Stage, DateOnly? ScheduledDate,
+public sealed record AddInterviewRoundCommand(Guid UserId, Guid ApplicationId, string Stage, DateOnly? ScheduledDate,
     string? Interviewer, string? Format, string? Notes) : IRequest<Result<Guid>>;
 
-public sealed record UpdateInterviewRoundCommand(Guid ApplicationId, Guid RoundId, string? Stage,
+public sealed record UpdateInterviewRoundCommand(Guid UserId, Guid ApplicationId, Guid RoundId, string? Stage,
     DateOnly? ScheduledDate, string? Interviewer, string? Format, string Outcome, string? Notes)
     : IRequest<Result>;
 
-public sealed record BulkImportApplicationsCommand(IReadOnlyList<BulkImportRow> Rows) : IRequest<Result<BulkImportResult>>;
+public sealed record BulkImportApplicationsCommand(Guid UserId, IReadOnlyList<BulkImportRow> Rows) : IRequest<Result<BulkImportResult>>;
 
 public sealed record BulkImportRow(string Company, string Role, string? Location, string? Link, string? Salary,
     string? Status, string? Source, string? Notes, DateOnly? AppliedDate);
@@ -231,7 +231,7 @@ public sealed class ListCompaniesQueryHandler(JobsDbContext db)
 {
     public async Task<Result<IReadOnlyList<CompanyDto>>> Handle(ListCompaniesQuery request, CancellationToken ct)
     {
-        var q = db.Companies.AsNoTracking().AsQueryable();
+        var q = db.Companies.AsNoTracking().Where(c => c.UserId == request.UserId).AsQueryable();
         if (!request.IncludeBlacklisted) q = q.Where(c => !c.IsBlacklisted);
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
@@ -257,9 +257,9 @@ public sealed class GetCompanyQueryHandler(JobsDbContext db)
 {
     public async Task<Result<CompanyDto>> Handle(GetCompanyQuery request, CancellationToken ct)
     {
-        var c = await db.Companies.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var c = await db.Companies.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure<CompanyDto>(Error.NotFound("公司"));
-        var count = await db.Applications.CountAsync(a => a.CompanyId == c.Id, ct);
+        var count = await db.Applications.CountAsync(a => a.CompanyId == c.Id && a.UserId == request.UserId, ct);
         return Result.Success(c.ToDto(count));
     }
 }
@@ -271,7 +271,7 @@ public sealed class CreateCompanyCommandHandler(JobsDbContext db)
     {
         var name = request.Name.Trim();
         var existing = await db.Companies.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower(), ct);
+            .FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower() && c.UserId == request.UserId, ct);
         if (existing is not null)
             return Result.Success(existing.Id); // 幂等:已存在直接返回
 
@@ -280,7 +280,7 @@ public sealed class CreateCompanyCommandHandler(JobsDbContext db)
             : request.LogoUrl;
 
         var company = new Company(name, request.Website, request.Industry, request.Location,
-            logoUrl, request.Notes)
+            logoUrl, request.Notes, userId: request.UserId)
         {
             // CompanyType/EmployeeCount 通过 Update 设置(保持聚合封装)
         };
@@ -298,7 +298,7 @@ public sealed class UpdateCompanyCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(UpdateCompanyCommand request, CancellationToken ct)
     {
-        var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("公司"));
 
         // Logo 自动解析:用户没显式给 Logo 且填了官网时,按官网 host 推导 favicon 地址。
@@ -319,7 +319,7 @@ public sealed class DeleteCompanyCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(DeleteCompanyCommand request, CancellationToken ct)
     {
-        var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("公司"));
 
         var count = await db.Applications.CountAsync(a => a.CompanyId == c.Id, ct);
@@ -343,7 +343,7 @@ public sealed class ListApplicationsQueryHandler(JobsDbContext db)
         var page = Math.Max(1, request.Page);
         var size = Math.Clamp(request.PageSize, 1, 200);
 
-        var q = db.Applications.AsNoTracking().AsQueryable();
+        var q = db.Applications.AsNoTracking().Where(a => a.UserId == request.UserId).AsQueryable();
         if (request.CompanyId.HasValue) q = q.Where(a => a.CompanyId == request.CompanyId.Value);
 
         // ★ 归档过滤:默认只看未归档,Archived=true 只看已归档,null 看全部
@@ -410,7 +410,7 @@ public sealed class SetJdContentCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(SetJdContentCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
 
         a.SetJdContent(request.JdText, request.JdSourceUrl);
@@ -425,7 +425,7 @@ public sealed class SetCompanyProfileCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(SetCompanyProfileCommand request, CancellationToken ct)
     {
-        var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("公司"));
 
         c.UpdateProfile(request.Profile, request.ProfileSourcesJson);
@@ -444,7 +444,7 @@ public sealed class GetApplicationQueryHandler(JobsDbContext db)
         var a = await db.Applications.AsNoTracking()
             .Include(x => x.History)
             .Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure<ApplicationDto>(Error.NotFound("投递记录"));
 
         var company = await db.Companies.AsNoTracking().Where(c => c.Id == a.CompanyId)
@@ -458,11 +458,11 @@ public sealed class CreateApplicationCommandHandler(JobsDbContext db)
 {
     public async Task<Result<Guid>> Handle(CreateApplicationCommand request, CancellationToken ct)
     {
-        if (!await db.Companies.AnyAsync(c => c.Id == request.CompanyId, ct))
+        if (!await db.Companies.AnyAsync(c => c.Id == request.CompanyId && c.UserId == request.UserId, ct))
             return Result.Failure<Guid>(Error.Validation("Company.NotFound", "指定的公司不存在"));
 
         var app = new JobApplication(request.CompanyId, request.Role, request.Location, request.Link,
-            request.Salary, request.WorkMode, request.Source, request.JdSummary);
+            request.Salary, request.WorkMode, request.Source, request.JdSummary, userId: request.UserId);
 
         if (!string.IsNullOrWhiteSpace(request.CompanyDescription))
             app.SetCompanyDescription(request.CompanyDescription);
@@ -507,7 +507,7 @@ public sealed class UpdateApplicationCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(UpdateApplicationCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
 
         a.UpdateDetails(request.Role, request.Location, request.Link, request.Salary,
@@ -534,7 +534,7 @@ public sealed class ChangeApplicationStatusCommandHandler(JobsDbContext db)
         // Include Rounds:切到 Interview 时的"第几轮邀请"按已有轮次计数,
         // 不带 Rounds 进来会永远算成第 1 轮(与 AddRound 同源的加载缺陷)
         var a = await db.Applications.Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
 
         if (!Enum.TryParse<ApplicationStatus>(request.Status, true, out var target))
@@ -566,7 +566,7 @@ public sealed class DeleteApplicationCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(DeleteApplicationCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
         a.MarkDeleted();
         await db.SaveChangesAsync(ct);
@@ -579,7 +579,7 @@ public sealed class ArchiveApplicationCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(ArchiveApplicationCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
         a.Archive();
         await db.SaveChangesAsync(ct);
@@ -592,8 +592,9 @@ public sealed class UnarchiveApplicationCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(UnarchiveApplicationCommand request, CancellationToken ct)
     {
+        // IgnoreQueryFilters 绕过全局过滤器(含归属过滤)—— 必须自带 UserId 谓词(COD-01 双保险缺口点)
         var a = await db.Applications.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId && !x.IsDeleted, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
         a.Unarchive();
         await db.SaveChangesAsync(ct);
@@ -606,7 +607,7 @@ public sealed class SetApplicationAnalysisCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(SetApplicationAnalysisCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
         a.SetAnalysis(request.ResumeScore, request.PassRateEstimate, request.MatchKeywords);
         await db.SaveChangesAsync(ct);
@@ -619,7 +620,7 @@ public sealed class SetOutreachCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(SetOutreachCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
         a.SetOutreach(request.PosterName, request.NeedsConnectFirst, request.Message);
         await db.SaveChangesAsync(ct);
@@ -632,7 +633,7 @@ public sealed class MarkOutreachSentCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(MarkOutreachSentCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
         a.MarkOutreachSent();
         await db.SaveChangesAsync(ct);
@@ -645,7 +646,7 @@ public sealed class ScheduleFollowUpCommandHandler(JobsDbContext db)
 {
     public async Task<Result> Handle(ScheduleFollowUpCommand request, CancellationToken ct)
     {
-        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
         a.ScheduleFollowUp(request.At);
         await db.SaveChangesAsync(ct);
@@ -661,7 +662,7 @@ public sealed class AddInterviewRoundCommandHandler(JobsDbContext db)
         // ⚠️ 必须 Include Rounds:轮次号 = 已有轮数 + 1,
         // 不带进来 _rounds 恒为空 → 每一轮都算第 1 轮(既有 bug,本轮修复)
         var a = await db.Applications.Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure<Guid>(Error.NotFound("投递记录"));
 
         var round = a.AddRound(request.Stage, request.ScheduledDate, request.Interviewer,
@@ -679,7 +680,7 @@ public sealed class UpdateInterviewRoundCommandHandler(JobsDbContext db)
         // ⚠️ 必须 Include Rounds:UpdateRound 在聚合里按 Id 找轮次,
         // 不带进来永远抛"面试轮次不存在"(既有 bug,本轮修复)
         var a = await db.Applications.Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
 
         if (!Enum.TryParse<RoundOutcome>(request.Outcome, true, out var outcome))
@@ -715,7 +716,7 @@ public sealed class GetTrackerStatsQueryHandler(JobsDbContext db)
     public async Task<Result<TrackerStats>> Handle(GetTrackerStatsQuery request, CancellationToken ct)
     {
         var apps = await db.Applications.AsNoTracking().Include(a => a.Rounds)
-            .Where(a => !a.IsArchived).ToListAsync(ct);
+            .Where(a => a.UserId == request.UserId && !a.IsArchived).ToListAsync(ct);
         var total = apps.Count;
 
         // 状态计数 (string key 供前端直接查)
@@ -788,7 +789,7 @@ public sealed class GetActionCenterQueryHandler(JobsDbContext db, TimeProvider c
         var deadlineUntil = today.AddDays(Math.Clamp(request.DeadlineDays, 1, 120));
 
         var apps = await db.Applications.AsNoTracking().Include(a => a.Rounds)
-            .Where(a => !a.IsArchived).ToListAsync(ct);
+            .Where(a => a.UserId == request.UserId && !a.IsArchived).ToListAsync(ct);
 
         var followUps = apps
             .Where(a => a.NextFollowUpAt != null && a.NextFollowUpAt <= followUntil)
@@ -833,7 +834,7 @@ public sealed class GetUpcomingFollowUpsQueryHandler(JobsDbContext db, TimeProvi
         var until = now.AddDays(Math.Clamp(request.Days, 1, 90));
 
         var apps = await db.Applications.AsNoTracking()
-            .Where(a => a.NextFollowUpAt != null && a.NextFollowUpAt <= until)
+            .Where(a => a.UserId == request.UserId && a.NextFollowUpAt != null && a.NextFollowUpAt <= until)
             .OrderBy(a => a.NextFollowUpAt)
             .Take(100).ToListAsync(ct);
 
@@ -857,7 +858,7 @@ public sealed class GetDeadlinesQueryHandler(JobsDbContext db, TimeProvider cloc
         var until = today.AddDays(Math.Clamp(request.Days, 1, 120));
 
         var apps = await db.Applications.AsNoTracking()
-            .Where(a => a.Deadline != null && a.Deadline >= today && a.Deadline <= until)
+            .Where(a => a.UserId == request.UserId && a.Deadline != null && a.Deadline >= today && a.Deadline <= until)
             .OrderBy(a => a.Deadline).Take(100).ToListAsync(ct);
 
         var ids = apps.Select(a => a.CompanyId).Distinct().ToList();
@@ -892,15 +893,15 @@ public sealed class BulkImportApplicationsCommandHandler(JobsDbContext db)
             }
 
             var name = row.Company.Trim();
-            var company = await db.Companies.FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower(), ct);
+            var company = await db.Companies.FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower() && c.UserId == request.UserId, ct);
             if (company is null)
             {
-                company = new Company(name);
+                company = new Company(name, userId: request.UserId);
                 db.Companies.Add(company);
                 await db.SaveChangesAsync(ct);
             }
 
-            var dup = await db.Applications.AnyAsync(a => a.CompanyId == company.Id
+            var dup = await db.Applications.AnyAsync(a => a.CompanyId == company.Id && a.UserId == request.UserId
                 && a.Role.ToLower() == row.Role.Trim().ToLower(), ct);
             if (dup)
             {
@@ -909,7 +910,7 @@ public sealed class BulkImportApplicationsCommandHandler(JobsDbContext db)
             }
 
             var app = new JobApplication(company.Id, row.Role.Trim(), row.Location, row.Link,
-                row.Salary, null, row.Source, null);
+                row.Salary, null, row.Source, null, userId: request.UserId);
             if (!string.IsNullOrWhiteSpace(row.Notes)) app.UpdateDetails(row.Role.Trim(), row.Location,
                 row.Link, row.Salary, null, row.Source, null, row.Notes);
 

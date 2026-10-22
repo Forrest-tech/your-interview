@@ -62,7 +62,7 @@ public sealed class GenerateCoverLetterCommandHandler(
     {
         // ---------- 1. 取齐四个输入 ----------
         var app = await db.Applications.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
         if (app is null)
             return Result.Failure<CoverLetterDto>(Error.NotFound("投递记录"));
 
@@ -74,9 +74,9 @@ public sealed class GenerateCoverLetterCommandHandler(
                 "尚未录入简历 —— 求职信必须基于你的真实经历撰写,请先录入简历。"));
 
         var company = await db.Companies.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == app.CompanyId, ct);
+            .FirstOrDefaultAsync(x => x.Id == app.CompanyId && x.UserId == request.UserId, ct);
 
-        var existing = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
+        var existing = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
 
         // 默认不覆盖已有内容 —— 生成一次要花钱花时间,把用户手改的信冲掉是严重体验事故。
         if (existing is not null && !string.IsNullOrWhiteSpace(existing.Content) && !request.Overwrite)

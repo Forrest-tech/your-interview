@@ -148,7 +148,7 @@ public sealed class ParseJdCommandHandler(
 // ============================ 一键建档(解析结果 → 投递记录) ============================
 
 public sealed record SmartAddApplicationCommand(
-    string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
+    Guid UserId, string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
     string? CompanyDescription = null, string? WorkAuthorization = null,
@@ -177,8 +177,9 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
 
         // 公司按名大小写不敏感匹配 —— "Shopify" 与 "shopify" 是同一家,
         // 不这样做会在看板上出现两条同名的公司列。
+        // COD-01:find-or-create 按 (Name, UserId) 双条件 —— 同名公司在他人名下不算已存在
         var existing = await db.Companies
-            .FirstOrDefaultAsync(c => c.Name.ToLower() == companyName.ToLower(), ct);
+            .FirstOrDefaultAsync(c => c.Name.ToLower() == companyName.ToLower() && c.UserId == request.UserId, ct);
 
         var created = false;
         if (existing is null)
@@ -188,7 +189,8 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
             var website = JdPasteParser.IsAggregator(request.Link) ? null : JdPasteParser.HostOf(request.Link);
             existing = new Company(companyName,
                 website: website,
-                logoUrl: Company.LogoUrlFromWebsite(website));
+                logoUrl: Company.LogoUrlFromWebsite(website),
+                userId: request.UserId);
             db.Companies.Add(existing);
             created = true;
         }
@@ -199,7 +201,8 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
             salary: NullIfBlank(request.Salary),
             workMode: NullIfBlank(request.WorkMode),
             source: NullIfBlank(request.Source),
-            jdSummary: NullIfBlank(request.JdSummary));
+            jdSummary: NullIfBlank(request.JdSummary),
+            userId: request.UserId);
 
         if (!string.IsNullOrWhiteSpace(request.Priority)
             && Enum.TryParse<Priority>(request.Priority, true, out var p))
@@ -311,7 +314,7 @@ public sealed class ParseInviteCommandHandler(IAiGatewayClient ai)
 /// 而且 AddRound 会自动发出"邀请已登记"事件去建机经草稿(既有链路,不重复实现)。
 /// </summary>
 public sealed record LinkInviteCommand(
-    Guid ApplicationId, string? Stage, DateOnly? ScheduledDate, string? Interviewer,
+    Guid UserId, Guid ApplicationId, string? Stage, DateOnly? ScheduledDate, string? Interviewer,
     string? Format, string? Notes)
     : IRequest<Result<LinkInviteResultDto>>;
 
@@ -323,7 +326,7 @@ public sealed class LinkInviteCommandHandler(JobsDbContext db)
     public async Task<Result<LinkInviteResultDto>> Handle(LinkInviteCommand request, CancellationToken ct)
     {
         var app = await db.Applications.Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
         if (app is null) return Result.Failure<LinkInviteResultDto>(Error.NotFound("投递记录"));
 
         var stage = string.IsNullOrWhiteSpace(request.Stage) ? "面试" : request.Stage.Trim();

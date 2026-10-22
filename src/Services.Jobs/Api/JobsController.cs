@@ -15,8 +15,8 @@ namespace YourInterview.Services.Jobs.Api;
 [Produces("application/json")]
 public sealed class JobsController(ISender sender, ICurrentUser currentUser) : ControllerBase
 {
-    /// <summary>当前用户。简历是用户级资产(有 UserId),公司/投递是单租户空间(无 UserId)。</summary>
-    private Guid Me => currentUser.UserId ?? Guid.Empty;
+    /// <summary>当前用户(COD-01/票03):公司/投递/沟通均已按 UserId 隔离,未登录直接 401,不再回落 Guid.Empty。</summary>
+    private Guid Me => currentUser.RequireUserId();
 
     // ---------- 公司 ----------
 
@@ -24,7 +24,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> ListCompanies([FromQuery] string? search, [FromQuery] bool includeBlacklisted = false, CancellationToken ct = default)
     {
-        var r = await sender.Send(new ListCompaniesQuery(search, includeBlacklisted), ct);
+        var r = await sender.Send(new ListCompaniesQuery(Me, search, includeBlacklisted), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -32,7 +32,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> GetCompany(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new GetCompanyQuery(id), ct);
+        var r = await sender.Send(new GetCompanyQuery(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -40,7 +40,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> CreateCompany([FromBody] CreateCompanyCommand command, CancellationToken ct)
     {
-        var r = await sender.Send(command, ct);
+        var r = await sender.Send(command with { UserId = Me }, ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/companies/{r.Value}", new { id = r.Value })
             : r.ToProblemDetails();
@@ -50,7 +50,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateCompany(Guid id, [FromBody] UpdateCompanyBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateCompanyCommand(id, body.Name, body.Website, body.Industry,
+        var r = await sender.Send(new UpdateCompanyCommand(Me, id, body.Name, body.Website, body.Industry,
             body.Location, body.LogoUrl, body.Notes, body.CompanyType, body.EmployeeCount, body.IsBlacklisted), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
@@ -63,7 +63,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetCompanyProfile(Guid id, [FromBody] CompanyProfileBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetCompanyProfileCommand(id, body.Profile, body.ProfileSourcesJson), ct);
+        var r = await sender.Send(new SetCompanyProfileCommand(Me, id, body.Profile, body.ProfileSourcesJson), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -71,7 +71,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
     public async Task<IResult> DeleteCompany(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteCompanyCommand(id), ct);
+        var r = await sender.Send(new DeleteCompanyCommand(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -84,7 +84,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         [FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] bool? archived = null,
         CancellationToken ct = default)
     {
-        var r = await sender.Send(new ListApplicationsQuery(search, status, priority, companyId, sortBy, page, pageSize, archived), ct);
+        var r = await sender.Send(new ListApplicationsQuery(Me, search, status, priority, companyId, sortBy, page, pageSize, archived), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -92,7 +92,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> GetApplication(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new GetApplicationQuery(id), ct);
+        var r = await sender.Send(new GetApplicationQuery(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -100,7 +100,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> CreateApplication([FromBody] CreateApplicationCommand command, CancellationToken ct)
     {
-        var r = await sender.Send(command, ct);
+        var r = await sender.Send(command with { UserId = Me }, ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{r.Value}", new { id = r.Value })
             : r.ToProblemDetails();
@@ -110,7 +110,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateApplication(Guid id, [FromBody] UpdateApplicationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateApplicationCommand(id, body.Role, body.Location, body.Link,
+        var r = await sender.Send(new UpdateApplicationCommand(Me, id, body.Role, body.Location, body.Link,
             body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline,
             body.AppliedDate, body.CompanyDescription, body.WorkAuthorization, null,
             body.Requirements, body.Benefits), ct);
@@ -126,7 +126,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetJdContent(Guid id, [FromBody] JdContentBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetJdContentCommand(id, body.JdText, body.JdSourceUrl), ct);
+        var r = await sender.Send(new SetJdContentCommand(Me, id, body.JdText, body.JdSourceUrl), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -135,7 +135,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> ChangeStatus(Guid id, [FromBody] ChangeStatusBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ChangeApplicationStatusCommand(id, body.Status, body.Note, body.RejectionReason), ct);
+        var r = await sender.Send(new ChangeApplicationStatusCommand(Me, id, body.Status, body.Note, body.RejectionReason), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -143,7 +143,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
     public async Task<IResult> DeleteApplication(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteApplicationCommand(id), ct);
+        var r = await sender.Send(new DeleteApplicationCommand(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -152,7 +152,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> ArchiveApplication(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new ArchiveApplicationCommand(id), ct);
+        var r = await sender.Send(new ArchiveApplicationCommand(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -161,7 +161,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UnarchiveApplication(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new UnarchiveApplicationCommand(id), ct);
+        var r = await sender.Send(new UnarchiveApplicationCommand(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -170,7 +170,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetAnalysis(Guid id, [FromBody] AnalysisBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetApplicationAnalysisCommand(id, body.ResumeScore, body.PassRateEstimate, body.MatchKeywords), ct);
+        var r = await sender.Send(new SetApplicationAnalysisCommand(Me, id, body.ResumeScore, body.PassRateEstimate, body.MatchKeywords), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -179,7 +179,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetOutreach(Guid id, [FromBody] OutreachBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetOutreachCommand(id, body.PosterName, body.NeedsConnectFirst, body.Message), ct);
+        var r = await sender.Send(new SetOutreachCommand(Me, id, body.PosterName, body.NeedsConnectFirst, body.Message), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -187,7 +187,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> MarkOutreachSent(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new MarkOutreachSentCommand(id), ct);
+        var r = await sender.Send(new MarkOutreachSentCommand(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -195,7 +195,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> ScheduleFollowUp(Guid id, [FromBody] FollowUpBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ScheduleFollowUpCommand(id, body.At), ct);
+        var r = await sender.Send(new ScheduleFollowUpCommand(Me, id, body.At), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -205,7 +205,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> AddRound(Guid id, [FromBody] AddRoundBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new AddInterviewRoundCommand(id, body.Stage, body.ScheduledDate,
+        var r = await sender.Send(new AddInterviewRoundCommand(Me, id, body.Stage, body.ScheduledDate,
             body.Interviewer, body.Format, body.Notes), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{id}/rounds/{r.Value}", new { id = r.Value })
@@ -216,7 +216,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateRound(Guid id, Guid roundId, [FromBody] UpdateRoundBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateInterviewRoundCommand(id, roundId, body.Stage, body.ScheduledDate,
+        var r = await sender.Send(new UpdateInterviewRoundCommand(Me, id, roundId, body.Stage, body.ScheduledDate,
             body.Interviewer, body.Format, body.Outcome, body.Notes), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
@@ -227,7 +227,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> Stats(CancellationToken ct)
     {
-        var r = await sender.Send(new GetTrackerStatsQuery(), ct);
+        var r = await sender.Send(new GetTrackerStatsQuery(Me), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -235,7 +235,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> ActionCenter([FromQuery] int followUpDays = 7, [FromQuery] int deadlineDays = 14, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetActionCenterQuery(followUpDays, deadlineDays), ct);
+        var r = await sender.Send(new GetActionCenterQuery(Me, followUpDays, deadlineDays), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -243,7 +243,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> FollowUps([FromQuery] int days = 7, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetUpcomingFollowUpsQuery(days), ct);
+        var r = await sender.Send(new GetUpcomingFollowUpsQuery(Me, days), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -251,7 +251,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> Deadlines([FromQuery] int days = 14, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetDeadlinesQuery(days), ct);
+        var r = await sender.Send(new GetDeadlinesQuery(Me, days), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -260,7 +260,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> BulkImport([FromBody] BulkImportApplicationsCommand command, CancellationToken ct)
     {
-        var r = await sender.Send(command, ct);
+        var r = await sender.Send(command with { UserId = Me }, ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -339,7 +339,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SmartAddApplication([FromBody] SmartAddApplicationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SmartAddApplicationCommand(body.Company, body.Role, body.Location,
+        var r = await sender.Send(new SmartAddApplicationCommand(Me, body.Company, body.Role, body.Location,
             body.Salary, body.WorkMode, body.JobType, body.JdSummary, body.MatchKeywords, body.Priority,
             body.Link, body.JdText, body.Source, body.Status, body.Deadline,
             body.CompanyDescription, body.WorkAuthorization, body.Requirements, body.Benefits), ct);
@@ -364,7 +364,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> LinkInvite(Guid id, [FromBody] LinkInviteBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new LinkInviteCommand(id, body.Stage, body.ScheduledDate,
+        var r = await sender.Send(new LinkInviteCommand(Me, id, body.Stage, body.ScheduledDate,
             body.Interviewer, body.Format, body.Notes), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
@@ -665,7 +665,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteCoverLetter(Guid applicationId, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteCoverLetterCommand(applicationId), ct);
+        var r = await sender.Send(new DeleteCoverLetterCommand(applicationId, Me), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -711,7 +711,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> ListCommunications(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new ListCommunicationsQuery(id), ct);
+        var r = await sender.Send(new ListCommunicationsQuery(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -719,7 +719,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> CreateCommunication(Guid id, [FromBody] CommunicationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new CreateCommunicationCommand(id, body.Type, body.Subject, body.Content,
+        var r = await sender.Send(new CreateCommunicationCommand(Me, id, body.Type, body.Subject, body.Content,
             body.ContactName, body.ContactEmail, body.OccurredAt, body.MetaJson, body.HandlingStatus), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{id}/communications/{r.Value}", new { id = r.Value })
@@ -732,7 +732,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public async Task<IResult> SetCommunicationMeta(Guid id, Guid commId,
         [FromBody] CommunicationMetaBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetCommunicationMetaCommand(commId, id,
+        var r = await sender.Send(new SetCommunicationMetaCommand(Me, commId, id,
             body.MetaJson, body.HandlingStatus), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
@@ -741,7 +741,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateCommunication(Guid id, Guid commId, [FromBody] CommunicationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateCommunicationCommand(commId, id, body.Type, body.Subject, body.Content,
+        var r = await sender.Send(new UpdateCommunicationCommand(Me, commId, id, body.Type, body.Subject, body.Content,
             body.ContactName, body.ContactEmail, body.OccurredAt), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
@@ -750,7 +750,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
     public async Task<IResult> DeleteCommunication(Guid id, Guid commId, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteCommunicationCommand(commId, id), ct);
+        var r = await sender.Send(new DeleteCommunicationCommand(Me, commId, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 

@@ -35,26 +35,26 @@ public sealed record DeleteAnswerTemplateCommand(Guid Id, Guid UserId) : IReques
 
 // ============================ 沟通记录(投递级) ============================
 
-public sealed record ListCommunicationsQuery(Guid ApplicationId)
+public sealed record ListCommunicationsQuery(Guid UserId, Guid ApplicationId)
     : IRequest<Result<IReadOnlyList<CommunicationDto>>>;
 
 public sealed record CreateCommunicationCommand(
-    Guid ApplicationId, string Type, string? Subject, string Content,
+    Guid UserId, Guid ApplicationId, string Type, string? Subject, string Content,
     string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
     string? MetaJson = null, string? HandlingStatus = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateCommunicationCommand(
-    Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
+    Guid UserId, Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
     string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt)
     : IRequest<Result>;
 
 /// <summary>Playbook v2:单独更新沟通的元数据 / 安排处理状态(不动正文)。</summary>
 public sealed record SetCommunicationMetaCommand(
-    Guid Id, Guid ApplicationId, string? MetaJson = null, string? HandlingStatus = null)
+    Guid UserId, Guid Id, Guid ApplicationId, string? MetaJson = null, string? HandlingStatus = null)
     : IRequest<Result>;
 
-public sealed record DeleteCommunicationCommand(Guid Id, Guid ApplicationId) : IRequest<Result>;
+public sealed record DeleteCommunicationCommand(Guid UserId, Guid Id, Guid ApplicationId) : IRequest<Result>;
 
 // ============================ 校验 ============================
 
@@ -152,11 +152,11 @@ public sealed class ListCommunicationsQueryHandler(JobsDbContext db)
 {
     public async Task<Result<IReadOnlyList<CommunicationDto>>> Handle(ListCommunicationsQuery request, CancellationToken ct)
     {
-        if (!await db.Applications.AsNoTracking().AnyAsync(x => x.Id == request.ApplicationId, ct))
+        if (!await db.Applications.AsNoTracking().AnyAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct))
             return Result.Failure<IReadOnlyList<CommunicationDto>>(Error.NotFound("投递记录"));
 
         var items = await db.Communications.AsNoTracking()
-            .Where(c => c.ApplicationId == request.ApplicationId)
+            .Where(c => c.ApplicationId == request.ApplicationId && c.UserId == request.UserId)
             .OrderByDescending(c => c.OccurredAt).ThenByDescending(c => c.CreatedAt)
             .Select(c => new CommunicationDto(c.Id, c.ApplicationId, c.Type, c.Subject, c.Content,
                 c.ContactName, c.ContactEmail, c.OccurredAt, c.CreatedAt, c.UpdatedAt,
@@ -172,11 +172,15 @@ public sealed class CreateCommunicationCommandHandler(JobsDbContext db)
 {
     public async Task<Result<Guid>> Handle(CreateCommunicationCommand request, CancellationToken ct)
     {
-        if (!await db.Applications.AsNoTracking().AnyAsync(x => x.Id == request.ApplicationId, ct))
+        var app = await db.Applications.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
+        if (app is null)
             return Result.Failure<Guid>(Error.NotFound("投递记录"));
 
+        // 归属从所属投递盖章(不从请求另传)—— 沟通的主人恒等于投递的主人
         var c = new ApplicationCommunication(request.ApplicationId, request.Type, request.Subject,
-            request.Content, request.ContactName, request.ContactEmail, request.OccurredAt);
+            request.Content, request.ContactName, request.ContactEmail, request.OccurredAt,
+            userId: app.UserId);
         if (!string.IsNullOrWhiteSpace(request.MetaJson)) c.SetMeta(request.MetaJson);
         if (!string.IsNullOrWhiteSpace(request.HandlingStatus)) c.SetHandlingStatus(request.HandlingStatus);
         db.Communications.Add(c);
@@ -191,7 +195,7 @@ public sealed class SetCommunicationMetaCommandHandler(JobsDbContext db)
     public async Task<Result> Handle(SetCommunicationMetaCommand request, CancellationToken ct)
     {
         var c = await db.Communications.FirstOrDefaultAsync(
-            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId, ct);
+            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("沟通记录"));
 
         if (request.MetaJson is not null) c.SetMeta(request.MetaJson);
@@ -207,7 +211,7 @@ public sealed class UpdateCommunicationCommandHandler(JobsDbContext db)
     public async Task<Result> Handle(UpdateCommunicationCommand request, CancellationToken ct)
     {
         var c = await db.Communications.FirstOrDefaultAsync(
-            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId, ct);
+            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("沟通记录"));
 
         c.Update(request.Type, request.Subject, request.Content, request.ContactName,
@@ -223,7 +227,7 @@ public sealed class DeleteCommunicationCommandHandler(JobsDbContext db)
     public async Task<Result> Handle(DeleteCommunicationCommand request, CancellationToken ct)
     {
         var c = await db.Communications.FirstOrDefaultAsync(
-            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId, ct);
+            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("沟通记录"));
 
         c.MarkDeleted();

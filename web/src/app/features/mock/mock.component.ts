@@ -216,6 +216,9 @@ export class MockComponent implements OnInit {
     const keyMap: Record<string, string> = {
       TopicDrill: 'mock.modeTopicDrill',
       FullMock: 'mock.modeFullMock',
+      // 后端 SessionMode 的完整模拟值是 FullLoop(见 AssessmentAggregates),
+      // 与表单值 FullMock 共用同一本地化名,保证已存会话标签不直出枚举。
+      FullLoop: 'mock.modeFullMock',
       WeaknessFocus: 'mock.modeWeakness',
       CompanyStyle: 'mock.modeCompanyStyle'
     };
@@ -225,6 +228,7 @@ export class MockComponent implements OnInit {
 
   statusLabel(s: string): string {
     const map: Record<string, string> = {
+      Draft: this.t('mock.statusDraft'),
       InProgress: this.t('mock.statusInProgress'),
       Completed: this.t('mock.statusCompleted'),
       Abandoned: this.t('mock.statusAbandoned')

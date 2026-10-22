@@ -25,7 +25,7 @@
         <div>
           <h2>{{ s.title }}</h2>
           <div class="head-meta">
-            <span class="mode">{{ s.mode }}</span>
+            <span class="mode">{{ modeLabel(s.mode) }}</span>
             @if (s.topic) { <span class="topic">{{ s.topic }}</span> }
             <span class="chip" [class.busy]="!isCompleted()" [class.ok]="isCompleted()">
               {{ statusLabel(s.status) }}

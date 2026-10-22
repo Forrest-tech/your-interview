@@ -347,8 +347,22 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     return map[state] ?? state;
   }
 
+  /** 模式标签走 i18n 映射(含后端枚举值 FullLoop),不直出枚举原文。 */
+  modeLabel(mode: string): string {
+    const keyMap: Record<string, string> = {
+      TopicDrill: 'mock.modeTopicDrill',
+      FullMock: 'mock.modeFullMock',
+      FullLoop: 'mock.modeFullMock',
+      WeaknessFocus: 'mock.modeWeakness',
+      CompanyStyle: 'mock.modeCompanyStyle'
+    };
+    const key = keyMap[mode];
+    return key ? this.t(key) : mode;
+  }
+
   statusLabel(s: string): string {
     const map: Record<string, string> = {
+      Draft: this.t('mock.statusDraft'),
       InProgress: this.t('mock.statusInProgress'),
       Completed: this.t('mock.statusCompleted'),
       Abandoned: this.t('mock.statusAbandoned')

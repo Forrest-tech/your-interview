@@ -1,7 +1,4 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
@@ -11,12 +8,8 @@ using YourInterview.SharedContracts;   // AddMassTransitWithRabbitMq 扩展所�
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ★ 2026-09-26(Forrest 413 修复):Kestrel 默认请求体上限 30MB,
-//   长录音(>2分钟)的 multipart 上传/评分送审会撞 413 Payload Too Large。
-//   行业做法(如 GitHub API):按业务最大合理体积显式声明 —— 这里放宽到 64MB,
-//   覆盖 10 分钟 16k 单声道 WAV 的 base64(约 25MB)绰绰有余。
-builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 64 * 1024 * 1024);
-
+// ★ Kestrel 请求体上限 64MB 已收进 AddServiceDefaults 全服务统一(ARC-09/票18);
+//   本服务 2026-09-26 的 413 修复口径不变(长录音 multipart 上传/评分送审,值仍 64MB)。
 builder.AddServiceDefaults("assessment-api");
 
 // ---------- 数据库:独占 schema "assessment" ----------
@@ -63,24 +56,8 @@ builder.Services.AddSingleton<YourInterview.Services.Assessment.Application.Spee
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 
 // ---------- 鉴权 ----------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("缺少 Jwt:SigningKey");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-    });
+// ---------- JWT 认证(校验参数唯一定义在 ServiceDefaults,ARC-09/票18) ----------
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddAuthorization(options => PermissionPolicy.AddPermissionPolicies(options));
 

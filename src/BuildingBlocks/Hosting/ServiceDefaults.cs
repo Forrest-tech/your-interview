@@ -1,7 +1,11 @@
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +14,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 using MediatR;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using OpenTelemetry.Resources;
@@ -30,11 +35,28 @@ public static class ServiceDefaults
 {
     public const string CorsPolicy = "your-interview-cors";
 
+    /// <summary>
+    /// 全服务统一的 Kestrel 请求体上限:64MB(ARC-09/票18)。
+    /// 与网关(Services.Gateway 自有同值一行,网关不引用 BuildingBlocks)口径一致;
+    /// 此前只有 Assessment 与网关配了 64MB,其余服务吃 Kestrel 默认 30,000,000B,
+    /// 无 [RequestSizeLimit] 的端点收到 &gt;30MB 请求体即被拒。端点级属性口径不动(按端点覆盖本值)。
+    /// </summary>
+    public const long MaxRequestBodySizeBytes = 64L * 1024 * 1024;
+
+    /// <summary>JWT Issuer 兜底(ARC-09/票18:以 Jobs 旧口径为准的统一默认值)。</summary>
+    public const string DefaultJwtIssuer = "your-interview.identity";
+
+    /// <summary>JWT Audience 兜底(ARC-09/票18:以 Jobs 旧口径为准的统一默认值)。</summary>
+    public const string DefaultJwtAudience = "your-interview.api";
+
     public static WebApplicationBuilder AddServiceDefaults(
         this WebApplicationBuilder builder,
         string serviceName,
         Action<IServiceCollection>? configure = null)
     {
+        // ---------- Kestrel 请求体上限(ARC-09/票18:全服务统一 64MB,见 MaxRequestBodySizeBytes) ----------
+        builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = MaxRequestBodySizeBytes);
+
         // ---------- Serilog ----------
         builder.Host.UseSerilog((context, services, cfg) => cfg
             .MinimumLevel.Information()
@@ -127,6 +149,59 @@ public static class ServiceDefaults
         configure?.Invoke(builder.Services);
 
         return builder;
+    }
+
+    /// <summary>
+    /// ARC-09(票18):JWT 校验参数的**唯一定义**。此前七个服务在各自 Program.cs 逐字复制本块且已漂移
+    /// (仅 Jobs 带 issuer/audience 兜底)——统一口径以 Jobs 兜底为准:
+    /// Issuer/Audience 配置缺失(null)时回落默认串;签名密钥缺失/空白即抛(启动失败,不带病运行)。
+    /// 纯函数(只读 <see cref="IConfiguration"/>),口径由 BuildingBlocks.Tests 特征测试锁定。
+    /// </summary>
+    public static TokenValidationParameters BuildTokenValidationParameters(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var signingKey = configuration["Jwt:SigningKey"];
+        if (string.IsNullOrWhiteSpace(signingKey))
+            throw new InvalidOperationException(
+                "缺少 Jwt:SigningKey 配置。请在本地 appsettings.Development.json 或环境变量 Jwt__SigningKey 中配置" +
+                "(需与 Services.Identity 签发的密钥一致,至少 32 字符)。");
+
+        return new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            // 注:?? 只兜底 null —— 配置为空串时原样保留(Jobs 旧口径,特征测试锁定,不顺手改)。
+            ValidIssuer = configuration["Jwt:Issuer"] ?? DefaultJwtIssuer,
+            ValidAudience = configuration["Jwt:Audience"] ?? DefaultJwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+            ClockSkew = TimeSpan.FromSeconds(30),
+            // Jobs/Identity 旧显式值;其余五服务未显式设时框架默认同为 ClaimTypes.Role —— 等值显式化。
+            RoleClaimType = ClaimTypes.Role
+        };
+    }
+
+    /// <summary>
+    /// ARC-09(票18):JWT Bearer 注册的**唯一入口**。校验参数一律由
+    /// <see cref="BuildTokenValidationParameters"/> 决定,调用点不许另改;
+    /// <paramref name="configure"/> 只供个别服务保留有意差异
+    /// (Identity 的 ProblemDetails 401/403 Events 与 SaveToken、Jobs/Identity 的 RequireHttpsMetadata),
+    /// 差异内容仍写在各服务 Program.cs、逐项可盘点。
+    /// </summary>
+    public static IServiceCollection AddJwtAuthentication(
+        this IServiceCollection services, IConfiguration configuration,
+        Action<JwtBearerOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = BuildTokenValidationParameters(configuration);
+                configure?.Invoke(options);
+            });
+        return services;
     }
 
     /// <summary>

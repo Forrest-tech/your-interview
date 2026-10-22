@@ -1,7 +1,4 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
@@ -74,29 +71,12 @@ builder.AddServiceDefaults(ServiceName, services =>
 builder.Services.AddCurrentUser();
 
 // ---------- JWT 认证(校验 Identity 签发的令牌,只验签不查库) ----------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"]
-    ?? throw new InvalidOperationException(
-        "缺少 Jwt:SigningKey 配置。请在本地 appsettings.Development.json 或环境变量 Jwt__SigningKey 中配置" +
-        "(需与 Services.Identity 签发的密钥一致,至少 32 字符)。");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"] ?? "your-interview.identity",
-            ValidAudience = jwtSection["Audience"] ?? "your-interview.api",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30),
-            RoleClaimType = System.Security.Claims.ClaimTypes.Role
-        };
-    });
+// 校验参数唯一定义在 ServiceDefaults(ARC-09/票18);本服务旧有的 issuer/audience 兜底已并入统一口径。
+// RequireHttpsMetadata 为本服务保留项,经 configure 回调设置(无 Authority 配置,实际不拉 OIDC 元数据)。
+builder.Services.AddJwtAuthentication(builder.Configuration, options =>
+{
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+});
 
 builder.Services.AddAuthorization(options =>
 {

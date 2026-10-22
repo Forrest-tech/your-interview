@@ -1,7 +1,4 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
@@ -65,24 +62,8 @@ builder.Services.AddHostedService<AnalysisJobDispatcher>();
 builder.Services.AddHostedService<AudioIntegritySweepService>();
 
 // ---------- 鉴权 ----------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("缺少 Jwt:SigningKey");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-    });
+// ---------- JWT 认证(校验参数唯一定义在 ServiceDefaults,ARC-09/票18) ----------
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddAuthorization(options => PermissionPolicy.AddPermissionPolicies(options));
 

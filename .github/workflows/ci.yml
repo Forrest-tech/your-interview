@@ -22,7 +22,7 @@ name: CI
 
 on:
   push:
-    branches: [develop-new-features, work-push]
+    branches: [develop-new-features]
   pull_request:
     branches: [develop-new-features]
 

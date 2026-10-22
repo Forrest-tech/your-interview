@@ -10,7 +10,9 @@
     "start:host": "ng serve --proxy-config proxy.conf.json --host 0.0.0.0 --disable-host-check",
     "check-templates": "node tools/check-templates.mjs",
     "prestart": "npm run check-templates",
-    "prebuild": "npm run check-templates"
+    "prebuild": "npm run check-templates",
+    "e2e": "playwright test",
+    "e2e:report": "playwright show-report e2e/.report"
   },
   "private": true,
   "dependencies": {
@@ -41,6 +43,7 @@
     "@angular-devkit/build-angular": "^17.3.17",
     "@angular/cli": "^17.3.17",
     "@angular/compiler-cli": "^17.3.0",
+    "@playwright/test": "^1.64.1",
     "@types/jasmine": "~5.1.0",
     "jasmine-core": "~5.1.0",
     "karma": "~6.4.0",

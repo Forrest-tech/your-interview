@@ -71,6 +71,41 @@ grep -rn REPLACE_WITH .env src/Analysis.Worker/appsettings.Development.json
 
 输出为空就说明配好了。
 
+## 三点五、一条命令起全套(推荐)
+
+起环境的正确顺序是:**起容器 → 等数据库真能连 → 建 schema → 跑迁移 → 起后自检**。
+少了任何一步,都可能得到"页面能开但 API 全 500"这种假成功 —— 界面看着正常,
+但每个接口都在报错,而从界面上完全看不出病根在哪。
+
+所以别再手工拼命令了,直接用:
+
+```bash
+./scripts/dev-up.sh
+```
+
+它会依次做完上面五步,最后打印一份**起后自检报告**(哪个没活一眼可见),
+没全绿就以非零退出码退出(可被编排/CI 当门禁用)。
+
+只想看当前状态(不重起),单独跑自检:
+
+```bash
+scripts/dev-doctor.sh
+```
+
+### 常见坑
+
+1. **Docker 没开** —— 这是最常见的坑。Docker Desktop 没运行时,compose 命令本身
+   才失败;而如果是数据库没就绪就起了服务,界面表现为"接口全 500",
+   报错信息完全指不到 Docker 上。`dev-up.sh` 会在第一步就明确拦下并提示。
+2. **宿主 5432 端口被占** —— compose 现在自带 PostgreSQL 并发布到 5432。
+   若你本机已有 PostgreSQL 在用,改 `docker-compose.yml` 里 postgres 的端口映射即可。
+3. **没填 .env** —— 没有 `.env` 时 `dev-up.sh` 会从 `.env.example` 复制一份并停下来
+   提示你先填,不会带着空密钥硬跑(六个服务共用的 `JWT_SIGNING_KEY` 必须一致,
+   否则 Identity 签的令牌其它服务验不过)。
+4. **首次构建慢** —— 要下 SDK 镜像 + 还原 NuGet 包 + 构建 8 个项目,10-20 分钟属正常。
+5. **前端不在这条命令里** —— 前端在宿主机跑(热重载顺手),起来后另开一个终端:
+   `cd web && npm start`。
+
 ## 四、起后端(Docker 路线,推荐)
 
 ```bash

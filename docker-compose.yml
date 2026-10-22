@@ -227,6 +227,29 @@ services:
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  # 共享 OCR 服务(2026-10-21,票59):PaddleOCR PP-OCRv6 本地识别,平台能力
+  # (定稿 replica/platform-ocr-spec.md)—— Playbook 入口先行接入,其余模块
+  # 经网关 /api/ocr/** 共用同一服务,禁止各模块自攒 OCR。无状态、无 DB 依赖;
+  # 配置全走 env(OCR_*),mkldnn 默认关(paddlepaddle 3.3.1 OneDNN bug 绕行)。
+  ocr-service:
+    build:
+      context: ./src/ocr-service
+      dockerfile: Dockerfile
+    container_name: yourinterview-ocr
+    restart: unless-stopped
+    environment:
+      OCR_PORT: "5300"
+      OCR_MIN_CONFIDENCE: "${OCR_MIN_CONFIDENCE:-0.5}"
+      OCR_ENABLE_MKLDNN: "${OCR_ENABLE_MKLDNN:-false}"
+      OCR_JOB_TTL_SECONDS: "${OCR_JOB_TTL_SECONDS:-600}"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5300/health', timeout=3)\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
   gateway:
     build:
       <<: *service-build
@@ -245,6 +268,7 @@ services:
       ReverseProxy__Clusters__assessment__Destinations__d1__Address: "http://assessment:8080/"
       ReverseProxy__Clusters__analytics__Destinations__d1__Address: "http://analytics:8080/"
       ReverseProxy__Clusters__aigateway__Destinations__d1__Address: "http://aigateway:8080/"
+      ReverseProxy__Clusters__ocr__Destinations__d1__Address: "http://ocr-service:5300/"
     ports:
       - "5200:8080"          # 唯一对外暴露的端口,前端连它
     depends_on:

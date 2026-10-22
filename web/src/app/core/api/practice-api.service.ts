@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { map, timeout } from 'rxjs/operators';
 
 import { ApiClient } from './api-client';
 
@@ -164,6 +164,20 @@ export interface PrepSourceSettingsDto {
 export interface ImageTextDto {
   status: 'ok' | 'notConfigured' | 'unsupported' | 'failed' | string;
   text: string | null;
+}
+
+/**
+ * 共享 OCR 服务结果(平台能力,票59):本地 PaddleOCR,图片不出本地。
+ * text = 服务处理层组装的全文(逐行、阅读序);droppedLines = 被置信过滤
+ * 剔除的行数(不静默);失败/不可达由 Observable 错误通道如实上抛。
+ */
+export interface SharedOcrDto {
+  status: string;
+  engine?: string;
+  model?: string;
+  text: string | null;
+  droppedLines?: number;
+  elapsedMs?: number;
 }
 
 // ---------- Azure 语音设置 ----------
@@ -493,6 +507,20 @@ export class PracticeApi {
    */
   extractImageText(imageBase64: string, mimeType: string): Observable<ImageTextDto> {
     return this.api.post<ImageTextDto>('/api/ai/vision/extract-text', { imageBase64, mimeType });
+  }
+
+  // ---------- 共享 OCR 服务(2026-10-21:平台能力,票59) ----------
+
+  /**
+   * 共享 OCR 服务(经网关 /api/ocr → 本地 PaddleOCR):截图识别的主通道,
+   * 图片不出本地。timeoutMs 由调用方以可配置常量传入(不写死在此);
+   * 超时/不可达走错误通道,调用方据此回落视觉路径。baseUrl 可注入
+   * (测试/降级模拟指向其它地址),默认走网关前缀。
+   */
+  extractImageTextShared(imageBase64: string, mimeType: string, timeoutMs: number,
+                         baseUrl = '/api/ocr'): Observable<SharedOcrDto> {
+    return this.api.post<SharedOcrDto>(`${baseUrl}/v1/ocr`, { imageBase64, mimeType })
+      .pipe(timeout(timeoutMs));
   }
 
   // ---------- 示范朗读(TTS) ----------

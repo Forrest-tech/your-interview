@@ -41,12 +41,25 @@ interface EmailCard {
   /** 保存为材料正文的全文(OCR 转写原文,与粘文字时保存 raw 同口径)。 */
   body: string;
   duplicate: boolean;
+  /** 实际识别来源(定稿第九节来源标注口径,按实标注):本地共享 OCR / AI 视觉兜底。 */
+  source: 'local' | 'vision';
 }
 
 /** 预览聚合组:同归一化主题的卡片,组内时间正序。 */
 interface EmailCardGroup { key: string; subject: string; cards: EmailCard[]; }
 
 const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'other'];
+
+/**
+ * 共享 OCR 服务(票59,平台能力)前端配置 —— 只放可调常量,不写死在调用里:
+ * - 超时阈值:本地引擎慢(沙盒单图可达分钟级),超时即按兜底规则回落视觉;
+ *   部署机复测延迟后改这一处即可。
+ * - 服务基址:默认经网关 /api/ocr;globalThis.__SHARED_OCR_BASE_URL__ 可注入
+ *   覆盖(测试/降级模拟把地址指向死端口,验证视觉兜底分支被触发)。
+ */
+export const SHARED_OCR_TIMEOUT_MS = 180_000;
+export const SHARED_OCR_BASE_URL: string =
+  (globalThis as { __SHARED_OCR_BASE_URL__?: string }).__SHARED_OCR_BASE_URL__ ?? '/api/ocr';
 
 /**
  * 条目级统一入口(2026-10-20 定稿):
@@ -61,7 +74,9 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
  * 截图是附件,不是类型;进入方式只有粘贴:直接粘进文本框,缩略图在框内
  * 底部呈现,没有单独的截图文件按钮。截图可多张共存(定稿第九节):再粘只
  * 追加不替换,每张可单独移除。Email 类型文字为空时,Parse 对全部截图逐张
- * 走 AI 网关视觉 OCR → 与粘文字同一解析管线出卡片,预览按归一化主题聚合。
+ * OCR → 与粘文字同一解析管线出卡片,预览按归一化主题聚合。OCR 通道(票59):
+ * 共享 OCR 服务(本地 PaddleOCR,经网关 /api/ocr)为主,服务不可达/超时/
+ * 识别失败/解析后卡片为 failed 时回落 AI 网关视觉;预览来源标注按实标注。
  */
 @Component({
   selector: 'app-intake-panel',
@@ -165,7 +180,7 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
                    组内时间正序、组间按最新时间倒序;每卡可改字段/移除,
                    识别失败的卡只标自己,可重试/移除,不拖垮整批。 -->
               <p class="hint" data-testid="intake-batch-summary">
-                {{ t('pb.v2.i.srcScreenshot') }} · {{ fmt('pb.v2.i.batchSummary', { n: cards.length, g: batchGroups().length }) }}
+                {{ t(batchSourceKey()) }} · {{ fmt('pb.v2.i.batchSummary', { n: cards.length, g: batchGroups().length }) }}
               </p>
               @for (g of batchGroups(); track g.key) {
                 <div class="bgroup" data-testid="batch-group">
@@ -433,6 +448,16 @@ export class IntakePanelComponent {
   readonly batch = signal<EmailCard[] | null>(null);
   /** 逐张 OCR 进行中(解析按钮禁用 + 进度提示)。 */
   readonly ocrBusy = signal(false);
+  /**
+   * 批量预览的来源标注(定稿第九节,按实标注):整批全本地 OCR → 本地;
+   * 全走视觉兜底 → 视觉;混合 → 混合。单卡实际来源另存于 EmailCard.source。
+   */
+  readonly batchSourceKey = computed(() => {
+    const ok = (this.batch() ?? []).filter(c => c.status === 'ok');
+    if (ok.length && ok.every(c => c.source === 'vision')) return 'pb.v2.i.srcScreenshot';
+    if (ok.length && ok.every(c => c.source === 'local')) return 'pb.v2.i.srcScreenshotLocal';
+    return ok.length ? 'pb.v2.i.srcScreenshotMixed' : 'pb.v2.i.srcScreenshotLocal';
+  });
   private cardSeq = 0;
   readonly audioFile = signal<File | null>(null);
   readonly audioName = computed(() => this.audioFile()?.name ?? '');
@@ -639,7 +664,7 @@ export class IntakePanelComponent {
   /**
    * 解析分流:
    * - 录音上传模式:无文本可解析,预览只呈现文件信息 + 归属(原行为);
-   * - Email 且文字为空、有截图:逐张视觉 OCR → 批量卡片预览(定稿第九节);
+   * - Email 且文字为空、有截图:逐张 OCR(共享服务为主、视觉兜底)→ 批量卡片预览(定稿第九节);
    * - 备注/转写文本且文字为空、有截图:OCR 全部截图拼成文本,回落到与粘文字
    *   完全相同的管线;全失败则留在输入步报错,不静默;
    * - 有文字:原同步解析(文字为内容、截图为附件,不变)。
@@ -669,8 +694,11 @@ export class IntakePanelComponent {
     this.step.set('preview');
   }
 
-  /** 一张截图 → 网关视觉 OCR。任何失败如实回 status,绝不编造文本。 */
-  private async ocrShot(s: ShotItem): Promise<{ status: string; text: string | null }> {
+  /**
+   * 一张截图的视觉 OCR(AiGateway 视觉通道,原样保留作兜底)。
+   * 任何失败如实回 status,绝不编造文本。
+   */
+  private async ocrShotVision(s: ShotItem): Promise<{ status: string; text: string | null }> {
     try {
       const { b64, mime } = await fileToBase64(s.file);
       const r = await this.aiApi.extractImageText(b64, mime).toPromise();
@@ -678,6 +706,38 @@ export class IntakePanelComponent {
     } catch {
       return { status: 'failed', text: null };
     }
+  }
+
+  /** 一张截图 → 共享 OCR 服务(本地 PaddleOCR,主通道)。失败如实回 status。 */
+  private async ocrShotShared(s: ShotItem): Promise<{ status: string; text: string | null }> {
+    try {
+      const { b64, mime } = await fileToBase64(s.file);
+      const r = await this.aiApi.extractImageTextShared(
+        b64, mime, SHARED_OCR_TIMEOUT_MS, SHARED_OCR_BASE_URL).toPromise();
+      const text = r?.text?.trim() ? r.text : null;
+      return { status: r?.status === 'ok' && text ? 'ok' : 'failed', text };
+    } catch {
+      // 不可达/超时/HTTP 错误:一律 failed,由调用方按兜底规则回落视觉。
+      return { status: 'failed', text: null };
+    }
+  }
+
+  /**
+   * 一张截图 → 文字(票59 入口切换):共享 OCR 为主,AiGateway 视觉为兜底。
+   * 兜底判定(任一命中即回落视觉):共享服务不可达/超时/status 非 ok/文本为空;
+   * 邮件卡片场景(forEmailCard)再加一条:本地文本走既有管线解析后卡片为
+   * failed(头部三件套全空)。返回的 source 按实标注实际来源。
+   */
+  private async ocrShot(s: ShotItem, forEmailCard = false):
+    Promise<{ status: string; text: string | null; source: 'local' | 'vision' }> {
+    const local = await this.ocrShotShared(s);
+    if (local.status === 'ok' && local.text) {
+      if (!forEmailCard || this.cardFromText(0, local.text).status === 'ok') {
+        return { ...local, source: 'local' };
+      }
+    }
+    const vision = await this.ocrShotVision(s);
+    return { ...vision, source: 'vision' };
   }
 
   private ocrErrorKey(status: string): string {
@@ -720,16 +780,18 @@ export class IntakePanelComponent {
     });
   }
 
-  private blankCard(shotIndex: number, errorKey: string): EmailCard {
+  private blankCard(shotIndex: number, errorKey: string,
+                    source: 'local' | 'vision' = 'vision'): EmailCard {
     return {
       id: ++this.cardSeq, shotIndex, status: 'failed', errorKey,
       category: 'other', subject: '', from: '', date: '', when: '',
-      interviewers: '', format: '', body: '', duplicate: false
+      interviewers: '', format: '', body: '', duplicate: false, source
     };
   }
 
   /** OCR 文本 → 邮件卡片:与粘文字 parseEmail 同一套抽取器,不另起口径。 */
-  private cardFromText(shotIndex: number, raw: string): EmailCard {
+  private cardFromText(shotIndex: number, raw: string,
+                       source: 'local' | 'vision' = 'vision'): EmailCard {
     const p = parsePastedEmail(raw);
     const body = p.body ?? raw;
     const card: EmailCard = {
@@ -742,7 +804,8 @@ export class IntakePanelComponent {
       interviewers: extractInterviewerNames(body).join(', '),
       format: extractFormat(body),
       body: raw,
-      duplicate: false
+      duplicate: false,
+      source
     };
     // 头部三件套全空 = 没识别出邮件内容(如粘错图):按失败卡处理,可重试/移除。
     if (!card.subject && !card.from && !card.date) {
@@ -760,12 +823,12 @@ export class IntakePanelComponent {
       const seen = new Set<string>();
       const list = this.shots();
       for (let i = 0; i < list.length; i++) {
-        const r = await this.ocrShot(list[i]);
+        const r = await this.ocrShot(list[i], true);
         if (r.status !== 'ok' || !r.text) {
-          cards.push(this.blankCard(i, this.ocrErrorKey(r.status)));
+          cards.push(this.blankCard(i, this.ocrErrorKey(r.status), r.source));
           continue;
         }
-        const card = this.cardFromText(i, r.text);
+        const card = this.cardFromText(i, r.text, r.source);
         if (card.status === 'ok') {
           const key = dedupeKey(card.from, card.date, card.subject);
           card.duplicate = this.assetDupExists(key) || seen.has(key);
@@ -838,11 +901,11 @@ export class IntakePanelComponent {
     if (!s) return;
     this.ocrBusy.set(true);
     try {
-      const r = await this.ocrShot(s);
+      const r = await this.ocrShot(s, true);
       if (r.status !== 'ok' || !r.text) {
         card.errorKey = this.ocrErrorKey(r.status);
       } else {
-        const fresh = this.cardFromText(card.shotIndex, r.text);
+        const fresh = this.cardFromText(card.shotIndex, r.text, r.source);
         if (fresh.status !== 'ok') {
           card.errorKey = fresh.errorKey;
         } else {

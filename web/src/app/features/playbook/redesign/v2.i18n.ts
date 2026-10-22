@@ -420,6 +420,8 @@ export const V2_I18N: Record<string, { zh: string; en: string; fr: string }> = {
   'pb.v2.i.pasteAudioWrongType': { zh: '录音文件请在「录音·转写」类型下粘贴', en: 'Paste recording files under the “Recording / transcript” type', fr: 'Collez les fichiers audio sous le type « Enregistrement / transcription »' },
   'pb.v2.i.removeShot': { zh: '移除截图', en: 'Remove screenshot', fr: 'Retirer la capture' },
   'pb.v2.i.srcScreenshot': { zh: '来源:截图识别(AI 视觉读图)', en: 'Source: screenshot recognition (AI vision)', fr: 'Source : reconnaissance de capture (vision IA)' },
+  'pb.v2.i.srcScreenshotLocal': { zh: '来源:截图识别(本地 OCR)', en: 'Source: screenshot recognition (local OCR)', fr: 'Source : reconnaissance de capture (OCR local)' },
+  'pb.v2.i.srcScreenshotMixed': { zh: '来源:截图识别(本地 OCR + AI 视觉兜底)', en: 'Source: screenshot recognition (local OCR + AI vision fallback)', fr: 'Source : reconnaissance de capture (OCR local + vision IA en secours)' },
   'pb.v2.i.batchSummary': { zh: '共 {n} 封 · {g} 个主题', en: '{n} emails · {g} threads', fr: '{n} e-mails · {g} fils' },
   'pb.v2.i.batchCount': { zh: '{n} 封', en: '{n}', fr: '{n}' },
   'pb.v2.i.noSubject': { zh: '(无主题)', en: '(no subject)', fr: '(sans objet)' },

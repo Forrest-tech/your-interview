@@ -209,6 +209,10 @@ public static class ServiceDefaults
     /// COD-05:EF Core 的 <see cref="DbUpdateConcurrencyException"/>(xmin 乐观并发令牌冲突)
     /// 必须映射 409 Conflict —— 此前它落到默认分支冒 500,双标签页/双设备并发编辑同一条目时
     /// 用户只看到「服务器错误」,无从知道自己的改动因版本过期而未保存。
+    /// COD-13:<see cref="JsonException"/> 必须映射 400 BadRequest —— 直读请求体的端点
+    /// (Interviews 的 AttachAsset 用 HttpRequest.ReadFromJsonAsync)收到畸形 JSON 时 STJ 抛
+    /// JsonException 且无模型绑定层兜底,此前它落到默认分支冒 500,把客户端错误报成服务器错误。
+    /// 注:BadHttpRequestException(超限体 413 的载体)不在本映射内,由票76 单独处置。
     /// </summary>
     public static int MapExceptionToStatusCode(Exception? ex) => ex switch
     {
@@ -216,6 +220,7 @@ public static class ServiceDefaults
         UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
         KeyNotFoundException => StatusCodes.Status404NotFound,
         DbUpdateConcurrencyException => StatusCodes.Status409Conflict,
+        JsonException => StatusCodes.Status400BadRequest,
         ArgumentException => StatusCodes.Status400BadRequest,
         _ => StatusCodes.Status500InternalServerError
     };

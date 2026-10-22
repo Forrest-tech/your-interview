@@ -194,6 +194,71 @@ public sealed class OutcomeWritebackConsumerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LegacyEvent_NoEnum_ResultExactlyRejected_BehavesLikeStructuredEnum()
+    {
+        if (!_available) return;
+        // 票58:无枚举旧事件 + Result 恰为受控词 Rejected —— 改前 adapter 只认中文关键词,
+        // 英文受控词整串不命中 → 不回写,与 Playbook DeriveOutcome 规则 2 的结论不一致。
+        // 期望与结构化枚举事件(EnumRejected_NoJobsRound_*)同效:补建投影 Failed + 状态 Rejected。
+        var app = await SeedAppAsync(withRound: false);
+
+        await ConsumeAsync(Evt(app.Id, Owner, 1, "Rejected", null));
+
+        var stored = await ReloadAsync(app.Id);
+        stored.Rounds.Should().ContainSingle(r => r.Order == 1);
+        stored.Rounds.Single().Outcome.Should().Be(RoundOutcome.Failed);
+        stored.Status.Should().Be(ApplicationStatus.Rejected);
+    }
+
+    [Fact]
+    public async Task LegacyEvent_NoEnum_ResultExactlyPassed_BehavesLikeStructuredEnum()
+    {
+        if (!_available) return;
+        // 票58:同上,Result 恰为 Passed → 与结构化枚举事件(EnumPassed_NoJobsRound_*)同效:
+        // 补建投影 Passed + Saved 沿状态机走到 Interview。
+        var app = await SeedAppAsync(withRound: false);
+
+        await ConsumeAsync(Evt(app.Id, Owner, 1, "Passed", null));
+
+        var stored = await ReloadAsync(app.Id);
+        stored.Rounds.Should().ContainSingle(r => r.Order == 1);
+        stored.Rounds.Single().Outcome.Should().Be(RoundOutcome.Passed);
+        stored.Status.Should().Be(ApplicationStatus.Interview);
+    }
+
+    [Fact]
+    public async Task LegacyEvent_NoEnum_ResultExactlyPending_DoesNotAdvanceToTerminal()
+    {
+        if (!_available) return;
+        // 票58:Result 恰为 Pending → 按 Pending 枚举走既有消费者语义(同结构化 Pending 事件):
+        // 只落 Pending 投影,不推进终局 —— 状态停在 Applied,不转 Rejected/Ghosted 等终局。
+        var app = await SeedAppAsync(withRound: false, applied: true);
+        app.Status.Should().Be(ApplicationStatus.Applied);
+
+        await ConsumeAsync(Evt(app.Id, Owner, 1, "Pending", null));
+
+        var stored = await ReloadAsync(app.Id);
+        stored.Rounds.Should().ContainSingle(r => r.Order == 1);
+        stored.Rounds.Single().Outcome.Should().Be(RoundOutcome.Pending);
+        stored.Status.Should().Be(ApplicationStatus.Applied);
+    }
+
+    [Fact]
+    public async Task LegacyEvent_NoEnum_ResultControlledWord_TrimAndCaseAlignedWithDeriveOutcome()
+    {
+        if (!_available) return;
+        // 票58:精确匹配口径与 DeriveOutcome 规则 2 完全一致 —— 先 Trim、枚举名比较忽略大小写。
+        var app = await SeedAppAsync(withRound: false);
+
+        await ConsumeAsync(Evt(app.Id, Owner, 1, " rejected ", null));
+
+        var stored = await ReloadAsync(app.Id);
+        stored.Rounds.Should().ContainSingle(r => r.Order == 1);
+        stored.Rounds.Single().Outcome.Should().Be(RoundOutcome.Failed);
+        stored.Status.Should().Be(ApplicationStatus.Rejected);
+    }
+
+    [Fact]
     public async Task UserIdMismatch_Skips_NoProjectionNoStatusChange()
     {
         if (!_available) return;

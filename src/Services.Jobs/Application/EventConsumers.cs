@@ -83,14 +83,38 @@ _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "未知契�
 /// 服务对象:契约升级(票04)前已发出、没有 Outcome 枚举的 InterviewOutcomeRecorded 消息。
 /// 新发布端一律填结构化枚举,不得再扩大此映射的适用范围;
 /// 待旧消息自然排空后,本 adapter 应整体删除。
-/// 规则(用户原话 → 轮次结果,注意"未通过"先于"通过"判断):
-/// 未通过/不通过/拒/挂 → Failed;通过 → Passed;待定/其它 → null(不动,等人确认)。
+/// 规则(顺序即优先级,上者胜):
+///  0. 英文受控词整串精确匹配(票58):与 Interviews 侧 InterviewHandlers.DeriveOutcome
+///     规则 2 完全一致 —— Trim 后以契约枚举名(Pending/Passed/Rejected/Ghosted/
+///     Cancelled/NoShow)忽略大小写精确解析,名字对上才算(防 "1" 之类数字串被
+///     Enum.TryParse 误收)。命中按契约枚举走既有消费者语义,枚举映射同
+///     FromContract(唯一命名差异:Rejected → Jobs 侧 Failed)。
+///     ⚠ 本词表与 DeriveOutcome 规则 2 是同一张表:任一侧改词表,必须回此对账。
+///  1. 中文关键词回落(用户原话 → 轮次结果,注意"未通过"先于"通过"判断):
+///     未通过/不通过/拒/挂 → Failed;通过 → Passed;待定/其它 → null(不动,等人确认)。
 /// </summary>
 internal static class LegacyOutcomeTextAdapter
 {
 public static RoundOutcome? MapOutcome(string result)
 {
 var r = result.Trim();
+
+// 票58:受控词整串精确匹配(对照 DeriveOutcome 规则 2,见类注释),先于关键词回落。
+if (Enum.TryParse<InterviewOutcome>(r, ignoreCase: true, out var parsed)
+&& string.Equals(parsed.ToString(), r, StringComparison.OrdinalIgnoreCase))
+{
+return parsed switch
+{
+InterviewOutcome.Pending => RoundOutcome.Pending,
+InterviewOutcome.Passed => RoundOutcome.Passed,
+InterviewOutcome.Rejected => RoundOutcome.Failed,
+InterviewOutcome.Ghosted => RoundOutcome.Ghosted,
+InterviewOutcome.Cancelled => RoundOutcome.Cancelled,
+InterviewOutcome.NoShow => RoundOutcome.NoShow,
+_ => null
+};
+}
+
 if (r.Contains("未通过") || r.Contains("不通过") || r.Contains("拒") || r.Contains("挂"))
 return RoundOutcome.Failed;
 if (r.Contains("通过"))

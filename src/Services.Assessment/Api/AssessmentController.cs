@@ -177,7 +177,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// key 只在服务端;浏览器拿不到,也就无法被滥用。
     /// </summary>
     [HttpPost("pronunciation/assess")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> AssessPronunciation([FromBody] AssessPronunciationBody body,
         CancellationToken ct)
     {
@@ -577,7 +577,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// 这里失败就如实报 401/403 与区域不匹配,绝不做假成功。
     /// </summary>
     [HttpPost("speech/test")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
     public async Task<IResult> TestSpeech(CancellationToken ct)
     {
         if (!await assessor.IsAvailableAsync(Me, ct))

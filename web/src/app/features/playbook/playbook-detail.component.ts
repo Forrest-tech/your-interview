@@ -70,19 +70,20 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly entry = signal<InterviewDetail | null>(null);
 
   // ---------------- 左侧条目导航(2026-10-21 定稿第八节) ----------------
-  // 分组判定与列表页同一套:v2.helpers 的 entryResultOutcome / entryEndKey,
-  // 两处不许各写一份。导航只是切换路由(/playbook/:id),不整页刷新。
+  // 分组判定与列表页同一套:只消费后端 outcome 经 v2.helpers 的
+  // entryResultOutcome 映射(票05/ARC-14 单一事实源),不判读 result 原文。
+  // 导航只是切换路由(/playbook/:id),不整页刷新。
   readonly navEntries = signal<InterviewEntry[]>([]);
   readonly navCompletedOpen = signal(false);
   readonly navActive = computed(() =>
-    this.navEntries().filter(e => entryResultOutcome(e.result) === null));
+    this.navEntries().filter(e => entryResultOutcome(e.outcome) === null));
   readonly navCompleted = computed(() =>
     this.navEntries()
-      .filter(e => entryResultOutcome(e.result) !== null)
+      .filter(e => entryResultOutcome(e.outcome) !== null)
       .sort((a, b) => entryEndKey(b).localeCompare(entryEndKey(a))));
   private navLoaded = false;
 
-  navOutcome(e: InterviewEntry) { return entryResultOutcome(e.result); }
+  navOutcome(e: InterviewEntry) { return entryResultOutcome(e.outcome); }
 
   goEntry(entryId: string): void {
     if (entryId === this.id()) return;
@@ -104,7 +105,7 @@ export class PlaybookDetailComponent implements OnDestroy {
       this.navEntries.set(acc);
       // 当前条目在 Completed 组时默认展开该组,否则高亮看不见
       const cur = acc.find(e => e.id === this.id());
-      if (cur && entryResultOutcome(cur.result) !== null) this.navCompletedOpen.set(true);
+      if (cur && entryResultOutcome(cur.outcome) !== null) this.navCompletedOpen.set(true);
     } catch { /* 导航拉不到不阻断详情页 */ }
   }
   readonly application = signal<Application | null>(null);

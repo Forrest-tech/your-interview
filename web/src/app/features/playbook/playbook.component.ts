@@ -126,17 +126,14 @@ export class PlaybookComponent implements OnInit {
   readonly entries = signal<InterviewEntry[]>([]);
 
   /**
-   * 结果归类(定稿第七节,2026-10-21 用户拍板):
-   * result 是自由文本(域约定 Passed | Rejected | Pending | Ghosted,详情页也是自由输入),
-   * 不能"非空即完成"——填了 Pending/等回复 的条目还在流程里。
-   * 口径:先排未落定(pending/waiting/等回复…),再按关键词判终局:
-   *   rejected(红) / positive(绿:offer·passed·通过·录用) / closed(中性:Ghosted·放弃·取消·结束)。
-   * 关键词都不命中的自由文本一律返回 null 留在 In Progress —— 宁可漏分,不可错分。
+   * 结果归类(定稿第七节分组口径不变;判读来源票05/ARC-14 起收归后端):
+   * 只消费 DTO 的结构化 outcome(后端 DeriveOutcome 派生,与 Tracker 回写
+   * 同一事实源),经 v2.helpers 的 entryResultOutcome 映射成展示三态 ——
+   * rejected(红) / positive(绿) / closed(中性);Pending/无 outcome 留 In Progress。
+   * 不许再判读 e.result 自由文本。
    */
   resultOutcome(e: InterviewEntry): 'rejected' | 'positive' | 'closed' | null {
-    // 判定实现只此一份:redesign/v2.helpers 的 entryResultOutcome ——
-    // 详情页左侧导航用同一个函数,两处不许各抄一份正则(2026-10-21 定稿第八节)。
-    return entryResultOutcome(e.result);
+    return entryResultOutcome(e.outcome);
   }
 
   /** 进行中:没有落定最终结果的(含轮次全完但还在等回复的) */

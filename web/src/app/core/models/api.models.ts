@@ -235,6 +235,12 @@ export interface InterviewEntry {
   location?: string;
   status: InterviewStatus;
   result?: string;
+  /**
+   * 结构化结果(票05/ARC-14):后端 DeriveOutcome 派生的枚举名
+   * (Pending|Passed|Rejected|Ghosted|Cancelled|NoShow),列表与详情 DTO 同源。
+   * 分组/徽章只许消费此字段,禁止再判读 result 自由文本。
+   */
+  outcome?: string | null;
   jdText?: string;
   jdSummary?: string;
   companyProfile?: string;

@@ -134,7 +134,7 @@ public sealed class ImportCustomCategoriesCommandValidator : AbstractValidator<I
             .Must(ns => ns is null || ns.Count <= TechStackLocalDataRules.MaxImportCategories)
             .WithMessage("一次导入的分类数过多");
         RuleForEach(x => x.Names).MaximumLength(TechStackLocalDataRules.MaxCategoryNameLength)
-            .WithMessage("分类名过长");
+            .WithMessage("分类名不超过 100 字符"); // 票83:文案含上限值(票75 同族口径)
     }
 }
 

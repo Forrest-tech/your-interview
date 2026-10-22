@@ -9,6 +9,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiClient } from '../../../core/api/api-client';
 import { TechStackLocalService } from '../../../core/api/techstack-local.service';
+import {
+  MAX_CATEGORY_NAME_LENGTH, validateCategoryName,
+} from '../../../core/api/techstack-local.helpers';
 import { I18nService } from '../../../core/i18n/i18n.service';
 
 export interface CategoryInfo {
@@ -60,14 +63,62 @@ export class CategoryManagerComponent {
     return n.length > 0 && this.categories().some(c => c.name.toLowerCase() === n);
   });
 
-  /** 新增分类:0 条目的空分类经 TechStackLocalService 落后端(票16),等有条目用它后自然转正 */
+  /** 票83:新名超长(>100,Trim 后计)—— 字段级提示 + 禁用添加,不再假成功 */
+  readonly newNameTooLong = computed(() =>
+    validateCategoryName(this.newName()).reason === 'tooLong');
+
+  /** 票83:改名草稿超长 —— 禁用保存,confirm 前拦截(不触发合并/改名确认框) */
+  readonly editDraftTooLong = computed(() =>
+    validateCategoryName(this.editDraft()).reason === 'tooLong');
+
+  readonly tooLongText = () => this.t('ts.cat.nameTooLong')
+    .replace('{max}', String(MAX_CATEGORY_NAME_LENGTH));
+
+  /**
+   * 票83:错误文案提取 —— 先看服务层纯校验标记(validation.reason),
+   * 再按票12 applyServerError 先例从 ValidationProblemDetails 的
+   * errors 字典抠后端原文(含上限 100),最后退 e.message。
+   */
+  private describeError(e: unknown): string {
+    const err = e as {
+      message?: string;
+      validation?: { reason?: string };
+      original?: { error?: { errors?: Record<string, string[]> } };
+      error?: { errors?: Record<string, string[]> };
+    };
+    if (err?.validation?.reason === 'tooLong') return this.tooLongText();
+    const raw = err?.original?.error?.errors ?? err?.error?.errors ?? null;
+    if (raw && typeof raw === 'object') {
+      const texts = Object.values(raw).flat().filter(Boolean);
+      if (texts.length) return texts.join(' ');
+    }
+    return err?.message ?? String(e);
+  }
+
+  /**
+   * 新增分类:0 条目的空分类经 TechStackLocalService 落后端(票16),等有条目用它后自然转正。
+   * 票83:提交前纯校验先挡超长;订阅服务结果 —— **成功才**进弹窗列表/清输入,
+   * 失败只报错、不动列表(旧实现无条件加列表 = 假成功、刷新即失,D4b)。
+   */
   addCategory(): void {
     const n = this.newName().trim();
     if (!n || this.newNameExists()) return;
-    this.tsLocal.addCategory(n);
-    this.categories.update(list => [...list, { name: n, count: 0 }]);
-    this.newName.set('');
-    this.changed = true;
+    const v = validateCategoryName(n);
+    if (!v.valid) {
+      this.error.set(v.reason === 'tooLong' ? this.tooLongText() : '');
+      return;
+    }
+    this.error.set('');
+    this.busy.set(true);
+    this.tsLocal.addCategory(n).subscribe({
+      next: () => {
+        this.categories.update(list => [...list, { name: n, count: 0 }]);
+        this.newName.set('');
+        this.changed = true;
+        this.busy.set(false);
+      },
+      error: (e: unknown) => { this.error.set(this.describeError(e)); this.busy.set(false); }
+    });
   }
 
   startRename(c: CategoryInfo): void {
@@ -86,6 +137,11 @@ export class CategoryManagerComponent {
     const newName = this.editDraft().trim();
     if (!newName || newName.toLowerCase() === oldName.toLowerCase()) {
       this.cancelRename();
+      return;
+    }
+    // 票83:超长在 confirm 之前拦截 —— 字段级报错、保持编辑态,不触发确认框
+    if (!validateCategoryName(newName).valid) {
+      this.error.set(this.tooLongText());
       return;
     }
     // 合并:新名字已存在
@@ -107,17 +163,24 @@ export class CategoryManagerComponent {
     // 改前实现对空分类也打 topics/rename(无条目可改、恒返回 0)且旧名残留
     // localStorage 会「复活」—— 票16 服务化后在此收口,UI/文案不变。
     if (c.count === 0) {
-      this.tsLocal.renameCategory(oldName, newName);
-      this.categories.update(list => {
-        const rest = list.filter(x => x.name.toLowerCase() !== oldName.toLowerCase());
-        if (target) {
-          return rest.map(x => x.name.toLowerCase() === target.name.toLowerCase()
-            ? { ...x, count: x.count + c.count } : x);
-        }
-        return [...rest, { name: newName, count: c.count }];
+      // 票83:订阅结果 —— 成功才改弹窗列表;失败报错并保持编辑态,不假成功
+      this.busy.set(true);
+      this.tsLocal.renameCategory(oldName, newName).subscribe({
+        next: () => {
+          this.categories.update(list => {
+            const rest = list.filter(x => x.name.toLowerCase() !== oldName.toLowerCase());
+            if (target) {
+              return rest.map(x => x.name.toLowerCase() === target.name.toLowerCase()
+                ? { ...x, count: x.count + c.count } : x);
+            }
+            return [...rest, { name: newName, count: c.count }];
+          });
+          this.editingName.set(null);
+          this.changed = true;
+          this.busy.set(false);
+        },
+        error: (e: unknown) => { this.error.set(this.describeError(e)); this.busy.set(false); }
       });
-      this.editingName.set(null);
-      this.changed = true;
       return;
     }
     this.busy.set(true);
@@ -139,7 +202,7 @@ export class CategoryManagerComponent {
         this.busy.set(false);
         this.changed = true;
       },
-      error: (e: unknown) => { this.error.set(e instanceof Error ? e.message : String(e)); this.busy.set(false); }
+      error: (e: unknown) => { this.error.set(this.describeError(e)); this.busy.set(false); }
     });
   }
 

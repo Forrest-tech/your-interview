@@ -9,15 +9,21 @@
              (keyup.enter)="addCategory()" [disabled]="busy()">
     </mat-form-field>
     <button mat-raised-button color="primary" (click)="addCategory()"
-            [disabled]="!newName().trim() || newNameExists() || busy()">
+            [disabled]="!newName().trim() || newNameExists() || newNameTooLong() || busy()">
       {{ t('ts.cat.add') }}
     </button>
   </div>
   @if (newNameExists()) {
     <p class="warn">{{ t('ts.cat.exists') }}</p>
   }
+  @if (newNameTooLong()) {
+    <p class="warn">{{ tooLongText() }}</p>
+  }
   @if (error()) {
     <p class="warn">{{ error() }}</p>
+  }
+  @if (editingName() && editDraftTooLong()) {
+    <p class="warn">{{ tooLongText() }}</p>
   }
 
   <!-- 列表 -->
@@ -29,8 +35,8 @@
             <input matInput [ngModel]="editDraft()" (ngModelChange)="editDraft.set($event)"
                    (keyup.enter)="confirmRename(c)" (keyup.escape)="cancelRename()" #renameInput>
           </mat-form-field>
-          <button mat-icon-button (click)="confirmRename(c)" [disabled]="busy()"
-                  [matTooltip]="t('ts.cat.save')">
+          <button mat-icon-button (click)="confirmRename(c)" [disabled]="busy() || editDraftTooLong()"
+                  [matTooltip]="editDraftTooLong() ? tooLongText() : t('ts.cat.save')">
             <mat-icon>check</mat-icon>
           </button>
           <button mat-icon-button (click)="cancelRename()" [disabled]="busy()"

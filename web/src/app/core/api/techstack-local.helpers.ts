@@ -126,6 +126,42 @@ export function shouldAttemptImport(
   return authenticated && shouldImport(importedFlag, localCount);
 }
 
+/**
+ * 分类名上限 —— 与后端单一口径对齐(票83):TechStackLocalDataRules
+ * .MaxCategoryNameLength = 100,EF 列宽 TechStackCategory.Name /
+ * KnowledgeItem.Topic 均 HasMaxLength(100),Add/Import 校验器均
+ * MaximumLength(100)。前端提交前先挡一道,不再把超长名乐观显示成
+ * 「已保存」后被后端 400 静默吞掉(D4b)。
+ */
+export const MAX_CATEGORY_NAME_LENGTH = 100;
+
+/** 分类名校验结果:length 为 Trim 后的计数,max 为上限。 */
+export interface CategoryNameValidation {
+  valid: boolean;
+  reason: 'empty' | 'tooLong' | null;
+  length: number;
+  max: number;
+}
+
+/**
+ * 分类名纯校验(票83 §7,node 冒烟覆盖 boundary):
+ *   - 计数口径 = **UTF-16 code unit**(JS String.length)—— 与后端 .NET
+ *     String.Length(FluentValidation MaximumLength 的计数)逐字一致;
+ *     astral 字符(如 emoji 🎯)前后端均计 2,判定永不漂移;
+ *   - 校验对象 = Trim 后的名字(与后端 NormalizeCategoryNames /
+ *     RenameTopic handler 的 Trim 口径一致,前后空白不占额度);
+ *   - null/undefined/纯空白 → 'empty';超上限 → 'tooLong'。
+ */
+export function validateCategoryName(raw: string | null | undefined): CategoryNameValidation {
+  const name = (raw ?? '').trim();
+  const length = name.length;
+  if (length === 0) return { valid: false, reason: 'empty', length: 0, max: MAX_CATEGORY_NAME_LENGTH };
+  if (length > MAX_CATEGORY_NAME_LENGTH) {
+    return { valid: false, reason: 'tooLong', length, max: MAX_CATEGORY_NAME_LENGTH };
+  }
+  return { valid: true, reason: null, length, max: MAX_CATEGORY_NAME_LENGTH };
+}
+
 /** 复习映射 → 导入条目(日期升序,形状对齐后端 ImportReviewActivityBody)。 */
 export function toActivityEntries(map: ReviewActivityMap): ReviewActivityDto[] {
   return Object.keys(map).sort().map((date) => ({ date, count: map[date] }));

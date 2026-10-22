@@ -1,12 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, forkJoin, map, of, switchMap, tap } from 'rxjs';
+import { Observable, catchError, forkJoin, map, of, switchMap, tap, throwError } from 'rxjs';
 
 import { ApiClient } from './api-client';
 import { AuthService } from '../auth/auth.service';
 import {
   CustomCategoryDto, EnsureState, ReviewActivityDto, ReviewActivityMap,
   localDateKey, parseCustomCategories, parseReviewActivity, shouldAttemptImport,
-  shouldEnsureLoad, toActivityEntries, toActivityMap,
+  shouldEnsureLoad, toActivityEntries, toActivityMap, validateCategoryName,
 } from './techstack-local.helpers';
 
 interface ImportResult { imported: number; total: number }
@@ -103,15 +103,30 @@ export class TechStackLocalService {
     }
   }
 
-  /** 新增空分类:乐观更新信号,后端 PUT 失败则回读后端真源纠正。 */
-  addCategory(name: string): void {
+  /**
+   * 新增空分类:乐观更新信号,后端 PUT 成功才算数。
+   * 票83:返回可订阅结果 —— 失败时回读后端真源纠正乐观信号 **并把错误
+   * 透传给调用方显示**(旧实现 subscribe 只 reload、吞掉错误,分类管理器
+   * 又无条件把名字加进弹窗列表 → 假成功、刷新即失,D4b)。
+   * 提交前先跑纯校验 validateCategoryName(与后端 100 上限同口径):
+   * 不合法直接以带 validation 的错误拒,不发请求。
+   */
+  addCategory(name: string): Observable<void> {
     const n = name.trim();
-    if (!n) return;
+    const v = validateCategoryName(n);
+    if (!v.valid) {
+      return throwError(() => Object.assign(
+        new Error(v.reason === 'tooLong' ? 'Category name too long' : 'Category name is empty'),
+        { validation: v }));
+    }
     if (!this.customCategories().some((x) => x.toLowerCase() === n.toLowerCase())) {
       this.customCategories.update((list) => [...list, n]);
     }
-    this.api.put(`/api/knowledge/custom-categories/${encodeURIComponent(n)}`)
-      .subscribe({ error: () => this.reloadCategories() });
+    return this.api.put<void>(`/api/knowledge/custom-categories/${encodeURIComponent(n)}`)
+      .pipe(catchError((e: unknown) => {
+        this.reloadCategories();
+        return throwError(() => e);
+      }));
   }
 
   /** 删除空分类:乐观移除,后端 DELETE 失败则回读纠正。 */
@@ -122,21 +137,38 @@ export class TechStackLocalService {
       .subscribe({ error: () => this.reloadCategories() });
   }
 
-  /** 空分类改名(= 删旧 + 加新;有条目的分类改名仍走既有 topics/rename,不经此处)。 */
-  renameCategory(oldName: string, newName: string): void {
+  /**
+   * 空分类改名(有条目的分类改名仍走既有 topics/rename,不经此处)。
+   * 票83:与 addCategory 同口径 —— 先纯校验新名;请求改 **PUT 新名先行、
+   * 成功后再 DELETE 旧名**(旧顺序 DELETE 先行、PUT 失败时旧名已删 =
+   * 改名失败顺带丢数据);失败回读纠正乐观信号并透传错误给调用方显示,
+   * 不再吞错假成功。
+   */
+  renameCategory(oldName: string, newName: string): Observable<void> {
+    const n = newName.trim();
+    const v = validateCategoryName(n);
+    if (!v.valid) {
+      return throwError(() => Object.assign(
+        new Error(v.reason === 'tooLong' ? 'Category name too long' : 'Category name is empty'),
+        { validation: v }));
+    }
+    // 同名(大小写不敏感)= 无操作:不能走 PUT 后 DELETE,会把自己删掉
+    if (oldName.toLowerCase() === n.toLowerCase()) return of(undefined);
     this.customCategories.update((list) => {
       const rest = list.filter((x) => x.toLowerCase() !== oldName.toLowerCase());
       // 合并改名(目标已存在)时不重复加同名行
-      return rest.some((x) => x.toLowerCase() === newName.toLowerCase())
-        ? rest : [...rest, newName];
+      return rest.some((x) => x.toLowerCase() === n.toLowerCase())
+        ? rest : [...rest, n];
     });
-    this.api.delete(`/api/knowledge/custom-categories/${encodeURIComponent(oldName)}`)
+    return this.api.put<void>(`/api/knowledge/custom-categories/${encodeURIComponent(n)}`)
       .pipe(
-        catchError(() => of(null)),
-        switchMap(() => this.api.put(
-          `/api/knowledge/custom-categories/${encodeURIComponent(newName)}`)),
-      )
-      .subscribe({ error: () => this.reloadCategories() });
+        switchMap(() => this.api.delete<void>(
+          `/api/knowledge/custom-categories/${encodeURIComponent(oldName)}`)),
+        catchError((e: unknown) => {
+          this.reloadCategories();
+          return throwError(() => e);
+        }),
+      );
   }
 
   /**

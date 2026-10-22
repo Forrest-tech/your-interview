@@ -222,6 +222,17 @@ public sealed class UpdateKnowledgeCommandValidator : AbstractValidator<UpdateKn
     }
 }
 
+public sealed class RenameTopicCommandValidator : AbstractValidator<RenameTopicCommand>
+{
+    public RenameTopicCommandValidator()
+    {
+        // 票83:此前改名无校验器,超长新名直达 Topic 列(HasMaxLength(100))在
+        // DB 层爆异常而非明确 400 —— 与 AddCustomCategory 同口径补齐。
+        RuleFor(x => x.NewName).NotEmpty().MaximumLength(TechStackLocalDataRules.MaxCategoryNameLength)
+            .WithMessage("分类名必填且不超过 100 字符");
+    }
+}
+
 public sealed class RecordReviewCommandValidator : AbstractValidator<RecordReviewCommand>
 {
     private static readonly string[] Allowed = ["Again", "Hard", "Good", "Easy"];
@@ -656,6 +667,10 @@ public sealed class RenameTopicCommandHandler(KnowledgeDbContext db)
         var newName = request.NewName?.Trim();
         if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
             return Result.Failure<int>(Error.Validation("Topic.Empty", "分类名不能为空"));
+        // 票83:handler 守卫与 RenameTopicCommandValidator 同口径(双保险)——
+        // 超长新名回明确 Validation 400,不许落到 Topic 列宽处爆 DB 异常。
+        if (newName.Length > TechStackLocalDataRules.MaxCategoryNameLength)
+            return Result.Failure<int>(Error.Validation("Topic.TooLong", "分类名不超过 100 字符"));
         if (oldName.Equals(newName, StringComparison.OrdinalIgnoreCase))
             return Result.Success(0);
 

@@ -43,6 +43,49 @@ public sealed class TechStackLocalDataBoundaryTests
         HasError(v, new AddCustomCategoryCommand(User, "微服务 🎯"), "Name").Should().BeFalse();
     }
 
+    // ---------- 改名（票83：RenameTopic 此前无校验器，超长直达列宽爆 DB 异常） ----------
+
+    [Fact] // boundary: 超长上限±1 —— 新名 100 放行、101/200 拒（与 Add/Topic 同口径）
+    public void RenameTopic_NameLengthBoundary()
+    {
+        var v = new RenameTopicCommandValidator();
+        HasError(v, new RenameTopicCommand(User, "Old", new string('a', 100)), "NewName").Should().BeFalse();
+        HasError(v, new RenameTopicCommand(User, "Old", new string('a', 101)), "NewName").Should().BeTrue();
+        HasError(v, new RenameTopicCommand(User, "Old", new string('a', 200)), "NewName").Should().BeTrue();
+    }
+
+    [Fact] // boundary: 空/纯空白 —— 新名空拒
+    public void RenameTopic_EmptyOrWhitespace_Rejected()
+    {
+        var v = new RenameTopicCommandValidator();
+        HasError(v, new RenameTopicCommand(User, "Old", ""), "NewName").Should().BeTrue();
+        HasError(v, new RenameTopicCommand(User, "Old", "   "), "NewName").Should().BeTrue();
+    }
+
+    [Fact] // boundary: Unicode —— 中文+emoji 新名合法放行（计数口径 .NET String.Length，astral 计 2，与前端一致）
+    public void RenameTopic_Unicode_Accepted()
+    {
+        var v = new RenameTopicCommandValidator();
+        HasError(v, new RenameTopicCommand(User, "Old", "微服务 🎯"), "NewName").Should().BeFalse();
+        // 50 个 emoji = 100 个 UTF-16 单元恰上限放行；51 个 = 102 拒
+        HasError(v, new RenameTopicCommand(User, "Old", string.Concat(Enumerable.Repeat("🎯", 50))), "NewName").Should().BeFalse();
+        HasError(v, new RenameTopicCommand(User, "Old", string.Concat(Enumerable.Repeat("🎯", 51))), "NewName").Should().BeTrue();
+    }
+
+    [Fact] // 票83/票75 同族口径：超长文案必须含上限数字 100（Add / Import / Rename 三入口一致）
+    public void CategoryValidators_TooLongMessageContainsLimit()
+    {
+        new AddCustomCategoryCommandValidator().Validate(
+                new AddCustomCategoryCommand(User, new string('a', 101)))
+            .Errors.Should().Contain(e => e.ErrorMessage.Contains("100"));
+        new ImportCustomCategoriesCommandValidator().Validate(
+                new ImportCustomCategoriesCommand(User, [new string('x', 101)]))
+            .Errors.Should().Contain(e => e.ErrorMessage.Contains("100"));
+        new RenameTopicCommandValidator().Validate(
+                new RenameTopicCommand(User, "Old", new string('a', 101)))
+            .Errors.Should().Contain(e => e.ErrorMessage.Contains("100"));
+    }
+
     // ---------- 导入分类 ----------
 
     [Fact] // boundary: 空/null —— null 列表拒(且 Must 谓词 null-safe 不抛 NRE,票14 教训)

@@ -107,9 +107,11 @@ public sealed class JobsDbContext(
             e.Property(x => x.WorkMode).HasMaxLength(200);
             e.Property(x => x.Source).HasMaxLength(100);
             e.Property(x => x.JdSummary).HasMaxLength(20000);
-            // JD 全文:与 JdSummary 同量级上限。取 40000 是因为真实 JD 常含
-            // 岗位职责+任职要求+公司介绍三段,20000 在长 JD 上会截断。
-            e.Property(x => x.JdText).HasMaxLength(40000);
+            // JD 全文:text 列不限长 (FUN-04)。真实 LinkedIn 长 JD 可达 44K+ 字符,
+            // varchar 上限曾让 smart-add 整单 500 (Postgres 22001)。长度口径改由
+            // 应用层校验统一把关 (JdTextLimits.MaxLength,超限 400 而非落库 500),
+            // 口径与 UserResume.Content 的 text 先例一致。
+            e.Property(x => x.JdText).HasColumnType("text");
             e.Property(x => x.JdSourceUrl).HasMaxLength(2048);
             // 公司介绍:完整存储,20000 上限(LinkedIn 公司介绍通常 2000-5000 字)。
             e.Property(x => x.CompanyDescription).HasMaxLength(20000);

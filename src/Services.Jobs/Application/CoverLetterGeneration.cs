@@ -146,8 +146,9 @@ public sealed class GenerateCoverLetterCommandHandler(
     /// ⚠️ 长度控制:简历/JD/公司情报各自截断到上限再拼。
     /// 无脑全塞会遇到两个问题:(1) 超出上下文窗口被上游拒;
     /// (2) 塞在中间的信息注意力衰减,反而丢失关键匹配点。
-    /// 上限取的是"够用且不溢出"的经验值 —— JD 40000 是库里的上限,这里收到 12000
-    /// 是因为求职信只需要抓 3-4 个核心要求,不是把整份 JD 逐条对应。
+    /// 上限取的是"够用且不溢出"的经验值 —— JD 在库里不限长 (text 列,应用层上限
+    /// JdTextLimits.MaxLength),这里收到 12000 是 prompt 侧的截断、与保存上限无关:
+    /// 求职信只需要抓 3-4 个核心要求,不是把整份 JD 逐条对应。
     /// </summary>
     private static string BuildPrompt(JobApplication app, Company? company, string resumeContent,
         string? extraInstructions)

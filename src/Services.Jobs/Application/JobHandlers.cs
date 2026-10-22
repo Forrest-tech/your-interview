@@ -26,7 +26,7 @@ public sealed record ApplicationDto(
     string? Salary, string? WorkMode, string? Source, string? JdSummary,
     // JD 全文与出处(2026-09-18:面试前准备包的输入)。
     // 与 JdSummary 并存:摘要是给人看的速览,全文是给 AI 的原料 —— 两者用途不同。
-    // ⚠️ 可达 40000 字符,列表接口不要带它(见 ListApplicationsQuery:仍用不带全文的映射)。
+    // ⚠️ 可达 JdTextLimits.MaxLength 字符,列表接口不要带它(见 ListApplicationsQuery:仍用不带全文的映射)。
     string? JdText, string? JdSourceUrl,
     // 公司介绍(2026-10-19):完整存储,不截断。Smart paste 从 "About the company" 提取。
     string? CompanyDescription,
@@ -183,6 +183,18 @@ public sealed class CreateCompanyCommandValidator : AbstractValidator<CreateComp
         => Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
 }
 
+/// <summary>
+/// JD 全文 (JdText) 的全仓统一长度口径 (FUN-04)。
+/// 列已扩为 text 不再有库端上限,闸门收敛到应用层一处:所有写 JdText 的命令
+/// (Create / Update / SetJdContent / SmartAdd) 共用此上限,超限一律 400 校验,
+/// 不许再出现"一条路径 400、另一条路径落库 500"的缝隙。
+/// 取值与 ParseJdCommand 的粘贴输入上限 (200_000) 对齐 —— 能粘进来的 JD 就一定存得下。
+/// </summary>
+public static class JdTextLimits
+{
+    public const int MaxLength = 200_000;
+}
+
 public sealed class CreateApplicationCommandValidator : AbstractValidator<CreateApplicationCommand>
 {
     public CreateApplicationCommandValidator()
@@ -190,11 +202,30 @@ public sealed class CreateApplicationCommandValidator : AbstractValidator<Create
         RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.Role).NotEmpty().MaximumLength(300).WithMessage("岗位名称必填");
         RuleFor(x => x.Link).MaximumLength(2048);
-        // FUN-02:与列上限对齐 (JdText 40000 / Notes 8000),超长给明确 400 而不是落库 500。
-        RuleFor(x => x.JdText).MaximumLength(40000);
+        // FUN-02/FUN-04:JdText 与统一口径对齐 (JdTextLimits.MaxLength),超长给明确 400 而不是落库 500。
+        RuleFor(x => x.JdText).MaximumLength(JdTextLimits.MaxLength);
         RuleFor(x => x.Notes).MaximumLength(8000);
         RuleFor(x => x.Priority).Must(p => p is null || Enum.TryParse<Priority>(p, true, out _))
             .WithMessage("优先级必须是 Low / Medium / High / Critical");
+    }
+}
+
+public sealed class UpdateApplicationCommandValidator : AbstractValidator<UpdateApplicationCommand>
+{
+    public UpdateApplicationCommandValidator()
+    {
+        // FUN-04:此前 Update 无校验,JdText 超列上限直接落库 500。与统一口径对齐。
+        // JdText 为 null = 未提供 (保持原值),MaximumLength 对 null 放行,语义不变。
+        RuleFor(x => x.JdText).MaximumLength(JdTextLimits.MaxLength);
+    }
+}
+
+public sealed class SetJdContentCommandValidator : AbstractValidator<SetJdContentCommand>
+{
+    public SetJdContentCommandValidator()
+    {
+        // FUN-04:此前 SetJdContent 无校验,同上。与统一口径对齐。
+        RuleFor(x => x.JdText).MaximumLength(JdTextLimits.MaxLength);
     }
 }
 

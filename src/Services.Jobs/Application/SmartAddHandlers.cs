@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Results;
@@ -157,6 +158,17 @@ public sealed record SmartAddApplicationCommand(
 
 public sealed record SmartAddResultDto(
     Guid ApplicationId, Guid CompanyId, string CompanyName, bool CompanyCreated, string Status);
+
+public sealed class SmartAddApplicationCommandValidator
+    : AbstractValidator<SmartAddApplicationCommand>
+{
+    public SmartAddApplicationCommandValidator()
+    {
+        // FUN-04:此前 SmartAdd 无校验,长 JD 直接撞列上限整单 500 (Postgres 22001)。
+        // 与全仓统一口径对齐 (JdTextLimits.MaxLength),超限在落库前给 400 校验提示。
+        RuleFor(x => x.JdText).MaximumLength(JdTextLimits.MaxLength);
+    }
+}
 
 public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
     : IRequestHandler<SmartAddApplicationCommand, Result<SmartAddResultDto>>

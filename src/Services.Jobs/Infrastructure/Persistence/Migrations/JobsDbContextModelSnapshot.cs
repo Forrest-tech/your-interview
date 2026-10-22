@@ -397,8 +397,7 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20000)");
 
                     b.Property<string>("JdText")
-                        .HasMaxLength(40000)
-                        .HasColumnType("character varying(40000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("JobType")
                         .HasMaxLength(100)

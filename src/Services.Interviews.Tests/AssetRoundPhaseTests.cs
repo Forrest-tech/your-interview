@@ -54,9 +54,19 @@ public sealed class AssetRoundPhaseTests
     }
 
     [Fact]
-    public void AttachAssetValidator_MissingRoundId_Invalid()
+    public void AttachAssetValidator_EntryLevelWithoutRoundId_Valid()
     {
+        // RoundId 可空是有意设计:条目级材料(截图、整场转写等)靠 EntryId 挂载,
+        // 不属于某一轮;校验器对 RoundId 无规则,缺 RoundId 时应校验通过。
         var cmd = new AttachAssetCommand(Guid.Empty, Guid.NewGuid(), "Text", "x.txt", null, 1, null, null,
+            "hello", null, null);
+        new AttachAssetCommandValidator().Validate(cmd).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AttachAssetValidator_MissingEntryId_Invalid()
+    {
+        var cmd = new AttachAssetCommand(Guid.Empty, Guid.Empty, "Text", "x.txt", null, 1, null, null,
             "hello", null, null);
         new AttachAssetCommandValidator().Validate(cmd).IsValid.Should().BeFalse();
     }

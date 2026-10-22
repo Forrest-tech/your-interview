@@ -99,6 +99,39 @@ namespace YourInterview.Services.Analytics.Infrastructure.Persistence.Migrations
                     b.ToTable("mastery_breakdowns", "analytics");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Analytics.Domain.MasteryItemState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Bucket")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("KnowledgeItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Topic")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "KnowledgeItemId")
+                        .IsUnique();
+
+                    b.ToTable("mastery_item_states", "analytics");
+                });
+
             modelBuilder.Entity("YourInterview.Services.Analytics.Domain.PipelineSnapshot", b =>
                 {
                     b.Property<Guid>("Id")

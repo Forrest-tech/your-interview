@@ -342,10 +342,14 @@ public sealed class ResetReadModelCommandHandler(AnalyticsDbContext db)
         var abilities = await db.AbilitySnapshots.Where(x => x.UserId == r.UserId).ToListAsync(ct);
         var pipelines = await db.PipelineSnapshots.Where(x => x.UserId == r.UserId).ToListAsync(ct);
         var mastery = await db.MasteryBreakdowns.Where(x => x.UserId == r.UserId).ToListAsync(ct);
+        // 票34:单条目台账是 MasteryBreakdown 的计数依据,必须随快照一并清 ——
+        // 只清快照留台账的话,重放/后续事件会按旧台账迁移不存在的行,再次分叉。
+        var itemStates = await db.MasteryItemStates.Where(x => x.UserId == r.UserId).ToListAsync(ct);
 
         db.AbilitySnapshots.RemoveRange(abilities);
         db.PipelineSnapshots.RemoveRange(pipelines);
         db.MasteryBreakdowns.RemoveRange(mastery);
+        db.MasteryItemStates.RemoveRange(itemStates);
 
         await db.SaveChangesAsync(ct);
         return Result.Success(new ResetResultDto(abilities.Count, pipelines.Count, mastery.Count));

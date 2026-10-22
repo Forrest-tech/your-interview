@@ -18,6 +18,7 @@ public sealed class AnalyticsDbContext(DbContextOptions<AnalyticsDbContext> opti
     public DbSet<AbilitySnapshot> AbilitySnapshots => Set<AbilitySnapshot>();
     public DbSet<PipelineSnapshot> PipelineSnapshots => Set<PipelineSnapshot>();
     public DbSet<MasteryBreakdown> MasteryBreakdowns => Set<MasteryBreakdown>();
+    public DbSet<MasteryItemState> MasteryItemStates => Set<MasteryItemState>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -48,6 +49,16 @@ public sealed class AnalyticsDbContext(DbContextOptions<AnalyticsDbContext> opti
             e.HasKey(x => x.Id);
             e.Property(x => x.Topic).HasMaxLength(200).IsRequired();
             e.HasIndex(x => new { x.UserId, x.Date, x.Topic }).IsUnique();
+        });
+
+        b.Entity<MasteryItemState>(e =>
+        {
+            e.ToTable("mastery_item_states");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Topic).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Bucket).HasMaxLength(20).IsRequired();
+            // 一个用户的一条知识条目只有一行台账 —— 消费者据此迁移桶计数
+            e.HasIndex(x => new { x.UserId, x.KnowledgeItemId }).IsUnique();
         });
 
         b.Entity<ProcessedEvent>(e =>

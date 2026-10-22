@@ -69,6 +69,32 @@ public sealed class AnalyticsController(ISender sender, ICurrentUser currentUser
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 投影对账(票34/REQ-18,只读):经 Knowledge API 拉真源,与本地 Mastery 投影
+    /// + knowledge 来源 technicalDepth 逐项比对,返回差异清单。Pipeline 为逐日增量
+    /// 口径不在可比范围,报告中单列说明。
+    /// </summary>
+    [HttpGet("reconcile")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsRead)]
+    public async Task<IResult> Reconcile(CancellationToken ct = default)
+    {
+        var r = await sender.Send(new ReconcileProjectionQuery(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 投影重建(票34/REQ-18):以 Knowledge 真源全量重建当前用户的 Mastery 投影
+    /// (分布 + 单条目台账 + knowledge 来源 technicalDepth)。可重复执行、幂等;
+    /// 真源不可达时失败且不改动投影。
+    /// </summary>
+    [HttpPost("rebuild")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsWrite)]
+    public async Task<IResult> Rebuild(CancellationToken ct = default)
+    {
+        var r = await sender.Send(new RebuildProjectionCommand(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>清空当前用户的读模型(重建/排障用)。</summary>
     [HttpPost("reset")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsWrite)]

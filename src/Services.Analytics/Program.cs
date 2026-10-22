@@ -21,6 +21,11 @@ builder.Services.AddHealthChecks().AddDbContextCheck<AnalyticsDbContext>("postgr
 
 builder.Services.AddCurrentUser();
 
+// ---------- 票34:投影对账/重建的真源通道(经 Knowledge API 转发调用方令牌) ----------
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<YourInterview.Services.Analytics.Application.IKnowledgeTruthSource,
+    YourInterview.Services.Analytics.Infrastructure.Services.HttpKnowledgeTruthSource>();
+
 // ---------- 消息总线:Analytics 是纯消费者(读模型由事件驱动) ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration, x =>
 {

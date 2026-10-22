@@ -449,12 +449,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasColumnType("date");
 
                     b.Property<string>("Benefits")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("CompanyDescription")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid");
@@ -476,8 +474,7 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(2048)");
 
                     b.Property<string>("JdSummary")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("JdText")
                         .HasColumnType("text");
@@ -533,8 +530,7 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.Property<string>("Requirements")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)");
+                        .HasColumnType("text");
 
                     b.Property<int?>("ResumeScore")
                         .HasColumnType("integer");

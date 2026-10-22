@@ -167,6 +167,12 @@ public sealed class SmartAddApplicationCommandValidator
         // FUN-04:此前 SmartAdd 无校验,长 JD 直接撞列上限整单 500 (Postgres 22001)。
         // 与全仓统一口径对齐 (JdTextLimits.MaxLength),超限在落库前给 400 校验提示。
         RuleFor(x => x.JdText).MaximumLength(JdTextLimits.MaxLength);
+        // 票62:解析出的四段长文本同型隐患 —— 单段超旧列上限 20000 同样整单 500。
+        // 列已扩 text,四段与 JdText 共用同一闸门,超限在落库前给 400 字段提示。
+        RuleFor(x => x.JdSummary).MaximumLength(JdTextLimits.MaxLength);
+        RuleFor(x => x.Requirements).MaximumLength(JdTextLimits.MaxLength);
+        RuleFor(x => x.Benefits).MaximumLength(JdTextLimits.MaxLength);
+        RuleFor(x => x.CompanyDescription).MaximumLength(JdTextLimits.MaxLength);
     }
 }
 

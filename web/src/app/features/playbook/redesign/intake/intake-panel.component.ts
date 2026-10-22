@@ -1179,11 +1179,18 @@ export function classifyEmail(subject: string, body: string): string {
   return 'other';
 }
 
-/** 从正文里找面试时间:优先 "Oct 7, 2026 at 11:00 AM" / "2026-10-07 11:00" 一类明确写法。 */
+/** 从正文里找面试时间:优先 "Oct 7, 2026 at 11:00 AM" / "2026-10-07 11:00" 一类明确写法;
+ *  OCR 邀请卡格式也要认:"2026-10-13 周二 10:00～11:00"(星期夹中间)、"2026年10月13日(星期二) 14:00"。 */
 export function extractInterviewWhen(text: string): string | null {
-  const iso = text.match(/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2})/);
+  const p = (n: string) => n.padStart(2, '0');
+  // 年月日写法,日期与时间之间可夹星期;时段(～/〜/-)只取起始时间
+  const cn = text.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日\s*(?:(?:星期|周)[一二三四五六日天]\s*)?(\d{1,2})[:：](\d{2})/);
+  if (cn) {
+    return `${cn[1]}-${p(cn[2])}-${p(cn[3])} ${p(cn[4])}:${cn[5]}`;
+  }
+  // ISO 日期与时间之间可夹星期("2026-10-13 周二 10:00～11:00"),或仍是单个空格/T 分隔
+  const iso = text.match(/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})(?:[ T]|\s*(?:星期|周)[一二三四五六日天]\s*)(\d{1,2})[:：](\d{2})/);
   if (iso) {
-    const p = (n: string) => n.padStart(2, '0');
     return `${iso[1]}-${p(iso[2])}-${p(iso[3])} ${p(iso[4])}:${iso[5]}`;
   }
   const months: Record<string, number> = {

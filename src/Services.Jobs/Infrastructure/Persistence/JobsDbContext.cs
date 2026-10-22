@@ -36,6 +36,10 @@ public sealed class JobsDbContext(
     public DbSet<ApplicationAnswerTemplate> AnswerTemplates => Set<ApplicationAnswerTemplate>();
     public DbSet<ApplicationCommunication> Communications => Set<ApplicationCommunication>();
 
+    // ---- COD-10a/票14:Tracker 收藏与按投递自备问题(原 localStorage 孤岛上后端)----
+    public DbSet<ApplicationFavorite> Favorites => Set<ApplicationFavorite>();
+    public DbSet<ApplicationQuestion> ApplicationQuestions => Set<ApplicationQuestion>();
+
     /// <summary>
     /// 修正「新增子实体被 EF 误判为 Modified」。共享实现见 NewChildEntityFixer ——
     /// 之前这里的私有版本是"状态 Modified 一律转 Added",把「修改既有轮次」也
@@ -243,6 +247,39 @@ public sealed class JobsDbContext(
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
             e.HasIndex(x => x.ApplicationId);
+            e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // COD-10a/票14:Tracker 收藏(用户级关系行)。(UserId, ApplicationId) 唯一 ——
+        // 同一用户对同一投递最多一条收藏,导入/重复 PUT 靠它在库层兜底幂等;
+        // 软删后重加走 Restore(Handler 以 IgnoreQueryFilters 查含删行),不新建第二行。
+        b.Entity<ApplicationFavorite>(e =>
+        {
+            e.ToTable("application_favorites");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.ApplicationId).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.ApplicationId }).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+            e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // COD-10a/票14:按投递自备问题。归属从所属投递盖章(同沟通记录口径),
+        // 查询过滤器与 Handler 谓词双保险。
+        b.Entity<ApplicationQuestion>(e =>
+        {
+            e.ToTable("application_questions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.ApplicationId).IsRequired();
+            e.Property(x => x.Text).HasMaxLength(4000).IsRequired();
+            e.Property(x => x.SortOrder).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.ApplicationId });
+            e.HasIndex(x => x.ApplicationId);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
             e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
         });
     }

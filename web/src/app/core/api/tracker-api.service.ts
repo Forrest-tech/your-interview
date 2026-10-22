@@ -49,6 +49,28 @@ export interface ParsedInvite {
   needsManualReview: boolean;
 }
 
+/** 后端 FavoriteDto(COD-10a/票14):收藏 = (applicationId + createdAt)。 */
+export interface FavoriteDto {
+  applicationId: string;
+  createdAt: string;
+}
+
+/** 后端 ApplicationQuestionDto(COD-10a/票14):按投递自备问题。 */
+export interface ApplicationQuestionDto {
+  id: string;
+  applicationId: string;
+  text: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/** 一次性导入(localStorage → 后端)的对账结果。 */
+export interface ImportResultDto {
+  imported: number;
+  total: number;
+}
+
 /** 建档结果。 */
 export interface SmartAddResult {
   applicationId: string;
@@ -173,5 +195,47 @@ export class TrackerApi {
   deleteCommunication(applicationId: string, commId: string): Observable<void> {
     return this.api.delete<void>(
       `${TrackerApi.BASE}/applications/${applicationId}/communications/${commId}`);
+  }
+
+  // ---------- Tracker 收藏(COD-10a/票14,原 localStorage yi-tracker-favorites) ----------
+
+  listFavorites(): Observable<FavoriteDto[]> {
+    return this.api.get<FavoriteDto[]>(`${TrackerApi.BASE}/favorites`);
+  }
+
+  addFavorite(applicationId: string): Observable<void> {
+    return this.api.put<void>(`${TrackerApi.BASE}/favorites/${applicationId}`, {});
+  }
+
+  removeFavorite(applicationId: string): Observable<void> {
+    return this.api.delete<void>(`${TrackerApi.BASE}/favorites/${applicationId}`);
+  }
+
+  /** 一次性导入本地收藏(幂等,后端按归属+去重处理,返回对账)。 */
+  importFavorites(applicationIds: string[]): Observable<ImportResultDto> {
+    return this.api.post<ImportResultDto>(`${TrackerApi.BASE}/favorites/import`, { applicationIds });
+  }
+
+  // ---------- 按投递自备问题(COD-10a/票14,原 localStorage yi-tracker-questions-{id}) ----------
+
+  listQuestions(applicationId: string): Observable<ApplicationQuestionDto[]> {
+    return this.api.get<ApplicationQuestionDto[]>(
+      `${TrackerApi.BASE}/applications/${applicationId}/questions`);
+  }
+
+  addQuestion(applicationId: string, text: string): Observable<{ id: string }> {
+    return this.api.post<{ id: string }>(
+      `${TrackerApi.BASE}/applications/${applicationId}/questions`, { text });
+  }
+
+  deleteQuestion(applicationId: string, questionId: string): Observable<void> {
+    return this.api.delete<void>(
+      `${TrackerApi.BASE}/applications/${applicationId}/questions/${questionId}`);
+  }
+
+  /** 一次性导入某条投递的本地自备问题(幂等,后端按正文去重,返回对账)。 */
+  importQuestions(applicationId: string, questions: string[]): Observable<ImportResultDto> {
+    return this.api.post<ImportResultDto>(
+      `${TrackerApi.BASE}/applications/${applicationId}/questions/import`, { questions });
   }
 }

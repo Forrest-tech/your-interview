@@ -24,7 +24,8 @@ import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { SubnavService } from '../../layout/subnav.service';
-import { TrackerApi } from '../../core/api/tracker-api.service';
+import { TrackerApi, ApplicationQuestionDto } from '../../core/api/tracker-api.service';
+import { TrackerPreferencesService } from '../../core/api/tracker-preferences.service';
 import { Application, ApplicationStatus, AnswerTemplate, Communication, CommunicationType, Company, Paged, TrackerStats } from '../../core/models/api.models';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
@@ -322,6 +323,7 @@ export class ApplicationDialogComponent {
 export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly api = inject(ApiClient);
   private readonly trackerApi = inject(TrackerApi);
+  private readonly prefs = inject(TrackerPreferencesService);
   private readonly router = inject(Router);
   private readonly subnav = inject(SubnavService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
@@ -815,20 +817,15 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly error = signal<string | null>(null);
 
   readonly items = signal<Application[]>([]);
-  /** ★ 收藏 (localStorage):id 集合。 */
-  readonly favorites = signal<Set<string>>(new Set(
-    JSON.parse(localStorage.getItem('yi-tracker-favorites') || '[]')
-  ));
+  /** ★ 收藏(COD-10a/票14:后端为真源,与详情弹窗共用同一份信号 —— 单一读写路径)。 */
+  readonly favorites = this.prefs.favorites;
 
   toggleFavorite(id: string): void {
-    const f = new Set(this.favorites());
-    if (f.has(id)) f.delete(id); else f.add(id);
-    this.favorites.set(f);
-    try { localStorage.setItem('yi-tracker-favorites', JSON.stringify([...f])); } catch { /* 忽略 */ }
+    this.prefs.toggleFavorite(id);
   }
 
   isFavorite(id: string): boolean {
-    return this.favorites().has(id);
+    return this.prefs.isFavorite(id);
   }
 
   /** ★ 批量操作:选中的申请 id 集合。 */
@@ -1178,6 +1175,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngOnInit(): void {
     this.reload();
+    this.prefs.ensureFavoritesLoaded(); // ★ 票14:收藏读后端 + 本地旧数据一次性导入
     this.loadGhosting(); // ★ #18
     // ★ 子导航:有实际功能 —— Status 切看板, List 切列表, Overview 滚到指标区
     this.subnav.register('/tracker', [
@@ -2056,11 +2054,11 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           }
 
           <div class="q-list">
-            @for (q of appQuestions(); track q; let i = $index) {
+            @for (q of appQuestions(); track q.id; let i = $index) {
               <div class="q-item">
                 <span class="q-num">{{ i + 1 }}</span>
-                <span class="q-text">{{ q }}</span>
-                <button mat-icon-button class="q-del" (click)="removeQuestion(i)"
+                <span class="q-text">{{ q.text }}</span>
+                <button mat-icon-button class="q-del" (click)="removeQuestion(q.id)"
                         [matTooltip]="t('common.delete')">
                   <mat-icon>delete_outline</mat-icon>
                 </button>
@@ -2581,6 +2579,7 @@ export class ApplicationDetailDialogComponent {
   readonly app = inject<Application>(MAT_DIALOG_DATA);
   private readonly api = inject(ApiClient);
   private readonly trackerApi = inject(TrackerApi);
+  private readonly prefs = inject(TrackerPreferencesService);
   private readonly i18n = inject(I18nService);
   private readonly dialog = inject(MatDialog);
   private readonly sanitizer = inject(DomSanitizer);
@@ -2769,6 +2768,12 @@ export class ApplicationDetailDialogComponent {
 
     // 沟通记录:提前拉一次,这样概览页"沟通记录(N)"角标的数字才准
     this.loadCommunications();
+
+    // 自备问题:读后端(含本地旧数据一次性导入)
+    this.loadAppQuestions();
+
+    // 收藏状态:与列表同一份信号(已加载则为空操作)
+    this.prefs.ensureFavoritesLoaded();
   }
 
   // ---------------------------- 求职信方法 ----------------------------
@@ -2960,24 +2965,16 @@ export class ApplicationDetailDialogComponent {
 
   /* ★ Simplify 真站:头部操作按钮 */
   readonly dialogRef = inject(MatDialogRef<ApplicationDetailDialogComponent>);
-  private readonly favKey = 'yi-tracker-favorites';
 
+  /** 收藏与列表共用同一路径(TrackerPreferencesService)—— 不再各读各的 localStorage。 */
   isFav(): boolean {
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem(this.favKey) ?? '[]');
-      return arr.includes(this.app.id);
-    } catch { return false; }
+    return this.prefs.isFavorite(this.app.id);
   }
 
   toggleFav(): void {
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem(this.favKey) ?? '[]');
-      const i = arr.indexOf(this.app.id);
-      if (i >= 0) arr.splice(i, 1); else arr.push(this.app.id);
-      localStorage.setItem(this.favKey, JSON.stringify(arr));
-      this.snack.open(this.t(i >= 0 ? 'tracker.unfavorited' : 'tracker.favorited'),
-        this.t('common.close'), { duration: 2000 });
-    } catch { /* ignore */ }
+    const adding = this.prefs.toggleFavorite(this.app.id);
+    this.snack.open(this.t(adding ? 'tracker.favorited' : 'tracker.unfavorited'),
+      this.t('common.close'), { duration: 2000 });
   }
 
   doArchive(): void {
@@ -3094,38 +3091,37 @@ export class ApplicationDetailDialogComponent {
 
   // ---------------------------- 面试问题 (G-07) ----------------------------
 
-  /** 每个申请的自定义面试问题(localStorage,按申请 id 存)。 */
-  readonly appQuestions = signal<string[]>(this.loadAppQuestions());
+  /** 每个申请的自定义面试问题(COD-10a/票14:Jobs 后端为真源,按申请 id 隔离)。 */
+  readonly appQuestions = signal<ApplicationQuestionDto[]>([]);
   questionDraft = '';
   readonly questionAdding = signal(false);
 
-  private questionsKey(): string {
-    return `yi-tracker-questions-${this.app.id}`;
-  }
-
-  private loadAppQuestions(): string[] {
-    try {
-      return JSON.parse(localStorage.getItem(this.questionsKey()) || '[]');
-    } catch { return []; }
-  }
-
-  private saveAppQuestions(qs: string[]): void {
-    try { localStorage.setItem(this.questionsKey(), JSON.stringify(qs)); } catch { /* 忽略 */ }
-    this.appQuestions.set(qs);
+  /** 打开弹窗时读后端(未导入过则先把本地旧问题一次性导入再读回,对账以读回条数为准)。 */
+  private loadAppQuestions(): void {
+    this.prefs.loadQuestions(this.app.id).subscribe({
+      next: (qs) => this.appQuestions.set(qs),
+      error: () => { /* 读不到不阻断详情展示(同求职信口径) */ }
+    });
   }
 
   addQuestion(): void {
     const q = this.questionDraft.trim();
     if (!q) return;
-    this.saveAppQuestions([...this.appQuestions(), q]);
-    this.questionDraft = '';
-    this.questionAdding.set(false);
+    this.prefs.addQuestion(this.app.id, q).subscribe({
+      next: () => {
+        this.questionDraft = '';
+        this.questionAdding.set(false);
+        this.loadAppQuestions();
+      },
+      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
+    });
   }
 
-  removeQuestion(idx: number): void {
-    const qs = [...this.appQuestions()];
-    qs.splice(idx, 1);
-    this.saveAppQuestions(qs);
+  removeQuestion(questionId: string): void {
+    this.prefs.deleteQuestion(this.app.id, questionId).subscribe({
+      next: () => this.appQuestions.set(this.appQuestions().filter((x) => x.id !== questionId)),
+      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
+    });
   }
 
   startEditNotes(): void {

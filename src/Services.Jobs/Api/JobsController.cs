@@ -756,6 +756,96 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
+    // ---------- COD-10a/票14:Tracker 收藏与按投递自备问题(原 localStorage 上后端) ----------
+
+    /// <summary>当前用户的全部收藏(列表与详情共用同一读路径,前端单一数据源)。</summary>
+    [HttpGet("favorites")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ListFavorites(CancellationToken ct)
+    {
+        var r = await sender.Send(new ListFavoritesQuery(Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>加收藏(幂等)。</summary>
+    [HttpPut("favorites/{applicationId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> AddFavorite(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new AddFavoriteCommand(Me, applicationId), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>取消收藏(幂等)。</summary>
+    [HttpDelete("favorites/{applicationId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> RemoveFavorite(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new RemoveFavoriteCommand(Me, applicationId), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一次性导入本地收藏(localStorage yi-tracker-favorites)。幂等,返回对账
+    /// { imported, total } —— 重复导入 imported=0、total 不变。
+    /// </summary>
+    [HttpPost("favorites/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> ImportFavorites([FromBody] ImportFavoritesBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ImportFavoritesCommand(Me, body.ApplicationIds ?? []), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>某条投递的自备问题(按 SortOrder 升序)。</summary>
+    [HttpGet("applications/{id:guid}/questions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ListApplicationQuestions(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListApplicationQuestionsQuery(Me, id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>给某条投递加一条自备问题。</summary>
+    [HttpPost("applications/{id:guid}/questions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> AddApplicationQuestion(Guid id, [FromBody] ApplicationQuestionBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new AddApplicationQuestionCommand(Me, id, body.Text ?? string.Empty), ct);
+        return r.IsSuccess
+            ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{id}/questions/{r.Value}", new { id = r.Value })
+            : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 删某条投递的一条自备问题。权限用 JobsWrite 而非 JobsDelete:默认 User 角色
+    /// 没有 JobsDelete(只有 PowerUser/Admin),删自己的备考问题是普通用户日常操作 ——
+    /// 与 DeleteCoverLetter 用 JobsWrite 的先例同口径。
+    /// </summary>
+    [HttpDelete("applications/{id:guid}/questions/{questionId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> DeleteApplicationQuestion(Guid id, Guid questionId, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteApplicationQuestionCommand(Me, id, questionId), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一次性导入某条投递的本地自备问题(yi-tracker-questions-{id})。幂等(按正文去重),
+    /// 返回对账 { imported, total }。
+    /// </summary>
+    [HttpPost("applications/{id:guid}/questions/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> ImportApplicationQuestions(Guid id, [FromBody] ImportQuestionsBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ImportApplicationQuestionsCommand(Me, id, body.Questions ?? []), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    public sealed record ImportFavoritesBody(Guid[]? ApplicationIds);
+    public sealed record ApplicationQuestionBody(string? Text);
+    public sealed record ImportQuestionsBody(string[]? Questions);
+
     public sealed record AnswerTemplateBody(string Category, string Question, string Answer);
 
     public sealed record CommunicationBody(string Type, string? Subject, string Content,

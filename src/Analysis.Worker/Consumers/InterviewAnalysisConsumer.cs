@@ -13,6 +13,10 @@ namespace YourInterview.Analysis.Worker.Consumers;
 /// 分析结果是一个**大的结构化产物**(六维 + 明细 + 报告),塞进消息体不合适;
 /// 而且回写需要幂等与失败可重试,用 HTTP + Polly 重试更直接可控。
 /// 消息用来"触发",HTTP 用来"传数据" —— 各司其职。
+///
+/// COD-01/票03(裁决 B):全部 Interviews 调用带 ?ownerUserId={事件 UserId} ——
+/// 服务账号 JWT 不是条目主人,服务端以 ownerUserId 校验 entry.UserId,
+/// 主人对不上即拒绝;不给服务账号全量豁免。
 /// </summary>
 public sealed class InterviewAnalysisRequestedConsumer(
     AnalysisPipeline pipeline,
@@ -227,7 +231,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         HttpClient http, string baseUrl, InterviewAnalysisRequested m, CancellationToken ct)
     {
         using var entryReq = new HttpRequestMessage(HttpMethod.Get,
-            $"{baseUrl}/api/interviews/{m.InterviewEntryId}");
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}?ownerUserId={m.UserId}");
         if (!await tokens.AuthorizeAsync(entryReq, ct)) return (null, null);
         using var entryResp = await http.SendAsync(entryReq, ct);
         if (!entryResp.IsSuccessStatusCode) return (null, null);
@@ -251,7 +255,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         if (assetId is null) return (null, null);
 
         using var tReq = new HttpRequestMessage(HttpMethod.Get,
-            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/assets/{assetId}/transcript");
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/assets/{assetId}/transcript?ownerUserId={m.UserId}");
         if (!await tokens.AuthorizeAsync(tReq, ct)) return (null, null);
         using var tResp = await http.SendAsync(tReq, ct);
         if (!tResp.IsSuccessStatusCode) return (null, null);
@@ -299,7 +303,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post,
-            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/analysis")
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/analysis?ownerUserId={m.UserId}")
         {
             Content = JsonContent.Create(payload)
         };
@@ -333,7 +337,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get,
-                $"{baseUrl}/api/interviews/{m.InterviewEntryId}");
+                $"{baseUrl}/api/interviews/{m.InterviewEntryId}?ownerUserId={m.UserId}");
             if (!await tokens.AuthorizeAsync(req, ct)) return null;
 
             using var resp = await http.SendAsync(req, ct);
@@ -389,7 +393,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         // "有没有可分析的转写文本" —— 传空串会让它报错(而且错误被下面吞掉,
         // 现象是"状态怎么都不动"),这是一个踩过的坑。
         var transcriptUrl = $"{baseUrl}/api/interviews/{m.InterviewEntryId}" +
-                            $"/assets/{assetId}/transcript";
+                            $"/assets/{assetId}/transcript?ownerUserId={m.UserId}";
 
         var segmentsJson = JsonSerializer.Serialize(artifact.Segments.Select(s => new
         {
@@ -423,7 +427,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         // 不先走这一步直接存转写稿会被拒(Transcript.InvalidState),
         // 因为聚合根要求转写稿只能在 Transcribing 状态下写入。
         using (var sReq = new HttpRequestMessage(HttpMethod.Post,
-                   $"{baseUrl}/api/interviews/{m.InterviewEntryId}/transcription/start"))
+                   $"{baseUrl}/api/interviews/{m.InterviewEntryId}/transcription/start?ownerUserId={m.UserId}"))
         {
             if (await tokens.AuthorizeAsync(sReq, ct))
             {
@@ -439,7 +443,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
 
         // 3) 触发分析(Transcribed → Analyzing)
         using var aReq = new HttpRequestMessage(HttpMethod.Post,
-            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/analyze");
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/analyze?ownerUserId={m.UserId}");
 
         if (await tokens.AuthorizeAsync(aReq, ct))
         {
@@ -554,7 +558,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
             var baseUrl = config["Services:Interviews"] ?? "http://127.0.0.1:5264";
             var http = httpFactory.CreateClient("interviews");
             using var req = new HttpRequestMessage(HttpMethod.Post,
-                $"{baseUrl}/api/interviews/{m.InterviewEntryId}/failure")
+                $"{baseUrl}/api/interviews/{m.InterviewEntryId}/failure?ownerUserId={m.UserId}")
             {
                 Content = JsonContent.Create(new { reason })
             };

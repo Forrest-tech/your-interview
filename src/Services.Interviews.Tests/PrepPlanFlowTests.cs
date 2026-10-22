@@ -43,7 +43,7 @@ public sealed class PrepPlanFlowTests : IAsyncLifetime
     {
         var opts = new DbContextOptionsBuilder<InterviewsDbContext>()
             .UseNpgsql(Cs).Options;
-        _db = new InterviewsDbContext(opts);
+        _db = new InterviewsDbContext(opts, new TestCurrentUser());
         try
         {
             _available = await _db.Database.CanConnectAsync();
@@ -74,7 +74,7 @@ public sealed class PrepPlanFlowTests : IAsyncLifetime
             .Include(x => x.Questions).Include(x => x.Weaknesses)
             .FirstAsync(x => x.Id == e.Id);
         var handler = new GeneratePrepPlanCommandHandler(_db, new FakeAi());
-        var cmd = new GeneratePrepPlanCommand(loaded.Id, r2.Id,
+        var cmd = new GeneratePrepPlanCommand(Guid.Empty, loaded.Id, r2.Id,
             JdText: "JD", ResumeText: "resume", Experiences: "机经", Requirements: "req");
 
         var result = await handler.Handle(cmd, default);
@@ -91,7 +91,7 @@ public sealed class PrepPlanFlowTests : IAsyncLifetime
         asset.RoundId.Should().Be(r2.Id);
 
         var get = await new GetPrepPlanQueryHandler(_db)
-            .Handle(new GetPrepPlanQuery(loaded.Id, r2.Id), default);
+            .Handle(new GetPrepPlanQuery(Guid.Empty, loaded.Id, r2.Id), default);
         get.IsSuccess.Should().BeTrue();
         get.Value.Markdown.Should().Contain("URL shortener");
     }

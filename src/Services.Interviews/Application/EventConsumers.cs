@@ -26,13 +26,15 @@ public sealed class InterviewInviteRecordedConsumer(
     {
         var e = context.Message;
 
-        var entry = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x =>
-            x.JobApplicationId == e.ApplicationId && x.RoundNo == e.RoundNo,
+        // COD-01:消费者无 HTTP 上下文 —— IgnoreQueryFilters 后以事件 UserId 显式收口归属
+        var entry = await db.Entries.IgnoreQueryFilters().Include(x => x.Rounds).FirstOrDefaultAsync(x =>
+            x.JobApplicationId == e.ApplicationId && x.RoundNo == e.RoundNo
+            && x.UserId == e.UserId && !x.IsDeleted,
             context.CancellationToken);
 
         if (entry is null)
         {
-            entry = new InterviewEntry(e.CompanyId, e.CompanyName, e.Role, e.ApplicationId);
+            entry = new InterviewEntry(e.CompanyId, e.CompanyName, e.Role, e.ApplicationId, userId: e.UserId);
             entry.UpdateBasicInfo(e.CompanyName, e.Role, null, null, e.JdSummary,
                 e.RoundNo, e.InterviewDate, e.Format, e.Interviewers, null, null, null);
             // ★ F-03 修复:必须落一个真实 Round 实体 —— 只有 RoundNo 没有轮次实体时,

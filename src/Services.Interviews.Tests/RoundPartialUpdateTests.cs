@@ -34,7 +34,7 @@ public sealed class RoundPartialUpdateTests : IAsyncLifetime
     {
         var opts = new DbContextOptionsBuilder<InterviewsDbContext>()
             .UseNpgsql(Cs).Options;
-        _db = new InterviewsDbContext(opts);
+        _db = new InterviewsDbContext(opts, new TestCurrentUser());
         try
         {
             _available = await _db.Database.CanConnectAsync();
@@ -54,7 +54,7 @@ public sealed class RoundPartialUpdateTests : IAsyncLifetime
         var r = e.AddRound("Technical");
         await _db.SaveChangesAsync();
 
-        var full = new UpdateRoundCommand(e.Id, r.Id, "Technical",
+        var full = new UpdateRoundCommand(Guid.Empty, e.Id, r.Id, "Technical",
             new DateOnly(2026, 10, 20), "Alice", "Video", "Toronto", "Pending",
             "note", "feedback",
             MeetingLink: MeetingLink, ScheduledTime: ScheduledTime,
@@ -79,7 +79,7 @@ public sealed class RoundPartialUpdateTests : IAsyncLifetime
         var (entryId, roundId) = await SeedRoundWithAllDetailsAsync();
 
         // 仅基础字段的更新命令:扩展字段全部缺省(null)—— round-card 保存 / comm-log 同步的形态
-        var partial = new UpdateRoundCommand(entryId, roundId, "Technical",
+        var partial = new UpdateRoundCommand(Guid.Empty, entryId, roundId, "Technical",
             new DateOnly(2026, 10, 21), "Alice, Bob", "Video", null, "Pending", null, null);
         var res = await new UpdateRoundCommandHandler(_db).Handle(partial, default);
         res.IsSuccess.Should().BeTrue();
@@ -105,7 +105,7 @@ public sealed class RoundPartialUpdateTests : IAsyncLifetime
         var (entryId, roundId) = await SeedRoundWithAllDetailsAsync();
 
         // 显式传空字符串 = 清空对应字段(存 null)
-        var clear = new UpdateRoundCommand(entryId, roundId, "Technical",
+        var clear = new UpdateRoundCommand(Guid.Empty, entryId, roundId, "Technical",
             new DateOnly(2026, 10, 20), "Alice", "Video", "Toronto", "Pending", null, null,
             MeetingLink: "", ScheduledTime: "", PrepQuestionsJson: "", EmailsJson: "",
             Transcript: "", RecordingUrl: "", ChecklistJson: "");
@@ -128,7 +128,7 @@ public sealed class RoundPartialUpdateTests : IAsyncLifetime
         if (!_available) return;
         var (entryId, roundId) = await SeedRoundWithAllDetailsAsync();
 
-        var mixed = new UpdateRoundCommand(entryId, roundId, "Technical",
+        var mixed = new UpdateRoundCommand(Guid.Empty, entryId, roundId, "Technical",
             new DateOnly(2026, 10, 20), "Alice", "Video", "Toronto", "Pending", null, null,
             MeetingLink: "https://meet.example.com/room-2", // 非空 = 赋值
             Transcript: "",                                 // 空 = 清空
@@ -153,7 +153,7 @@ public sealed class RoundPartialUpdateTests : IAsyncLifetime
         var (entryId, roundId) = await SeedRoundWithAllDetailsAsync();
 
         // 全字段写入方(rounds-timeline 路径)行为不变:非空值整体覆盖
-        var full = new UpdateRoundCommand(entryId, roundId, "SystemDesign",
+        var full = new UpdateRoundCommand(Guid.Empty, entryId, roundId, "SystemDesign",
             new DateOnly(2026, 10, 22), "Carol", "Onsite", "Office", "Passed", "n2", "f2",
             MeetingLink: "https://meet.example.com/room-9", ScheduledTime: "09:00",
             PrepQuestionsJson: "[]", EmailsJson: "[]",

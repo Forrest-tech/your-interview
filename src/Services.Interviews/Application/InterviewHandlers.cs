@@ -54,7 +54,7 @@ public sealed record UpcomingRoundDto(
     string? Interviewers, string? Format, string? Location,
     string? MeetingLink, string Outcome);
 
-public sealed record GetUpcomingRoundsQuery(int Days = 30) : IRequest<Result<List<UpcomingRoundDto>>>;
+public sealed record GetUpcomingRoundsQuery(Guid UserId, int Days = 30) : IRequest<Result<List<UpcomingRoundDto>>>;
 
 public sealed record GuidanceMaterialDto(
     Guid Id, int Version, string ContentMarkdown, string Model,
@@ -165,24 +165,24 @@ public sealed record RoundEmailItem(
 // ============================ 查询 ============================
 
 public sealed record ListEntriesQuery(
-    int Page = 1, int PageSize = 20, Guid? CompanyId = null, string? Status = null,
+    Guid UserId, int Page = 1, int PageSize = 20, Guid? CompanyId = null, string? Status = null,
     string? Search = null) : IRequest<Result<PagedResult<InterviewEntryListItemDto>>>;
 
-public sealed record GetEntryQuery(Guid Id) : IRequest<Result<InterviewEntryDto>>;
+public sealed record GetEntryQuery(Guid UserId, Guid Id, Guid? OwnerUserId = null) : IRequest<Result<InterviewEntryDto>>;
 
-public sealed record GetCompanySummariesQuery : IRequest<Result<IReadOnlyList<CompanySummaryDto>>>;
+public sealed record GetCompanySummariesQuery(Guid UserId) : IRequest<Result<IReadOnlyList<CompanySummaryDto>>>;
 
 /// <summary>某公司的全部轮次(跨该公司的所有面试条目,按时间排序)。供 Tech Stack 来源选择用。</summary>
 public sealed record CompanyRoundDto(Guid RoundId, Guid EntryId, int Order, string Stage, DateOnly? ScheduledDate);
-public sealed record GetCompanyRoundsQuery(Guid CompanyId) : IRequest<Result<IReadOnlyList<CompanyRoundDto>>>;
+public sealed record GetCompanyRoundsQuery(Guid UserId, Guid CompanyId) : IRequest<Result<IReadOnlyList<CompanyRoundDto>>>;
 
-public sealed record GetInterviewStatsQuery : IRequest<Result<InterviewStatsDto>>;
+public sealed record GetInterviewStatsQuery(Guid UserId) : IRequest<Result<InterviewStatsDto>>;
 
-public sealed record ListWeaknessesQuery(Guid EntryId, string? Category = null)
+public sealed record ListWeaknessesQuery(Guid UserId, Guid EntryId, string? Category = null)
     : IRequest<Result<IReadOnlyList<WeaknessDto>>>;
 
 /// <summary>任务台账:该条目的分析任务历史(含投递尝试与失败原因)。</summary>
-public sealed record ListAnalysisJobsQuery(Guid EntryId)
+public sealed record ListAnalysisJobsQuery(Guid UserId, Guid EntryId)
     : IRequest<Result<IReadOnlyList<AnalysisJobDto>>>;
 
 /// <summary>任务台账行 DTO —— 给前端"流水线记录"区直出。</summary>
@@ -194,25 +194,25 @@ public sealed record AnalysisJobDto(
 // ============================ 命令 ============================
 
 public sealed record CreateEntryCommand(
-    Guid? CompanyId, string CompanyName, string Role, Guid? JobApplicationId = null,
+    Guid UserId, Guid? CompanyId, string CompanyName, string Role, Guid? JobApplicationId = null,
     string? CompanyProfile = null, string? JdText = null, string? JdSummary = null,
     string? InterviewFormat = null, string? Interviewers = null, DateOnly? InterviewDate = null,
     string? Location = null, string? Notes = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateEntryCommand(
-    Guid Id, string CompanyName, string Role, string? CompanyProfile, string? JdText,
+    Guid UserId, Guid Id, string CompanyName, string Role, string? CompanyProfile, string? JdText,
     string? JdSummary, int RoundNo, DateOnly? InterviewDate, string? InterviewFormat,
     string? Interviewers, string? Location, string? Result, string? Notes,
     string? QuestionsToAskJson = null, string? DebriefJson = null) : IRequest<Result>;
 
-public sealed record DeleteEntryCommand(Guid Id) : IRequest<Result>;
+public sealed record DeleteEntryCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
 /// <summary>回填 Tracker 投递关联:additive —— 条目已有关联时不覆盖,原样返回成功。</summary>
-public sealed record LinkJobApplicationCommand(Guid Id, Guid JobApplicationId) : IRequest<Result>;
+public sealed record LinkJobApplicationCommand(Guid UserId, Guid Id, Guid JobApplicationId) : IRequest<Result>;
 
 public sealed record AttachAssetCommand(
-    Guid EntryId, string Kind, string FileName, string? ContentType, long SizeBytes,
+    Guid UserId, Guid EntryId, string Kind, string FileName, string? ContentType, long SizeBytes,
     string? StoragePath, string? BlobUrl, string? TranscriptText, string? TranscriptSegmentsJson,
     double? DurationSeconds, string SourceLanguage = "en", string? Sha256 = null,
     // 2026-10-19:资产按 Round 管理;2026-10-20 v2 起 RoundId 可空 = 条目级材料(沟通记录)。
@@ -226,28 +226,28 @@ public sealed record AttachAssetCommand(
 /// 文件本体从来没存过 —— Worker 永远找不到文件,这是 M1 修复的第一断点。
 /// </summary>
 public sealed record UploadAssetFileCommand(
-    Guid EntryId, string FileName, string? ContentType, double? DurationSeconds,
+    Guid UserId, Guid EntryId, string FileName, string? ContentType, double? DurationSeconds,
     string? SourceLanguage, Stream Content,
     // 2026-10-19:资产按 Round 管理,新增上传必填 RoundId
     Guid? RoundId = null, string? Phase = null) : IRequest<Result<Guid>>;
 
 /// <summary>回放:取某条材料的音频流(前端 &lt;audio&gt; 直接指向这里)。</summary>
-public sealed record GetAssetAudioQuery(Guid EntryId, Guid AssetId)
+public sealed record GetAssetAudioQuery(Guid UserId, Guid EntryId, Guid AssetId)
     : IRequest<Result<(Stream Stream, string ContentType, string FileName)>>;
 
-public sealed record SaveTranscriptCommand(Guid EntryId, Guid AssetId, string FullText,
-    string? SegmentsJson) : IRequest<Result>;
+public sealed record SaveTranscriptCommand(Guid UserId, Guid EntryId, Guid AssetId, string FullText,
+    string? SegmentsJson, Guid? OwnerUserId = null) : IRequest<Result>;
 
 /// <summary>开始转写(由分析 Worker 调用,把条目从 AssetsUploaded 推进到 Transcribing)。</summary>
-public sealed record BeginTranscriptionCommand(Guid EntryId) : IRequest<Result>;
+public sealed record BeginTranscriptionCommand(Guid UserId, Guid EntryId, Guid? OwnerUserId = null) : IRequest<Result>;
 
 public sealed class BeginTranscriptionCommandHandler(InterviewsDbContext db)
     : IRequestHandler<BeginTranscriptionCommand, Result>
 {
     public async Task<Result> Handle(BeginTranscriptionCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
-            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await OwnedEntry.LoadAsync(db, request.EntryId, request.UserId, request.OwnerUserId,
+            q => q.Include(x => x.Assets).Include(x => x.Questions).Include(x => x.Weaknesses), ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -263,73 +263,73 @@ public sealed class BeginTranscriptionCommandHandler(InterviewsDbContext db)
     }
 }
 
-public sealed record RequestAnalysisCommand(Guid EntryId) : IRequest<Result>;
+public sealed record RequestAnalysisCommand(Guid UserId, Guid EntryId, Guid? OwnerUserId = null) : IRequest<Result>;
 
 public sealed record ApplyAnalysisCommand(
-    Guid EntryId, int Overall, int? Pronunciation, int Fluency, int Structure,
+    Guid UserId, Guid EntryId, int Overall, int? Pronunciation, int Fluency, int Structure,
     int TechnicalDepth, int Relevance, string? Summary,
     List<QuestionDraft>? Questions, List<WeaknessDraft>? Weaknesses,
     string? SpeechMetricsJson = null,
-    string? CandidateTranscript = null) : IRequest<Result>;
+    string? CandidateTranscript = null, Guid? OwnerUserId = null) : IRequest<Result>;
 
-public sealed record MarkEntryFailedCommand(Guid EntryId, string Reason) : IRequest<Result>;
+public sealed record MarkEntryFailedCommand(Guid UserId, Guid EntryId, string Reason, Guid? OwnerUserId = null) : IRequest<Result>;
 
 public sealed record AddQuestionCommand(
-    Guid EntryId, string QuestionText, string? MyAnswerText, string Category, int Difficulty,
+    Guid UserId, Guid EntryId, string QuestionText, string? MyAnswerText, string Category, int Difficulty,
     string? Assessment = null, Guid? RoundId = null, string? AskedBy = null) : IRequest<Result<Guid>>;
 
 public sealed record UpdateQuestionCommand(
-    Guid EntryId, Guid QuestionId, string QuestionText, string? MyAnswerText, string Category,
+    Guid UserId, Guid EntryId, Guid QuestionId, string QuestionText, string? MyAnswerText, string Category,
     int Difficulty, string? Assessment, bool GotStuck, string? StuckReason,
     string? RecommendedAnswer) : IRequest<Result>;
 
-public sealed record RemoveQuestionCommand(Guid EntryId, Guid QuestionId) : IRequest<Result>;
+public sealed record RemoveQuestionCommand(Guid UserId, Guid EntryId, Guid QuestionId) : IRequest<Result>;
 
 // ============================ Playbook 重做(A1–A7/F3):命令与查询 ============================
 
 /// <summary>A1:设置题目掌握度(0=待练,1=练习中,2=已掌握,3=还卡壳)。</summary>
-public sealed record UpdateQuestionMasteryCommand(Guid EntryId, Guid QuestionId, int Mastery)
+public sealed record UpdateQuestionMasteryCommand(Guid UserId, Guid EntryId, Guid QuestionId, int Mastery)
     : IRequest<Result>;
 
 /// <summary>A2:待办列表。</summary>
-public sealed record ListActionsQuery(Guid EntryId) : IRequest<Result<IReadOnlyList<ActionDto>>>;
+public sealed record ListActionsQuery(Guid UserId, Guid EntryId) : IRequest<Result<IReadOnlyList<ActionDto>>>;
 
 /// <summary>A2:新增待办。</summary>
 public sealed record CreateActionCommand(
-    Guid EntryId, string Title, string? Detail = null, DateTimeOffset? DueDate = null)
+    Guid UserId, Guid EntryId, string Title, string? Detail = null, DateTimeOffset? DueDate = null)
     : IRequest<Result<Guid>>;
 
 /// <summary>A2:部分更新待办(null 字段不动)。</summary>
 public sealed record UpdateActionCommand(
-    Guid EntryId, Guid ActionId, string? Title = null, bool? IsDone = null,
+    Guid UserId, Guid EntryId, Guid ActionId, string? Title = null, bool? IsDone = null,
     DateTimeOffset? DueDate = null) : IRequest<Result>;
 
 /// <summary>A2:删除待办。</summary>
-public sealed record DeleteActionCommand(Guid EntryId, Guid ActionId) : IRequest<Result>;
+public sealed record DeleteActionCommand(Guid UserId, Guid EntryId, Guid ActionId) : IRequest<Result>;
 
 /// <summary>A3:分析趋势(按时间 asc 的快照列表)。</summary>
-public sealed record GetAnalysisTrendQuery(Guid EntryId)
+public sealed record GetAnalysisTrendQuery(Guid UserId, Guid EntryId)
     : IRequest<Result<IReadOnlyList<AnalysisTrendPointDto>>>;
 
 /// <summary>A3 最新快照:返回最近一条快照全文,没有快照时返回 null(前端显示"首次分析")。</summary>
-public sealed record GetLatestSnapshotQuery(Guid EntryId)
+public sealed record GetLatestSnapshotQuery(Guid UserId, Guid EntryId)
     : IRequest<Result<AnalysisSnapshotDto?>>;
 
 /// <summary>A4:该题在其它面试中的回答版本(归一化题干精确匹配)。</summary>
-public sealed record GetQuestionHistoryQuery(Guid EntryId, Guid QuestionId)
+public sealed record GetQuestionHistoryQuery(Guid UserId, Guid EntryId, Guid QuestionId)
     : IRequest<Result<IReadOnlyList<QuestionHistoryDto>>>;
 
 /// <summary>A5:全局技术覆盖图谱(按 Category 聚合)。</summary>
-public sealed record GetCoverageQuery : IRequest<Result<IReadOnlyList<CoverageCategoryDto>>>;
+public sealed record GetCoverageQuery(Guid UserId) : IRequest<Result<IReadOnlyList<CoverageCategoryDto>>>;
 
 /// <summary>A7:整体替换某轮次的邮件时间线。</summary>
 public sealed record UpdateRoundEmailsCommand(
-    Guid EntryId, Guid RoundId, List<RoundEmailItem> Emails) : IRequest<Result>;
+    Guid UserId, Guid EntryId, Guid RoundId, List<RoundEmailItem> Emails) : IRequest<Result>;
 
 // ============================ 轮次(缺口1) ============================
 
 public sealed record AddRoundCommand(
-    Guid EntryId, string Stage = "Technical", DateOnly? ScheduledDate = null,
+    Guid UserId, Guid EntryId, string Stage = "Technical", DateOnly? ScheduledDate = null,
     string? Interviewers = null, string? Format = null, string? Location = null,
     string? ScheduledTime = null) : IRequest<Result<Guid>>;
 
@@ -339,20 +339,20 @@ public sealed record AddRoundCommand(
 /// Controller 的 UpdateRoundBody 与本命令同为可空字段,「未提供」信息逐层不丢失。
 /// </summary>
 public sealed record UpdateRoundCommand(
-    Guid EntryId, Guid RoundId, string Stage, DateOnly? ScheduledDate, string? Interviewers,
+    Guid UserId, Guid EntryId, Guid RoundId, string Stage, DateOnly? ScheduledDate, string? Interviewers,
     string? Format, string? Location, string Outcome, string? Notes,
     string? Feedback, string? MeetingLink = null, string? ScheduledTime = null,
     string? PrepQuestionsJson = null, string? EmailsJson = null,
     string? Transcript = null, string? RecordingUrl = null,
     string? ChecklistJson = null) : IRequest<Result>;
 
-public sealed record RemoveRoundCommand(Guid EntryId, Guid RoundId) : IRequest<Result>;
+public sealed record RemoveRoundCommand(Guid UserId, Guid EntryId, Guid RoundId) : IRequest<Result>;
 
 public sealed record AddWeaknessCommand(
-    Guid EntryId, string Category, string Title, string? Detail, string? Evidence,
+    Guid UserId, Guid EntryId, string Category, string Title, string? Detail, string? Evidence,
     int Severity, string? Suggestion) : IRequest<Result<Guid>>;
 
-public sealed record RemoveWeaknessCommand(Guid EntryId, Guid WeaknessId) : IRequest<Result>;
+public sealed record RemoveWeaknessCommand(Guid UserId, Guid EntryId, Guid WeaknessId) : IRequest<Result>;
 
 // ============================ 校验器 ============================
 // 注意:校验器由 ServiceDefaults 的反射扫描自动注册(踩过"忘了注册导致校验静默失效"的坑)。
@@ -605,6 +605,52 @@ public static class InterviewMappingExtensions
         e.JobApplicationId);
 }
 
+// ============================ 归属加载(COD-01/票03) ============================
+
+/// <summary>
+/// 条目归属加载的统一入口(双保险第二层):
+/// · 普通请求路径:按 (Id, UserId) 谓词加载(全局过滤器之外再显式一道);
+/// · Worker 回写路径(OwnerUserId 非空,裁决 B):IgnoreQueryFilters 按 Id 加载后
+///   校验 entry.UserId == OwnerUserId —— 不给服务账号全量豁免,主人不对一律视为不存在(404)。
+/// </summary>
+internal static class OwnedEntry
+{
+    public static async Task<InterviewEntry?> LoadAsync(
+        InterviewsDbContext db, Guid entryId, Guid userId, Guid? ownerUserId,
+        Func<IQueryable<InterviewEntry>, IQueryable<InterviewEntry>>? include = null,
+        CancellationToken ct = default)
+    {
+        IQueryable<InterviewEntry> q = ownerUserId.HasValue
+            ? db.Entries.IgnoreQueryFilters()
+            : db.Entries;
+        if (include is not null) q = include(q);
+        var e = await q.FirstOrDefaultAsync(x => x.Id == entryId, ct);
+        if (e is null) return null;
+        var expected = ownerUserId ?? userId;
+        return e.UserId == expected ? e : null;
+    }
+
+    public static async Task<InterviewEntry?> LoadNoTrackingAsync(
+        InterviewsDbContext db, Guid entryId, Guid userId, Guid? ownerUserId,
+        Func<IQueryable<InterviewEntry>, IQueryable<InterviewEntry>>? include = null,
+        CancellationToken ct = default)
+    {
+        IQueryable<InterviewEntry> q = ownerUserId.HasValue
+            ? db.Entries.IgnoreQueryFilters().AsNoTracking()
+            : db.Entries.AsNoTracking();
+        if (include is not null) q = include(q);
+        var e = await q.FirstOrDefaultAsync(x => x.Id == entryId, ct);
+        if (e is null) return null;
+        var expected = ownerUserId ?? userId;
+        return e.UserId == expected ? e : null;
+    }
+
+    /// <summary>子表直查前的归属存在性校验:条目不属于当前用户 → 按不存在处理(404)。</summary>
+    public static Task<bool> ExistsAsync(
+        InterviewsDbContext db, Guid entryId, Guid userId, CancellationToken ct = default)
+        => db.Entries.AnyAsync(x => x.Id == entryId && x.UserId == userId, ct);
+}
+
 // ============================ Handler:查询 ============================
 
 public sealed class ListEntriesQueryHandler(InterviewsDbContext db)
@@ -617,6 +663,7 @@ public sealed class ListEntriesQueryHandler(InterviewsDbContext db)
         var size = request.PageSize is < 1 or > 200 ? 20 : request.PageSize;
 
         var q = db.Entries.AsNoTracking()
+            .Where(x => x.UserId == request.UserId)
             .Include(x => x.Assets)
             .Include(x => x.Questions)
             .Include(x => x.Weaknesses)
@@ -654,13 +701,12 @@ public sealed class GetEntryQueryHandler(InterviewsDbContext db)
     public async Task<Result<InterviewEntryDto>> Handle(GetEntryQuery request, CancellationToken ct)
     {
         // 详情必须 Include 子集合:它们是字段访问模式,不显式加载会得到空集合(踩过的坑)
-        var e = await db.Entries.AsNoTracking()
-            .Include(x => x.Assets)
-            .Include(x => x.Questions)
-            .Include(x => x.Weaknesses)
-            .Include(x => x.Actions)
-            .Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var e = await OwnedEntry.LoadNoTrackingAsync(db, request.Id, request.UserId, request.OwnerUserId,
+            q => q.Include(x => x.Assets)
+                .Include(x => x.Questions)
+                .Include(x => x.Weaknesses)
+                .Include(x => x.Actions)
+                .Include(x => x.Rounds), ct);
 
         return e is null
             ? Result.Failure<InterviewEntryDto>(Error.NotFound("面试条目"))
@@ -676,6 +722,7 @@ public sealed class GetCompanySummariesQueryHandler(InterviewsDbContext db)
     {
         // 前端左侧"公司树"用:按公司聚合出场次、已分析数、平均分、最近一场
         var rows = await db.Entries.AsNoTracking()
+            .Where(x => x.UserId == request.UserId)
             .GroupBy(x => new { x.CompanyId, x.CompanyName })
             .Select(g => new CompanySummaryDto(
                 g.Key.CompanyId,
@@ -699,7 +746,7 @@ public sealed class GetCompanyRoundsQueryHandler(InterviewsDbContext db)
         GetCompanyRoundsQuery request, CancellationToken ct)
     {
         var rounds = await db.Entries.AsNoTracking()
-            .Where(e => e.CompanyId == request.CompanyId)
+            .Where(e => e.CompanyId == request.CompanyId && e.UserId == request.UserId)
             .SelectMany(e => e.Rounds, (e, r) => new { EntryId = e.Id, Round = r })
             .OrderBy(x => x.Round.ScheduledDate ?? DateOnly.MaxValue)
             .ThenBy(x => x.Round.Order)
@@ -710,7 +757,7 @@ public sealed class GetCompanyRoundsQueryHandler(InterviewsDbContext db)
         if (rounds.Count == 0)
         {
             var fallback = await db.Entries.AsNoTracking()
-                .Where(e => e.CompanyId == request.CompanyId)
+                .Where(e => e.CompanyId == request.CompanyId && e.UserId == request.UserId)
                 .OrderByDescending(e => e.InterviewDate ?? DateOnly.MinValue)
                 .Select(e => new { e.Id, e.RoundNo, e.InterviewDate })
                 .FirstOrDefaultAsync(ct);
@@ -731,6 +778,10 @@ public sealed class ListWeaknessesQueryHandler(InterviewsDbContext db)
     public async Task<Result<IReadOnlyList<WeaknessDto>>> Handle(
         ListWeaknessesQuery request, CancellationToken ct)
     {
+        // 子表直查:先校验父条目归属,他人的条目按不存在处理(404)
+        if (!await OwnedEntry.ExistsAsync(db, request.EntryId, request.UserId, ct))
+            return Result.Failure<IReadOnlyList<WeaknessDto>>(Error.NotFound("面试条目"));
+
         var q = db.Weaknesses.AsNoTracking().Where(w => w.InterviewEntryId == request.EntryId);
 
         if (!string.IsNullOrWhiteSpace(request.Category)
@@ -750,6 +801,9 @@ public sealed class ListAnalysisJobsQueryHandler(InterviewsDbContext db)
     public async Task<Result<IReadOnlyList<AnalysisJobDto>>> Handle(
         ListAnalysisJobsQuery request, CancellationToken ct)
     {
+        if (!await OwnedEntry.ExistsAsync(db, request.EntryId, request.UserId, ct))
+            return Result.Failure<IReadOnlyList<AnalysisJobDto>>(Error.NotFound("面试条目"));
+
         var jobs = await db.AnalysisJobs.AsNoTracking()
             .Where(j => j.InterviewEntryId == request.EntryId)
             .OrderByDescending(j => j.CreatedAt)
@@ -767,9 +821,14 @@ public sealed class GetInterviewStatsQueryHandler(InterviewsDbContext db)
     public async Task<Result<InterviewStatsDto>> Handle(GetInterviewStatsQuery request,
         CancellationToken ct)
     {
-        var entries = await db.Entries.AsNoTracking().ToListAsync(ct);
-        var weaknesses = await db.Weaknesses.AsNoTracking().ToListAsync(ct);
-        var questions = await db.Questions.AsNoTracking().ToListAsync(ct);
+        var entries = await db.Entries.AsNoTracking()
+            .Where(x => x.UserId == request.UserId).ToListAsync(ct);
+        // 子表无 UserId:按当前用户的条目 Id 集合收口,不得把他人问答/短板计进统计
+        var ownedIds = db.Entries.Where(x => x.UserId == request.UserId).Select(x => x.Id);
+        var weaknesses = await db.Weaknesses.AsNoTracking()
+            .Where(w => ownedIds.Contains(w.InterviewEntryId)).ToListAsync(ct);
+        var questions = await db.Questions.AsNoTracking()
+            .Where(q => ownedIds.Contains(q.InterviewEntryId)).ToListAsync(ct);
 
         var analyzed = entries.Where(e => e.Status == InterviewStatus.Analyzed).ToList();
 
@@ -837,14 +896,14 @@ public sealed class CreateEntryCommandHandler(InterviewsDbContext db)
         if (companyId is null || companyId == Guid.Empty)
         {
             var existing = await db.Entries.AsNoTracking()
-                .Where(x => x.CompanyName == request.CompanyName)
+                .Where(x => x.CompanyName == request.CompanyName && x.UserId == request.UserId)
                 .Select(x => x.CompanyId)
                 .FirstOrDefaultAsync(ct);
             companyId = existing == Guid.Empty ? Guid.NewGuid() : existing;
         }
 
         var entry = new InterviewEntry(companyId.Value, request.CompanyName, request.Role,
-            request.JobApplicationId);
+            request.JobApplicationId, userId: request.UserId);
 
         if (request.CompanyProfile is not null || request.JdText is not null
             || request.JdSummary is not null || request.Interviewers is not null
@@ -878,7 +937,7 @@ public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(UpdateEntryCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         e.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,
@@ -898,7 +957,7 @@ public sealed class LinkJobApplicationCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(LinkJobApplicationCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         if (e.LinkJobApplication(request.JobApplicationId))
             await db.SaveChangesAsync(ct);
@@ -911,7 +970,7 @@ public sealed class DeleteEntryCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(DeleteEntryCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id, ct);
+        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         e.MarkDeleted();   // 软删除:全局查询过滤器会自动隐藏
         await db.SaveChangesAsync(ct);
@@ -927,7 +986,7 @@ public sealed class AttachAssetCommandHandler(InterviewsDbContext db)
         // 带子集合加载 —— 聚合方法要往集合里加东西(Rounds 用于校验 RoundId)
         var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
             .Include(x => x.Weaknesses).Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
 
         if (!Enum.TryParse<AssetKind>(request.Kind, true, out var kind))
@@ -975,7 +1034,7 @@ public sealed class UploadAssetFileCommandHandler(
 
         var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
             .Include(x => x.Weaknesses).Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
 
         // 1) 先落盘(文件名由存储层生成,天然唯一;tmp+原子改名,崩溃不留半截文件)
@@ -1035,6 +1094,9 @@ public sealed class GetAssetAudioQueryHandler(
     public async Task<Result<(Stream, string, string)>> Handle(GetAssetAudioQuery request,
         CancellationToken ct)
     {
+        if (!await OwnedEntry.ExistsAsync(db, request.EntryId, request.UserId, ct))
+            return Result.Failure<(Stream, string, string)>(Error.NotFound("材料"));
+
         var a = await db.Assets.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == request.AssetId
                 && x.InterviewEntryId == request.EntryId, ct);
@@ -1055,7 +1117,7 @@ public sealed class GetAssetAudioQueryHandler(
 }
 
 /// <summary>读取转写稿(供 Analysis.Worker 文本模式取粘贴文本)。</summary>
-public sealed record GetTranscriptQuery(Guid EntryId, Guid AssetId)
+public sealed record GetTranscriptQuery(Guid UserId, Guid EntryId, Guid AssetId, Guid? OwnerUserId = null)
     : IRequest<Result<TranscriptPayload>>;
 
 public sealed record TranscriptPayload(string? FullText, string? SegmentsJson);
@@ -1066,8 +1128,8 @@ public sealed class GetTranscriptQueryHandler(InterviewsDbContext db)
     public async Task<Result<TranscriptPayload>> Handle(GetTranscriptQuery request,
         CancellationToken ct)
     {
-        var e = await db.Entries.AsNoTracking().Include(x => x.Assets)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await OwnedEntry.LoadNoTrackingAsync(db, request.EntryId, request.UserId, request.OwnerUserId,
+            q => q.Include(x => x.Assets), ct);
         if (e is null) return Result.Failure<TranscriptPayload>(Error.NotFound("面试条目"));
         var a = e.Assets.FirstOrDefault(x => x.Id == request.AssetId);
         if (a is null) return Result.Failure<TranscriptPayload>(Error.NotFound("材料"));
@@ -1080,8 +1142,8 @@ public sealed class SaveTranscriptCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(SaveTranscriptCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
-            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await OwnedEntry.LoadAsync(db, request.EntryId, request.UserId, request.OwnerUserId,
+            q => q.Include(x => x.Assets).Include(x => x.Questions).Include(x => x.Weaknesses), ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -1104,8 +1166,8 @@ public sealed class RequestAnalysisCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(RequestAnalysisCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
-            .Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await OwnedEntry.LoadAsync(db, request.EntryId, request.UserId, request.OwnerUserId,
+            q => q.Include(x => x.Assets).Include(x => x.Questions).Include(x => x.Weaknesses), ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -1126,9 +1188,9 @@ public sealed class ApplyAnalysisCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(ApplyAnalysisCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
-            .Include(x => x.Weaknesses).Include(x => x.Snapshots)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await OwnedEntry.LoadAsync(db, request.EntryId, request.UserId, request.OwnerUserId,
+            q => q.Include(x => x.Assets).Include(x => x.Questions)
+                .Include(x => x.Weaknesses).Include(x => x.Snapshots), ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -1161,7 +1223,7 @@ public sealed class MarkEntryFailedCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(MarkEntryFailedCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await OwnedEntry.LoadAsync(db, request.EntryId, request.UserId, request.OwnerUserId, null, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try
         {
@@ -1185,7 +1247,7 @@ public sealed class AddQuestionCommandHandler(InterviewsDbContext db)
     public async Task<Result<Guid>> Handle(AddQuestionCommand request, CancellationToken ct)
     {
         var e = await db.Entries.Include(x => x.Questions).Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
 
         if (!Enum.TryParse<QuestionCategory>(request.Category, true, out var cat))
@@ -1215,7 +1277,7 @@ public sealed class UpdateQuestionCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(UpdateQuestionCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Questions).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await db.Entries.Include(x => x.Questions).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         if (!Enum.TryParse<QuestionCategory>(request.Category, true, out var cat))
@@ -1241,7 +1303,7 @@ public sealed class RemoveQuestionCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(RemoveQuestionCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Questions).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await db.Entries.Include(x => x.Questions).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try
         {
@@ -1261,7 +1323,7 @@ public sealed class AddRoundCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result<Guid>> Handle(AddRoundCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
 
         var r = e.AddRound(request.Stage);
@@ -1293,6 +1355,7 @@ public sealed class GetUpcomingRoundsQueryHandler(InterviewsDbContext db)
         var limit = today.AddDays(request.Days);
 
         var rows = await db.Entries.AsNoTracking()
+            .Where(e => e.UserId == request.UserId)
             .SelectMany(e => e.Rounds, (e, r) => new { e, r })
             .Where(x => x.r.ScheduledDate != null
                 && x.r.ScheduledDate >= today
@@ -1317,7 +1380,7 @@ public sealed record PassProbabilityDto(
     string Stage,
     List<OfferFactorDto> Factors);     // 影响因素说明(Key 由前端按 locale 格式化)
 
-public sealed record GetRoundPassProbabilityQuery(Guid RoundId) : IRequest<Result<PassProbabilityDto>>;
+public sealed record GetRoundPassProbabilityQuery(Guid UserId, Guid RoundId) : IRequest<Result<PassProbabilityDto>>;
 
 public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
     : IRequestHandler<GetRoundPassProbabilityQuery, Result<PassProbabilityDto>>
@@ -1327,6 +1390,7 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
     {
         // 找到本轮,取其 stage
         var round = await db.Entries.AsNoTracking()
+            .Where(e => e.UserId == request.UserId)
             .SelectMany(e => e.Rounds, (e, r) => new { e, r })
             .Where(x => x.r.Id == request.RoundId)
             .Select(x => new { x.r.Stage, RoundId = x.r.Id })
@@ -1335,6 +1399,7 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
 
         // 历史同 stage 轮次:只算有定论的 (Passed / Rejected)
         var history = await db.Entries.AsNoTracking()
+            .Where(e => e.UserId == request.UserId)
             .SelectMany(e => e.Rounds)
             .Where(r => r.Stage == round.Stage
                 && r.Id != round.RoundId
@@ -1360,6 +1425,7 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
 
         // 准备度信号:本轮的准备越充分,微调概率
         var target = await db.Entries.AsNoTracking()
+            .Where(e => e.UserId == request.UserId)
             .SelectMany(e => e.Rounds, (e, r) => new { e, r })
             .Where(x => x.r.Id == request.RoundId)
             .Select(x => new
@@ -1390,7 +1456,7 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
 
         // 查本轮所属条目的 Q&A 积累情况
         var entry = await db.Entries.AsNoTracking()
-            .Where(e => e.Rounds.Any(r => r.Id == request.RoundId))
+            .Where(e => e.UserId == request.UserId && e.Rounds.Any(r => r.Id == request.RoundId))
             .Select(e => new { e.Id, QaCount = e.Questions.Count })
             .FirstOrDefaultAsync(ct);
         if (entry is not null)
@@ -1418,7 +1484,7 @@ public sealed record OfferProbabilityDto(
 /// <summary>概率因子:Key 由前端按 locale 格式化,避免后端硬编码中文。</summary>
 public sealed record OfferFactorDto(string Key, int Arg1 = 0, int Arg2 = 0, int Arg3 = 0);
 
-public sealed record GetOfferProbabilityQuery(Guid EntryId) : IRequest<Result<OfferProbabilityDto>>;
+public sealed record GetOfferProbabilityQuery(Guid UserId, Guid EntryId) : IRequest<Result<OfferProbabilityDto>>;
 
 public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
     : IRequestHandler<GetOfferProbabilityQuery, Result<OfferProbabilityDto>>
@@ -1428,7 +1494,7 @@ public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
     {
         // 当前条目:第几轮(按 rounds 数量)
         var current = await db.Entries.AsNoTracking()
-            .Where(e => e.Id == request.EntryId)
+            .Where(e => e.Id == request.EntryId && e.UserId == request.UserId)
             .Select(e => new { RoundCount = e.Rounds.Count, e.Result })
             .FirstOrDefaultAsync(ct);
         if (current is null) return Result.Failure<OfferProbabilityDto>(Error.NotFound("Entry"));
@@ -1438,7 +1504,7 @@ public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
 
         // 历史漏斗:走到 >= 当前轮次 且已有定论的条目
         var history = await db.Entries.AsNoTracking()
-            .Where(e => e.Id != request.EntryId
+            .Where(e => e.Id != request.EntryId && e.UserId == request.UserId
                 && e.Rounds.Count >= currentRound
                 && (e.Result == "Passed" || e.Result == "Rejected"))
             .Select(e => e.Result)
@@ -1459,7 +1525,7 @@ public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
 
         // 准备度:整单的 Q&A、轮次准备完整度微调
         var prep = await db.Entries.AsNoTracking()
-            .Where(e => e.Id == request.EntryId)
+            .Where(e => e.Id == request.EntryId && e.UserId == request.UserId)
             .Select(e => new
             {
                 QaCount = e.Questions.Count,
@@ -1499,7 +1565,7 @@ public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(UpdateRoundCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         if (!Enum.TryParse<InterviewRoundOutcome>(request.Outcome, true, out var outcome))
@@ -1527,7 +1593,7 @@ public sealed class RemoveRoundCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(RemoveRoundCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try
         {
@@ -1547,7 +1613,7 @@ public sealed class AddWeaknessCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result<Guid>> Handle(AddWeaknessCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await db.Entries.Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
 
         if (!Enum.TryParse<WeaknessCategory>(request.Category, true, out var cat))
@@ -1565,7 +1631,7 @@ public sealed class RemoveWeaknessCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(RemoveWeaknessCommand request, CancellationToken ct)
     {
-        var e = await db.Entries.Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+        var e = await db.Entries.Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         e.RemoveWeakness(request.WeaknessId);
         await db.SaveChangesAsync(ct);
@@ -1577,16 +1643,16 @@ public sealed class RemoveWeaknessCommandHandler(InterviewsDbContext db)
 
 /// <summary>手动触发:为该条目生成一份新的面试指导材料(版本号自动 +1)。</summary>
 public sealed record GenerateGuidanceCommand(
-    Guid EntryId,
+    Guid UserId, Guid EntryId,
     string? JdText = null,
     string? ResumeText = null,
     string? InterviewExperiences = null,
     string? CustomRequirements = null) : IRequest<Result<GuidanceMaterialDto>>;
 
-public sealed record GetGuidanceQuery(Guid EntryId, int? Version = null)
+public sealed record GetGuidanceQuery(Guid UserId, Guid EntryId, int? Version = null)
     : IRequest<Result<GuidanceMaterialDto>>;
 
-public sealed record ListGuidanceVersionsQuery(Guid EntryId)
+public sealed record ListGuidanceVersionsQuery(Guid UserId, Guid EntryId)
     : IRequest<Result<IReadOnlyList<GuidanceVersionDto>>>;
 
 public sealed class GenerateGuidanceCommandHandler(InterviewsDbContext db, IAiGatewayClient ai)
@@ -1599,7 +1665,7 @@ public sealed class GenerateGuidanceCommandHandler(InterviewsDbContext db, IAiGa
             .Include(x => x.Weaknesses)
             .Include(x => x.Rounds)
             .Include(x => x.Materials)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure<GuidanceMaterialDto>(Error.NotFound("面试条目"));
 
         var prompt = BuildPrompt(e, request);
@@ -1705,6 +1771,9 @@ public sealed class GetGuidanceQueryHandler(InterviewsDbContext db)
 {
     public async Task<Result<GuidanceMaterialDto>> Handle(GetGuidanceQuery request, CancellationToken ct)
     {
+        if (!await OwnedEntry.ExistsAsync(db, request.EntryId, request.UserId, ct))
+            return Result.Failure<GuidanceMaterialDto>(Error.NotFound("面试条目"));
+
         var q = db.GuidanceMaterials.Where(m => m.InterviewEntryId == request.EntryId);
         var m = request.Version.HasValue
             ? await q.FirstOrDefaultAsync(x => x.Version == request.Version.Value, ct)
@@ -1720,6 +1789,9 @@ public sealed class ListGuidanceVersionsQueryHandler(InterviewsDbContext db)
     public async Task<Result<IReadOnlyList<GuidanceVersionDto>>> Handle(
         ListGuidanceVersionsQuery request, CancellationToken ct)
     {
+        if (!await OwnedEntry.ExistsAsync(db, request.EntryId, request.UserId, ct))
+            return Result.Failure<IReadOnlyList<GuidanceVersionDto>>(Error.NotFound("面试条目"));
+
         var list = await db.GuidanceMaterials
             .Where(m => m.InterviewEntryId == request.EntryId)
             .OrderByDescending(m => m.Version)
@@ -1732,7 +1804,7 @@ public sealed class ListGuidanceVersionsQueryHandler(InterviewsDbContext db)
 // ============================ 问答候选(缺口3) ============================
 
 /// <summary>把该条目的问答转成候选列表,供前端勾选导入 TechStack。默认全选由前端做。</summary>
-public sealed record ListQuestionCandidatesQuery(Guid EntryId)
+public sealed record ListQuestionCandidatesQuery(Guid UserId, Guid EntryId)
     : IRequest<Result<IReadOnlyList<QuestionCandidateDto>>>;
 
 public sealed class ListQuestionCandidatesQueryHandler(InterviewsDbContext db)
@@ -1741,7 +1813,7 @@ public sealed class ListQuestionCandidatesQueryHandler(InterviewsDbContext db)
     public async Task<Result<IReadOnlyList<QuestionCandidateDto>>> Handle(
         ListQuestionCandidatesQuery request, CancellationToken ct)
     {
-        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (!exists) return Result.Failure<IReadOnlyList<QuestionCandidateDto>>(Error.NotFound("面试条目"));
 
         var list = await db.Questions
@@ -1762,7 +1834,7 @@ public sealed class UpdateQuestionMasteryCommandHandler(InterviewsDbContext db)
     public async Task<Result> Handle(UpdateQuestionMasteryCommand request, CancellationToken ct)
     {
         var e = await db.Entries.Include(x => x.Questions)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -1785,7 +1857,7 @@ public sealed class ListActionsQueryHandler(InterviewsDbContext db)
     public async Task<Result<IReadOnlyList<ActionDto>>> Handle(ListActionsQuery request,
         CancellationToken ct)
     {
-        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (!exists) return Result.Failure<IReadOnlyList<ActionDto>>(Error.NotFound("面试条目"));
 
         var list = await db.Actions.AsNoTracking()
@@ -1803,7 +1875,7 @@ public sealed class CreateActionCommandHandler(InterviewsDbContext db)
     public async Task<Result<Guid>> Handle(CreateActionCommand request, CancellationToken ct)
     {
         var e = await db.Entries.Include(x => x.Actions)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
 
         try
@@ -1825,7 +1897,7 @@ public sealed class UpdateActionCommandHandler(InterviewsDbContext db)
     public async Task<Result> Handle(UpdateActionCommand request, CancellationToken ct)
     {
         var e = await db.Entries.Include(x => x.Actions)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -1847,7 +1919,7 @@ public sealed class DeleteActionCommandHandler(InterviewsDbContext db)
     public async Task<Result> Handle(DeleteActionCommand request, CancellationToken ct)
     {
         var e = await db.Entries.Include(x => x.Actions)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -1870,7 +1942,7 @@ public sealed class GetAnalysisTrendQueryHandler(InterviewsDbContext db)
     public async Task<Result<IReadOnlyList<AnalysisTrendPointDto>>> Handle(
         GetAnalysisTrendQuery request, CancellationToken ct)
     {
-        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (!exists)
             return Result.Failure<IReadOnlyList<AnalysisTrendPointDto>>(Error.NotFound("面试条目"));
 
@@ -1890,7 +1962,7 @@ public sealed class GetLatestSnapshotQueryHandler(InterviewsDbContext db)
     public async Task<Result<AnalysisSnapshotDto?>> Handle(
         GetLatestSnapshotQuery request, CancellationToken ct)
     {
-        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId, ct);
+        var exists = await db.Entries.AnyAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (!exists)
             return Result.Failure<AnalysisSnapshotDto?>(Error.NotFound("面试条目"));
 
@@ -1927,6 +1999,7 @@ public sealed class GetQuestionHistoryQueryHandler(InterviewsDbContext db)
             return Result.Success<IReadOnlyList<QuestionHistoryDto>>([]);
 
         var rows = await db.Entries.AsNoTracking()
+            .Where(e => e.UserId == request.UserId)
             .SelectMany(e => e.Questions, (e, q) => new { e, q })
             .Where(x => x.q.Id != request.QuestionId)
             .Select(x => new
@@ -1963,6 +2036,7 @@ public sealed class GetCoverageQueryHandler(InterviewsDbContext db)
         GetCoverageQuery request, CancellationToken ct)
     {
         var rows = await db.Entries.AsNoTracking()
+            .Where(e => e.UserId == request.UserId)
             .SelectMany(e => e.Questions, (e, q) => new
             {
                 Category = q.Category.ToString(),
@@ -1995,7 +2069,7 @@ public sealed class UpdateRoundEmailsCommandHandler(InterviewsDbContext db)
     public async Task<Result> Handle(UpdateRoundEmailsCommand request, CancellationToken ct)
     {
         var e = await db.Entries.Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
         try
@@ -2025,14 +2099,14 @@ public sealed record PrepPlanDto(
 
 /// <summary>生成某轮备考方案(存为轮次资产)。Experiences=全网机经文本(手动粘贴;自动搜索待配 key)。</summary>
 public sealed record GeneratePrepPlanCommand(
-    Guid EntryId, Guid RoundId,
+    Guid UserId, Guid EntryId, Guid RoundId,
     string? JdText = null,
     string? ResumeText = null,
     string? Experiences = null,
     string? Requirements = null) : IRequest<Result<PrepPlanDto>>;
 
 /// <summary>取某轮最新的备考方案(在线阅读用)。</summary>
-public sealed record GetPrepPlanQuery(Guid EntryId, Guid RoundId)
+public sealed record GetPrepPlanQuery(Guid UserId, Guid EntryId, Guid RoundId)
     : IRequest<Result<PrepPlanDto>>;
 
 public sealed class GeneratePrepPlanCommandValidator : AbstractValidator<GeneratePrepPlanCommand>
@@ -2054,7 +2128,7 @@ public sealed class GeneratePrepPlanCommandHandler(InterviewsDbContext db, IAiGa
             .Include(x => x.Assets)
             .Include(x => x.Questions)
             .Include(x => x.Weaknesses)
-            .FirstOrDefaultAsync(x => x.Id == request.EntryId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure<PrepPlanDto>(Error.NotFound("面试条目"));
         var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
         if (round is null) return Result.Failure<PrepPlanDto>(Error.NotFound("轮次"));
@@ -2174,6 +2248,9 @@ public sealed class GetPrepPlanQueryHandler(InterviewsDbContext db)
 {
     public async Task<Result<PrepPlanDto>> Handle(GetPrepPlanQuery request, CancellationToken ct)
     {
+        if (!await OwnedEntry.ExistsAsync(db, request.EntryId, request.UserId, ct))
+            return Result.Failure<PrepPlanDto>(Error.NotFound("面试条目"));
+
         var a = await db.Assets.AsNoTracking()
             .Where(x => x.InterviewEntryId == request.EntryId
                 && x.RoundId == request.RoundId
@@ -2181,7 +2258,9 @@ public sealed class GetPrepPlanQueryHandler(InterviewsDbContext db)
             .OrderByDescending(x => x.UploadedAt)
             .FirstOrDefaultAsync(ct);
         if (a is null) return Result.Failure<PrepPlanDto>(Error.NotFound("备考方案"));
-        var order = await db.Rounds.AsNoTracking()
+        var order = await db.Entries.AsNoTracking()
+            .Where(e => e.Id == request.EntryId && e.UserId == request.UserId)
+            .SelectMany(e => e.Rounds)
             .Where(r => r.Id == request.RoundId)
             .Select(r => r.Order)
             .FirstOrDefaultAsync(ct);
@@ -2195,17 +2274,17 @@ public sealed class GetPrepPlanQueryHandler(InterviewsDbContext db)
 // JSON 结构由前后端共同约定(见 replica/playbook-redesign-spec.md),后端负责生成与存储。
 
 /// <summary>改材料归属:RoundId=null → 条目级(沟通记录)。</summary>
-public sealed record ReassignAssetCommand(Guid EntryId, Guid AssetId, Guid? RoundId) : IRequest<Result>;
+public sealed record ReassignAssetCommand(Guid UserId, Guid EntryId, Guid AssetId, Guid? RoundId) : IRequest<Result>;
 
 /// <summary>删除材料(2026-10-20 v2 补齐)。</summary>
-public sealed record DeleteAssetCommand(Guid EntryId, Guid AssetId) : IRequest<Result>;
+public sealed record DeleteAssetCommand(Guid UserId, Guid EntryId, Guid AssetId) : IRequest<Result>;
 
 public sealed class DeleteAssetCommandHandler(InterviewsDbContext db)
     : IRequestHandler<DeleteAssetCommand, Result>
 {
     public async Task<Result> Handle(DeleteAssetCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try { e.RemoveAsset(request.AssetId); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Asset.Delete", ex.Message)); }
@@ -2219,7 +2298,7 @@ public sealed class ReassignAssetCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result> Handle(ReassignAssetCommand request, CancellationToken ct)
     {
-        var e = await LoadFull(db, request.EntryId, ct);
+        var e = await LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try { e.ReassignAsset(request.AssetId, request.RoundId); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Asset.Reassign", ex.Message)); }
@@ -2227,21 +2306,21 @@ public sealed class ReassignAssetCommandHandler(InterviewsDbContext db)
         return Result.Success();
     }
 
-    internal static async Task<InterviewEntry?> LoadFull(InterviewsDbContext db, Guid id, CancellationToken ct)
+    internal static async Task<InterviewEntry?> LoadFull(InterviewsDbContext db, Guid id, Guid userId, CancellationToken ct)
         => await db.Entries.Include(x => x.Assets).Include(x => x.Questions)
             .Include(x => x.Weaknesses).Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == id, ct);
+            .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
 }
 
 /// <summary>更新材料元数据 JSON(解析字段/AI 摘要/提取安排/处理状态)。</summary>
-public sealed record UpdateAssetMetaCommand(Guid EntryId, Guid AssetId, string? MetaJson) : IRequest<Result>;
+public sealed record UpdateAssetMetaCommand(Guid UserId, Guid EntryId, Guid AssetId, string? MetaJson) : IRequest<Result>;
 
 public sealed class UpdateAssetMetaCommandHandler(InterviewsDbContext db)
     : IRequestHandler<UpdateAssetMetaCommand, Result>
 {
     public async Task<Result> Handle(UpdateAssetMetaCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try { e.UpdateAssetMeta(request.AssetId, request.MetaJson); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Asset.Meta", ex.Message)); }
@@ -2251,14 +2330,14 @@ public sealed class UpdateAssetMetaCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>写入逐题复盘 JSON(含标准答案用户编辑版)。</summary>
-public sealed record SetQuestionReviewCommand(Guid EntryId, Guid QuestionId, string? ReviewJson) : IRequest<Result>;
+public sealed record SetQuestionReviewCommand(Guid UserId, Guid EntryId, Guid QuestionId, string? ReviewJson) : IRequest<Result>;
 
 public sealed class SetQuestionReviewCommandHandler(InterviewsDbContext db)
     : IRequestHandler<SetQuestionReviewCommand, Result>
 {
     public async Task<Result> Handle(SetQuestionReviewCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try { e.SetQuestionReview(request.QuestionId, request.ReviewJson); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Question.Review", ex.Message)); }
@@ -2268,14 +2347,14 @@ public sealed class SetQuestionReviewCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>写入整轮复盘汇总 JSON。</summary>
-public sealed record SetRoundReviewCommand(Guid EntryId, Guid RoundId, string? ReviewJson) : IRequest<Result>;
+public sealed record SetRoundReviewCommand(Guid UserId, Guid EntryId, Guid RoundId, string? ReviewJson) : IRequest<Result>;
 
 public sealed class SetRoundReviewCommandHandler(InterviewsDbContext db)
     : IRequestHandler<SetRoundReviewCommand, Result>
 {
     public async Task<Result> Handle(SetRoundReviewCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try { e.SetRoundReview(request.RoundId, request.ReviewJson); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Round.Review", ex.Message)); }
@@ -2285,14 +2364,14 @@ public sealed class SetRoundReviewCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>写入结构化备考报告 JSON(前端编辑 Tech Stack 关联后回存也走这里)。</summary>
-public sealed record SetRoundPrepReportCommand(Guid EntryId, Guid RoundId, string? PrepReportJson) : IRequest<Result>;
+public sealed record SetRoundPrepReportCommand(Guid UserId, Guid EntryId, Guid RoundId, string? PrepReportJson) : IRequest<Result>;
 
 public sealed class SetRoundPrepReportCommandHandler(InterviewsDbContext db)
     : IRequestHandler<SetRoundPrepReportCommand, Result>
 {
     public async Task<Result> Handle(SetRoundPrepReportCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try { e.SetRoundPrepReport(request.RoundId, request.PrepReportJson); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Round.PrepReport", ex.Message)); }
@@ -2302,7 +2381,7 @@ public sealed class SetRoundPrepReportCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>说话人批量改名(本轮分段 + 题目 AskedBy 全篇生效)。返回受影响处数。</summary>
-public sealed record RenameSpeakerCommand(Guid EntryId, Guid RoundId, string From, string To)
+public sealed record RenameSpeakerCommand(Guid UserId, Guid EntryId, Guid RoundId, string From, string To)
     : IRequest<Result<int>>;
 
 public sealed class RenameSpeakerCommandHandler(InterviewsDbContext db)
@@ -2310,7 +2389,7 @@ public sealed class RenameSpeakerCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result<int>> Handle(RenameSpeakerCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure<int>(Error.NotFound("面试条目"));
         try
         {
@@ -2323,14 +2402,14 @@ public sealed class RenameSpeakerCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>生成整轮复盘:逐题四维分析 + 整轮汇总(含通过概率,AI 估计)。</summary>
-public sealed record GenerateRoundReviewCommand(Guid EntryId, Guid RoundId) : IRequest<Result<string>>;
+public sealed record GenerateRoundReviewCommand(Guid UserId, Guid EntryId, Guid RoundId) : IRequest<Result<string>>;
 
 public sealed class GenerateRoundReviewCommandHandler(InterviewsDbContext db, IAiGatewayClient ai)
     : IRequestHandler<GenerateRoundReviewCommand, Result<string>>
 {
     public async Task<Result<string>> Handle(GenerateRoundReviewCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure<string>(Error.NotFound("面试条目"));
         var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
         if (round is null) return Result.Failure<string>(Error.NotFound("轮次"));
@@ -2441,14 +2520,14 @@ public sealed class GenerateRoundReviewCommandHandler(InterviewsDbContext db, IA
 }
 
 /// <summary>从本轮转写抽取问答对 → 生成本轮题目(提问人逐人标注)。</summary>
-public sealed record ExtractRoundQuestionsCommand(Guid EntryId, Guid RoundId) : IRequest<Result<int>>;
+public sealed record ExtractRoundQuestionsCommand(Guid UserId, Guid EntryId, Guid RoundId) : IRequest<Result<int>>;
 
 public sealed class ExtractRoundQuestionsCommandHandler(InterviewsDbContext db, IAiGatewayClient ai)
     : IRequestHandler<ExtractRoundQuestionsCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(ExtractRoundQuestionsCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure<int>(Error.NotFound("面试条目"));
         var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
         if (round is null) return Result.Failure<int>(Error.NotFound("轮次"));
@@ -2559,7 +2638,7 @@ public sealed class ExtractRoundQuestionsCommandHandler(InterviewsDbContext db, 
 /// 「备考数据源」配置接入 —— 题库/公司背景开关决定内部输入,网络面经/Glassdoor
 /// 经网关检索后才进提示词,状态如实写进报告 sources.details,绝不编造面经。</summary>
 public sealed record GeneratePrepReportCommand(
-    Guid EntryId, Guid RoundId, string? JdText = null, string? ResumeText = null,
+    Guid UserId, Guid EntryId, Guid RoundId, string? JdText = null, string? ResumeText = null,
     string? Experiences = null, string? Language = null) : IRequest<Result<string>>;
 
 /// <summary>一次生成实际用到的数据源上下文(配置开关 + 外部检索结果)。</summary>
@@ -2572,7 +2651,7 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
 {
     public async Task<Result<string>> Handle(GeneratePrepReportCommand request, CancellationToken ct)
     {
-        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, ct);
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure<string>(Error.NotFound("面试条目"));
         var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
         if (round is null) return Result.Failure<string>(Error.NotFound("轮次"));

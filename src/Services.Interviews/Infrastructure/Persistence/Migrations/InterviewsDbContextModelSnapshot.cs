@@ -400,6 +400,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -415,6 +418,8 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.HasIndex("InterviewDate");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("entries", "interviews");
                 });

@@ -70,7 +70,7 @@ public sealed class QuestionMasteryTests
     [InlineData(4, false)]
     public void Validator_MasteryRange(int mastery, bool expectedValid)
     {
-        var cmd = new UpdateQuestionMasteryCommand(Guid.NewGuid(), Guid.NewGuid(), mastery);
+        var cmd = new UpdateQuestionMasteryCommand(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), mastery);
 
         new UpdateQuestionMasteryCommandValidator().Validate(cmd).IsValid
             .Should().Be(expectedValid);

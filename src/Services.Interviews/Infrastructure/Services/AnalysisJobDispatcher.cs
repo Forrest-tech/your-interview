@@ -90,8 +90,10 @@ public sealed class AnalysisJobDispatcher(
         var threshold = DateTimeOffset.UtcNow - StuckThreshold;
 
         // 条目仍在 Transcribing = 派发出去的消息没有产生任何回写
+        // COD-01:派发器是系统级自愈逻辑(无当前用户,条目过滤器 fail-closed 会把联查拦成零行)
+        // —— 联查必须 IgnoreQueryFilters,跨全部用户查卡单。
         var stuck = await (from j in db.AnalysisJobs
-                           join e in db.Entries on j.InterviewEntryId equals e.Id
+                           join e in db.Entries.IgnoreQueryFilters() on j.InterviewEntryId equals e.Id
                            where j.Status == AnalysisJobStatus.Dispatched
                                  && j.DispatchedAt < threshold
                                  && e.Status == InterviewStatus.Transcribing

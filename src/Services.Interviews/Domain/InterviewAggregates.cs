@@ -132,8 +132,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     private InterviewEntry() { }
 
     public InterviewEntry(Guid companyId, string companyName, string role,
-        Guid? jobApplicationId = null)
+        Guid? jobApplicationId = null, Guid userId = default)
     {
+        UserId = userId;
         CompanyId = companyId;
         CompanyName = companyName;
         Role = role;
@@ -143,6 +144,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     }
 
     // ---------- 基本信息 ----------
+    /// <summary>归属用户(COD-01/票03):条目按用户隔离,子实体经本聚合根归属。</summary>
+    public Guid UserId { get; private set; }
+
     public Guid CompanyId { get; private set; }
     public string CompanyName { get; private set; } = string.Empty;
     public Guid? JobApplicationId { get; private set; }
@@ -274,7 +278,7 @@ public sealed class InterviewEntry : AuditableAggregateRoot
 
         if (outcomeRecorded)
             RaiseDomainEvent(new InterviewOutcomeRecordedDomainEvent(
-                Id, JobApplicationId!.Value, RoundNo, result!));
+                Id, JobApplicationId!.Value, RoundNo, result!, UserId));
     }
 
     /// <summary>挂上一份材料(录音或文本)。会自动把 Draft 推进到 AssetsUploaded。</summary>
@@ -1252,7 +1256,8 @@ public sealed record InterviewAnalysisFailedDomainEvent(Guid EntryId, string Rea
 /// Jobs 消费后回写对应轮次的 Outcome,被拒时申请自动转 Rejected。
 /// </summary>
 public sealed record InterviewOutcomeRecordedDomainEvent(
-    Guid EntryId, Guid ApplicationId, int RoundNo, string Result) : DomainEventBase;
+    Guid EntryId, Guid ApplicationId, int RoundNo, string Result,
+    Guid UserId = default) : DomainEventBase;
 
 // ============================ 分析回写用的 DTO(领域层不依赖 Application) ============================
 

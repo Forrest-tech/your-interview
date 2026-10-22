@@ -25,7 +25,6 @@ namespace YourInterview.Services.Interviews.Infrastructure.Services;
 /// </summary>
 public sealed class InterviewsIntegrationEventPublisher(
     IPublishEndpoint publish,
-    ICurrentUser currentUser,
     ILogger<InterviewsIntegrationEventPublisher> logger)
     : INotificationHandler<DomainEventNotification<InterviewTranscriptionStartedDomainEvent>>,
       INotificationHandler<DomainEventNotification<InterviewTranscribedDomainEvent>>,
@@ -77,7 +76,8 @@ public sealed class InterviewsIntegrationEventPublisher(
 
     /// <summary>
     /// 面试结果登记(M1.5)→ 回写 Tracker:对应轮次 Outcome 更新,被拒时申请转 Rejected。
-    /// UserId 取当前 JWT(转发在请求管线内,上下文还在)。
+    /// UserId 取领域事件自带(聚合产生事件时带入条目 UserId),不依赖 ICurrentUser ——
+    /// 消费者作用域内转发时 HttpContext 为空,旧写法会发 Guid.Empty(COD-01 §5.3)。
     /// </summary>
     public async Task Handle(DomainEventNotification<InterviewOutcomeRecordedDomainEvent> n,
         CancellationToken ct)
@@ -87,6 +87,6 @@ public sealed class InterviewsIntegrationEventPublisher(
             e.EntryId, e.RoundNo, e.Result, e.ApplicationId);
 
         await publish.Publish(new SharedContracts.Events.InterviewOutcomeRecorded(
-            e.ApplicationId, e.EntryId, currentUser.UserId ?? Guid.Empty, e.RoundNo, e.Result), ct);
+            e.ApplicationId, e.EntryId, e.UserId, e.RoundNo, e.Result), ct);
     }
 }

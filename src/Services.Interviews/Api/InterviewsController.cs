@@ -19,8 +19,11 @@ namespace YourInterview.Services.Interviews.Api;
 [ApiController]
 [Route("api/interviews")]
 [Authorize]
-public sealed class InterviewsController(ISender sender) : ControllerBase
+public sealed class InterviewsController(ISender sender, ICurrentUser currentUser) : ControllerBase
 {
+    /// <summary>当前用户(COD-01/票03):所有查询/命令显式带入,Handler 按 (Id, UserId) 收口。</summary>
+    private Guid Me => currentUser.RequireUserId();
+
     // ---------------- 列表与详情 ----------------
 
     [HttpGet]
@@ -29,15 +32,17 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         [FromQuery] Guid? companyId = null, [FromQuery] string? status = null,
         [FromQuery] string? search = null, CancellationToken ct = default)
     {
-        var r = await sender.Send(new ListEntriesQuery(page, pageSize, companyId, status, search), ct);
+        var r = await sender.Send(new ListEntriesQuery(Me, page, pageSize, companyId, status, search), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
-    public async Task<IResult> Get(Guid id, CancellationToken ct)
+    public async Task<IResult> Get(Guid id, [FromQuery] Guid? ownerUserId = null,
+        CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetEntryQuery(id), ct);
+        // ownerUserId:Worker 服务账号读路径(裁决 B)—— Handler 内 IgnoreQueryFilters + 校验条目归属
+        var r = await sender.Send(new GetEntryQuery(Me, id, ownerUserId), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -46,7 +51,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> Companies(CancellationToken ct)
     {
-        var r = await sender.Send(new GetCompanySummariesQuery(), ct);
+        var r = await sender.Send(new GetCompanySummariesQuery(Me), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -55,7 +60,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> CompanyRounds(Guid companyId, CancellationToken ct)
     {
-        var r = await sender.Send(new GetCompanyRoundsQuery(companyId), ct);
+        var r = await sender.Send(new GetCompanyRoundsQuery(Me, companyId), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -64,7 +69,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> Stats(CancellationToken ct)
     {
-        var r = await sender.Send(new GetInterviewStatsQuery(), ct);
+        var r = await sender.Send(new GetInterviewStatsQuery(Me), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -74,7 +79,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> Create([FromBody] CreateEntryCommand body, CancellationToken ct)
     {
-        var r = await sender.Send(body, ct);
+        var r = await sender.Send(body with { UserId = Me }, ct);
         return r.IsSuccess
             ? Results.Created($"/api/interviews/{r.Value}", new { id = r.Value })
             : r.ToProblemDetails();
@@ -84,7 +89,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> Update(Guid id, [FromBody] UpdateEntryBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateEntryCommand(id, body.CompanyName, body.Role,
+        var r = await sender.Send(new UpdateEntryCommand(Me, id, body.CompanyName, body.Role,
             body.CompanyProfile, body.JdText, body.JdSummary, body.RoundNo, body.InterviewDate,
             body.InterviewFormat, body.Interviewers, body.Location, body.Result, body.Notes,
             body.QuestionsToAskJson, body.DebriefJson), ct);
@@ -100,7 +105,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> LinkApplication(Guid id, [FromBody] LinkApplicationBody body,
         CancellationToken ct)
     {
-        var r = await sender.Send(new LinkJobApplicationCommand(id, body.JobApplicationId), ct);
+        var r = await sender.Send(new LinkJobApplicationCommand(Me, id, body.JobApplicationId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -108,7 +113,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsDelete)]
     public async Task<IResult> Delete(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteEntryCommand(id), ct);
+        var r = await sender.Send(new DeleteEntryCommand(Me, id), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -145,7 +150,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
 
             Guid? roundId = form.TryGetValue("roundId", out var ridRaw)
                 && Guid.TryParse(ridRaw.FirstOrDefault(), out var rid) ? rid : null;
-            var cmd = new UploadAssetFileCommand(id, file.FileName,
+            var cmd = new UploadAssetFileCommand(Me, id, file.FileName,
                 string.IsNullOrWhiteSpace(file.ContentType) ? null : file.ContentType,
                 duration, form["sourceLanguage"].FirstOrDefault(), file.OpenReadStream(),
                 roundId, form["phase"].FirstOrDefault());
@@ -173,7 +178,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
             if (string.IsNullOrWhiteSpace(fileName)) fileName = "pasted-text.txt";
         }
 
-        var jr = await sender.Send(new AttachAssetCommand(id, kind, fileName,
+        var jr = await sender.Send(new AttachAssetCommand(Me, id, kind, fileName,
             body.ContentType, body.SizeBytes, body.StoragePath, body.BlobUrl, transcriptText,
             body.TranscriptSegmentsJson, body.DurationSeconds, body.SourceLanguage ?? "en",
             body.Sha256, body.RoundId, body.Phase, body.MetaJson), ct);
@@ -187,7 +192,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> GetAssetAudio(Guid id, Guid assetId, CancellationToken ct)
     {
-        var r = await sender.Send(new GetAssetAudioQuery(id, assetId), ct);
+        var r = await sender.Send(new GetAssetAudioQuery(Me, id, assetId), ct);
         if (!r.IsSuccess) return r.ToProblemDetails();
 
         var (stream, contentType, fileName) = r.Value;
@@ -202,19 +207,20 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     /// </summary>
     [HttpPost("{id:guid}/transcription/start")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
-    public async Task<IResult> StartTranscription(Guid id, CancellationToken ct)
+    public async Task<IResult> StartTranscription(Guid id, [FromQuery] Guid? ownerUserId = null,
+        CancellationToken ct = default)
     {
-        var r = await sender.Send(new BeginTranscriptionCommand(id), ct);
+        var r = await sender.Send(new BeginTranscriptionCommand(Me, id, ownerUserId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
     [HttpPost("{id:guid}/assets/{assetId:guid}/transcript")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> SaveTranscript(Guid id, Guid assetId, [FromBody] TranscriptBody body,
-        CancellationToken ct)
+        [FromQuery] Guid? ownerUserId = null, CancellationToken ct = default)
     {
-        var r = await sender.Send(new SaveTranscriptCommand(id, assetId, body.FullText,
-            body.SegmentsJson), ct);
+        var r = await sender.Send(new SaveTranscriptCommand(Me, id, assetId, body.FullText,
+            body.SegmentsJson, ownerUserId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -224,9 +230,10 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     /// </summary>
     [HttpGet("{id:guid}/assets/{assetId:guid}/transcript")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
-    public async Task<IResult> GetTranscript(Guid id, Guid assetId, CancellationToken ct)
+    public async Task<IResult> GetTranscript(Guid id, Guid assetId,
+        [FromQuery] Guid? ownerUserId = null, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetTranscriptQuery(id, assetId), ct);
+        var r = await sender.Send(new GetTranscriptQuery(Me, id, assetId, ownerUserId), ct);
         return r.IsSuccess
             ? Results.Ok(new { fullText = r.Value.FullText, segmentsJson = r.Value.SegmentsJson })
             : r.ToProblemDetails();
@@ -237,9 +244,10 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     /// <summary>触发六维分析(校验通过后发集成事件给 Analysis.Worker)。</summary>
     [HttpPost("{id:guid}/analyze")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsAnalyze)]
-    public async Task<IResult> Analyze(Guid id, CancellationToken ct)
+    public async Task<IResult> Analyze(Guid id, [FromQuery] Guid? ownerUserId = null,
+        CancellationToken ct = default)
     {
-        var r = await sender.Send(new RequestAnalysisCommand(id), ct);
+        var r = await sender.Send(new RequestAnalysisCommand(Me, id, ownerUserId), ct);
         return r.IsSuccess ? Results.Accepted() : r.ToProblemDetails();
     }
 
@@ -247,23 +255,25 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [HttpPost("{id:guid}/analysis")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsAnalyze)]
     public async Task<IResult> ApplyAnalysis(Guid id, [FromBody] ApplyAnalysisBody body,
-        CancellationToken ct)
+        [FromQuery] Guid? ownerUserId = null, CancellationToken ct = default)
     {
         var metricsJson = body.SpeechMetrics.HasValue
             ? body.SpeechMetrics.Value.GetRawText()
             : null;
-        var r = await sender.Send(new ApplyAnalysisCommand(id, body.Overall, body.Pronunciation,
+        var r = await sender.Send(new ApplyAnalysisCommand(Me, id, body.Overall, body.Pronunciation,
             body.Fluency, body.Structure, body.TechnicalDepth, body.Relevance, body.Summary,
-            body.Questions, body.Weaknesses, metricsJson, body.CandidateTranscript), ct);
+            body.Questions, body.Weaknesses, metricsJson, body.CandidateTranscript,
+            OwnerUserId: ownerUserId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
     /// <summary>标记分析失败(Worker 出错时调用,让前端看到可重试)。</summary>
     [HttpPost("{id:guid}/failure")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsAnalyze)]
-    public async Task<IResult> MarkFailed(Guid id, [FromBody] FailureBody body, CancellationToken ct)
+    public async Task<IResult> MarkFailed(Guid id, [FromBody] FailureBody body,
+        [FromQuery] Guid? ownerUserId = null, CancellationToken ct = default)
     {
-        var r = await sender.Send(new MarkEntryFailedCommand(id, body.Reason), ct);
+        var r = await sender.Send(new MarkEntryFailedCommand(Me, id, body.Reason, ownerUserId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -274,7 +284,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> AddQuestion(Guid id, [FromBody] AddQuestionBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new AddQuestionCommand(id, body.QuestionText, body.MyAnswerText,
+        var r = await sender.Send(new AddQuestionCommand(Me, id, body.QuestionText, body.MyAnswerText,
             body.Category ?? "Technical", body.Difficulty, body.Assessment,
             body.RoundId, body.AskedBy), ct);
         return r.IsSuccess
@@ -287,7 +297,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> UpdateQuestion(Guid id, Guid questionId, [FromBody] UpdateQuestionBody body,
         CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateQuestionCommand(id, questionId, body.QuestionText,
+        var r = await sender.Send(new UpdateQuestionCommand(Me, id, questionId, body.QuestionText,
             body.MyAnswerText, body.Category, body.Difficulty, body.Assessment, body.GotStuck,
             body.StuckReason, body.RecommendedAnswer), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
@@ -297,7 +307,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> RemoveQuestion(Guid id, Guid questionId, CancellationToken ct)
     {
-        var r = await sender.Send(new RemoveQuestionCommand(id, questionId), ct);
+        var r = await sender.Send(new RemoveQuestionCommand(Me, id, questionId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -307,7 +317,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> SetQuestionMastery(Guid id, Guid questionId,
         [FromBody] SetQuestionMasteryBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateQuestionMasteryCommand(id, questionId, body.Mastery), ct);
+        var r = await sender.Send(new UpdateQuestionMasteryCommand(Me, id, questionId, body.Mastery), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -318,7 +328,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> ListActions(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new ListActionsQuery(id), ct);
+        var r = await sender.Send(new ListActionsQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -328,7 +338,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> CreateAction(Guid id, [FromBody] CreateActionBody body,
         CancellationToken ct)
     {
-        var r = await sender.Send(new CreateActionCommand(id, body.Title, body.Detail,
+        var r = await sender.Send(new CreateActionCommand(Me, id, body.Title, body.Detail,
             body.DueDate), ct);
         return r.IsSuccess
             ? Results.Created($"/api/interviews/{id}/actions/{r.Value}", new { id = r.Value })
@@ -341,7 +351,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> UpdateAction(Guid id, Guid actionId,
         [FromBody] UpdateActionBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateActionCommand(id, actionId, body.Title,
+        var r = await sender.Send(new UpdateActionCommand(Me, id, actionId, body.Title,
             body.IsDone, body.DueDate), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
@@ -350,7 +360,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> DeleteAction(Guid id, Guid actionId, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteActionCommand(id, actionId), ct);
+        var r = await sender.Send(new DeleteActionCommand(Me, id, actionId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -361,7 +371,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> AnalysisTrend(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new GetAnalysisTrendQuery(id), ct);
+        var r = await sender.Send(new GetAnalysisTrendQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -370,7 +380,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> LatestSnapshot(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new GetLatestSnapshotQuery(id), ct);
+        var r = await sender.Send(new GetLatestSnapshotQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -379,7 +389,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> QuestionHistory(Guid id, Guid questionId, CancellationToken ct)
     {
-        var r = await sender.Send(new GetQuestionHistoryQuery(id, questionId), ct);
+        var r = await sender.Send(new GetQuestionHistoryQuery(Me, id, questionId), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -388,7 +398,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> Coverage(CancellationToken ct)
     {
-        var r = await sender.Send(new GetCoverageQuery(), ct);
+        var r = await sender.Send(new GetCoverageQuery(Me), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -397,7 +407,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> UpcomingRounds([FromQuery] int days = 30, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetUpcomingRoundsQuery(days), ct);
+        var r = await sender.Send(new GetUpcomingRoundsQuery(Me, days), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -406,7 +416,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> RoundPassProbability(Guid roundId, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetRoundPassProbabilityQuery(roundId), ct);
+        var r = await sender.Send(new GetRoundPassProbabilityQuery(Me, roundId), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -415,7 +425,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> OfferProbability(Guid id, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetOfferProbabilityQuery(id), ct);
+        var r = await sender.Send(new GetOfferProbabilityQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -424,7 +434,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> AddRound(Guid id, [FromBody] AddRoundBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new AddRoundCommand(id, body.Stage ?? "Technical",
+        var r = await sender.Send(new AddRoundCommand(Me, id, body.Stage ?? "Technical",
             body.ScheduledDate, body.Interviewers, body.Format, body.Location,
             body.ScheduledTime), ct);
         return r.IsSuccess
@@ -437,7 +447,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> UpdateRound(Guid id, Guid roundId, [FromBody] UpdateRoundBody body,
         CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateRoundCommand(id, roundId, body.Stage, body.ScheduledDate,
+        var r = await sender.Send(new UpdateRoundCommand(Me, id, roundId, body.Stage, body.ScheduledDate,
             body.Interviewers, body.Format, body.Location, body.Outcome ?? "Pending",
             body.Notes, body.Feedback, body.MeetingLink, body.ScheduledTime,
             body.PrepQuestionsJson, body.EmailsJson, body.Transcript, body.RecordingUrl,
@@ -449,7 +459,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> RemoveRound(Guid id, Guid roundId, CancellationToken ct)
     {
-        var r = await sender.Send(new RemoveRoundCommand(id, roundId), ct);
+        var r = await sender.Send(new RemoveRoundCommand(Me, id, roundId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -462,7 +472,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> UpdateRoundEmails(Guid id, Guid roundId,
         [FromBody] UpdateRoundEmailsBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateRoundEmailsCommand(id, roundId, body.Emails), ct);
+        var r = await sender.Send(new UpdateRoundEmailsCommand(Me, id, roundId, body.Emails), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -475,7 +485,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> GeneratePrepPlan(Guid id, Guid roundId,
         [FromBody] GeneratePrepPlanBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new GeneratePrepPlanCommand(id, roundId,
+        var r = await sender.Send(new GeneratePrepPlanCommand(Me, id, roundId,
             body.JdText, body.ResumeText, body.Experiences, body.Requirements), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
@@ -485,7 +495,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> GetPrepPlan(Guid id, Guid roundId, CancellationToken ct)
     {
-        var r = await sender.Send(new GetPrepPlanQuery(id, roundId), ct);
+        var r = await sender.Send(new GetPrepPlanQuery(Me, id, roundId), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -498,7 +508,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
         CancellationToken ct)
     {
         var r = await sender.Send(new GenerateGuidanceCommand(
-            id, req?.JdText, req?.ResumeText,
+            Me, id, req?.JdText, req?.ResumeText,
             req?.InterviewExperiences, req?.CustomRequirements), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
@@ -514,7 +524,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> GetGuidance(Guid id, [FromQuery] int? version, CancellationToken ct)
     {
-        var r = await sender.Send(new GetGuidanceQuery(id, version), ct);
+        var r = await sender.Send(new GetGuidanceQuery(Me, id, version), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -523,7 +533,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> ListGuidanceVersions(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new ListGuidanceVersionsQuery(id), ct);
+        var r = await sender.Send(new ListGuidanceVersionsQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -535,7 +545,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> ReassignAsset(Guid id, Guid assetId,
         [FromBody] ReassignAssetBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ReassignAssetCommand(id, assetId, body.RoundId), ct);
+        var r = await sender.Send(new ReassignAssetCommand(Me, id, assetId, body.RoundId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -545,7 +555,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> UpdateAssetMeta(Guid id, Guid assetId,
         [FromBody] AssetMetaBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateAssetMetaCommand(id, assetId, body.MetaJson), ct);
+        var r = await sender.Send(new UpdateAssetMetaCommand(Me, id, assetId, body.MetaJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -554,7 +564,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> DeleteAsset(Guid id, Guid assetId, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteAssetCommand(id, assetId), ct);
+        var r = await sender.Send(new DeleteAssetCommand(Me, id, assetId), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -564,7 +574,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> SetQuestionReview(Guid id, Guid questionId,
         [FromBody] ReviewJsonBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetQuestionReviewCommand(id, questionId, body.ReviewJson), ct);
+        var r = await sender.Send(new SetQuestionReviewCommand(Me, id, questionId, body.ReviewJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -574,7 +584,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> SetRoundReview(Guid id, Guid roundId,
         [FromBody] ReviewJsonBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetRoundReviewCommand(id, roundId, body.ReviewJson), ct);
+        var r = await sender.Send(new SetRoundReviewCommand(Me, id, roundId, body.ReviewJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -583,7 +593,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> GenerateRoundReview(Guid id, Guid roundId, CancellationToken ct)
     {
-        var r = await sender.Send(new GenerateRoundReviewCommand(id, roundId), ct);
+        var r = await sender.Send(new GenerateRoundReviewCommand(Me, id, roundId), ct);
         return r.IsSuccess ? Results.Ok(new { reviewJson = r.Value }) : r.ToProblemDetails();
     }
 
@@ -592,7 +602,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> ExtractRoundQuestions(Guid id, Guid roundId, CancellationToken ct)
     {
-        var r = await sender.Send(new ExtractRoundQuestionsCommand(id, roundId), ct);
+        var r = await sender.Send(new ExtractRoundQuestionsCommand(Me, id, roundId), ct);
         return r.IsSuccess ? Results.Ok(new { created = r.Value }) : r.ToProblemDetails();
     }
 
@@ -602,7 +612,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> SetPrepReport(Guid id, Guid roundId,
         [FromBody] PrepReportBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetRoundPrepReportCommand(id, roundId, body.PrepReportJson), ct);
+        var r = await sender.Send(new SetRoundPrepReportCommand(Me, id, roundId, body.PrepReportJson), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -612,7 +622,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> GeneratePrepReport(Guid id, Guid roundId,
         [FromBody] GeneratePrepReportBody? body, CancellationToken ct)
     {
-        var r = await sender.Send(new GeneratePrepReportCommand(id, roundId,
+        var r = await sender.Send(new GeneratePrepReportCommand(Me, id, roundId,
             body?.JdText, body?.ResumeText, body?.Experiences, body?.Language), ct);
         return r.IsSuccess ? Results.Ok(new { prepReportJson = r.Value }) : r.ToProblemDetails();
     }
@@ -623,7 +633,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     public async Task<IResult> RenameSpeaker(Guid id, Guid roundId,
         [FromBody] RenameSpeakerBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new RenameSpeakerCommand(id, roundId, body.From, body.To), ct);
+        var r = await sender.Send(new RenameSpeakerCommand(Me, id, roundId, body.From, body.To), ct);
         return r.IsSuccess ? Results.Ok(new { changed = r.Value }) : r.ToProblemDetails();
     }
 
@@ -632,7 +642,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> RoundIcs(Guid id, Guid roundId, CancellationToken ct)
     {
-        var r = await sender.Send(new GetEntryQuery(id), ct);
+        var r = await sender.Send(new GetEntryQuery(Me, id), ct);
         if (!r.IsSuccess) return r.ToProblemDetails();
         var round = r.Value.Rounds.FirstOrDefault(x => x.Id == roundId);
         if (round is null)
@@ -673,7 +683,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> ListQuestionCandidates(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new ListQuestionCandidatesQuery(id), ct);
+        var r = await sender.Send(new ListQuestionCandidatesQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -682,7 +692,7 @@ public sealed class InterviewsController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
     public async Task<IResult> Jobs(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new ListAnalysisJobsQuery(id), ct);
+        var r = await sender.Send(new ListAnalysisJobsQuery(Me, id), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 

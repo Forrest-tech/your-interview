@@ -102,7 +102,7 @@ public sealed class InterviewActionTests
     [Fact]
     public void Validator_BlankTitle_Invalid()
     {
-        var cmd = new CreateActionCommand(Guid.NewGuid(), "  ");
+        var cmd = new CreateActionCommand(Guid.Empty, Guid.NewGuid(), "  ");
 
         new CreateActionCommandValidator().Validate(cmd).IsValid.Should().BeFalse();
     }
@@ -110,7 +110,7 @@ public sealed class InterviewActionTests
     [Fact]
     public void Validator_ValidCommand_Passes()
     {
-        var cmd = new CreateActionCommand(Guid.NewGuid(), "Review system design",
+        var cmd = new CreateActionCommand(Guid.Empty, Guid.NewGuid(), "Review system design",
             "Redo the photo-sharing design", DateTimeOffset.UtcNow.AddDays(3));
 
         new CreateActionCommandValidator().Validate(cmd).IsValid.Should().BeTrue();

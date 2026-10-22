@@ -2,6 +2,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Domain;
 using YourInterview.BuildingBlocks.Persistence;
+using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Interviews.Domain;
 
 namespace YourInterview.Services.Interviews.Infrastructure.Persistence;
@@ -10,9 +11,17 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence;
 /// 实战机经的持久化上下文。
 /// 每个微服务独占一个 PostgreSQL schema("interviews"),服务间不共享表 —— 微服务的核心纪律。
 /// </summary>
-public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> options) : DbContext(options)
+public sealed class InterviewsDbContext(
+    DbContextOptions<InterviewsDbContext> options,
+    ICurrentUser? currentUser = null) : DbContext(options)
 {
     public const string Schema = "interviews";
+
+    /// <summary>
+    /// 当前请求用户(COD-01/票03 全局过滤器用)。无 HTTP 上下文(消费者/后台)时为 null,
+    /// 过滤器 fail-closed 匹配零行 —— 非请求路径必须 IgnoreQueryFilters + 事件 UserId 显式校验。
+    /// </summary>
+    public Guid? CurrentUserId { get; } = currentUser?.UserId;
 
     public DbSet<InterviewEntry> Entries => Set<InterviewEntry>();
     public DbSet<InterviewAsset> Assets => Set<InterviewAsset>();
@@ -98,9 +107,11 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.HasIndex(x => x.InterviewDate);
             e.HasIndex(x => x.CompanyName);
 
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.UserId).IsRequired();   // COD-01 contract:回填后收紧为非空
             // PostgreSQL 原生 xmin 做乐观并发令牌,不需要额外 rowversion 列
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
 
             e.HasMany(x => x.Assets).WithOne().HasForeignKey(a => a.InterviewEntryId)
                 .OnDelete(DeleteBehavior.Cascade);

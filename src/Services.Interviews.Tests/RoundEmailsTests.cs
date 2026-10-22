@@ -44,7 +44,7 @@ public sealed class RoundEmailsTests
     [Fact]
     public void Validator_NullEmails_Invalid()
     {
-        var cmd = new UpdateRoundEmailsCommand(Guid.NewGuid(), Guid.NewGuid(), null!);
+        var cmd = new UpdateRoundEmailsCommand(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), null!);
 
         new UpdateRoundEmailsCommandValidator().Validate(cmd).IsValid.Should().BeFalse();
     }
@@ -53,7 +53,7 @@ public sealed class RoundEmailsTests
     public void Validator_EmptyList_Valid()
     {
         // 空数组 = 清空时间线,是合法操作
-        var cmd = new UpdateRoundEmailsCommand(Guid.NewGuid(), Guid.NewGuid(), []);
+        var cmd = new UpdateRoundEmailsCommand(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), []);
 
         new UpdateRoundEmailsCommandValidator().Validate(cmd).IsValid.Should().BeTrue();
     }

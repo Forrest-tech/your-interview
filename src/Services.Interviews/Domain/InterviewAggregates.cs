@@ -337,8 +337,12 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Touch();
     }
 
-    /// <summary>开始转写(用户点「开始转写」,或 Worker 状态推进时调用)。</summary>
-    public void StartTranscription()
+    /// <summary>
+    /// 开始转写(用户点「开始转写」,或 Worker 状态推进时调用)。
+    /// assetId 给定时精确转写那一件录音(COD-07:前端在某一轮的录音上发起);
+    /// 不给时保留条目级旧语义 —— 取全条目第一件有落盘路径的录音(Worker 重跑路径)。
+    /// </summary>
+    public void StartTranscription(Guid? assetId = null)
     {
         // 幂等:流程中/已完成的不重复触发 ——
         // 尤其 Transcribing:Worker 回写时也会调它,不挡住会重复发事件 → 重复跑管线。
@@ -349,13 +353,27 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         if (!_assets.Any())
             throw new InvalidOperationException("还没有上传任何材料,无法开始转写");
 
+        InterviewAsset? audio;
+        if (assetId is not null)
+        {
+            // 指定了材料就必须精确命中:不存在 / 不是录音 / 没有落盘路径都直接报错,
+            // 绝不回落到"第一件录音" —— 多轮条目里那会把别的轮次的录音送去转写。
+            audio = _assets.FirstOrDefault(a => a.Id == assetId.Value)
+                ?? throw new InvalidOperationException("材料不存在");
+            if (audio.Kind != AssetKind.Audio || string.IsNullOrWhiteSpace(audio.StoragePath))
+                throw new InvalidOperationException("指定材料不是可转写的录音文件");
+        }
+        else
+        {
+            audio = _assets.FirstOrDefault(a =>
+                a.Kind == AssetKind.Audio && !string.IsNullOrWhiteSpace(a.StoragePath));
+        }
+
         TransitionTo(InterviewStatus.Transcribing);
         Touch();
 
         // 只在"真正开始"时发事件(带着录音的真实路径)→ 触发 Analysis.Worker。
         // 之前这一步只改状态不发事件,点完按钮就石沉大海 —— M1 修复的核心断点。
-        var audio = _assets.FirstOrDefault(a =>
-            a.Kind == AssetKind.Audio && !string.IsNullOrWhiteSpace(a.StoragePath));
         RaiseDomainEvent(new InterviewTranscriptionStartedDomainEvent(
             Id, audio?.Id ?? Guid.Empty, audio?.StoragePath));
     }

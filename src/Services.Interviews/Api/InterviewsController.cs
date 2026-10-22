@@ -214,6 +214,21 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 按材料开始转写(COD-07)—— 前端轮次页在**某一轮的录音**上点「开始转写」走这里。
+    /// 与条目级入口共用同一命令/状态机/台账管线,只是把 assetId 透传下去精确选材:
+    /// 条目级入口选的是全条目第一件录音,多轮条目会转错轮次的材料。
+    /// 材料不存在或不是可转写的录音 → 409(命令的 InvalidOperationException 映射)。
+    /// </summary>
+    [HttpPost("{id:guid}/assets/{assetId:guid}/transcribe")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> StartAssetTranscription(Guid id, Guid assetId,
+        [FromQuery] Guid? ownerUserId = null, CancellationToken ct = default)
+    {
+        var r = await sender.Send(new BeginTranscriptionCommand(Me, id, ownerUserId, assetId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     [HttpPost("{id:guid}/assets/{assetId:guid}/transcript")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> SaveTranscript(Guid id, Guid assetId, [FromBody] TranscriptBody body,

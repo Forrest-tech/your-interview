@@ -238,8 +238,13 @@ public sealed record GetAssetAudioQuery(Guid UserId, Guid EntryId, Guid AssetId)
 public sealed record SaveTranscriptCommand(Guid UserId, Guid EntryId, Guid AssetId, string FullText,
     string? SegmentsJson, Guid? OwnerUserId = null) : IRequest<Result>;
 
-/// <summary>开始转写(由分析 Worker 调用,把条目从 AssetsUploaded 推进到 Transcribing)。</summary>
-public sealed record BeginTranscriptionCommand(Guid UserId, Guid EntryId, Guid? OwnerUserId = null) : IRequest<Result>;
+/// <summary>
+/// 开始转写(把条目从 AssetsUploaded 推进到 Transcribing)。
+/// AssetId 给定时精确转写该录音(COD-07 资产级路由,前端轮次页发起);
+/// 为空时条目级旧语义(Worker 经 transcription/start 重跑,不指定材料)。
+/// </summary>
+public sealed record BeginTranscriptionCommand(Guid UserId, Guid EntryId, Guid? OwnerUserId = null,
+    Guid? AssetId = null) : IRequest<Result>;
 
 public sealed class BeginTranscriptionCommandHandler(InterviewsDbContext db)
     : IRequestHandler<BeginTranscriptionCommand, Result>
@@ -252,7 +257,7 @@ public sealed class BeginTranscriptionCommandHandler(InterviewsDbContext db)
 
         try
         {
-            e.StartTranscription();   // 幂等:已在 Transcribed/Analyzed 直接返回
+            e.StartTranscription(request.AssetId);   // 幂等:已在 Transcribed/Analyzed 直接返回
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }

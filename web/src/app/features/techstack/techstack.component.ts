@@ -942,7 +942,9 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const payload: Record<string, unknown> = {
       title,
       topic: d.topic.trim() || item.topic,
-      question: d.blocks['question'] ?? '',
+      // 票61:DETAIL_BLOCKS 无 question 块(详情不展示题干),保存时必须回填条目现存值,
+      // 否则恒发空串、后端全量 PUT 会把已存 Question 清空(数据丢失)。
+      question: item.question,
       conceptExplanation: d.blocks['conceptExplanation'] || null,
       keyPointsJson: this.linesToJson(d.blocks['keyPoints'] ?? ''),
       commonMistakesJson: this.linesToJson(d.blocks['commonMistakes'] ?? ''),
@@ -963,7 +965,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
           topic: d.topic.trim() || item.topic,
           difficulty: d.difficulty,
           importance: d.importance,
-          question: d.blocks['question'] ?? '',
+          question: item.question,
           conceptExplanation: d.blocks['conceptExplanation'] || undefined,
           keyPointsJson: this.linesToJson(d.blocks['keyPoints'] ?? '') ?? undefined,
           commonMistakesJson: this.linesToJson(d.blocks['commonMistakes'] ?? '') ?? undefined,

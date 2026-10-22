@@ -213,6 +213,10 @@ public sealed class UpdateKnowledgeCommandValidator : AbstractValidator<UpdateKn
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
         RuleFor(x => x.Topic).NotEmpty().MaximumLength(100);
+        // 票61:与 Create 口径对齐 —— Question 必填。全量 PUT 的唯一前端调用方是
+        // 详情保存(回填现存 question),无任何合法「清空 question」流;
+        // 空串放行只会误清已存题干(数据丢失)。
+        RuleFor(x => x.Question).NotEmpty().MaximumLength(8000);
         RuleFor(x => x.Difficulty).InclusiveBetween(1, 5);
         RuleFor(x => x.Importance).InclusiveBetween(1, 5);
     }

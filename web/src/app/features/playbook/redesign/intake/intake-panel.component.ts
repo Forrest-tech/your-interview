@@ -732,7 +732,8 @@ export class IntakePanelComponent {
     Promise<{ status: string; text: string | null; source: 'local' | 'vision' }> {
     const local = await this.ocrShotShared(s);
     if (local.status === 'ok' && local.text) {
-      if (!forEmailCard || this.cardFromText(0, local.text).status === 'ok') {
+      // 探针按本地来源试跑(票60 头部适配在 source='local' 时才触发),与成卡同口径。
+      if (!forEmailCard || this.cardFromText(0, local.text, 'local').status === 'ok') {
         return { ...local, source: 'local' };
       }
     }
@@ -792,7 +793,14 @@ export class IntakePanelComponent {
   /** OCR 文本 → 邮件卡片:与粘文字 parseEmail 同一套抽取器,不另起口径。 */
   private cardFromText(shotIndex: number, raw: string,
                        source: 'local' | 'vision' = 'vision'): EmailCard {
-    const p = parsePastedEmail(raw);
+    let p = parsePastedEmail(raw);
+    // 票60:本地 OCR 文本无 Key:value 头且 parsePastedEmail 无头命中时,先过
+    // 头部适配(adaptLocalOcrEmailText 合成头块)再走同一管线;视觉/粘贴路径
+    // 不经此适配,合成不出则保持原解析结果(failed → 既有兜底)。
+    if (source === 'local' && !p.from && !p.date && !p.subject) {
+      const adapted = adaptLocalOcrEmailText(raw);
+      if (adapted) p = parsePastedEmail(adapted);
+    }
     const body = p.body ?? raw;
     const card: EmailCard = {
       id: ++this.cardSeq, shotIndex, status: 'ok', errorKey: '',
@@ -1267,6 +1275,49 @@ export function extractInterviewWhen(text: string): string | null {
     if (en[6]?.toUpperCase() === 'AM' && hh === 12) hh = 0;
     const p = (n: number) => String(n).padStart(2, '0');
     return `${en[3]}-${p(mon)}-${p(Number(en[2]))} ${p(hh)}:${en[5]}`;
+  }
+  return null;
+}
+
+/**
+ * 票60:本地 OCR(Paddle)文本头部适配。本地 OCR 输出是带阅读序的散行,没有
+ * Key:value 头,parsePastedEmail 扫不到头 → 邮件卡 failed → 回落视觉。本函数
+ * 仅由 cardFromText 在「本地 OCR 文本且无头命中」时调用,用轻量规则定位并
+ * 合成为标准头块,之后仍走既有同一管线(parsePastedEmail → cardFromText 抽取),
+ * 抽取器与抽取域口径不变:
+ * - 主题行:首个非空行;带窗口标题前缀「人名 : 主题本体」(该客户端标题固定
+ *   格式,ocr-test RESULT.md 已知残余口径)时只剥「人名 + 空格冒号」型前缀,
+ *   剥不动就原样保留;
+ * - 发件人行:主题行之后数行内首个含日期时间形态的行(日期
+ *   20\d{2}[-/年]\d{1,2}[-/月]\d{1,2} 与时间 \d{1,2}:\d{2} 可粘连无空格,如
+ *   Khalil Musazade2026-10-0809:18)——日期时间之前的部分作 From、日期时间
+ *   作 Sent;日期时间之前为空的行(以日期开头的会议卡行)不算发件人行;
+ * - 合成 = Subject/From/Sent 头块 + 空行 + 发件人行之后的原文余部作 body
+ *   (会议卡落在 body 内,仍是 extractInterviewWhen 的抽取域;发信时间不入
+ *   body,防被误抽成面试时间)。
+ * 找不到发件人行 → 返回 null,不硬造头(保持 failed → 视觉兜底的既有行为)。
+ */
+export function adaptLocalOcrEmailText(raw: string): string | null {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  const subjectIdx = lines.findIndex(l => l.trim().length > 0);
+  if (subjectIdx < 0) return null;
+  let subject = lines[subjectIdx].trim();
+  // 窗口标题前缀:人名(字母/中文/空格/点/连字符,不含数字与冒号) + 空格冒号。
+  const titlePrefix = subject.match(/^([A-Za-z\u4e00-\u9fa5][A-Za-z\u4e00-\u9fa5 .'-]{0,40}?)\s+[:：]\s+(.+)$/);
+  if (titlePrefix) subject = titlePrefix[2].trim();
+  if (!subject) return null;
+  // 发件人行:主题行之后 6 行内找含日期时间形态的行,日期与时间可粘连。
+  const dateTime = /(20\d{2})[-/年](\d{1,2})[-/月](\d{1,2})日?\s*(\d{1,2}):(\d{2})/;
+  const last = Math.min(lines.length, subjectIdx + 7);
+  for (let i = subjectIdx + 1; i < last; i++) {
+    const m = lines[i].match(dateTime);
+    if (!m || m.index === undefined) continue;
+    const from = lines[i].slice(0, m.index).trim();
+    if (!from) continue; // 以日期时间开头的行是会议卡,不是发件人行
+    const p2 = (n: string) => n.padStart(2, '0');
+    const sent = `${m[1]}-${p2(m[2])}-${p2(m[3])} ${p2(m[4])}:${m[5]}`;
+    const body = lines.slice(i + 1).join('\n').trim();
+    return `Subject: ${subject}\nFrom: ${from}\nSent: ${sent}\n\n${body}`;
   }
   return null;
 }

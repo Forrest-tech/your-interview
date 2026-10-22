@@ -174,3 +174,81 @@ jobs:
         working-directory: web
         # pdfjs-dist 是 CommonJS 会产生 optimization bailout warning —— warning 不算红
         run: npx ng build
+
+  e2e:
+    name: E2E · 黄金路径回归套
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: 写 CI 最小 .env
+        run: |
+          cat > .env <<'EOF'
+          PGPASSWORD_LOCAL=postgres
+          PG_USER=postgres
+          ADMIN_PASSWORD=Admin@2026
+          DEMO_PASSWORD=Admin@2026
+          JWT_SIGNING_KEY=${{ secrets.JWT_SIGNING_KEY || 'ci-jwt-signing-key-at-least-32-characters-long' }}
+          EOF
+
+      - name: 起全套后端（容器）
+        run: docker compose up -d --build --wait --wait-timeout 300
+        timeout-minutes: 20
+
+      - name: 前端装依赖
+        working-directory: web
+        run: npm ci
+
+      - name: 起前端 dev server
+        working-directory: web
+        run: |
+          nohup npx ng serve --host 0.0.0.0 --disable-host-check > /tmp/ng-serve.log 2>&1 &
+          echo $! > /tmp/ng-serve.pid
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null http://127.0.0.1:4200; then
+              echo "前端就绪（第 $i 次探）"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "前端 60 次探活仍未就绪"
+              cat /tmp/ng-serve.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: 装 Playwright Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: 跑 E2E
+        working-directory: web
+        run: npm run e2e
+
+      - name: 上传 E2E 报告（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            web/e2e/.report
+            web/e2e/.results
+
+      - name: 停环境
+        if: always()
+        run: docker compose down

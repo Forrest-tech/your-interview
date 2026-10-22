@@ -744,6 +744,103 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     /// 反射式读出状态机流转表 —— 让前端和后端共用同一份真相。
     /// 之所以不手工再写一遍:两份定义迟早会不一致,而不一致的安全后果是"前端允许点、后端拒绝"。
     /// </summary>
+    // ---------------- Playbook 本地数据(COD-10b/票15) ----------------
+    // STAR 故事库 + 历史复盘/粘贴材料孤儿键归档。此前只存浏览器 localStorage,
+    // 清缓存即丢;现落 Interviews 后端,前端首次加载一次性导入本地存量。
+    // 删除故事用 InterviewsWrite(默认 User 角色无 InterviewsDelete,同票14
+    // Jobs 面删自备问题用 JobsWrite 的先例)。
+
+    /// <summary>当前用户的 STAR 故事库(按 SortOrder 升序)。</summary>
+    [HttpGet("star-stories")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListStarStories(CancellationToken ct)
+    {
+        var r = await sender.Send(new ListStarStoriesQuery(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>保存一个故事(按 clientId upsert,幂等)。</summary>
+    [HttpPut("star-stories/{clientId}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> UpsertStarStory(string clientId, [FromBody] StarStoryBody body,
+        CancellationToken ct)
+    {
+        var r = await sender.Send(new UpsertStarStoryCommand(Me, new StarStoryInput(
+            clientId, body.Title ?? string.Empty, body.Situation, body.Task,
+            body.Action, body.Result, body.Tags)), ct);
+        return r.IsSuccess ? Results.Ok(new { id = r.Value }) : r.ToProblemDetails();
+    }
+
+    /// <summary>删除一个故事(软删,幂等)。</summary>
+    [HttpDelete("star-stories/{clientId}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> DeleteStarStory(string clientId, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteStarStoryCommand(Me, clientId), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一次性导入本地故事库(localStorage pb.starStories)。幂等(按 clientId
+    /// 去重),返回对账 { imported, total } —— 重复导入 imported=0、total 不变。
+    /// </summary>
+    [HttpPost("star-stories/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> ImportStarStories([FromBody] ImportStarStoriesBody body,
+        CancellationToken ct)
+    {
+        var stories = (body.Stories ?? []).Select(s => new StarStoryInput(
+            s.ClientId ?? string.Empty, s.Title ?? string.Empty, s.Situation, s.Task,
+            s.Action, s.Result, s.Tags)).ToList();
+        var r = await sender.Send(new ImportStarStoriesCommand(Me, stories), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>当前用户归档的历史复盘(原 pb.debrief.* 本地键,原始 JSON 逐字)。</summary>
+    [HttpGet("legacy-debriefs")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListLegacyDebriefs(CancellationToken ct)
+    {
+        var r = await sender.Send(new ListLegacyDebriefsQuery(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一次性导入本地历史复盘(pb.debrief.&lt;条目id&gt;)。幂等(按条目去重,
+    /// 首导为准不覆盖),返回对账 { imported, total };条目不属于当前用户的跳过。
+    /// </summary>
+    [HttpPost("legacy-debriefs/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> ImportLegacyDebriefs([FromBody] ImportLegacyDebriefsBody body,
+        CancellationToken ct)
+    {
+        var items = (body.Items ?? []).Select(i => new LegacyDebriefImportItem(
+            i.EntryId, i.PayloadJson ?? string.Empty)).ToList();
+        var r = await sender.Send(new ImportLegacyDebriefsCommand(Me, items), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>当前用户归档的历史粘贴材料(原 pb-pasted-* 本地键,原文逐字)。</summary>
+    [HttpGet("legacy-pasted")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListLegacyPasted(CancellationToken ct)
+    {
+        var r = await sender.Send(new ListLegacyPastedQuery(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>一次性导入本地历史粘贴材料(pb-pasted-&lt;条目id&gt;),口径同复盘导入。</summary>
+    [HttpPost("legacy-pasted/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> ImportLegacyPasted([FromBody] ImportLegacyPastedBody body,
+        CancellationToken ct)
+    {
+        var items = (body.Items ?? []).Select(i => new LegacyPastedImportItem(
+            i.EntryId, i.Content ?? string.Empty)).ToList();
+        var r = await sender.Send(new ImportLegacyPastedCommand(Me, items), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     private static string[] DescribeTransitions(InterviewStatus from)
     {
         // 领域层的 AllowedTransitions 是 private static,
@@ -763,6 +860,24 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
 }
 
 // ---------------- 请求体 ----------------
+
+public sealed record StarStoryBody(
+    string? Title = null, string? Situation = null, string? Task = null,
+    string? Action = null, string? Result = null, string? Tags = null);
+
+public sealed record StarStoryImportItemBody(
+    string? ClientId = null, string? Title = null, string? Situation = null,
+    string? Task = null, string? Action = null, string? Result = null, string? Tags = null);
+
+public sealed record ImportStarStoriesBody(List<StarStoryImportItemBody>? Stories);
+
+public sealed record LegacyDebriefImportItemBody(Guid EntryId, string? PayloadJson = null);
+
+public sealed record ImportLegacyDebriefsBody(List<LegacyDebriefImportItemBody>? Items);
+
+public sealed record LegacyPastedImportItemBody(Guid EntryId, string? Content = null);
+
+public sealed record ImportLegacyPastedBody(List<LegacyPastedImportItemBody>? Items);
 
 public sealed record LinkApplicationBody(Guid JobApplicationId);
 

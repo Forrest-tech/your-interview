@@ -39,6 +39,16 @@ public sealed class InterviewsDbContext(
     /// <summary>分析任务台账(发件箱)。派发器与回写端点共用。</summary>
     public DbSet<AnalysisJob> AnalysisJobs => Set<AnalysisJob>();
 
+    // ---- COD-10b/票15:Playbook 本地数据上后端(原 localStorage 孤岛)----
+    /// <summary>STAR 故事库(用户级全局列表,原 pb.starStories)。</summary>
+    public DbSet<StarStory> StarStories => Set<StarStory>();
+
+    /// <summary>历史复盘孤儿键归档(原 pb.debrief.&lt;条目id&gt;,原始 JSON 逐字)。</summary>
+    public DbSet<LegacyDebrief> LegacyDebriefs => Set<LegacyDebrief>();
+
+    /// <summary>历史粘贴材料孤儿键归档(原 pb-pasted-&lt;条目id&gt;,原文逐字)。</summary>
+    public DbSet<LegacyPastedMaterial> LegacyPastedMaterials => Set<LegacyPastedMaterial>();
+
     /// <summary>
     /// 给该条目所有未关单的任务排定终态(只改跟踪状态,不落库 ——
     /// 由调用方随后的 SaveChangesAsync 与业务变更**同一事务**提交)。
@@ -277,6 +287,53 @@ public sealed class InterviewsDbContext(
             e.HasIndex(x => x.IdempotencyKey)
                 .IsUnique()
                 .HasFilter("\"Status\" IN ('Pending', 'Dispatched')");
+        });
+
+        // ---- COD-10b/票15:Playbook 本地数据(票03 归属口径与其它实体一致)----
+
+        b.Entity<StarStory>(e =>
+        {
+            e.ToTable("star_stories");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ClientId).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(500).IsRequired();
+            // S/T/A/R 是段落文本:text 列不限长,长度口径由应用层校验把关
+            // (StarStoryLimits.FieldMax,超限 400 而非落库 500;同 JdText 先例)。
+            e.Property(x => x.Situation).HasColumnType("text");
+            e.Property(x => x.Task).HasColumnType("text");
+            e.Property(x => x.Action).HasColumnType("text");
+            e.Property(x => x.Result).HasColumnType("text");
+            e.Property(x => x.Tags).HasMaxLength(1000);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.ClientId }).IsUnique();
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        b.Entity<LegacyDebrief>(e =>
+        {
+            e.ToTable("legacy_debriefs");
+            e.HasKey(x => x.Id);
+            // 原始 JSON 逐字归档:text 列不限长,上限由导入校验把关。
+            e.Property(x => x.PayloadJson).HasColumnType("text").IsRequired();
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.EntryId }).IsUnique();
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        b.Entity<LegacyPastedMaterial>(e =>
+        {
+            e.ToTable("legacy_pasted_materials");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Content).HasColumnType("text").IsRequired();
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.EntryId }).IsUnique();
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
         });
     }
 }

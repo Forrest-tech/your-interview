@@ -14,6 +14,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
+import { PlaybookLocalService } from '../../core/api/playbook-local.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -116,6 +117,7 @@ export class PlaybookComponent implements OnInit {
     return s;
   };
 
+  private readonly localData = inject(PlaybookLocalService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly snack = inject(MatSnackBar);
@@ -207,6 +209,10 @@ export class PlaybookComponent implements OnInit {
   form: NewEntryForm = this.emptyForm();
 
   ngOnInit(): void {
+    // ★ COD-10b/票15:故事库改读后端(首次加载一次性导入本地存量);
+    // 历史复盘/粘贴材料孤儿键一并一次性导入后端归档。本地旧键保留不清除。
+    this.localData.ensureStarStoriesLoaded();
+    this.localData.importLegacyOnce();
     this.load();
     this.loadCompanies();
     this.loadStats();
@@ -503,19 +509,12 @@ export class PlaybookComponent implements OnInit {
     };
   }
 
-  // ★ #13:STAR 故事库 (localStorage)
-  readonly starStories = signal<StarStory[]>(this.loadStarStories());
+  // ★ #13:STAR 故事库 —— COD-10b/票15 起真源在 Interviews 后端
+  // (star_stories 表),读写收敛到 PlaybookLocalService 单一路径;组件只消费
+  // 同一份信号。localStorage 旧键(pb.starStories)仅作首次导入来源,保留不清除。
+  readonly starStories = this.localData.starStories;
   readonly showStarBank = signal(false);
   readonly editingStory = signal<StarStory | null>(null);
-
-  private loadStarStories(): StarStory[] {
-    try { return JSON.parse(localStorage.getItem('pb.starStories') || '[]'); }
-    catch { return []; }
-  }
-  private saveStarStories(list: StarStory[]): void {
-    localStorage.setItem('pb.starStories', JSON.stringify(list));
-    this.starStories.set(list);
-  }
   newStory(): void {
     this.editingStory.set({
       id: 's' + Date.now(), title: '', situation: '', task: '', action: '', result: '', tags: ''
@@ -532,15 +531,12 @@ export class PlaybookComponent implements OnInit {
       this.snack.open('故事内容是空的:请至少填写 S/T/A/R 中的一项', '关闭', { duration: 3500 });
       return;
     }
-    const list = this.loadStarStories();
-    const idx = list.findIndex(x => x.id === s.id);
-    if (idx >= 0) list[idx] = s; else list.push(s);
-    this.saveStarStories(list);
+    this.localData.saveStory(s);
     this.editingStory.set(null);
   }
   deleteStory(id: string): void {
     if (!confirm('删除这个故事?')) return;
-    this.saveStarStories(this.loadStarStories().filter(x => x.id !== id));
+    this.localData.deleteStory(id);
   }
   /** ★ #13:按 JD 关键词推荐故事 */
   recommendStories(jdText: string): StarStory[] {

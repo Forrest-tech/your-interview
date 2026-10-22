@@ -29,11 +29,6 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
     // ★ 2026-09-25(Forrest):练习类别 —— 素材树按场景过滤的下拉数据源。
     public DbSet<PracticeCategory> Categories => Set<PracticeCategory>();
 
-    // ---- 用户简历正文(2026-09-18:简历匹配分析 + 准备包输入)----
-    // 简历是长文本内容,独立成表,不让内容查询跟着其他配置变重。
-    // (M2.3:原用户级 LLM 凭据表 ai_settings 已收敛到 AiGateway,历史行由迁移搬走后删表)
-    public DbSet<UserResume> Resumes => Set<UserResume>();
-
     // ---- 示范朗读音频缓存(2026-09-16 第三十一轮)----
     // 文本没改就回放上次合成的 MP3,不再重复消耗 Azure TTS 额度。
     public DbSet<PracticeTtsCache> TtsCache => Set<PracticeTtsCache>();
@@ -227,18 +222,6 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.HasKey(x => x.UserId);
             // 路径用 1000 上限:macOS 的 PATH_MAX 是 1024,深目录也要装得下
             e.Property(x => x.RootPath).HasMaxLength(1000).IsRequired();
-        });
-
-        // 用户简历正文(2026-09-18)
-        b.Entity<UserResume>(e =>
-        {
-            e.ToTable("resumes");
-            // 一人一份主版本 —— 与 ai_settings 同策略
-            e.HasKey(x => x.UserId);
-            // Content 用 text:简历形态差异大(纯文本/Markdown/PDF 提取),
-            // 限长只会造成"保存失败但不知道为什么"。
-            e.Property(x => x.Content).HasColumnType("text").IsRequired();
-            e.Property(x => x.Version).IsRequired();
         });
 
         // 示范朗读音频缓存(2026-09-16 第三十一轮)

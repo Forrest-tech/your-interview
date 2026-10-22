@@ -700,48 +700,6 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     // 历史数据(assessment.ai_settings)由 RemoveAiSettings 迁移自动搬走后删表。
     // 前端已改调 /api/ai/*(网关 YARP 直通 aigateway 集群)。
 
-    // ======================= 简历正文(2026-09-18)=======================
-    // 用途:简历匹配分析(简历 vs JD 关键词比对)+ 面试前准备包的输入。
-    //
-    // 权限沿用 MockRead/MockManage —— 简历与 AI 练习同属"面试准备"域,
-    // 不另起一套权限,避免用户要在两个地方各配一次。
-
-    /// <summary>
-    /// 读当前用户的简历正文。
-    /// 未设置时返回 resumeText = null(前端据此提示"先录入简历"),
-    /// 而不是 404 —— 404 会被前端当成错误弹出提示条。
-    /// </summary>
-    [HttpGet("resume-text")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
-    public async Task<IResult> GetResumeText(CancellationToken ct)
-    {
-        var r = await sender.Send(new GetResumeQuery(Me), ct);
-        return r.IsSuccess
-            ? Results.Ok(new { resumeText = r.Value.Content, version = r.Value.Version,
-                               updatedAt = r.Value.UpdatedAt })
-            : r.ToProblemDetails();
-    }
-
-    /// <summary>存/覆盖当前用户的简历正文(版本号自增)。</summary>
-    [HttpPut("resume-text")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> SaveResumeText([FromBody] ResumeTextBody body, CancellationToken ct)
-    {
-        var r = await sender.Send(new SaveResumeCommand(Me, body.ResumeText ?? string.Empty), ct);
-        return r.IsSuccess
-            ? Results.Ok(new { version = r.Value.Version, updatedAt = r.Value.UpdatedAt })
-            : r.ToProblemDetails();
-    }
-
-    /// <summary>清空简历(回到未设置状态)。</summary>
-    [HttpDelete("resume-text")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> DeleteResumeText(CancellationToken ct)
-    {
-        var r = await sender.Send(new DeleteResumeCommand(Me), ct);
-        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
-    }
-
     // ---------- 本机录音存储目录(★ 2026-09-27 Forrest:"我的账户"里可自选) ----------
 
     /// <summary>
@@ -779,8 +737,6 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     }
 
 
-/// <summary>简历正文提交。空串由 Handler 归一为"清空"。</summary>
-public sealed record ResumeTextBody(string? ResumeText);
 }
 
 // ---------------- 请求体 ----------------

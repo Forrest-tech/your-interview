@@ -16,7 +16,8 @@ import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-v
 /**
  * 简历配置页(独立页面,不再放在 profile/account 里)。
  *
- * 存一份简历文本到 localStorage,备战材料生成、求职信生成时自动带入。
+ * 简历正文的真源是 Jobs API(/api/jobs/resume-text);localStorage 仅作本机草稿缓存,
+ * 备战材料生成、求职信生成时从真源读入自动带入。
  * 支持 txt/md 直接读取、PDF 自动提取文字(pdf.js)、Word 复制粘贴。
  *
  * 数据键与旧版 profile 页完全一致(yi-my-resume / yi-my-resume-meta),

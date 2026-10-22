@@ -84,3 +84,103 @@ export async function deleteEntry(
     /* 清理失败不阻断 */
   }
 }
+
+/** 建一个 Tech Stack 知识点。 */
+export async function createKnowledgeItem(
+  request: APIRequestContext,
+  token: string,
+  body: { title: string; topic: string; question: string; importance?: number; difficulty?: number }
+): Promise<string> {
+  const r = await request.post(`${API}/api/knowledge`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: body,
+  });
+  if (!r.ok()) {
+    throw new Error(`[e2e] 建知识点失败: HTTP ${r.status()} ${(await r.text()).slice(0, 200)}`);
+  }
+  const j = (await r.json()) as { id: string };
+  return j.id;
+}
+
+/** 清理知识点。 */
+export async function deleteKnowledgeItem(
+  request: APIRequestContext,
+  token: string,
+  id: string
+): Promise<void> {
+  try {
+    await request.delete(`${API}/api/knowledge/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    /* 清理失败不阻断 */
+  }
+}
+
+/** 读复习活动(GET /api/knowledge/review-activity)。票81 用它做服务端旁证。 */
+export async function listReviewActivity(
+  request: APIRequestContext,
+  token: string
+): Promise<{ date: string; count: number }[]> {
+  const r = await request.get(`${API}/api/knowledge/review-activity`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!r.ok()) {
+    throw new Error(`[e2e] 读复习活动失败: HTTP ${r.status()}`);
+  }
+  return (await r.json()) as { date: string; count: number }[];
+}
+
+/** 本地日历日期键 YYYY-MM-DD —— 与前端 localDateKey、后端存储口径一致(不用 UTC)。 */
+export function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** 按 role 找投递记录(E2E 清理用)。 */
+export async function findApplicationByRole(
+  request: APIRequestContext,
+  token: string,
+  role: string
+): Promise<{ id: string } | null> {
+  try {
+    const r = await request.get(`${API}/api/jobs/applications?page=1&pageSize=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok()) return null;
+    const j = (await r.json()) as { items?: { id: string; role?: string }[] };
+    return (j.items ?? []).find((a) => a.role === role) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 清理投递记录。 */
+export async function deleteApplication(
+  request: APIRequestContext,
+  token: string,
+  id: string
+): Promise<void> {
+  try {
+    await request.delete(`${API}/api/jobs/applications/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    /* 清理失败不阻断 */
+  }
+}
+
+/** 给 Playbook 条目加一轮(Order 自动递增;stage 缺省 Technical)。 */
+export async function addRound(
+  request: APIRequestContext,
+  token: string,
+  entryId: string,
+  stage = 'Technical'
+): Promise<void> {
+  const r = await request.post(`${API}/api/interviews/${entryId}/rounds`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { stage },
+  });
+  if (!r.ok()) {
+    throw new Error(`[e2e] 加轮次失败: HTTP ${r.status()} ${(await r.text()).slice(0, 200)}`);
+  }
+}

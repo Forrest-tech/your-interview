@@ -1353,6 +1353,24 @@ public static class InvitePasteParser
         return m.Success ? m.Groups[1].Value.Trim() : null;
     }
 
+    // 票85:英文日期显式格式表(配 InvariantCulture 使用,不依赖宿主 culture)。
+    // 时刻形态由上方正则限定:时:分[ AM/PM] / 时:分AM / 时 AM / 时AM / 时:分(可 24h)。
+    private static readonly string[] EnglishMonthDateFormats =
+    {
+        "MMM d, yyyy h:mm tt", "MMM d, yyyy h:mmtt",
+        "MMM d, yyyy H:mm tt", "MMM d, yyyy H:mmtt",
+        "MMM d, yyyy h tt", "MMM d, yyyy htt",
+        "MMM d, yyyy H:mm",
+    };
+
+    private static readonly string[] SlashDateFormats =
+    {
+        "M/d/yyyy h:mm tt", "M/d/yyyy h:mmtt",
+        "M/d/yyyy H:mm tt", "M/d/yyyy H:mmtt",
+        "M/d/yyyy h tt", "M/d/yyyy htt",
+        "M/d/yyyy H:mm",
+    };
+
     private static DateTimeOffset? GuessTime(string text)
     {
         // 1) 2026-10-05 14:30 / 2026/10/05 14:30
@@ -1370,24 +1388,34 @@ public static class InvitePasteParser
         }
 
         // 2) Oct 5, 2026 at 2:30 PM (EST)
+        // ⚠️ 票85:原实现用 GetCultureInfo("en-US")——生产 runtimeconfig 开 invariant
+        //    globalization(Directory.Build.props),该调用直接抛 CultureNotFoundException,
+        //    英文日期整支失效(票28双向断言锁定)。改显式格式表 + InvariantCulture:
+        //    invariant 的月份缩写/AM-PM 标记即英文,且 InvariantCulture 本身在
+        //    invariant 宿主下可用。格式表逐项与旧 en-US TryParse 行为对齐过
+        //    (evidence-85 探针):含无后缀 24h 时刻(H:mm)、"14:30 PM" 这类
+        //    旧解析能解出的怪形态(H:mm tt),以及纯小时无分钟("…2026 2")旧解析
+        //    解不出——故表中不放裸 h/H 格式,保持解不出。
         m = Regex.Match(text,
             @"(?<mon>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(?<day>\d{1,2})(?:st|nd|rd|th)?,?\s+(?<y>20\d{2})\s*(?:at\s*)?(?<t>\d{1,2}(?::[0-5]\d)?\s*(?:AM|PM|am|pm)?)?");
         if (m.Success)
         {
             var s = $"{m.Groups["mon"].Value} {m.Groups["day"].Value}, {m.Groups["y"].Value} "
                     + (m.Groups["t"].Success && m.Groups["t"].Length > 0 ? m.Groups["t"].Value.Trim() : "9:00 AM");
-            if (DateTimeOffset.TryParse(s, CultureInfo.GetCultureInfo("en-US"), DateTimeStyles.AssumeLocal, out var dto2))
+            if (DateTimeOffset.TryParseExact(s, EnglishMonthDateFormats, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeLocal, out var dto2))
                 return dto2;
         }
 
-        // 3) 10/05/2026 2:00pm (同样两位优先)
+        // 3) 10/05/2026 2:00pm (同样两位优先;月日序按美式 MM/dd,歧义口径同旧 en-US)
         m = Regex.Match(text,
             @"(?<d>(?:1[0-2]|0?[1-9])/(?:[12]\d|3[01]|0?[1-9])/(?:20\d{2}))\s*(?:at\s*)?(?<t>\d{1,2}(?::[0-5]\d)?\s*(?:AM|PM|am|pm)?)?");
         if (m.Success)
         {
             var s = m.Groups["d"].Value + " "
                     + (m.Groups["t"].Success && m.Groups["t"].Length > 0 ? m.Groups["t"].Value.Trim() : "9:00 AM");
-            if (DateTimeOffset.TryParse(s, CultureInfo.GetCultureInfo("en-US"), DateTimeStyles.AssumeLocal, out var dto3))
+            if (DateTimeOffset.TryParseExact(s, SlashDateFormats, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeLocal, out var dto3))
                 return dto3;
         }
 

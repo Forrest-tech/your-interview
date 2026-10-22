@@ -1,4 +1,3 @@
-using System.Globalization;
 using YourInterview.Services.Jobs.Application;
 using Xunit;
 
@@ -132,33 +131,14 @@ public sealed class SmartParseRulesInviteTests
     public void Parse_Null_BoundaryNull_ThrowsNullReference()
         => Assert.Throws<NullReferenceException>(() => InvitePasteParser.Parse(null!));
 
-    // known-gap(非票 29 范围,报告已上报协调者另立票):
-    // 英文月份名日期分支(Oct 5, 2026 / 10/05/2026)走 GetCultureInfo("en-US")。
-    // 行为随**宿主进程**的 globalization 模式分裂:
-    //  - 生产/常规测试宿主:仓库全局 InvariantGlobalization=true(Directory.Build.props,
-    //    服务与 testhost 的 runtimeconfig 均为 invariant)→ GetCultureInfo 抛
-    //    CultureNotFoundException,整条解析抛错(探针 evidence-28/probe-output.txt 实证)。
-    //  - 沙盒定版的 xunit console runner 宿主:其自身 runtimeconfig 未开 invariant,
-    //    文化可用 → 正常解出时间(本套件在此通道实测)。
-    // 两种宿主下分别断言各自的确定行为,不是放宽断言:分裂本身就是要钉住的现状。
-    private static bool HostIsInvariant
-    {
-        get
-        {
-            try { _ = CultureInfo.GetCultureInfo("en-US"); return false; }
-            catch (CultureNotFoundException) { return true; }
-        }
-    }
-
+    // 票 85 已修(原票 28 known-gap #5):英文月份名/斜杠日期分支原走 GetCultureInfo("en-US"),
+    // 在 invariant 宿主(生产 runtimeconfig)抛 CultureNotFoundException。现改显式格式表 +
+    // InvariantCulture,两宿主行为统一为「正常解出」——以下断言即原非 invariant 宿主的锁定口径,
+    // 逐字不变;invariant 宿主下复跑全套由 evidence-85 留证。
     [Fact]
-    public void Parse_EnglishMonthNameDate_KnownGap_BehaviorDependsOnHostGlobalization()
+    public void Parse_EnglishMonthNameDate_InvariantHostSafe_Parses()
     {
         const string raw = "Round 2 will be on Oct 5, 2026 at 2:30 PM via Zoom. Interviewer: Jane Smith.";
-        if (HostIsInvariant)
-        {
-            Assert.Throws<CultureNotFoundException>(() => InvitePasteParser.Parse(raw));
-            return;
-        }
         var d = InvitePasteParser.Parse(raw);
         Assert.Equal(2, d.RoundNo);
         Assert.Equal("Video", d.Format);
@@ -167,14 +147,9 @@ public sealed class SmartParseRulesInviteTests
     }
 
     [Fact]
-    public void Parse_SlashDateUsForm_KnownGap_BehaviorDependsOnHostGlobalization()
+    public void Parse_SlashDateUsForm_InvariantHostSafe_Parses()
     {
         const string raw = "Phone screen on 10/05/2026 2:00pm with the recruiter.";
-        if (HostIsInvariant)
-        {
-            Assert.Throws<CultureNotFoundException>(() => InvitePasteParser.Parse(raw));
-            return;
-        }
         var d = InvitePasteParser.Parse(raw);
         Assert.Equal("Screen", d.Stage);
         Assert.Equal("Phone", d.Format);

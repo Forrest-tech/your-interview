@@ -536,8 +536,13 @@ export class PlaybookDetailComponent implements OnDestroy {
   }
 
   async toggleAction(actionId: string): Promise<void> {
-    await this.api.put(`/api/interviews/${this.id()}/actions/${actionId}/toggle`, {}).toPromise()
-      .catch(() => undefined);
+    const action = this.entry()?.actions?.find(a => a.id === actionId);
+    if (!action) return;
+    try {
+      await this.api.patch(`/api/interviews/${this.id()}/actions/${actionId}`, { isDone: !action.isDone }).toPromise();
+    } catch {
+      this.snack.open(this.t('pb.v2.d.toggleFailed'), this.t('common.close'), { duration: 3000 });
+    }
     await this.load();
   }
 

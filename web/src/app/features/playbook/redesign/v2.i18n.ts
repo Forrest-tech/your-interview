@@ -44,6 +44,7 @@ export const V2_I18N: Record<string, { zh: string; en: string; fr: string }> = {
   'pb.v2.d.saveFailed': { zh: '保存失败', en: 'Save failed', fr: 'Échec de l’enregistrement' },
   'pb.v2.d.deleteFailed': { zh: '删除失败', en: 'Delete failed', fr: 'Échec de la suppression' },
   'pb.v2.d.addFailed': { zh: '添加失败', en: 'Add failed', fr: 'Échec de l’ajout' },
+  'pb.v2.d.toggleFailed': { zh: '更新待办状态失败', en: 'Failed to update to-do status', fr: 'Échec de la mise à jour de la tâche' },
   'pb.v2.d.debriefSaved': { zh: '复盘已保存', en: 'Review saved', fr: 'Bilan enregistré' },
   'pb.v2.d.stripJd': { zh: 'JD 摘要', en: 'JD summary', fr: 'Résumé de l’offre' },
   'pb.v2.d.stripJdEmpty': { zh: '暂无 JD,点开可查看', en: 'No JD yet — open to view', fr: 'Pas d’offre — cliquez pour voir' },

@@ -37,6 +37,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.Jobs
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.Assessment.Tests", "Services.Assessment.Tests\YourInterview.Services.Assessment.Tests.csproj", "{D142F7B7-F0DD-4B03-AE99-B4B17E56717B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.Knowledge.Tests", "Services.Knowledge.Tests\YourInterview.Services.Knowledge.Tests.csproj", "{CEBB1A7A-0BF6-4376-8F99-F17F3F4270E8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -114,5 +116,9 @@ Global
 		{D142F7B7-F0DD-4B03-AE99-B4B17E56717B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D142F7B7-F0DD-4B03-AE99-B4B17E56717B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D142F7B7-F0DD-4B03-AE99-B4B17E56717B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CEBB1A7A-0BF6-4376-8F99-F17F3F4270E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CEBB1A7A-0BF6-4376-8F99-F17F3F4270E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CEBB1A7A-0BF6-4376-8F99-F17F3F4270E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CEBB1A7A-0BF6-4376-8F99-F17F3F4270E8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

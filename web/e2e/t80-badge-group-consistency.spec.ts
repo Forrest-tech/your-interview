@@ -49,6 +49,9 @@ test.describe('票80 · 详情页头部徽章与左侧分组一致', () => {
         `当前条目应高亮落在 In Progress 组,实际徽章文案为「${text}」`
       ).toHaveCount(1);
       await expect(currentInActive).toContainText(COMPANY);
+
+      // ⛔ 临时红灯验证：故意让 CI 失败，确认护栏通电
+      expect(1).toBe(2);
     } finally {
       await deleteEntry(request, auth.token, entryId);
     }

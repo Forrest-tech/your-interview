@@ -1868,6 +1868,8 @@ function trimForm(f: ApplicationForm): ApplicationForm {
             <span class="cl-status cl-generated">{{ t('tracker.dResumeTailored') }}</span>
           } @else if (appResumeKind() === 'base') {
             <span class="cl-status cl-draft">{{ t('tracker.dResumeBase') }}</span>
+          } @else if (appResumeKind() === 'text') {
+            <span class="cl-status cl-draft">{{ t('tracker.dResumeText') }}</span>
           }
           <span class="doc-actions">
             <button mat-button (click)="tailoredFile.click()">
@@ -1892,6 +1894,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
           @if (resumePdfRawUrl()) {
             <app-pdf-content-viewer [pdfUrl]="resumePdfRawUrl()"></app-pdf-content-viewer>
           }
+        } @else if (appResumeKind() === 'text') {
+          <!-- REQ-05:主简历只有文本版 —— 显示全文,不再误报「No resume yet」 -->
+          <p class="field-hint">{{ t('tracker.dResumeHint') }}</p>
+          <pre class="resume-text-view">{{ appResumeText() }}</pre>
         } @else {
           <p class="field-hint">{{ t('tracker.dResumeHint') }}</p>
           <p class="dim">{{ t('tracker.dNoResume') }}</p>
@@ -2366,6 +2372,12 @@ function trimForm(f: ApplicationForm): ApplicationForm {
       color: #1f2937;
     }
     .doc-filename mat-icon { color: #d32f2f; }
+    .resume-text-view {
+      white-space: pre-wrap; word-break: break-word;
+      font-size: 13px; line-height: 1.6; color: #1f2937;
+      background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+      padding: 12px 14px; margin: 12px 0; max-height: 480px; overflow: auto;
+    }
     .doc-pdf-viewer {
       width: 100%; height: 700px; border: 1px solid #e5e7eb;
       border-radius: 8px; background: #f9fafb;
@@ -2631,15 +2643,17 @@ export class ApplicationDetailDialogComponent {
 
   /**
    * Documents tab: 有效简历来源。
-   * tailored = 本投递的投递版本; base = 引用基础简历(不复制); none = 都没有。
+   * tailored = 本投递的投递版本; base = 引用基础简历文件(不复制);
+   * text = 主简历只有文本版(REQ-05 后端回落,无文件); none = 都没有。
    */
-  readonly appResumeKind = signal<'base' | 'tailored' | 'none'>('none');
+  readonly appResumeKind = signal<'base' | 'tailored' | 'text' | 'none'>('none');
 
   /**
    * 有效简历的提取文本(评分用)。来自后端 resume_files.TextContent ——
-   * 有 tailored 时后端返回 tailored 的文本,Resume Score 按投递版本算。
+   * 有 tailored 时后端返回 tailored 的文本,Resume Score 按投递版本算;
+   * kind=text 时为文本简历正文,Documents 直接展示全文(模板要读,故非 private)。
    */
-  private readonly appResumeText = signal<string | null>(null);
+  readonly appResumeText = signal<string | null>(null);
 
   /** 匹配分析结果。null = 还没算(JD 或简历缺失时保持 null)。 */
   readonly match = signal<MatchResult | null>(null);
@@ -2650,18 +2664,21 @@ export class ApplicationDetailDialogComponent {
   /**
    * 本投递的有效简历:先拿元信息(kind/fileName/textContent),再拿 PDF 二进制做预览。
    * kind=tailored → 显示投递版本;kind=base → 引用基础简历(不复制);
+   * kind=text → 主简历只有文本版:无 PDF 可取,直接展示 textContent 全文;
    * kind=none → 提示上传。
    */
   private loadAppResume(): void {
     this.api.get<{ kind: string; fileName: string | null; textContent: string | null }>(
       `/api/jobs/applications/${this.app.id}/resume`).subscribe({
       next: (r) => {
-        const kind = r.kind === 'tailored' ? 'tailored' : r.kind === 'base' ? 'base' : 'none';
+        const kind = r.kind === 'tailored' ? 'tailored'
+          : r.kind === 'base' ? 'base'
+          : r.kind === 'text' ? 'text' : 'none';
         this.appResumeKind.set(kind);
         this.resumeFileName.set(r.fileName);
         this.appResumeText.set(r.textContent);
         this.recomputeMatch();
-        if (kind !== 'none') {
+        if (kind === 'tailored' || kind === 'base') {
           this.api.getBlob(`/api/jobs/applications/${this.app.id}/resume-file`).subscribe({
             next: (blob) => {
               const url = URL.createObjectURL(blob);

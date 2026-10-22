@@ -129,6 +129,22 @@ public static class ServiceDefaults
         return builder;
     }
 
+    /// <summary>
+    /// 全局异常 → HTTP 状态码的唯一映射表(UseServiceDefaults 的异常处理器与测试共用同一口径)。
+    /// COD-05:EF Core 的 <see cref="DbUpdateConcurrencyException"/>(xmin 乐观并发令牌冲突)
+    /// 必须映射 409 Conflict —— 此前它落到默认分支冒 500,双标签页/双设备并发编辑同一条目时
+    /// 用户只看到「服务器错误」,无从知道自己的改动因版本过期而未保存。
+    /// </summary>
+    public static int MapExceptionToStatusCode(Exception? ex) => ex switch
+    {
+        ValidationException => StatusCodes.Status400BadRequest,
+        UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
+        KeyNotFoundException => StatusCodes.Status404NotFound,
+        DbUpdateConcurrencyException => StatusCodes.Status409Conflict,
+        ArgumentException => StatusCodes.Status400BadRequest,
+        _ => StatusCodes.Status500InternalServerError
+    };
+
     /// <summary>中间件管线(顺序即最佳实践,面试可直接讲)。</summary>
     public static WebApplication UseServiceDefaults(this WebApplication app, string serviceName)
     {
@@ -144,14 +160,7 @@ public static class ServiceDefaults
             var ex = feature?.Error;
             var isDev = app.Environment.IsDevelopment();
 
-            var status = ex switch
-            {
-                ValidationException => StatusCodes.Status400BadRequest,
-                UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
-                KeyNotFoundException => StatusCodes.Status404NotFound,
-                ArgumentException => StatusCodes.Status400BadRequest,
-                _ => StatusCodes.Status500InternalServerError
-            };
+            var status = MapExceptionToStatusCode(ex);
 
             ctx.Response.StatusCode = status;
             ctx.Response.ContentType = "application/problem+json";
@@ -166,6 +175,23 @@ public static class ServiceDefaults
                     Title = "One or more validation errors occurred.",
                     Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
                     Extensions = { ["traceId"] = ctx.TraceIdentifier }
+                });
+                return;
+            }
+
+            if (ex is DbUpdateConcurrencyException)
+            {
+                // COD-05:并发冲突给用户可执行的提示(刷新后重试),且该文案不含任何内部细节,
+                // 生产环境也照常下发 —— 与 500 的「隐藏 detail」口径不同,409 的 detail 就是给用户看的。
+                // code=concurrency_conflict 供前端统一错误处理(ApiClient)识别并给出本地化提示。
+                await ctx.Response.WriteAsJsonAsync(new ProblemDetails
+                {
+                    Status = status,
+                    Title = "Concurrency conflict",
+                    Detail = "This record was modified by someone else since it was loaded. " +
+                             "Your changes were not saved — refresh and try again.",
+                    Type = "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+                    Extensions = { ["traceId"] = ctx.TraceIdentifier, ["code"] = "concurrency_conflict" }
                 });
                 return;
             }

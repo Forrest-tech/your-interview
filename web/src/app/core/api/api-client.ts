@@ -158,6 +158,12 @@ export class ApiClient {
 
     let msg = backendText || statusFallback();
 
+    // COD-05:后端乐观并发冲突(409 + code=concurrency_conflict)—— 覆盖后端英文 detail,
+    // 给用户可执行的提示:这份改动没存上,刷新拿到最新版本后再改。
+    if (e?.status === 409 && obj?.code === 'concurrency_conflict') {
+      msg = '该记录已被他人修改,本次修改未保存,请刷新后重试';
+    }
+
     // ★ 空响应体的 401(框架 [Authorize] 拦截)没有 JSON 可供解析。
     //   从 WWW-Authenticate 头里把 error_description 抠出来,
     //   这样"令牌被吊销 / 签名不匹配 / 已过期"能区分,而不是笼统一句"重新登录"。

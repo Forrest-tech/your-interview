@@ -48,13 +48,17 @@ public sealed class AnalyticsController(ISender sender, ICurrentUser currentUser
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
-    /// <summary>写入一条能力快照(内部调用:Assessment 打分后立刻反映到雷达图)。</summary>
+    /// <summary>写入一条能力快照(Assessment 打分后立刻反映到雷达图)。</summary>
+    /// <remarks>
+    /// COD-02:归属一律以当前登录用户(Me)为准 —— 请求体不接受 UserId,
+    /// 杜绝带他人 UserId 替他人写入能力快照(可写型 IDOR)。
+    /// </remarks>
     [HttpPost("ability")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsWrite)]
     public async Task<IResult> RecordAbility([FromBody] RecordAbilityBody body, CancellationToken ct)
     {
         var r = await sender.Send(new RecordAbilityCommand(
-            body.UserId ?? Me, body.Dimension, body.Score, body.Source ?? "mock"), ct);
+            Me, body.Dimension, body.Score, body.Source ?? "mock"), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -68,4 +72,4 @@ public sealed class AnalyticsController(ISender sender, ICurrentUser currentUser
     }
 }
 
-public sealed record RecordAbilityBody(Guid? UserId, string Dimension, int Score, string? Source);
+public sealed record RecordAbilityBody(string Dimension, int Score, string? Source);

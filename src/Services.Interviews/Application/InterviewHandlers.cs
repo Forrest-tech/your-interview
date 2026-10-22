@@ -981,6 +981,24 @@ public sealed class CreateEntryCommandHandler(InterviewsDbContext db)
 {
     public async Task<Result<Guid>> Handle(CreateEntryCommand request, CancellationToken ct)
     {
+        // FUN-03(票10):JobApplicationId 幂等 —— Tracker 点 Prep 重复点击/重试时,
+        // 当前用户名下已有同 JobApplicationId 的条目就直接返回既有条目 id、不新建,
+        // 否则同一投递散落两条备考记录,轮次/材料各记一半。口径与票03 用户隔离
+        // 一致:只查当前用户自己的条目(全局过滤器之外再显式带 UserId 谓词);
+        // 软删条目被全局过滤器排除,删除后重新 Prep 仍可正常新建。
+        // 无 JobApplicationId(或空 Guid)的建单不参与去重,行为不变。
+        // 存量若已有多条重复,返回最早建的那条(原始条目)。
+        if (request.JobApplicationId is { } jobApplicationId && jobApplicationId != Guid.Empty)
+        {
+            var existingId = await db.Entries.AsNoTracking()
+                .Where(x => x.UserId == request.UserId && x.JobApplicationId == jobApplicationId)
+                .OrderBy(x => x.CreatedAt)
+                .Select(x => (Guid?)x.Id)
+                .FirstOrDefaultAsync(ct);
+            if (existingId is not null)
+                return Result.Success(existingId.Value);
+        }
+
         // CompanyId 可空:Tracker 一键创建时只知道公司名,按名复用已有公司的 Id,
         // 找不到则生成新的 —— 避免 Guid.Empty 导致公司树聚合错乱。
         var companyId = request.CompanyId;

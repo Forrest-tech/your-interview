@@ -486,9 +486,12 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     dialogRef.afterClosed().subscribe(go => {
       if (go) {
         // ★ F-B1: 直接创建 Playbook 条目并预填,不让用户重输
+        // FUN-03:必须带 jobApplicationId —— 后端按它幂等,已有条目时返回既有 id,
+        // 前端直接跳既有条目;此前这条路径没带,每次改状态到 Interview 都新建第二条。
         this.api.post<{ id: string }>('/api/interviews', {
           companyName: app.companyName,
           role: app.role,
+          jobApplicationId: app.id,
           jdText: app.jdText || null,
         }).subscribe({
           next: (r) => {

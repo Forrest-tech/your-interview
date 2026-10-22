@@ -11,10 +11,10 @@
  * 另一个动机:"页面能开但 API 全挂"是最经典的假成功,页面 HTML 200 但每个接口
  *   都在 500,此时跑 E2E 只会得到一堆莫名其妙的红。这里逐个探真实能力。
  */
-const API = process.env.E2E_API ?? 'http://127.0.0.1:5200';
-const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:4200';
-const EMAIL = process.env.E2E_EMAIL ?? 'admin@your-interview.local';
-const PASSWORD = process.env.E2E_PASSWORD ?? 'Admin@2026';
+const API = process.env['E2E_API'] ?? 'http://127.0.0.1:5200';
+const WEB = process.env['E2E_WEB'] ?? 'http://127.0.0.1:4200';
+const EMAIL = process.env['E2E_EMAIL'] ?? 'admin@your-interview.local';
+const PASSWORD = process.env['E2E_PASSWORD'] ?? 'Admin@2026';
 
 async function waitForLoginWorks(timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;

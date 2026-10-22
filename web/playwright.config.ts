@@ -8,7 +8,7 @@ import { defineConfig, devices } from '@playwright/test';
  * 服务起法不在本套件范围(B4 落地后切到一条命令):这里只做**依赖等待与健康检查**,
  * 半起状态下不许开跑 —— 否则会跑出假绿/假红,那比不跑更糟。
  */
-const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:4200';
+const WEB = process.env['E2E_WEB'] ?? 'http://127.0.0.1:4200';
 
 export default defineConfig({
   testDir: './e2e',
@@ -17,8 +17,8 @@ export default defineConfig({
   // 黄金路径之间共享同一账号与后端数据,串行更可预测,也避免互相踩数据
   fullyParallel: false,
   workers: 1,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  forbidOnly: !!process.env['CI'],
+  retries: process.env['CI'] ? 1 : 0,
   reporter: [
     ['list'],
     ['html', { outputFolder: 'e2e/.report', open: 'never' }],

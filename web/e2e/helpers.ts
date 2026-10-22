@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 
 /** 后端网关(gateway)。E2E 直连网关,不经前端代理 —— 失败时能直接区分是 API 挂了还是页面挂了。 */
-export const API = process.env.E2E_API ?? 'http://127.0.0.1:5200';
+export const API = process.env['E2E_API'] ?? 'http://127.0.0.1:5200';
 
 /**
  * E2E 专用种子账号。
@@ -10,8 +10,8 @@ export const API = process.env.E2E_API ?? 'http://127.0.0.1:5200';
  *    也不许依赖他人遗留数据 —— 否则套件换个环境就红。
  */
 export const E2E_USER = {
-  email: process.env.E2E_EMAIL ?? 'admin@your-interview.local',
-  password: process.env.E2E_PASSWORD ?? 'Admin@2026',
+  email: process.env['E2E_EMAIL'] ?? 'admin@your-interview.local',
+  password: process.env['E2E_PASSWORD'] ?? 'Admin@2026',
 };
 
 export interface Auth {

@@ -1,4 +1,5 @@
 using YourInterview.BuildingBlocks.Domain;
+using YourInterview.Services.Interviews.Domain.JsonFields;
 
 namespace YourInterview.Services.Interviews.Domain;
 
@@ -153,7 +154,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public string Role { get; private set; } = string.Empty;
 
     /// <summary>复盘 (JSON):面试后总结,原存 localStorage,现迁后端。</summary>
-    public string? DebriefJson { get; private set; }
+    private string? _debriefJson;
+    public string? DebriefJson { get => JsonFieldAdapter.Unwrap(_debriefJson); private set => _debriefJson = JsonFieldAdapter.Wrap(value); }
 
     public void SetDebrief(string? json) { DebriefJson = json; Touch(); }
 
@@ -179,7 +181,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public string? JdSummary { get; private set; }
 
     /// <summary>"我要问面试官的问题"JSON 数组(F3):[{text, checked?}]。</summary>
-    public string? QuestionsToAskJson { get; private set; }
+    private string? _questionsToAskJson;
+    public string? QuestionsToAskJson { get => JsonFieldAdapter.Unwrap(_questionsToAskJson); private set => _questionsToAskJson = JsonFieldAdapter.Wrap(value); }
 
     // ---------- 面试场次信息 ----------
     public int RoundNo { get; private set; } = 1;
@@ -209,7 +212,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     /// 客观声学指标 JSON(缺口4,2026-10-07)。Worker 回写时带上,
     /// 内容即 Analysis.Worker 的 SpeechMetrics 序列化。存原文,前端直接展示。
     /// </summary>
-    public string? SpeechMetricsJson { get; private set; }
+    private string? _speechMetricsJson;
+    public string? SpeechMetricsJson { get => JsonFieldAdapter.Unwrap(_speechMetricsJson); private set => _speechMetricsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>
     /// 计分文本(2026-10-15):被 SpeakerLabelStage 标为 CANDIDATE 的分段拼接。
@@ -821,14 +825,16 @@ public sealed class InterviewAsset : Entity
     public string? TranscriptText { get; private set; }
 
     /// <summary>转写分段 JSON: [{idx,speaker,start,end,text,pitchHz}] —— 说话人分离结果。</summary>
-    public string? TranscriptSegmentsJson { get; private set; }
+    private string? _transcriptSegmentsJson;
+    public string? TranscriptSegmentsJson { get => JsonFieldAdapter.Unwrap(_transcriptSegmentsJson); private set => _transcriptSegmentsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>
     /// 材料元数据 JSON(2026-10-20 详情页 v2):统一入口解析出的字段
     /// (邮件分类/发件人/主题/时间、截图附件 assetId、AI 摘要、提取到的安排、
     /// 沟通处理状态、来源场景 如电话/邮件)。结构由前端约定,后端只透传存储。
     /// </summary>
-    public string? MetaJson { get; private set; }
+    private string? _metaJson;
+    public string? MetaJson { get => JsonFieldAdapter.Unwrap(_metaJson); private set => _metaJson = JsonFieldAdapter.Wrap(value); }
 
     internal void Reassign(Guid? roundId) => RoundId = roundId;
 
@@ -889,7 +895,8 @@ public sealed class InterviewQuestion : Entity
     /// pronunciation:{score,comment,fix}}, stdSpoken:{ai,user}, stdTechnical:{ai,user}}。
     /// 标准答案 AI 原版与用户编辑版分开存,用户版优先、可还原。
     /// </summary>
-    public string? ReviewJson { get; private set; }
+    private string? _reviewJson;
+    public string? ReviewJson { get => JsonFieldAdapter.Unwrap(_reviewJson); private set => _reviewJson = JsonFieldAdapter.Wrap(value); }
 
     internal void SetReview(string? reviewJson) => ReviewJson = reviewJson;
 
@@ -926,13 +933,16 @@ public sealed class InterviewQuestion : Entity
     public double? AskedAtSeconds { get; private set; }
 
     /// <summary>短板标签 JSON 数组,如 ["Structure","Terminology"]。</summary>
-    public string? WeaknessTagsJson { get; private set; }
+    private string? _weaknessTagsJson;
+    public string? WeaknessTagsJson { get => JsonFieldAdapter.Unwrap(_weaknessTagsJson); private set => _weaknessTagsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>可能被追问什么(JSON 数组),提前准备。</summary>
-    public string? FollowUpQuestionsJson { get; private set; }
+    private string? _followUpQuestionsJson;
+    public string? FollowUpQuestionsJson { get => JsonFieldAdapter.Unwrap(_followUpQuestionsJson); private set => _followUpQuestionsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>漏掉的得分点(JSON 数组)。</summary>
-    public string? MissedPointsJson { get; private set; }
+    private string? _missedPointsJson;
+    public string? MissedPointsJson { get => JsonFieldAdapter.Unwrap(_missedPointsJson); private set => _missedPointsJson = JsonFieldAdapter.Wrap(value); }
 
     internal void FillAnswer(string? myAnswerText, string? assessment, bool gotStuck,
         string? stuckReason, string? recommendedAnswer, double? askedAtSeconds)
@@ -1058,10 +1068,12 @@ public sealed class InterviewRound : Entity
     public string? ScheduledTime { get; private set; }
 
     /// <summary>备考问题清单 JSON:[{text, checked}]。</summary>
-    public string? PrepQuestionsJson { get; private set; }
+    private string? _prepQuestionsJson;
+    public string? PrepQuestionsJson { get => JsonFieldAdapter.Unwrap(_prepQuestionsJson); private set => _prepQuestionsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>相关邮件 JSON:[{subject, from, date, snippet}]。</summary>
-    public string? EmailsJson { get; private set; }
+    private string? _emailsJson;
+    public string? EmailsJson { get => JsonFieldAdapter.Unwrap(_emailsJson); private set => _emailsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>面试录音文稿。</summary>
     public string? Transcript { get; private set; }
@@ -1070,21 +1082,24 @@ public sealed class InterviewRound : Entity
     public string? RecordingUrl { get; private set; }
 
     /// <summary>准备清单 JSON:[{text, done}]。</summary>
-    public string? ChecklistJson { get; private set; }
+    private string? _checklistJson;
+    public string? ChecklistJson { get => JsonFieldAdapter.Unwrap(_checklistJson); private set => _checklistJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>
     /// 整轮复盘汇总 JSON(2026-10-20 详情页 v2):
     /// {overall, passProbability, passBasis, strongest, weakest, summary}。
     /// passProbability 明确是 AI 估计,依据写在 passBasis。
     /// </summary>
-    public string? ReviewJson { get; private set; }
+    private string? _reviewJson;
+    public string? ReviewJson { get => JsonFieldAdapter.Unwrap(_reviewJson); private set => _reviewJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>
     /// 结构化备考报告 JSON(2026-10-20 详情页 v2):
     /// {generatedAt, generatedBy, sources, sections:[{id,title,blocks}], questions:[...]}。
     /// 题目与 Tech Stack 的关联以 knowledgeId 挂接(同一条记录,不复制答案)。
     /// </summary>
-    public string? PrepReportJson { get; private set; }
+    private string? _prepReportJson;
+    public string? PrepReportJson { get => JsonFieldAdapter.Unwrap(_prepReportJson); private set => _prepReportJson = JsonFieldAdapter.Wrap(value); }
 
     internal void SetReview(string? reviewJson) => ReviewJson = reviewJson;
 
@@ -1259,10 +1274,12 @@ public sealed class AnalysisSnapshot : Entity
     /// 六维分数 JSON:{overall,pronunciation,fluency,structure,technicalDepth,relevance}。
     /// 各维度可空(如文本模式的 pronunciation 为 null),前端按"未测量"展示。
     /// </summary>
-    public string? DimensionsJson { get; private set; }
+    private string? _dimensionsJson;
+    public string? DimensionsJson { get => JsonFieldAdapter.Unwrap(_dimensionsJson); private set => _dimensionsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>3~5 条一句话结论的 JSON 数组(由回写时的 Summary 句子切分得到)。</summary>
-    public string? SummaryBulletsJson { get; private set; }
+    private string? _summaryBulletsJson;
+    public string? SummaryBulletsJson { get => JsonFieldAdapter.Unwrap(_summaryBulletsJson); private set => _summaryBulletsJson = JsonFieldAdapter.Wrap(value); }
 
     public DateTimeOffset CreatedAt { get; private set; }
 }

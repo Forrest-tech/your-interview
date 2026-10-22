@@ -121,6 +121,10 @@ public sealed class InterviewsDbContext(
             e.Property(x => x.UserId).IsRequired();   // COD-01 contract:回填后收紧为非空
             // PostgreSQL 原生 xmin 做乐观并发令牌,不需要额外 rowversion 列
             e.UseXminAsConcurrencyToken();
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(InterviewEntry.DebriefJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewEntry.QuestionsToAskJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewEntry.SpeechMetricsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
 
             e.HasMany(x => x.Assets).WithOne().HasForeignKey(a => a.InterviewEntryId)
@@ -171,6 +175,9 @@ public sealed class InterviewsDbContext(
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
             // 2026-10-20 详情页 v2:材料元数据(解析字段/摘要/处理状态等),前端约定结构。
             e.Property(x => x.MetaJson).HasColumnType("text");
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(InterviewAsset.TranscriptSegmentsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewAsset.MetaJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             // 2026-10-19:资产按 Round 管理。历史材料 RoundId/Phase 保持 null,不强制回填。
             e.Property(x => x.RoundId);
             e.Property(x => x.Phase).HasConversion<string>().HasMaxLength(10);
@@ -197,6 +204,11 @@ public sealed class InterviewsDbContext(
             e.Property(x => x.RoundId);
             e.Property(x => x.AskedBy).HasMaxLength(200);
             e.Property(x => x.ReviewJson).HasColumnType("text");
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(InterviewQuestion.ReviewJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewQuestion.WeaknessTagsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewQuestion.FollowUpQuestionsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewQuestion.MissedPointsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Sequence });
         });
@@ -233,6 +245,12 @@ public sealed class InterviewsDbContext(
             // 2026-10-20 详情页 v2:整轮复盘汇总 + 结构化备考报告。
             e.Property(x => x.ReviewJson).HasColumnType("text");
             e.Property(x => x.PrepReportJson).HasColumnType("text");
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(InterviewRound.PrepQuestionsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewRound.EmailsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewRound.ChecklistJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewRound.ReviewJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewRound.PrepReportJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.Property(x => x.RecordingUrl).HasMaxLength(2000);
             e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.InterviewEntryId);
@@ -264,6 +282,9 @@ public sealed class InterviewsDbContext(
             e.HasKey(x => x.Id);
             e.Property(x => x.DimensionsJson).HasColumnType("text");
             e.Property(x => x.SummaryBulletsJson).HasColumnType("text");
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(AnalysisSnapshot.DimensionsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(AnalysisSnapshot.SummaryBulletsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.CreatedAt });
         });

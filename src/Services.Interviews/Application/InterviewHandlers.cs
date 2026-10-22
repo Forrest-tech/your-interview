@@ -7,6 +7,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.Services.Interviews.Domain;
+using YourInterview.Services.Interviews.Domain.JsonFields;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
 using YourInterview.Services.Interviews.Infrastructure.Services;
 using YourInterview.Services.Interviews.Infrastructure.Storage;
@@ -589,21 +590,19 @@ public static class InterviewMappingExtensions
             .Select(x => x.ToDto()).ToList(), e.DebriefJson,
         DeriveOutcome(e)?.ToString());
 
-    /// <summary>指标 JSON 反序列化:坏数据/缺字段时返回 null,前端按"无指标"处理。</summary>
+    /// <summary>指标 JSON 反序列化(票19:经 JsonFieldAdapter 强类型读):坏数据/缺字段时返回 null,前端按"无指标"处理。</summary>
     private static SpeechMetricsDto? ParseSpeechMetrics(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;
         try
         {
-            return JsonSerializer.Deserialize<SpeechMetricsDto>(json, JsonOpts);
+            return JsonFieldAdapter.Read<SpeechMetricsDto>(json);
         }
         catch
         {
             return null;
         }
     }
-
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     /// <summary>列表项只带聚合的标量字段(不带子集合),避免列表页把大文本拖出来。</summary>
     public static InterviewEntryListItemDto ToListItemDto(this InterviewEntry e) => new(
@@ -1535,33 +1534,23 @@ public sealed class GetRoundPassProbabilityQueryHandler(InterviewsDbContext db)
         }
 
         // 准备度信号:本轮的准备越充分,微调概率
+        // 票19:同上 —— 加载轮次实体,Json 字段经属性 getter(原始载荷)判定
         var target = await db.Entries.AsNoTracking()
             .Where(e => e.UserId == request.UserId)
-            .SelectMany(e => e.Rounds, (e, r) => new { e, r })
-            .Where(x => x.r.Id == request.RoundId)
-            .Select(x => new
-            {
-                x.r.PrepQuestionsJson,
-                x.r.Transcript,
-                x.r.RecordingUrl,
-                x.r.EmailsJson,
-                x.r.Notes,
-                x.r.Feedback
-            })
+            .SelectMany(e => e.Rounds)
+            .Where(r => r.Id == request.RoundId)
             .FirstOrDefaultAsync(ct);
 
         int adjustment = 0;
         if (target is not null)
         {
-            if (!string.IsNullOrWhiteSpace(target.PrepQuestionsJson)
-                && target.PrepQuestionsJson != "[]")
+            if (!JsonFieldAdapter.IsEmptyArray(target.PrepQuestionsJson))
             { adjustment += 5; factors.Add(new OfferFactorDto("pp_prep_list")); }
 
             if (!string.IsNullOrWhiteSpace(target.Notes))
             { adjustment += 3; factors.Add(new OfferFactorDto("pp_has_notes")); }
 
-            if (!string.IsNullOrWhiteSpace(target.EmailsJson)
-                && target.EmailsJson != "[]")
+            if (!JsonFieldAdapter.IsEmptyArray(target.EmailsJson))
             { adjustment += 2; factors.Add(new OfferFactorDto("pp_has_email")); }
         }
 
@@ -1637,24 +1626,30 @@ public sealed class GetOfferProbabilityQueryHandler(InterviewsDbContext db)
         // 准备度:整单的 Q&A、轮次准备完整度微调
         var prep = await db.Entries.AsNoTracking()
             .Where(e => e.Id == request.EntryId && e.UserId == request.UserId)
-            .Select(e => new
-            {
-                QaCount = e.Questions.Count,
-                RoundPrepDone = e.Rounds.Count(r =>
-                    r.PrepQuestionsJson != null && r.PrepQuestionsJson != "[]")
-            })
+            .Select(e => new { QaCount = e.Questions.Count })
             .FirstOrDefaultAsync(ct);
+        // 票19:PrepQuestionsJson 存版本信封后 SQL 侧字符串判定失效 —— 拉本条目轮次(个人量级)
+        // 经属性 getter + adapter 类型化判定计数,与迁移前口径逐项一致(文件内 GetQuestionHistory 同先例)
+        var roundPrepDone = 0;
+        if (prep is not null)
+        {
+            var rounds = await db.Entries.AsNoTracking()
+                .Where(e => e.Id == request.EntryId && e.UserId == request.UserId)
+                .SelectMany(e => e.Rounds)
+                .ToListAsync(ct);
+            roundPrepDone = rounds.Count(r => !JsonFieldAdapter.IsEmptyArray(r.PrepQuestionsJson));
+        }
 
         int adjustment = 0;
         if (prep is not null)
         {
             if (prep.QaCount >= 5)
             { adjustment += 5; factors.Add(new OfferFactorDto("qa_bonus", prep.QaCount)); }
-            if (prep.RoundPrepDone > 0)
+            if (roundPrepDone > 0)
             {
-                int prepBonus = 3 * Math.Min(3, prep.RoundPrepDone);
+                int prepBonus = 3 * Math.Min(3, roundPrepDone);
                 adjustment += prepBonus;
-                factors.Add(new OfferFactorDto("prep_bonus", prep.RoundPrepDone, prepBonus));
+                factors.Add(new OfferFactorDto("prep_bonus", roundPrepDone, prepBonus));
             }
         }
 
@@ -2077,12 +2072,13 @@ public sealed class GetLatestSnapshotQueryHandler(InterviewsDbContext db)
         if (!exists)
             return Result.Failure<AnalysisSnapshotDto?>(Error.NotFound("面试条目"));
 
-        var s = await db.AnalysisSnapshots.AsNoTracking()
+        // 票19:Json 字段存版本信封,EF 投影直读列会漏出信封形 —— 先加载实体再经属性 getter 映射
+        var snap = await db.AnalysisSnapshots.AsNoTracking()
             .Where(x => x.InterviewEntryId == request.EntryId)
             .OrderByDescending(x => x.CreatedAt)
-            .Select(x => new AnalysisSnapshotDto(
-                x.Id, x.CreatedAt, x.OverallScore, x.DimensionsJson, x.SummaryBulletsJson))
             .FirstOrDefaultAsync(ct);
+        var s = snap is null ? null : new AnalysisSnapshotDto(
+            snap.Id, snap.CreatedAt, snap.OverallScore, snap.DimensionsJson, snap.SummaryBulletsJson);
         return Result.Success(s);
     }
 }
@@ -2175,7 +2171,6 @@ public sealed class GetCoverageQueryHandler(InterviewsDbContext db)
 public sealed class UpdateRoundEmailsCommandHandler(InterviewsDbContext db)
     : IRequestHandler<UpdateRoundEmailsCommand, Result>
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     public async Task<Result> Handle(UpdateRoundEmailsCommand request, CancellationToken ct)
     {
@@ -2185,7 +2180,7 @@ public sealed class UpdateRoundEmailsCommandHandler(InterviewsDbContext db)
 
         try
         {
-            var json = JsonSerializer.Serialize(request.Emails, JsonOpts);
+            var json = JsonFieldAdapter.Serialize(request.Emails);
             e.SetRoundEmails(request.RoundId, json);
             await db.SaveChangesAsync(ct);
             return Result.Success();
@@ -2590,7 +2585,7 @@ public sealed class GenerateRoundReviewCommandHandler(InterviewsDbContext db, IA
                     var review = new Dictionary<string, object?>();
                     foreach (var p in qEl.EnumerateObject())
                         if (p.Name != "sequence") review[p.Name] = p.Value.Clone();
-                    e.SetQuestionReview(q.Id, JsonSerializer.Serialize(review));
+                    e.SetQuestionReview(q.Id, JsonFieldAdapter.SerializeRaw(review));
                     // 兼容旧字段:RecommendedAnswer 同步技术版,Assessment 同步总评
                     var stdTech = qEl.TryGetProperty("stdTechnical", out var st) ? st.GetString() : null;
                     var verdict = qEl.TryGetProperty("verdict", out var vd) ? vd.GetString() : null;
@@ -3004,7 +2999,7 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
             sources,
             sections
         };
-        return JsonSerializer.Serialize(report);
+        return JsonFieldAdapter.SerializeRaw(report);
     }
 
     /// <summary>本地兜底文案三套(zh/en/fr)—— 与系统三语口径一致,禁止只写中文。</summary>

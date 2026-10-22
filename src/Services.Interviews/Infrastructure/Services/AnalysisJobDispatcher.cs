@@ -1,7 +1,7 @@
-using System.Text.Json;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using YourInterview.Services.Interviews.Domain;
+using YourInterview.Services.Interviews.Domain.JsonFields;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
 using YourInterview.SharedContracts.Events;
 
@@ -135,8 +135,8 @@ public sealed class AnalysisJobDispatcher(
     /// <summary>台账行 → 集成事件。负载字段与 Worker 消费端约定一一对应。</summary>
     private static InterviewAnalysisRequested BuildEvent(AnalysisJob job)
     {
-        var payload = JsonSerializer
-            .Deserialize<AnalysisJobOutboxInterceptor.JobPayload>(job.PayloadJson);
+        var payload = JsonFieldAdapter
+            .ReadRaw<AnalysisJobOutboxInterceptor.JobPayload>(job.PayloadJson);
         return new InterviewAnalysisRequested(
             job.InterviewEntryId,
             payload?.AssetId ?? Guid.Empty,

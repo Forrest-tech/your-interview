@@ -28,11 +28,13 @@ public sealed record ResumeFileDto(
     /// <summary>提取文本(评分用)。列表场景不需要时可为空。</summary>
     string? TextContent);
 
-/// <summary>某条投递的有效简历:tailored 优先,没有就回落基础。</summary>
+/// <summary>某条投递的有效简历:tailored 优先,没有就回落基础文件,再没有回落文本简历。</summary>
 public sealed record EffectiveResumeDto(
-    /// <summary>"tailored" | "base" | "none"</summary>
+    /// <summary>"tailored" | "base" | "text" | "none"</summary>
     string Kind,
-    ResumeFileDto? File);
+    ResumeFileDto? File,
+    /// <summary>REQ-05:Kind=text 时的文本简历正文(主简历 resumes 表)。文件形态时为 null,文本走 File.TextContent。</summary>
+    string? TextContent = null);
 
 /// <summary>上传/覆盖简历 PDF。ApplicationId 为 null = 基础简历,有值 = 该投递的 tailored。</summary>
 public sealed record SaveResumeFileCommand(
@@ -109,7 +111,7 @@ public sealed class GetResumeFileQueryHandler(JobsDbContext db)
     }
 }
 
-/// <summary>某条投递的有效简历:tailored 优先,没有回落基础,都没有返回 Kind=none。</summary>
+/// <summary>某条投递的有效简历:tailored 优先,没有回落基础文件,再没有回落文本简历,都没有返回 Kind=none。</summary>
 public sealed record GetEffectiveResumeQuery(Guid UserId, Guid ApplicationId)
     : IRequest<Result<EffectiveResumeDto>>;
 
@@ -131,6 +133,15 @@ public sealed class GetEffectiveResumeQueryHandler(JobsDbContext db)
         if (baseFile is not null)
             return Result.Success(new EffectiveResumeDto("base",
                 SaveResumeFileCommandHandler.ToDto(baseFile, includeText: true)));
+
+        // REQ-05 回落:主简历只有文本版(resumes 表,无文件)时,Documents 不该显示「No resume yet」。
+        // 归属口径与文件查询一致 —— 只查当前用户自己的文本简历(票03 先例),他人文本不回落。
+        // 空白文本视为无简历:SaveResume 本就拒绝空白存入,但存量/直写数据可能留空白行,
+        // 与控制器 textContent 的空白→null 口径保持一致。
+        var textResume = await db.Resumes.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == request.UserId, ct);
+        if (textResume is not null && !string.IsNullOrWhiteSpace(textResume.Content))
+            return Result.Success(new EffectiveResumeDto("text", null, textResume.Content));
 
         return Result.Success(new EffectiveResumeDto("none", null));
     }

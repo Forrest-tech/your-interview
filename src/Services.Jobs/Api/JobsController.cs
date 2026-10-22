@@ -535,8 +535,10 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     }
 
     /// <summary>
-    /// 某条投递的有效简历元信息。kind=tailored(投递版本) / base(引用基础) / none(都没有)。
-    /// textContent 供 Resume Score 按投递版本算分 —— 有 tailored 就用 tailored 的文本。
+    /// 某条投递的有效简历元信息。kind=tailored(投递版本) / base(引用基础文件) /
+    /// text(REQ-05 回落:主简历只有文本版) / none(都没有)。
+    /// textContent 供 Resume Score 按投递版本算分 —— 有 tailored 就用 tailored 的文本;
+    /// kind=text 时为文本简历正文,fileName/size 为 null(无文件可下载)。
     /// </summary>
     [HttpGet("applications/{applicationId:guid}/resume")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
@@ -545,12 +547,13 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         var r = await sender.Send(new GetEffectiveResumeQuery(Me, applicationId), ct);
         if (!r.IsSuccess) return r.ToProblemDetails();
         var v = r.Value;
+        var rawText = v.File?.TextContent ?? v.TextContent;
         return Microsoft.AspNetCore.Http.Results.Ok(new
         {
             kind = v.Kind,
             fileName = v.File?.FileName,
             size = v.File?.Size,
-            textContent = string.IsNullOrWhiteSpace(v.File?.TextContent) ? null : v.File.TextContent
+            textContent = string.IsNullOrWhiteSpace(rawText) ? null : rawText
         });
     }
 

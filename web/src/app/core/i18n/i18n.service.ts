@@ -856,6 +856,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dResumeHint': { zh: '显示投递时使用的简历版本。', en: 'Shows the resume version used for this application.', fr: 'Affiche la version du CV utilisée.' },
   'tracker.dNoResume': { zh: '暂无简历。上传投递版本后在此显示。', en: 'No resume yet. Upload the submitted version to display here.', fr: 'Pas de CV.' },
   'tracker.dResumeBase': { zh: '基础简历(引用 /resume,不复制)', en: 'Base resume (referenced from /resume, not copied)', fr: 'CV de base (référencé)' },
+  'tracker.dResumeText': { zh: '文本简历(主简历,无文件)', en: 'Text resume (main resume, no file)', fr: 'CV texte (principal, sans fichier)' },
   'tracker.dResumeTailored': { zh: '投递版本', en: 'Tailored version', fr: 'Version adaptée' },
   'tracker.dResumeUploadTailored': { zh: '上传投递版本', en: 'Upload tailored version', fr: 'Téléverser la version adaptée' },
   'tracker.dResumeRemoveTailored': { zh: '移除投递版本(回落到基础简历)', en: 'Remove tailored version (fall back to base)', fr: 'Retirer la version adaptée' },

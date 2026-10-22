@@ -17,6 +17,9 @@ namespace YourInterview.BuildingBlocks.Tests;
 /// COD-13 / 票24 追加:JsonException(AttachAsset 以 ReadFromJsonAsync 直读请求体,
 /// 坏 JSON 时由 STJ 抛 JsonException 且无局部捕获)必须映射 400 而非默认 500;
 /// 真实端点坏 JSON 实测见 evidence-24。既有映射在本文件逐项锁定,不许回退。
+/// 票76 追加:BadHttpRequestException(Kestrel 请求体超上限时抛,框架 StatusCode=413)
+/// 必须透传其框架 StatusCode(超限即 413)而非默认 500;票24 在此处的
+/// 「仍落 500」不变项锁定随本票翻转。真实端点超限实测见 evidence-76。
 /// </summary>
 public class ExceptionStatusMappingTests
 {
@@ -131,12 +134,63 @@ public class ExceptionStatusMappingTests
             .Should().Be(StatusCodes.Status400BadRequest);
     }
 
-    [Fact] // 不变项(票76 范围,本票不顺手做 413):BadHttpRequestException 仍落默认 500
-    public void BadHttpRequestException_StillMapsTo500_InThisTicket()
+    // ---- 票76:BadHttpRequestException → 透传框架 StatusCode(超限 = 413) ----
+
+    [Fact] // 核心:Kestrel 超限真实形态(消息与框架 StatusCode=413,活体三服务实证同型)
+    public void BadHttpRequestException_PayloadTooLarge_MapsTo413()
     {
-        ServiceDefaults.MapExceptionToStatusCode(
-                new BadHttpRequestException("Request body too large.", StatusCodes.Status413PayloadTooLarge))
-            .Should().Be(StatusCodes.Status500InternalServerError);
+        ServiceDefaults.MapExceptionToStatusCode(new BadHttpRequestException(
+                "Request body too large. The max request body size is 67108864 bytes.",
+                StatusCodes.Status413PayloadTooLarge))
+            .Should().Be(StatusCodes.Status413PayloadTooLarge);
+    }
+
+    [Fact] // 透传而非硬编码 413:框架其他细分码(请求头过大 431)原样返回
+    public void BadHttpRequestException_HeaderFieldsTooLarge_PassesThrough431()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new BadHttpRequestException(
+                "Request headers too large.", StatusCodes.Status431RequestHeaderFieldsTooLarge))
+            .Should().Be(StatusCodes.Status431RequestHeaderFieldsTooLarge);
+    }
+
+    [Fact] // 透传:框架其他细分码(408)原样返回
+    public void BadHttpRequestException_RequestTimeout_PassesThrough408()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new BadHttpRequestException(
+                "Reading the request body timed out.", StatusCodes.Status408RequestTimeout))
+            .Should().Be(StatusCodes.Status408RequestTimeout);
+    }
+
+    [Fact] // boundary:默认构造的框架 StatusCode 本即 400(非超限形态),透传后仍是客户端错误而非 500/413
+    public void BadHttpRequestException_DefaultStatusCode_MapsTo400()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new BadHttpRequestException("Bad request."))
+            .Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    [Fact] // 真实形态:带内部异常的构造(Kestrel 包装 IO 异常路径)同样透传 413
+    public void BadHttpRequestException_WithInnerException_MapsTo413()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new BadHttpRequestException(
+                "Request body too large.", StatusCodes.Status413PayloadTooLarge,
+                new InvalidOperationException("inner")))
+            .Should().Be(StatusCodes.Status413PayloadTooLarge);
+    }
+
+    [Fact] // boundary:继承 —— BadHttpRequestException 子类(Kestrel.Core 的实现即子类)同样命中透传
+    public void DerivedBadHttpRequestException_MapsTo413()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new DerivedBadHttpRequestException())
+            .Should().Be(StatusCodes.Status413PayloadTooLarge);
+    }
+
+    [Fact] // boundary-恰上限的映射侧对应面:恰在上限的请求不产生 BadHttpRequestException,
+           // 穿过 Kestrel 后由校验层以 ValidationException→400 处置(活体 =64MiB→400 见 evidence-76),
+           // 本条锁映射层口径不因本票误伤校验路径。
+    public void AtLimitRequest_ValidationPath_StillMapsTo400()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new ValidationException("too long"))
+            .Should().Be(StatusCodes.Status400BadRequest);
     }
 
     private static JsonException CaptureJsonException(Action act)
@@ -154,5 +208,13 @@ public class ExceptionStatusMappingTests
 
     private sealed class DerivedJsonException : JsonException
     {
+    }
+
+    private sealed class DerivedBadHttpRequestException : BadHttpRequestException
+    {
+        public DerivedBadHttpRequestException()
+            : base("Request body too large.", StatusCodes.Status413PayloadTooLarge)
+        {
+        }
     }
 }

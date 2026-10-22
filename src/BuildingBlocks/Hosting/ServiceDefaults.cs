@@ -212,7 +212,10 @@ public static class ServiceDefaults
     /// COD-13:<see cref="JsonException"/> 必须映射 400 BadRequest —— 直读请求体的端点
     /// (Interviews 的 AttachAsset 用 HttpRequest.ReadFromJsonAsync)收到畸形 JSON 时 STJ 抛
     /// JsonException 且无模型绑定层兜底,此前它落到默认分支冒 500,把客户端错误报成服务器错误。
-    /// 注:BadHttpRequestException(超限体 413 的载体)不在本映射内,由票76 单独处置。
+    /// 票76:<see cref="BadHttpRequestException"/> 必须透传其框架 StatusCode —— Kestrel 在请求体
+    /// 超过上限(MaxRequestBodySizeBytes)时抛此异常且 StatusCode 本即 413 Payload Too Large,
+    /// 此前它落到默认分支冒 500;透传而非硬编码 413,是因为框架的其他细分(请求头过大 431、
+    /// 读体超时 408、默认 400)同样应按框架原值返回。Kestrel.Core 的实现为其子类,类型模式一并命中。
     /// </summary>
     public static int MapExceptionToStatusCode(Exception? ex) => ex switch
     {
@@ -221,6 +224,7 @@ public static class ServiceDefaults
         KeyNotFoundException => StatusCodes.Status404NotFound,
         DbUpdateConcurrencyException => StatusCodes.Status409Conflict,
         JsonException => StatusCodes.Status400BadRequest,
+        BadHttpRequestException badHttp => badHttp.StatusCode,
         ArgumentException => StatusCodes.Status400BadRequest,
         _ => StatusCodes.Status500InternalServerError
     };

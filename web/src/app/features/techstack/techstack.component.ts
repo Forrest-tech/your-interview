@@ -734,18 +734,14 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   openCreate(): void {
     const ref = this.dialog.open(KnowledgeDialogComponent, { autoFocus: 'first-tabbable' });
-    // 对话框返回的已经是后端契约形状(title/topic/...Json),这里不再二次加工
+    // FUN-05:保存已收进对话框内部(成功才关窗,失败在弹窗内给字段级提示),
+    // 这里只在保存成功(回传 payload)时刷新列表,不再二次 POST。
     ref.afterClosed().subscribe((payload?: Record<string, unknown> | null) => {
       if (!payload) return;
-      this.api.post<KnowledgeItem>('/api/knowledge', payload).subscribe({
-        next: () => {
-          this.notify(this.t('ts.created'));
-          this.page.set(1);
-          this.reload();
-          this.loadTopics();
-        },
-        error: (e: Error) => this.notify(e.message, true)
-      });
+      this.notify(this.t('ts.created'));
+      this.page.set(1);
+      this.reload();
+      this.loadTopics();
     });
   }
 

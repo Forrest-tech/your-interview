@@ -9,6 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
 import { I18nService } from '../../core/i18n/i18n.service';
+import { ApiClient } from '../../core/api/api-client';
 
 
 /** 新增条目的表单模型(仅本对话框内部使用)。 */
@@ -56,20 +57,32 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('ts.dialog.titleLabel') }}</mat-label>
         <input matInput name="title" [(ngModel)]="form.title" required
+               (ngModelChange)="clearFieldError('title')"
                [placeholder]="t('ts.dialog.titlePh')">
       </mat-form-field>
+      @if (fieldErrors.title) {
+        <div class="field-error" role="alert">{{ fieldErrors.title }}</div>
+      }
 
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('ts.dialog.topicLabel') }}</mat-label>
         <input matInput name="topic" [(ngModel)]="form.topic" required
+               (ngModelChange)="clearFieldError('topic')"
                [placeholder]="t('ts.dialog.topicPh')">
       </mat-form-field>
+      @if (fieldErrors.topic) {
+        <div class="field-error" role="alert">{{ fieldErrors.topic }}</div>
+      }
 
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('ts.dialog.questionLabel') }}</mat-label>
-        <textarea matInput name="question" [(ngModel)]="form.question" rows="2"
+        <textarea matInput name="question" [(ngModel)]="form.question" rows="2" required
+                  (ngModelChange)="clearFieldError('question')"
                   [placeholder]="t('ts.dialog.questionPh')"></textarea>
       </mat-form-field>
+      @if (fieldErrors.question) {
+        <div class="field-error" role="alert">{{ fieldErrors.question }}</div>
+      }
 
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('ts.dialog.conceptLabel') }}</mat-label>
@@ -145,11 +158,14 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
                  [(ngModel)]="form.importance">
         </mat-form-field>
       </div>
+      @if (saveError) {
+        <div class="save-error" role="alert">{{ saveError }}</div>
+      }
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>{{ t('common.cancel') }}</button>
-      <button mat-raised-button color="primary" [disabled]="!canSubmit()" (click)="save()">
+      <button mat-raised-button color="primary" [disabled]="saving" (click)="save()">
         {{ t('common.save') }}
       </button>
     </mat-dialog-actions>
@@ -166,12 +182,24 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
     }
     .src-box .src-title { display: block; font-size: 12.5px; font-weight: 600; color: #3f51b5; }
     .src-box .src-hint { display: block; font-size: 11.5px; opacity: .65; margin: 2px 0 8px; }
+    .field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
+    .save-error {
+      color: #ba1a1a; font-size: 12.5px; margin-top: 8px;
+      padding: 8px 10px; border-radius: 6px; background: rgba(186,26,26,0.06);
+    }
   `]
 })
 export class KnowledgeDialogComponent {
   private readonly ref = inject(MatDialogRef<KnowledgeDialogComponent>);
   private readonly i18n = inject(I18nService);
+  private readonly api = inject(ApiClient);
   t = (key: string): string => this.i18n.t(key);
+
+  /** 字段级错误(前端拦截或后端 400 映射),按字段名挂在对应输入框下。 */
+  fieldErrors: Partial<Record<'title' | 'topic' | 'question', string>> = {};
+  /** 非字段级的保存失败原因(弹窗内展示,弹窗不关、输入不丢)。 */
+  saveError: string | null = null;
+  saving = false;
 
   readonly stages = ROUND_STAGES;
   /** 轮次类型 → 本地化标签(找不到键时回退英文枚举)。 */
@@ -188,9 +216,74 @@ export class KnowledgeDialogComponent {
     sourceCompanyName: '', sourceRoundNo: null, sourceRoundStage: null, sourceDate: null
   };
 
-  /** 标题和分类是后端必填项,前端先挡一道,避免白跑一次 400。 */
+  /**
+   * 标题、分类、面试题干都是后端必填项(CreateKnowledgeCommandValidator 三者
+   * 均 NotEmpty),前端先挡一道并给字段级提示,避免白跑一次 400。
+   * FUN-05:此前漏了 question —— UI 没标必填、Save 可点,后端必回
+   * 400 errors{Question:["The Question field is required."]} 且无处提示。
+   */
   canSubmit(): boolean {
-    return this.form.title.trim().length > 0 && this.form.topic.trim().length > 0;
+    return this.form.title.trim().length > 0
+      && this.form.topic.trim().length > 0
+      && this.form.question.trim().length > 0;
+  }
+
+  /** 点 Save 时逐字段校验:缺哪个就在哪个字段下亮提示,返回是否全过。 */
+  private validate(): boolean {
+    const errors: typeof this.fieldErrors = {};
+    if (!this.form.title.trim()) errors.title = this.t('ts.dialog.titleRequired');
+    if (!this.form.topic.trim()) errors.topic = this.t('ts.dialog.topicRequired');
+    if (!this.form.question.trim()) errors.question = this.t('ts.dialog.questionRequired');
+    this.fieldErrors = errors;
+    return Object.keys(errors).length === 0;
+  }
+
+  /** 用户开始补填某字段时,先撤掉该字段的旧错误。 */
+  clearFieldError(field: 'title' | 'topic' | 'question'): void {
+    if (this.fieldErrors[field]) {
+      const next = { ...this.fieldErrors };
+      delete next[field];
+      this.fieldErrors = next;
+    }
+  }
+
+  /**
+   * 后端 400 的字段映射(双保险):前端拦截漏网时,把 ValidationProblemDetails
+   * 的 errors{Question:[...]} 按字段名映射回弹窗对应字段,而不是只弹一句
+   * 通用错误。ApiClient.rethrow 只透传 title/detail,原始响应挂在 error.original。
+   */
+  private applyServerError(e: unknown): void {
+    const err = e as {
+      message?: string;
+      original?: { error?: { errors?: Record<string, string[]> } };
+      error?: { errors?: Record<string, string[]> };
+    };
+    const raw = err?.original?.error?.errors ?? err?.error?.errors ?? null;
+    if (raw && typeof raw === 'object') {
+      const fieldErrors: typeof this.fieldErrors = {};
+      const others: string[] = [];
+      const requiredKey = {
+        title: 'ts.dialog.titleRequired',
+        topic: 'ts.dialog.topicRequired',
+        question: 'ts.dialog.questionRequired'
+      } as const;
+      for (const [key, messages] of Object.entries(raw)) {
+        const field = key.toLowerCase() as keyof typeof requiredKey;
+        const text = (messages ?? []).join(' ');
+        if (field in requiredKey) {
+          // 必填类后端文案换成本地化口径;长度等其它校验保留后端原文。
+          fieldErrors[field] = /required|must not be empty/i.test(text)
+            ? this.t(requiredKey[field])
+            : text;
+        } else if (text) {
+          others.push(text);
+        }
+      }
+      this.fieldErrors = fieldErrors;
+      this.saveError = others.length > 0 ? others.join(' ') : null;
+      if (Object.keys(fieldErrors).length > 0 || this.saveError) return;
+    }
+    this.saveError = err?.message || 'Save failed';
   }
 
   /** 把"一行一条"的文本转成后端要的 JSON 数组字符串;空则给 null 而不是 "[]"。 */
@@ -200,11 +293,14 @@ export class KnowledgeDialogComponent {
   }
 
   save(): void {
-    if (!this.canSubmit()) return;
+    if (this.saving) return;
+    this.saveError = null;
+    // 前端拦截:缺必填字段时不发请求、不关弹窗,字段下直接亮提示。
+    if (!this.validate()) return;
     const payload = {
       title: this.form.title.trim(),
       topic: this.form.topic.trim(),
-      question: this.form.question.trim() || null,
+      question: this.form.question.trim(),
       conceptExplanation: this.form.conceptExplanation.trim() || null,
       keyPointsJson: this.toJsonList(this.form.keyPoints),
       commonMistakesJson: this.toJsonList(this.form.commonMistakes),
@@ -219,6 +315,18 @@ export class KnowledgeDialogComponent {
       sourceRoundStage: this.form.sourceRoundStage || null,
       sourceDate: this.form.sourceDate || null
     };
-    this.ref.close(payload);
+    // 弹窗内直接保存:成功才关弹窗(父组件只负责刷新列表);
+    // 失败留在弹窗内显示字段级/表单级原因,用户已填内容不丢。
+    this.saving = true;
+    this.api.post('/api/knowledge', payload).subscribe({
+      next: () => {
+        this.saving = false;
+        this.ref.close(payload);
+      },
+      error: (e: unknown) => {
+        this.saving = false;
+        this.applyServerError(e);
+      }
+    });
   }
 }

@@ -29,6 +29,8 @@ import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, Ma
 import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
+import { TechStackLocalService } from '../../core/api/techstack-local.service';
+import { heatmapLevel, localDateKey } from '../../core/api/techstack-local.helpers';
 import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 import { SubnavService } from '../../layout/subnav.service';
@@ -125,6 +127,8 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
+  /** ★ 票16:自定义分类/复习活动的单一读写路径(后端真源,见 TechStackLocalService)。 */
+  private readonly tsLocal = inject(TechStackLocalService);
 
   readonly masteryOrder = MASTERY_ORDER;
   readonly blocks = DETAIL_BLOCKS;
@@ -257,15 +261,12 @@ export class TechStackComponent implements OnInit, OnDestroy {
         if (!counts.has(tp)) counts.set(tp, 0);
       }
     }
-    // 加上用户手动建的空分类(localStorage)
-    try {
-      const custom: string[] = JSON.parse(localStorage.getItem('ts.customCategories') ?? '[]');
-      for (const n of custom) {
-        if (![...counts.keys()].some(k => k.toLowerCase() === n.toLowerCase())) {
-          counts.set(n, 0);
-        }
+    // 加上用户手动建的空分类(票16:后端真源,经 TechStackLocalService 信号)
+    for (const n of this.tsLocal.customCategories()) {
+      if (![...counts.keys()].some(k => k.toLowerCase() === n.toLowerCase())) {
+        counts.set(n, 0);
       }
-    } catch { /* ignore */ }
+    }
     const dialogRef = this.dialog.open(CategoryManagerComponent, {
       width: '520px',
       data: {}
@@ -337,6 +338,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    this.tsLocal.ensureLoaded(); // 票16:分类/复习活动改读后端(首次自动导入本地存量)
     this.restoreFiltersFromUrl();
     this.load();
     this.loadBuckets();
@@ -1214,23 +1216,14 @@ export class TechStackComponent implements OnInit, OnDestroy {
     );
   }
 
-  /** ★ #9:记录每日复习数 (localStorage,供热力图)。 */
+  /** ★ #9:记录每日复习数 (票16:后端真源,经 TechStackLocalService;日期仍按本地口径)。 */
   private recordReviewActivity(): void {
-    const key = 'ts.reviewActivity';
-    // ★ 用本地日期,不用 UTC (21:00 EDT 会记到第二天)
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    try {
-      const data: Record<string, number> = JSON.parse(localStorage.getItem(key) || '{}');
-      data[today] = (data[today] || 0) + 1;
-      localStorage.setItem(key, JSON.stringify(data));
-    } catch { /* ignore */ }
+    this.tsLocal.recordReview();
   }
 
-  /** ★ #9:过去 12 周的热力图数据。 */
+  /** ★ #9:过去 12 周的热力图数据。(票16:数据源改后端信号;网格/档位规则逐字不变,键统一走 localDateKey 本地口径) */
   readonly heatmapWeeks = computed(() => {
-    let data: Record<string, number> = {};
-    try { data = JSON.parse(localStorage.getItem('ts.reviewActivity') || '{}'); } catch { /* ignore */ }
+    const data: Record<string, number> = this.tsLocal.reviewActivity();
     const weeks: { date: string; count: number; level: number }[][] = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1242,9 +1235,9 @@ export class TechStackComponent implements OnInit, OnDestroy {
       for (let d = 0; d < 7; d++) {
         const dt = new Date(start);
         dt.setDate(dt.getDate() + w * 7 + d);
-        const key = dt.toISOString().slice(0, 10);
+        const key = localDateKey(dt);
         const count = dt > today ? -1 : (data[key] || 0);
-        const level = count < 0 ? -1 : count === 0 ? 0 : count < 3 ? 1 : count < 6 ? 2 : count < 10 ? 3 : 4;
+        const level = count < 0 ? -1 : heatmapLevel(count);
         week.push({ date: key, count, level });
       }
       weeks.push(week);
@@ -1252,17 +1245,16 @@ export class TechStackComponent implements OnInit, OnDestroy {
     return weeks;
   });
 
-  /** ★ #9:当前连击 (连续复习天数)。 */
+  /** ★ #9:当前连击 (连续复习天数)。(票16:数据源改后端信号;算法逐字不变) */
   readonly reviewStreak = computed(() => {
-    let data: Record<string, number> = {};
-    try { data = JSON.parse(localStorage.getItem('ts.reviewActivity') || '{}'); } catch { /* ignore */ }
+    const data: Record<string, number> = this.tsLocal.reviewActivity();
     let streak = 0;
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    const todayKey = d.toISOString().slice(0, 10);
+    const todayKey = localDateKey(d);
     if (!data[todayKey]) d.setDate(d.getDate() - 1);
     while (true) {
-      const key = d.toISOString().slice(0, 10);
+      const key = localDateKey(d);
       if (data[key]) { streak++; d.setDate(d.getDate() - 1); }
       else break;
     }

@@ -259,6 +259,83 @@ public sealed class KnowledgeController(ISender sender, ICurrentUser currentUser
             : r.ToProblemDetails();
     }
 
+    // ---------- COD-10c/票16:Tech Stack 本地数据(原 localStorage 上后端) ----------
+
+    /// <summary>当前用户的自定义空分类(ts.customCategories 的后端真源)。</summary>
+    [HttpGet("custom-categories")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
+    public async Task<IResult> ListCustomCategories(CancellationToken ct)
+    {
+        var r = await sender.Send(new ListCustomCategoriesQuery(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>新增空分类(幂等)。</summary>
+    [HttpPut("custom-categories/{name}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> AddCustomCategory(string name, CancellationToken ct)
+    {
+        var r = await sender.Send(new AddCustomCategoryCommand(Me, name), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 删除空分类(幂等)。权限用 KnowledgeWrite 而非 KnowledgeDelete:默认 User
+    /// 角色没有 KnowledgeDelete,删自己的空分类是普通用户日常操作 ——
+    /// 与既有 DeleteTopic 用 KnowledgeWrite、票14 删问题用 JobsWrite 的先例同口径。
+    /// </summary>
+    [HttpDelete("custom-categories/{name}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> RemoveCustomCategory(string name, CancellationToken ct)
+    {
+        var r = await sender.Send(new RemoveCustomCategoryCommand(Me, name), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一次性导入本地分类(localStorage ts.customCategories)。幂等,返回对账
+    /// { imported, total } —— 重复导入 imported=0、total 不变。
+    /// </summary>
+    [HttpPost("custom-categories/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> ImportCustomCategories([FromBody] ImportCategoriesBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ImportCustomCategoriesCommand(Me, body.Names ?? []), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>当前用户的全部复习活动(热力图/连击的后端真源,日期升序)。</summary>
+    [HttpGet("review-activity")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeRead)]
+    public async Task<IResult> GetReviewActivity(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetReviewActivityQuery(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 记录一次复习:前端按本地日历口径算好日期上报,后端按 (用户, 日期) 累加。
+    /// </summary>
+    [HttpPost("review-activity/record")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> RecordReviewActivity([FromBody] RecordReviewActivityBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new RecordReviewActivityCommand(Me, body.Date ?? string.Empty), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一次性导入本地复习记录(localStorage ts.reviewActivity)。幂等(同日取
+    /// max 不虚增),返回对账 { imported, total }(total = 总天数)。
+    /// </summary>
+    [HttpPost("review-activity/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
+    public async Task<IResult> ImportReviewActivity([FromBody] ImportReviewActivityBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ImportReviewActivityCommand(Me, body.Entries ?? []), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>批量导入(前端可一次粘贴一堆题目)。幂等:同 topic+title 不重复插。</summary>
     [HttpPost("import")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
@@ -291,6 +368,11 @@ public sealed record ImportBody(List<ImportKnowledgeRow> Items);
 public sealed record MergeBody(Guid KeepId, Guid MergeId);
 
 public sealed record RenameTopicBody(string OldName, string NewName);
+
+// COD-10c/票16 请求体
+public sealed record ImportCategoriesBody(List<string>? Names);
+public sealed record RecordReviewActivityBody(string? Date);
+public sealed record ImportReviewActivityBody(List<ReviewActivityImportItem>? Entries);
 
 /// <summary>
 /// 机经候选题导入请求体。

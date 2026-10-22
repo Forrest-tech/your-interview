@@ -8,6 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiClient } from '../../../core/api/api-client';
+import { TechStackLocalService } from '../../../core/api/techstack-local.service';
 import { I18nService } from '../../../core/i18n/i18n.service';
 
 export interface CategoryInfo {
@@ -33,6 +34,7 @@ export interface CategoryInfo {
 })
 export class CategoryManagerComponent {
   private readonly api = inject(ApiClient);
+  private readonly tsLocal = inject(TechStackLocalService);
   private readonly dialogRef = inject(MatDialogRef<CategoryManagerComponent>);
   private readonly i18n = inject(I18nService);
 
@@ -58,25 +60,11 @@ export class CategoryManagerComponent {
     return n.length > 0 && this.categories().some(c => c.name.toLowerCase() === n);
   });
 
-  /** 用户手动新增的空分类,存 localStorage(后端无分类表,空分类只活在前端) */
-  private loadCustom(): string[] {
-    try {
-      return JSON.parse(localStorage.getItem('ts.customCategories') ?? '[]');
-    } catch { return []; }
-  }
-  private saveCustom(names: string[]): void {
-    try { localStorage.setItem('ts.customCategories', JSON.stringify(names)); } catch { /* ignore */ }
-  }
-
-  /** 新增分类:0 条目的先放 localStorage,等有条目用它后自然转正 */
+  /** 新增分类:0 条目的空分类经 TechStackLocalService 落后端(票16),等有条目用它后自然转正 */
   addCategory(): void {
     const n = this.newName().trim();
     if (!n || this.newNameExists()) return;
-    const custom = this.loadCustom();
-    if (!custom.some(x => x.toLowerCase() === n.toLowerCase())) {
-      custom.push(n);
-      this.saveCustom(custom);
-    }
+    this.tsLocal.addCategory(n);
     this.categories.update(list => [...list, { name: n, count: 0 }]);
     this.newName.set('');
     this.changed = true;
@@ -115,6 +103,23 @@ export class CategoryManagerComponent {
         .replace('{to}', newName);
       if (!confirm(msg)) return;
     }
+    // 空分类(0 条目)是后端分类表里的占位行,改名走分类服务(删旧+加新);
+    // 改前实现对空分类也打 topics/rename(无条目可改、恒返回 0)且旧名残留
+    // localStorage 会「复活」—— 票16 服务化后在此收口,UI/文案不变。
+    if (c.count === 0) {
+      this.tsLocal.renameCategory(oldName, newName);
+      this.categories.update(list => {
+        const rest = list.filter(x => x.name.toLowerCase() !== oldName.toLowerCase());
+        if (target) {
+          return rest.map(x => x.name.toLowerCase() === target.name.toLowerCase()
+            ? { ...x, count: x.count + c.count } : x);
+        }
+        return [...rest, { name: newName, count: c.count }];
+      });
+      this.editingName.set(null);
+      this.changed = true;
+      return;
+    }
     this.busy.set(true);
     this.api.put<number>(`/api/knowledge/topics/rename`,
       { oldName, newName }).subscribe({
@@ -146,10 +151,10 @@ export class CategoryManagerComponent {
       if (!confirm(msg)) return;
     }
     this.busy.set(true);
-    // 空分类(0 条目)是纯前端占位,直接移除,同时清 localStorage
+    // 空分类(0 条目)是后端分类表占位行,经分类服务删除(票16)
     if (c.count === 0) {
       this.categories.update(list => list.filter(x => x.name !== c.name));
-      this.saveCustom(this.loadCustom().filter(x => x.toLowerCase() !== c.name.toLowerCase()));
+      this.tsLocal.removeCategory(c.name);
       this.busy.set(false);
       this.changed = true;
       return;

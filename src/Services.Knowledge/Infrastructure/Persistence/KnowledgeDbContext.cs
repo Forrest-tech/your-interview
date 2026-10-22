@@ -25,6 +25,10 @@ public sealed class KnowledgeDbContext(
     public DbSet<KnowledgeReviewLog> ReviewLogs => Set<KnowledgeReviewLog>();
     public DbSet<KnowledgeRelation> Relations => Set<KnowledgeRelation>();
 
+    // ---- COD-10c/票16:Tech Stack 本地数据(原 localStorage 孤岛上后端)----
+    public DbSet<TechStackCategory> CustomCategories => Set<TechStackCategory>();
+    public DbSet<ReviewActivityDay> ReviewActivities => Set<ReviewActivityDay>();
+
     /// <summary>
     /// 把"新加进聚合子集合、但 Id 由 C# 端生成"的子实体显式标成 Added。
     ///
@@ -134,6 +138,36 @@ public sealed class KnowledgeDbContext(
             // 进步曲线/本周复习数按时间倒序取 —— 复合索引让它走 Index Scan 而不是 Sort。
             e.HasIndex(x => new { x.ItemId, x.ReviewedAt });
             e.HasIndex(x => x.ReviewedAt);
+        });
+
+        // COD-10c/票16:自定义空分类(用户级占位行)。(UserId, Name) 唯一 —— 同一用户
+        // 同名分类最多一行,导入/重复 PUT 靠它在库层兜底幂等;大小写不敏感查重在
+        // Handler 层(存首现原文)。软删后重加走 Restore,不新建第二行。
+        b.Entity<TechStackCategory>(e =>
+        {
+            e.ToTable("tech_stack_categories");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        // COD-10c/票16:每日复习活动。(UserId, Date) 唯一 —— 一人一天一行,
+        // Record 累加与导入合并都收敛到这一行。Date 为用户本地日历日期(逐字口径)。
+        b.Entity<ReviewActivityDay>(e =>
+        {
+            e.ToTable("review_activities");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.Date).IsRequired();
+            e.Property(x => x.Count).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.Date }).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
         });
 
         b.Entity<KnowledgeRelation>(e =>

@@ -22,7 +22,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
-import { catchError, of } from 'rxjs';
+import { Subscription, catchError, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged, PlaybookCompany, PlaybookCompanyRound } from '../../core/models/api.models';
@@ -30,7 +30,11 @@ import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
 import { TechStackLocalService } from '../../core/api/techstack-local.service';
-import { heatmapLevel, localDateKey } from '../../core/api/techstack-local.helpers';
+import {
+  UNCATEGORIZED_TOPIC, heatmapLevel, localDateKey, remapDeletedCategoryTopic, remapTopicName,
+  topicDetailsAfterCategoryDelete, topicDetailsAfterCategoryRename,
+  topicNamesAfterCategoryDelete, topicNamesAfterCategoryRename,
+} from '../../core/api/techstack-local.helpers';
 import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 import { SubnavService } from '../../layout/subnav.service';
@@ -281,6 +285,80 @@ export class TechStackComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * 票84:分类删除成功后的本地同步 —— 与服务端 DeleteTopic 同语义
+   * (名下条目回落 Uncategorized),把本页全部本地状态消费方一次对齐,
+   * 不发请求、不等关弹窗重拉(关弹窗后既有 load() 对账仍保留):
+   * 条目卡/详情头/复习队列副本的 topic、Topic chips、管理器计数行、
+   * 以及正指向被删名的当前筛选值。纯映射在 techstack-local.helpers。
+   */
+  private applyCategoryDeleted(name: string): void {
+    const deleted = (name ?? '').trim();
+    if (!deleted) return;
+    const isDeleted = (tp: string | null | undefined) =>
+      (tp ?? '').trim().toLowerCase() === deleted.toLowerCase();
+
+    // 受影响条数:以 topics 全量计数行为准(当前页只是分页子集);
+    // 接口计数缺失时退当前页命中数 —— 只用来决定要不要补 Uncategorized chip
+    const detailRow = this.topicDetails().find((d) => isDeleted(d.topic));
+    let pageHits = 0;
+    this.items.update((list) => list.map((it) => {
+      if (!isDeleted(it.topic)) return it;
+      pageHits++;
+      return { ...it, topic: UNCATEGORIZED_TOPIC };
+    }));
+    const hadItems = (detailRow?.total ?? 0) > 0 || pageHits > 0;
+
+    const sel = this.selected();
+    if (sel && isDeleted(sel.topic)) {
+      this.selected.set({ ...sel, topic: UNCATEGORIZED_TOPIC });
+    }
+    this.reviewQueue.update((list) => remapDeletedCategoryTopic(list, deleted));
+    const rc = this.reviewCurrent();
+    if (rc && isDeleted(rc.topic)) {
+      this.reviewCurrent.set({ ...rc, topic: UNCATEGORIZED_TOPIC });
+    }
+
+    this.topics.update((names) => topicNamesAfterCategoryDelete(names, deleted, hadItems));
+    this.topicDetails.update((rows) => topicDetailsAfterCategoryDelete(rows, deleted));
+
+    // 当前筛选正指着被删名:改指 Uncategorized,同一批条目仍在眼前
+    // (分页/总数在关弹窗的 load() 对账时归位,这里不额外发请求)
+    if (this.topic() !== null && isDeleted(this.topic())) {
+      this.topic.set(UNCATEGORIZED_TOPIC);
+      this.syncFiltersToUrl();
+    }
+  }
+
+  /**
+   * 票84 邻居:分类改名成功后的本地同步 —— 与删分类同一通道、同一批
+   * 消费方(条目卡/详情头/复习队列副本/Topic chips/管理器计数行/当前
+   * 筛选值),把旧名整体换成新名(合并时计数并入目标行)。不发请求;
+   * 关弹窗后的 load() 对账不变。
+   */
+  private applyCategoryRenamed(oldName: string, newName: string): void {
+    const from = (oldName ?? '').trim();
+    const to = (newName ?? '').trim();
+    if (!from || !to || from.toLowerCase() === to.toLowerCase()) return;
+    const isFrom = (tp: string | null | undefined) =>
+      (tp ?? '').trim().toLowerCase() === from.toLowerCase();
+
+    this.items.update((list) => remapTopicName(list, from, to));
+    const sel = this.selected();
+    if (sel && isFrom(sel.topic)) this.selected.set({ ...sel, topic: to });
+    this.reviewQueue.update((list) => remapTopicName(list, from, to));
+    const rc = this.reviewCurrent();
+    if (rc && isFrom(rc.topic)) this.reviewCurrent.set({ ...rc, topic: to });
+
+    this.topics.update((names) => topicNamesAfterCategoryRename(names, from, to));
+    this.topicDetails.update((rows) => topicDetailsAfterCategoryRename(rows, from, to));
+
+    if (this.topic() !== null && isFrom(this.topic())) {
+      this.topic.set(to);
+      this.syncFiltersToUrl();
+    }
+  }
+
   /** 激活的筛选数量(用于折叠态的计数徽标) */
   readonly activeFilterCount = computed(() => {
     let n = 0;
@@ -337,8 +415,16 @@ export class TechStackComponent implements OnInit, OnDestroy {
     }));
   });
 
+  /** 票84:分类删除/改名事件订阅(组件销毁时退订)。 */
+  private readonly categorySubs = new Subscription();
+
   ngOnInit(): void {
     this.tsLocal.ensureLoaded(); // 票16:分类/复习活动改读后端(首次自动导入本地存量)
+    // 票84:分类管理器删/改名成功后即时同步本地呈现,不等关弹窗/整页刷新(F4)
+    this.categorySubs.add(this.tsLocal.categoryDeleted$
+      .subscribe((name) => this.applyCategoryDeleted(name)));
+    this.categorySubs.add(this.tsLocal.categoryRenamed$
+      .subscribe(({ oldName, newName }) => this.applyCategoryRenamed(oldName, newName)));
     this.restoreFiltersFromUrl();
     this.load();
     this.loadBuckets();
@@ -1381,6 +1467,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.categorySubs.unsubscribe();
     this.subnav.unregister('/tech-stack');
   }
 }

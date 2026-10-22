@@ -185,3 +185,114 @@ export function toActivityMap(rows: ReviewActivityDto[]): ReviewActivityMap {
 export function heatmapLevel(count: number): number {
   return count === 0 ? 0 : count < 3 ? 1 : count < 6 ? 2 : count < 10 ? 3 : 4;
 }
+
+// ---------- 票84:删分类后的本地同步(纯映射,与服务端 DeleteTopic 同语义) ----------
+
+/**
+ * 条目失去分类后的回落名 —— 与服务端逐字一致:DeleteTopic handler 对
+ * 名下条目 SetTopic(null),域内 KnowledgeItem.SetTopic 把 null/空落成
+ * "Uncategorized"(KnowledgeAggregate.cs),GET 回包与刷新后呈现均为此串。
+ * 本地同步只是把这条已确定的服务端规则镜像到本地信号,不另 invent 文案。
+ */
+export const UNCATEGORIZED_TOPIC = 'Uncategorized';
+
+/** 分类名同一性:Trim + 大小写不敏感(与后端 ToLower 比对、前端各处查重同口径)。 */
+function sameCategoryName(a: string | null | undefined, b: string): boolean {
+  return (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * 把一批条目里属于 fromName 分类的 topic 即时改指 toName(票84)。
+ * 未命中的条目保持原对象引用(列表 track/选中比较不抖动);不改入参。
+ */
+export function remapTopicName<T extends { topic?: string | null }>(
+  items: readonly T[], fromName: string, toName: string,
+): T[] {
+  return items.map((it) => sameCategoryName(it.topic, fromName)
+    ? { ...it, topic: toName }
+    : it);
+}
+
+/** 删分类版 remap:回落目标固定为服务端同语义的 Uncategorized。 */
+export function remapDeletedCategoryTopic<T extends { topic?: string | null }>(
+  items: readonly T[], deletedName: string,
+): T[] {
+  return remapTopicName(items, deletedName, UNCATEGORIZED_TOPIC);
+}
+
+/**
+ * Topic 筛选名列表在改名后的新值(票84 邻居:改名与删分类同病,同一通道
+ * 同步):原位把旧名换成新名(位置不变,chips 不跳位);新名已存在(合并)
+ * 时只留一份,保新名原位置。
+ */
+export function topicNamesAfterCategoryRename(
+  names: readonly string[], oldName: string, newName: string,
+): string[] {
+  if (!names.some((n) => sameCategoryName(n, oldName))) return [...names];
+  const mapped = names.map((n) => sameCategoryName(n, oldName) ? newName : n);
+  const seen = new Set<string>();
+  return mapped.filter((n) => {
+    const k = n.trim().toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/**
+ * topics 全量计数行在改名后的新值(票84):旧名行原位改名(聚合字段全保留);
+ * 新名行已存在(合并)时摘旧行、其 total 并入新名行(其余聚合字段沿用新名
+ * 行原值 —— total 是唯一被分类管理器消费的字段)。无旧名行时原样返回。
+ */
+export function topicDetailsAfterCategoryRename<T extends { topic: string; total: number }>(
+  rows: readonly T[], oldName: string, newName: string,
+): T[] {
+  const old = rows.find((r) => sameCategoryName(r.topic, oldName));
+  if (!old) return [...rows];
+  if (sameCategoryName(oldName, newName)) return [...rows];
+  const target = rows.find((r) => sameCategoryName(r.topic, newName)
+    && !sameCategoryName(r.topic, oldName));
+  if (!target) {
+    return rows.map((r) => sameCategoryName(r.topic, oldName) ? { ...r, topic: newName } : r);
+  }
+  return rows
+    .filter((r) => !sameCategoryName(r.topic, oldName))
+    .map((r) => sameCategoryName(r.topic, newName) ? { ...r, total: r.total + old.total } : r);
+}
+
+/**
+ * Topic 筛选名列表在删分类后的新值(票84):摘掉被删名;确有条目被回落
+ * (hadItems)且列表里还没有 Uncategorized 时补上(服务端 GET /topics 在
+ * 刷新后也会给出它,本地先行镜像);其余名与相对顺序不动,补入项追加末尾
+ * —— 与 deriveTopics 的合并追加形态一致,不重排既有 chips。
+ */
+export function topicNamesAfterCategoryDelete(
+  names: readonly string[], deletedName: string, hadItems: boolean,
+): string[] {
+  const rest = names.filter((n) => !sameCategoryName(n, deletedName));
+  if (hadItems && !rest.some((n) => sameCategoryName(n, UNCATEGORIZED_TOPIC))) {
+    return [...rest, UNCATEGORIZED_TOPIC];
+  }
+  return rest;
+}
+
+/**
+ * topics 全量计数行在删分类后的新值(票84,分类管理器计数来源):
+ * 摘掉被删名行,其 total 并入 Uncategorized 行(已存在则累加 total,其余
+ * 聚合字段沿用该行原值;不存在则以被删行的聚合字段为底、仅换名与 total
+ * —— 该行只有 total 被 openCategoryManager 消费,聚合字段不在此呈现面)。
+ * 被删名无计数行时原样返回。
+ */
+export function topicDetailsAfterCategoryDelete<T extends { topic: string; total: number }>(
+  rows: readonly T[], deletedName: string,
+): T[] {
+  const deleted = rows.find((r) => sameCategoryName(r.topic, deletedName));
+  if (!deleted) return [...rows];
+  const rest = rows.filter((r) => !sameCategoryName(r.topic, deletedName));
+  if (deleted.total <= 0) return rest;
+  const idx = rest.findIndex((r) => sameCategoryName(r.topic, UNCATEGORIZED_TOPIC));
+  if (idx >= 0) {
+    return rest.map((r, i) => i === idx ? { ...r, total: r.total + deleted.total } : r);
+  }
+  return [...rest, { ...deleted, topic: UNCATEGORIZED_TOPIC }];
+}

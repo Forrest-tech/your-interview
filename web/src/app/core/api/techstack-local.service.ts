@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, forkJoin, map, of, switchMap, tap, throwError } from 'rxjs';
+import { Observable, Subject, catchError, forkJoin, map, of, switchMap, tap, throwError } from 'rxjs';
 
 import { ApiClient } from './api-client';
 import { AuthService } from '../auth/auth.service';
@@ -51,6 +51,43 @@ export class TechStackLocalService {
   readonly customCategories = signal<string[]>([]);
   /** 全应用唯一一份复习活动状态(本地日期串 → 次数)。 */
   readonly reviewActivity = signal<ReviewActivityMap>({});
+
+  /**
+   * 票84:分类删除成功事件(被删名)。分类管理器在删除落服务端后发出,
+   * Tech Stack 页订阅后即时把本地条目/chip 同步回落 Uncategorized ——
+   * 旧实现只有弹窗自己的列表副本更新,背后页面要等关弹窗重拉、Topic
+   * chips 更是要整页刷新才消失(F4)。
+   */
+  readonly categoryDeleted$ = new Subject<string>();
+
+  /**
+   * 票84:登记一次已成功的分类删除 —— 本服务自己的 customCategories
+   * 信号先摘名(count>0 的分类若同时是自定义行,不摘会在重开管理器时
+   * 复活;只动本地信号,不多发请求),再广播给页面做条目/chip 同步。
+   */
+  notifyCategoryDeleted(name: string): void {
+    this.customCategories.update((list) =>
+      list.filter((x) => x.toLowerCase() !== name.toLowerCase()));
+    this.categoryDeleted$.next(name);
+  }
+
+  /**
+   * 票84 邻居:分类改名成功事件 —— 与删分类同病(弹窗只更新自己列表,
+   * 背后条目卡靠关弹窗 load() 恢复、Topic chips 不重拉恒旧名),同一通道
+   * 同步。改名链路本身(请求/确认/合并语义)不动,只补本地呈现同步。
+   */
+  readonly categoryRenamed$ = new Subject<{ oldName: string; newName: string }>();
+
+  /** 登记一次已成功的改名:customCategories 信号原位改名(合并时摘旧名)后广播。 */
+  notifyCategoryRenamed(oldName: string, newName: string): void {
+    this.customCategories.update((list) => {
+      if (!list.some((x) => x.toLowerCase() === oldName.toLowerCase())) return list;
+      const rest = list.filter((x) => x.toLowerCase() !== oldName.toLowerCase());
+      return rest.some((x) => x.toLowerCase() === newName.toLowerCase())
+        ? rest : [...rest, newName];
+    });
+    this.categoryRenamed$.next({ oldName, newName });
+  }
 
   private state: EnsureState = 'idle';
   /** state==='loaded' 时对应的用户(票82:换账号必须重载)。 */

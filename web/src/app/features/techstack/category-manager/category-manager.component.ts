@@ -175,6 +175,8 @@ export class CategoryManagerComponent {
             }
             return [...rest, { name: newName, count: c.count }];
           });
+          // 票84 邻居:改名已落服务端 —— 同步通知页面呈现(条目卡/chip),不等关弹窗
+          this.tsLocal.notifyCategoryRenamed(oldName, target ? target.name : newName);
           this.editingName.set(null);
           this.changed = true;
           this.busy.set(false);
@@ -198,6 +200,16 @@ export class CategoryManagerComponent {
           // 重命名:加新分类(保持原计数)
           return [...rest, { name: newName, count: c.count }];
         });
+        // 票84 邻居:该名若同时是自定义行(先建空分类后挂条目),只改 topics 会把
+        // 旧名自定义行留在服务端 —— 整页刷新后旧名以空分类身份在管理器复活。
+        // 信号里确有旧名时,经分类服务把自定义行一并改名(票83 的 PUT 先行口径);
+        // 从未注册过的 topic 不凭空建行,不订阅结果之外的呈现(失败由服务回读纠正)。
+        if (this.tsLocal.customCategories().some(x => x.toLowerCase() === oldName.toLowerCase())) {
+          this.tsLocal.renameCategory(oldName, target ? target.name : newName)
+            .subscribe({ error: () => undefined });
+        }
+        // 票84 邻居:改名已落服务端 —— 同步通知页面呈现(条目卡/chip),不等关弹窗
+        this.tsLocal.notifyCategoryRenamed(oldName, target ? target.name : newName);
         this.editingName.set(null);
         this.busy.set(false);
         this.changed = true;
@@ -218,6 +230,9 @@ export class CategoryManagerComponent {
     if (c.count === 0) {
       this.categories.update(list => list.filter(x => x.name !== c.name));
       this.tsLocal.removeCategory(c.name);
+      // 票84:与 removeCategory 的乐观信号同拍通知页面(空分类无条目受影响,
+      // 页面同步为无害空转;若计数口径下有漏计条目则正好一并回落)
+      this.tsLocal.notifyCategoryDeleted(c.name);
       this.busy.set(false);
       this.changed = true;
       return;
@@ -225,6 +240,13 @@ export class CategoryManagerComponent {
     this.api.delete<number>(`/api/knowledge/topics/${encodeURIComponent(c.name)}`).subscribe({
       next: () => {
         this.categories.update(list => list.filter(x => x.name !== c.name));
+        // 票84:该名若同时是自定义行(先建空分类后挂条目,T6 同形),只删 topics
+        // 会把自定义行留在服务端 —— 整页刷新后它会以空分类身份在管理器复活。
+        // 同一删除动作一并删掉该名的自定义行(端点幂等,不存在也成功;
+        // 服务端各端点行为不动,只是前端把同一次删除做完整)。
+        this.tsLocal.removeCategory(c.name);
+        // 票84:删除已落服务端 —— 通知页面即时回落条目卡/chip,不等关弹窗/刷新(F4)
+        this.tsLocal.notifyCategoryDeleted(c.name);
         this.busy.set(false);
         this.changed = true;
       },

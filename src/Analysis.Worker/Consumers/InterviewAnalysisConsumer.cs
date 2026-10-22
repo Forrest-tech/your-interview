@@ -606,12 +606,13 @@ public sealed class InterviewAnalysisCompletedConsumer(
             if (!score.HasValue) continue;
             try
             {
+                // 票56:归属走可信通道 ?ownerUserId=(票03 query 形态)——Analytics 仅对带
+                // analytics.writeback claim 的服务账号 honoured;body 不再传 userId(票06 禁止形态)。
                 using var req = new HttpRequestMessage(HttpMethod.Post,
-                    $"{analyticsUrl}/api/analytics/ability")
+                    $"{analyticsUrl}/api/analytics/ability?ownerUserId={m.UserId}")
                 {
                     Content = JsonContent.Create(new
                     {
-                        userId = m.UserId,
                         dimension = dim,
                         score = score.Value,
                         source = "interview"

@@ -50,15 +50,22 @@ public sealed class AnalyticsController(ISender sender, ICurrentUser currentUser
 
     /// <summary>写入一条能力快照(Assessment 打分后立刻反映到雷达图)。</summary>
     /// <remarks>
-    /// COD-02:归属一律以当前登录用户(Me)为准 —— 请求体不接受 UserId,
+    /// COD-02:归属默认以当前登录用户(Me)为准,请求体不接受 UserId,
     /// 杜绝带他人 UserId 替他人写入能力快照(可写型 IDOR)。
+    /// 票56(解法A)可信通道:Worker 服务账号回写走 ?ownerUserId=(与票03 query 形态对齐),
+    /// 仅当 JWT 带 perm claim analytics.writeback 时 honoured;判定见 AbilityOwnership。
     /// </remarks>
     [HttpPost("ability")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsWrite)]
-    public async Task<IResult> RecordAbility([FromBody] RecordAbilityBody body, CancellationToken ct)
+    public async Task<IResult> RecordAbility(
+        [FromBody] RecordAbilityBody body,
+        [FromQuery] Guid? ownerUserId = null,
+        CancellationToken ct = default)
     {
+        var callerPermissions = User.FindAll(CustomClaims.Permission).Select(c => c.Value);
+        var owner = AbilityOwnership.Resolve(Me, callerPermissions, ownerUserId);
         var r = await sender.Send(new RecordAbilityCommand(
-            Me, body.Dimension, body.Score, body.Source ?? "mock"), ct);
+            owner, body.Dimension, body.Score, body.Source ?? "mock"), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 

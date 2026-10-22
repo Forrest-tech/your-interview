@@ -30,6 +30,9 @@ public static class Permissions
     // 数据分析(Analytics 读模型:仪表盘 / 雷达图 / 漏斗趋势)
     public const string AnalyticsRead = "analytics.read";
     public const string AnalyticsWrite = "analytics.write";
+    // 服务回写专用(票56 解法A):仅 Service 角色持有。Analytics ability 端点以此 claim
+    // 判定 ?ownerUserId= 是否 honoured —— 普通人类角色(含 PowerUser)不持有,带了也忽略。
+    public const string AnalyticsWriteback = "analytics.writeback";
 
     // 管理面
     public const string AdminUsersRead = "admin.users.read";
@@ -45,7 +48,7 @@ public static class Permissions
         InterviewsRead, InterviewsWrite, InterviewsAnalyze, InterviewsDelete,
         KnowledgeRead, KnowledgeWrite, KnowledgeDelete,
         MockRead, MockAnswer, MockManage,
-        AnalyticsRead, AnalyticsWrite,
+        AnalyticsRead, AnalyticsWrite, AnalyticsWriteback,
         AdminUsersRead, AdminUsersWrite, AdminRolesWrite,
         AdminContentModerate, AdminAuditRead, AdminSystemWrite
     ];
@@ -58,8 +61,10 @@ public static class Roles
     public const string PowerUser = "PowerUser";
     public const string User = "User";
     public const string Viewer = "Viewer";
+    /// <summary>服务账号专用角色(票56):只给 Analysis.Worker 回写链路的最小权限集,人类账号不授。</summary>
+    public const string Service = "Service";
 
-    public static readonly string[] All = [Admin, PowerUser, User, Viewer];
+    public static readonly string[] All = [Admin, PowerUser, User, Viewer, Service];
 
     public static readonly Dictionary<string, string[]> DefaultPermissions = new()
     {
@@ -85,6 +90,14 @@ public static class Roles
         [
             Permissions.JobsRead, Permissions.InterviewsRead,
             Permissions.KnowledgeRead, Permissions.MockRead, Permissions.AnalyticsRead
+        ],
+        // 票56:Worker 回写最小集 —— Interviews 读(取条目/转写稿)+写(存转写稿/分析结果/失败状态)
+        // +分析(转写/分析状态流转端点)+ Analytics 写(ability 端点现行 policy)+ writeback(归属 honoured 门)。
+        // 不给 delete、不给 analytics.read(Worker 不读 Analytics)、不给任何 admin.* 与其他模块权限。
+        [Service] =
+        [
+            Permissions.InterviewsRead, Permissions.InterviewsWrite, Permissions.InterviewsAnalyze,
+            Permissions.AnalyticsWrite, Permissions.AnalyticsWriteback
         ]
     };
 }

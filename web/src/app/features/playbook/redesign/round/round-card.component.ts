@@ -76,7 +76,8 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
             <span class="cal-next" data-testid="round-cal-next">{{ t('pb.v2.r.calNext') }} {{ nextRemindLabel() }}</span>
           }
           <span class="spacer"></span>
-          <button type="button" class="mini-btn" (click)="toggleEdit()">{{ t('pb.v2.r.editRound') }}</button>
+          <!-- 票 118 / F-4:日历条不再放第二个 Edit round —— 编辑入口只保留轮次标题旁那一个,
+               本条只报状态(到期/下一次提醒走上方状态文案)。 -->
         </div>
       }
 

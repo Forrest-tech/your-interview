@@ -82,7 +82,7 @@ mat-card { border-radius: 8px; }
   margin-bottom: 10px;
 }
 
-.buckets-title { font-size: 14px; font-weight: 600; }
+.buckets-title { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 15px; font-weight: 600; }
 .buckets-total { font-size: 12px; opacity: 0.55; }
 
 .bucket-row {
@@ -116,7 +116,7 @@ mat-card { border-radius: 8px; }
 .bar-fill {
   height: 100%;
   border-radius: 3px;
-  background: var(--m-color, #3f51b5);
+  background: var(--m-color, #2e3a8c);
   transition: width 220ms ease;
 }
 
@@ -126,8 +126,8 @@ mat-card { border-radius: 8px; }
   margin-top: 12px;
   padding: 10px 12px;
   background: #f5f7fa;
-  border-radius: 8px;
-  border: 1px solid #e1e5eb;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
 }
 .fsrs-row {
   display: flex;
@@ -160,8 +160,8 @@ mat-card { border-radius: 8px; }
   margin-top: 12px;
   padding: 10px 12px;
   background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e1e5eb;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
 }
 .heatmap-head {
   display: flex;
@@ -176,7 +176,7 @@ mat-card { border-radius: 8px; }
 }
 .streak-badge {
   font-size: 12px;
-  background: #fff3e0;
+  background: var(--attention-tint);
   color: #e65100;
   padding: 2px 10px;
   border-radius: 12px;
@@ -197,12 +197,12 @@ mat-card { border-radius: 8px; }
   width: 12px;
   height: 12px;
   border-radius: 3px;
-  background: #ebedf0;
+  background: #e2e5ec;
 }
-.heatmap-day.lv-1 { background: #c6e48b; }
-.heatmap-day.lv-2 { background: #7bc96f; }
-.heatmap-day.lv-3 { background: #239a3b; }
-.heatmap-day.lv-4 { background: #196127; }
+.heatmap-day.lv-1 { background: #c6cdea; }
+.heatmap-day.lv-2 { background: #8e9ad6; }
+.heatmap-day.lv-3 { background: #3e4da3; }
+.heatmap-day.lv-4 { background: #2e3a8c; }
 .heatmap-day.lv--1 { background: transparent; }
 .heatmap-legend {
   display: flex;
@@ -229,23 +229,23 @@ mat-card { border-radius: 8px; }
 .resole-hint {
   font-size: 13px;
   color: #6b7280;
-  background: #fef3c7;
+  background: var(--attention-tint);
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: 6px;
   margin-bottom: 10px;
-  border: 1px solid #fde68a;
+  border: 1px solid #ead9a0;
 }
 .binary-grade {
   display: flex;
   gap: 12px;
 }
 .binary-grade .g-pass {
-  background: #10b981;
+  background: var(--go);
   color: white;
   flex: 1;
 }
 .binary-grade .g-fail {
-  background: #ef4444;
+  background: var(--stop);
   color: white;
   flex: 1;
 }
@@ -268,7 +268,7 @@ mat-card { border-radius: 8px; }
   gap: 4px;
   font-weight: 600;
   font-size: 13.5px;
-  color: #3f51b5;
+  color: #2e3a8c;
   padding: 4px 8px;
   min-width: 0;
 }
@@ -281,7 +281,7 @@ mat-card { border-radius: 8px; }
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #3f51b5;
+  background: #2e3a8c;
   color: #fff;
   font-size: 11.5px;
   font-weight: 700;
@@ -295,8 +295,8 @@ mat-card { border-radius: 8px; }
 }
 .achip {
   font-size: 12.5px;
-  background: rgba(63, 81, 181, 0.1);
-  color: #3f51b5;
+  background: rgba(46, 58, 140, 0.1);
+  color: #2e3a8c;
 }
 
 /* 分类管理按钮 */
@@ -305,7 +305,7 @@ mat-card { border-radius: 8px; }
   width: 32px;
   height: 32px;
 }
-.manage-btn:hover { color: #3f51b5; background: rgba(63, 81, 181, 0.08); }
+.manage-btn:hover { color: #2e3a8c; background: rgba(46, 58, 140, 0.08); }
 .manage-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
 /* 筛选区底部:Clear filters 右对齐 */
@@ -383,7 +383,7 @@ mat-form-field { width: 100%; }
   transition: background 0.15s;
   margin: 8px 0;
 }
-.split-handle:hover::after { background: rgba(63, 81, 181, 0.35); }
+.split-handle:hover::after { background: rgba(46, 58, 140, 0.35); }
 
 /* ---------- 左:列表 ---------- */
 
@@ -420,16 +420,16 @@ mat-form-field { width: 100%; }
 .list-item:hover { background: rgba(0, 0, 0, 0.045); }
 
 .list-item.active {
-  background: rgba(63, 81, 181, 0.1);
-  box-shadow: inset 2px 0 0 #3f51b5;
+  background: rgba(46, 58, 140, 0.1);
+  box-shadow: inset 2px 0 0 #2e3a8c;
 }
 
 .list-item + .list-item { margin-top: 2px; }
 
 /* 批量编辑模式:勾选项高亮 + 复选框 */
 .list-item.batch-selected {
-  background: rgba(63, 81, 181, 0.08);
-  box-shadow: inset 2px 0 0 #3f51b5;
+  background: rgba(46, 58, 140, 0.08);
+  box-shadow: inset 2px 0 0 #2e3a8c;
 }
 .batch-check {
   margin-right: 8px;
@@ -591,7 +591,7 @@ mat-form-field { width: 100%; }
   font-size: 20px;
   width: 20px;
   height: 20px;
-  color: #3f51b5;
+  color: #2e3a8c;
   opacity: 0.8;
   flex: 0 0 auto;
 }
@@ -608,11 +608,11 @@ mat-form-field { width: 100%; }
   font-size: 15px;
   line-height: 1.8;
   padding: 10px 12px;
-  border: 1px solid rgba(63, 81, 181, 0.35);
+  border: 1px solid rgba(46, 58, 140, 0.35);
   border-radius: 8px;
   resize: vertical;
 }
-.blk-editor:focus { outline: none; border-color: #3f51b5; }
+.blk-editor:focus { outline: none; border-color: #2e3a8c; }
 .block-empty-hint {
   margin: 0;
   font-size: 12.5px;
@@ -664,17 +664,17 @@ mat-form-field { width: 100%; }
 /* ---------- 熟练度配色 ---------- */
 /* 五级从冷灰到暖绿:视觉上就能看出"这块还有没有欠债" */
 
-.m-new { --m-color: #9e9e9e; --m-color-bg: rgba(158, 158, 158, 0.16); }
-.m-learning { --m-color: #a15c00; --m-color-bg: rgba(249, 168, 37, 0.18); }
-.m-familiar { --m-color: #1565c0; --m-color-bg: rgba(21, 101, 192, 0.14); }
-.m-proficient { --m-color: #00695c; --m-color-bg: rgba(0, 105, 92, 0.14); }
-.m-mastered { --m-color: #2e7d32; --m-color-bg: rgba(46, 125, 50, 0.16); }
+.m-new { --m-color: #68707e; --m-color-bg: rgba(104, 112, 126, 0.14); }
+.m-learning { --m-color: #6673c2; --m-color-bg: rgba(102, 115, 194, 0.14); }
+.m-familiar { --m-color: #3e4da3; --m-color-bg: rgba(62, 77, 163, 0.13); }
+.m-proficient { --m-color: #2e3a8c; --m-color-bg: rgba(46, 58, 140, 0.14); }
+.m-mastered { --m-color: #1b7f4b; --m-color-bg: rgba(27, 127, 75, 0.14); }
 
-.b-new { --m-color: #9e9e9e; }
-.b-learning { --m-color: #f9a825; }
-.b-familiar { --m-color: #1565c0; }
-.b-proficient { --m-color: #00695c; }
-.b-mastered { --m-color: #2e7d32; }
+.b-new { --m-color: #68707e; }
+.b-learning { --m-color: #6673c2; }
+.b-familiar { --m-color: #3e4da3; }
+.b-proficient { --m-color: #2e3a8c; }
+.b-mastered { --m-color: #1b7f4b; }
 
 /* ---------- 错误 ---------- */
 
@@ -731,8 +731,8 @@ mat-form-field { width: 100%; }
   font-weight: 600;
   padding: 3px 12px;
   border-radius: 11px;
-  background: rgba(63, 81, 181, 0.12);
-  color: #3f51b5;
+  background: rgba(46, 58, 140, 0.12);
+  color: #2e3a8c;
 }
 
 .rs-card {
@@ -762,14 +762,14 @@ mat-form-field { width: 100%; }
   margin: 18px 0 4px;
   padding: 14px 16px;
   border-radius: 10px;
-  background: rgba(63, 81, 181, 0.06);
+  background: rgba(46, 58, 140, 0.06);
 }
 
 .rs-question mat-icon {
   font-size: 20px;
   width: 20px;
   height: 20px;
-  color: #3f51b5;
+  color: #2e3a8c;
   flex: 0 0 auto;
   margin-top: 1px;
 }

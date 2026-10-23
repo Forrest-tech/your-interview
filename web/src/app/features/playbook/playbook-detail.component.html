@@ -61,19 +61,38 @@
         <div class="ehead-left">
         <div class="ehead-main">
           <div class="ehead-titles">
-            <h1>{{ e.companyName }} · {{ e.role }}</h1>
+            <div class="ehead-name">
+              <h1>{{ e.role }}</h1>
+              <div class="ehead-company">{{ e.companyName }}</div>
+            </div>
             <span class="status-badge">{{ statusText() }}</span>
           </div>
           <!-- 元信息五项常驻(2026-10-21 定稿第一节,覆盖 X1 的"无值隐藏"):
-               投递日期 / 来源 / 准备度 / Recruiter / 最近联系永远渲染带标签,
-               无值显示「—」(与四格条 Resume Score 同风格);不再分关联/未关联两套。 -->
-          <p class="ehead-meta" data-testid="header-meta">
-            <span class="meta-item">{{ t('pb.v2.d.metaApplied') }} {{ (application()?.appliedDate ?? '').slice(0, 10) || '—' }}</span>
-            · <span class="meta-item">{{ t('pb.v2.d.metaSource') }} {{ application()?.source || '—' }}</span>
-            · <span class="meta-item">{{ t('pb.v2.d.metaReadiness') }} {{ readiness() }}%</span>
-            · <span class="meta-item">{{ t('pb.v2.d.recruiter') }} {{ recruiterLine() || '—' }}</span>
-            · <span class="meta-item">{{ t('pb.v2.d.lastContact') }} {{ lastContactDate() || '—' }}</span>
-          </p>
+               投递日期 / 来源 / 准备度 / Recruiter / 最近联系永远渲染带标签,不再分关联/未关联两套。
+               票 118(D-7):呈现改标签对版式(标签在上、值在下),无值用「标签化空值」
+               (未记录/未添加/暂无联系)——不再用「—」占位,也不再中点拼接成一行。 -->
+          <div class="ehead-meta" data-testid="header-meta">
+            <div class="meta-pair">
+              <span class="meta-k">{{ t('pb.v2.d.metaApplied') }}</span>
+              <span class="meta-v" [class.missing]="!(application()?.appliedDate)">{{ (application()?.appliedDate ?? '').slice(0, 10) || t('pb.v2.d.emptyNotRecorded') }}</span>
+            </div>
+            <div class="meta-pair">
+              <span class="meta-k">{{ t('pb.v2.d.metaSource') }}</span>
+              <span class="meta-v" [class.missing]="!application()?.source">{{ application()?.source || t('pb.v2.d.emptyNotRecorded') }}</span>
+            </div>
+            <div class="meta-pair">
+              <span class="meta-k">{{ t('pb.v2.d.metaReadiness') }}</span>
+              <span class="meta-v">{{ readiness() }}%</span>
+            </div>
+            <div class="meta-pair">
+              <span class="meta-k">{{ t('pb.v2.d.recruiter') }}</span>
+              <span class="meta-v" [class.missing]="!recruiterLine()">{{ recruiterLine() || t('pb.v2.d.emptyNotAdded') }}</span>
+            </div>
+            <div class="meta-pair">
+              <span class="meta-k">{{ t('pb.v2.d.lastContact') }}</span>
+              <span class="meta-v" [class.missing]="!lastContactDate()">{{ lastContactDate() || t('pb.v2.d.emptyNoContact') }}</span>
+            </div>
+          </div>
           @if (editingBasic()) {
             <div class="basic-edit">
               <label>{{ t('pb.v2.d.fCompany') }} <input class="fld" [ngModel]="bCompany()" (ngModelChange)="bCompany.set($event)"></label>
@@ -115,7 +134,7 @@
           </button>
           <button type="button" class="cell" (click)="toggleCell('score')">
             <span class="cell-label">{{ t('pb.v2.d.stripScore') }}</span>
-            <span class="cell-body big">{{ resumeScore() != null ? resumeScore() : '—' }}</span>
+            <span class="cell-body" [class.big]="resumeScore() != null" [class.missing]="resumeScore() == null">{{ resumeScore() != null ? resumeScore() : t('pb.v2.d.emptyNotScored') }}</span>
             <span class="cell-more">{{ expandedCell() === 'score' ? t('pb.v2.d.collapse') : t('pb.v2.d.howDerived') }}</span>
           </button>
         </section>

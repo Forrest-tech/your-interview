@@ -88,9 +88,12 @@ export class PlaybookCalendarComponent implements OnInit {
     return weeks;
   });
 
+  /* 票 118 / F-8:月题写月份名(October 2026 / 2026年10月),不再是 2026 / 10 的数字拼接;
+     语言随界面语言(Intl 长月份名)。 */
   readonly monthLabel = computed(() => {
     const d = this.viewMonth();
-    return `${d.getFullYear()} / ${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const locale = { zh: 'zh-CN', fr: 'fr-FR', en: 'en-US' }[this.i18n.lang()] ?? 'en-US';
+    return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(d);
   });
 
   /** A10(票35):星期头按界面语言取(zh 与改前逐字一致)。 */

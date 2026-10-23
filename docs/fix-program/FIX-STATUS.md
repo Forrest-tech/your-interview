@@ -7,7 +7,7 @@
 > - **事实源**：`docs/fix-program/source/`（AUDIT.md + 票面 + replica 定稿 + HANDOVER.md）
 > - **本文件纪律**：队列与状态唯一事实源；没到远端且验过的成果，不报「已完成」。
 
-> **当前 DOING**：票 41 · ARC-16 Playbook 旧代实现下线
+> **当前 DOING**：票 42 · ARC-11 前端 API 层收敛（已实现并推送 `277919c`，待 CI E2E 复跑转 VERIFIED；下一票 43 ARC-13 i18n 收口）
 
 ---
 
@@ -16,8 +16,8 @@
 | 状态 | 票号 | 说明 |
 |---|---|---|
 | **VERIFIED** | 41 | CI run `39888149532` Backend/Frontend/E2E 全 success；证据 `docs/fix-program/evidence-41/` |
-| **DOING** | 42 | ARC-11 前端 API 层收敛；证据 `docs/fix-program/evidence-42/` |
-| **TODO（S3 优先）** | 43, 45, 48, 49, 50 | 42 之后按 S2→S3→S4 顺序清；票 47 已由并行执行线落远端，本台账仅登记为 PUSHED 待其补证据 |
+| **PUSHED** | 42 | ARC-11 前端 API 层收敛收口；远端 `277919c`；证据 `docs/fix-program/evidence-42/`（PLAN + VERIFICATION）；features/** 字面量归零、tsc --noEmit 0 错；**待 CI E2E 黄金路径复跑确认后转 VERIFIED**（协议 §3 第四步） |
+| **TODO（S3 优先）** | 43, 45, 48, 49, 50 | 42 VERIFIED 后按 S2→S3→S4 顺序清；票 47 已由并行执行线落远端，本台账仅登记为 PUSHED 待其补证据 |
 | **PUSHED（非本执行线）** | 47 | 远端 `13e2e144` 已含票 47 实现；CI 同 run `39888149532` 全绿；但非我实现，证据不由我登记 |
 | **TODO（重构批）** | 51, 52, 53, 54 | 纯重构，S4 功能票清完后再动 |
 | **TODO（平台/跟进）** | 64, 65, 67, 70, 71, 72, 74, 75, 77, 78, 79, 88 | 主线清完后或按需要插队 |

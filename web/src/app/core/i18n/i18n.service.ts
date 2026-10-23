@@ -2126,7 +2126,6 @@ const DICT: Record<string, Record<Lang, string>> = {
   'an.trendTitle': { zh: '近 30 天变化', en: 'Last 30 days', fr: '30 derniers jours' },
   'an.trendSub': { zh: '按首末两次评分对比,负数代表退步', en: 'First vs last score; negative means regression', fr: 'Premier vs dernier score ; négatif = régression' },
   'an.trendEmpty': { zh: '趋势数据为空。', en: 'No trend data.', fr: 'Aucune donnée de tendance.' },
-  'an.trendUnavailable': { zh: '趋势接口暂不可用,跳过这一段。', en: 'Trend API unavailable — skipping this section.', fr: 'API de tendance indisponible — section ignorée.' },
   'auth.tagline': { zh: '求职与面试全流程平台', en: 'End-to-end job search and interview platform', fr: 'Plateforme complète de recherche d’emploi et d’entretiens' },
   'auth.fieldEmail': { zh: '邮箱', en: 'Email', fr: 'E-mail' },
   'auth.fieldPassword': { zh: '密码', en: 'Password', fr: 'Mot de passe' },

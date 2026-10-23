@@ -180,9 +180,10 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
       error: (e: Error) => { this.error.set(e.message); done(); }
     });
 
-    // 趋势是可选增强:接口不存在也不该让整页报错
+    // 趋势接口为正式端点(FUN-08/票36:后端基于 AbilitySnapshots 按天聚合);
+    // 请求失败时降级为空 series,让区块走本地化空态(an.trendEmpty),不让整页报错
     this.api.get<AbilityTrend>('/api/analytics/ability/trend', { days: 30 })
-      .pipe(catchError(() => of(null)))
+      .pipe(catchError(() => of<AbilityTrend>({ days: 30, series: [] })))
       .subscribe((t) => { this.trend.set(t); done(); });
   }
 

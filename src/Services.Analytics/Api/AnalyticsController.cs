@@ -39,6 +39,19 @@ public sealed class AnalyticsController(ISender sender, ICurrentUser currentUser
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 能力趋势(FUN-08/票36)—— 基于 AbilitySnapshots 历史按天聚合(每日取 Max,
+    /// 口径见 AbilityTrendAggregation)。前端「近 30 天变化」区块的数据源;
+    /// 无快照时返回空 series(200),不 404。
+    /// </summary>
+    [HttpGet("ability/trend")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsRead)]
+    public async Task<IResult> AbilityTrend([FromQuery] int days = 30, CancellationToken ct = default)
+    {
+        var r = await sender.Send(new GetAbilityTrendQuery(Me, days), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>求职漏斗趋势。</summary>
     [HttpGet("pipeline")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsRead)]

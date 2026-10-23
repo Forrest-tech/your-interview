@@ -361,10 +361,6 @@ public sealed record UpdateRoundCommand(
 
 public sealed record RemoveRoundCommand(Guid UserId, Guid EntryId, Guid RoundId) : IRequest<Result>;
 
-public sealed record AddWeaknessCommand(
-    Guid UserId, Guid EntryId, string Category, string Title, string? Detail, string? Evidence,
-    int Severity, string? Suggestion) : IRequest<Result<Guid>>;
-
 public sealed record RemoveWeaknessCommand(Guid UserId, Guid EntryId, Guid WeaknessId) : IRequest<Result>;
 
 // ============================ 校验器 ============================
@@ -466,16 +462,6 @@ public sealed class UpdateRoundCommandValidator : AbstractValidator<UpdateRoundC
         RuleFor(x => x.Outcome).NotEmpty();
         RuleFor(x => x.Interviewers).MaximumLength(1000);
         RuleFor(x => x.Location).MaximumLength(300);
-    }
-}
-
-public sealed class AddWeaknessCommandValidator : AbstractValidator<AddWeaknessCommand>
-{
-    public AddWeaknessCommandValidator()
-    {
-        RuleFor(x => x.EntryId).NotEmpty();
-        RuleFor(x => x.Title).NotEmpty().MaximumLength(500);
-        RuleFor(x => x.Severity).InclusiveBetween(1, 5);
     }
 }
 
@@ -1711,24 +1697,6 @@ public sealed class RemoveRoundCommandHandler(InterviewsDbContext db)
         {
             return Result.Failure(Error.NotFound(ex.Message));
         }
-    }
-}
-
-public sealed class AddWeaknessCommandHandler(InterviewsDbContext db)
-    : IRequestHandler<AddWeaknessCommand, Result<Guid>>
-{
-    public async Task<Result<Guid>> Handle(AddWeaknessCommand request, CancellationToken ct)
-    {
-        var e = await db.Entries.Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
-        if (e is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
-
-        if (!Enum.TryParse<WeaknessCategory>(request.Category, true, out var cat))
-            return Result.Failure<Guid>(Error.Validation("Weakness.InvalidCategory", "短板分类无效"));
-
-        var w = e.AddWeakness(cat, request.Title, request.Detail, request.Evidence,
-            request.Severity, request.Suggestion);
-        await db.SaveChangesAsync(ct);
-        return Result.Success(w.Id);
     }
 }
 

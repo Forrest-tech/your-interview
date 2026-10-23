@@ -158,10 +158,6 @@ export class PlaybookV2Api {
     return this.api.post(`${this.base(entryId)}/assets/${assetId}/transcribe`, {});
   }
 
-  runAnalysis(entryId: string): Observable<unknown> {
-    return this.api.post(`${this.base(entryId)}/analyze`, {});
-  }
-
   roundIcsUrl(entryId: string, roundId: string): string {
     return `${this.base(entryId)}/rounds/${roundId}/ics`;
   }
@@ -225,10 +221,6 @@ export class PlaybookV2Api {
         { betterAnswer: body.betterAnswer });
     }
     return this.api.put(`/api/knowledge/${id}/answer`, { myAnswer: body.answer ?? null });
-  }
-
-  addKnowledgeSource(id: string, body: Record<string, unknown>): Observable<unknown> {
-    return this.api.post(`/api/knowledge/${id}/sources`, body);
   }
 
   // ---------------- 沟通记录(Jobs 同源) ----------------

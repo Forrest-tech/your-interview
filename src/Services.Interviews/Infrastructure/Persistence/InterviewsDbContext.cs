@@ -49,6 +49,9 @@ public sealed class InterviewsDbContext(
     /// <summary>历史粘贴材料孤儿键归档(原 pb-pasted-&lt;条目id&gt;,原文逐字)。</summary>
     public DbSet<LegacyPastedMaterial> LegacyPastedMaterials => Set<LegacyPastedMaterial>();
 
+    /// <summary>轮次提醒(CONF-CAL-2):由轮次排期派生的应用内提醒,唯一键 (RoundId, Kind)。</summary>
+    public DbSet<RoundReminder> RoundReminders => Set<RoundReminder>();
+
     /// <summary>
     /// 给该条目所有未关单的任务排定终态(只改跟踪状态,不落库 ——
     /// 由调用方随后的 SaveChangesAsync 与业务变更**同一事务**提交)。
@@ -363,6 +366,24 @@ public sealed class InterviewsDbContext(
             e.Property(x => x.UserId).IsRequired();
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => new { x.UserId, x.EntryKey }).IsUnique();
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        // ---- CONF-CAL-2:轮次提醒(派生数据,同步口径见 ReminderSync)----
+        b.Entity<RoundReminder>(e =>
+        {
+            e.ToTable("round_reminders");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.EntryId);
+            // 同步 upsert 的收口键:一轮次一类提醒最多一行。
+            e.HasIndex(x => new { x.RoundId, x.Kind }).IsUnique();
+            // 到期列表的主查询形状:按用户 + 状态 + 触发时刻。
+            e.HasIndex(x => new { x.UserId, x.Status, x.RemindAt });
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
         });

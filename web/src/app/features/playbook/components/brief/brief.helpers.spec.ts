@@ -5,6 +5,9 @@
  * 22 例逐项映射(下方每条标注「票41」),期望值逐字守票 41 落盘口径;
  * 另加的 boundary 扩充例均由现行源码逐行读证得出,标注「扩充」与类别。
  * 特征测试锁现状:不改被测函数行为;可疑行为只登记报告,不在本票修。
+ * 票102 修订:票64 登记 B-64-1 (normalizeEmailDate 不校验日历合法性) 已修复——
+ * 原 2 例 (locked) 期望按票55先例改口径并在用例内注明依据=票102;另加日历
+ * 合法性 boundary 组 21 例 + parsePastedEmail 管线 2 例。
  */
 import { describe, expect, it } from '@jest/globals';
 import { normalizeEmailDate, parsePastedEmail } from './brief.helpers';
@@ -86,14 +89,15 @@ describe('normalizeEmailDate(boundary 扩充,源码读证)', () => {
   it('padded with whitespace', () => {
     expect(normalizeEmailDate('  Oct 5, 2026  ')).toBe('2026-10-05');
   });
-  // [boundary-日期临界/特征锁定] 扩充:2026 非闰年,字符串路径不校验日历合法性,
-  // 2月29日原样回传(现状锁定;是否算 bug 见 CLOSE-REPORT 登记 B-64-1)
-  it('Feb 29 on non-leap year passes through string path (locked)', () => {
-    expect(normalizeEmailDate('2026-02-29')).toBe('2026-02-29');
+  // [boundary-日期临界] 票64 (locked) 例改期望,依据=票102(B-64-1 修复):
+  // 2026 非闰年,2月29日日历上不存在 → 归空(原 locked 期望为原样回传 '2026-02-29')
+  it('Feb 29 on non-leap year rejected (票102 改期望,原 locked)', () => {
+    expect(normalizeEmailDate('2026-02-29')).toBe('');
   });
-  // [boundary-日期临界/特征锁定] 扩充:13 月同样不校验,原样回传(同 B-64-1)
-  it('month 13 passes through string path (locked)', () => {
-    expect(normalizeEmailDate('2026-13-01')).toBe('2026-13-01');
+  // [boundary-日期临界] 票64 (locked) 例改期望,依据=票102:13 月不存在 → 归空
+  // (原 locked 期望为原样回传 '2026-13-01')
+  it('month 13 rejected (票102 改期望,原 locked)', () => {
+    expect(normalizeEmailDate('2026-13-01')).toBe('');
   });
   // [boundary-超长] 扩充:超长垃圾串解析失败回空
   it('very long garbage', () => {
@@ -112,6 +116,94 @@ describe('normalizeEmailDate(boundary 扩充,源码读证)', () => {
     expect(() => normalizeEmailDate(undefined as unknown as string)).toThrow(TypeError);
   });
   // [boundary-文件类] 不适用:无文件入参(票面口径注明)
+});
+
+describe('normalizeEmailDate(票102 日历合法性 boundary)', () => {
+  // [boundary-日期临界/闰年] 2024 闰年 2/29 合法,ISO 路径守恒
+  it('Feb 29 on leap year 2024 valid (ISO)', () => {
+    expect(normalizeEmailDate('2024-02-29')).toBe('2024-02-29');
+  });
+  // [boundary-日期临界/闰年] 同上,m2 日-月名路径
+  it('Feb 29 on leap year valid (d MMM yyyy)', () => {
+    expect(normalizeEmailDate('29 Feb 2024')).toBe('2024-02-29');
+  });
+  // [boundary-日期临界/闰年] 同上,m3 月名-日路径
+  it('Feb 29 on leap year valid (MMM d, yyyy)', () => {
+    expect(normalizeEmailDate('Feb 29, 2024')).toBe('2024-02-29');
+  });
+  // [boundary-日期临界/闰年-百年] 2000 被 400 整除 → 闰年,2/29 合法
+  it('Feb 29 year 2000 valid (400-year leap)', () => {
+    expect(normalizeEmailDate('2000-02-29')).toBe('2000-02-29');
+  });
+  // [boundary-日期临界/闰年-百年] 1900 被 100 整除但不被 400 → 平年,2/29 归空
+  it('Feb 29 year 1900 rejected (century non-leap)', () => {
+    expect(normalizeEmailDate('1900-02-29')).toBe('');
+  });
+  // [boundary-日期临界] 平年 2/29,m2 路径同样校验
+  it('Feb 29 non-leap rejected (d MMM yyyy)', () => {
+    expect(normalizeEmailDate('29 Feb 2026')).toBe('');
+  });
+  // [boundary-日期临界] 平年 2/29,m3 路径同样校验
+  it('Feb 29 non-leap rejected (MMM d, yyyy)', () => {
+    expect(normalizeEmailDate('Feb 29, 2026')).toBe('');
+  });
+  // [boundary-日期临界] 2/30 任何年份都不存在
+  it('Feb 30 rejected', () => {
+    expect(normalizeEmailDate('2026-02-30')).toBe('');
+  });
+  // [boundary-日期临界] 0 月归空
+  it('month 0 rejected', () => {
+    expect(normalizeEmailDate('2026-00-10')).toBe('');
+  });
+  // [boundary-日期临界] 0 日归空
+  it('day 0 rejected', () => {
+    expect(normalizeEmailDate('2026-01-00')).toBe('');
+  });
+  // [boundary-日期临界] 32 日归空
+  it('day 32 rejected', () => {
+    expect(normalizeEmailDate('2026-01-32')).toBe('');
+  });
+  // [boundary-日期临界] 4 月只有 30 天,31 日归空 (ISO)
+  it('Apr 31 rejected (ISO)', () => {
+    expect(normalizeEmailDate('2026-04-31')).toBe('');
+  });
+  // [boundary-日期临界] 4/31,m3 路径
+  it('Apr 31 rejected (MMM d, yyyy)', () => {
+    expect(normalizeEmailDate('Apr 31, 2026')).toBe('');
+  });
+  // [boundary-日期临界] 4/31,m2 路径
+  it('Apr 31 rejected (d MMM yyyy)', () => {
+    expect(normalizeEmailDate('31 Apr 2026')).toBe('');
+  });
+  // [boundary-日期临界/Unicode] 中文写法平年 2/29 归空
+  it('Feb 29 non-leap zh rejected', () => {
+    expect(normalizeEmailDate('2026年2月29日')).toBe('');
+  });
+  // [boundary-日期临界/Unicode] 中文写法 13 月归空
+  it('month 13 zh rejected', () => {
+    expect(normalizeEmailDate('2026年13月1日')).toBe('');
+  });
+  // [boundary-日期临界/跨年] 年末守恒
+  it('Dec 31 valid across year boundary', () => {
+    expect(normalizeEmailDate('2024-12-31')).toBe('2024-12-31');
+  });
+  // [boundary-日期临界/跨年] 年初守恒
+  it('Jan 1 valid across year boundary', () => {
+    expect(normalizeEmailDate('2025-01-01')).toBe('2025-01-01');
+  });
+  // [boundary-日期临界] 平年 2/28 (非法 2/29 的前一日) 守恒
+  it('Feb 28 non-leap valid', () => {
+    expect(normalizeEmailDate('2026-02-28')).toBe('2026-02-28');
+  });
+  // [boundary-日期临界] 平年 3/1 守恒
+  it('Mar 1 non-leap valid', () => {
+    expect(normalizeEmailDate('2026-03-01')).toBe('2026-03-01');
+  });
+  // [boundary-日期临界] 合法月末守恒:1/31 与 4/30
+  it('valid month ends preserved', () => {
+    expect(normalizeEmailDate('2026-01-31')).toBe('2026-01-31');
+    expect(normalizeEmailDate('2026-04-30')).toBe('2026-04-30');
+  });
 });
 
 describe('parsePastedEmail(票41 映射 8 例)', () => {
@@ -191,6 +283,16 @@ describe('parsePastedEmail(boundary 扩充,源码读证)', () => {
   it('folded from', () => {
     expect(parsePastedEmail('From: Alice\n Smith\nSubject: Hi\n\nB'))
       .toEqual({ from: 'Alice Smith', date: '', subject: 'Hi', body: 'B' });
+  });
+  // [boundary-日期临界/票102] Date 头为日历不存在日期(平年 2/29)→ 经 normalizeEmailDate 归空,其余字段照常
+  it('calendar-invalid date header normalizes to empty (票102)', () => {
+    expect(parsePastedEmail('From: a@b.c\nDate: 2026-02-29\nSubject: Hi\n\nB'))
+      .toEqual({ from: 'a@b.c', date: '', subject: 'Hi', body: 'B' });
+  });
+  // [boundary-日期临界/票102] Date 头为闰年 2/29 → 管线内正常归一,其余字段照常
+  it('leap-year date header normalizes through pipeline (票102)', () => {
+    expect(parsePastedEmail('From: a@b.c\nDate: Feb 29, 2024\nSubject: Hi\n\nB'))
+      .toEqual({ from: 'a@b.c', date: '2024-02-29', subject: 'Hi', body: 'B' });
   });
   // [boundary-日期不可解析] 扩充:Date 头垃圾值经 normalizeEmailDate 归空,其余字段照常
   it('unparseable date header normalizes to empty', () => {

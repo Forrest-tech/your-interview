@@ -191,11 +191,24 @@ export function renderMarkdown(md: string): string {
   return out.join('\n');
 }
 
-/** 把各种日期写法归一为 yyyy-MM-dd；无法识别返回空串。 */
+/** 日历合法性（票102）：月 1–12、日 1–当月实际天数；闰年 = 被 4 整除，百年须被 400 整除。 */
+function isValidCalendarDate(y: number, m: number, d: number): boolean {
+  if (m < 1 || m > 12 || d < 1) return false;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return d <= daysInMonth[m - 1];
+}
+
+/**
+ * 把各种日期写法归一为 yyyy-MM-dd；无法识别、或形态对但日历上不存在
+ * （13 月 / 平年 2-29 / 4 月 31 日等，票102）返回空串——与 Date 回落路径
+ * 解析失败同口径，消费方（intake 落库/排序/occurredAt 构造）均按空串防御。
+ */
 export function normalizeEmailDate(s: string): string {
   const t = s.trim();
   const m1 = t.match(/(\d{4})[年\/\-.](\d{1,2})[月\/\-.](\d{1,2})日?/);
   if (m1) {
+    if (!isValidCalendarDate(+m1[1], +m1[2], +m1[3])) return '';
     const mm = String(+m1[2]).padStart(2, '0');
     const dd = String(+m1[3]).padStart(2, '0');
     return `${m1[1]}-${mm}-${dd}`;
@@ -206,12 +219,14 @@ export function normalizeEmailDate(s: string): string {
   };
   const m2 = t.match(/(\d{1,2})\s+([A-Za-z]+)\.?\s+(\d{4})/);
   if (m2 && months[m2[2].toLowerCase()]) {
+    if (!isValidCalendarDate(+m2[3], months[m2[2].toLowerCase()], +m2[1])) return '';
     const mm = String(months[m2[2].toLowerCase()]).padStart(2, '0');
     const dd = String(+m2[1]).padStart(2, '0');
     return `${m2[3]}-${mm}-${dd}`;
   }
   const m3 = t.match(/([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})/);
   if (m3 && months[m3[1].toLowerCase()]) {
+    if (!isValidCalendarDate(+m3[3], months[m3[1].toLowerCase()], +m3[2])) return '';
     const mm = String(months[m3[1].toLowerCase()]).padStart(2, '0');
     const dd = String(+m3[2]).padStart(2, '0');
     return `${m3[3]}-${mm}-${dd}`;

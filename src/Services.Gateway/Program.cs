@@ -83,8 +83,11 @@ Log.Information("网关探活下游 {Count} 个: {Urls}", clusterUrls.Count,
     clusterUrls.Count == 0 ? "(无)" : string.Join(", ", clusterUrls));
 
 // ---------- CORS:前端 SPA 与网关不同源 ----------
+// ARC-18/票50:与服务级 ServiceDefaults 同一口径——同键 Cors:AllowedOrigins、同默认三项
+// (网关不引用 BuildingBlocks,故兜底数组在此逐字对齐 ServiceDefaults.DefaultCorsAllowedOrigins;
+//  此前兜底缺 http://127.0.0.1:4200,与本服务 appsettings.json 不一致,现对齐)。
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-                     ?? ["http://localhost:4200", "http://localhost:5100"];
+                     ?? ["http://localhost:4200", "http://localhost:5100", "http://127.0.0.1:4200"];
 
 builder.Services.AddCors(o => o.AddPolicy("spa", p => p
     .WithOrigins(allowedOrigins)

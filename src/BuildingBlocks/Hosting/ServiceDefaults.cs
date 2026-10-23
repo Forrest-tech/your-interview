@@ -36,6 +36,84 @@ public static class ServiceDefaults
     public const string CorsPolicy = "your-interview-cors";
 
     /// <summary>
+    /// CORS 白名单的**统一默认口径**(ARC-18/票50):与网关(Services.Gateway/appsettings.json 的
+    /// Cors:AllowedOrigins 及网关代码兜底)逐项一致,网关与各服务共读同一配置键
+    /// <c>Cors:AllowedOrigins</c>(环境变量 Cors__AllowedOrigins__0... 同样生效)。
+    /// 逐项依据:
+    ///   · http://localhost:4200 —— Angular dev server(ng serve)的规范 Origin;
+    ///     前端既可经 proxy.conf.json 同源转发,也可在排查时直连各服务端口
+    ///     (web/src/environments/environment.ts 的 servicePorts 直连模式),两种形态浏览器 Origin 都是它。
+    ///   · http://127.0.0.1:4200 —— 同一 dev server 以 127.0.0.1 打开时的 Origin(与 localhost 是不同 Origin,必须分列)。
+    ///   · http://localhost:5100 —— 网关 appsettings 既有的 SPA 本地形态,网关侧已放行,服务侧统一跟齐。
+    /// 部署形态(生产前端域名)不写死在代码里:上线时以 Cors:AllowedOrigins 配置节/环境变量注入即可,不要改本默认值。
+    /// </summary>
+    public static readonly string[] DefaultCorsAllowedOrigins =
+        ["http://localhost:4200", "http://localhost:5100", "http://127.0.0.1:4200"];
+
+    /// <summary>
+    /// ARC-18(票50):CORS 白名单的**唯一解析口径**。读统一配置键 <c>Cors:AllowedOrigins</c>
+    /// (与网关同键同值),逐项归一化(去空白、去尾斜杠、去重)并剔除含 <c>*</c> 的通配项
+    /// —— 白名单永不接受通配,防止有人把配置写成 * 又回到全放行+凭据的危险组合。
+    /// 配置缺失/为空/全被剔除时回落 <see cref="DefaultCorsAllowedOrigins"/>。
+    /// 纯函数(只读 <see cref="IConfiguration"/>),口径由 BuildingBlocks.Tests 锁定。
+    /// </summary>
+    public static IReadOnlyList<string> ResolveCorsAllowedOrigins(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var configured = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        var normalized = NormalizeCorsOrigins(configured);
+        return normalized.Count > 0 ? normalized : NormalizeCorsOrigins(DefaultCorsAllowedOrigins);
+    }
+
+    /// <summary>
+    /// ARC-18(票50):Origin 是否在白名单内 —— **精确匹配**(归一化后 OrdinalIgnoreCase 全等),
+    /// 不做后缀/子域匹配:http://sub.localhost:4200、http://evil-localhost:4200、
+    /// 端口不同、scheme 不同一律拒绝。null/空白/字面量 "null"(沙盒 iframe 的 Origin 序列化值)一律拒绝。
+    /// 白名单侧含 * 的项被归一化剔除,不会命中任何 Origin。纯函数,口径由 BuildingBlocks.Tests 锁定。
+    /// </summary>
+    public static bool IsCorsOriginAllowed(string? origin, IEnumerable<string?>? allowedOrigins)
+    {
+        var normalizedOrigin = NormalizeCorsOrigin(origin);
+        if (normalizedOrigin is null || allowedOrigins is null)
+            return false;
+
+        foreach (var allowed in allowedOrigins)
+        {
+            var normalizedAllowed = NormalizeCorsOrigin(allowed);
+            if (normalizedAllowed is not null &&
+                string.Equals(normalizedOrigin, normalizedAllowed, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static List<string> NormalizeCorsOrigins(IEnumerable<string?>? origins)
+    {
+        var result = new List<string>();
+        if (origins is null) return result;
+        foreach (var origin in origins)
+        {
+            var normalized = NormalizeCorsOrigin(origin);
+            if (normalized is not null &&
+                !result.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+                result.Add(normalized);
+        }
+        return result;
+    }
+
+    private static string? NormalizeCorsOrigin(string? origin)
+    {
+        if (string.IsNullOrWhiteSpace(origin)) return null;
+        var value = origin.Trim();
+        // 通配项一律作废:白名单口径下 "*" 不是合法条目,含 * 的条目也不参与匹配。
+        if (value.Contains('*')) return null;
+        // Origin 序列化本身不带尾斜杠;配置/来访值带了尾斜杠时归一掉,避免 "http://localhost:4200/" 误拒。
+        value = value.TrimEnd('/');
+        return value.Length == 0 ? null : value;
+    }
+
+    /// <summary>
     /// 全服务统一的 Kestrel 请求体上限:64MB(ARC-09/票18)。
     /// 与网关(Services.Gateway 自有同值一行,网关不引用 BuildingBlocks)口径一致;
     /// 此前只有 Assessment 与网关配了 64MB,其余服务吃 Kestrel 默认 30,000,000B,
@@ -108,9 +186,14 @@ public static class ServiceDefaults
             cfg.AddOpenBehavior(typeof(UnhandledExceptionBehavior<,>));
         });
 
-        // ---------- CORS(本地 Angular dev server + Azure 前端) ----------
+        // ---------- CORS(ARC-18/票50:与网关同一白名单口径) ----------
+        // 此前 SetIsOriginAllowed(_ => true)+AllowCredentials = 任意站点带凭据跨源,直连服务端口即全放行。
+        // 现白名单自统一配置 Cors:AllowedOrigins 读取(解析口径见 ResolveCorsAllowedOrigins),
+        // 与网关逐项一致;白名单外 Origin 的预检/实际请求均无 Access-Control-Allow-Origin 回头。
+        // 无 Origin 头的请求(服务间调用/健康检查/curl)不经 CORS 判定,不受影响。
+        var corsAllowedOrigins = ResolveCorsAllowedOrigins(builder.Configuration);
         builder.Services.AddCors(o => o.AddPolicy(CorsPolicy, p => p
-            .SetIsOriginAllowed(_ => true)          // 生产改为白名单(builder.Configuration["Cors:Origins"])
+            .SetIsOriginAllowed(origin => IsCorsOriginAllowed(origin, corsAllowedOrigins))
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials()));

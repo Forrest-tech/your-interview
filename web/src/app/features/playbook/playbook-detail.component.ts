@@ -566,8 +566,15 @@ export class PlaybookDetailComponent implements OnDestroy {
   }
 
   async deleteAction(actionId: string): Promise<void> {
-    await this.interviewsApi.deleteAction(this.id(), actionId).toPromise()
-      .catch(() => undefined);
+    // 票116 O-H4(票80 同项):改前 .catch(() => undefined) 静默吞错,删除失败
+    // 用户无感、列表与服务端真值可不一致。对齐票12/75 族与本文件 deleteEntry
+    // 先例:失败 snack 明示(pb.v2.d.deleteFailed 既有键),成败都 load() 以
+    // 服务端真值刷新;成功路径(请求→load)逐字守恒。
+    try {
+      await this.interviewsApi.deleteAction(this.id(), actionId).toPromise();
+    } catch {
+      this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 });
+    }
     await this.load();
   }
 

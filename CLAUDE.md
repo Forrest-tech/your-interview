@@ -30,7 +30,7 @@
 
 - 后端：.NET 微服务（Identity / Jobs / Interviews / Knowledge / Analytics / Assessment / AiGateway / Analysis.Worker），共享契约在 `src/SharedContracts`，横切关注点在 `src/BuildingBlocks`
 - 前端：Angular（`web/`，standalone components + signals + Material），API 访问经 `web/src/app/core/api/*.service.ts` typed 服务层（票 42 ARC-11 收敛成果，组件不自己拼 `/api/` 路径）
-- 测试：后端 xUnit（`*.Tests` 项目，基线约 787 例）；前端 `ng build` + `tsc --noEmit`；E2E 黄金路径接入 CI（票 88/89）
+- 测试：后端 xUnit（九个 `*.Tests` 项目，基线以台账对账为准）；前端 `ng build` + `tsc --noEmit`；E2E 黄金路径接入 CI（票 88/89）
 - 错误口径：后端 4xx/5xx 走 ProblemDetails；前端 `ApiClient.rethrow` 统一转可读文案
 
 ## 常用命令
@@ -43,7 +43,5 @@ cd web && npx tsc --noEmit
 dotnet build src/YourInterview.sln   # 或对应 .sln
 dotnet test
 
-# 环境起停/日志（Genie 沙盒）
-curl -XPOST http://localhost:55221/__genie__/restart
-curl http://localhost:55221/__genie__/logs/frontend?lines=50
+# 本地起停（Mac）：见仓库根 README-本地运行Mac.md；后端全栈 docker compose up -d（改哪个服务只编哪个：docker compose up -d --build <service>）
 ```

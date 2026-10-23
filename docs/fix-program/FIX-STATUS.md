@@ -384,3 +384,4 @@
 - **票 42 转 VERIFIED**：提交 `277919c` 为当前 tip 祖先；最终 tip CI run `39950122499` 三项全绿（Frontend tsc+build / Backend 全量测试+覆盖率门 / E2E 黄金路径回归套），满足关票四步之 CI E2E 复跑确认。
 - **票 43 转 VERIFIED**：提交 `7d4591e` 为当前 tip 祖先；同一 CI run 全绿；独立复验（三语逐字比对、boundary 42/42、570 键 0 缺失）证据在 `evidence-43/`；预算项按裁决 1A 关闭。
 - **正式验收报告入仓**：`docs/fix-program/ACCEPTANCE.md`（四阶段：55 条反跑 54 确认 / 0 未通过 / 1 部分环境不可验；后端 1610 例 + Jest 240/240 全绿；覆盖率并集 17.22%）。
+- **票 68 实现完成**（裁决 2B 落地）：提交 `39f0d7be` —— JobsController 7 个 DELETE 端点授权 JobsDelete→JobsWrite（DeleteCompany/DeleteApplication/DeleteResumeText/DeleteResumeFile/投递简历/DeleteAnswerTemplate/DeleteCommunication），归属隔离仍由 Handler 按 UserId 校验；新增测试 8 例（WAF 宿主级 6 + 策略矩阵反射 2），Jobs 全套 356/356 全绿。

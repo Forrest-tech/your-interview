@@ -29,7 +29,9 @@ public sealed record QuestionDto(Guid Id, int Sequence, string QuestionText, str
     int Difficulty, string State, string? ExpectedPointsJson, string? AnswerText,
     double? AnswerDurationSeconds, string? Comment, string? RecommendedAnswer,
     string? BetterStructure, string? FillerWordsJson, int? Overall,
-    ScoresDto? Scores, IReadOnlyList<DimensionIssueDto> Issues, string? TopIssueTitle);
+    ScoresDto? Scores, IReadOnlyList<DimensionIssueDto> Issues, string? TopIssueTitle,
+    // ★ 票108 A09:题目行读时 xmin —— answer/score/skip 回传钉版,过期得 409。
+    uint? Version = null);
 
 public sealed record ScoresDto(int Pronunciation, int Fluency, int SentenceIntegrity,
     int Structure, int TechnicalDepth, int Relevance, int Overall, string WeakestDimension);
@@ -134,16 +136,23 @@ public sealed class GetSessionQueryHandler(AssessmentDbContext db)
 
         if (s is null) return Result.Failure<SessionDetailDto>(Error.NotFound("模拟练习"));
 
+        // ★ 票108 A09:逐题读时 xmin(影子属性须投影读,AsNoTracking 实体上取不到)。
+        var versions = await db.Questions.AsNoTracking()
+            .Where(q => q.SessionId == s.Id)
+            .Select(q => new { q.Id, V = EF.Property<uint>(q, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+
         return Result.Success(new SessionDetailDto(
             s.Id, s.Title, s.Mode.ToString(), s.Topic, s.CompanyStyle, s.Status.ToString(),
             s.TargetQuestionCount, s.Language, s.StartedAt, s.CompletedAt,
             s.OverallSummary, s.PriorityAction, s.OverallScore,
             ToScores(s.AverageScores()),
-            s.Questions.OrderBy(q => q.Sequence).Select(ToQuestion).ToList(),
+            s.Questions.OrderBy(q => q.Sequence)
+                .Select(q => ToQuestion(q, versions.TryGetValue(q.Id, out var v) ? v : null)).ToList(),
             s.WeaknessSummary().Select(w => new WeaknessBucketDto(w.Dimension, w.Count, w.AvgSeverity)).ToList()));
     }
 
-    internal static QuestionDto ToQuestion(MockQuestion q) => new(
+    internal static QuestionDto ToQuestion(MockQuestion q, uint? version = null) => new(
         q.Id, q.Sequence, q.QuestionText, q.Type.ToString(), q.Difficulty, q.State.ToString(),
         q.ExpectedPointsJson, q.AnswerText, q.AnswerDurationSeconds,
         q.Comment, q.RecommendedAnswer, q.BetterStructure, q.FillerWordsJson,
@@ -153,7 +162,7 @@ public sealed class GetSessionQueryHandler(AssessmentDbContext db)
             q.Scores.Relevance, q.Scores.Overall, q.Scores.WeakestDimension()),
         q.Issues.Select(i => new DimensionIssueDto(i.Id, i.Dimension, i.Title, i.Detail,
             i.Evidence, i.Suggestion, i.Severity)).ToList(),
-        q.TopIssue?.Title);
+        q.TopIssue?.Title, version);
 
     internal static ScoresDto? ToScores((int Pronunciation, int Fluency, int SentenceIntegrity,
         int Structure, int TechnicalDepth, int Relevance)? t)
@@ -357,7 +366,9 @@ public sealed class AddQuestionsCommandHandler(AssessmentDbContext db)
 
 /// <summary>作答。</summary>
 public sealed record AnswerQuestionCommand(Guid SessionId, Guid QuestionId, Guid UserId,
-    string? AnswerText, string? AudioPath, double? DurationSeconds, string? TranscriptJson)
+    string? AnswerText, string? AudioPath, double? DurationSeconds, string? TranscriptJson,
+    // ★ 票108 A09:题目行读时 xmin(不传 = 不钉版,兼容旧调用方)。
+    uint? Version = null)
     : IRequest<Result<Guid>>;
 
 public sealed class AnswerQuestionCommandValidator : AbstractValidator<AnswerQuestionCommand>
@@ -389,6 +400,8 @@ public sealed class AnswerQuestionCommandHandler(AssessmentDbContext db)
             return Result.Failure<Guid>(Error.Validation("Answer", ex.Message));
         }
 
+        // ★ 票108 A09:钉题目行版本 —— 期间已被改(答/评/跳)则 409,不静默覆盖。
+        ConcurrencyPin.Pin(db, s.Questions.First(q => q.Id == r.QuestionId), r.Version);
         await db.SaveChangesAsync(ct);
         return Result.Success(r.QuestionId);
     }
@@ -398,7 +411,9 @@ public sealed class AnswerQuestionCommandHandler(AssessmentDbContext db)
 public sealed record ScoreQuestionCommand(Guid SessionId, Guid QuestionId, Guid UserId,
     int Pronunciation, int Fluency, int SentenceIntegrity, int Structure, int TechnicalDepth,
     int Relevance, string? Comment, string? RecommendedAnswer, string? BetterStructure,
-    string? FillerWordsJson, IReadOnlyList<IssueDraftIn> Issues) : IRequest<Result>;
+    string? FillerWordsJson, IReadOnlyList<IssueDraftIn> Issues,
+    // ★ 票108 A09:题目行读时 xmin(不传 = 不钉版;AI 编排路径不传,行为不变)。
+    uint? Version = null) : IRequest<Result>;
 
 public sealed class ScoreQuestionCommandValidator : AbstractValidator<ScoreQuestionCommand>
 {
@@ -446,12 +461,16 @@ public sealed class ScoreQuestionCommandHandler(AssessmentDbContext db)
             return Result.Failure<Guid>(Error.Validation("Score", ex.Message));
         }
 
+        // ★ 票108 A09:钉题目行版本(同 AnswerQuestionCommandHandler)。
+        ConcurrencyPin.Pin(db, s.Questions.First(q => q.Id == r.QuestionId), r.Version);
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }
 }
 
-public sealed record SkipQuestionCommand(Guid SessionId, Guid QuestionId, Guid UserId)
+public sealed record SkipQuestionCommand(Guid SessionId, Guid QuestionId, Guid UserId,
+    // ★ 票108 A09:题目行读时 xmin(不传 = 不钉版,兼容旧调用方)。
+    uint? Version = null)
     : IRequest<Result>;
 
 public sealed class SkipQuestionCommandHandler(AssessmentDbContext db)
@@ -466,6 +485,8 @@ public sealed class SkipQuestionCommandHandler(AssessmentDbContext db)
         try { s.SkipQuestion(r.QuestionId); }
         catch (InvalidOperationException ex) { return Result.Failure<Guid>(Error.Validation("Skip", ex.Message)); }
 
+        // ★ 票108 A09:钉题目行版本(同 AnswerQuestionCommandHandler)。
+        ConcurrencyPin.Pin(db, s.Questions.First(q => q.Id == r.QuestionId), r.Version);
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }

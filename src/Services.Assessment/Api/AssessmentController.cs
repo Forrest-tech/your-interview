@@ -155,7 +155,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         CancellationToken ct)
     {
         var r = await sender.Send(new AnswerQuestionCommand(id, questionId, Me, body.AnswerText,
-            body.AudioPath, body.DurationSeconds, body.TranscriptJson), ct);
+            body.AudioPath, body.DurationSeconds, body.TranscriptJson, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -168,15 +168,16 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         var r = await sender.Send(new ScoreQuestionCommand(id, questionId, Me,
             body.Pronunciation, body.Fluency, body.SentenceIntegrity, body.Structure,
             body.TechnicalDepth, body.Relevance, body.Comment, body.RecommendedAnswer,
-            body.BetterStructure, body.FillerWordsJson, body.Issues ?? []), ct);
+            body.BetterStructure, body.FillerWordsJson, body.Issues ?? [], body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
     [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/skip")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> Skip(Guid id, Guid questionId, CancellationToken ct)
+    public async Task<IResult> Skip(Guid id, Guid questionId, [FromBody] SkipBody? body,
+        CancellationToken ct)
     {
-        var r = await sender.Send(new SkipQuestionCommand(id, questionId, Me), ct);
+        var r = await sender.Send(new SkipQuestionCommand(id, questionId, Me, body?.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -792,11 +793,18 @@ public sealed record CompleteBody(string? OverallSummary, string? PriorityAction
 public sealed record AddQuestionsBody(IReadOnlyList<QuestionDraftIn> Questions);
 
 public sealed record AnswerBody(string? AnswerText, string? AudioPath, double? DurationSeconds,
-    string? TranscriptJson);
+    string? TranscriptJson,
+    // ★ 票108 A09:题目行读时 xmin 回传钉版(不传 = 不钉,兼容旧调用方)。
+    uint? Version = null);
 
 public sealed record ScoreBody(int Pronunciation, int Fluency, int SentenceIntegrity, int Structure,
     int TechnicalDepth, int Relevance, string? Comment, string? RecommendedAnswer,
-    string? BetterStructure, string? FillerWordsJson, IReadOnlyList<IssueDraftIn>? Issues);
+    string? BetterStructure, string? FillerWordsJson, IReadOnlyList<IssueDraftIn>? Issues,
+    // ★ 票108 A09:同 AnswerBody。
+    uint? Version = null);
+
+/// <summary>★ 票108 A09:skip 原无 body —— 可选 body 仅承载题目行 Version(不带 body 的旧调用照常)。</summary>
+public sealed record SkipBody(uint? Version = null);
 
 /// <summary>
 /// 发音评估请求体。

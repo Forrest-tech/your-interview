@@ -102,6 +102,9 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
                 .OnDelete(DeleteBehavior.Cascade);
 
             e.HasIndex(x => new { x.SessionId, x.Sequence });
+            // ★ 票108 A09:题目行补 xmin 并发令牌(PG 系统列,零迁移;票101
+            //   Interviews 题目行同先例)—— answer/score/skip 钉版防串行双写覆盖。
+            e.UseXminAsConcurrencyToken();
         });
 
         b.Entity<DimensionIssue>(e =>

@@ -136,4 +136,118 @@ public sealed class Ticket108ConcurrencyTests : IAsyncLifetime
         var rows = await new ListAllRecordingsQueryHandler(db).Handle(new ListAllRecordingsQuery(user), default);
         rows.Single(x => x.Id == recId).Score!.Version.Should().Be(saved.Version);
     }
+
+    // ---------------- A09 题目 answer/score/skip ----------------
+
+    private async Task<(Guid SessionId, Guid QuestionId, uint Version)> SeedSessionAsync(Guid user)
+    {
+        await using var db = NewDb();
+        var created = await new CreateSessionCommandHandler(db).Handle(
+            new CreateSessionCommand(user, "T108 session", SessionMode.TopicDrill, "EF Core",
+                null, 5, "en"), default);
+        created.IsSuccess.Should().BeTrue(created.Error.Description);
+        var added = await new AddQuestionsCommandHandler(db).Handle(
+            new AddQuestionsCommand(created.Value, user,
+                [new QuestionDraftIn("What is EF Core tracking?", "Technical", 3, null)]), default);
+        added.IsSuccess.Should().BeTrue(added.Error.Description);
+        var detail = await GetDetailAsync(user, created.Value);
+        var q = detail.Questions.Single();
+        q.Version.Should().NotBeNull();
+        return (created.Value, q.Id, q.Version!.Value);
+    }
+
+    private async Task<SessionDetailDto> GetDetailAsync(Guid user, Guid sessionId)
+    {
+        await using var db = NewDb();
+        var r = await new GetSessionQueryHandler(db).Handle(new GetSessionQuery(sessionId, user), default);
+        r.IsSuccess.Should().BeTrue(r.Error.Description);
+        return r.Value;
+    }
+
+    private static AnswerQuestionCommand AnswerCmd(Guid s, Guid q, Guid user, string text, uint? version = null) =>
+        new(s, q, user, text, null, null, null, version);
+
+    private static ScoreQuestionCommand ScoreCmd(Guid s, Guid q, Guid user, uint? version = null) =>
+        new(s, q, user, 80, 80, 80, 80, 80, 80, "c", null, null, null, [], version);
+
+    [Fact] // A09 answer:B 持旧题目版本作答 → 并发异常,A 的答案完好
+    public async Task Answer_StaleVersion_Throws()
+    {
+        if (!_available) return;
+        var user = NewUser();
+        var (sid, qid, v) = await SeedSessionAsync(user);
+
+        await using (var dbA = NewDb())
+            (await new AnswerQuestionCommandHandler(dbA).Handle(
+                AnswerCmd(sid, qid, user, "A answer", v), default)).IsSuccess.Should().BeTrue();
+
+        await using var dbB = NewDb();
+        var act = () => new AnswerQuestionCommandHandler(dbB).Handle(
+            AnswerCmd(sid, qid, user, "B answer", v), default);
+        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+        (await GetDetailAsync(user, sid)).Questions.Single().AnswerText.Should().Be("A answer");
+    }
+
+    [Fact] // A09 score:B 持旧题目版本评分 → 并发异常
+    public async Task Score_StaleVersion_Throws()
+    {
+        if (!_available) return;
+        var user = NewUser();
+        var (sid, qid, v) = await SeedSessionAsync(user);
+
+        await using (var dbA = NewDb())
+            (await new AnswerQuestionCommandHandler(dbA).Handle(
+                AnswerCmd(sid, qid, user, "ans", v), default)).IsSuccess.Should().BeTrue();
+        var v2 = (await GetDetailAsync(user, sid)).Questions.Single().Version;
+
+        await using (var dbA2 = NewDb())
+            (await new ScoreQuestionCommandHandler(dbA2).Handle(
+                ScoreCmd(sid, qid, user, v2), default)).IsSuccess.Should().BeTrue();
+
+        await using var dbB = NewDb();
+        var act = () => new ScoreQuestionCommandHandler(dbB).Handle(
+            ScoreCmd(sid, qid, user, v2), default);
+        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+    }
+
+    [Fact] // A09 skip:A 先作答(版本推进)后 B 持旧版本 skip → 并发异常,题目仍 Answered
+    public async Task Skip_StaleVersion_Throws()
+    {
+        if (!_available) return;
+        var user = NewUser();
+        var (sid, qid, v) = await SeedSessionAsync(user);
+
+        await using (var dbA = NewDb())
+            (await new AnswerQuestionCommandHandler(dbA).Handle(
+                AnswerCmd(sid, qid, user, "ans", v), default)).IsSuccess.Should().BeTrue();
+
+        await using var dbB = NewDb();
+        var act = () => new SkipQuestionCommandHandler(dbB).Handle(
+            new SkipQuestionCommand(sid, qid, user, v), default);
+        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+        (await GetDetailAsync(user, sid)).Questions.Single().State.Should().Be("Answered");
+    }
+
+    [Fact] // A09 兼容:三命令不带 Version 仍可写(旧调用方/AI 编排口径不变)
+    public async Task QuestionCommands_NoVersion_StillSave()
+    {
+        if (!_available) return;
+        var user = NewUser();
+        var (sid, qid, _) = await SeedSessionAsync(user);
+
+        await using (var db = NewDb())
+            (await new AnswerQuestionCommandHandler(db).Handle(
+                AnswerCmd(sid, qid, user, "ans"), default)).IsSuccess.Should().BeTrue();
+        await using (var db = NewDb())
+            (await new ScoreQuestionCommandHandler(db).Handle(
+                ScoreCmd(sid, qid, user), default)).IsSuccess.Should().BeTrue();
+
+        var (sid2, qid2, _) = await SeedSessionAsync(user);
+        await using (var db = NewDb())
+            (await new SkipQuestionCommandHandler(db).Handle(
+                new SkipQuestionCommand(sid2, qid2, user), default)).IsSuccess.Should().BeTrue();
+        (await GetDetailAsync(user, sid2)).Questions.Single().State.Should().Be("Skipped");
+    }
 }

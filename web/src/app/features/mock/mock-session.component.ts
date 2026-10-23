@@ -40,6 +40,8 @@ interface AssessmentQuestion {
   scores?: AssessmentScores;
   issues?: AssessmentIssue[];
   topIssueTitle?: string;
+  /** ★ 票108 A09:题目行读时版本 —— 作答回传钉版,过期得 409。 */
+  version?: number | null;
 }
 
 /** 六维分数(Assessment 服务用 ScoresDto,比 MockSession 多一个 sentenceIntegrity)。 */
@@ -307,7 +309,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     // 端点路径按 questionId 走 —— 这是每个题目的答案,不是会话级答案。
     this.mockApi.answerQuestion<void>(
       this.id(), q.id,
-      { answerText: text, audioPath: null, durationSeconds: null, transcriptJson: null })
+      { answerText: text, audioPath: null, durationSeconds: null, transcriptJson: null, version: q.version ?? null })
       .subscribe({
         next: () => {
           this.busy.set(null);

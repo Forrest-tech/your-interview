@@ -39,7 +39,11 @@ public sealed record KnowledgeListItemDto(
     bool IsDue, string? SourceCompanyName, Guid? SourceInterviewEntryId, DateOnly? SourceDate,
     int? SourceRoundNo, string? SourceRoundStage, Guid? SourceJobApplicationId,
     string? SourcesJson, string? Question, string? MyAnswer, string? BetterAnswer,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // ★ 票113(K07 残余):条目行读时 xmin —— 批量删(逐项 DELETE)时 If-Match 回传钉版用
+    //   (票111 只在详情 DTO 有 Version,列表项无版本可带,批量删仍走兼容 LWW)。
+    //   仅列表查询填充真值;DuePlan/去重等非删除来源缺省 null = 不钉版。
+    uint? Version = null);
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
 {

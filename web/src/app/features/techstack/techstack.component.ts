@@ -751,25 +751,49 @@ export class TechStackComponent implements OnInit, OnDestroy {
     return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
   }
 
-  /** 批量删除:逐个调删除接口(后端暂无批量接口),完成后退出编辑模式并刷新。 */
+  /** 批量删除:逐个调删除接口(后端暂无批量接口),完成后退出编辑模式并刷新。
+   *  票113:逐项带列表项读时版本(If-Match 钉版,票111 契约);逐项独立结算——
+   *  一项失败(如 409 版本已推进)不中断其余项,已删项不回滚(逐项 API 固有事实);
+   *  失败项保留勾选并停留在编辑模式,刷新列表后可重试,提示中点名失败项。 */
   deleteSelected(): void {
     const ids = this.batchIds();
     if (ids.length === 0) return;
-    const names = this.items().filter(e => ids.includes(e.id))
-      .map(e => e.title).join('、');
+    const picked = this.items().filter(e => ids.includes(e.id));
+    const names = picked.map(e => e.title).join('、');
     void this.confirmDlg(
       this.t('ts.list.confirmDeleteBatch')
         .replace('{n}', String(ids.length))
         .replace('{names}', names), true).then((ok) => {
       if (!ok) return;
 
-      forkJoin(ids.map(id => this.knowledgeApi.deleteItem(id))).subscribe({
-        next: () => {
-          this.notify(this.t('ts.deleted'));
-          this.editing.set(false);
-          this.batchIds.set([]);
-          this.selected.set(null);
-          this.clearUrlId();
+      const byId = new Map(picked.map(e => [e.id, e]));
+      forkJoin(ids.map(id => this.knowledgeApi.deleteItem(id, byId.get(id)?.version).pipe(
+        catchError((e: Error) => of({ failedId: id, error: e }))
+      ))).subscribe({
+        next: (results) => {
+          const failed = results.filter(
+            (r): r is { failedId: string; error: Error } =>
+              !!r && typeof r === 'object' && 'failedId' in r);
+          if (failed.length === 0) {
+            this.notify(this.t('ts.deleted'));
+            this.editing.set(false);
+            this.batchIds.set([]);
+            this.selected.set(null);
+            this.clearUrlId();
+            this.reload();
+            return;
+          }
+          // 部分失败:已删项不回滚;失败项保留勾选待重试,列表刷新对齐服务端真值。
+          this.batchIds.set(failed.map(f => f.failedId));
+          const failedIds = new Set(failed.map(f => f.failedId));
+          const sel = this.selected();
+          if (sel && ids.includes(sel.id) && !failedIds.has(sel.id)) {
+            this.selected.set(null);
+            this.clearUrlId();
+          }
+          const failedNames = failed
+            .map(f => byId.get(f.failedId)?.title ?? f.failedId).join('、');
+          this.notify(`${failed[0].error.message}：${failedNames}`, true);
           this.reload();
         },
         error: (e: Error) => this.notify(e.message, true)

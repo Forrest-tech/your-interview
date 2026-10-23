@@ -78,8 +78,16 @@ public sealed class ListKnowledgeQueryHandler(KnowledgeDbContext db, TimeProvide
             .Skip((page - 1) * size).Take(size)
             .ToListAsync(ct);
 
+        // ★ 票113:当页条目行读时 xmin(影子属性须投影读,先例 GetKnowledgeItemQueryHandler)。
+        var pageIds = items.Select(x => x.Id).ToList();
+        var versions = await db.Items.AsNoTracking()
+            .Where(x => pageIds.Contains(x.Id))
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+
         return Result.Success(new PagedResult<KnowledgeListItemDto>(
-            items.Select(x => x.ToListItemDto(now)).ToList(), total, page, size));
+            items.Select(x => x.ToListItemDto(now,
+                versions.TryGetValue(x.Id, out var v) ? v : null)).ToList(), total, page, size));
     }
 }
 

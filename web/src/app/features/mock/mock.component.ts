@@ -301,13 +301,19 @@ export class MockComponent implements OnInit {
     });
     ref.afterClosed().subscribe((v) => {
       if (v !== true) return;
-      this.mockApi.deleteSession(s.id).subscribe({
+      // 票113:带列表项读时版本(If-Match 钉版);409 = 期间已被改动,提示走
+      // ApiClient 全站 concurrency_conflict 统一文案,并刷新列表对齐最新版本
+      // (先例 practice-material-tree 票111段2 的 409 刷新)。
+      this.mockApi.deleteSession(s.id, s.version).subscribe({
         next: () => {
           this.snack.open(this.t('mock.deletedToast'), this.t('common.close'), { duration: 3000 });
           if (this.sessions().length === 1 && this.page() > 1) this.page.update((p) => p - 1);
           this.load();
         },
-        error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
+        error: (e: Error) => {
+          this.snack.open(e.message, this.t('common.close'), { duration: 5000 });
+          if ((e as { status?: number })?.status === 409) this.load();
+        }
       });
     });
   }

@@ -64,11 +64,12 @@ public static class KnowledgeMappingExtensions
             k.CreatedAt, k.UpdatedAt, version);
     }
 
-    public static KnowledgeListItemDto ToListItemDto(this KnowledgeItem k, DateTimeOffset now) => new(
+    public static KnowledgeListItemDto ToListItemDto(this KnowledgeItem k, DateTimeOffset now,
+        uint? version = null) => new(
         k.Id, k.Title, k.Topic, k.SubTopic, k.Mastery.ToString(), k.Source.ToString(),
         k.Difficulty, k.Importance, k.ReviewCount, k.NextReviewAt, KnowledgeDue.IsDue(k, now),
         k.SourceCompanyName, k.SourceInterviewEntryId, k.SourceDate,
         k.SourceRoundNo, k.SourceRoundStage, k.SourceJobApplicationId, k.SourcesJson,
-        k.Question, k.MyAnswer, k.BetterAnswer, k.CreatedAt);
+        k.Question, k.MyAnswer, k.BetterAnswer, k.CreatedAt, version);
 }
 

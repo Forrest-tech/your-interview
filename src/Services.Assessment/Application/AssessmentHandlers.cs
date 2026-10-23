@@ -23,7 +23,10 @@ public sealed record DimensionIssueDto(Guid Id, string Dimension, string Title, 
 public sealed record SessionListItemDto(Guid Id, string Title, string Mode, string? Topic,
     string? CompanyStyle, string Status, int QuestionCount, int AnsweredCount, int ScoredCount,
     int? OverallScore, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt,
-    string? WeakestDimension);
+    string? WeakestDimension,
+    // ★ 票113(A08 残余):会话行读时 xmin —— 列表删会话时 If-Match 回传钉版用
+    //   (票111 只补了 SessionDetailDto,列表项无版本可带,列表删仍走兼容 LWW)。
+    uint? Version = null);
 
 public sealed record QuestionDto(Guid Id, int Sequence, string QuestionText, string Type,
     int Difficulty, string State, string? ExpectedPointsJson, string? AnswerText,
@@ -100,6 +103,13 @@ public sealed class ListSessionsQueryHandler(AssessmentDbContext db)
             .Take(r.PageSize)
             .ToListAsync(ct);
 
+        // ★ 票113:当页会话行读时 xmin(影子属性须投影读,先例 ListCategoriesQueryHandler)。
+        var pageIds = items.Select(x => x.Id).ToList();
+        var versions = await db.Sessions.AsNoTracking()
+            .Where(x => pageIds.Contains(x.Id))
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+
         var dtos = items.Select(x =>
         {
             var scored = x.Questions.Where(q2 => q2.Scores is not null).ToList();
@@ -116,7 +126,8 @@ public sealed class ListSessionsQueryHandler(AssessmentDbContext db)
                     .SelectMany(q2 => q2.Issues)
                     .GroupBy(i => i.Dimension)
                     .OrderByDescending(g => g.Average(i => i.Severity))
-                    .FirstOrDefault()?.Key);
+                    .FirstOrDefault()?.Key,
+                versions.TryGetValue(x.Id, out var v) ? v : null);
         }).ToList();
 
         return Result.Success(new PagedResult<SessionListItemDto>(dtos, total,

@@ -560,7 +560,7 @@ export interface KnowledgeItem {
   relations?: KnowledgeRelation[];
   createdAt?: string;
   updatedAt?: string;
-  /** 票70:读详情时的 xmin 并发版本;详情编辑保存时原样回传,过期保存会被后端 409 拒绝。列表项不带此字段。 */
+  /** 票70:读详情时的 xmin 并发版本;详情编辑保存时原样回传,过期保存会被后端 409 拒绝。票113 起列表项亦回传(批量删逐项 If-Match 用)。 */
   version?: number;
 
   // ---- 来源标记(需求 6.4.2 / 6.4.4)----
@@ -694,6 +694,8 @@ export interface MockSession {
   summary?: string;
   startedAt: string;
   completedAt?: string;
+  /** 票113:列表项读时 xmin(票111 只在详情回传);列表删会话时 If-Match 回传,过期后端 409。 */
+  version?: number;
 }
 
 export interface MockQuestion {

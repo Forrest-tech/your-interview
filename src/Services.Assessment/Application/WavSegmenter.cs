@@ -89,7 +89,7 @@ internal static class WavSegmenter
                 result.Add(BuildSegment(info, start, remaining));
                 break;
             }
-            var cut = FindQuietCut(info, start + maxFrames, totalFrames);
+            var cut = FindQuietCut(info, start, start + maxFrames, totalFrames);
             result.Add(BuildSegment(info, start, cut - start));
             start = cut;
         }
@@ -102,11 +102,11 @@ internal static class WavSegmenter
     /// 不一定恰好落在切点上,宁可切早一点(段更短)也要落在停顿处;
     /// 往后最多 2s 保证段长 ≤30s 官方上限。窗内没有真静音时取能量最低点兜底。
     /// </summary>
-    private static int FindQuietCut(WavInfo w, int targetFrame, int totalFrames)
+    private static int FindQuietCut(WavInfo w, int segmentStart, int targetFrame, int totalFrames)
     {
         int back = 3 * w.SampleRate;                // 前移 3 秒
         int fwd = 2 * w.SampleRate;                 // 后移最多 2 秒(段长 ≤30s)
-        int lo = Math.Max(targetFrame - back, 0);
+        int lo = Math.Max(targetFrame - back, segmentStart);
         int hi = Math.Min(targetFrame + fwd, totalFrames);
         int frameBytes = w.Channels * 2;
         int step = Math.Max(w.SampleRate / 50, 1);  // 20ms 能量窗
@@ -117,7 +117,7 @@ internal static class WavSegmenter
             var e = FrameEnergy(w, f, step, frameBytes);
             if (e < bestEnergy) { bestEnergy = e; best = Math.Min(f + step / 2, totalFrames); }
         }
-        return best;
+        return Math.Max(best, Math.Min(segmentStart + 1, totalFrames));
     }
 
     private static long FrameEnergy(WavInfo w, int startFrame, int frames, int frameBytes)

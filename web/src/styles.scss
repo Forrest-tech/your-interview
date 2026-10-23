@@ -235,6 +235,8 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 .chip.screen    { background: var(--signal-tint); color: var(--brand); }
 .chip.interview { background: var(--signal-tint); color: var(--brand); }
 .chip.offer     { background: var(--go-tint); color: var(--go); }
+.chip.accepted  { background: var(--go-tint); color: var(--go); }
+.chip.ghosted   { background: var(--attention-tint); color: var(--attention); }
 .chip.rejected  { background: var(--stop-tint); color: var(--stop); }
 .chip.paused    { background: var(--parked-fill); color: var(--parked); }
 .chip.withdrawn { background: var(--parked-fill); color: var(--parked); }

@@ -15,21 +15,25 @@
 }
 
 .metric.highlight {
-  background: linear-gradient(140deg, #f1f4ff 0%, #ffffff 80%);
-  border: 1px solid rgba(63, 81, 181, 0.22);
+  background: var(--go-tint);
+  border-color: rgba(27, 127, 75, 0.35);
 }
 
 .metric-val {
+  font-family: 'Space Grotesk', Inter, sans-serif;
   font-size: 30px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.1;
-  color: #303f9f;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
+
+.metric.highlight .metric-val { color: var(--go); }
 
 .metric-label {
   margin-top: 5px;
   font-size: 12.5px;
-  color: #6b6f76;
+  color: var(--ink-2);
 }
 
 .cols {
@@ -79,7 +83,7 @@
 .dim-foot {
   margin-top: 5px;
   font-size: 11.5px;
-  color: #8b8f96;
+  color: var(--ink-2);
 }
 
 .actions {
@@ -94,16 +98,32 @@
   height: 42px;
 }
 
-.actions a mat-icon { margin-right: 8px; }
+/* 票 118 / F-3:图标落在 signal 浅底砖里,标签文字常显 */
+.actions a mat-icon {
+  margin-right: 10px;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--signal-tint);
+  border-radius: 8px;
+  color: var(--brand);
+  font-size: 17px;
+}
+
+.actions a { font-size: 13.5px; font-weight: 500; color: var(--ink); }
 
 // ===================== 行动中心(M4) =====================
 .action-center { margin-bottom: 18px; }
 
 .ac-title {
+  font-family: 'Space Grotesk', Inter, sans-serif;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   margin: 4px 2px 12px;
-  color: #2b2f36;
+  color: var(--ink);
 }
 
 .ac-empty {
@@ -112,12 +132,12 @@
   gap: 10px;
   padding: 16px 18px;
   font-size: 14px;
-  color: #4a7d3a;
-  background: #f3faf0;
-  border: 1px solid rgba(74, 125, 58, 0.22);
+  color: var(--go);
+  background: var(--go-tint);
+  border: 1px solid rgba(27, 127, 75, 0.3);
 }
 
-.ac-empty mat-icon { color: #4a7d3a; }
+.ac-empty mat-icon { color: var(--go); }
 
 .ac-grid {
   display: grid;
@@ -136,10 +156,10 @@
   border-left: 4px solid #c9ccd2;
 }
 
-.ac-card.kind-followup { border-left-color: #f0a020; }
-.ac-card.kind-deadline { border-left-color: #d24b3e; }
-.ac-card.kind-weak { border-left-color: #6a5acd; }
-.ac-card.kind-pipeline { border-left-color: #3f51b5; }
+.ac-card.kind-followup { border-left-color: var(--attention); }
+.ac-card.kind-deadline { border-left-color: var(--attention); }
+.ac-card.kind-weak { border-left-color: var(--brand); }
+.ac-card.kind-pipeline { border-left-color: var(--brand); }
 
 .ac-head {
   display: flex;
@@ -151,9 +171,10 @@
 .ac-head mat-icon { color: #6b6f76; }
 
 .ac-head .ac-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #2b2f36;
+  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .ac-head .ac-count {
@@ -161,8 +182,9 @@
   font-size: 13px;
   font-weight: 700;
   color: #fff;
-  background: #3f51b5;
+  background: var(--brand);
   border-radius: 999px;
+  font-family: 'Space Grotesk', Inter, sans-serif;
   padding: 1px 9px;
   min-width: 22px;
   text-align: center;
@@ -214,8 +236,19 @@
 
 .ac-item-sub {
   font-size: 11.5px;
-  color: #8b8f96;
+  color: var(--ink-2);
 }
+
+.ac-item-role {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ac-item-sub .chip { margin-right: 7px; }
+.ac-item-sub .ac-when { display: block; margin-top: 3px; }
 
 .ac-pri {
   margin-left: auto;
@@ -226,9 +259,9 @@
   white-space: nowrap;
 }
 
-.ac-pri.pri-high { background: #fdecea; color: #b3261e; }
-.ac-pri.pri-mid { background: #fff4e0; color: #b9770a; }
-.ac-pri.pri-low { background: #eef1f4; color: #6b6f76; }
+.ac-pri.pri-high { background: var(--stop-tint); color: var(--stop); }
+.ac-pri.pri-mid { background: var(--attention-tint); color: var(--attention); }
+.ac-pri.pri-low { background: var(--parked-fill); color: var(--parked); }
 
 .ac-weak { margin-bottom: 10px; }
 .ac-weak .dim { margin-bottom: 12px; }
@@ -236,9 +269,9 @@
 .ac-tip {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #5b5f66;
-  background: #f5f3ff;
-  border: 1px solid rgba(106, 90, 205, 0.18);
+  color: var(--ink-2);
+  background: #f4f5fb;
+  border: 1px solid var(--signal-soft);
   border-radius: 8px;
   padding: 8px 10px;
 }
@@ -250,15 +283,14 @@
   margin-bottom: 10px;
 }
 
+/* 颜色交给全局 .chip.<status> 语义类(票 118),此处只管尺寸 */
 .ac-chips .chip {
   font-size: 12px;
-  color: #4a4e55;
-  background: #eef1f4;
   border-radius: 999px;
   padding: 3px 10px;
 }
 
-.ac-chips .chip b { color: #303f9f; margin-right: 4px; }
+.ac-chips .chip b { margin-right: 4px; }
 
 .ac-cta {
   margin-top: auto;

@@ -57,7 +57,8 @@
                         {{ companyInitials(a.companyName) }}
                       </span>
                       <span class="ac-item-main">
-                        <span class="ac-item-title">{{ a.companyName }} · {{ a.role }}</span>
+                        <span class="ac-item-title">{{ a.companyName }}</span>
+                        <span class="ac-item-role">{{ a.role }}</span>
                         <span class="ac-item-sub">{{ t('dash.followUpAt') }} {{ dateOnly(a.nextFollowUpAt) }}</span>
                       </span>
                       @if (a.priority) {
@@ -74,12 +75,15 @@
                         {{ companyInitials(r.companyName) }}
                       </span>
                       <span class="ac-item-main">
-                        <span class="ac-item-title">{{ r.companyName }} · {{ r.role }}</span>
+                        <span class="ac-item-title">{{ r.companyName }}</span>
+                        <span class="ac-item-role">{{ r.role }}</span>
                         <span class="ac-item-sub">
-                          {{ roundLabel(r.order) }} · {{ stageText(r.stage) }}
-                          @if (r.scheduledDate) { · {{ r.scheduledDate }} }
-                          @if (r.scheduledTime) { {{ r.scheduledTime }} }
-                          @if (r.format) { · {{ formatText(r.format) }} }
+                          <span class="chip interview">{{ roundLabel(r.order) }} · {{ stageText(r.stage) }}</span>
+                          <span class="ac-when">
+                            @if (r.scheduledDate) { {{ r.scheduledDate }} }
+                            @if (r.scheduledTime) { {{ r.scheduledTime }} }
+                            @if (r.format) { · {{ formatText(r.format) }} }
+                          </span>
                         </span>
                       </span>
                       <a mat-icon-button [routerLink]="['/playbook', r.entryId]" [queryParams]="{tab: 'rounds'}" [matTooltip]="t('dash.goPrepareTip')">
@@ -96,7 +100,8 @@
                         {{ companyInitials(a.companyName) }}
                       </span>
                       <span class="ac-item-main">
-                        <span class="ac-item-title">{{ a.companyName }} · {{ a.role }}</span>
+                        <span class="ac-item-title">{{ a.companyName }}</span>
+                        <span class="ac-item-role">{{ a.role }}</span>
                         <span class="ac-item-sub">{{ t('dash.deadlineOn') }} {{ dateOnly(a.deadline) }}</span>
                       </span>
                     </li>
@@ -125,14 +130,13 @@
               } @else if (c.kind === 'pipeline') {
                 <div class="ac-chips">
                   @for (s of ac.byStatus; track s.status) {
-                    <span class="chip"><b>{{ s.count }}</b> {{ statusLabel(s.status) }}</span>
+                    <span class="chip" [class]="s.status.toLowerCase()"><b>{{ s.count }}</b> {{ statusLabel(s.status) }}</span>
                   }
                 </div>
               }
 
               <a mat-stroked-button color="primary" [routerLink]="c.link" class="ac-cta">
                 {{ t(c.ctaKey) }}
-                <mat-icon>arrow_forward</mat-icon>
               </a>
             </mat-card>
           }
@@ -155,7 +159,7 @@
       <div class="metric-val">{{ interviewCount() }}</div>
       <div class="metric-label">{{ t('dash.interviewing') }}</div>
     </mat-card>
-    <mat-card class="metric highlight">
+    <mat-card class="metric" [class.highlight]="offerCount() > 0">
       <div class="metric-val">{{ offerCount() }}</div>
       <div class="metric-label">{{ t('dash.offer') }}</div>
     </mat-card>
@@ -166,7 +170,9 @@
     <mat-card class="panel">
       <mat-card-header>
         <mat-card-title>{{ t('dash.radar') }}</mat-card-title>
-        <mat-card-subtitle>{{ t('dash.radarSub') }}</mat-card-subtitle>
+        @if (weakest().length) {
+          <mat-card-subtitle>{{ t('dash.radarSub') }}</mat-card-subtitle>
+        }
       </mat-card-header>
       <mat-card-content>
         @if (weakest().length === 0) {
@@ -191,13 +197,13 @@
             </div>
           }
           <a mat-button color="primary" routerLink="/analytics">
-            {{ t('dash.viewFull') }} <mat-icon>arrow_forward</mat-icon>
+            {{ t('dash.viewFull') }}
           </a>
         }
       </mat-card-content>
     </mat-card>
 
-    <!-- 快速入口:纯图标,靠 tooltip 说明 -->
+    <!-- 快速入口(票 118 / F-3):图标 + 文字标签成行,不再是靠 tooltip 猜的裸图标 -->
     <mat-card class="panel">
       <mat-card-header>
         <mat-card-title>{{ t('dash.next') }}</mat-card-title>
@@ -205,21 +211,21 @@
       </mat-card-header>
       <mat-card-content>
         <div class="actions">
-          <a mat-icon-button color="primary" routerLink="/playbook"
-             [matTooltip]="t('dash.importAudio')">
+          <a mat-button routerLink="/playbook" class="step-link">
             <mat-icon>upload_file</mat-icon>
+            <span>{{ t('dash.importAudio') }}</span>
           </a>
-          <a mat-icon-button routerLink="/tech-stack"
-             [matTooltip]="t('dash.reviewStack')">
-            <mat-icon>school</mat-icon>
-          </a>
-          <a mat-icon-button routerLink="/mock"
-             [matTooltip]="t('dash.startMock')">
+          <a mat-button routerLink="/mock" class="step-link">
             <mat-icon>record_voice_over</mat-icon>
+            <span>{{ t('dash.startMock') }}</span>
           </a>
-          <a mat-icon-button routerLink="/tracker"
-             [matTooltip]="t('dash.newApp')">
+          <a mat-button routerLink="/tech-stack" class="step-link">
+            <mat-icon>school</mat-icon>
+            <span>{{ t('dash.reviewStack') }}</span>
+          </a>
+          <a mat-button routerLink="/tracker" class="step-link">
             <mat-icon>add_task</mat-icon>
+            <span>{{ t('dash.newApp') }}</span>
           </a>
         </div>
       </mat-card-content>

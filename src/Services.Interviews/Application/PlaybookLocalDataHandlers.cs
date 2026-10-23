@@ -310,7 +310,7 @@ public sealed class ImportStarStoriesCommandHandler(InterviewsDbContext db)
     // 实测)。导入契约本就是幂等(按 ClientId 去重),故同法收敛:撞
     // DbUpdateException 清跟踪后整批重跑 —— 重跑时赢家行已在,按既有行
     // 更新/计数口径自然收敛(imported 只数重跑时新建行,对账不虚报)。
-    private const int MaxAttempts = 3;
+    private const int MaxAttempts = 5;
 
     public async Task<Result<PlaybookImportResultDto>> Handle(
         ImportStarStoriesCommand request, CancellationToken ct)
@@ -350,10 +350,22 @@ public sealed class ImportStarStoriesCommandHandler(InterviewsDbContext db)
             {
                 // 已导入过的:内容以本地为准同步一次(导入语义 = 把本地现状搬上后端),
                 // 但不计 imported —— 对账口径 imported 只数新建行。
-                row.Update(input.Title, input.Situation, input.Task, input.Action,
-                    input.Result, input.Tags);
-                if (row.IsDeleted) row.Restore();
-                changed = true;
+                // 票78:内容与已存行逐字段相等且行未删时免写 —— 并发同发同批
+                // 时收敛方的重跑若再整卡写,只会互撞 xmin 把重试轮次耗尽出 409
+                // (活体实测);同值免写后重跑是纯读,自然收敛(同 upsert 口径)。
+                if (row.IsDeleted)
+                {
+                    row.Update(input.Title, input.Situation, input.Task, input.Action,
+                        input.Result, input.Tags);
+                    row.Restore();
+                    changed = true;
+                }
+                else if (!StarStoryUpsertRules.HasSameContent(row, input))
+                {
+                    row.Update(input.Title, input.Situation, input.Task, input.Action,
+                        input.Result, input.Tags);
+                    changed = true;
+                }
                 continue;
             }
             db.StarStories.Add(new StarStory(request.UserId, clientId, input.Title,

@@ -122,10 +122,11 @@ public sealed class UpsertStarStoryCommandValidator : AbstractValidator<UpsertSt
     public UpsertStarStoryCommandValidator()
     {
         RuleFor(x => x.Story).NotNull();
-        RuleFor(x => x.Story.ClientId).NotEmpty().MaximumLength(StarStoryLimits.ClientIdMax)
-            .WithMessage("故事 id 必填");
-        RuleFor(x => x.Story.Title).NotEmpty().MaximumLength(StarStoryLimits.TitleMax)
-            .WithMessage("故事标题必填");
+        // 票107:必填/长度文案分挂两条规则(WithMessage 只挂紧邻的前一条规则)。
+        RuleFor(x => x.Story.ClientId).NotEmpty().WithMessage("故事 id 必填")
+            .MaximumLength(StarStoryLimits.ClientIdMax).WithMessage("故事 id 长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.Story.Title).NotEmpty().WithMessage("故事标题必填")
+            .MaximumLength(StarStoryLimits.TitleMax).WithMessage("故事标题长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.Story.Situation).MaximumLength(StarStoryLimits.FieldMax);
         RuleFor(x => x.Story.Task).MaximumLength(StarStoryLimits.FieldMax);
         RuleFor(x => x.Story.Action).MaximumLength(StarStoryLimits.FieldMax);
@@ -172,8 +173,8 @@ public sealed class ImportLegacyDebriefsCommandValidator : AbstractValidator<Imp
         RuleForEach(x => x.Items).ChildRules(i =>
         {
             // 票77:归档键 = 键后缀原文,不再限 Guid 形态;空/超长仍拒。
-            i.RuleFor(x => x.EntryId).NotEmpty().MaximumLength(LegacyImportLimits.EntryKeyMax)
-                .WithMessage("复盘必须带归档键");
+            i.RuleFor(x => x.EntryId).NotEmpty().WithMessage("复盘必须带归档键")
+                .MaximumLength(LegacyImportLimits.EntryKeyMax).WithMessage("归档键长度不能超过 {MaxLength} 个字符");
             i.RuleFor(x => x.PayloadJson).NotEmpty().MaximumLength(LegacyImportLimits.PayloadMax)
                 .WithMessage("复盘内容过长");
         });
@@ -190,8 +191,8 @@ public sealed class ImportLegacyPastedCommandValidator : AbstractValidator<Impor
         RuleForEach(x => x.Items).ChildRules(i =>
         {
             // 票77:口径同复盘导入(归档键 = 后缀原文)。
-            i.RuleFor(x => x.EntryId).NotEmpty().MaximumLength(LegacyImportLimits.EntryKeyMax)
-                .WithMessage("粘贴材料必须带归档键");
+            i.RuleFor(x => x.EntryId).NotEmpty().WithMessage("粘贴材料必须带归档键")
+                .MaximumLength(LegacyImportLimits.EntryKeyMax).WithMessage("归档键长度不能超过 {MaxLength} 个字符");
             i.RuleFor(x => x.Content).NotEmpty().MaximumLength(LegacyImportLimits.ContentMax)
                 .WithMessage("粘贴材料过长");
         });

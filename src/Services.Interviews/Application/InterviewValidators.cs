@@ -22,9 +22,12 @@ public sealed class CreateEntryCommandValidator : AbstractValidator<CreateEntryC
 {
     public CreateEntryCommandValidator()
     {
-        RuleFor(x => x.CompanyName).NotEmpty().MaximumLength(300)
-            .WithMessage("公司名不能为空且不超过 300 字");
-        RuleFor(x => x.Role).NotEmpty().MaximumLength(300).WithMessage("岗位名不能为空");
+        // 票107:必填/长度文案分挂两条规则(WithMessage 只挂紧邻的前一条规则,
+        // 合并一句实际只挂在 MaximumLength 上,空值只回英文默认文案)。
+        RuleFor(x => x.CompanyName).NotEmpty().WithMessage("公司名不能为空")
+            .MaximumLength(300).WithMessage("公司名长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.Role).NotEmpty().WithMessage("岗位名不能为空")
+            .MaximumLength(300).WithMessage("岗位名长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.JdText).MaximumLength(60000);
     }
 }
@@ -70,8 +73,8 @@ public sealed class UploadAssetFileCommandValidator : AbstractValidator<UploadAs
     public UploadAssetFileCommandValidator()
     {
         RuleFor(x => x.EntryId).NotEmpty();
-        RuleFor(x => x.FileName).NotEmpty().MaximumLength(500)
-            .WithMessage("请选择要上传的录音文件");
+        RuleFor(x => x.FileName).NotEmpty().WithMessage("请选择要上传的录音文件")
+            .MaximumLength(500).WithMessage("文件名长度不能超过 {MaxLength} 个字符");
         // 大小上限在 Handler 里对着真实流校验(信 Form 长度不如信实读字节数),
         // 这里只挡明显非法的值,避免双重报错口径。
         RuleFor(x => x.DurationSeconds).InclusiveBetween(0, 24 * 3600)
@@ -136,8 +139,8 @@ public sealed class CreateActionCommandValidator : AbstractValidator<CreateActio
     public CreateActionCommandValidator()
     {
         RuleFor(x => x.EntryId).NotEmpty();
-        RuleFor(x => x.Title).NotEmpty().MaximumLength(500)
-            .WithMessage("待办标题不能为空且不超过 500 字");
+        RuleFor(x => x.Title).NotEmpty().WithMessage("待办标题不能为空")
+            .MaximumLength(500).WithMessage("待办标题长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.Detail).MaximumLength(8000);
     }
 }

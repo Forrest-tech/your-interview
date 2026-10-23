@@ -67,6 +67,12 @@ export class MockComponent implements OnInit {
   readonly page = signal(1);
   readonly pageSize = signal(12);
 
+  /** 票95:Suggest 推荐(最弱维度)—— 列表页推荐卡数据源;失败静默不挡列表。 */
+  readonly suggestion = signal<{
+    title: string; mode: string; topic?: string;
+    targetQuestionCount: number; rationale: string;
+  } | null>(null);
+
   readonly dialogOpen = signal(false);
   readonly saving = signal(false);
   readonly formError = signal<string | null>(null);
@@ -99,6 +105,7 @@ export class MockComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.loadSuggestion();
     // 从 Playbook 带上下文跳过来(?company=&role=):预填标题并自动打开新建对话框。
     const company = this.route.snapshot.queryParamMap.get('company')?.trim();
     const role = this.route.snapshot.queryParamMap.get('role')?.trim();
@@ -142,6 +149,31 @@ export class MockComponent implements OnInit {
     if (!this.canNext()) return;
     this.page.update((p) => p + 1);
     this.load();
+  }
+
+  // ---------------------------------------------------------------- 推荐(票95)
+
+  /** 拉 Suggest 推荐;失败静默(推荐是增益,不是主流程)。 */
+  loadSuggestion(): void {
+    this.mockApi.suggest<{
+      title: string; mode: string; topic?: string;
+      targetQuestionCount: number; rationale: string;
+    }>(5).subscribe({
+      next: (sug) => this.suggestion.set(sug),
+      error: () => this.suggestion.set(null)
+    });
+  }
+
+  /** 点「按推荐新建」:预填建会话表单并打开对话框(mode 为后端枚举的 camelCase 串,转 PascalCase 与表单提交值同口径)。 */
+  applySuggestion(): void {
+    const sug = this.suggestion();
+    if (!sug) return;
+    this.form = this.emptyForm();
+    this.form.title = sug.title;
+    this.form.mode = sug.mode.charAt(0).toUpperCase() + sug.mode.slice(1);
+    this.form.topic = sug.topic ?? '';
+    this.formError.set(null);
+    this.dialogOpen.set(true);
   }
 
   // ---------------------------------------------------------------- 新建

@@ -102,9 +102,27 @@
     @if (questionCount() === 0) {
       <mat-card class="panel empty-panel">
         <mat-icon>inbox</mat-icon>
-        <p>
-          {{ t('mock.noQuestionsHint') }}
-        </p>
+        @if (genState() === 'generating') {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+          <p>{{ t('mock.generatingQuestions') }}</p>
+        } @else if (genState() === 'notConfigured') {
+          <p>{{ t('mock.aiNotConfigured') }}</p>
+          <button mat-stroked-button (click)="generateQuestions()">
+            <mat-icon>refresh</mat-icon> {{ t('mock.retryGenerate') }}
+          </button>
+        } @else if (genState() === 'failed') {
+          <p>{{ t('mock.generationFailed') }}</p>
+          <button mat-flat-button color="primary" (click)="generateQuestions()">
+            <mat-icon>refresh</mat-icon> {{ t('mock.retryGenerate') }}
+          </button>
+        } @else {
+          <p>{{ t('mock.noQuestionsHint') }}</p>
+          @if (auth.can('mock.manage')) {
+            <button mat-flat-button color="primary" (click)="generateQuestions()">
+              <mat-icon>auto_awesome</mat-icon> {{ t('mock.generateQuestions') }}
+            </button>
+          }
+        }
       </mat-card>
     } @else {
       <div class="question-nav">
@@ -180,6 +198,23 @@
                 {{ t('mock.nextQuestion') }} <mat-icon>arrow_forward</mat-icon>
               </button>
             </div>
+          }
+
+          <!-- 票95:答后 AI 评分状态 —— 进行中/未配置/失败可重试,题目停 Answered 不丢回答 -->
+          @if (q.state === 'Answered') {
+            @if (busy() === 'score') {
+              <p class="next-hint"><mat-icon inline>hourglass_top</mat-icon> {{ t('mock.scoringNow') }}</p>
+            } @else if (scoreError() === 'notConfigured') {
+              <p class="next-hint"><mat-icon inline>warning</mat-icon> {{ t('mock.aiNotConfigured') }}</p>
+              <button mat-stroked-button (click)="retryScoring()" [disabled]="busy() !== null">
+                <mat-icon>refresh</mat-icon> {{ t('mock.retryScoring') }}
+              </button>
+            } @else if (scoreError() === 'failed') {
+              <p class="next-hint"><mat-icon inline>error_outline</mat-icon> {{ t('mock.scoringFailed') }}</p>
+              <button mat-stroked-button (click)="retryScoring()" [disabled]="busy() !== null">
+                <mat-icon>refresh</mat-icon> {{ t('mock.retryScoring') }}
+              </button>
+            }
           }
 
           @if (nextHint()) {

@@ -88,9 +88,14 @@ interface AssessmentSessionDetail {
  * 一屏只做一件事:答当前这题。所以布局是「题干 → 输入框 → 提交 → 评分结果」的单列流,
  * 而不是把所有题铺开。理由是练习时注意力就是一次一题,铺开反而让人想跳过。
  *
- * 关于"下一题":后端暂未提供 next-question 端点。
- * 这里实现为 getNextQuestion() —— 先尝试请求该端点,404/409 则退化为
- * 「从已加载的题目列表里找第一道未作答的题」。这样端点上线后无需改前端。
+ * 关于"下一题"(票95 裁定,含票48):不实现 next-question 端点 —— 出题是
+ * 按 TargetQuestionCount 一次性批量生成(后端 POST /generate 编排),导航纯本地:
+ * 从已加载题目里挑下一道未作答的题。旧实现每次点下一题都试调必-404 的
+ * /next-question,已删除(会话页网络面不得再有必 404 请求)。
+ *
+ * 出题/评分(票95):进入 0 题会话自动调一次 /generate;答题成功后自动调
+ * /questions/{qid}/score-ai。失败口径:生成失败→空态卡三态(生成中/失败可重试/
+ * AI 未配置 503);评分失败→题目停 Answered + 评分失败提示与重试按钮。
  */
 @Component({
   selector: 'app-mock-session',
@@ -130,6 +135,12 @@ export class MockSessionComponent implements OnInit, OnDestroy {
   readonly nextHint = signal<string | null>(null);
 
   readonly answerText = signal('');
+
+  /** 票95:AI 出题状态机 —— 空态卡据此呈现真实状态,不再是无出路文案。 */
+  readonly genState = signal<'idle' | 'generating' | 'failed' | 'notConfigured'>('idle');
+
+  /** 票95:AI 评分失败态(题目停 Answered 时展示,带重试入口)。 */
+  readonly scoreError = signal<'failed' | 'notConfigured' | null>(null);
 
   /** 结束后的总评。 */
   readonly summary = signal<{
@@ -201,6 +212,13 @@ export class MockSessionComponent implements OnInit, OnDestroy {
         this.loading.set(false);
         // 优先停在"已答但未评分"或"未答"的第一题,这是用户接着练的位置
         this.syncCurrent(d.questions ?? []);
+        // 票95:0 题且会话未终结 → 自动编排出题一次(失败后由空态卡手动重试,
+        // 不在每次 load 里无限重试)。
+        if ((d.questions?.length ?? 0) === 0
+          && d.status !== 'Completed' && d.status !== 'Abandoned'
+          && this.genState() === 'idle') {
+          this.generateQuestions();
+        }
       });
   }
 
@@ -227,6 +245,50 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     this.lastResult.set(next.state === 'Scored' ? next : null);
   }
 
+  // ---------------------------------------------------------------- AI 编排(票95)
+
+  /** 调后端编排生成题目(幂等补差额)。成功后重拉会话;失败置 genState 供空态卡重试。 */
+  generateQuestions(): void {
+    if (this.genState() === 'generating') return;
+    this.genState.set('generating');
+    this.mockApi.generateQuestions(this.id())
+      .subscribe({
+        next: () => {
+          this.genState.set('idle');
+          this.load(false);
+        },
+        error: (e: Error) => {
+          const code = (e as { code?: string }).code;
+          this.genState.set(code === 'Mock.AiNotConfigured' ? 'notConfigured' : 'failed');
+        }
+      });
+  }
+
+  /** 调后端编排为某题评分。答题后自动调用;失败置 scoreError,题目停 Answered 可重试。 */
+  scoreWithAi(questionId: string): void {
+    this.busy.set('score');
+    this.scoreError.set(null);
+    this.mockApi.scoreWithAi(this.id(), questionId)
+      .subscribe({
+        next: () => {
+          this.busy.set(null);
+          this.load(false);
+        },
+        error: (e: Error) => {
+          this.busy.set(null);
+          const code = (e as { code?: string }).code;
+          this.scoreError.set(code === 'Mock.AiNotConfigured' ? 'notConfigured' : 'failed');
+          this.load(false);
+        }
+      });
+  }
+
+  /** 评分失败后的重试入口(当前题仍 Answered 时)。 */
+  retryScoring(): void {
+    const q = this.current();
+    if (q && q.state === 'Answered') this.scoreWithAi(q.id);
+  }
+
   // ---------------------------------------------------------------- 提交回答
 
   submitAnswer(): void {
@@ -251,8 +313,8 @@ export class MockSessionComponent implements OnInit, OnDestroy {
           this.busy.set(null);
           this.answerText.set('');
           this.snack.open(this.t('mock.answerSubmitted'), this.t('common.close'), { duration: 2500 });
-          // 重新拉会话:评分由后端流水线写回,以服务端为准而不是本地拼
-          this.load(false);
+          // 票95:答完立即触发后端 AI 评分编排;评分结果以重拉的服务端数据为准。
+          this.scoreWithAi(q.id);
         },
         error: (e: Error) => {
           this.busy.set(null);
@@ -264,42 +326,25 @@ export class MockSessionComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------- 下一题
 
   /**
-   * 下一题。
-   *
-   * 后端没有 next-question 端点,所以我们先试一次(为了将来端点上线时自动受益),
-   * 失败就本地挑下一道未作答的题。这是刻意的优雅降级 ——
-   * 让"接口不存在"表现为"功能仍然可用",而不是一个红色报错。
+   * 下一题 —— 纯本地导航(票95/48):题目已在建会话后批量生成完毕,
+   * 这里只在已加载列表里找下一道未作答的题,不发任何请求
+   * (旧实现试调不存在的 /next-question,每次点击必 404,已删除)。
    */
   nextQuestion(): void {
     this.nextHint.set(null);
-    this.busy.set('next');
+    const list = this.questions();
+    const idx = list.findIndex((q) => q.id === this.current()?.id);
+    const upcoming = list.slice(idx + 1).find((q) => q.state === 'Asked')
+      ?? list.find((q) => q.state === 'Asked');
 
-    this.mockApi.nextQuestion<AssessmentQuestion>(this.id())
-      .pipe(catchError(() => {
-        // 404/409 或任何错误:回退到本地逻辑,不把错误抛给用户
-        const list = this.questions();
-        const idx = list.findIndex((q) => q.id === this.current()?.id);
-        const upcoming = list.slice(idx + 1).find((q) => q.state === 'Asked')
-          ?? list.find((q) => q.state === 'Asked');
-
-        if (upcoming) {
-          this.current.set(upcoming);
-          this.lastResult.set(upcoming.state === 'Scored' ? upcoming : null);
-          this.answerText.set('');
-        } else {
-          this.nextHint.set(this.t('mock.noMoreQuestions'));
-        }
-        return of(null);
-      }))
-      .subscribe((q) => {
-        this.busy.set(null);
-        if (q) {
-          // 端点存在:直接用后端返回的题
-          this.current.set(q);
-          this.lastResult.set(null);
-          this.answerText.set('');
-        }
-      });
+    if (upcoming) {
+      this.current.set(upcoming);
+      this.lastResult.set(upcoming.state === 'Scored' ? upcoming : null);
+      this.answerText.set('');
+      this.scoreError.set(null);
+    } else {
+      this.nextHint.set(this.t('mock.noMoreQuestions'));
+    }
   }
 
   /** 手动切到某道题(左侧题号列表用)。 */
@@ -308,6 +353,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     this.lastResult.set(q.state === 'Scored' ? q : null);
     this.answerText.set('');
     this.nextHint.set(null);
+    this.scoreError.set(null);
   }
 
   // ---------------------------------------------------------------- 结束

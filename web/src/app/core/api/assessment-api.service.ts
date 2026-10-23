@@ -56,9 +56,6 @@ export class AssessmentApiService {
       `${AssessmentApiService.BASE}/${sessionId}/questions/${questionId}/answer`, body);
   }
 
-  nextQuestion(sessionId: string): Observable<unknown> {
-    return this.api.post(`${AssessmentApiService.BASE}/${sessionId}/next-question`, {});
-  }
 
   completeSession(sessionId: string, body: unknown): Observable<AssessmentSessionComplete> {
     return this.api.post<AssessmentSessionComplete>(

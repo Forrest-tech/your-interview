@@ -80,16 +80,16 @@ public sealed record UpdateKnowledgeCommand(
     uint? Version = null) : IRequest<Result>;
 
 /// <summary>只更新我的回答(Playbook Q&A 页签用,避免全量 PUT 误清空)。</summary>
-public sealed record UpdateMyAnswerCommand(Guid UserId, Guid Id, string? MyAnswer) : IRequest<Result>;
+public sealed record UpdateMyAnswerCommand(Guid UserId, Guid Id, string? MyAnswer, uint? Version = null) : IRequest<Result>; // 票101 Version:读时 xmin
 
 /// <summary>只更新推荐答案(AI Practice From Tech 编辑写回用)。</summary>
-public sealed record UpdateBetterAnswerCommand(Guid UserId, Guid Id, string? BetterAnswer) : IRequest<Result>;
+public sealed record UpdateBetterAnswerCommand(Guid UserId, Guid Id, string? BetterAnswer, uint? Version = null) : IRequest<Result>; // 票101 Version
 
 /// <summary>只更新题目(AI Practice From Tech 重命名写回用)。</summary>
-public sealed record UpdateQuestionCommand(Guid UserId, Guid Id, string? Question) : IRequest<Result>;
+public sealed record UpdateQuestionCommand(Guid UserId, Guid Id, string? Question, uint? Version = null) : IRequest<Result>; // 票101 Version
 
 /// <summary>From Tech 一次写回题目+推荐答案(避免并发 xmin 冲突)。</summary>
-public sealed record UpdateFromTechCommand(Guid UserId, Guid Id, string? Question, string? BetterAnswer) : IRequest<Result>;
+public sealed record UpdateFromTechCommand(Guid UserId, Guid Id, string? Question, string? BetterAnswer, uint? Version = null) : IRequest<Result>; // 票101 Version
 
 public sealed record DeleteKnowledgeCommand(Guid UserId, Guid Id) : IRequest<Result>;
 public sealed record RestoreKnowledgeCommand(Guid UserId, Guid Id) : IRequest<Result>;
@@ -107,7 +107,7 @@ public sealed record RecordReviewCommand(
 public sealed record ReviewOutcomeDto(DateTimeOffset? NextReviewAt, int IntervalDays,
     double EasinessFactor, string Mastery, int RepetitionStreak);
 
-public sealed record ChangeMasteryCommand(Guid UserId, Guid Id, string Mastery) : IRequest<Result>;
+public sealed record ChangeMasteryCommand(Guid UserId, Guid Id, string Mastery, uint? Version = null) : IRequest<Result>; // 票101 Version
 
 public sealed record AttachRelationCommand(Guid UserId, Guid Id, Guid RelatedItemId, string RelationType,
     string? Note = null) : IRequest<Result<Guid>>;

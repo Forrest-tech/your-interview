@@ -629,7 +629,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       const kid = (target as any)?._kid as string;
       if (kid) {
         this.knowledgeApi.updateBetterAnswer<void>(kid, {
-          betterAnswer: text || null
+          betterAnswer: text || null,
+          version: (target as any)?._version ?? null // 票101:树节点读时 xmin
         }).subscribe({
           next: () => this.toast(this.t('dialog.saveDone')),
           error: (e) => this.toast(this.tree.errText(e))

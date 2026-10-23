@@ -151,46 +151,46 @@ public sealed class KnowledgeController(ISender sender, ICurrentUser currentUser
     }
 
     /// <summary>只更新我的回答(Playbook Q&A 页签用)。</summary>
-    public sealed record UpdateMyAnswerBody(string? MyAnswer);
+    public sealed record UpdateMyAnswerBody(string? MyAnswer, uint? Version = null); // 票101 Version:读时 xmin
 
     [HttpPut("{id:guid}/answer")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> UpdateMyAnswer(Guid id, [FromBody] UpdateMyAnswerBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateMyAnswerCommand(Me, id, body.MyAnswer), ct);
+        var r = await sender.Send(new UpdateMyAnswerCommand(Me, id, body.MyAnswer, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
-    public sealed record UpdateBetterAnswerBody(string? BetterAnswer);
+    public sealed record UpdateBetterAnswerBody(string? BetterAnswer, uint? Version = null); // 票101 Version
 
     /// <summary>只更新推荐答案(AI Practice From Tech 编辑写回用)。</summary>
     [HttpPut("{id:guid}/better-answer")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> UpdateBetterAnswer(Guid id, [FromBody] UpdateBetterAnswerBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateBetterAnswerCommand(Me, id, body.BetterAnswer), ct);
+        var r = await sender.Send(new UpdateBetterAnswerCommand(Me, id, body.BetterAnswer, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
-    public sealed record UpdateQuestionBody(string? Question);
+    public sealed record UpdateQuestionBody(string? Question, uint? Version = null); // 票101 Version
 
     /// <summary>只更新题目(AI Practice From Tech 重命名写回用)。</summary>
     [HttpPut("{id:guid}/question")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> UpdateQuestion(Guid id, [FromBody] UpdateQuestionBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateQuestionCommand(Me, id, body.Question), ct);
+        var r = await sender.Send(new UpdateQuestionCommand(Me, id, body.Question, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
-    public sealed record UpdateFromTechBody(string? Question, string? BetterAnswer);
+    public sealed record UpdateFromTechBody(string? Question, string? BetterAnswer, uint? Version = null); // 票101 Version
 
     /// <summary>From Tech 一次写回题目+推荐答案(避免并发 xmin 冲突)。</summary>
     [HttpPut("{id:guid}/from-tech")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> UpdateFromTech(Guid id, [FromBody] UpdateFromTechBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateFromTechCommand(Me, id, body.Question, body.BetterAnswer), ct);
+        var r = await sender.Send(new UpdateFromTechCommand(Me, id, body.Question, body.BetterAnswer, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -244,7 +244,7 @@ public sealed class KnowledgeController(ISender sender, ICurrentUser currentUser
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeWrite)]
     public async Task<IResult> ChangeMastery(Guid id, [FromBody] MasteryBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ChangeMasteryCommand(Me, id, body.Mastery), ct);
+        var r = await sender.Send(new ChangeMasteryCommand(Me, id, body.Mastery, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -361,7 +361,7 @@ public sealed record UpdateKnowledgeBody(
 public sealed record ReviewBody(string Result, int? ConfidenceBefore = null,
     int? ConfidenceAfter = null, string? Note = null, int? DurationSeconds = null);
 
-public sealed record MasteryBody(string Mastery);
+public sealed record MasteryBody(string Mastery, uint? Version = null); // 票101 Version
 
 public sealed record RelationBody(Guid RelatedItemId, string RelationType, string? Note = null);
 

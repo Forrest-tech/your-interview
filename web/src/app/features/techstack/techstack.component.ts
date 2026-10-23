@@ -1168,7 +1168,8 @@ export class TechStackComponent implements OnInit, OnDestroy {
       this.acting.set(true);
       this.knowledgeApi.updateMastery(item.id, {
         level: next,
-        confidence: 0.7
+        confidence: 0.7,
+        version: item.version ?? null // 票101:读时 xmin(后端 MasteryBody 可选字段)
       }).subscribe({
         next: (updated) => {
           this.acting.set(false);

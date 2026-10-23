@@ -263,13 +263,13 @@ export class PracticeMaterialTree {
 
   /** From Tech:把编辑后的推荐答案写回 Knowledge(同一份数据) */
   private saveFromTechToKnowledge(after?: () => void): void {
-    const updates: { kid: string; name: string; content: string }[] = [];
+    const updates: { kid: string; name: string; content: string; version: number | null }[] = [];
     const walk = (nodes: MaterialNode[]) => {
       for (const n of nodes) {
         if (!n.folder && n.id.startsWith('ts:item:')) {
           const kid = (n as any)._kid as string;
           if (kid) {
-            updates.push({ kid, name: n.name, content: n.content || '' });
+            updates.push({ kid, name: n.name, content: n.content || '', version: (n as any)._version ?? null });
           }
         }
         if (n.children) walk(n.children);
@@ -302,7 +302,8 @@ export class PracticeMaterialTree {
       const u = updates[index];
       this.host.knowledgeApi.updateFromTech<void>(u.kid, {
         question: u.name || null,
-        betterAnswer: u.content || null
+        betterAnswer: u.content || null,
+        version: u.version
       }).subscribe({
         next: () => sendNext(index + 1),
         error: () => { failed++; sendNext(index + 1); }
@@ -688,6 +689,7 @@ export class PracticeMaterialTree {
           folder.children.forEach((c, i) => {
             const kid = items[i]?.id;
             (c as any)._kid = kid;
+            (c as any)._version = items[i]?.version ?? null; // 票101:读时 xmin,保存回传
           });
           done();
         },

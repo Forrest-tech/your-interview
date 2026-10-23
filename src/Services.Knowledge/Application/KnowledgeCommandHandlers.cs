@@ -104,6 +104,7 @@ public sealed class UpdateMyAnswerCommandHandler(KnowledgeDbContext db)
     {
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
+        ConcurrencyPin.Pin(db, k, request.Version); // 票101:旧版本保存 → 409
         k.SetMyAnswer(request.MyAnswer);
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -117,6 +118,7 @@ public sealed class UpdateBetterAnswerCommandHandler(KnowledgeDbContext db)
     {
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
+        ConcurrencyPin.Pin(db, k, request.Version); // 票101
         k.SetBetterAnswer(request.BetterAnswer);
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -130,6 +132,7 @@ public sealed class UpdateQuestionCommandHandler(KnowledgeDbContext db)
     {
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
+        ConcurrencyPin.Pin(db, k, request.Version); // 票101
         k.SetQuestion(request.Question);
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -143,6 +146,7 @@ public sealed class UpdateFromTechCommandHandler(KnowledgeDbContext db)
     {
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
+        ConcurrencyPin.Pin(db, k, request.Version); // 票101
         k.SetTitle(request.Question);
         k.SetBetterAnswer(request.BetterAnswer);
         await db.SaveChangesAsync(ct);
@@ -231,6 +235,7 @@ public sealed class ChangeMasteryCommandHandler(KnowledgeDbContext db)
         if (!Enum.TryParse<MasteryLevel>(request.Mastery, true, out var level))
             return Result.Failure(Error.Validation("Mastery.Invalid", "掌握度无效"));
 
+        ConcurrencyPin.Pin(db, k, request.Version); // 票101
         k.PromoteMastery(level);
         await db.SaveChangesAsync(ct);
         return Result.Success();

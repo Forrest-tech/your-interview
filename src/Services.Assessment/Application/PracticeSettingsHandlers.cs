@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Assessment.Domain;
@@ -67,7 +68,8 @@ public sealed record TestSpeechCredentialCommand(string Key, string Region)
 
 public sealed record TestSpeechCredentialResult(bool Ok, string Message);
 
-public sealed class TestSpeechCredentialCommandHandler(PronunciationAssessor assessor)
+public sealed class TestSpeechCredentialCommandHandler(PronunciationAssessor assessor,
+    ILogger<TestSpeechCredentialCommandHandler> logger)
     : MediatR.IRequestHandler<TestSpeechCredentialCommand, Result<TestSpeechCredentialResult>>
 {
     public async Task<Result<TestSpeechCredentialResult>> Handle(
@@ -92,8 +94,12 @@ public sealed class TestSpeechCredentialCommandHandler(PronunciationAssessor ass
         catch (AzureAuthException ex)
         {
             // 领域错误不假装成功;由控制器映射为 502(绝不能是 401/403)
+            // ★ 票117:Description 改 SpeechAiFailure 固定脱敏文案 —— ex.Message
+            // 拼有 Azure 上游响应 body,原文只进服务端日志(票47/116 定版)。
+            logger.LogWarning(ex, "测试候选语音凭据被 Azure 拒绝");
             return Result.Failure<TestSpeechCredentialResult>(
-                new Error("Speech.InvalidCredential", ex.Message, ErrorType.Failure));
+                new Error(SpeechAiFailure.InvalidCredentialCode,
+                    SpeechAiFailure.InvalidCredentialDetail, ErrorType.Failure));
         }
     }
 }
@@ -114,7 +120,8 @@ public sealed record SaveSpeechSettingCommand(Guid UserId, string Key, string Re
 ///    现在后端自己把关,不依赖前端是否老实调了 test-credential。
 ///    前端门禁是体验,后端校验是底线 —— 两道都要有。
 /// </summary>
-public sealed class SaveSpeechSettingCommandHandler(AssessmentDbContext db, PronunciationAssessor assessor)
+public sealed class SaveSpeechSettingCommandHandler(AssessmentDbContext db, PronunciationAssessor assessor,
+    ILogger<SaveSpeechSettingCommandHandler> logger)
     : MediatR.IRequestHandler<SaveSpeechSettingCommand, Result<SpeechSettingStatusDto>>
 {
     public async Task<Result<SpeechSettingStatusDto>> Handle(SaveSpeechSettingCommand r, CancellationToken ct)
@@ -145,9 +152,12 @@ public sealed class SaveSpeechSettingCommandHandler(AssessmentDbContext db, Pron
             // 凭据被上游拒绝 → 不写库。领域错误用 Failure 类型,
             // 由控制器映射为 502(网关类),绝不用 401/403 ——
             // 那会被前端拦截器当成"会话失效"把用户踢回登录页。
+            // ★ 票117:Description 改固定脱敏文案(沿用改前自有前缀、去掉其后
+            // 拼接的 ex.Message —— 其含 Azure 上游响应 body),原文只进日志。
+            logger.LogWarning(ex, "保存语音凭据被 Azure 拒绝,未写库");
             return Result.Failure<SpeechSettingStatusDto>(new Error(
-                "Speech.CredentialRejected",
-                $"Azure 拒绝了该密钥或区域,凭据未保存:{ex.Message}",
+                SpeechAiFailure.CredentialRejectedCode,
+                SpeechAiFailure.CredentialRejectedDetail,
                 ErrorType.Failure));
         }
 

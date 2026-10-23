@@ -300,12 +300,19 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             // 用 502 而不是 401(401 会被前端理解为"会话过期"→ 刷新/登出)。
             // 此处必须显式捕获:AzureAuthException 继承自 Exception 而非
             // InvalidOperationException,不捕获会漏到全局处理器变成 500。
-            return Results.Problem(title: "Azure 密钥/区域无效", detail: ex.Message,
+            // ★ 票117:detail 改 SpeechAiFailure 固定脱敏文案 —— AzureAuthException
+            // 消息拼有 Azure 上游响应 body,原文只进服务端日志(票47/116 定版)。
+            logger.LogWarning(ex, "发音评估被 Azure 拒绝凭据");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.InvalidCredential);
+            return Results.Problem(title: "Azure 密钥/区域无效", detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Problem(title: "发音评估失败", detail: ex.Message,
+            // ★ 票117:同上脱敏 —— 此链消息含重试聚合嵌的底层异常原文(last.Message)。
+            logger.LogWarning(ex, "发音评估失败");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.Pronunciation);
+            return Results.Problem(title: p.Title, detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
     }
@@ -672,7 +679,10 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             // 网关错误,所以用 502 Bad Gateway。前端据 status 给出可操作提示。
             // 真正需要重新登录的情况由框架的 [Authorize] 中间件以 401 返回,
             // 与业务代码无关,两者从此不再混淆。
-            return Results.Problem(title: "密钥或区域无效", detail: ex.Message,
+            // ★ 票117:detail 改固定脱敏文案,Azure 原文只进日志(同 pronunciation/assess)。
+            logger.LogWarning(ex, "语音连通性测试被 Azure 拒绝凭据");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.InvalidCredential);
+            return Results.Problem(title: "密钥或区域无效", detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
     }
@@ -750,12 +760,18 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             // ⚠️ 同 TestSpeech:Azure 凭据错误绝不能用 401 —— 那会让前端拦截器
             // 误以为"会话过期"并触发刷新/登出。这是上游服务拒绝我们凭据的
             // 网关类错误,用 502;真正的会话失效由 [Authorize] 返回 401。
-            return Results.Problem(title: "密钥或区域无效", detail: ex.Message,
+            // ★ 票117:detail 改固定脱敏文案,Azure 原文(消息含上游 body)只进日志。
+            logger.LogWarning(ex, "语音合成被 Azure 拒绝凭据");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.InvalidCredential);
+            return Results.Problem(title: "密钥或区域无效", detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Problem(title: "语音合成失败", detail: ex.Message,
+            // ★ 票117:同上脱敏 —— 合成链消息嵌 Azure 非成功状态的响应 body。
+            logger.LogWarning(ex, "语音合成失败");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.Synthesis);
+            return Results.Problem(title: p.Title, detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
     }

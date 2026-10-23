@@ -721,10 +721,10 @@ export interface RadarPoint {
   changeFromPrevious: number;
 }
 
+/** FUN-07(票35):后端只回结构化 Code+Params,文案由前端 localized-messages.helpers 本地化。 */
 export interface Insight {
-  headline: string;
-  detail: string;
-  suggestedAction?: string;
+  code: string;
+  params: Record<string, string>;
   severity?: 'info' | 'warning' | 'critical' | string;
 }
 

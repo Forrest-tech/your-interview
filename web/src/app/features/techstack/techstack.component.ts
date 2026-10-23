@@ -128,6 +128,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
+  tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
 
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
@@ -1367,7 +1368,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const item = this.selected();
     if (!item) return;
     const content = this.blockText(item, blockKey);
-    if (!content.trim()) { this.notify('该块无内容'); return; }
+    if (!content.trim()) { this.notify(this.t('ts.detail.blockEmpty')); return; }
     // 用块内容的前 60 字作标题,全文作问题
     const title = content.trim().slice(0, 60) + (content.length > 60 ? '…' : '');
     this.api.post<KnowledgeItem>('/api/knowledge', {
@@ -1381,7 +1382,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
       importance: 3
     }).subscribe({
       next: () => {
-        this.notify('闪卡已创建,加入复习队列');
+        this.notify(this.t('ts.detail.flashcardCreated'));
         this.reload();
       },
       error: (e: Error) => this.notify(e.message, true)

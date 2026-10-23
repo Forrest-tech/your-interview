@@ -43,7 +43,24 @@ public sealed record CoverLetterReadinessDto(
     bool HasJdText,
     bool HasCompanyProfile,
     string CompanyName, string Role,
-    string? MissingHint);
+    /// <summary>FUN-07(票35):缺失提示改结构化码(MissingResume/MissingJd/MissingCompanyProfile),
+    /// 前端按码查 i18n 本地化(tracker.dClMissing* 键);null = 输入齐备。</summary>
+    string? MissingCode);
+
+/// <summary>CoverLetterReadinessDto.MissingCode 取值与选取逻辑(纯函数,单测覆盖)。</summary>
+public static class CoverLetterMissing
+{
+    public const string Resume = "MissingResume";
+    public const string Jd = "MissingJd";
+    public const string CompanyProfile = "MissingCompanyProfile";
+
+    /// <summary>简历是硬前提优先,其次 JD、公司情报(与改前提示优先级逐字一致)。</summary>
+    public static string? For(bool hasResume, bool hasJdText, bool hasCompanyProfile)
+        => !hasResume ? Resume
+         : !hasJdText ? Jd
+         : !hasCompanyProfile ? CompanyProfile
+         : null;
+}
 
 // ---------------------------- 读 ----------------------------
 
@@ -102,16 +119,11 @@ public sealed class GetCoverLetterReadinessQueryHandler(JobsDbContext db)
         var hasProfile = company is not null && !string.IsNullOrWhiteSpace(company.Profile);
 
         // 简历是硬前提(没有简历就没有"基于什么写的");JD 与公司情报是加分项。
-        // 只有简历缺失才提示"必须补",其余用措辞说明"补了效果更好"。
-        string? hint = !hasResume
-            ? "尚未录入简历 —— 求职信需要基于你的简历撰写,请先在\"技术栈/简历\"里录入。"
-            : !hasJd ? "未填 JD 全文 —— 补上后生成的信会更有针对性(岗位职责与要求)。"
-            : !hasProfile ? "未填公司情报 —— 补上后 AI 能写出针对该公司的话术。" 
-            : null;
-
+        // FUN-07(票35):只回缺失码,文案由前端本地化;公司缺失时公司名回空串(不再直出中文占位)。
         return Result.Success(new CoverLetterReadinessDto(
             hasResume, resume?.Version ?? 0, hasJd, hasProfile,
-            company?.Name ?? "(未知公司)", app.Role, hint));
+            company?.Name ?? string.Empty, app.Role,
+            CoverLetterMissing.For(hasResume, hasJd, hasProfile)));
     }
 }
 

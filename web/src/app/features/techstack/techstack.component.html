@@ -102,9 +102,9 @@
           <!-- ★ #9:复习热力图 + 连击 -->
           <div class="heatmap-panel">
             <div class="heatmap-head">
-              <span class="heatmap-title">复习热力图</span>
+              <span class="heatmap-title">{{ t('ts.heatmap.title') }}</span>
               @if (reviewStreak() > 0) {
-                <span class="streak-badge">🔥 {{ reviewStreak() }} 天连击</span>
+                <span class="streak-badge">{{ tn('ts.heatmap.streak', reviewStreak()) }}</span>
               }
             </div>
             <div class="heatmap-grid">
@@ -112,19 +112,19 @@
                 <div class="heatmap-week">
                   @for (day of week; track day.date) {
                     <div class="heatmap-day" [class]="'lv-' + day.level"
-                         [matTooltip]="day.count >= 0 ? day.date + ': ' + day.count + ' 条' : ''"></div>
+                         [matTooltip]="day.count >= 0 ? tf('ts.heatmap.count', { date: day.date, n: day.count }) : ''"></div>
                   }
                 </div>
               }
             </div>
             <div class="heatmap-legend">
-              <span>少</span>
+              <span>{{ t('ts.heatmap.less') }}</span>
               <div class="heatmap-day lv-0"></div>
               <div class="heatmap-day lv-1"></div>
               <div class="heatmap-day lv-2"></div>
               <div class="heatmap-day lv-3"></div>
               <div class="heatmap-day lv-4"></div>
-              <span>多</span>
+              <span>{{ t('ts.heatmap.more') }}</span>
             </div>
           </div>
         </div>
@@ -358,7 +358,7 @@
               </button>
               <!-- ★ 打通:去 AI Practice 练这张卡 -->
               <button mat-stroked-button (click)="practiceCard(it)">
-                <mat-icon>mic</mat-icon> 口语练习
+                <mat-icon>mic</mat-icon> {{ t('ts.detail.speakingPractice') }}
               </button>
             }
             <mat-menu #reviewMenu="matMenu" class="app-menu">
@@ -435,7 +435,7 @@
                 <!-- ★ #8:一键转为闪卡 -->
                 @if (!detailEditing() && blockText(it, b.key)) {
                   <button mat-icon-button class="flashcard-btn"
-                          matTooltip="转为闪卡 (加入复习队列)"
+                          [matTooltip]="t('ts.detail.toFlashcard')"
                           (click)="makeFlashcard(b.key)">
                     <mat-icon>style</mat-icon>
                   </button>
@@ -611,23 +611,23 @@
             <!-- ★ #5:重做模式开关 -->
             <label class="resole-toggle">
               <input type="checkbox" [checked]="resoleMode()" (change)="toggleResoleMode()" />
-              <span>重做模式 (只看题,讲套路)</span>
+              <span>{{ t('ts.resole.toggle') }}</span>
             </label>
             @if (resoleMode()) {
               <!-- 二元评分: Pass/Fail -->
               @if (!resoleRevealed()) {
-                <p class="resole-hint">看着题目,把核心套路讲出来 (不要背答案),然后翻开对照。</p>
+                <p class="resole-hint">{{ t('ts.resole.hint') }}</p>
                 <button mat-flat-button color="primary"
-                        (click)="resoleRevealed.set(true)">翻开答案</button>
+                        (click)="resoleRevealed.set(true)">{{ t('ts.resole.reveal') }}</button>
               } @else {
                 <div class="binary-grade">
                   <button mat-flat-button class="g-pass"
                           [disabled]="reviewLoading()" (click)="gradeBinary(true)">
-                    ✓ 讲出了套路
+                    {{ t('ts.resole.pass') }}
                   </button>
                   <button mat-flat-button class="g-fail"
                           [disabled]="reviewLoading()" (click)="gradeBinary(false)">
-                    ✗ 没讲出来
+                    {{ t('ts.resole.fail') }}
                   </button>
                 </div>
               }

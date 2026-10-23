@@ -16,6 +16,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 
 import { TrackerApi, ParsedJd, ParsedInvite } from '../../core/api/tracker-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { parseMessageText } from '../../core/i18n/localized-messages.helpers';
 import { Application } from '../../core/models/api.models';
 
 /** 弹窗入参:邀请模式需要一份现有投递清单供选择归属。 */
@@ -509,7 +510,7 @@ export class SmartAddDialogComponent {
       this.trackerApi.parseJd(this.raw, this.useAi).subscribe(done<ParsedJd>((r) => {
         this.parsed.set(r);
         this.status.set(r.status);
-        this.msg.set(r.message);
+        this.msg.set(parseMessageText(r.messageCodes, (k) => this.i18n.t(k), this.mode() === 'jd' ? ' ' : ''));
         // 图片/完全解析不出时保留空白表单 —— 用户可以直接手工填,入口不中断
         this.jd = {
           company: r.company ?? '', role: r.role ?? '', location: r.location ?? '',
@@ -529,7 +530,7 @@ export class SmartAddDialogComponent {
       this.trackerApi.parseInvite(this.raw, this.useAi).subscribe(done<ParsedInvite>((r) => {
         this.invite.set(r);
         this.status.set(r.status);
-        this.msg.set(r.message);
+        this.msg.set(parseMessageText(r.messageCodes, (k) => this.i18n.t(k), this.mode() === 'jd' ? ' ' : ''));
         const at = r.scheduledAt ? new Date(r.scheduledAt) : null;
         this.inv = {
           roundNo: r.roundNo,

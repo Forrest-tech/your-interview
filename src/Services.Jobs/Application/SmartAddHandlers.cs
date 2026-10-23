@@ -28,6 +28,71 @@ namespace YourInterview.Services.Jobs.Application;
 //     解析不出来就返回 Failed 让前端回退手动填写 —— 这是验收标准明确写的。
 // ============================================================================
 
+/// <summary>
+/// FUN-07(票35):parse 成功响应的用户提示不再直出中文句 —— 后端只回结构化码列表,
+/// 前端 smart-add-dialog 按码查 i18n 字典本地化拼接(parse.* 键,zh 值与改前原句逐字对齐)。
+/// 码序即呈现序:主状态码在前,附加说明(fetch/AI 降级)在后。
+/// </summary>
+public static class ParseMessageCodes
+{
+    public const string JdOkAi = "Parse.JdOkAi";
+    public const string JdOk = "Parse.JdOk";
+    public const string JdPartial = "Parse.JdPartial";
+    public const string JdFailed = "Parse.JdFailed";
+    public const string ImageUnsupported = "Parse.ImageUnsupported";
+    public const string FetchBlocked = "Parse.FetchBlocked";
+    public const string InviteOk = "Parse.InviteOk";
+    public const string InvitePartial = "Parse.InvitePartial";
+    public const string InviteFailed = "Parse.InviteFailed";
+    public const string AiNoCredentials = "Parse.AiNoCredentials";
+    public const string AiFailed = "Parse.AiFailed";
+    public const string AiTimeout = "Parse.AiTimeout";
+
+    /// <summary>AI 降级说明的种类(内部枚举,出门即转码)。</summary>
+    public enum AiNoteKind { None, NoCredentials, Failed, Timeout }
+
+    public static string CodeFor(AiNoteKind kind) => kind switch
+    {
+        AiNoteKind.NoCredentials => AiNoCredentials,
+        AiNoteKind.Timeout => AiTimeout,
+        _ => AiFailed
+    };
+
+    /// <summary>JD 主状态码:Ok 时区分是否经 AI 补齐(与改前文案分支一致)。</summary>
+    public static IReadOnlyList<string> ComposeJd(string status, bool usedAi,
+        bool fetchBlocked, AiNoteKind aiNote)
+    {
+        var codes = new List<string>
+        {
+            status switch
+            {
+                ParseOutcome.Ok => usedAi ? JdOkAi : JdOk,
+                ParseOutcome.Partial => JdPartial,
+                _ => JdFailed
+            }
+        };
+        if (fetchBlocked) codes.Add(FetchBlocked);
+        if (aiNote != AiNoteKind.None) codes.Add(CodeFor(aiNote));
+        return codes;
+    }
+
+    /// <summary>Invite 主状态码:改前 Ok 句不带 AI 说明,仅 Partial/Failed 追加(口径不变)。</summary>
+    public static IReadOnlyList<string> ComposeInvite(string status, AiNoteKind aiNote)
+    {
+        var codes = new List<string>
+        {
+            status switch
+            {
+                ParseOutcome.Ok => InviteOk,
+                ParseOutcome.Partial => InvitePartial,
+                _ => InviteFailed
+            }
+        };
+        if (status != ParseOutcome.Ok && aiNote != AiNoteKind.None) codes.Add(CodeFor(aiNote));
+        return codes;
+    }
+}
+
 /// <summary>解析一段粘贴内容。UseAi=false 时只做确定性解析(未配 AI 凭据也能用)。</summary>
 public sealed record ParseJdCommand(string Raw, bool UseAi = true) : IRequest<Result<ParsedJdDto>>;
 
@@ -52,7 +117,7 @@ public sealed class ParseJdCommandHandler(
         if (kind == PasteKind.Image)
         {
             return Result.Success(new ParsedJdDto(
-                kind, ParseOutcome.Failed, "已识别为图片,但当前尚未接入图片识别,请改为粘贴 JD 文本,或直接手动填写。",
+                kind, ParseOutcome.Failed, new[] { ParseMessageCodes.ImageUnsupported },
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 new Dictionary<string, int>(), false, true));
         }
@@ -78,7 +143,7 @@ public sealed class ParseJdCommandHandler(
                 }
                 else
                 {
-                    fetchNote = "该网站禁止自动抓取,已只按链接解析 —— 建议直接粘贴 JD 文本,解析会准很多。";
+                    fetchNote = ParseMessageCodes.FetchBlocked;
                 }
             }
         }
@@ -94,7 +159,7 @@ public sealed class ParseJdCommandHandler(
                 draft = draft with { Link = urlMatch.Value };
         }
         var usedAi = false;
-        string? aiNote = null;
+        var aiNoteKind = ParseMessageCodes.AiNoteKind.None;
 
         if (request.UseAi)
         {
@@ -108,17 +173,17 @@ public sealed class ParseJdCommandHandler(
             }
             catch (AiGatewayException ex)
             {
-                aiNote = ex.IsConfigurationError
-                    ? "未配置 AI 凭据,已只按规则解析。"
-                    : "AI 精修未成功,已只按规则解析。";
+                aiNoteKind = ex.IsConfigurationError
+                    ? ParseMessageCodes.AiNoteKind.NoCredentials
+                    : ParseMessageCodes.AiNoteKind.Failed;
             }
             catch (OperationCanceledException)
             {
-                aiNote = "AI 精修超时,已只按规则解析。";
+                aiNoteKind = ParseMessageCodes.AiNoteKind.Timeout;
             }
             catch (Exception)
             {
-                aiNote = "AI 精修未成功,已只按规则解析。";
+                aiNoteKind = ParseMessageCodes.AiNoteKind.Failed;
             }
         }
 
@@ -127,19 +192,11 @@ public sealed class ParseJdCommandHandler(
                    : filled >= 1 ? ParseOutcome.Partial
                    : ParseOutcome.Failed;
 
-        var extraNote = (fetchNote is null ? "" : " " + fetchNote)
-                      + (aiNote is null ? "" : " " + aiNote);
-        var message = status switch
-        {
-            ParseOutcome.Ok => (usedAi ? "已解析,并经过 AI 补齐全字段。" : "已解析出主要字段。") + extraNote,
-            ParseOutcome.Partial => "只解析出部分字段,请补全后再保存。" + extraNote,
-            _ => "没能识别出岗位信息,请手动填写。" + extraNote
-        };
-
         return Result.Success(draft with
         {
             Status = status,
-            Message = message,
+            MessageCodes = ParseMessageCodes.ComposeJd(status, usedAi,
+                fetchBlocked: fetchNote is not null, aiNoteKind),
             UsedAi = usedAi,
             NeedsManualReview = status != ParseOutcome.Ok
         });
@@ -290,7 +347,7 @@ public sealed class ParseInviteCommandHandler(IAiGatewayClient ai)
 
         var draft = InvitePasteParser.Parse(raw);
         var usedAi = false;
-        string? aiNote = null;
+        var aiNoteKind = ParseMessageCodes.AiNoteKind.None;
 
         if (request.UseAi)
         {
@@ -303,24 +360,21 @@ public sealed class ParseInviteCommandHandler(IAiGatewayClient ai)
             }
             catch (AiGatewayException ex)
             {
-                aiNote = ex.IsConfigurationError ? "未配置 AI 凭据,已只按规则解析。" : "AI 精修未成功,已只按规则解析。";
+                aiNoteKind = ex.IsConfigurationError
+                    ? ParseMessageCodes.AiNoteKind.NoCredentials
+                    : ParseMessageCodes.AiNoteKind.Failed;
             }
-            catch (OperationCanceledException) { aiNote = "AI 精修超时,已只按规则解析。"; }
-            catch (Exception) { aiNote = "AI 精修未成功,已只按规则解析。"; }
+            catch (OperationCanceledException) { aiNoteKind = ParseMessageCodes.AiNoteKind.Timeout; }
+            catch (Exception) { aiNoteKind = ParseMessageCodes.AiNoteKind.Failed; }
         }
 
         var filled = InvitePasteParser.CountFilled(draft);
         var status = filled >= 3 ? ParseOutcome.Ok : filled >= 1 ? ParseOutcome.Partial : ParseOutcome.Failed;
-        var message = status switch
-        {
-            ParseOutcome.Ok => "已解析出面试安排,确认后一键关联。",
-            ParseOutcome.Partial => "只解析出部分信息,请补全后再关联。" + (aiNote ?? ""),
-            _ => "没能识别出面试安排,请手动填写。" + (aiNote ?? "")
-        };
-
         return Result.Success(draft with
         {
-            Status = status, Message = message, UsedAi = usedAi,
+            Status = status,
+            MessageCodes = ParseMessageCodes.ComposeInvite(status, aiNoteKind),
+            UsedAi = usedAi,
             NeedsManualReview = status != ParseOutcome.Ok
         });
     }

@@ -76,13 +76,13 @@
                       <span class="ac-item-main">
                         <span class="ac-item-title">{{ r.companyName }} · {{ r.role }}</span>
                         <span class="ac-item-sub">
-                          第 {{ r.order }} 轮 · {{ r.stage }}
+                          {{ roundLabel(r.order) }} · {{ stageText(r.stage) }}
                           @if (r.scheduledDate) { · {{ r.scheduledDate }} }
                           @if (r.scheduledTime) { {{ r.scheduledTime }} }
-                          @if (r.format) { · {{ r.format }} }
+                          @if (r.format) { · {{ formatText(r.format) }} }
                         </span>
                       </span>
-                      <a mat-icon-button [routerLink]="['/playbook', r.entryId]" [queryParams]="{tab: 'rounds'}" matTooltip="去准备">
+                      <a mat-icon-button [routerLink]="['/playbook', r.entryId]" [queryParams]="{tab: 'rounds'}" [matTooltip]="t('dash.goPrepareTip')">
                         <mat-icon>arrow_forward</mat-icon>
                       </a>
                     </li>
@@ -112,7 +112,7 @@
                         <!-- ★ #16:弱项一键刷题 -->
                         <button mat-button (click)="drillWeakness(r.dimension)"
                                 class="drill-btn">
-                          <mat-icon>fitness_center</mat-icon> 口语练习
+                          <mat-icon>fitness_center</mat-icon> {{ t('dash.drillSpeaking') }}
                         </button>
                       </div>
                       <mat-progress-bar [value]="r.current" [class]="scoreClass(r.current)"></mat-progress-bar>

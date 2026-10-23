@@ -7,6 +7,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { weekDayHeaders } from '../../core/i18n/localized-messages.helpers';
 import { UpcomingRound } from '../../core/models/api.models';
 
 interface CalDay {
@@ -87,7 +88,8 @@ export class PlaybookCalendarComponent implements OnInit {
     return `${d.getFullYear()} / ${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  readonly weekHeaders = ['一', '二', '三', '四', '五', '六', '日'];
+  /** A10(票35):星期头按界面语言取(zh 与改前逐字一致)。 */
+  readonly weekHeaders = computed(() => weekDayHeaders(this.i18n.lang()));
 
   ngOnInit(): void {
     this.reload();

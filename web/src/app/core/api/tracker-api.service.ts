@@ -8,7 +8,8 @@ import { AnswerTemplate, Communication, CommunicationType } from '../models/api.
 export interface ParsedJd {
   sourceKind: 'Url' | 'Text' | 'Image' | string;
   status: 'Ok' | 'Partial' | 'Failed' | string;
-  message: string;
+  /** FUN-07(票35):结构化码列表(原 message 中文句已移除),前端 parseMessageText 本地化。 */
+  messageCodes: string[];
   company: string | null;
   role: string | null;
   location: string | null;
@@ -34,7 +35,8 @@ export interface ParsedJd {
 /** 后端 ParsedInviteDto。 */
 export interface ParsedInvite {
   status: 'Ok' | 'Partial' | 'Failed' | string;
-  message: string;
+  /** FUN-07(票35):结构化码列表(原 message 中文句已移除),前端 parseMessageText 本地化。 */
+  messageCodes: string[];
   company: string | null;
   role: string | null;
   roundNo: number | null;

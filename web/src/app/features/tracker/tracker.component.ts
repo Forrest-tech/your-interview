@@ -23,6 +23,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { coverLetterMissingKey } from '../../core/i18n/localized-messages.helpers';
 import { SubnavService } from '../../layout/subnav.service';
 import { TrackerApi, ApplicationQuestionDto } from '../../core/api/tracker-api.service';
 import { TrackerPreferencesService } from '../../core/api/tracker-preferences.service';
@@ -176,9 +177,9 @@ function todayIso(): string {
 
       <!-- ★ #6:投递文档版本 -->
       <mat-form-field appearance="outline" class="full">
-        <mat-label>投递文档 (如 Forrest_Lin_Resume_Corpay.pdf)</mat-label>
+        <mat-label>{{ t('tracker.fSentDocs') }}</mat-label>
         <input matInput name="sentDocuments" [(ngModel)]="form.sentDocuments"
-               placeholder="记录本次投递用的简历/求职信文件名">
+               [placeholder]="t('tracker.fSentDocsPh')">
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
@@ -187,9 +188,9 @@ function todayIso(): string {
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>职位描述 (JD)</mat-label>
+        <mat-label>{{ t('tracker.fJdText') }}</mat-label>
         <textarea matInput name="jdText" rows="6" [(ngModel)]="form.jdText"
-                  placeholder="粘贴完整 JD,用于关键词提取和备战计划"></textarea>
+                  [placeholder]="t('tracker.fJdTextPh')"></textarea>
       </mat-form-field>
 
       <div class="qa-row">
@@ -598,7 +599,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     link.download = `your-interview-backup-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    this.snack.open('备份已下载', '关闭', { duration: 2500 });
+    this.snack.open(this.t('tracker.backupDownloaded'), this.t('common.close'), { duration: 2500 });
   }
 
   /** ★ 从备份恢复 localStorage 数据 (STAR/复盘/粘贴材料)。 */
@@ -629,9 +630,9 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
             count++;
           }
         }
-        this.snack.open(`已恢复 ${count} 项本地数据`, '关闭', { duration: 3000 });
+        this.snack.open(this.tn('tracker.backupRestored', count), this.t('common.close'), { duration: 3000 });
       } catch {
-        this.snack.open('备份文件解析失败', '关闭', { duration: 3000 });
+        this.snack.open(this.t('tracker.backupParseFailed'), this.t('common.close'), { duration: 3000 });
       }
       input.value = '';
     };
@@ -1918,10 +1919,10 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 
         <!-- 缺 JD 黄色提示条 -->
         @if (clReadiness(); as rd) {
-          @if (rd.missingHint) {
+          @if (missingText(rd); as missingText) {
             <div class="warn-banner">
               <mat-icon>warning</mat-icon>
-              <span>{{ rd.missingHint }}</span>
+              <span>{{ missingText }}</span>
             </div>
           }
           @if (cl()?.isStale) {
@@ -1948,7 +1949,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
         } @else {
           <div class="cl-actions">
             <button mat-flat-button color="primary" class="gen-btn" (click)="generateCoverLetter()"
-              [disabled]="!!clReadiness()?.missingHint">
+              [disabled]="!!clReadiness()?.missingCode">
               <mat-icon>auto_awesome</mat-icon>
               {{ (cl()?.content ? t('tracker.dClRegen') : t('tracker.dClGenerate')) }}
             </button>
@@ -2740,6 +2741,12 @@ export class ApplicationDetailDialogComponent {
 
   /** 生成前的输入体检结果 —— 缺简历时按钮直接禁用,不让用户白等。 */
   readonly clReadiness = signal<CoverLetterReadinessDto | null>(null);
+
+  /** FUN-07(票35):readiness 缺失码 → 当前语言提示(未知码不显示横幅)。 */
+  missingText(rd: CoverLetterReadinessDto): string | null {
+    const key = coverLetterMissingKey(rd.missingCode);
+    return key ? this.t(key) : null;
+  }
 
   /** 生成中。LLM 要几十秒,必须有明确态,否则用户会重复点。 */
   readonly clGenerating = signal(false);
@@ -3577,8 +3584,8 @@ export interface CoverLetterReadinessDto {
   hasCompanyProfile: boolean;
   companyName: string;
   role: string;
-  /** 有值时说明输入不全(简历缺失是硬阻断,JD/公司情报是建议补)。 */
-  missingHint: string | null;
+  /** FUN-07(票35):后端结构化缺失码(MissingResume/MissingJd/MissingCompanyProfile),有值时说明输入不全。 */
+  missingCode: string | null;
 }
 
 

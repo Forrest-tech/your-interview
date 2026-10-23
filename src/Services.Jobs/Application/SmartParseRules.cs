@@ -36,7 +36,7 @@ public static class PasteKind
 }
 
 public sealed record ParsedJdDto(
-    string SourceKind, string Status, string Message,
+    string SourceKind, string Status, IReadOnlyList<string> MessageCodes,
     string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? CompanyDescription, string? Requirements, string? Benefits,
@@ -47,7 +47,7 @@ public sealed record ParsedJdDto(
 // ============================ 邀请邮件解析(需求 6.2.3) ============================
 
 public sealed record ParsedInviteDto(
-    string Status, string Message,
+    string Status, IReadOnlyList<string> MessageCodes,
     string? Company, string? Role, int? RoundNo, string? Stage,
     DateTimeOffset? ScheduledAt, string? Location, string? Format, string? Interviewer,
     string? RawLink, Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview, string? LogoUrl = null);
@@ -359,7 +359,7 @@ public static class JdPasteParser
         return new ParsedJdDto(
             kind,
             filled >= 4 ? ParseOutcome.Ok : filled >= 1 ? ParseOutcome.Partial : ParseOutcome.Failed,
-            string.Empty,
+            Array.Empty<string>(),
             company, role, location, salary, workMode, jobType, jdSummary, keywords, priority,
             link, jdText, companyDescription, requirements, benefits,
             workAuthorization,
@@ -1274,7 +1274,7 @@ public static class InvitePasteParser
         var role = Labeled(text, "职位", "岗位", "Role", "Position");
 
         return new ParsedInviteDto(
-            ParseOutcome.Partial, string.Empty,
+            ParseOutcome.Partial, Array.Empty<string>(),
             company, role, roundNo, stage, at, location, format, interviewer, link,
             conf, false, false);
     }

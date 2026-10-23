@@ -10,6 +10,10 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ApiClient } from '../../core/api/api-client';
 import { ActionCenter, Application, ApplicationStatus, Dashboard, UpcomingRound } from '../../core/models/api.models';
 import { weakestRadarPoints } from '../../core/models/radar.helpers';
+import {
+  dimensionLabel, localizeInsight, roundFormatLabel, stageLabel
+} from '../../core/i18n/localized-messages.helpers';
+import { formatLabel, makeV2T } from '../playbook/redesign/v2.helpers';
 import { AuthService } from '../../core/auth/auth.service';
 
 /** 行动中心卡片。 */
@@ -51,8 +55,12 @@ export class DashboardComponent implements OnInit {
   /** REQ-08:无 scored 数据时为空——雷达面板走 dash.noAnalysis 空态,行动中心不出弱项卡。 */
   readonly weakest = computed(() => weakestRadarPoints(this.dashboard()?.radar ?? []));
 
-  readonly insight = computed(() => this.dashboard()?.insight?.headline ?? '');
-  readonly suggestedAction = computed(() => this.dashboard()?.insight?.suggestedAction ?? '');
+  /** FUN-07(票35):insight 后端只回 Code+Params,这里本地化为当前语言文案。 */
+  private readonly insightText = computed(() =>
+    localizeInsight(this.dashboard()?.insight, this.i18n.lang(),
+      (k) => this.i18n.t(k), (k, p) => this.i18n.tf(k, p)));
+  readonly insight = computed(() => this.insightText()?.headline ?? '');
+  readonly suggestedAction = computed(() => this.insightText()?.action ?? '');
 
   readonly total = computed(() => this.actionCenter()?.total ?? 0);
   readonly activeCount = computed(() => this.actionCenter()?.activeCount ?? 0);
@@ -125,11 +133,27 @@ export class DashboardComponent implements OnInit {
     return 'bad';
   }
 
+  /** B3 口径:缺键时仅 zh 回退 nameZh,EN/FR 回退 dimension 原值(共用纯函数)。 */
   dimLabel(r: { dimension: string; nameZh?: string }): string {
-    const key = 'dim.' + r.dimension;
-    const translated = this.i18n.t(key);
-    if (translated !== key) return translated;
-    return r.nameZh ?? r.dimension;
+    return dimensionLabel(r.dimension, r.nameZh, this.i18n.lang(), (k) => this.i18n.t(k));
+  }
+
+  /** Upcoming 轮次号包裹串(A2):第 {n} 轮 / Round {n} / Tour {n}。 */
+  roundLabel(order: number): string {
+    return this.i18n.tn('dash.roundN', order);
+  }
+
+  /** Upcoming stage 存储值 → 本地化标签(已知规范值映射,未知原样)。 */
+  stageText(stage?: string): string {
+    return stageLabel(stage, (k) => this.i18n.t(k));
+  }
+
+  /** Upcoming format 存储值 → 本地化标签(中文规范值走 v2 formatLabel,英文码走 fm* 键)。 */
+  formatText(format?: string): string {
+    if (!format) return '';
+    const en = roundFormatLabel(format, (k) => this.i18n.t(k));
+    if (en !== format) return en;
+    return formatLabel(makeV2T(this.i18n), format);
   }
 
   statusLabel(s: string): string {

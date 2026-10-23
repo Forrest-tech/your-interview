@@ -18,7 +18,7 @@
   } @else {
     <mat-card class="cal-grid">
       <div class="cal-week-head">
-        @for (h of weekHeaders; track h) {
+        @for (h of weekHeaders(); track h) {
           <div class="cal-dow">{{ h }}</div>
         }
       </div>

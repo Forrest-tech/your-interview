@@ -17,12 +17,12 @@
       <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.newApp')">
         <mat-icon>add</mat-icon>
       </button>
-      <button mat-icon-button [matMenuTriggerFor]="moreMenu" matTooltip="更多操作">
+      <button mat-icon-button [matMenuTriggerFor]="moreMenu" [matTooltip]="t('tracker.moreActions')">
         <mat-icon>more_vert</mat-icon>
       </button>
       <button mat-icon-button (click)="favOnly.set(!favOnly())"
               [color]="favOnly() ? 'warn' : undefined"
-              matTooltip="只看收藏">
+              [matTooltip]="t('tracker.favOnly')">
         <mat-icon>{{ favOnly() ? 'favorite' : 'favorite_border' }}</mat-icon>
       </button>
       <mat-menu #moreMenu="matMenu">
@@ -33,10 +33,10 @@
           <mat-icon>download</mat-icon>{{ t('tracker.exportCsv') }}
         </button>
         <button mat-menu-item (click)="exportBackup()">
-          <mat-icon>backup</mat-icon>备份
+          <mat-icon>backup</mat-icon>{{ t('tracker.backup') }}
         </button>
         <button mat-menu-item (click)="backupFile.click()">
-          <mat-icon>restore</mat-icon>恢复备份
+          <mat-icon>restore</mat-icon>{{ t('tracker.restoreBackup') }}
         </button>
         <input #backupFile type="file" hidden accept=".json" (change)="importBackup($event)">
         <button mat-menu-item (click)="csvFile.click()">
@@ -55,18 +55,18 @@
     <mat-card class="ghosting-banner">
       <mat-icon>warning</mat-icon>
       <div>
-        <b>{{ ghostingApps().length }} 个申请超过 21 天无更新</b>
+        <b>{{ tn('tracker.ghostingTitle', ghostingApps().length) }}</b>
         <span class="ghosting-list">
           @for (a of ghostingApps().slice(0, 5); track a.id) {
             <span class="ghosting-item">{{ a.companyName }} · {{ a.role }}</span>
           }
           @if (ghostingApps().length > 5) {
-            <span>等 {{ ghostingApps().length - 5 }} 个…</span>
+            <span>{{ tn('tracker.ghostingMore', ghostingApps().length - 5) }}</span>
           }
         </span>
       </div>
-      <button mat-button (click)="ghostingApps.set([])">忽略</button>
-      <button mat-button (click)="dismissGhostingForever()">不再提示</button>
+      <button mat-button (click)="ghostingApps.set([])">{{ t('tracker.ghostingIgnore') }}</button>
+      <button mat-button (click)="dismissGhostingForever()">{{ t('tracker.ghostingNever') }}</button>
     </mat-card>
   }
 

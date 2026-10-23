@@ -16,6 +16,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AbilityTrend, Dashboard } from '../../core/models/api.models';
 import { hasScoredRadarData, weakestRadarPoints } from '../../core/models/radar.helpers';
+import { dimensionLabel, localizeInsight } from '../../core/i18n/localized-messages.helpers';
 
 /** 漏斗阶段的颜色档:越靠后越"贵",用同一色系由浅到深表示推进。 */
 const FUNNEL_COLORS = ['#9fa8da', '#7986cb', '#5c6bc0', '#3f51b5', '#303f9f'];
@@ -65,8 +66,20 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private resizeObserver: ResizeObserver | null = null;
 
-  // 后端 insight 是对象 {headline, detail, suggestedAction, severity}
-  readonly insight = computed(() => this.dashboard()?.insight ?? null);
+  // FUN-07(票35):后端 insight 只回 {code, params, severity},文案在此本地化
+  readonly insightRaw = computed(() => this.dashboard()?.insight ?? null);
+  readonly insight = computed(() => {
+    const raw = this.insightRaw();
+    if (!raw) return null;
+    const text = localizeInsight(raw, this.i18n.lang(),
+      (k) => this.i18n.t(k), (k, p) => this.i18n.tf(k, p));
+    return text ? { ...text, severity: raw.severity } : null;
+  });
+
+  /** B3 口径维度名(与 Dashboard 共用纯函数):缺键仅 zh 回退 nameZh。 */
+  dimLabelOf(dimension: string, nameZh?: string): string {
+    return dimensionLabel(dimension, nameZh, this.i18n.lang(), (k) => this.i18n.t(k));
+  }
 
   readonly radarPoints = computed(() => this.dashboard()?.radar ?? []);
 
@@ -125,6 +138,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
       return {
         dimension: ser.dimension,
         nameZh: ser.nameZh,
+        name: this.dimLabelOf(ser.dimension, ser.nameZh),
         delta: Math.round((last - first) * 10) / 10,
         from: first,
         to: last
@@ -203,7 +217,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private buildOption(points: Dashboard['radar']): echarts.EChartsOption {
-    const dims = points.map((p) => p.nameZh || p.dimension);
+    const dims = points.map((p) => this.dimLabelOf(p.dimension, p.nameZh));
     const curName = this.t('an.curLevel');
     const bestName = this.t('an.bestLevel');
 

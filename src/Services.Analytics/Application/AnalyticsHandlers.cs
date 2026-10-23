@@ -48,8 +48,24 @@ public sealed record ActivitySummaryDto(int PracticeDays, int TotalSnapshots,
 /// 仪表盘最容易犯的错是把 20 个数字扔给用户让他自己找问题;
 /// 这里强制给出一个判断,让用户打开就知道下一步做什么。
 /// </summary>
-public sealed record InsightDto(string Headline, string Detail, string? SuggestedAction,
+/// <summary>
+/// FUN-07(票35):洞察不再直出中文句 —— 只回结构化 Code + Params(维度键/数值/日期均为
+/// 语言无关值),三语文案由前端按 Code 查 i18n 字典本地化(insight.* 键)。
+/// Params 中维度以 dimension 键(如 pronunciation)传递,前端再映射为本地化维度名。
+/// </summary>
+public sealed record InsightDto(string Code, IReadOnlyDictionary<string, string> Params,
     string Severity);
+
+/// <summary>InsightDto.Code 取值(与前端 insight.* i18n 键一一对应)。</summary>
+public static class InsightCodes
+{
+    public const string NoData = "NoData";
+    public const string Regressing = "Regressing";
+    public const string Weakest = "Weakest";
+    public const string FunnelLow = "FunnelLow";
+    public const string Inactive = "Inactive";
+    public const string Stable = "Stable";
+}
 
 // =====================================================================================
 //  查询
@@ -144,83 +160,77 @@ public sealed class GetDashboardQueryHandler(AnalyticsDbContext db)
             activity, BuildInsight(radar, pipelineDtos, mastery, activity)));
     }
 
-    /// <summary>
-    /// 生成一条"最该关注什么"的判断。
-    ///
-    /// 优先级(从高到低):① 有维度在退步 → 立刻说 ② 有维度长期偏低 → 指出最该练的
-    /// ③ 漏斗转化异常 → 提醒投递质量 ④ 最近没练 → 提醒动手 ⑤ 都正常 → 给正反馈。
-    /// </summary>
+    /// <summary>洞察生成见 <see cref="InsightFactory"/>(纯逻辑,单测直接覆盖)。</summary>
     private static InsightDto BuildInsight(IReadOnlyList<RadarAxisDto> radar,
         IReadOnlyList<PipelineTrendDto> pipeline, IReadOnlyList<TopicMasteryDto> mastery,
         ActivitySummaryDto activity)
+        => InsightFactory.Build(radar, pipeline, activity);
+}
+
+/// <summary>
+/// 生成一条"最该关注什么"的判断 —— FUN-07(票35)起只产结构化 Code+Params,不产文案。
+///
+/// 优先级(从高到低,与改前逐字一致):① 有维度在退步 → 立刻说 ② 有维度长期偏低 → 指出最该练的
+/// ③ 漏斗转化异常 → 提醒投递质量 ④ 最近没练 → 提醒动手 ⑤ 都正常 → 给正反馈。
+/// 纯函数:入参为已算好的 DTO,无 DB/时钟依赖,单测直接覆盖(含 boundary)。
+/// </summary>
+public static class InsightFactory
+{
+    private static IReadOnlyDictionary<string, string> P(params (string K, string V)[] items)
+        => items.ToDictionary(x => x.K, x => x.V);
+
+    public static InsightDto Build(IReadOnlyList<RadarAxisDto> radar,
+        IReadOnlyList<PipelineTrendDto> pipeline, ActivitySummaryDto activity)
     {
         var scored = radar.Where(x => x.Current > 0).ToList();
 
         if (scored.Count == 0)
-        {
-            return new InsightDto(
-                "还没有练习数据",
-                "完成一次 AI 实战模拟或导入一场真实面试的录音,系统就能给出六维基线分。",
-                "从「AI 实战模拟」新建一次练习开始",
-                "info");
-        }
+            return new InsightDto(InsightCodes.NoData, P(), "info");
 
         // ① 退步优先 —— 退步比"一直低"更值得立刻干预
         var regressing = scored.Where(x => x.ChangeFromPrevious <= -8)
             .OrderBy(x => x.ChangeFromPrevious).FirstOrDefault();
         if (regressing is not null)
         {
-            return new InsightDto(
-                $"{regressing.NameZh} 比上次掉了 {Math.Abs(regressing.ChangeFromPrevious)} 分",
-                $"从 {regressing.Previous} 掉到 {regressing.Current}。单次波动可能是题目难度差异," +
-                "但如果连续两次都在掉,说明这一维需要专门练。",
-                $"针对「{regressing.NameZh}」做一次专项模拟",
-                "warning");
+            return new InsightDto(InsightCodes.Regressing, P(
+                ("dimension", regressing.Dimension),
+                ("drop", Math.Abs(regressing.ChangeFromPrevious).ToString()),
+                ("previous", (regressing.Previous ?? 0).ToString()),
+                ("current", regressing.Current.ToString())), "warning");
         }
 
         // ② 最弱的一维(加权后影响力最大)
         var weakest = scored.OrderBy(x => x.Current).First();
         if (weakest.Current < 65)
         {
-            return new InsightDto(
-                $"{weakest.NameZh} 是最该补的一维(当前 {weakest.Current} 分)",
-                "按平台的加权算法,这一维对总分的影响排在前面 —— " +
-                "把它提上去比在已经不错的维度上继续打磨更划算。",
-                $"针对「{weakest.NameZh}」做一次专项模拟",
-                "warning");
+            return new InsightDto(InsightCodes.Weakest, P(
+                ("dimension", weakest.Dimension),
+                ("current", weakest.Current.ToString())), "warning");
         }
 
         // ③ 漏斗转化异常
         var latestPipe = pipeline.LastOrDefault();
         if (latestPipe is { Applied: >= 10, InterviewRate: < 10 })
         {
-            return new InsightDto(
-                $"投递 {latestPipe.Applied} 个只拿到 {latestPipe.Interviewing} 个面试,转化偏低",
-                "这个比例通常不是运气问题 —— 多半是简历与 JD 的关键词匹配度不够," +
-                "或者投递方向与经历偏差较大。",
-                "用「Tracker」按状态复盘最近 10 个投递,检查简历是否按岗微调",
-                "warning");
+            return new InsightDto(InsightCodes.FunnelLow, P(
+                ("applied", latestPipe.Applied.ToString()),
+                ("interviewing", latestPipe.Interviewing.ToString())), "warning");
         }
 
         // ④ 最近没练
         if (activity.SessionsThisWeek == 0 && activity.PracticeDays > 0)
         {
-            return new InsightDto(
-                "本周还没有练习记录",
-                $"上次活动是 {activity.LastActivityDate}。间隔重复的价值在于频率 —— " +
-                "一周不练,之前的肌肉记忆会明显退化。",
-                "做一次 5 题的快速模拟保持手感",
-                "info");
+            return new InsightDto(InsightCodes.Inactive, P(
+                ("lastActivityDate", activity.LastActivityDate ?? "")), "info");
         }
 
         // ⑤ 都正常
         var strongest = scored.OrderByDescending(x => x.Current).First();
-        return new InsightDto(
-            $"状态稳定,最强项是{strongest.NameZh}({strongest.Current} 分)",
-            $"最低的一维是 {weakest.NameZh}({weakest.Current} 分),已经高于及格线。" +
-            "现在的重点应该是把练习频率保持住,而不是突击。",
-            "保持每周 3 次、每次 5 题的节奏",
-            "success");
+        return new InsightDto(InsightCodes.Stable, P(
+            ("strongestDimension", strongest.Dimension),
+            ("strongestCurrent", strongest.Current.ToString()),
+            ("weakestDimension", weakest.Dimension),
+            ("weakestCurrent", weakest.Current.ToString())), "success");
     }
 }
 

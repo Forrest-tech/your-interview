@@ -1,6 +1,5 @@
 import { ChangeDetectorRef, Component, HostListener, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { Howler } from 'howler';
-import { firstValueFrom } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -24,30 +23,9 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
 import { PracticeMaterialTree } from './practice-material-tree';
 import { PracticeTtsPlayer } from './practice-tts-player';
+import { PracticeGradingSession } from './practice-grading-session';
 import type { MarkColor } from './practice-material-tree';
 
-
-/**
- * 从 localStorage 恢复字号缩放百分比。
- * 在模块级声明(不是类方法)—— signal() 初始化时需要立刻调用,
- * 此时 this 还不可用。
- * 返回值一定落在 80–150 区间;读失败/值非法都回落 100。
- */
-/** "Azure 已配置"标记位的 localStorage 键(与设置页共用)。 */
-export const AZURE_READY_KEY = 'azure_speech_configured';
-
-/**
- * 读"Azure 已配置"标记位。
- * ⚠️ 这不是密钥 —— 密钥永远不进浏览器。此标记只表示用户是否去设置页
- *    声明过已配置,用于前端提前引导。默认 false(未配置)。
- */
-function readAzureReadyFlag(): boolean {
-  try {
-    return localStorage.getItem(AZURE_READY_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
 
 function readZoomFromStorage(): number {
   // ⚠️ 2026-09-16:MAX 必须与类里的 ZOOM_MAX 同步(150 → 400),
@@ -62,20 +40,6 @@ function readZoomFromStorage(): number {
   } catch {
     return DEFAULT;
   }
-}
-
-/** AI 评分配置 —— 用户可在页面内自己调。 */
-interface GradingConfig {
-  /** 各维度权重(0-100),用于总分加权 */
-  weights: { key: string; label: string; weight: number }[];
-  /** 严格度 1-5,影响打分宽严 */
-  strictness: number;
-  /** 是否检查语法 */
-  checkGrammar: boolean;
-  /** 是否给改进建议 */
-  advice: boolean;
-  /** 评分语言 */
-  lang: string;
 }
 
 /**
@@ -103,27 +67,49 @@ interface GradingConfig {
 })
 export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly tree = new PracticeMaterialTree(this);
-  readonly tts = new PracticeTtsPlayer(this);  readonly nodes = this.tree.nodes;
+  readonly tts = new PracticeTtsPlayer(this);
+  readonly grading = new PracticeGradingSession(this);  readonly recError = this.grading.recError;
+  readonly myRecordings = this.grading.myRecordings;
+  readonly nodes = this.tree.nodes;
   readonly fromTechNodes = this.tree.fromTechNodes;
   readonly categories = this.tree.categories;
   readonly categoryFilter = this.tree.categoryFilter;
   readonly isFromTechSelected = this.tree.isFromTechSelected;
   readonly treeOpen = this.tree.treeOpen;
   readonly treeWidth = this.tree.treeWidth;
+  readonly azureReady = this.grading.azureReady;
+  readonly canSubmitTake = this.grading.canSubmitTake;
+  readonly uploadingPending = this.grading.uploadingPending;
   readonly speaking = this.tts.speaking;
   readonly rate = this.tts.rate;
   readonly rates = this.tts.rates;
   readonly ttsNote = this.tts.ttsNote;
   readonly ttsBilledChars = this.tts.ttsBilledChars;
   readonly ttsFullChars = this.tts.ttsFullChars;
+  readonly scoreCost = this.grading.scoreCost;
+  readonly scoreSecondsText = this.grading.scoreSecondsText;
   readonly langMismatch = this.tts.langMismatch;
   readonly mismatchLangLabel = this.tts.mismatchLangLabel;
   readonly treeDirty = this.tree.treeDirty;
   readonly treeEditing = this.tree.treeEditing;
   readonly treeLoading = this.tree.treeLoading;
   readonly treeLoadFailed = this.tree.treeLoadFailed;
+  readonly pickedWord = this.grading.pickedWord;
   readonly markColorOptions = this.tree.markColorOptions;
   readonly markColor = this.tree.markColor;
+  readonly fillerStats = this.grading.fillerStats;
+  readonly speechPace = this.grading.speechPace;
+  readonly oneFix = this.grading.oneFix;
+  readonly followUpQuestion = this.grading.followUpQuestion;
+  readonly followUpLoading = this.grading.followUpLoading;
+  readonly previewingPending = this.grading.previewingPending;
+  readonly activeTakeId = this.grading.activeTakeId;
+  readonly activeTake = this.grading.activeTake;
+  readonly activePlaying = this.grading.activePlaying;
+  readonly errorCounts = this.grading.errorCounts;
+  readonly reportOpen = this.grading.reportOpen;
+  readonly showWaveform = this.grading.showWaveform;
+  readonly waveBars = this.grading.waveBars;
 
   readonly i18n = inject(I18nService);
   readonly recorder = inject(RecorderService);
@@ -132,33 +118,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   // ★ 2026-09-20(Forrest):Howler 的事件回调在 Angular 之外触发,
   //   必须手动 detectChanges 才能让模板看到最新的位置/状态。
   readonly cdr = inject(ChangeDetectorRef);
-
-  /** 录音失败提示(麦克风权限等)。 */
-  readonly recError = signal<string | null>(null);
-
-  /** 当前素材的录音列表。 */
-  readonly myRecordings = computed(() =>
-    this.recorder.forMaterial(this.selectedId())
-  );
-
-  /**
-   * ★ 第四十九轮(Forrest 报"新录音显示 Take #1"):Take 序号按时间先后。
-   * 列表显示顺序是"最新在上"(后端 CreatedAt DESC),旧实现直接用显示序号
-   * ($index+1)当 Take 号 → 每录一条新录音,旧的号全被顶下去。
-   * 现在:按 createdAt 升序编号,最早 = #1,新录音永远是最大号;
-   * 显示顺序保持不变,只有号码与时间轴对齐。
-   */
-  readonly takeNumbers = computed(() => {
-    const sorted = [...this.myRecordings()].sort((a, b) => a.createdAt - b.createdAt);
-    const map = new Map<string, number>();
-    sorted.forEach((r, i) => map.set(r.id, i + 1));
-    return map;
-  });
-
-  /** 某条录音的 Take 序号(时间先后,最早=1)。 */
-  takeNo(id: string): number {
-    return this.takeNumbers().get(id) ?? 1;
-  }
   readonly selectedId = signal<string | null>(null);
 
   /** 编辑态正文(仅编辑模式下可改)。 */
@@ -359,83 +318,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.router.navigateByUrl('/account/ai-setting');
   }
 
-  // ============================================================
-  // Azure Speech 凭证校验 —— AI 评分前置门禁(任务书第六节)
-  // ============================================================
-  //
-  // ⚠️ 诚实边界:前端**拿不到也存不到** Azure Key。
-  //    Key 只存在于服务端 appsettings.Development.json(gitignored),
-  //    浏览器永远不知道真实密钥。所以这里的 azureReady() 只能反映
-  //    "用户是否已声明配置过" —— 靠一个本地标记位,不是密钥本身。
-  //
-  //    真正的密钥校验发生在**服务端**(PronunciationAssessor 调 Azure 失败
-  //    会返回 ErrorType/错误信息)。所以本门禁的作用是"早发现早引导",
-  //    而不是伪造一个前端安全边界。
-  // ============================================================
-
-  /**
-   * Azure 是否就绪。
-   *
-   * ★ 2026-09-20(Forrest BUG1 真因修复):以**服务端**为准。
-   *
-   * 旧实现只读 localStorage['azure_speech_configured'] —— 该标记只有用户
-   * 手动去 AI 设置页保存过才会写入。本机从未写过,于是 azureReady 恒为 false,
-   * speak() 第一行就被门禁挡住 → 点播放毫无反应、时间永远 --:-- / --:--
-   * (这正是 Forrest 报的"默认时间是空的")。
-   *
-   * 现在:localStorage 标记为 true 时立即就绪(快速路径);
-   *       否则向 GET /speech/settings 查 hasKey,以服务端为准。
-   */
-  readonly azureReady = signal(readAzureReadyFlag());
-
-  /**
-   * ★ 2026-09-20(Forrest BUG1 修复):向服务端核对 Azure 是否真的配好。
-   *   服务端持 key(不进浏览器),GET speech/settings 只回 hasKey 布尔值。
-   *   本地标记已是 true 就不必再问;否则以服务端回答为准。
-   */
-  private syncAzureReadyFromServer(): void {
-    if (this.azureReady()) return;   // 本地已声明配置过 → 不必等网络
-    this.practiceApi.getSpeechSettings().subscribe({
-      next: (s) => {
-        if (s?.hasKey) {
-          this.azureReady.set(true);
-          try { localStorage.setItem(AZURE_READY_KEY, '1'); } catch { /* 隐私模式忽略 */ }
-          this.cdr.detectChanges();
-          // ★ 2026-09-20(Forrest):若首次进入时该状态尚未就绪、导致
-          //   本地音频时长没装载,这里补跑一次,保证与响应时序无关。
-          this.tts.retryCachedDuration();
-        }
-      },
-      // 服务端不可用时不误判为"未配置",保持原值,让用户点播放时拿到真实错误
-      error: () => { /* noop */ }
-    });
-  }
-
-  /**
-   * 待提交的录音是否可以提交。
-   * 2026-09-16(Forrest 本轮):提交按钮的行为定义 ——
-   *   · 没有录音        → 置灰
-   *   · 录好了(有待提交) → 激活
-   * 这是界面上的硬门禁,不让用户点到注定失败的按钮。
-   */
-  readonly canSubmitTake = computed(() => {
-    const pt = this.recorder.pendingTake();
-    if (!pt) return false;
-    // 素材不是 GUID(本地种子)→ 后端存不了,先如实置灰(保存素材树后再来)
-    return RecorderService.isGuid(pt.materialId);
-  });
-
-  /**
-   * 待提交录音是否正在上传。
-   * 为什么需要这个:提交 → 列表落一条本地记录 → 上传异步完成。
-   * 上传未回来之前,那条录音还不能评分(否则 404)。
-   * 界面用这个标志告诉用户"还在上传",而不是让人对着一颗灰按钮发愣。
-   */
-  readonly uploadingPending = computed(() => {
-    const list = this.recorder.recordings();
-    return list.some((r) => !r.uploaded);
-  });
-
   // ⚠️ 2026-09-16(Forrest 第 4 条):底部"提交 AI 评分"按钮已删除 ——
   //    它与录音区右侧的 run ai scoring 胶囊是同一动作,重复只会让人困惑。
   //    onSubmitScoringClick() 随之移除(仅有的调用点就是那个被删的按钮)。
@@ -486,9 +368,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (target) this.selectFile(target);
   }
 
-  /** 当前素材下的录音序号(第几次录音)。 */
-  readonly recOrder = computed(() => this.myRecordings().length);
-
   /**
    * 当前练习/朗读语言(BCP-47,如 en-US / fr-FR)。
    *
@@ -521,44 +400,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   ];
 
   /**
-   * ★ 第三十三轮(Forrest):AI 评分的**额度消耗**标记。
-   *
-   * 与示范朗读同理,必须告诉用户这次到底花没花 Azure 额度:
-   *   · 'fresh' = 本次真调了 Azure 发音评估 → 消耗了额度
-   *   · 'cache' = 该录音已有入库评分,直接读库 → 未消耗额度
-   *   · ''      = 无提示
-   *
-   * ★ 第五十四轮:grade() 允许重复评分后,评分入口恒为 'fresh';
-   *   'cache' 仅保留给"列表首次加载带回历史评分"的展示路径。
-   */
-  readonly scoreCost = signal<'' | 'fresh' | 'cache'>('');
-
-  /**
-   * ★ 第三十四轮(Forrest):本次 AI 评分的精确计费量。
-   *
-   * ⚠️ 评分这边同样不提 token —— Azure 发音评估按**音频时长**计费。
-   *   billedSeconds 由服务端从 WAV 头精确算出(字节率 × data 长度),
-   *   不是估算也不是从 Azure 请求返回物里猜的。
-   *   null = 服务端/旧后端未提供 → 不显示数字。
-   */
-  readonly scoreBilledSeconds = signal<number | null>(null);
-
-  /** 评分时送评的音频字节数(核对用)。 */
-  readonly scoreBilledBytes = signal<number | null>(null);
-
-  /**
-   * ★ 第三十四轮:把评分音频秒数格式化成界面文案用的字符串。
-   *
-   * 拿不到就返回 '—'(与四项分数的 "拿不到显示 —" 口径一致),
-   * **绝不编一个数**。保留 1 位小数(音频长度到 0.1 秒已足够精确)。
-   */
-  readonly scoreSecondsText = computed(() => {
-    const s = this.scoreBilledSeconds();
-    if (s === null || !Number.isFinite(s)) return '—';
-    return s.toFixed(1);
-  });
-
-  /**
    * ★ 2026-09-24:引擎/失败提示不再渲染在播放胶囊里(Forrest 指令),
    *   改为音频区下方的行内警示条(.tts-alert),ttsNote 仅作数据源。
    *   原 showTtsNote 门禁随之删除 —— 警示条永远如实显示 ttsNote。
@@ -586,7 +427,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** Knowledge API(Tech Stack 实时视图用) */
   readonly knowledgeApi = inject(KnowledgeApiService);
   /** AI complete(追问生成) */
-  private readonly aiApi = inject(AiApiService);
+  readonly aiApi = inject(AiApiService);
 
   /** 统一确认弹窗(保存/删除都要先过这一关,Forrest 2026-09-20)。 */
   readonly dialog = inject(MatDialog);
@@ -632,183 +473,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ---------- 发音音标 ----------
-  /**
-   * 取单词音标。
-   * ⚠️ 诚实约束：Azure PA 的返回里**没有音标**（只有 AccuracyScore/ErrorType）。
-   * 本地没有音标词典，所以无法给出真实音标 —— 返回 null，
-   * 由界面显示"暂无音标"。**绝不编造 /ˈwɜːd/ 这种看起来像真的假音标。**
-   * 后续若接发音词典 API（如 Free Dictionary API）再填这里。
-   */
-  phonetic(_word: string): string | null {
-    return null;
-  }
-
-  /** 当前在逐词区点开的单词下标（null = 未点开）。 */
-  readonly pickedWord = signal<number | null>(null);
-
-  /** 点词展开音标与得分；再点同一个则收起。 */
-  pickWord(i: number): void {
-    this.pickedWord.set(this.pickedWord() === i ? null : i);
-  }
-
-  /** ★ #1:填充词检测(Yoodli 模式)。 */
-  private static readonly FILLERS = new Set([
-    'um', 'uh', 'uhm', 'umm', 'hmm', 'hm',
-    'like', 'you know', 'i mean', 'basically', 'actually', 'literally',
-    'stuff', 'things', 'well', 'so', 'right',
-    '那个', '就是', '然后', '嗯', '啊', '这个', '其实'
-  ]);
-
-  isFiller(word: string): boolean {
-    return AiPracticeComponent.FILLERS.has(word.toLowerCase().trim());
-  }
-
-  /** ★ #1:当前评分的填充词统计。 */
-  readonly fillerStats = computed(() => {
-    const sc = this.activeTake()?.score;
-    if (!sc?.words?.length) return null;
-    const fillers = sc.words.filter(w => this.isFiller(w.word));
-    const minutes = (sc.billedSeconds ?? 60) / 60;
-    return {
-      count: fillers.length,
-      perMinute: minutes > 0 ? +(fillers.length / minutes).toFixed(1) : 0,
-      indices: new Set(sc.words.map((w, i) => this.isFiller(w.word) ? i : -1).filter(i => i >= 0))
-    };
-  });
-
-  /** ★ #15:语速分析 (WPM + 评价)。 */
-  readonly speechPace = computed(() => {
-    const sc = this.activeTake()?.score;
-    if (!sc?.words?.length) return null;
-    const wordCount = sc.words.length;
-    const minutes = (sc.billedSeconds ?? 60) / 60;
-    if (minutes <= 0) return null;
-    const wpm = Math.round(wordCount / minutes);
-    let verdict: string;
-    let level: 'slow' | 'good' | 'fast';
-    if (wpm < 110) { verdict = '偏慢'; level = 'slow'; }
-    else if (wpm <= 160) { verdict = '适中'; level = 'good'; }
-    else { verdict = '偏快'; level = 'fast'; }
-    return { wpm, verdict, level, wordCount };
-  });
-
-  /** ★ #1:点击填充词 → 从该时间戳回放音频。 */
-  replayAt(offsetMs: number): void {
-    const rec = this.activeTake();
-    const blob = (rec as any)?.blob;
-    if (!blob) { this.toast(this.t('rec.noAudio')); return; }
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.currentTime = Math.max(0, offsetMs / 1000 - 0.5); // 提前 0.5s
-    audio.play().catch(() => this.toast(this.t('practice.retryLater')));
-    audio.onended = () => URL.revokeObjectURL(url);
-  }
-
-  /** ★ #3:Orai 模式 — 一次只给一个最关键的改进点。 */
-  readonly oneFix = computed(() => {    const sc = this.activeTake()?.score;
-    if (!sc) return null;
-    const fs = this.fillerStats();
-    // 优先级:填充词 > 流利度 > 准确度 > 发音 > 完整度
-    if (fs && fs.perMinute > 3) {
-      return {
-        icon: 'graphic_eq',
-        title: '减少填充词',
-        detail: `检测到 ${fs.count} 个填充词 (${fs.perMinute}/分钟)。下次在想词时停顿 1 秒,而不是说 "um"。点击橙色词回放。`
-      };
-    }
-    const dims = [
-      { key: 'fluencyScore', label: '流利度', val: sc.fluencyScore },
-      { key: 'accuracyScore', label: '准确度', val: sc.accuracyScore },
-      { key: 'pronScore', label: '发音', val: sc.pronScore },
-      { key: 'completenessScore', label: '完整度', val: sc.completenessScore },
-    ].filter(d => d.val != null) as { key: string; label: string; val: number }[];
-    if (!dims.length) return null;
-    dims.sort((a, b) => a.val - b.val);
-    const weakest = dims[0];
-    if (weakest.val >= 85) return null; // 都不错,不打扰
-    const fixes: Record<string, string> = {
-      fluencyScore: '语速不均。试着用 2 倍速听一遍自己的录音,标记卡顿处,重录时在这些地方刻意放慢。',
-      accuracyScore: '个别词发音不准。点击下方红色波浪线词,看音标,跟读 3 遍。',
-      pronScore: '整体发音需加强。每天跟读 5 分钟,重点模仿语调起伏。',
-      completenessScore: '内容不完整。有漏读的词,对照原文检查。',
-    };
-    return {
-      icon: 'tips_and_updates',
-      title: `优先改进:${weakest.label} (${weakest.val.toFixed(0)}分)`,
-      detail: fixes[weakest.key] ?? '继续练习。'
-    };
-  });
-
-  /** ★ #10:Interviewing.io 模式 — Hire/No-Hire verdict + 2-3 个待加强点。 */
-  /** ★ #14:AI 追问 (像真面试官一样,基于回答生成一层追问)。 */
-  readonly followUpQuestion = signal<string | null>(null);
-  readonly followUpLoading = signal(false);
-
-  /** ★ 打通:AI Practice 低分 → 创建 Tech Stack 复习卡。 */
-  async addToReview(): Promise<void> {
-    const question = this.customQuestion() || this.currentText();
-    if (!question.trim()) return;
-    const take = this.activeTake();
-    const transcript = (take as any)?.transcript ?? '';
-    try {
-      await this.knowledgeApi.createItem({
-        title: question.slice(0, 60),
-        question: question,
-        myAnswer: transcript.slice(0, 1000),
-        topic: 'AI Practice',
-        category: '口语练习',
-        mastery: 'ToDo'
-      }).toPromise();
-      this.toast('已加入 Tech Stack 复习');
-    } catch {
-      this.toast('加入失败,请重试');
-    }
-  }
-
-  async generateFollowUp(): Promise<void> {
-    const take = this.activeTake();
-    if (!take || this.followUpLoading()) return;
-    const transcript = (take as any)?.transcript ?? (take as any)?.text ?? '';
-    const question = this.currentText();
-    if (!transcript.trim()) return;
-
-    this.followUpLoading.set(true);
-    this.followUpQuestion.set(null);
-    try {
-      const res = await this.aiApi.complete({
-        purpose: 'ai-practice-followup',
-        systemPrompt: 'You are a senior technical interviewer. Based on the candidate\'s answer, ask ONE sharp follow-up question that digs deeper into a weak point, edge case, or design trade-off. Reply in the same language as the answer. Output only the question, no preamble.',
-        prompt: `Original question: ${question}\n\nCandidate's answer:\n${transcript.slice(0, 2000)}`,
-        maxTokens: 200,
-        temperature: 0.7
-      }).toPromise();
-      const q = res?.text ?? res?.content ?? '';
-      this.followUpQuestion.set(q.trim() || null);
-      if (!q.trim()) this.toast('AI 追问失败,请检查 AI 配置');
-    } catch {
-      this.followUpQuestion.set(null);
-      this.toast('AI 追问失败,请检查 AI 配置');
-    } finally {
-      this.followUpLoading.set(false);
-    }
-  }
-
-  /** 在历史列表里点"查看报告"：把该条设为当前作品并弹到结果区。 */
-  focusTake(id: string): void {
-    this.activeTakeId.set(id);
-    this.pickedWord.set(null);
-  }
-
-  // ---------- 评分配置(朗读语言 = 朗读与评分的唯一语言出口) ----------
-  readonly config = signal<GradingConfig>({
-    weights: [],
-    strictness: 3,
-    checkGrammar: true,
-    advice: true,
-    lang: 'en'
-  });
-
   /**
    * ★ 2026-09-20(Forrest):编辑中还有未保存改动时,刷新/关闭浏览器要拦一下。
    * 浏览器的 beforeunload 只允许"重新加载 / 取消"两个按钮(全站通用规范,
@@ -825,7 +489,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   ngOnInit(): void {    // ★ 2026-09-20(Forrest BUG1 修复):进页面即校准"Azure 是否就绪"。
     //   本地标记为 false 时以服务端 speech/settings 的 hasKey 为准 ——
     //   否则播放功能会被一个从未写入的 localStorage 标记永久挡死。
-    this.syncAzureReadyFromServer();
+    this.grading.syncAzureReadyFromServer();
     // 素材树改为从后端加载(2026-09-15 第十七轮)。
     // 2026-09-15 第十七轮:持久化迁到后端 —— 必须先等数据回来再选素材,
     // 否则 findFile 在空树上永远找不到,会错误地跳到第一个素材。
@@ -876,10 +540,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       URL.revokeObjectURL(this.tts.ttsUrl);
       this.tts.ttsUrl = null;
     }
-    this.stopPlayback();
+    this.grading.stopPlayback();
     // ★ 第二十六轮:回收鉴权拉流产生的 objectURL(否则离页泄漏)
-    for (const u of this.audioBlobUrls.values()) URL.revokeObjectURL(u);
-    this.audioBlobUrls.clear();
+    for (const u of this.grading.audioBlobUrls.values()) URL.revokeObjectURL(u);
+    this.grading.audioBlobUrls.clear();
     // 离开页面时若还在录,直接丢弃,避免录到无关声音
     if (this.recorder.recording()) this.recorder.cancel();
   }
@@ -908,7 +572,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.draft.set(text);
     this.editing.set(false);
     // 换素材后当前作品作废,必须重新点评分
-    this.activeTakeId.set(null);
+    this.grading.activeTakeId.set(null);
     // ★ 第十三轮:标记颜色现在直接读节点字段(markColor),换素材自动跟随,无需回读
     // ★ 2026-09-20(Forrest):换素材 → 销毁旧音频(stop + unload + 释放 URL),
     //   由统一的 destroyTtsAudio() 处理,避免各调用点漏掉某一项。
@@ -957,7 +621,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.saved.set(text);
     this.editing.set(false);
     // 内容变了,旧评分作废 —— 参考文本变了,旧分数不再对应这份文本
-    const t = this.activeTake();
+    const t = this.grading.activeTake();
     if (t) this.recorder.clearScore(t.id);
 
     // From Tech:内容直接写回 Knowledge,不走 Practice API
@@ -1006,419 +670,29 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   /** 当前应朗读/录音的文本(编辑态用草稿,只读态用已存)。 */
-  private currentText(): string {
+  currentText(): string {
     return (this.editing() ? this.draft() : this.saved()) || '';
   }
 
-  // ---------- 录音 ----------
-  async startRecording(): Promise<void> {
-    this.recError.set(null);
-    const id = this.selectedId();
-    if (!id) return;
-    // ★ 第四十九轮:录音前停掉页面上所有在响的声音 ——
-    //   示范朗读 / 历史录音回放 / 待提交试听。否则两路声音叠播,
-    //   麦克风还会把正在放的内容录进去。
-    this.tts.stopSpeak();
-    this.stopPlayback();
-    this.pausePendingPreview();
-
-    // ★ 第四十九轮:上一条录完还没提交,用户又按了麦克风 ——
-    //   明确丢弃并告知。旧实现是等新录音录完由 finalize() 把它无声顶掉,
-    //   那条已经录好的音频就【凭空消失】了,用户却以为它还在。
-    if (this.recorder.pendingTake()) {
-      this.recorder.discardPending();
-      this.toast(this.t('practice.prevTakeDiscarded'));
-    }
-
-    const err = await this.recorder.start(id);
-    if (err) this.recError.set(err);
-  }
-
-  stopRecording(): void {
-    this.recorder.stop();
-    // ⚠️ 2026-09-16(Forrest 本轮):**不再自动选中**刚录的这条。
-    //    录音会停在 recorder.pendingTake(),界面出现"提交"按钮;
-    //    用户点提交后它才进列表、才被选中。
-    //    (旧行为是立刻选中 → 中间按钮变成"播放" → 用户以为没反应。)
-  }
-
-  // ---------- 待提交录音(Forrest 本轮:录完 → 提交 → 进列表) ----------
-
-  /** 正在试听待提交的录音。 */
-  /** 试听待提交录音的播放状态。⚠️ 必须是 public —— 模板里绑定了它
-   *  ({{ previewingPending() ? 'pause' : 'play_arrow' }})。
-   *  2026-09-16 教训:Angular 编译器对模板引用的 private 成员直接报 NG1,
-   *  而 `tsc` 根本不查模板 → 本地 tsc 0 error 也拦不住。 */
-  readonly previewingPending = signal(false);
-
-  /** 试听/停止试听待提交的录音。 */
-  previewPending(): void {
-    const pt = this.recorder.pendingTake();
-    if (!pt) return;
-
-    if (this.previewingPending()) {
-      this.pausePendingPreview();
-      return;
-    }
-
-    // 试听前停掉其他声音(示范朗读 / 历史回放),避免叠音
-    this.tts.stopSpeak();
-    this.stopPlayback();
-
-    this.pendingAudio = new Audio(pt.url);
-    // ⚠️ 用 addEventListener 而不是 `onended = …`:Zone.js 【不修补】属性式回调,
-    //    那样写会让这个回调跑在 Angular Zone 之外,写 signal 也不触发刷新
-    //    (第四十九轮"第二次录完没反应"就是同一类根因,详见 RecorderService.zone)。
-    this.pendingAudio.addEventListener('ended', () => {
-      this.previewingPending.set(false);
-      this.pendingAudio = null;
-    }, { once: true });
-    void this.pendingAudio.play().catch(() => {
-      this.previewingPending.set(false);
-      this.pendingAudio = null;
-    });
-    this.previewingPending.set(true);
-  }
-
-  private pendingAudio: HTMLAudioElement | null = null;
-
-  /** ★ 第四十九轮:停掉待提交录音的试听(统一的收口,防两路声音叠播)。 */
-  pausePendingPreview(): void {
-    if (this.pendingAudio) {
-      this.pendingAudio.pause();
-      this.pendingAudio = null;
-    }
-    this.previewingPending.set(false);
-  }
-
-  /** 提交待提交录音 → 进列表。 */
-  submitPending(): void {
-    const pt = this.recorder.pendingTake();
-    if (!pt) return;
-    // 停掉试听
-    this.pausePendingPreview();
-
-    this.recorder.submitPending();
-    // 提交后把它设为当前作品 —— 用户下一步大概率就是回听/评分它。
-    // ⚠️ 2026-09-16:这里是**本地临时 id**;上传成功后后端会换成正式 GUID,
-    //    下面的 effect 会跟着把 activeTakeId 改过去,否则 activeTake() 会找不到人。
-    this.activeTakeId.set(pt.id);
-    // ★ 第五十轮(Forrest):提交成功不再弹提示条 ——
-    //   录音已经出现在下方列表里,结果本身就是反馈;
-    //   再弹一条带警示图标的"Submit"反而像出了问题(第五十轮截图反馈)。
-
-    // 上传完成前先记住"待接替的本地 id"。
-    this.pendingIdRemap = pt.id;
-  }
-
-  /**
-   * 上传成功后,把当前作品 id 从本地临时 id 改后端 GUID。
-   * 不做这一步的后果:列表里已经是 GUID,而 activeTakeId 还指向 r_xxx
-   * → activeTake() 返回 null → 评分/回放全部"无反应"。
-   *
-   * ⚠️ 2026-09-16(真机报错,严重):这个方法里会写 activeTakeId,
-   *    而它是在 effect 里被调用的 —— Angular 默认禁止在 effect 里写 signal,
-   *    直接抛 NG0600 "Writing to signals is not allowed in a computed or an effect"。
-   *    后果不只是这条报错:effect 整个炸掉,而 Submit / Retry 的可用状态
-   *    依赖 recorder 状态流转 —— 于是按钮永远灰着、点了没反应。
-   *
-   *    修法:不在 effect 里直接写。改为把"待接替 id"记下来,
-   *    用 queueMicrotask 推到 effect 之外再写 signal。
-   *    (不用 allowSignalWrites:会引 Angular 18+ 才稳定的选项,
-   *     且容易掩盖真实的循环依赖问题。)
-   */
-  private pendingIdRemap: string | null = null;
-
-  private syncPendingIdRemap(): void {
-    const oldId = this.pendingIdRemap;
-    if (!oldId) return;
-    // 本地 id 已不存在 = 已被后端 GUID 替掉
-    const stillLocal = this.recorder.recordings().some((r) => r.id === oldId);
-    if (stillLocal) return;
-
-    const candidate = this.recorder.recordings().find((r) => r.uploaded);
-    if (!candidate) return;
-
-    this.pendingIdRemap = null;
-
-    // ⚠️ 关键:状态写入必须跳出 effect 的同步执行上下文。
-    const newId = candidate.id;
-    queueMicrotask(() => {
-      if (this.activeTakeId() === oldId) this.activeTakeId.set(newId);
-    });
-  }
-
-  /** 丢弃待提交录音。 */
-  discardPending(): void {
-    this.pausePendingPreview();
-    this.recorder.discardPending();
-  }
-
-  removeRecording(id: string): void {
-    // ★ 2026-09-20(Forrest):删除录音必须先经确认弹窗,确认了才真删。
-    // ★ 第五十轮(Forrest 截图反馈):标题已经问清"删除这条录音?",
-    //   不再附加"删除后无法恢复"的说明行 —— 确认弹窗保持最简:
-    //   一句问话 + 取消/确认(行业通行的轻量确认样式)。
-    void this.tree.confirmDialog({
-      title: this.t('dialog.deleteRecTitle'),
-      confirmText: this.t('dialog.deleteConfirm'),
-      danger: true
-    }).then((ok) => {
-      if (!ok) return;
-      this.recorder.remove(id);
-      if (this.activeTakeId() === id) this.activeTakeId.set(null);
-    });
-  }
-
-  /**
-   * 对某条录音做发音评分(以当前素材文本为参考文本)。
-   *
-   * ★ 第五十轮(Forrest):胶囊上的「Run AI Scoring」已移除,这里是唯一评分入口
-   *   (列表每行的 ✦ 按钮)。评分即把它设为当前作品 —— 报告区跟随被评的那条。
-   *
-   * ★ 第三十三/三十四轮(Forrest):如实标记本次评分花没花 Azure 额度与计费量
-   *   判定依据是 grade() 的行为:
-   *   ★ 第五十四轮起 grade() 允许重复评分 —— 每次点击都真调 Azure,故恒为 'fresh'。
-   */
-  async gradeRecording(id: string): Promise<void> {
-    const t = this.myRecordings().find((r) => r.id === id);
-    if (!t || t.grading) return;
-    this.stopPlayback();
-    this.activeTakeId.set(id);
-
-    // 每次都会真调 Azure(重复评分覆盖旧分数)→ 计费口径一律 'fresh'。
-    this.scoreCost.set('fresh');
-    this.scoreBilledSeconds.set(null);
-    this.scoreBilledBytes.set(null);
-
-    await this.recorder.grade(id, this.currentText(), this.practiceLang());
-
-    // grade() 完成后回读计费口径:真调 → 新值;命中缓存 → 库里的旧值。
-    const after = this.myRecordings().find((x) => x.id === id) ?? null;
-    this.scoreBilledSeconds.set(after?.score?.billedSeconds ?? null);
-    this.scoreBilledBytes.set(after?.score?.billedBytes ?? null);
-  }
-
-  // ---------- 当前作品(参考站的"录 → 回听 → 评分"流程) ----------
-
-  /**
-   * 当前作品 id。
-   * 为什么要有"当前作品"这个概念:
-   *   参考站是单题工作流 —— 一次只处理一条录音。
-   *   没有这个概念,用户会对列表里随手一条录音点评分,
-   *   很容易把上一次的分当成这一次的。
-   */
-  readonly activeTakeId = signal<string | null>(null);
-
-  /** 当前作品(找不到则为 null)。 */
-  readonly activeTake = computed(() => {
-    const id = this.activeTakeId();
-    if (!id) return null;
-    return this.myRecordings().find((r) => r.id === id) ?? null;
-  });
-
-  /** 当前作品是否正在播放(波形"跳动"高亮用;回放入口在列表每行的播放键)。 */
-  readonly activePlaying = computed(() => {
-    const t = this.activeTake();
-    return !!t && this.playingId() === t.id;
-  });
-
-  /** 停掉当前回放。 */
-  private stopPlayback(): void {
-    this.audio.pause();
-    this.playingId.set(null);
-    this.playPos.set(0);
-  }
-
-
-  /**
-   * 评分后的识别率 = 被正确识别的词占比。拿不到就返回 0。
-   *
-   * ⚠️ 2026-09-16(Forrest 本轮):只有**有词级数据且 errorType === 'None'**
-   *    才计入"正确";无词级数据的词(errorType 为空串)不能算正确 ——
-   *    否则会凭空空提高识别率,让报告看起来"假"。
-   */
-  recognitionPct(sc: RecordingScore): number {
-    const scored = sc.words.filter((w) => !!w.errorType);
-    if (!scored.length) return 0;
-    const ok = scored.filter((w) => w.errorType === 'None').length;
-    return Math.round((ok / scored.length) * 100);
-  }
-
-  /**
-   * 五类错误计数(参考站右侧图例)。
-   * ⚠️ 这五个 key 是 Azure PA 返回的 ErrorType 原值,不能改写成别的词:
-   *   None / Mispronunciation / Omission / Insertion / UnexpectedBreak / MissingBreak
-   */
-  readonly errorCounts = computed(() => {
-    const sc = this.activeTake()?.score;
-    const empty = [
-      { key: 'err.mispron', cls: 'e-mispron', n: 0 },
-      { key: 'err.omission', cls: 'e-omission', n: 0 },
-      { key: 'err.insertion', cls: 'e-insertion', n: 0 },
-      { key: 'err.unexpectedBreak', cls: 'e-break', n: 0 },
-      { key: 'err.missingBreak', cls: 'e-pause', n: 0 }
-    ];
-    if (!sc) return empty;
-
-    const words = sc.words;
-    const count = (t: string) => words.filter((w) => w.errorType === t).length;
-    return [
-      { key: 'err.mispron', cls: 'e-mispron', n: count('Mispronunciation') },
-      { key: 'err.omission', cls: 'e-omission', n: count('Omission') },
-      { key: 'err.insertion', cls: 'e-insertion', n: count('Insertion') },
-      { key: 'err.unexpectedBreak', cls: 'e-break', n: count('UnexpectedBreak') },
-      { key: 'err.missingBreak', cls: 'e-pause', n: count('MissingBreak') }
-    ];
-  });
-
-  /** 逐词颜色:按 Azure 的 ErrorType 分类,而不是只看分数 —— 错误类型更有指导性。 */
-  errorClass(errorType: string): string {
-    switch (errorType) {
-      case 'Mispronunciation': return 'e-mispron';
-      case 'Omission': return 'e-omission';
-      case 'Insertion': return 'e-insertion';
-      case 'UnexpectedBreak': return 'e-break';
-      case 'MissingBreak': return 'e-pause';
-      // ⚠️ 2026-09-16:空串 = 该词无词级评估数据(Azure 未返回)。
-      //    不能归为 e-ok(那会让它看起来"读对了"),用 e-na 中性色。
-      case '': return 'e-na';
-      default: return 'e-ok';
-    }
-  }
-
-  /** 错误类型的中文名(用于 tooltip)。 */
-  errLabel(errorType: string): string {
-    switch (errorType) {
-      case 'Mispronunciation': return this.t('err.mispron');
-      case 'Omission': return this.t('err.omission');
-      case 'Insertion': return this.t('err.insertion');
-      case 'UnexpectedBreak': return this.t('err.unexpectedBreak');
-      case 'MissingBreak': return this.t('err.missingBreak');
-      case '': return this.t('err.noData');
-      default: return this.t('err.ok');
-    }
-  }
-
-  /**
-   * 词是否带评分数据。
-   * ⚠️ 2026-09-16(Forrest 本轮):没用它之前,无数据的词会渲染成 "0.0",
-   *    看起来像"发音 0 分",其实是 Azure 没返回词级分 —— 这就是"假报告"的观感来源。
-   */
-  hasWordScore(w: { accuracy?: number; errorType?: string }): boolean {
-    return !!w.errorType && typeof w.accuracy === 'number';
-  }
-
-  /** 时长格式化 —— ★ 2026-09-20(Forrest):秒一律取整,不显示小数。 */
-  fmtDuration(sec: number): string {
-    const t = Math.max(0, Math.floor(sec || 0));   // 抹掉小数(seek() 返回浮点)
-    const m = Math.floor(t / 60);
-    const s = t % 60;
-    return m > 0
-      ? m + ':' + String(s).padStart(2, '0')
-      : s + 's';
-  }
-
-  fmtTime(ts: number): string {
-    const d = new Date(ts);
-    const p = (n: number) => String(n).padStart(2, '0');
-    return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' '
-      + p(d.getHours()) + ':' + p(d.getMinutes());
-  }
-
-  // ---------- 录音回放(自绘播放器) ----------
-
-  /**
-   * 当前正在播放的录音 id。
-   * 用单例 <audio> 而不是每条录音一个元素 —— 播放器同时只应有一个在响,
-   * 单例天然保证互斥,也便于切歌时统一收尾。
-   */
-  private readonly audio = new Audio();
-  readonly playingId = signal<string | null>(null);
-  readonly playPos = signal(0);
-
-  /**
-   * ★ 第二十六轮:已上传录音的 blob → objectURL 缓存(按 recording id)。
-   * 认证拉流拿到的 blob 不再重复下载;同时集中回收,防内存泄漏。
-   */
-  private readonly audioBlobUrls = new Map<string, string>();
-
-  /** 正在"拉流加载"中的录音 id(界面可显示 loading)。 */
-  readonly audioLoadingId = signal<string | null>(null);
-
-  /** 拉流失败的真实原因(如实展示,绝不静默)。 */
-  readonly audioError = signal<string | null>(null);
-  /** 逐词明细展开状态(按录音 id)。 */
-  /** 评分报告面板是否展开(任务书第三节:可随时收起/展开)。默认展开。 */
-  readonly reportOpen = signal(true);
-
-  /** 切换报告面板收起/展开。 */
-  toggleReport(): void {
-    this.reportOpen.set(!this.reportOpen());
-  }
-
-  /**
-   * 把某条录音设为"当前作品"。
-   *
-   * ⚠️ 2026-09-15 第十二轮修两个严重 bug(Forrest 反馈"点 Take #1 没反应,
-   *    还会跟上面的 Submit AI Scoring / play 联动"):
-   *
-   *  bug A —— **事件冒泡**:本行内部 4 个按钮都有各自的 (click),但都没
-   *    stopPropagation,点击会冒泡到本行的 (click)=selectTake,于是
-   *    "点播放" = togglePlay + selectTake 同时执行。
-   *
-   *  bug B —— **toggle 语义错误**:原实现"再点已选中行就取消选中 + stopPlayback"。
-   *    与 bug A 叠加 → 点已选中行的播放:先开播,紧接着 selectTake 判定
-   *    "已是选中态"→ 清空 activeTakeId + stopPlayback() → **刚开的播放被掐断**,
-   *    上方 Submit/play 也一起变灰。这就是"联动、不能使用"的真因。
-   *
-   * 修法:
-   *  1. selectTake 改为**幂等选择**(点已选中项不动,不再 toggle 取消);
-   *  2. 行内所有按钮/track 的 click 一律 $event.stopPropagation()
-   *     (模板侧改),让按钮点击不再误触发选行。
-   */
-  selectTake(id: string): void {
-    // 幂等:已经是当前作品就原样返回,不做任何副作用。
-    // 取消选中改由「点其他行」或删除行来完成,不用重复点同一行。
-    if (this.activeTakeId() === id) return;
-    this.stopPlayback();
-    this.activeTakeId.set(id);
-  }
-
-  /** 录音列表里的 View Report —— 同一个 take 再点一次就收起(任务书要求 toggle)。 */
-  toggleTakeReport(id: string): void {
-    if (this.activeTakeId() === id && this.reportOpen()) {
-      this.reportOpen.set(false);
-      return;
-    }
-    this.activeTakeId.set(id);
-    this.reportOpen.set(true);
-  }
-
-  /** 当前展开报告的 take 是否为这条录音(驱动按钮文案)。 */
-  isTakeReportOpen(id: string): boolean {
-    return this.activeTakeId() === id && this.reportOpen();
-  }
-
   constructor() {
-    this.audio.addEventListener('timeupdate', () => {
-      this.playPos.set(this.audio.currentTime);
+    this.grading.audio.addEventListener('timeupdate', () => {
+      this.grading.playPos.set(this.grading.audio.currentTime);
     });
-    this.audio.addEventListener('ended', () => {
-      this.playingId.set(null);
-      this.playPos.set(0);
+    this.grading.audio.addEventListener('ended', () => {
+      this.grading.playingId.set(null);
+      this.grading.playPos.set(0);
     });
-    this.audio.addEventListener('pause', () => {
+    this.grading.audio.addEventListener('pause', () => {
       // 播完自然暂停也会触发这里 —— 用 ended 已处理归零,这里只清高亮
-      if (this.audio.ended) return;
-      this.playingId.set(null);
+      if (this.grading.audio.ended) return;
+      this.grading.playingId.set(null);
     });
 
     // 监听录音列表变化:上传成功后把"当前作品"从本地临时 id 接到后端 GUID。
     // 不接的后果:activeTake() 找不到人 → 评分/回放全部无反应。
     effect(() => {
       this.recorder.recordings();   // 依赖
-      this.syncPendingIdRemap();
+      this.grading.syncPendingIdRemap();
     });
 
     // ★ 第二十九轮(对齐 ynwac 参考站):评分一产出,就把该录音的
@@ -1436,320 +710,30 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     //   同一段音频只解码一次(结果进 waveCache);
     //   异步完成后用 queueMicrotask 写信号,避开 effect 内写信号的 NG0600。
     effect(() => {
-      const id = this.waveTargetId();
-      const take = this.activeTake() ?? this.recorder.pendingTake();
+      const id = this.grading.waveTargetId();
+      const take = this.grading.activeTake() ?? this.recorder.pendingTake();
       if (!id || !take) {
-        queueMicrotask(() => this.waveBars.set([]));
+        queueMicrotask(() => this.grading.waveBars.set([]));
         return;
       }
-      const cached = this.waveCache.get(id);
+      const cached = this.grading.waveCache.get(id);
       if (cached) {
-        queueMicrotask(() => this.waveBars.set(cached));
+        queueMicrotask(() => this.grading.waveBars.set(cached));
         return;
       }
-      queueMicrotask(() => this.waveBars.set([]));
+      queueMicrotask(() => this.grading.waveBars.set([]));
       void (async () => {
-        const src = await this.waveAudioSource(take);
+        const src = await this.grading.waveAudioSource(take);
         if (!src || src.size === 0) return;
-        const bars = await this.computeWaveBars(src);
+        const bars = await this.grading.computeWaveBars(src);
         if (!bars) return;
-        this.waveCache.set(id, bars);
+        this.grading.waveCache.set(id, bars);
         // 只有当前目标仍是这条录音时才写入(避免异步竞态写错人的波形)
-        if (this.waveTargetId() === id) this.waveBars.set(bars);
+        if (this.grading.waveTargetId() === id) this.grading.waveBars.set(bars);
       })();
     });
   }
-
-  isPlaying(id: string): boolean {
-    return this.playingId() === id;
-  }
-
-  /**
-   * 播放/暂停切换。切到另一条时先停掉当前这条。
-   *
-   * ★ 第二十六轮(401 修复):
-   *   旧实现 `this.audio.src = api.audioUrl(id)` 把后端录音端点直接交给
-   *   <audio src> —— 浏览器发这个请求**不带 Authorization 头**,
-   *   而端点带 [Authorize] → 必然 401(Forrest 控制台看到的报错)。
-   *
-   *   新实现分两条路:
-   *     a) 本页刚录、还没上传的 → 直接用本地 Object URL(零网络,零鉴权);
-   *     b) 已上传的历史录音 → 先用 HttpClient(带 Bearer)拉回 blob,
-   *        再 createObjectURL 交给 <audio>;blob 缓存在本组件 Map 里,
-   *        同一条重复播放不再重复下载。
-   *   拉取失败时如实提示,绝不静默假装能播。
-   */
-  togglePlay(r: Recording): void {
-    // 播放期间先把示范朗读停掉,避免两种声音叠在一起
-    this.tts.stopSpeak();
-    // ★ 第四十九轮:待提交录音的试听也一并停掉 —— 全页只允许一路声音
-    this.pausePendingPreview();
-
-    if (this.playingId() === r.id) {
-      this.audio.pause();
-      this.playingId.set(null);
-      return;
-    }
-
-    // 换目标:若正在放别的,先停
-    if (this.playingId() !== null) this.audio.pause();
-
-    // (a) 本地 Object URL:刚录完、还没上传完成的,直接播,不发请求。
-    if (r.url) {
-      this.startAudio(r, r.url);
-      return;
-    }
-
-    // (b) 已上传:命中缓存就直接播。
-    const cached = this.audioBlobUrls.get(r.id);
-    if (cached) {
-      this.startAudio(r, cached);
-      return;
-    }
-
-    // (b-2) 走带鉴权的 HttpClient 拉 blob(拦截器自动附 Bearer + 401 刷新)。
-    this.audioLoadingId.set(r.id);
-    this.practiceApi.fetchRecordingAudio(r.id).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        this.audioBlobUrls.set(r.id, url);
-        this.audioLoadingId.set(null);
-        this.startAudio(r, url);
-      },
-      error: (e) => {
-        this.audioLoadingId.set(null);
-        // 如实报错,绝不静默。401 已被拦截器处理;其余错误给出可读原因。
-        const status = (e as { status?: number } | null)?.status;
-        const raw = String((e as { message?: string } | null)?.message ?? e ?? '');
-        // ★ 2026-09-20(Forrest 报 "take #1 点播报 数据不存在"):
-        //   404 的真实含义不是"系统故障",而是**库里这条记录还在、音频文件没了**
-        //   —— 服务端容器重建/清理时,容器内 storage/recordings 会被重置,
-        //   而 PostgreSQL 里的录音行还在,于是列表还在、却取不到音频。
-        const msg = status === 404
-          ? this.t('practice.recGone')
-          : this.t('practice.recLoadFail') + (raw || this.t('practice.retryLater'));
-        this.audioError.set(msg);
-        this.toast(msg);
-      }
-    });
-  }
-
-  /** 绑定 src 并起播(播放/暂停本地共用的收尾逻辑)。 */
-  private startAudio(r: Recording, src: string): void {
-    this.audio.src = src;
-    this.audio.volume = 1;
-    // ★ 与示范朗读同一口径:变速只改速度,不改嗓音
-    (this.audio as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
-    this.audio.currentTime = 0;
-    this.playPos.set(0);
-    void this.audio.play().then(
-      () => this.playingId.set(r.id),
-      // ★ 2026-09-20(Forrest 报"点了没声音"):浏览器拦截自动播放时
-      //   play() 的 Promise 会 reject,旧代码只是把状态置回 null —— 用户
-      //   看到的又是"点了没反应"。现在如实说一句。
-      () => {
-        this.playingId.set(null);
-        this.toast(this.t('practice.audioBlockedToast'));
-      }
-    );
-  }
-
-  // ============================================================
-  // ★ 第三十轮:静态波形(录完后)
-  //   从当前作品/待提交录音的真实音频解出峰值柱,而不是画一条假的装饰波形。
-  //   缓存:同一段音频只解码一次(waveCache),避免每次变更检测都重算。
-  // ============================================================
-
-  /** 当前是否有可供画波形的录音。 */
-  readonly showWaveform = computed(() => {
-    const t = this.activeTake();
-    if (t) return true;
-    return !!this.recorder.pendingTake();
-  });
-
-  /** 当前波形归属的录音 id(作品优先,否则待提交)。 */
-  private waveTargetId(): string | null {
-    const t = this.activeTake();
-    if (t) return t.id;
-    const p = this.recorder.pendingTake();
-    return p?.id ?? null;
-  }
-
-  /** 静态波形的柱高数组(0~100,已按最大值归一化)。 */
-  readonly waveBars = signal<number[]>([]);
-
-  /** 解码结果缓存:录音 id → 柱高数组。 */
-  private readonly waveCache = new Map<string, number[]>();
-
-  /**
-   * 音频源:优先内存里的 blob(刚录完),否则走带鉴权接口把已上传录音取回。
-   * 与评分同一个取数策略(第二十九轮),避免「刷新后没有 blob」时波形画不出来。
-   */
-  private async waveAudioSource(rec: Recording): Promise<Blob | null> {
-    const b = (rec as { blob?: Blob }).blob;
-    if (b && b.size > 0) return b;
-    if (RecorderService.isGuid(rec.id)) {
-      try {
-        return await firstValueFrom(this.practiceApi.fetchRecordingAudio(rec.id));
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  }
-
-  /** 解码音频并算出波形柱高。 */
-  private async computeWaveBars(blob: Blob, bars = 56): Promise<number[] | null> {
-    const Ctor = window.AudioContext
-      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return null;
-    const ctx = new Ctor();
-    try {
-      const buf = await blob.arrayBuffer();
-      const audio = await this.decodeCompat(ctx, buf);
-      const data = audio.getChannelData(0);
-      if (!data.length) return null;
-      const block = Math.max(1, Math.floor(data.length / bars));
-      const out: number[] = [];
-      let peak = 0;
-      for (let i = 0; i < bars; i++) {
-        let max = 0;
-        const start = i * block;
-        const end = Math.min(data.length, start + block);
-        for (let j = start; j < end; j++) {
-          const v = Math.abs(data[j]);
-          if (v > max) max = v;
-        }
-        out.push(max);
-        if (max > peak) peak = max;
-      }
-      // 归一化到 0~100:说话录音峰值通常远小于 1,必须归一化才看得出形状。
-      const norm = peak > 0 ? out.map((v) => Math.max(6, Math.round((v / peak) * 100))) : [];
-      return norm.length ? norm : null;
-    } catch {
-      return null;
-    } finally {
-      if (ctx.state !== 'closed') void ctx.close().catch(() => undefined);
-    }
-  }
-
-  /** 与录音服务同款双形态解码(Safari 只支持回调式)。 */
-  private decodeCompat(ctx: BaseAudioContext, buf: ArrayBuffer): Promise<AudioBuffer> {
-    return new Promise<AudioBuffer>((resolve, reject) => {
-      const anyCtx = ctx as unknown as {
-        decodeAudioData: (
-          b: ArrayBuffer,
-          ok?: (x: AudioBuffer) => void,
-          bad?: (e: unknown) => void
-        ) => Promise<AudioBuffer> | void;
-      };
-      try {
-        const ret = anyCtx.decodeAudioData(buf, resolve, reject);
-        if (ret && typeof (ret as Promise<AudioBuffer>).then === 'function') {
-          (ret as Promise<AudioBuffer>).then(resolve).catch(reject);
-        }
-      } catch (e) {
-        reject(e);
-      }
-    });
-  }
-
-  /** 播放位置对应第几根柱子已播过(用于高亮)。 */
-  wavePlayed(index: number): boolean {
-    const bars = this.waveBars().length;
-    if (!bars) return false;
-    const t = this.activeTake();
-    const p = this.recorder.pendingTake();
-    const isActive = !!t && this.playingId() === t.id;
-    const isPending = !!p && this.previewingPending();
-    if (!isActive && !isPending) return false;
-    return index / bars <= this.playPos() / Math.max(1, t?.duration ?? p?.duration ?? 1);
-  }
-
-  /** 播放进度百分比。 */
-  progress(r: Recording): number {
-    if (this.playingId() !== r.id || !r.duration) return 0;
-    return Math.min(100, (this.playPos() / r.duration) * 100);
-  }
-
-  /** 当前播放位置的显示时间。 */
-  playingTime(r: Recording): string {
-    if (this.playingId() !== r.id) return '0:00';
-    const s = Math.floor(this.playPos());
-    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-  }
-
-  /** 点击时间轴跳转。 */
-  seek(r: Recording, ev: MouseEvent): void {
-    const el = ev.currentTarget as HTMLElement;
-    const rect = el.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-
-    if (this.playingId() !== r.id) {
-      // 未在播放:先起播再定位
-      this.togglePlay(r);
-    }
-    const target = ratio * (r.duration || 0);
-    this.audio.currentTime = target;
-    this.playPos.set(target);
-  }
-
-  /**
-   * ★ 第三十五轮(Forrest):逐词分值区**已取消折叠,改为常驻展开**。
-   *
-   * 它只是纯文本展示(与 Recognition 同性质),没有任何理由需要点一下展开。
-   * 这里保留方法签名并恒返回 true —— 这样旧调用点不会被破坏
-   * (但模板里已经不再用了);今后若有人重新引入折叠,也不至于拿到错的值。
-   */
-  isWordsOpen(_id: string): boolean {
-    return true;
-  }
-
-  /**
-   * ★ 第三十五轮:折叠已取消,故本方法不再被模板调用。
-   * 保留为空实现,避免旧引用直接报错;行为上什么也不做。
-   */
-  toggleWords(_id: string): void {
-    // 第三十五轮:无操作 —— 逐词分值已改为常驻显示。
-  }
-
-  /**
-   * ★ 第二十九轮:确保某条录音的逐词明细处于展开状态(幂等)。
-   *
-   * 与 toggleWords 的区别:**只展开,不收起** —— 供"评分完成后自动展开"
-   * 使用。用户在展开后手动收起,不应被下一次数据刷新重新弹开,
-   * 所以只对"尚未展开过"的 id 生效(由调用方判断 has())。
-   */
-  /**
-   * ★ 第三十五轮:折叠已取消,自动展开逻辑也一并作废。
-   * 保留空实现,避免旧调用点报错。
-   */
-  private ensureWordsOpen(_id: string): void {
-    // 第三十五轮:无操作 —— 逐词分值始终可见,无需再维护展开状态。
-  }
-
-  /** 总分的中文口语化评价 —— 比裸数字直观。 */
-  verdict(v: number): string {
-    if (v >= 90) return this.t('verdict.excellent');
-    if (v >= 80) return this.t('verdict.good');
-    if (v >= 70) return this.t('verdict.fair');
-    return this.t('verdict.poor');
-  }
-
-  /** 逐词颜色的分档。 */
-  wordClass(acc: number): string {
-    if (acc >= 80) return 'w-good';
-    if (acc >= 60) return 'w-mid';
-    return 'w-bad';
-  }
-
-  scoreClass(v: number): string {
-    // 四档:颜色梯度足够细,又不至于让用户分不清
-    if (v >= 85) return 's-good';
-    if (v >= 70) return 's-mid';
-    if (v >= 55) return 's-warn';
-    return 's-bad';
-  }
+  takeNo(id: string): number { return this.grading.takeNo(id); }
   startResize(ev: MouseEvent): void { return this.tree.startResize(ev); }
   fixLang(): void { return this.tts.fixLang(); }
   saveTree(): void { return this.tree.saveTree(); }
@@ -1758,14 +742,46 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   onCategoryFilterChange(value: string): void { return this.tree.onCategoryFilterChange(value); }
   openManage(tab: 'categories' | 'export' = 'export'): void { return this.tree.openManage(tab); }
   reloadTree(): void { return this.tree.reloadTree(); }
+  phonetic(_word: string): string | null { return this.grading.phonetic(_word); }
   markDot(): string { return this.tree.markDot(); }
   setMarkColor(c: MarkColor): void { return this.tree.setMarkColor(c); }
+  pickWord(i: number): void { return this.grading.pickWord(i); }
+  isFiller(word: string): boolean { return this.grading.isFiller(word); }
+  replayAt(offsetMs: number): void { return this.grading.replayAt(offsetMs); }
+  addToReview(): Promise<void> { return this.grading.addToReview(); }
+  generateFollowUp(): Promise<void> { return this.grading.generateFollowUp(); }
   onTreeChange(next: MaterialNode[]): void { return this.tree.onTreeChange(next); }
   onFolderToggle(node: MaterialNode): void { return this.tree.onFolderToggle(node); }
   onNodeCreated(_node: MaterialNode): void { return this.tree.onNodeCreated(_node); }
   onDelete(n: MaterialNode): void { return this.tree.onDelete(n); }
   speak(): void { return this.tts.speak(); }
+  startRecording(): Promise<void> { return this.grading.startRecording(); }
+  stopRecording(): void { return this.grading.stopRecording(); }
+  previewPending(): void { return this.grading.previewPending(); }
+  submitPending(): void { return this.grading.submitPending(); }
+  discardPending(): void { return this.grading.discardPending(); }
+  removeRecording(id: string): void { return this.grading.removeRecording(id); }
+  gradeRecording(id: string): Promise<void> { return this.grading.gradeRecording(id); }
   speakProgress(): number { return this.tts.speakProgress(); }
   setRate(r: number): void { return this.tts.setRate(r); }
   speakTimeText(): string { return this.tts.speakTimeText(); }
+  recognitionPct(sc: RecordingScore): number { return this.grading.recognitionPct(sc); }
+  errorClass(errorType: string): string { return this.grading.errorClass(errorType); }
+  errLabel(errorType: string): string { return this.grading.errLabel(errorType); }
+  hasWordScore(w: { accuracy?: number; errorType?: string }): boolean { return this.grading.hasWordScore(w); }
+  fmtDuration(sec: number): string { return this.grading.fmtDuration(sec); }
+  fmtTime(ts: number): string { return this.grading.fmtTime(ts); }
+  toggleReport(): void { return this.grading.toggleReport(); }
+  selectTake(id: string): void { return this.grading.selectTake(id); }
+  toggleTakeReport(id: string): void { return this.grading.toggleTakeReport(id); }
+  isTakeReportOpen(id: string): boolean { return this.grading.isTakeReportOpen(id); }
+  isPlaying(id: string): boolean { return this.grading.isPlaying(id); }
+  togglePlay(r: Recording): void { return this.grading.togglePlay(r); }
+  wavePlayed(index: number): boolean { return this.grading.wavePlayed(index); }
+  progress(r: Recording): number { return this.grading.progress(r); }
+  playingTime(r: Recording): string { return this.grading.playingTime(r); }
+  seek(r: Recording, ev: MouseEvent): void { return this.grading.seek(r, ev); }
+  verdict(v: number): string { return this.grading.verdict(v); }
+  scoreClass(v: number): string { return this.grading.scoreClass(v); }
 }
+export { AZURE_READY_KEY } from './practice-grading-session';

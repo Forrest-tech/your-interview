@@ -1235,7 +1235,7 @@ export class PracticeMaterialTree {
         this.host.saved.set('');
         this.host.draft.set('');
         this.host.editing.set(false);
-        this.host.activeTakeId.set(null);
+        this.host.grading.activeTakeId.set(null);
       }
       this.treeDeletedSinceSave = true;
       this.treeDirty.set(true);

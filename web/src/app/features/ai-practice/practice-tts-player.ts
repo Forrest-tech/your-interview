@@ -211,7 +211,7 @@ export class PracticeTtsPlayer {
     // ── 门禁:没配 Azure Key 就**不能播**,并把原因直接摊给用户看 ──
     //    诚实红线的一半是不伪装,另一半是不能让人对着灰按钮发愣 ——
     //    所以这里顺手把右上角的配置浮层展开。
-    if (!this.host.azureReady()) {
+    if (!this.host.grading.azureReady()) {
       this.ttsNote.set(this.host.t('practice.azurePlayBlocked'));
       this.host.toast(this.host.t('practice.azurePlayBlocked'));
       this.openTtsSettings();
@@ -583,7 +583,7 @@ export class PracticeTtsPlayer {
     const clean = ((this.host.editing() ? this.host.draft() : this.host.saved()) || '').trim();
     if (!clean) { this.destroyTtsAudio(); return; }
     // 没配 Key 就不发请求 —— 发也一定失败,白白让用户等
-    if (!this.host.azureReady()) { this.destroyTtsAudio(); return; }
+    if (!this.host.grading.azureReady()) { this.destroyTtsAudio(); return; }
     const key = ttsKey(clean, '', this.host.practiceLang());
     void this.synthesizeAndPlay(clean, key, /* autoplay */ false);
   }
@@ -603,14 +603,14 @@ export class PracticeTtsPlayer {
   speakTimeText(): string {
     // ★ 2026-09-20(Forrest 第三十六轮):**未配 Azure Key 就没有音频这回事**。
     //   此时一律显示 --:-- / --:--,绝不拿 0 或估算值冒充时长。
-    if (!this.host.azureReady()) return '--:-- / --:--';
+    if (!this.host.grading.azureReady()) return '--:-- / --:--';
 
     const total = this.speakDur();
     if (!(total > 0)) {
       // Azure 已配置、音频尚未装载 → 中性占位(0s / --s)
-      return this.host.fmtDuration(this.speakPos()) + ' / --s';
+      return this.host.grading.fmtDuration(this.speakPos()) + ' / --s';
     }
     // ★ 总时长**固定不变**:倍速只改播放速度(duration() 仍是 1x 的音源长度)
-    return this.host.fmtDuration(this.speakPos()) + ' / ' + this.host.fmtDuration(total);
+    return this.host.grading.fmtDuration(this.speakPos()) + ' / ' + this.host.grading.fmtDuration(total);
   }
 }

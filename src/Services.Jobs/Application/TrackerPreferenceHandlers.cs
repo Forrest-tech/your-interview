@@ -65,7 +65,9 @@ public sealed class AddApplicationQuestionCommandValidator : AbstractValidator<A
 {
     public AddApplicationQuestionCommandValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().MaximumLength(4000).WithMessage("问题必填");
+        // 票107:必填/长度文案分挂两条规则(WithMessage 只挂紧邻的前一条规则)。
+        RuleFor(x => x.Text).NotEmpty().WithMessage("问题必填")
+            .MaximumLength(4000).WithMessage("问题长度不能超过 {MaxLength} 个字符");
     }
 }
 

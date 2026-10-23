@@ -13,7 +13,10 @@ public sealed class CreateCompanyCommandValidator : AbstractValidator<CreateComp
 {
     public CreateCompanyCommandValidator()
     {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(300).WithMessage("公司名称必填");
+        // 票107:WithMessage 只挂紧邻的前一条规则——必填/长度文案须分挂两条规则,
+        // 否则长度违规会被误标「必填」、空值只回英文默认文案。
+        RuleFor(x => x.Name).NotEmpty().WithMessage("公司名称必填")
+            .MaximumLength(300).WithMessage("公司名称长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.Website).MaximumLength(1024)
             .Must(BeValidUrl).When(x => !string.IsNullOrWhiteSpace(x.Website))
             .WithMessage("官网地址格式不正确");
@@ -45,7 +48,8 @@ public sealed class CreateApplicationCommandValidator : AbstractValidator<Create
     public CreateApplicationCommandValidator()
     {
         RuleFor(x => x.CompanyId).NotEmpty();
-        RuleFor(x => x.Role).NotEmpty().MaximumLength(300).WithMessage("岗位名称必填");
+        RuleFor(x => x.Role).NotEmpty().WithMessage("岗位名称必填")
+            .MaximumLength(300).WithMessage("岗位名称长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.Link).MaximumLength(2048);
         // FUN-02/FUN-04:JdText 与统一口径对齐 (JdTextLimits.MaxLength),超长给明确 400 而不是落库 500。
         RuleFor(x => x.JdText).MaximumLength(JdTextLimits.MaxLength);

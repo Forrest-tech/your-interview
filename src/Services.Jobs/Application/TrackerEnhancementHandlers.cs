@@ -62,9 +62,13 @@ public sealed class CreateAnswerTemplateCommandValidator : AbstractValidator<Cre
 {
     public CreateAnswerTemplateCommandValidator()
     {
-        RuleFor(x => x.Category).NotEmpty().MaximumLength(100).WithMessage("分类必填");
-        RuleFor(x => x.Question).NotEmpty().MaximumLength(500).WithMessage("问题必填");
-        RuleFor(x => x.Answer).NotEmpty().MaximumLength(20000).WithMessage("答案必填");
+        // 票107:必填/长度文案分挂两条规则(WithMessage 只挂紧邻的前一条规则)。
+        RuleFor(x => x.Category).NotEmpty().WithMessage("分类必填")
+            .MaximumLength(100).WithMessage("分类长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.Question).NotEmpty().WithMessage("问题必填")
+            .MaximumLength(500).WithMessage("问题长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.Answer).NotEmpty().WithMessage("答案必填")
+            .MaximumLength(20000).WithMessage("答案长度不能超过 {MaxLength} 个字符");
     }
 }
 
@@ -75,7 +79,8 @@ public sealed class CreateCommunicationCommandValidator : AbstractValidator<Crea
         RuleFor(x => x.Type).NotEmpty()
             .Must(t => new[] { "Email", "Call", "Interview", "Message", "Note" }.Contains(t))
             .WithMessage("沟通类型必须是 Email / Call / Interview / Message / Note");
-        RuleFor(x => x.Content).NotEmpty().MaximumLength(20000).WithMessage("内容必填");
+        RuleFor(x => x.Content).NotEmpty().WithMessage("内容必填")
+            .MaximumLength(20000).WithMessage("内容长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.Subject).MaximumLength(300);
         RuleFor(x => x.ContactName).MaximumLength(300);
         RuleFor(x => x.ContactEmail).MaximumLength(300);

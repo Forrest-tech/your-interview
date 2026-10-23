@@ -658,7 +658,8 @@ mat-form-field { width: 100%; }
   background: #e8eaf6; color: #3f51b5; font-size: 12px; font-weight: 600;
   display: flex; align-items: center; justify-content: center;
 }
-.q-text { flex: 1; font-size: 14px; line-height: 1.5; }
+/* 票74:与抽屉内联样式(application-detail-dialog)同口径的换行约束,防两处漂移 */
+.q-text { flex: 1; min-width: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; word-break: break-word; }
 .q-del { flex: 0 0 auto; opacity: 0.5; }
 .q-del:hover { opacity: 1; color: #c62828; }
 .q-add-form { margin-bottom: 16px; }

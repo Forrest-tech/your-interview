@@ -1034,6 +1034,38 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .comm-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 11.5px; opacity: 0.6; }
     .comm-actions { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
     .comm-actions .danger { color: #c62828; }
+
+    /* ---- 自备问题 (Questions, G-07) ---- */
+    /* ★ 票74:q-* 原在 tracker.component.scss,票52 拆分抽屉时漏迁 —— 封装作用域
+       到不了抽屉 DOM(实测 .q-item 计算样式 display:block),长无空格文本因此无约束
+       横向溢出。按 comm 先例迁回本组件,值逐字源自 tracker.component.scss;
+       .q-text 另加换行约束(min-width:0 + overflow-wrap:anywhere +
+       word-break:break-word,与本文件 .comm-content/.pre 口径一致)。 */
+    .q-empty {
+      text-align: center; padding: 32px 16px; color: rgba(0,0,0,0.45);
+    }
+    .q-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.4; }
+    .q-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .q-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 14px; border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 8px; background: #fff;
+    }
+    .q-num {
+      flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%;
+      background: #e8eaf6; color: #3f51b5; font-size: 12px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .q-text {
+      flex: 1; min-width: 0; font-size: 14px; line-height: 1.5;
+      overflow-wrap: anywhere; word-break: break-word;
+    }
+    .q-del { flex: 0 0 auto; opacity: 0.5; }
+    .q-del:hover { opacity: 1; color: #c62828; }
+    .q-add-form { margin-bottom: 16px; }
+    .q-add-form .full { width: 100%; }
+    .q-add-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .q-add-btn { margin-top: 4px; }
   `]
 })
 export class ApplicationDetailDialogComponent {

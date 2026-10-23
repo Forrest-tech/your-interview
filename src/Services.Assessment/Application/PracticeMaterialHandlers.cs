@@ -1,3 +1,4 @@
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.BuildingBlocks.Security;
@@ -46,6 +47,29 @@ public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
 /// </remarks>
 public sealed record SaveMaterialTreeCommand(Guid UserId, IReadOnlyList<MaterialNodeIn> Nodes, bool Force = false)
     : MediatR.IRequest<Result<int>>;
+
+/// <summary>
+/// 票109:整树保存此前无应用层长度校验,Name 只有 EF 硬限(300)—— 超限
+/// 穿透 DB 回 500。本校验器只补 Name 长度(整树递归),上限 = EF 逐字;
+/// Content 在 EF 是 text(无上限,有意),不设限。
+/// </summary>
+public sealed class SaveMaterialTreeCommandValidator : AbstractValidator<SaveMaterialTreeCommand>
+{
+    public SaveMaterialTreeCommandValidator()
+    {
+        RuleForEach(x => x.Nodes).SetValidator(new MaterialNodeInValidator());
+    }
+}
+
+public sealed class MaterialNodeInValidator : AbstractValidator<MaterialNodeIn>
+{
+    public MaterialNodeInValidator()
+    {
+        RuleFor(x => x.Name)
+            .MaximumLength(300).WithMessage("素材名长度不能超过 {MaxLength} 个字符");
+        RuleForEach(x => x.Children).SetValidator(this);
+    }
+}
 
 /// <summary>前端提交的节点(Id 为 null = 新建)。MarkColor / CategoryId 可选 —— 旧客户端不传也能存。</summary>
 public sealed record MaterialNodeIn(

@@ -59,12 +59,13 @@ public sealed class RoundReminder : AuditableAggregateRoot
     public DateTimeOffset? AcknowledgedAt { get; private set; }
 
     /// <summary>
-    /// 改期重算:更新触发时刻并回到待触发 —— 时刻已变,旧确认对新时刻无意义。
-    /// 已取消的行不复活(取消原因若消失,由同步层新建行)。
+    /// 同步重算的统一入口:把行带到「按当前排期应有的待触发态」——
+    /// 更新触发时刻并回到 Pending、清旧确认。时刻已变时旧确认对新时刻无意义;
+    /// 已取消的行在取消原因消失(结果回退 Pending 等)时同样经此复活 ——
+    /// 唯一键 (RoundId, Kind) 只容一行,复活与新建必须走同一条路。
     /// </summary>
     public void Reschedule(DateTimeOffset remindAt)
     {
-        if (Status == RoundReminderStatus.Cancelled) return;
         RemindAt = remindAt;
         Status = RoundReminderStatus.Pending;
         AcknowledgedAt = null;

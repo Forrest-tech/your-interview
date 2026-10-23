@@ -78,6 +78,8 @@ public sealed class CreateEntryCommandHandler(InterviewsDbContext db)
 
         db.Entries.Add(entry);
         await db.SaveChangesAsync(ct);
+        // CONF-CAL-2:建单带的首轮排期即时生成提醒(派生数据,失败不连坐,查询侧对账兜底)。
+        await ReminderSync.SafeSyncEntryAsync(db, request.UserId, entry.Id, ct);
         return Result.Success(entry.Id);
     }
 }
@@ -101,6 +103,8 @@ public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
             e.SetDebrief(request.DebriefJson);
 
         await db.SaveChangesAsync(ct);
+        // CONF-CAL-2:基本信息里的日期/结果变更可能影响轮次排期与终态,同步提醒。
+        await ReminderSync.SafeSyncEntryAsync(db, request.UserId, e.Id, ct);
         return Result.Success();
     }
 }
@@ -128,6 +132,8 @@ public sealed class DeleteEntryCommandHandler(InterviewsDbContext db)
         ConcurrencyPin.Pin(db, e, request.Version);
         e.MarkDeleted();   // 软删除:全局查询过滤器会自动隐藏
         await db.SaveChangesAsync(ct);
+        // CONF-CAL-2:条目删除 → 其待触发提醒取消(同步层按「条目不可见」对账)。
+        await ReminderSync.SafeSyncEntryAsync(db, request.UserId, e.Id, ct);
         return Result.Success();
     }
 }
@@ -501,6 +507,8 @@ public sealed class AddRoundCommandHandler(InterviewsDbContext db)
             r.UpdateDetails(null, request.ScheduledTime, null, null, null, null);
         }
         await db.SaveChangesAsync(ct);
+        // CONF-CAL-2:新轮次带排期 → 生成两条提醒。
+        await ReminderSync.SafeSyncEntryAsync(db, request.UserId, e.Id, ct);
         return Result.Success(r.Id);
     }
 }
@@ -743,6 +751,8 @@ public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
             round?.UpdateDetails(request.MeetingLink, request.ScheduledTime, request.PrepQuestionsJson,
                 request.EmailsJson, request.Transcript, request.RecordingUrl, request.ChecklistJson);
             await db.SaveChangesAsync(ct);
+            // CONF-CAL-2:改期 → 提醒重算;出终态 → 取消待触发提醒。
+            await ReminderSync.SafeSyncEntryAsync(db, request.UserId, e.Id, ct);
             return Result.Success();
         }
         catch (InvalidOperationException ex)
@@ -763,6 +773,8 @@ public sealed class RemoveRoundCommandHandler(InterviewsDbContext db)
         {
             e.RemoveRound(request.RoundId);
             await db.SaveChangesAsync(ct);
+            // CONF-CAL-2:轮次删除 → 其待触发提醒取消。
+            await ReminderSync.SafeSyncEntryAsync(db, request.UserId, e.Id, ct);
             return Result.Success();
         }
         catch (InvalidOperationException ex)

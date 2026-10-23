@@ -427,6 +427,33 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>CONF-CAL-2:我的轮次提醒(待触发,按触发时刻升序;含 IsDue 标记)。</summary>
+    [HttpGet("reminders")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> ListReminders(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetRemindersQuery(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>CONF-CAL-2:已到触发时刻且未确认的提醒(应用内横幅数据源)。</summary>
+    [HttpGet("reminders/due")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> DueReminders(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetRemindersQuery(Me, DueOnly: true), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>CONF-CAL-2:确认一条提醒(点「知道了」);他人的提醒回 404。</summary>
+    [HttpPost("reminders/{id:guid}/ack")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> AcknowledgeReminder(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new AcknowledgeReminderCommand(Me, id), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     /// <summary>轮次通过概率:基于历史同 stage 通过率 + 准备度。</summary>
     [HttpGet("rounds/{roundId:guid}/pass-probability")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]

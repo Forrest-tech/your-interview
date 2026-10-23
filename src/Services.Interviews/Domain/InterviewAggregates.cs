@@ -719,22 +719,6 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         return m;
     }
 
-    public InterviewWeakness AddWeakness(WeaknessCategory category, string title, string? detail,
-        string? evidence, int severity, string? suggestion)
-    {
-        var w = new InterviewWeakness(Id, category, title, detail, evidence, severity,
-            suggestion, WeaknessSource.Manual);
-        _weaknesses.Add(w);
-        Touch();
-        return w;
-    }
-
-    public void RemoveWeakness(Guid weaknessId)
-    {
-        var w = _weaknesses.FirstOrDefault(x => x.Id == weaknessId);
-        if (w is not null) { _weaknesses.Remove(w); Touch(); }
-    }
-
     private void TransitionTo(InterviewStatus target)
     {
         if (target == Status) return;

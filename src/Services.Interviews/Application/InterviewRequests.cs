@@ -206,5 +206,3 @@ public sealed record UpdateRoundCommand(
 
 public sealed record RemoveRoundCommand(Guid UserId, Guid EntryId, Guid RoundId) : IRequest<Result>;
 
-public sealed record RemoveWeaknessCommand(Guid UserId, Guid EntryId, Guid WeaknessId) : IRequest<Result>;
-

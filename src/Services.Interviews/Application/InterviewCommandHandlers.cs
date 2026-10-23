@@ -756,16 +756,3 @@ public sealed class RemoveRoundCommandHandler(InterviewsDbContext db)
     }
 }
 
-public sealed class RemoveWeaknessCommandHandler(InterviewsDbContext db)
-    : IRequestHandler<RemoveWeaknessCommand, Result>
-{
-    public async Task<Result> Handle(RemoveWeaknessCommand request, CancellationToken ct)
-    {
-        var e = await db.Entries.Include(x => x.Weaknesses).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
-        if (e is null) return Result.Failure(Error.NotFound("面试条目"));
-        e.RemoveWeakness(request.WeaknessId);
-        await db.SaveChangesAsync(ct);
-        return Result.Success();
-    }
-}
-

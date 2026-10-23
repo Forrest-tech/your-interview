@@ -13,6 +13,7 @@ import { Observable } from 'rxjs';
 
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { TrackerApi } from '../../core/api/tracker-api.service';
+import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 import { AnswerTemplate } from '../../core/models/api.models';
 import { I18nService } from '../../core/i18n/i18n.service';
 
@@ -50,16 +51,26 @@ interface DialogData {
         <div class="al-form">
           <mat-form-field appearance="outline">
             <mat-label>{{ t('tracker.alCategory') }}</mat-label>
-            <input matInput [(ngModel)]="category" [placeholder]="t('tracker.alCatPh')">
+            <input matInput [(ngModel)]="category" [placeholder]="t('tracker.alCatPh')"
+                   (ngModelChange)="clearFieldError('category')">
           </mat-form-field>
+          @if (fieldErrors().category) {
+            <div class="field-error" role="alert">{{ fieldErrors().category }}</div>
+          }
           <mat-form-field appearance="outline" class="full">
             <mat-label>{{ t('tracker.alQuestion') }}</mat-label>
-            <input matInput [(ngModel)]="question">
+            <input matInput [(ngModel)]="question" (ngModelChange)="clearFieldError('question')">
           </mat-form-field>
+          @if (fieldErrors().question) {
+            <div class="field-error" role="alert">{{ fieldErrors().question }}</div>
+          }
           <mat-form-field appearance="outline" class="full">
             <mat-label>{{ t('tracker.alAnswer') }}</mat-label>
-            <textarea matInput rows="4" [(ngModel)]="answer"></textarea>
+            <textarea matInput rows="4" [(ngModel)]="answer" (ngModelChange)="clearFieldError('answer')"></textarea>
           </mat-form-field>
+          @if (fieldErrors().answer) {
+            <div class="field-error" role="alert">{{ fieldErrors().answer }}</div>
+          }
           <div class="al-form-actions">
             <button mat-flat-button color="primary" [disabled]="!question.trim() || !answer.trim()"
                     (click)="save()">
@@ -125,6 +136,8 @@ interface DialogData {
       background: rgba(0,0,0,0.025); border: 1px solid rgba(0,0,0,0.08);
     }
     .al-form mat-form-field { width: 100%; }
+    /* 票75:字段级校验提示(对齐票12 口径) */
+    .field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
     .al-form .full { width: 100%; }
     .al-form-actions { display: flex; gap: 8px; }
     .al-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -164,6 +177,22 @@ export class AnswerLibraryDialogComponent {
   question = '';
   answer = '';
 
+  // ---- 票75:字段级校验错误(上限与 Create/UpdateAnswerTemplateCommandValidator 对齐) ----
+  readonly LIMITS = { category: 100, question: 500, answer: 20_000 } as const;
+  readonly fieldErrors = signal<Partial<Record<'category' | 'question' | 'answer', string>>>({});
+
+  clearFieldError(field: 'category' | 'question' | 'answer'): void {
+    if (this.fieldErrors()[field]) {
+      const next = { ...this.fieldErrors() };
+      delete next[field];
+      this.fieldErrors.set(next);
+    }
+  }
+
+  private tooLongText(max: number): string {
+    return this.i18n.tf('validation.tooLong', { max });
+  }
+
   constructor() {
     this.load();
   }
@@ -177,6 +206,7 @@ export class AnswerLibraryDialogComponent {
   }
 
   startNew(): void {
+    this.fieldErrors.set({});
     this.editingId.set(null);
     this.category = '';
     this.question = '';
@@ -185,6 +215,7 @@ export class AnswerLibraryDialogComponent {
   }
 
   startEdit(item: AnswerTemplate): void {
+    this.fieldErrors.set({});
     this.editingId.set(item.id);
     this.category = item.category;
     this.question = item.question;
@@ -193,6 +224,7 @@ export class AnswerLibraryDialogComponent {
   }
 
   cancel(): void {
+    this.fieldErrors.set({});
     this.showForm.set(false);
     this.editingId.set(null);
   }
@@ -213,6 +245,13 @@ export class AnswerLibraryDialogComponent {
       question: this.question.trim(),
       answer: this.answer.trim()
     };
+    // 票75:三字段长度先挡,超限字段下亮含上限提示,不走通用 snack
+    const preErrors: Partial<Record<'category' | 'question' | 'answer', string>> = {};
+    for (const f of ['category', 'question', 'answer'] as const) {
+      if (textLengthError(body[f], this.LIMITS[f])) preErrors[f] = this.tooLongText(this.LIMITS[f]);
+    }
+    if (Object.keys(preErrors).length > 0) { this.fieldErrors.set(preErrors); return; }
+    this.fieldErrors.set({});
     const editing = this.editingId();
     const req: Observable<unknown> = editing
       ? this.trackerApi.updateAnswerTemplate(editing, body)
@@ -224,7 +263,19 @@ export class AnswerLibraryDialogComponent {
         this.load();
         this.snack.open(this.t(editing ? 'tracker.alSaved' : 'tracker.alCreated'), this.t('common.close'), { duration: 2200 });
       },
-      error: (err) => this.snack.open(this.readError(err), this.t('common.close'), { duration: 3000 })
+      // 票75:errors{Category/Question/Answer} 逐字段落回表单;无字段级错误回落原通用 snack
+      error: (err) => {
+        const mapped: Partial<Record<'category' | 'question' | 'answer', string>> = {};
+        const serverNames = { category: 'Category', question: 'Question', answer: 'Answer' } as const;
+        for (const f of ['category', 'question', 'answer'] as const) {
+          const c = fieldErrorFromServer(err, serverNames[f], { sentLength: body[f].length, max: this.LIMITS[f] });
+          if (!c) continue;
+          mapped[f] = c.kind === 'tooLong' ? this.tooLongText(this.LIMITS[f])
+            : c.kind === 'required' ? this.t('validation.required') : c.text;
+        }
+        if (Object.keys(mapped).length > 0) { this.fieldErrors.set(mapped); return; }
+        this.snack.open(this.readError(err), this.t('common.close'), { duration: 3000 });
+      }
     });
   }
 

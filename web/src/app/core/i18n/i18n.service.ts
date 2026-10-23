@@ -886,6 +886,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dQuestionsDesc': { zh: '为这场面试准备的问题清单', en: 'Questions to prepare for this interview', fr: 'Questions à préparer pour cet entretien' },
   'tracker.dQuestionsEmpty': { zh: '还没有问题,添加第一个吧', en: 'No questions yet — add the first one', fr: 'Aucune question — ajoutez la première' },
   'tracker.dQuestionAdd': { zh: '添加问题', en: 'Add question', fr: 'Ajouter une question' },
+  // 票75:字段级校验文案(上限数字走 {max} 占位,组件以 tf 注入;全站 Jobs 表单共用)
+  'validation.tooLong': { zh: '最多 {max} 个字符,请删减后再试', en: 'Must be at most {max} characters — please shorten it and try again', fr: 'Au plus {max} caractères — raccourcissez le texte puis réessayez' },
+  'validation.required': { zh: '此项必填', en: 'This field is required', fr: 'Ce champ est requis' },
   'tracker.dJobPosting': { zh: '职位发布', en: 'Job Posting', fr: 'Offre d\'emploi' },
   'tracker.dAppStatus': { zh: '申请状态', en: 'Application Status', fr: 'Statut de candidature' },
   'tracker.dNotes': { zh: '备注', en: 'Notes', fr: 'Notes' },

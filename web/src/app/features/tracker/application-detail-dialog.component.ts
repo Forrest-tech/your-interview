@@ -23,6 +23,7 @@ import { Application, ApplicationStatus, Communication, CommunicationType, Compa
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
 import { extractPdfText } from '../../core/utils/pdf-text';
+import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 import { computeMatch, type MatchResult } from '../../core/match/resume-match';
 
 /**
@@ -143,7 +144,11 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
         </div>
         @if (jdSummaryEditing()) {
           <textarea class="plain-area" rows="8" [(ngModel)]="jdSummaryDraft"
+                    (ngModelChange)="jdSummaryError.set(null)"
                     [placeholder]="t('tracker.dJdSummary')"></textarea>
+          @if (jdSummaryError()) {
+            <div class="field-error-plain" role="alert">{{ jdSummaryError() }}</div>
+          }
           <div class="cl-actions save-row">
             <button mat-flat-button color="primary" (click)="saveJdSummary()"
                     [disabled]="jdSummarySaving()">
@@ -526,12 +531,16 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
               <mat-form-field appearance="outline" class="full">
                 <mat-label>{{ t('tracker.dQuestionAdd') }}</mat-label>
                 <textarea matInput rows="2" [(ngModel)]="questionDraft"
+                          (ngModelChange)="questionError.set(null)"
                           (keydown.enter)="addQuestion(); $event.preventDefault()"></textarea>
               </mat-form-field>
+              @if (questionError()) {
+                <div class="field-error" role="alert">{{ questionError() }}</div>
+              }
               <div class="q-add-actions">
                 <button mat-flat-button color="primary" (click)="addQuestion()"
                         [disabled]="!questionDraft.trim()">{{ t('common.add') }}</button>
-                <button mat-button (click)="questionAdding.set(false); questionDraft = ''">{{ t('common.cancel') }}</button>
+                <button mat-button (click)="questionAdding.set(false); questionDraft = ''; questionError.set(null)">{{ t('common.cancel') }}</button>
               </div>
             </div>
           } @else {
@@ -574,22 +583,38 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
               </div>
               <mat-form-field appearance="outline" class="full">
                 <mat-label>{{ t('tracker.commsSubject') }}</mat-label>
-                <input matInput [(ngModel)]="commDraft().subject" [placeholder]="t('tracker.dCommSubjectPh')">
+                <input matInput [(ngModel)]="commDraft().subject" [placeholder]="t('tracker.dCommSubjectPh')"
+                       (ngModelChange)="clearCommError('subject')">
               </mat-form-field>
+              @if (commFieldErrors().subject) {
+                <div class="field-error" role="alert">{{ commFieldErrors().subject }}</div>
+              }
               <div class="row2">
                 <mat-form-field appearance="outline">
                   <mat-label>{{ t('tracker.commsContact') }}</mat-label>
-                  <input matInput [(ngModel)]="commDraft().contactName" [placeholder]="t('tracker.dCommContactPh')">
+                  <input matInput [(ngModel)]="commDraft().contactName" [placeholder]="t('tracker.dCommContactPh')"
+                         (ngModelChange)="clearCommError('contactName')">
                 </mat-form-field>
                 <mat-form-field appearance="outline">
                   <mat-label>Email</mat-label>
-                  <input matInput [(ngModel)]="commDraft().contactEmail" placeholder="name@company.com">
+                  <input matInput [(ngModel)]="commDraft().contactEmail" placeholder="name@company.com"
+                         (ngModelChange)="clearCommError('contactEmail')">
                 </mat-form-field>
               </div>
+              @if (commFieldErrors().contactName) {
+                <div class="field-error" role="alert">{{ commFieldErrors().contactName }}</div>
+              }
+              @if (commFieldErrors().contactEmail) {
+                <div class="field-error" role="alert">{{ commFieldErrors().contactEmail }}</div>
+              }
               <mat-form-field appearance="outline" class="full">
                 <mat-label>{{ t('tracker.commsContent') }}</mat-label>
-                <textarea matInput rows="3" [(ngModel)]="commDraft().content"></textarea>
+                <textarea matInput rows="3" [(ngModel)]="commDraft().content"
+                          (ngModelChange)="clearCommError('content')"></textarea>
               </mat-form-field>
+              @if (commFieldErrors().content) {
+                <div class="field-error" role="alert">{{ commFieldErrors().content }}</div>
+              }
               <div class="comm-form-actions">
                 <button mat-flat-button color="primary" [disabled]="!commDraft().content.trim()"
                         (click)="saveComm()">{{ editing ? t('common.save') : t('tracker.commsAdd') }}</button>
@@ -963,6 +988,9 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .plain-area:focus { outline: none; border-color: #1a73e8; }
     .plain-area::placeholder { color: rgba(0,0,0,0.35); }
     .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(0,0,0,0.45); line-height: 1.5; }
+    /* 票75:字段级校验提示(对齐票12 Knowledge 弹窗 .field-error 口径:红色 12px、贴字段下方) */
+    .field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
+    .field-error-plain { color: #ba1a1a; font-size: 12px; margin: 4px 0 8px 2px; }
     .gen-btn { margin: 2px 0 4px; }
     .gen-btn[disabled] { opacity: 0.5; }
 
@@ -1624,6 +1652,46 @@ export class ApplicationDetailDialogComponent {
   questionDraft = '';
   readonly questionAdding = signal(false);
 
+  // ---- 票75:字段级校验错误(后端上限为唯一口径,值与 Jobs 校验器逐一对齐) ----
+  /** 自备问题 Text 上限(AddApplicationQuestionCommandValidator MaximumLength(4000))。 */
+  readonly QUESTION_MAX = 4000;
+  /** JD 长文本统一上限(JdTextLimits.MaxLength,Update/SetJdContent 校验器共用)。 */
+  readonly JD_MAX = 200_000;
+  /** 沟通记录上限(Create/UpdateCommunicationCommandValidator)。 */
+  readonly COMM_CONTENT_MAX = 20_000;
+  readonly COMM_SHORT_MAX = 300;
+
+  readonly questionError = signal<string | null>(null);
+  readonly jdSummaryError = signal<string | null>(null);
+  readonly jdTextError = signal<string | null>(null);
+  readonly commFieldErrors = signal<Partial<Record<'subject' | 'contactName' | 'contactEmail' | 'content', string>>>({});
+
+  /** 超限文案:上限数字走 i18n tf 注入,三语在核心字典 validation.tooLong。 */
+  private tooLongText(max: number): string {
+    return this.tf('validation.tooLong', { max });
+  }
+
+  /**
+   * 服务端字段错误 → 本地化字段文案(票12 applyServerError 同型机制,纯逻辑
+   * 在 validation-errors.helpers)。该字段无服务端错误时返回 null,调用方
+   * 回落原有通用处理,非校验失败的呈现不回退。
+   */
+  private mapFieldError(e: unknown, field: string, sentLength: number, max: number): string | null {
+    const c = fieldErrorFromServer(e, field, { sentLength, max });
+    if (!c) return null;
+    if (c.kind === 'tooLong') return this.tooLongText(max);
+    if (c.kind === 'required') return this.t('validation.required');
+    return c.text;
+  }
+
+  clearCommError(field: 'subject' | 'contactName' | 'contactEmail' | 'content'): void {
+    if (this.commFieldErrors()[field]) {
+      const next = { ...this.commFieldErrors() };
+      delete next[field];
+      this.commFieldErrors.set(next);
+    }
+  }
+
   /** 打开弹窗时读后端(未导入过则先把本地旧问题一次性导入再读回,对账以读回条数为准)。 */
   private loadAppQuestions(): void {
     this.prefs.loadQuestions(this.app.id).subscribe({
@@ -1635,13 +1703,24 @@ export class ApplicationDetailDialogComponent {
   addQuestion(): void {
     const q = this.questionDraft.trim();
     if (!q) return;
+    // 票75:提交前先挡超限(后端 MaximumLength(4000)),字段下直接亮含上限的本地化提示,不白跑 400
+    if (textLengthError(q, this.QUESTION_MAX)) {
+      this.questionError.set(this.tooLongText(this.QUESTION_MAX));
+      return;
+    }
     this.prefs.addQuestion(this.app.id, q).subscribe({
       next: () => {
         this.questionDraft = '';
+        this.questionError.set(null);
         this.questionAdding.set(false);
         this.loadAppQuestions();
       },
-      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
+      // 票75:后端 400 的 errors{Text} 映射回问题框下方;非字段级失败回落原通用 snack
+      error: (e) => {
+        const fieldText = this.mapFieldError(e, 'Text', q.length, this.QUESTION_MAX);
+        if (fieldText) { this.questionError.set(fieldText); return; }
+        this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 });
+      }
     });
   }
 
@@ -1692,6 +1771,7 @@ export class ApplicationDetailDialogComponent {
 
   cancelEditJdSummary(): void {
     this.jdSummaryEditing.set(false);
+    this.jdSummaryError.set(null);
   }
 
   /** 2026-10-19:用最新后端重新解析 JD，修复旧数据的噪音/去重问题。 */
@@ -1861,6 +1941,12 @@ export class ApplicationDetailDialogComponent {
 
   saveJdSummary(): void {
     const d = this.detail;
+    // 票75:超限先挡(JdTextLimits.MaxLength),字段下亮含上限提示,不走通用弹框
+    const sent = this.jdSummaryDraft.trim();
+    if (textLengthError(sent, this.JD_MAX)) {
+      this.jdSummaryError.set(this.tooLongText(this.JD_MAX));
+      return;
+    }
     this.jdSummarySaving.set(true);
     this.jobsApi.updateApplication(this.app.id, {
       role: d.role, location: d.location, link: d.link, salary: d.salary,
@@ -1877,6 +1963,9 @@ export class ApplicationDetailDialogComponent {
       },
       error: (err) => {
         this.jdSummarySaving.set(false);
+        // 票75:errors{JdSummary} 落摘要框下方;其余失败回落原通用提示
+        const fieldText = this.mapFieldError(err, 'JdSummary', sent.length, this.JD_MAX);
+        if (fieldText) { this.jdSummaryError.set(fieldText); return; }
         this.alertError(this.readError(err));
       }
     });
@@ -1902,6 +1991,12 @@ export class ApplicationDetailDialogComponent {
   }
 
   saveJdText(): void {
+    // 票75:同 saveJdSummary 口径(该编辑入口现行模板未渲染,逻辑先对齐,防入口恢复后回潮)
+    const sent = this.jdTextDraft.trim();
+    if (textLengthError(sent, this.JD_MAX)) {
+      this.jdTextError.set(this.tooLongText(this.JD_MAX));
+      return;
+    }
     this.jdTextSaving.set(true);
     this.jobsApi.saveApplicationJd(this.app.id, {
       jdText: this.jdTextDraft.trim() || null,
@@ -1915,6 +2010,8 @@ export class ApplicationDetailDialogComponent {
       },
       error: (err) => {
         this.jdTextSaving.set(false);
+        const fieldText = this.mapFieldError(err, 'JdText', sent.length, this.JD_MAX);
+        if (fieldText) { this.jdTextError.set(fieldText); return; }
         this.alertError(this.readError(err));
       }
     });
@@ -1974,11 +2071,13 @@ export class ApplicationDetailDialogComponent {
 
   startAddComm(): void {
     this.commEditingId.set(null);
+    this.commFieldErrors.set({});
     this.commDraft.set(this.blankDraft());
   }
 
   startEditComm(c: Communication): void {
     this.commEditingId.set(c.id);
+    this.commFieldErrors.set({});
     this.commDraft.set({
       type: c.type,
       subject: c.subject ?? '',
@@ -1991,6 +2090,7 @@ export class ApplicationDetailDialogComponent {
 
   cancelComm(): void {
     this.commEditingId.set(null);
+    this.commFieldErrors.set({});
   }
 
   saveComm(): void {
@@ -2004,6 +2104,17 @@ export class ApplicationDetailDialogComponent {
       contactEmail: d.contactEmail.trim() || null,
       occurredAt: this.fromLocalInput(d.occurredAt)
     };
+    // 票75:四字段长度先挡(后端 Create/UpdateCommunication 校验器),超限字段下亮含上限提示
+    const limits = {
+      subject: this.COMM_SHORT_MAX, contactName: this.COMM_SHORT_MAX,
+      contactEmail: this.COMM_SHORT_MAX, content: this.COMM_CONTENT_MAX
+    } as const;
+    const preErrors: Partial<Record<keyof typeof limits, string>> = {};
+    for (const f of ['subject', 'contactName', 'contactEmail', 'content'] as const) {
+      if (textLengthError(body[f], limits[f])) preErrors[f] = this.tooLongText(limits[f]);
+    }
+    if (Object.keys(preErrors).length > 0) { this.commFieldErrors.set(preErrors); return; }
+    this.commFieldErrors.set({});
     const editing = this.commEditingId();
     const req: Observable<unknown> = editing
       ? this.trackerApi.updateCommunication(this.app.id, editing, body)
@@ -2014,7 +2125,17 @@ export class ApplicationDetailDialogComponent {
         this.loadCommunications();
         this.snack.open(this.t('tracker.commsSaved'), this.t('common.close'), { duration: 2500 });
       },
-      error: (err) => this.alertError(this.readError(err))
+      // 票75:errors{Subject/Content/...} 逐字段落回表单;无字段级错误回落原通用提示
+      error: (err) => {
+        const mapped: Partial<Record<keyof typeof limits, string>> = {};
+        const serverNames = { subject: 'Subject', contactName: 'ContactName', contactEmail: 'ContactEmail', content: 'Content' } as const;
+        for (const f of ['subject', 'contactName', 'contactEmail', 'content'] as const) {
+          const text = this.mapFieldError(err, serverNames[f], (body[f] ?? '').length, limits[f]);
+          if (text) mapped[f] = text;
+        }
+        if (Object.keys(mapped).length > 0) { this.commFieldErrors.set(mapped); return; }
+        this.alertError(this.readError(err));
+      }
     });
   }
 

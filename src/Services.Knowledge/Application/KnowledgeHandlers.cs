@@ -717,7 +717,7 @@ public sealed class RecordReviewCommandHandler(KnowledgeDbContext db, TimeProvid
         k.RecordReview(result, request.ConfidenceBefore, request.ConfidenceAfter,
             request.Note, request.DurationSeconds);
 
-        await db.SaveChangesAsync(ct);   // 领域事件 → KnowledgeMasteryChanged 集成事件
+        await db.SaveChangesAsync(ct);   // 领域事件 → 集成事件(票91:复习内真变级经此发出)
 
         var interval = k.NextReviewAt is null
             ? 0

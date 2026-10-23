@@ -14,7 +14,11 @@ public sealed record InterviewRecordingUploaded(
 ) : IntegrationEvent;
 
 /// <summary>Analysis.Worker:分析管线完成 → 回写结果 + 通知前端。
-/// PronunciationScore 可空:文本模式(无音频)下发音未测量。</summary>
+/// PronunciationScore 可空:文本模式(无音频)下发音未测量。
+/// ⚠️ 票91 定性(2026-10-22):本契约有真实消费者(Analytics 写 interview 来源雷达投影、
+/// Worker 消费后 HTTP 回写),但全仓暂无发布者 —— 发布接线在 Worker 分析完成点,
+/// 属分析管线面,待另立票接线(见 evidence-34 冲突申报 2 / evidence-91 死契约定性 4)。
+/// 在接线落地前本契约保留,勿删。</summary>
 public sealed record InterviewAnalysisCompleted(
     Guid InterviewSessionId,
     Guid AssetId,
@@ -31,17 +35,6 @@ public sealed record InterviewAnalysisFailed(
     Guid AssetId,
     Guid UserId,
     string Reason
-) : IntegrationEvent;
-
-/// <summary>Assessment 服务:一次 AI 模拟答题完成 → 触发多维分析。</summary>
-public sealed record MockAnswerSubmitted(
-    Guid MockSessionId,
-    Guid TurnId,
-    Guid UserId,
-    Guid QuestionId,
-    string Transcript,
-    string? AudioPath,
-    string? ReferenceAnswer
 ) : IntegrationEvent;
 
 /// <summary>JobTracker:投递状态流转 → 通知 Analytics 刷新读模型。</summary>
@@ -106,26 +99,8 @@ public sealed record InterviewOutcomeRecorded(
     InterviewOutcome? Outcome = null
 ) : IntegrationEvent;
 
-/// <summary>Knowledge:某技术条目掌握度变化 → Analytics 刷新能力雷达。</summary>
-public sealed record KnowledgeMasteryChanged(
-    Guid KnowledgeItemId,
-    Guid UserId,
-    int PreviousLevel,
-    int NewLevel
-) : IntegrationEvent;
-
 /// <summary>Identity:新用户注册 → 初始化该用户的默认工作区(默认知识库、默认管道列)。</summary>
 public sealed record UserRegistered(Guid UserId, string Email, string DisplayName) : IntegrationEvent;
-
-/// <summary>审计事件:任何敏感写操作 → Identity 审计流水(合规/PIPEDA 需要)。</summary>
-public sealed record AuditEventRecorded(
-    Guid UserId,
-    string Action,
-    string Resource,
-    string? ResourceId,
-    string? Detail,
-    string? IpAddress
-) : IntegrationEvent;
 
 /// <summary>Interviews 服务:材料转写完成 → 请求 Analysis.Worker 开跑六维分析。</summary>
 public sealed record InterviewAnalysisRequested(
@@ -145,6 +120,21 @@ public sealed record InterviewKnowledgeExtractionRequested(
 
 /// <summary>Knowledge 服务:知识点掌握度变化(int 等级版,给 Analytics 用)。</summary>
 public sealed record KnowledgeLevelChanged(
+    Guid KnowledgeItemId,
+    Guid UserId,
+    string Topic,
+    string Mastery,
+    int Level
+) : IntegrationEvent;
+
+/// <summary>
+/// Knowledge 服务:知识点条目被删除(票91)→ Analytics 把该条目移出掌握度分布台账。
+/// 为什么不复用 KnowledgeLevelChanged:它没有「移除」语义,消费者无法区分
+/// 「等级变成 X」与「条目已不存在」。本契约带足台账迁移所需信息:
+/// 条目 id / 用户 / 原主题 / 原等级(Mastery 字符串 + Level 枚举 int 双载,
+/// 与 KnowledgeLevelChanged 及 Analytics MasteryLevelMapping 同口径:字符串优先、int 回落)。
+/// </summary>
+public sealed record KnowledgeItemDeleted(
     Guid KnowledgeItemId,
     Guid UserId,
     string Topic,

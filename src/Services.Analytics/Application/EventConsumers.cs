@@ -66,22 +66,6 @@ public abstract class AnalyticsConsumerBase<TEvent>(AnalyticsDbContext db,
     }
 }
 
-/// <summary>AI 模拟答题完成 → 刷新能力雷达(mock 来源)。</summary>
-public sealed class MockAnswerSubmittedConsumer(AnalyticsDbContext db,
-    ILogger<MockAnswerSubmittedConsumer> logger)
-    : AnalyticsConsumerBase<MockAnswerSubmitted>(db, logger)
-{
-    protected override async Task Handle(MockAnswerSubmitted m, CancellationToken ct)
-    {
-        // MockAnswerSubmitted 只带文本,没有六维分数 —— 分数由 Assessment 打分后写入。
-        // 这里只记录"发生过一次练习"这个事实,供活跃度统计用。
-        // 真正的六维分数由 KnowledgeLevelChanged / 面试分析完成事件带来。
-        Logger.LogInformation("模拟答题提交 MockSession={Session} Question={Q}",
-            m.MockSessionId, m.QuestionId);
-        await Task.CompletedTask;
-    }
-}
-
 /// <summary>技术栈掌握度变化 → 刷新能力雷达(knowledge 来源)+ 主题分布。</summary>
 public sealed class KnowledgeLevelChangedConsumer(AnalyticsDbContext db,
     ILogger<KnowledgeLevelChangedConsumer> logger)
@@ -236,18 +220,5 @@ public sealed class InterviewAnalysisCompletedConsumer(AnalyticsDbContext db,
 
         Logger.LogInformation("真实面试分析完成 Entry={Entry} 发音={P} 结构={S} 流利={F}",
             m.InterviewSessionId, m.PronunciationScore, m.StructureScore, m.FluencyScore);
-    }
-}
-
-/// <summary>审计事件 → 保留审计流水(合规需要,只记不分析)。</summary>
-public sealed class AuditEventRecordedConsumer(AnalyticsDbContext db,
-    ILogger<AuditEventRecordedConsumer> logger)
-    : AnalyticsConsumerBase<AuditEventRecorded>(db, logger)
-{
-    protected override Task Handle(AuditEventRecorded m, CancellationToken ct)
-    {
-        Logger.LogDebug("审计事件 User={User} Action={Action} Resource={Resource}",
-            m.UserId, m.Action, m.Resource);
-        return Task.CompletedTask;
     }
 }

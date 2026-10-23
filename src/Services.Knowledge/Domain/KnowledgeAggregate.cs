@@ -54,6 +54,12 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
         // 而不是躺在库里等着被想起来(人一定会忘,系统不能忘)。
         Mastery = MasteryLevel.New;
         NextReviewAt = DateTimeOffset.UtcNow.AddDays(1);
+
+        // 票91:新建也要让 Analytics 台账感知 —— 此前只有 PromoteMastery 发事件,
+        // 条目新建(Mastery=New)不发 → 投影 Total 恒少于真源。构造即 Raise 创建事件,
+        // 由 KnowledgeItemLifecyclePublisher 在 SaveChanges 后回查本体发 KnowledgeLevelChanged。
+        // EF 物化走私有无参构造,不经过这里,读路径不会误发。
+        RaiseDomainEvent(new KnowledgeItemCreatedDomainEvent(Id));
     }
 
     // ---------- 基本信息 ----------
@@ -216,7 +222,7 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
 
     /// <summary>
     /// 调整掌握度。掌握度不是"随便改个状态",而是有方向的:
-    /// 提升到 Mastered 会 RaiseDomainEvent → 由 Handler 转成 KnowledgeMasteryChanged 集成事件,
+    /// 提升到 Mastered 会 RaiseDomainEvent → 由 Publisher 转成 KnowledgeLevelChanged 集成事件,
     /// 让 Analytics 服务刷新能力雷达图。
     /// 「晋升记录本身也是数据」:前端据此画"我什么时候征服了这道题"的时间线。
     /// </summary>
@@ -262,6 +268,9 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
         int? confidenceAfter = null, string? note = null, int? durationSeconds = null,
         DateTimeOffset? reviewedAt = null)
     {
+        // 票91:复习内改级(Mastered→NeedsReview / Learning→Familiar)此前直接改字段不发事件,
+        // Analytics 台账无从迁移。先记改级前等级,方法末尾真变级时才 Raise(未变级不发,防重复)。
+        var masteryBefore = Mastery;
         var at = reviewedAt ?? DateTimeOffset.UtcNow;
         var log = new KnowledgeReviewLog(Id, result, confidenceBefore, confidenceAfter, note, durationSeconds, at);
         _reviewLogs.Add(log);
@@ -310,8 +319,39 @@ public sealed class KnowledgeItem : AuditableAggregateRoot
                 Mastery = MasteryLevel.Familiar;
         }
 
+        // 票91:复习导致真变级 → 汇入既有掌握度变化领域事件(发布器转 KnowledgeLevelChanged,
+        // 消费侧按台账迁移桶);等级没变则不发,避免每次复习都惊扰投影。
+        if (Mastery != masteryBefore)
+            RaiseDomainEvent(new KnowledgeMasteryChangedDomainEvent(Id, (int)masteryBefore, (int)Mastery));
+
         Touch();
         return log;
+    }
+
+    /// <summary>
+    /// 软删除(票91 覆盖基类同名方法):删除前等级/主题要随删除事件带给 Analytics,
+    /// 消费侧台账才能把这条移出分布。事件只在「未删→已删」的真迁移时 Raise 一次,
+    /// 重复删除不重复发(防消费侧双减)。删除本身不改 Mastery,发布器回查即得原等级。
+    /// </summary>
+    public new void MarkDeleted()
+    {
+        var wasDeleted = IsDeleted;
+        base.MarkDeleted();
+        if (!wasDeleted)
+            RaiseDomainEvent(new KnowledgeItemDeletedDomainEvent(Id, (int)Mastery));
+    }
+
+    /// <summary>
+    /// 恢复(票91 覆盖基类同名方法):删除的逆操作 —— 条目回到真源集合,
+    /// 须以创建事件让台账重新计入(消费侧对无台账条目即 Total+1)。
+    /// 只在「已删→恢复」真迁移时 Raise;对未删条目调用是 no-op,不发。
+    /// </summary>
+    public new void Restore()
+    {
+        var wasDeleted = IsDeleted;
+        base.Restore();
+        if (wasDeleted)
+            RaiseDomainEvent(new KnowledgeItemCreatedDomainEvent(Id));
     }
 
     /// <summary>当前所处间隔(天),SM-2 的"上一次间隔"输入。不落库到公开字段之外,仅供算法自身使用。</summary>
@@ -460,10 +500,26 @@ public enum KnowledgeRelationType
 
 /// <summary>
 /// 领域事件:掌握度变化。
-/// 领域事件 = 服务内部同步语义;集成事件(KnowledgeMasteryChanged)才是跨服务契约。
+/// 领域事件 = 服务内部同步语义;集成事件(KnowledgeLevelChanged)才是跨服务契约。
 /// 这里刻意只带"变了什么",不带业务含义,翻译成本交给 Publisher。
 /// </summary>
 public sealed record KnowledgeMasteryChangedDomainEvent(
     Guid KnowledgeItemId,
     int PreviousLevel,
     int NewLevel) : DomainEventBase;
+
+/// <summary>
+/// 领域事件:条目进入真源集合(新建,或删除后恢复)(票91)。
+/// 发布器回查本体后发 KnowledgeLevelChanged(以保存后的最终等级为准)——
+/// 导入路径「先建后 PromoteMastery」的两条事件在消费侧台账上同桶汇合,不重复计 Total。
+/// </summary>
+public sealed record KnowledgeItemCreatedDomainEvent(
+    Guid KnowledgeItemId) : DomainEventBase;
+
+/// <summary>
+/// 领域事件:条目被软删除(票91)。PreviousLevel = 删除前 Mastery 枚举 int,
+/// 与 KnowledgeLevelChanged 的 Level 同语义(字符串由发布器回查本体补齐)。
+/// </summary>
+public sealed record KnowledgeItemDeletedDomainEvent(
+    Guid KnowledgeItemId,
+    int PreviousLevel) : DomainEventBase;

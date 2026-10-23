@@ -27,6 +27,7 @@ builder.Services.AddHealthChecks().AddDbContextCheck<KnowledgeDbContext>("postgr
 // ---------- 消息总线(掌握度变化 → Analytics) ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 builder.Services.AddScoped<KnowledgeMasteryChangedPublisher>();
+builder.Services.AddScoped<KnowledgeItemLifecyclePublisher>();
 
 // COD-01/票03:此前 Knowledge 根本没注册 ICurrentUser —— DbContext 全局过滤器与
 // Handler 谓词都以它为归属来源,缺了它过滤器只能 fail-closed 到零行。

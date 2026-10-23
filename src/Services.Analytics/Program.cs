@@ -30,11 +30,10 @@ builder.Services.AddScoped<YourInterview.Services.Analytics.Application.IKnowled
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration, x =>
 {
     // 每个消费者独立队列 —— 一个消费者反复失败(反复重投)不会拖垮其他读模型更新
-    x.AddConsumer<MockAnswerSubmittedConsumer>();
     x.AddConsumer<KnowledgeLevelChangedConsumer>();
+    x.AddConsumer<KnowledgeItemDeletedConsumer>();
     x.AddConsumer<JobApplicationStatusChangedConsumer>();
     x.AddConsumer<InterviewAnalysisCompletedConsumer>();
-    x.AddConsumer<AuditEventRecordedConsumer>();
 });
 
 // ---------- 鉴权 ----------

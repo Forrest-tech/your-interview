@@ -387,6 +387,22 @@ public sealed record SavePrepSourceSettingsCommand(
     bool WebExperiencesEnabled, bool GlassdoorEnabled,
     string? SearchProvider, string? SearchApiKey) : IRequest<Result<PrepSourceSettingsDto>>;
 
+public sealed class SavePrepSourceSettingsCommandValidator : AbstractValidator<SavePrepSourceSettingsCommand>
+{
+    public SavePrepSourceSettingsCommandValidator()
+    {
+        // 票112:长度上限 = PrepSourceSetting 的 EF 硬限逐字(SearchProvider 50)。
+        // 此前该命令无校验器:超限值虽被 Handler 的 tavily/serper 白名单以 400 拦下,
+        // 回的却是白名单通用文案、无字段级 errors{};补 MaximumLength 后超限走
+        // 统一管道回 400 + errors{SearchProvider:[长度文案]}(票107 定版文案),
+        // ≤50 的非法值仍由 Handler 白名单原样拒绝(逐字守恒)。
+        // 不加 NotEmpty:SearchProvider 为 null/空 = 未配置,是既有可选语义。
+        // SearchApiKey 在 EF 是 text(有意不限长),不设。
+        RuleFor(x => x.SearchProvider)
+            .MaximumLength(50).WithMessage("搜索服务商长度不能超过 {MaxLength} 个字符");
+    }
+}
+
 public sealed class SavePrepSourceSettingsCommandHandler(AiGatewayDbContext db)
     : IRequestHandler<SavePrepSourceSettingsCommand, Result<PrepSourceSettingsDto>>
 {

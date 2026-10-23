@@ -194,7 +194,9 @@ public sealed record StorageSettingDto(
     string LayoutExample,
     bool InContainer,
     /// <summary>是否可以把已有录音搬到新目录(新目录已生效且旧目录里还有文件)。</summary>
-    bool CanMigrate);
+    bool CanMigrate,
+    /// <summary>★ 票108 A13:设置行读时 xmin(无设置行时 null)—— 保存时回传钉版,过期得 409。</summary>
+    uint? Version = null);
 
 /// <summary>迁移结果。</summary>
 public sealed record StorageMigrationDto(int Moved, int Skipped, long Bytes, string TargetRoot);
@@ -208,12 +210,19 @@ public sealed record StorageMigrationDto(int Moved, int Skipped, long Bytes, str
 /// </summary>
 public sealed record GetStorageSettingQuery(Guid UserId) : MediatR.IRequest<StorageSettingDto>;
 
-public sealed class GetStorageSettingQueryHandler(IAudioStore store, IConfiguration config)
+public sealed class GetStorageSettingQueryHandler(IAudioStore store, IConfiguration config,
+    AssessmentDbContext db)
     : MediatR.IRequestHandler<GetStorageSettingQuery, StorageSettingDto>
 {
     public async Task<StorageSettingDto> Handle(GetStorageSettingQuery r, CancellationToken ct)
     {
         var roots = await store.ResolveRootsAsync(r.UserId, ct);
+
+        // ★ 票108 A13:设置行读时 xmin(影子属性须投影读);无设置行 = null。
+        var version = await db.StorageSettings.AsNoTracking()
+            .Where(x => x.UserId == r.UserId)
+            .Select(x => (uint?)EF.Property<uint>(x, "xmin"))
+            .FirstOrDefaultAsync(ct);
         var hostDir = config["Storage:HostDirectory"];
 
         string status;
@@ -256,7 +265,8 @@ public sealed class GetStorageSettingQueryHandler(IAudioStore store, IConfigurat
             string.IsNullOrWhiteSpace(hostDir) ? null : hostDir,
             status, message is null, message,
             files, bytes, layout,
-            LocalStorageRules.RunningInContainer, canMigrate);
+            LocalStorageRules.RunningInContainer, canMigrate,
+            Version: version);
     }
 }
 
@@ -269,7 +279,9 @@ public sealed class GetStorageSettingQueryHandler(IAudioStore store, IConfigurat
 ///   而真正危险的是"保存了但静默写进容器内部",那由
 ///   <see cref="LocalStorageRules.Evaluate"/> 在每次落盘时拦住,不是靠界面。
 /// </summary>
-public sealed record SaveStorageSettingCommand(Guid UserId, string? RootPath)
+public sealed record SaveStorageSettingCommand(Guid UserId, string? RootPath,
+    // ★ 票108 A13:设置行读时 xmin(不传 = 不钉版,兼容旧调用方;新建行无版本可钉)。
+    uint? Version = null)
     : MediatR.IRequest<Result<StorageSettingDto>>;
 
 public sealed class SaveStorageSettingCommandHandler(AssessmentDbContext db, MediatR.ISender sender)
@@ -285,6 +297,8 @@ public sealed class SaveStorageSettingCommandHandler(AssessmentDbContext db, Med
             var existing = await db.StorageSettings.FirstOrDefaultAsync(x => x.UserId == r.UserId, ct);
             if (existing is not null)
             {
+                // ★ 票108 A13:删行同样钉版 —— 旧页签的"恢复默认"不得吞掉新页签刚存的路径。
+                ConcurrencyPin.Pin(db, existing, r.Version);
                 db.StorageSettings.Remove(existing);
                 await db.SaveChangesAsync(ct);
             }
@@ -320,6 +334,8 @@ public sealed class SaveStorageSettingCommandHandler(AssessmentDbContext db, Med
         else
         {
             row.Update(normalized);
+            // ★ 票108 A13:钉设置行版本 —— 双页签串行双写时旧版本得 409,不静默覆盖。
+            ConcurrencyPin.Pin(db, row, r.Version);
         }
 
         await db.SaveChangesAsync(ct);

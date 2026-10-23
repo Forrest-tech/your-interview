@@ -405,7 +405,8 @@ export class ProfileComponent implements OnInit {
       ? this.storageDraft
       : this.storageSelect).trim();
 
-    this.practice.saveStorageSettings(raw.length > 0 ? raw : null).subscribe({
+    this.practice.saveStorageSettings(raw.length > 0 ? raw : null,
+      this.storageStatus()?.version ?? null).subscribe({
       next: (s) => {
         this.storageStatus.set(s);
         this.applyDesiredPath(s.desiredPath);

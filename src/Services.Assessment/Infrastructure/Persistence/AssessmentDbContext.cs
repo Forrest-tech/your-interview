@@ -233,6 +233,9 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.HasKey(x => x.UserId);
             // 路径用 1000 上限:macOS 的 PATH_MAX 是 1024,深目录也要装得下
             e.Property(x => x.RootPath).HasMaxLength(1000).IsRequired();
+            // ★ 票108 A13:设置行补 xmin 并发令牌(PG 系统列,零迁移;J19/I06 先例)
+            //   —— 同属主双页签串行双写曾活体证实静默覆盖(票101 phase1 A13)。
+            e.UseXminAsConcurrencyToken();
         });
 
         // 示范朗读音频缓存(2026-09-16 第三十一轮)

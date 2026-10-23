@@ -1,8 +1,11 @@
 using FluentAssertions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using YourInterview.Services.Assessment.Application;
 using YourInterview.Services.Assessment.Domain;
 using YourInterview.Services.Assessment.Infrastructure.Persistence;
+using YourInterview.Services.Assessment.Infrastructure.Storage;
 using Xunit;
 
 namespace YourInterview.Services.Assessment.Tests;
@@ -249,5 +252,127 @@ public sealed class Ticket108ConcurrencyTests : IAsyncLifetime
             (await new SkipQuestionCommandHandler(db).Handle(
                 new SkipQuestionCommand(sid2, qid2, user), default)).IsSuccess.Should().BeTrue();
         (await GetDetailAsync(user, sid2)).Questions.Single().State.Should().Be("Skipped");
+    }
+
+    // ---------------- A13 storage settings ----------------
+
+    /// <summary>最小 IAudioStore:根目录解析只认设置行本身(与 LocalAudioStore 的 DesiredRoot 口径一致)。</summary>
+    private sealed class FakeStore : IAudioStore
+    {
+        public bool IsConfigured => true;
+        public string DefaultRoot => "/tmp/t108-default";
+        public Task<string> SaveAsync(Guid u, Guid r, string e, Stream c, CancellationToken ct)
+            => throw new NotSupportedException();
+        public Task<Stream?> OpenReadAsync(Guid u, string p, CancellationToken ct)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteAsync(Guid u, string p, CancellationToken ct)
+            => throw new NotSupportedException();
+        public async Task<StorageRoots> ResolveRootsAsync(Guid userId, CancellationToken ct)
+        {
+            await using var db = NewDb();
+            var row = await db.StorageSettings.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.UserId == userId, ct);
+            return new StorageRoots(DefaultRoot, row?.RootPath, DefaultRoot, false, null);
+        }
+    }
+
+    /// <summary>SaveStorageSettingCommandHandler 尾部回读 GetStorageSettingQuery 的分发桩(同 MockAi 先例)。</summary>
+    private sealed class SettingDispatchSender : ISender
+    {
+        public async Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken ct = default)
+        {
+            await using var db = NewDb();
+            object? result = request switch
+            {
+                GetStorageSettingQuery q => await new GetStorageSettingQueryHandler(
+                    new FakeStore(), new ConfigurationBuilder().Build(), db).Handle(q, ct),
+                _ => throw new NotSupportedException(request.GetType().Name)
+            };
+            return (TResponse)result!;
+        }
+        public Task Send<TRequest>(TRequest request, CancellationToken ct = default)
+            where TRequest : IRequest => throw new NotSupportedException();
+        public Task<object?> Send(object request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task Publish(object notification, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task Publish<TNotification>(TNotification notification, CancellationToken ct = default)
+            where TNotification : INotification => throw new NotSupportedException();
+        public IAsyncEnumerable<TResponse> CreateStream<TResponse>(IStreamRequest<TResponse> request,
+            CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<object?> CreateStream(object request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+    }
+
+    private async Task<StorageSettingDto> SaveSettingAsync(Guid user, string? path, uint? version = null)
+    {
+        await using var db = NewDb();
+        var r = await new SaveStorageSettingCommandHandler(db, new SettingDispatchSender())
+            .Handle(new SaveStorageSettingCommand(user, path, version), default);
+        r.IsSuccess.Should().BeTrue(r.Error.Description);
+        return r.Value;
+    }
+
+    private async Task<StorageSettingDto> GetSettingAsync(Guid user)
+    {
+        await using var db = NewDb();
+        return await new GetStorageSettingQueryHandler(
+            new FakeStore(), new ConfigurationBuilder().Build(), db)
+            .Handle(new GetStorageSettingQuery(user), default);
+    }
+
+    [Fact] // A13:新建回传 Version;A 持当前版本改路径成功,B 持旧版本 → 并发异常,A 路径完好
+    public async Task StorageSetting_StaleVersion_Throws()
+    {
+        if (!_available) return;
+        var user = NewUser();
+
+        var created = await SaveSettingAsync(user, "/tmp/t108-a/root");
+        created.Version.Should().NotBeNull();
+        var v = created.Version!.Value;
+
+        var a = await SaveSettingAsync(user, "/tmp/t108-a2/root", v);
+        a.DesiredPath.Should().Be("/tmp/t108-a2/root");
+        a.Version.Should().NotBe(v);
+
+        await using var dbB = NewDb();
+        var act = () => new SaveStorageSettingCommandHandler(dbB, new SettingDispatchSender())
+            .Handle(new SaveStorageSettingCommand(user, "/tmp/t108-b/root", v), default);
+        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+        (await GetSettingAsync(user)).DesiredPath.Should().Be("/tmp/t108-a2/root");
+    }
+
+    [Fact] // A13:旧页签持旧版本"恢复默认"(删行)同样被钉版拦下
+    public async Task StorageSetting_StaleVersionDelete_Throws()
+    {
+        if (!_available) return;
+        var user = NewUser();
+
+        var created = await SaveSettingAsync(user, "/tmp/t108-c/root");
+        var v = created.Version!.Value;
+        await SaveSettingAsync(user, "/tmp/t108-c2/root", v);
+
+        await using var dbB = NewDb();
+        var act = () => new SaveStorageSettingCommandHandler(dbB, new SettingDispatchSender())
+            .Handle(new SaveStorageSettingCommand(user, null, v), default);
+        await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
+
+        (await GetSettingAsync(user)).DesiredPath.Should().Be("/tmp/t108-c2/root");
+    }
+
+    [Fact] // A13 兼容:不带 Version 保存/恢复默认仍成功
+    public async Task StorageSetting_NoVersion_StillSaves()
+    {
+        if (!_available) return;
+        var user = NewUser();
+
+        await SaveSettingAsync(user, "/tmp/t108-d/root");
+        var updated = await SaveSettingAsync(user, "/tmp/t108-d2/root", version: null);
+        updated.DesiredPath.Should().Be("/tmp/t108-d2/root");
+
+        var cleared = await SaveSettingAsync(user, null, version: null);
+        cleared.DesiredPath.Should().BeNull();
+        cleared.Version.Should().BeNull();
     }
 }

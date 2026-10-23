@@ -767,7 +767,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SaveStorageSettings([FromBody] StorageSettingsBody body, CancellationToken ct)
     {
         var r = await sender.Send(
-            new SaveStorageSettingCommand(currentUser.RequireUserId(), body.RootPath), ct);
+            new SaveStorageSettingCommand(currentUser.RequireUserId(), body.RootPath, body.Version), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -828,7 +828,9 @@ public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessmen
 public sealed record SpeechSettingsBody(string Key, string Region, string? Endpoint);
 
 /// <summary>本机存储目录提交。RootPath 为空串 = 恢复部署默认目录。</summary>
-public sealed record StorageSettingsBody(string? RootPath);
+public sealed record StorageSettingsBody(string? RootPath,
+    // ★ 票108 A13:设置行读时 xmin 回传钉版(不传 = 不钉,兼容旧调用方)。
+    uint? Version = null);
 
 /// <summary>
 /// 测试一把**尚未保存**的候选凭据(先测后存)。

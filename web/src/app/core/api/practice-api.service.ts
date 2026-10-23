@@ -221,6 +221,8 @@ export interface StorageSettingDto {
   inContainer: boolean;
   /** 是否可以迁移已有录音到新目录。 */
   canMigrate: boolean;
+  /** ★ 票108 A13:设置行读时版本 —— 保存时回传钉版,过期得 409。 */
+  version?: number | null;
 }
 
 /** 迁移结果。 */
@@ -421,9 +423,9 @@ export class PracticeApi {
    * 只是状态标成 CustomPendingMount,并把需要的挂载配置回显给界面。
    * 传空串 = 恢复部署默认目录。
    */
-  saveStorageSettings(rootPath: string | null): Observable<StorageSettingDto> {
+  saveStorageSettings(rootPath: string | null, version?: number | null): Observable<StorageSettingDto> {
     return this.api.put<StorageSettingDto>(
-      `${PracticeApi.BASE}/storage/settings`, { rootPath });
+      `${PracticeApi.BASE}/storage/settings`, { rootPath, version: version ?? null });
   }
 
   /** 把已有录音搬到自选目录(相对路径不变,数据库记录不受影响)。 */

@@ -44,8 +44,10 @@ public sealed class RenameTopicCommandValidator : AbstractValidator<RenameTopicC
     {
         // 票83:此前改名无校验器,超长新名直达 Topic 列(HasMaxLength(100))在
         // DB 层爆异常而非明确 400 —— 与 AddCustomCategory 同口径补齐。
-        RuleFor(x => x.NewName).NotEmpty().MaximumLength(TechStackLocalDataRules.MaxCategoryNameLength)
-            .WithMessage("分类名必填且不超过 100 字符");
+        // 票107:必填/长度文案分挂两条规则(WithMessage 只挂紧邻的前一条规则)。
+        RuleFor(x => x.NewName).NotEmpty().WithMessage("分类名必填")
+            .MaximumLength(TechStackLocalDataRules.MaxCategoryNameLength)
+            .WithMessage("分类名长度不能超过 {MaxLength} 个字符");
     }
 }
 

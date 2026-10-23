@@ -142,8 +142,10 @@ public sealed class AddCustomCategoryCommandValidator : AbstractValidator<AddCus
 {
     public AddCustomCategoryCommandValidator()
     {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(TechStackLocalDataRules.MaxCategoryNameLength)
-            .WithMessage("分类名必填且不超过 100 字符");
+        // 票107:必填/长度文案分挂两条规则(WithMessage 只挂紧邻的前一条规则)。
+        RuleFor(x => x.Name).NotEmpty().WithMessage("分类名必填")
+            .MaximumLength(TechStackLocalDataRules.MaxCategoryNameLength)
+            .WithMessage("分类名长度不能超过 {MaxLength} 个字符");
     }
 }
 

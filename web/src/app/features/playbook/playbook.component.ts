@@ -17,6 +17,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { PlaybookLocalService } from '../../core/api/playbook-local.service';
+import { shouldStartStorySave } from '../../core/api/playbook-local.helpers';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -545,7 +546,10 @@ export class PlaybookComponent implements OnInit {
   editStory(s: StarStory): void {
     this.editingStory.set({ ...s });
   }
+  /** 票78:STAR 保存在飞守卫(口径同本组件 save() 的 saving 与票92)。 */
+  readonly storySaving = signal(false);
   saveStory(s: StarStory): void {
+    if (!shouldStartStorySave(this.storySaving())) return;
     if (!s.title.trim()) return;
     // 空故事没有意义:标题之外 S/T/A/R 至少填一项,否则就是一张废卡
     const filled = [s.situation, s.task, s.action, s.result].filter(v => v && v.trim()).length;
@@ -553,8 +557,12 @@ export class PlaybookComponent implements OnInit {
       this.snack.open('故事内容是空的:请至少填写 S/T/A/R 中的一项', '关闭', { duration: 3500 });
       return;
     }
-    this.localData.saveStory(s);
-    this.editingStory.set(null);
+    this.storySaving.set(true);
+    const settle = () => {
+      this.storySaving.set(false);
+      this.editingStory.set(null);
+    };
+    this.localData.saveStory(s).subscribe({ next: settle, error: settle, complete: settle });
   }
   deleteStory(id: string): void {
     // 票45 REQ-14:站内确认弹窗替代原生 confirm;原文案为硬编码中文,逐字作 body 保留

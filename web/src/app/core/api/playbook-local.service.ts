@@ -1,12 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { catchError, map, of, switchMap, tap } from 'rxjs';
+import { EMPTY, Observable, catchError, finalize, map, of, switchMap, tap } from 'rxjs';
 
 import { ApiClient } from './api-client';
 import { AuthService } from '../auth/auth.service';
 import {
   EnsureState, PlaybookStarStory, StarStoryDto,
   collectLegacyDebriefs, collectLegacyPasted, parseStarStories, shouldAttemptImport,
-  shouldEnsureLoad, toLocalStory, toStoryInput,
+  shouldEnsureLoad, shouldStartStorySaveFor, toLocalStory, toStoryInput,
 } from './playbook-local.helpers';
 
 interface ImportResult { imported: number; total: number }
@@ -100,17 +100,31 @@ export class PlaybookLocalService {
     });
   }
 
-  /** 保存一个故事:乐观更新信号,后端 PUT 失败则回读后端真源纠正。 */
-  saveStory(story: PlaybookStarStory): void {
+  /** 票78:保存在飞的 clientId 集合(服务级守卫,防同故事同帧连发双 PUT)。 */
+  private readonly storySavesInFlight = new Set<string>();
+
+  /**
+   * 保存一个故事:乐观更新信号,后端 PUT 失败则回读后端真源纠正。
+   * 票78:改为返回 Observable(同票92 removeCategory 先例)—— 调用方订阅后
+   * 才真正发起,并在结算时释放自己的组件级守卫;同一 clientId 已有保存在
+   * 飞时直接返回 EMPTY(不重复发 PUT,后端 upsert 收敛是第二道防线)。
+   */
+  saveStory(story: PlaybookStarStory): Observable<unknown> {
+    if (!shouldStartStorySaveFor(this.storySavesInFlight, story.id)) return EMPTY;
+    this.storySavesInFlight.add(story.id);
+
     const list = [...this.starStories()];
     const idx = list.findIndex((x) => x.id === story.id);
     if (idx >= 0) list[idx] = story; else list.push(story);
     this.starStories.set(list);
 
-    this.api.put(`/api/interviews/star-stories/${encodeURIComponent(story.id)}`, {
+    return this.api.put(`/api/interviews/star-stories/${encodeURIComponent(story.id)}`, {
       title: story.title, situation: story.situation, task: story.task,
       action: story.action, result: story.result, tags: story.tags,
-    }).subscribe({ error: () => this.reloadStories() });
+    }).pipe(
+      catchError(() => { this.reloadStories(); return of(null); }),
+      finalize(() => this.storySavesInFlight.delete(story.id))
+    );
   }
 
   /** 删除一个故事:乐观移除,后端 DELETE 失败则回读纠正。 */

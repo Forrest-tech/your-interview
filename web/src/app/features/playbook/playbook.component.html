@@ -52,8 +52,8 @@
             <mat-form-field><mat-label>Result 结果</mat-label><textarea matInput rows="2" [(ngModel)]="s.result"></textarea></mat-form-field>
             <mat-form-field><mat-label>标签 (逗号分隔,用于 JD 匹配)</mat-label><input matInput [(ngModel)]="s.tags" placeholder="leadership, conflict, 微服务" /></mat-form-field>
             <div class="star-edit-actions">
-              <button mat-raised-button color="primary" (click)="saveStory(s)">保存</button>
-              <button mat-button (click)="editingStory.set(null)">取消</button>
+              <button mat-raised-button color="primary" (click)="saveStory(s)" [disabled]="storySaving()">保存</button>
+              <button mat-button (click)="editingStory.set(null)" [disabled]="storySaving()">取消</button>
             </div>
           </div>
         }

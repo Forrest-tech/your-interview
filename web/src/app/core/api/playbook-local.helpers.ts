@@ -93,6 +93,22 @@ export function shouldEnsureLoad(
   return loadedUserId !== currentUserId;
 }
 
+/**
+ * 票78:STAR 保存是否可发起 —— 组件级在飞守卫(口径同票92
+ * shouldStartCategorySubmit:纯判定,组件入口先查、起步同步置位、结算释放;
+ * 模板 [disabled] 只是第二道,同帧双击靠方法级判定挡住)。
+ */
+export function shouldStartStorySave(saving: boolean): boolean {
+  return !saving;
+}
+
+/** 票78:某 clientId 是否已有保存在飞 —— 服务级按故事守卫的纯判定。 */
+export function shouldStartStorySaveFor(
+  inFlightClientIds: ReadonlySet<string>, clientId: string
+): boolean {
+  return !inFlightClientIds.has(clientId);
+}
+
 /** 是否应尝试一次性导入:须已登录、未打标、本地确有旧数据(票82)。 */
 export function shouldAttemptImport(
   authenticated: boolean, importedFlag: boolean, localCount: number

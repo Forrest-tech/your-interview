@@ -384,14 +384,8 @@ export class SmartAddDialogComponent {
     this.trackerApi.fetchLinkedIn(url).subscribe({
       next: (r: any) => {
         this.fetching.set(false);
-        if (r?.ok === false) {
-          if (r.error === 'needs_login') {
-            this.msg.set(this.t('tracker.saNeedLogin'));
-          } else {
-            this.msg.set(this.t('tracker.saFetchFail'));
-          }
-          return;
-        }
+        // 票47(COD-20):失败已改为非 200 ProblemDetails,不再走 next 的 ok:false 分支;
+        // 失败分流见下方 error 回调(按 ProblemDetails 的 code 扩展)。
         // 用抓取结果填充表单（复用 parsed 结构）
         // 2026-10-19:保留原 URL 在 link 字段，raw 保留 JD 文本用于保存
         const fetchedUrl = url;
@@ -427,9 +421,13 @@ export class SmartAddDialogComponent {
           this.raw = fetchedUrl;
         }
       },
-      error: () => {
+      error: (e: unknown) => {
         this.fetching.set(false);
-        this.msg.set(this.t('tracker.saFetchFail'));
+        // 票47(COD-20):ApiClient.rethrow 把 ProblemDetails 的 code 扩展透传到 error.code
+        // (COD-05 同型读法)—— linkedin_needs_login 显示登录提示,其余一律抓取失败。
+        const code = (e as { code?: string } | null)?.code;
+        this.msg.set(this.t(code === 'linkedin_needs_login'
+          ? 'tracker.saNeedLogin' : 'tracker.saFetchFail'));
       }
     });
   }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using YourInterview.BuildingBlocks.Web;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Jobs.Application;
@@ -13,7 +14,7 @@ namespace YourInterview.Services.Jobs.Api;
 [Route("api/jobs")]
 [Authorize]
 [Produces("application/json")]
-public sealed class JobsController(ISender sender, ICurrentUser currentUser) : ControllerBase
+public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILogger<JobsController> logger) : ControllerBase
 {
     /// <summary>当前用户(COD-01/票03):公司/投递/沟通均已按 UserId 隔离,未登录直接 401,不再回落 Guid.Empty。</summary>
     private Guid Me => currentUser.RequireUserId();
@@ -281,6 +282,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     /// <summary>
     /// 2026-10-19:LinkedIn 职位页自动抓取 —— 用用户登录态抓页面 HTML，
     /// 转结构化文本后走规则解析，bullet 结构完整保留。
+    /// 票47(COD-20):失败统一 502 ProblemDetails(code 区分需要登录/一般失败),
+    /// 不再 200 + 异常原文;成功路径响应体不变。
     /// </summary>
     [HttpPost("fetch-linkedin")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
@@ -289,15 +292,27 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         [FromServices] Application.LinkedInFetcher fetcher,
         CancellationToken ct)
     {
+        var url = body.Url?.Trim() ?? string.Empty;
+        if (!url.Contains("linkedin.com/jobs/view/"))
+            return Microsoft.AspNetCore.Http.Results.Problem(
+                title: "Not a LinkedIn job URL",
+                detail: "Only LinkedIn job page URLs (linkedin.com/jobs/view/...) can be fetched.",
+                statusCode: Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest,
+                extensions: new Dictionary<string, object?>
+                    { ["code"] = Application.LinkedInFetchFailure.NotLinkedInJobUrlCode });
+
         try
         {
-            var url = body.Url?.Trim() ?? string.Empty;
-            if (!url.Contains("linkedin.com/jobs/view/"))
-                return Microsoft.AspNetCore.Http.Results.BadRequest(new { error = "not_linkedin_job_url" });
-
             var (ok, html, err) = await fetcher.FetchJobHtmlAsync(url, ct);
             if (!ok)
-                return Microsoft.AspNetCore.Http.Results.Ok(new { ok = false, error = err });
+            {
+                // 票47(COD-20):失败不再 200 + 原文 —— 统一 502 ProblemDetails;
+                // fetcher 的原始 err(含异常原文)只进服务端日志,绝不下发。
+                var failKind = Application.LinkedInFetchFailure.Classify(err);
+                if (failKind == Application.LinkedInFetchFailure.Kind.FetchFailed)
+                    logger.LogWarning("LinkedIn 抓取失败: {Url} 原始错误: {Error}", url, err);
+                return FetchProblem(failKind);
+            }
 
             // HTML → 规则解析（保留 bullet）
             var kind = Application.JdPasteParser.DetectKind(html!);
@@ -326,10 +341,21 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         }
         catch (Exception ex)
         {
-            // 2026-10-19:确保永不返回 500，前端显示友好错误
-            return Microsoft.AspNetCore.Http.Results.Ok(new { ok = false, error = "fetch_error: " + ex.Message });
+            // 票47(COD-20):异常原文只进日志;对前端统一 502 ProblemDetails
+            // (改前为 200 + "fetch_error: " + ex.Message,内部细节外泄且监控无感)。
+            logger.LogWarning(ex, "LinkedIn 抓取异常: {Url}", url);
+            return FetchProblem(Application.LinkedInFetchFailure.Kind.FetchFailed);
         }
     }
+
+    /// <summary>票47(COD-20):抓取失败的统一 ProblemDetails 出口(502 + code 扩展,前端按 code 分流提示)。</summary>
+    private static IResult FetchProblem(Application.LinkedInFetchFailure.Kind kind)
+        => Microsoft.AspNetCore.Http.Results.Problem(
+            title: Application.LinkedInFetchFailure.TitleFor(kind),
+            detail: Application.LinkedInFetchFailure.DetailFor(kind),
+            statusCode: Application.LinkedInFetchFailure.StatusCode,
+            extensions: new Dictionary<string, object?>
+                { ["code"] = Application.LinkedInFetchFailure.CodeFor(kind) });
 
     /// <summary>
     /// 一键建档:把(用户改过的)解析结果落成公司与投递记录。

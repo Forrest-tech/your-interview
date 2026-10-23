@@ -730,13 +730,21 @@
                         </div>
                         <p class="res-note">{{ t('practice.recognitionNote') }}</p>
 
-                        <div class="recog-grid">
-                          <!-- ★ #1:填充词统计条 -->
+                        <!-- ★ 票120:无逐词数据时整块以占位文案交代,不静默消失 -->
+                        @if (!sc.words.length) {
+                          <p class="res-note">{{ t('practice.noWordData') }}</p>
+                        } @else {
+                          <!-- ★ #1:填充词统计条 —— ★ 票120:移出 .recog-grid 置于网格上方通栏。
+                               它原是网格的第三个子元素,自动排版把逐词文本挤进了右侧窄图例列。 -->
                           @if (fillerStats(); as fs) {
                             <div class="filler-bar">
                               <mat-icon>graphic_eq</mat-icon>
                               <span>填充词 <b>{{ fs.count }}</b> · {{ fs.perMinute }}/分钟</span>
-                              <span class="filler-hint">点击橙色词回放该时刻</span>
+                              <!-- ★ 票120:回放提示只在真有可回放填充词(带 offsetMs)时出现,
+                                   不承诺一个不会发生的动作;计数为 0 时同样隐藏。 -->
+                              @if (fs.count > 0 && hasSeekableFiller(sc.words, isFiller)) {
+                                <span class="filler-hint">点击橙色词回放该时刻</span>
+                              }
                               <!-- ★ #15:语速 -->
                               @if (speechPace(); as pace) {
                                 <span class="pace-chip" [class]="'pace-' + pace.level">
@@ -746,25 +754,30 @@
                               }
                             </div>
                           }
-                          <p class="recog-text">
-                            @for (w of sc.words; track $index) {
-                              <span class="rw" [class]="errorClass(w.errorType)"
-                                    [class.is-filler]="isFiller(w.word)"
-                                    [class.picked]="pickedWord() === $index"
-                                    (click)="isFiller(w.word) && w.offsetMs ? replayAt(w.offsetMs!) : pickWord($index)"
-                                    [matTooltip]="(isFiller(w.word) ? '填充词 · 点击回放 · ' : '') + errLabel(w.errorType) + ' · ' + w.accuracy">{{ w.word }}</span>
-                            }
-                          </p>
+                          <div class="recog-grid">
+                            <p class="recog-text">
+                              @for (w of sc.words; track $index) {
+                                <span class="rw" [class]="errorClass(w.errorType)"
+                                      [class.is-filler]="isFiller(w.word)"
+                                      [class.picked]="pickedWord() === $index"
+                                      [tabIndex]="$index === recogTabStop(sc.words.length) ? 0 : -1"
+                                      (focus)="recogFocusIdx.set($index)"
+                                      (keydown)="onWordKeydown($event, $index, sc.words.length)"
+                                      (click)="wordClickAction(isFiller(w.word), w.offsetMs) === 'replay' ? replayAt(w.offsetMs!) : pickWord($index)"
+                                      [matTooltip]="(isFiller(w.word) ? '填充词' + (w.offsetMs ? ' · 点击回放' : '') + ' · ' : '') + errLabel(w.errorType) + ' · ' + w.accuracy">{{ w.word }}</span>
+                              }
+                            </p>
 
-                          <div class="err-cards">
-                            @for (c of errorCounts(); track c.key) {
-                              <span class="ec" [class]="c.cls">
-                                <b>{{ c.n }}</b>
-                                <span class="ec-label">{{ t(c.key) }}</span>
-                              </span>
-                            }
+                            <div class="err-cards">
+                              @for (c of errorCounts(); track c.key) {
+                                <span class="ec" [class]="c.cls" [class.ec-zero]="c.n === 0">
+                                  <b>{{ c.n }}</b>
+                                  <span class="ec-label">{{ t(c.key) }}</span>
+                                </span>
+                              }
+                            </div>
                           </div>
-                        </div>
+                        }
 
                         @if (pickedWord() !== null && sc.words[pickedWord()!]; as pw) {
                           <div class="word-pop">

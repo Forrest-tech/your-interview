@@ -1197,6 +1197,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.scoreResults': { zh: '评分结果', en: 'Score Results', fr: 'Résultats' },
   'practice.recognition': { zh: '识别结果', en: 'Recognition', fr: 'Reconnaissance' },
   'practice.recognitionNote': { zh: '按参考原文显示发音、遗漏、插入和停顿问题。悬停单词可查看该词的错误类型与得分。', en: 'Shows pronunciation, omission, insertion and pause issues against the reference text. Hover a word for its error type and score.', fr: 'Affiche les problèmes de prononciation, omissions, insertions et pauses.' },
+  'practice.noWordData': { zh: '本条录音暂无逐词数据。', en: 'No word-level data for this take.', fr: 'Aucune donnée au niveau des mots pour cette prise.' },
   'practice.wordScores': { zh: '逐词得分', en: 'Word Scores', fr: 'Scores par mot' },
   'dim.recognition': { zh: '识别', en: 'Recognition', fr: 'Reconnaissance' },
   'err.mispron': { zh: '发音错误', en: 'Mispronunciation', fr: 'Prononciation' },

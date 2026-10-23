@@ -1,9 +1,13 @@
 /**
- * 票122 前端分发补测(组件 spec 口径 —— 票120 的 word-click.helpers 尚未落地,
- * 按 SPEC-122 验证节的二选一走组件 spec 并在此留痕)。
+ * 票122 前端分发补测(组件 spec 口径)。
  *
  * 被测分发 = 模板逐字表达式(ai-practice.component.html 逐词 span):
- *   (click)="isFiller(w.word) && w.offsetMs ? replayAt(w.offsetMs!) : pickWord($index)"
+ *   (click)="wordClickAction(isFiller(w.word), w.offsetMs) === 'replay'
+ *             ? replayAt(w.offsetMs!) : pickWord($index)"
+ * 沿革:票122 落地时 word-click.helpers 尚未存在,分发是模板内联三元式,
+ * 本 spec 按上代表达式留痕;票120 落地后分发条件抽成纯函数 wordClickAction
+ * (行为逐字不变),本 spec 按其自带规则「改分发必须先改本 spec」同步改钉:
+ * 本地求值改用真实 wordClickAction,契约断言改钉新表达式。
  * 本 spec 不走 TestBed(本仓 Jest 口径),而是:
  *  1) 用真实 PracticeGradingSession 的 isFiller/replayAt/pickWord 按上式求值,
  *     断言重载语境三例的去向与副作用;
@@ -16,6 +20,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it, beforeEach } from '@jest/globals';
 import { PracticeGradingSession } from './practice-grading-session';
+import { wordClickAction } from './word-click.helpers';
 import type { Recording, RecordingScore } from '../../core/recorder/recorder.service';
 import type { WordScoreDto } from '../../core/api/practice-api.service';
 
@@ -69,9 +74,9 @@ function makeSession(words: WordScoreDto[]): { session: PracticeGradingSession; 
   return { session, host };
 }
 
-/** 与模板逐字同形的分发求值(被测对象是会话的真实三方法)。 */
+/** 与模板逐字同形的分发求值(纯函数判定 + 会话的真实三方法)。 */
 function dispatch(session: PracticeGradingSession, w: WordScoreDto, index: number): void {
-  if (session.isFiller(w.word) && w.offsetMs) session.replayAt(w.offsetMs);
+  if (wordClickAction(session.isFiller(w.word), w.offsetMs) === 'replay') session.replayAt(w.offsetMs!);
   else session.pickWord(index);
 }
 
@@ -126,6 +131,6 @@ describe('票122 重载语境逐词分发(模板表达式口径)', () => {
   it('契约:模板逐字含现行分发表达式(改分发必须先改本 spec)', () => {
     const html = readFileSync(join(__dirname, 'ai-practice.component.html'), 'utf8');
     expect(html).toContain(
-      '(click)="isFiller(w.word) && w.offsetMs ? replayAt(w.offsetMs!) : pickWord($index)"');
+      '(click)="wordClickAction(isFiller(w.word), w.offsetMs) === \'replay\' ? replayAt(w.offsetMs!) : pickWord($index)"');
   });
 });

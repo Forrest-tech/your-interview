@@ -1024,7 +1024,10 @@
   color: #8b93a1;
 }
 
-/* 识别结果:左逐词文本 + 右错误图例 */
+/* 识别结果:左逐词文本 + 右错误图例
+   ★ 票120:网格回到恰两个子元素(左 .recog-text 宽列 + 右 .err-cards 图例栏)。
+   .filler-bar 已移出网格置于其上方通栏 —— 它原是第三个子元素,网格自动排版
+   把 .recog-text 排进了 168–220px 的窄图例列(词中折行的根因)。 */
 .recog-grid {
   display: grid;
   /* ⚠️ 2026-09-16(Forrest 本轮):"Recognition 里面的显示内容有重叠"。
@@ -1044,10 +1047,14 @@
   margin: 0;
   line-height: 2.1;
   font-size: 14px;
-  color: #2b3340;
-  /* 长句词块要能换行,不能让词块把右侧列挤跑 */
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  color: var(--ink);
+  /* ★ 票120:换行口径正向声明 —— 正常词永不中断(normal、无连字符);
+     overflow-wrap: break-word 只是溢出阀:仅当单个 token 本身比整行还宽
+     时才许断开,防横向溢出。旧 anywhere+break-word 是当年为"别让词块把
+     右侧列挤跑"加的,在窄列里把长词从中间断开(continuin g 式折行)。 */
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: none;
   min-width: 0;
 }
 
@@ -1067,10 +1074,11 @@
 .rw.is-filler:hover {
   background: #ffe0b2;
 }
-/* ★ #1:填充词统计条 */
+/* ★ #1:填充词统计条(★ 票120:已移出 .recog-grid,置于网格上方通栏) */
 .filler-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
   margin-bottom: 8px;
@@ -1079,6 +1087,10 @@
   border-radius: 8px;
   font-size: 13px;
   color: #5d4037;
+}
+/* ★ 票120:窄屏折行时提示语左对齐落到第二行,不被 margin-left:auto 顶到右侧挤压计数 */
+@media (max-width: 600px) {
+  .filler-bar .filler-hint { margin-left: 0; }
 }
 /* ★ #3:One Fix 横幅 */
 .one-fix-banner {
@@ -1202,32 +1214,8 @@
   border-bottom: 2px dotted #4a6285;
 }
 
-/* 错误分类计数(参考站右侧竖排) */
-.err-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.lg {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 9px;
-  border-radius: 6px;
-  font-size: 11.5px;
-  color: #5b6472;
-  background: #f7f8fa;
-}
-.lg b {
-  font-variant-numeric: tabular-nums;
-  color: #2b3340;
-  min-width: 14px;
-}
-.lg.e-mispron { background: #fff4d6; }
-.lg.e-omission { background: #f1f3f5; }
-.lg.e-insertion { background: #fde8f0; }
-.lg.e-break { background: #ffe4e0; }
-.lg.e-pause { background: #e8eef7; }
+/* (★ 票120:旧 .err-legend/.lg 竖排图例死样式已删除 —— 模板与 TS 零引用,
+   现行图例是下方 .err-cards/.ec,grep 复核无残留。) */
 
 /* 逐词得分表 */
 .word-grid {
@@ -1711,44 +1699,49 @@
 }
 .rw:hover { outline-color: rgba(47, 111, 237, .35); }
 .rw.picked { outline-color: #2f6fed; }
+/* ★ 票120:逐词键盘焦点(roving tabindex)—— 与 .picked 同语言的 outline,令牌取值 */
+.rw:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 
-/* ---------- 错误统计卡(参考站右侧 2 列卡片) ---------- */
+/* ---------- 错误图例栏(★ 票120:由 2 列卡片阵改为单列图例行) ----------
+   每行 = [计数 chip] + [标签]:chip 底色/字色取正文同类词(.rw.e-*)的色,
+   读者按色把计数映射回正文;行本体透明底,行间 hairline 分隔(末行除外)。 */
 .err-cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 .ec {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 7px 9px;
-  border-radius: 7px;
-  background: #f7f8fa;
-  border: 1px solid #eef0f4;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--hairline);
   min-width: 0;
-  /* ⚠️ 2026-09-16:长标签(Mispronunciation)在窄列里要能换行不溢出 */
-  overflow-wrap: anywhere;
-  word-break: break-word;
 }
+.ec:last-child { border-bottom: none; }
 .ec b {
-  font-size: 15px;
+  flex: 0 0 auto;
+  min-width: 30px;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #2b3340;
-  line-height: 1.2;
+  line-height: 1.35;
 }
 .ec-label {
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.35;
-  color: #7c8593;
+  color: var(--ink-2);
 }
-.ec.e-mispron { background: #fff8e8; border-color: #f6e6c4; }
-.ec.e-omission { background: #f5f6f8; border-color: #e8eaee; }
-.ec.e-insertion { background: #fdf0f6; border-color: #f7dbe8; }
-.ec.e-break { background: #fff0ee; border-color: #f8dcd8; }
-.ec.e-pause { background: #eef3fa; border-color: #dee7f4; }
+.ec.e-mispron b { background: #fff4d6; color: #9a6b00; }
+.ec.e-omission b { background: #f1f3f5; color: var(--parked); } /* 遗漏数字对比度例外:#98a1ad 压 #f1f3f5 仅约 2.3:1,数字改用 parked(约 4.6:1),chip 底色不变 */
+.ec.e-insertion b { background: #fde8f0; color: #b8266b; }
+.ec.e-break b { background: #ffe4e0; color: #c5221f; }
+.ec.e-pause b { background: #e8eef7; color: #4a6285; }
+/* n=0 弱化只由 chip 承担:chip 转停放灰,标签保持 --ink-2 全强度(标签是数据,须过对比) */
+.ec.ec-zero b { background: var(--parked-fill); color: var(--parked); }
 
 /* ---------- 单词弹层:音标 + 错误类型 + 得分 ---------- */
 .word-pop {
@@ -1806,8 +1799,17 @@
 }
 
 /* ---------- 窄屏退让 ---------- */
+/* ★ 票120:≤1100px 网格已单列堆叠,图例栏落到文本下方但不拉满整行 ——
+   图例行改 2 列 wrap,免得五行短行横贯整宽重演"右侧大片死白";<600px 退化 1 列。 */
 @media (max-width: 1100px) {
-  .err-cards { grid-template-columns: 1fr; }
+  .err-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    column-gap: 16px;
+  }
+}
+@media (max-width: 600px) {
+  .err-cards { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ============================================================

@@ -24,6 +24,7 @@ import { Recording, RecordingScore, RecorderService } from '../../core/recorder/
 import { PracticeMaterialTree } from './practice-material-tree';
 import { PracticeTtsPlayer } from './practice-tts-player';
 import { PracticeGradingSession } from './practice-grading-session';
+import { clampFocusIndex, hasSeekableFiller, wordClickAction } from './word-click.helpers';
 import type { MarkColor } from './practice-material-tree';
 
 
@@ -747,8 +748,51 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   markDot(): string { return this.tree.markDot(); }
   setMarkColor(c: MarkColor): void { return this.tree.setMarkColor(c); }
   pickWord(i: number): void { return this.grading.pickWord(i); }
-  isFiller(word: string): boolean { return this.grading.isFiller(word); }
+  /**
+   * 填充词判定一律转调 session(FILLERS 的唯一事实源)。
+   * ★ 票120:写成绑定箭头属性 —— 模板要把本判定**作值**传给 helpers 纯函数
+   * (hasSeekableFiller 的谓词注入接缝),方法形态作参数传递会丢 this。
+   * 模板与 TS 内的调用形态(isFiller(w))不变。
+   */
+  readonly isFiller = (word: string): boolean => this.grading.isFiller(word);
   replayAt(offsetMs: number): void { return this.grading.replayAt(offsetMs); }
+
+  /** ★ 票120:模板直接调用的 helpers 纯函数(点击分发 / 可回放填充词判定),组件只作暴露,不另实现。 */
+  readonly wordClickAction = wordClickAction;
+  readonly hasSeekableFiller = hasSeekableFiller;
+
+  /** ★ 票120:逐词 roving tabindex 的焦点索引 —— 只存焦点位置,不碰评分状态机。 */
+  readonly recogFocusIdx = signal(0);
+
+  /** 当前 tab 停靠点下标 = 存储索引按现行词数钳制后的值(规则③:重渲染后恰一个停靠点且落在界内)。 */
+  recogTabStop(wordCount: number): number { return clampFocusIndex(this.recogFocusIdx(), wordCount); }
+
+  /**
+   * ★ 票120:逐词键盘处理 —— roving tabindex。
+   * ←/→/Home/End 在词间移动焦点(钳制不回绕:线性文本不是环,规则①);
+   * Enter/Space 触发与点击**完全相同**的分发(wordClickAction → replayAt/pickWord)。
+   * 焦点移动只改 recogFocusIdx 并对目标 span 调 focus(),不碰评分状态。
+   */
+  onWordKeydown(ev: KeyboardEvent, index: number, wordCount: number): void {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      const w = this.activeTake()?.score?.words?.[index];
+      if (!w) return;
+      if (wordClickAction(this.isFiller(w.word), w.offsetMs) === 'replay') this.replayAt(w.offsetMs!);
+      else this.pickWord(index);
+      return;
+    }
+    let target: number | null = null;
+    if (ev.key === 'ArrowLeft') target = clampFocusIndex(index - 1, wordCount);
+    else if (ev.key === 'ArrowRight') target = clampFocusIndex(index + 1, wordCount);
+    else if (ev.key === 'Home') target = clampFocusIndex(0, wordCount);
+    else if (ev.key === 'End') target = clampFocusIndex(wordCount - 1, wordCount);
+    if (target === null) return;
+    ev.preventDefault();
+    this.recogFocusIdx.set(target);
+    const spans = (ev.currentTarget as HTMLElement).parentElement?.children;
+    (spans?.[target] as HTMLElement | undefined)?.focus();
+  }
   addToReview(): Promise<void> { return this.grading.addToReview(); }
   generateFollowUp(): Promise<void> { return this.grading.generateFollowUp(); }
   onTreeChange(next: MaterialNode[]): void { return this.tree.onTreeChange(next); }
@@ -780,14 +824,32 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.grading.toggleReport();
     if (wasOpen && !this.reportOpen() && btn) this.refocusAfterCollapse(btn);
   }
-  selectTake(id: string): void { return this.grading.selectTake(id); }
+  selectTake(id: string): void {
+    const prev = this.activeTakeId();
+    this.grading.selectTake(id);
+    this.closeWordPopOnSwitch(prev);
+  }
   toggleTakeReport(id: string): void {
     // ★ 票121:唯一 TS 补丁(焦点归位) —— 行内 Collapse 钮收起了本条报告:同上归位。
     // 切换到另一条(本条本就没开)不做任何程序化焦点移动;滚动一概不动。
     const btn = this.collapseFocusTarget();
     const wasOpen = this.isTakeReportOpen(id);
+    const prev = this.activeTakeId();
     this.grading.toggleTakeReport(id);
+    this.closeWordPopOnSwitch(prev);
     if (wasOpen && !this.isTakeReportOpen(id) && btn) this.refocusAfterCollapse(btn);
+  }
+  /**
+   * ★ 票120 规则②(ii):切换 Take 后 word-pop 必须关闭 —— 会话的 focusTake 是
+   * 「把该条设为当前作品并收起弹层」的指定操作,但现行接线里它没有调用点,
+   * selectTake/toggleTakeReport 本身都不收弹层。故在组件包装层于**真正发生
+   * 切换**时补调一次 focusTake 对齐弹层状态(activeTakeId 已由前一步设为
+   * 新值,focusTake 内的同值重设是幂等空转,只有 pickedWord 归零生效)。
+   * 同条收起、重复点选已选行(prev === now)不触发,不改既有语义。
+   */
+  private closeWordPopOnSwitch(prevId: string | null): void {
+    const now = this.activeTakeId();
+    if (now && now !== prevId) this.grading.focusTake(now);
   }
   /**
    * ★ 票121:收起动作执行"前"记录目标按钮 —— 行内 Collapse 钮即当前焦点;

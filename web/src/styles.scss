@@ -392,7 +392,30 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 
 /* 票 118 / D-11:弹窗内容区顶部留白 —— outline 字段的浮动标签会升到字段框上方约 10px,
    内容区顶边距不足时首行标签被滚动容器裁掉一半。全站弹窗统一在此兜底。 */
-.mat-mdc-dialog-container .mat-mdc-dialog-content { padding-top: 12px; }
+.mat-mdc-dialog-container .mat-mdc-dialog-content { padding-top: 12px !important; }
+
+/* 票 118:Tracker 列表状态下拉按状态着浅底 —— 与筛选 chips、流程徽标同一套语义色。
+   必须写在全局:mat-form-field 内部元素不带 Tracker 组件的封装属性,组件内样式够不到。 */
+.lr-status.st-applied .mat-mdc-text-field-wrapper,
+.lr-status.st-screen .mat-mdc-text-field-wrapper,
+.lr-status.st-interview .mat-mdc-text-field-wrapper { background: var(--signal-tint); }
+.lr-status.st-applied .mat-mdc-select-value-text,
+.lr-status.st-screen .mat-mdc-select-value-text,
+.lr-status.st-interview .mat-mdc-select-value-text { color: var(--brand); font-weight: 600; }
+.lr-status.st-offer .mat-mdc-text-field-wrapper,
+.lr-status.st-accepted .mat-mdc-text-field-wrapper { background: var(--go-tint); }
+.lr-status.st-offer .mat-mdc-select-value-text,
+.lr-status.st-accepted .mat-mdc-select-value-text { color: var(--go); font-weight: 600; }
+.lr-status.st-rejected .mat-mdc-text-field-wrapper { background: var(--stop-tint); }
+.lr-status.st-rejected .mat-mdc-select-value-text { color: var(--stop); font-weight: 600; }
+.lr-status.st-ghosted .mat-mdc-text-field-wrapper { background: var(--attention-tint); }
+.lr-status.st-ghosted .mat-mdc-select-value-text { color: var(--attention); font-weight: 600; }
+.lr-status.st-saved .mat-mdc-text-field-wrapper,
+.lr-status.st-paused .mat-mdc-text-field-wrapper,
+.lr-status.st-withdrawn .mat-mdc-text-field-wrapper { background: var(--parked-fill); }
+.lr-status.st-saved .mat-mdc-select-value-text,
+.lr-status.st-paused .mat-mdc-select-value-text,
+.lr-status.st-withdrawn .mat-mdc-select-value-text { color: var(--parked); font-weight: 600; }
 
 /* ---------------- 全站统一确认弹窗(app-confirm) ----------------
    ★ 2026-09-20(Forrest):所有确认弹窗(保存素材树 / 删除素材 /

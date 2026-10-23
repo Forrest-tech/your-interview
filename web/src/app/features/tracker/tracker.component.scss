@@ -328,29 +328,8 @@ mat-form-field { width: 100%; }
 .prep-btn { color: var(--brand); }
 .lr-status { width: 132px; }
 .lr-status .mat-mdc-form-field-subscript-wrapper { display: none; }
-/* 票 118:状态下拉按状态着浅底 —— 与筛选 chips、流程徽标同一套语义色 */
-.lr-status.st-applied .mat-mdc-text-field-wrapper,
-.lr-status.st-screen .mat-mdc-text-field-wrapper,
-.lr-status.st-interview .mat-mdc-text-field-wrapper { background: var(--signal-tint); }
-.lr-status.st-applied .mat-mdc-select-value-text,
-.lr-status.st-screen .mat-mdc-select-value-text,
-.lr-status.st-interview .mat-mdc-select-value-text { color: var(--brand); font-weight: 600; }
-.lr-status.st-offer .mat-mdc-text-field-wrapper,
-.lr-status.st-accepted .mat-mdc-text-field-wrapper { background: var(--go-tint); }
-.lr-status.st-offer .mat-mdc-select-value-text,
-.lr-status.st-accepted .mat-mdc-select-value-text { color: var(--go); font-weight: 600; }
-.lr-status.st-rejected .mat-mdc-text-field-wrapper { background: var(--stop-tint); }
-.lr-status.st-rejected .mat-mdc-select-value-text { color: var(--stop); font-weight: 600; }
-.lr-status.st-ghosted .mat-mdc-text-field-wrapper { background: var(--attention-tint); }
-.lr-status.st-ghosted .mat-mdc-select-value-text { color: var(--attention); font-weight: 600; }
-.lr-status.st-saved .mat-mdc-text-field-wrapper,
-.lr-status.st-paused .mat-mdc-text-field-wrapper,
-.lr-status.st-withdrawn .mat-mdc-text-field-wrapper { background: var(--parked-fill); }
-.lr-status.st-saved .mat-mdc-select-value-text,
-.lr-status.st-paused .mat-mdc-select-value-text,
-.lr-status.st-withdrawn .mat-mdc-select-value-text { color: var(--parked); font-weight: 600; }
-/* 收藏心:已收藏 = 裁决红(与流程徽标同色),不用主题 warn 的亮红 */
 .fav-btn.mat-warn { color: var(--stop); }
+
 
 .list-empty {
   text-align: center;
@@ -669,6 +648,10 @@ mat-form-field { width: 100%; }
   outline-offset: -2px;
 }
 .app-card { position: relative; }
+/* 票 118 / D-10:看板卡把收藏锚到右上角、归档锚到右下角 —— 卡片高度只由
+   logo+标题决定,不再被两个全宽按钮行撑高(空洞感主因)。 */
+.app-card > .fav-btn { position: absolute; top: 4px; right: 4px; }
+.app-card > button.mat-mdc-icon-button:not(.fav-btn) { position: absolute; bottom: 4px; right: 4px; }
 .app-card .select-box {
   position: absolute; top: 4px; left: 4px; z-index: 2;
   background: rgba(255,255,255,0.9); border-radius: 4px;

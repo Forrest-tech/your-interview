@@ -85,7 +85,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'dash.inProgress': { zh: '进行中', en: 'In Progress', fr: 'En cours' },
   'dash.interviewing': { zh: '面试中', en: 'Interviews', fr: 'Entretiens' },
   'dash.offer': { zh: 'Offer', en: 'Offers', fr: 'Offres' },
-  'dash.radar': { zh: '能力雷达 · 最弱三项', en: 'Competency Radar · Weakest Three', fr: 'Radar de compétences · Trois plus faibles' },
+  'dash.radar': { zh: '能力雷达', en: 'Competency radar', fr: 'Radar de compétences' },
   'dash.radarSub': { zh: '权重最高的是技术深度与结构,优先后两项', en: 'Technical depth and structure carry the most weight — prioritise those two', fr: 'La profondeur technique et la structure pèsent le plus — priorisez ces deux' },
   'dash.noAnalysis': { zh: '还没有面试分析数据。去「实战机经」导入一场面试录音即可开始。', en: 'No interview analysis yet. Import an interview recording in Playbook to get started.', fr: 'Aucune analyse d’entretien. Importez un enregistrement dans Journal pour commencer.' },
   'dash.best': { zh: '历史最佳', en: 'Best', fr: 'Meilleur' },
@@ -98,7 +98,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'dash.newApp': { zh: '记录新投递', en: 'Log a new application', fr: 'Ajouter une candidature' },
 
   // ---------- 行动中心(M4) ----------
-  'dash.actionCenter': { zh: '行动中心 · 今天该做什么', en: 'Action Center · What to do today', fr: 'Centre d’action · Que faire aujourd’hui' },
+  'dash.actionCenter': { zh: '行动中心', en: 'Action center', fr: 'Centre d’action' },
   'dash.followUpsDue': { zh: '待跟进', en: 'Follow-ups due', fr: 'Suivis à faire' },
   'dash.upcomingRounds': { zh: '即将面试', en: 'Upcoming interviews', fr: 'Entretiens à venir' },
   'dash.goPrepare': { zh: '去准备', en: 'Prepare', fr: 'Préparer' },

@@ -2,20 +2,14 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiClient } from './api-client';
 
-/** 后端 UserProfileDto 子集。 */
-export interface UserProfile {
-  id: string;
-  email?: string;
-  name?: string;
-  picture?: string;
-}
+import { AuthUser } from '../models/api.models';
 
 @Injectable({ providedIn: 'root' })
 export class AuthApiService {
   private readonly api = inject(ApiClient);
 
-  getMe(): Observable<UserProfile> {
-    return this.api.get<UserProfile>('/api/auth/me');
+  getMe(): Observable<AuthUser> {
+    return this.api.get<AuthUser>('/api/auth/me');
   }
 
   changePassword(body: unknown): Observable<unknown> {

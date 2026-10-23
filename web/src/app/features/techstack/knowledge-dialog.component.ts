@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 
 import { I18nService } from '../../core/i18n/i18n.service';
 import { ApiClient } from '../../core/api/api-client';
+import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
 
 
 /** 新增条目的表单模型(仅本对话框内部使用)。 */
@@ -193,6 +194,7 @@ export class KnowledgeDialogComponent {
   private readonly ref = inject(MatDialogRef<KnowledgeDialogComponent>);
   private readonly i18n = inject(I18nService);
   private readonly api = inject(ApiClient);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
   t = (key: string): string => this.i18n.t(key);
 
   /** 字段级错误(前端拦截或后端 400 映射),按字段名挂在对应输入框下。 */
@@ -318,7 +320,7 @@ export class KnowledgeDialogComponent {
     // 弹窗内直接保存:成功才关弹窗(父组件只负责刷新列表);
     // 失败留在弹窗内显示字段级/表单级原因,用户已填内容不丢。
     this.saving = true;
-    this.api.post('/api/knowledge', payload).subscribe({
+    this.knowledgeApi.createItem(payload).subscribe({
       next: () => {
         this.saving = false;
         this.ref.close(payload);

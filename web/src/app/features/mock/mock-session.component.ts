@@ -12,7 +12,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { catchError, of } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { MockApiService } from '../../core/api/mock-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { DimensionIssue, MockQuestion, MockSessionDetail } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -103,7 +103,7 @@ interface AssessmentSessionDetail {
   styleUrl: './mock-session.component.scss'
 })
 export class MockSessionComponent implements OnInit, OnDestroy {
-  private readonly api = inject(ApiClient);
+  private readonly mockApi = inject(MockApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
@@ -186,7 +186,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     if (showSpinner) this.loading.set(true);
     this.error.set(null);
 
-    this.api.get<AssessmentSessionDetail>(`/api/assessment/sessions/${this.id()}`)
+    this.mockApi.getSession<AssessmentSessionDetail>(this.id())
       .pipe(catchError((e: Error) => {
         this.error.set(e.message);
         this.loading.set(false);
@@ -240,8 +240,8 @@ export class MockSessionComponent implements OnInit, OnDestroy {
 
     // 后端签名是 AnswerBody(AnswerText, AudioPath, DurationSeconds, TranscriptJson)。
     // 端点路径按 questionId 走 —— 这是每个题目的答案,不是会话级答案。
-    this.api.post<void>(
-      `/api/assessment/sessions/${this.id()}/questions/${q.id}/answer`,
+    this.mockApi.answerQuestion<void>(
+      this.id(), q.id,
       { answerText: text, audioPath: null, durationSeconds: null, transcriptJson: null })
       .subscribe({
         next: () => {
@@ -271,8 +271,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     this.nextHint.set(null);
     this.busy.set('next');
 
-    this.api.post<AssessmentQuestion>(
-      `/api/assessment/sessions/${this.id()}/next-question`, {})
+    this.mockApi.nextQuestion<AssessmentQuestion>(this.id())
       .pipe(catchError(() => {
         // 404/409 或任何错误:回退到本地逻辑,不把错误抛给用户
         const list = this.questions();
@@ -314,13 +313,12 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     if (!confirm(this.t('mock.confirmComplete'))) return;
 
     this.busy.set('complete');
-    this.api.post<{
+    this.mockApi.completeSession<{
       overallScore?: number;
       scoredQuestions: number;
       weaknesses: { dimension: string; count: number; avgSeverity: number }[];
       weakestDimension?: string;
-    }>(`/api/assessment/sessions/${this.id()}/complete`,
-      { overallSummary: null, priorityAction: null })
+    }>(this.id(), { overallSummary: null, priorityAction: null })
       .subscribe({
         next: (r) => {
           this.busy.set(null);

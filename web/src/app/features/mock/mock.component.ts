@@ -11,8 +11,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { ApiClient } from '../../core/api/api-client';
 import { AssessmentApiService } from '../../core/api/assessment-api.service';
+import { MockApiService } from '../../core/api/mock-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MockSession, Paged } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -45,7 +45,7 @@ interface NewSessionForm {
   styleUrl: './mock.component.scss'
 })
 export class MockComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly mockApi = inject(MockApiService);
   private readonly assessmentApi = inject(AssessmentApiService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
@@ -204,7 +204,7 @@ export class MockComponent implements OnInit {
 
     if (!confirm(this.tn('mock.confirmDelete', s.title))) return;
 
-    this.api.delete<void>(`/api/assessment/sessions/${s.id}`).subscribe({
+    this.mockApi.deleteSession(s.id).subscribe({
       next: () => {
         this.snack.open(this.t('mock.deletedToast'), this.t('common.close'), { duration: 3000 });
         if (this.sessions().length === 1 && this.page() > 1) this.page.update((p) => p - 1);

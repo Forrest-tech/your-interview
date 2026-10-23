@@ -8,11 +8,33 @@ import { MockSession, Paged } from '../models/api.models';
 export class MockApiService {
   private readonly api = inject(ApiClient);
 
+  private static readonly BASE = '/api/assessment/sessions';
+
   getSessions(params?: { page?: number; pageSize?: number }): Observable<Paged<MockSession>> {
-    return this.api.get<Paged<MockSession>>('/api/assessment/sessions', params);
+    return this.api.get<Paged<MockSession>>(MockApiService.BASE, params);
+  }
+
+  getSession<T>(id: string): Observable<T> {
+    return this.api.get<T>(`${MockApiService.BASE}/${id}`);
   }
 
   createSession(body: unknown): Observable<{ id: string }> {
-    return this.api.post<{ id: string }>('/api/assessment/sessions', body);
+    return this.api.post<{ id: string }>(MockApiService.BASE, body);
+  }
+
+  deleteSession(id: string): Observable<void> {
+    return this.api.delete<void>(`${MockApiService.BASE}/${id}`);
+  }
+
+  answerQuestion<T>(sessionId: string, questionId: string, body: unknown): Observable<T> {
+    return this.api.post<T>(`${MockApiService.BASE}/${sessionId}/questions/${questionId}/answer`, body);
+  }
+
+  nextQuestion<T>(sessionId: string): Observable<T> {
+    return this.api.post<T>(`${MockApiService.BASE}/${sessionId}/next-question`, {});
+  }
+
+  completeSession<T>(sessionId: string, body: unknown): Observable<T> {
+    return this.api.post<T>(`${MockApiService.BASE}/${sessionId}/complete`, body);
   }
 }

@@ -9,6 +9,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiClient } from '../../core/api/api-client';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { JobsApiService } from '../../core/api/jobs-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   Application, Company, InterviewDetail, InterviewEntry, InterviewRound, Paged
@@ -61,6 +63,8 @@ export class PlaybookDetailComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly api = inject(ApiClient);
+  private readonly interviewsApi = inject(InterviewsApiService);
+  private readonly jobsApi = inject(JobsApiService);
   private readonly v2 = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
   readonly i18n = inject(I18nService);
@@ -97,8 +101,9 @@ export class PlaybookDetailComponent implements OnDestroy {
       const size = 200;
       const acc: InterviewEntry[] = [];
       for (let page = 1; page <= 10; page++) {
-        const p = await this.api.get<Paged<InterviewEntry>>('/api/interviews',
-          { page, pageSize: size }).toPromise();
+        const p = await this.interviewsApi.getEntries({
+          page, pageSize: size
+        }).toPromise();
         const items = p?.items ?? [];
         acc.push(...items);
         if (acc.length >= (p?.total ?? acc.length) || items.length === 0) break;
@@ -301,7 +306,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     this.loading.set(true);
     this.loadError.set(null);
     try {
-      const e = await this.api.get<InterviewDetail>(`/api/interviews/${this.id()}`).toPromise();
+      const e = await this.interviewsApi.getEntry(this.id()).toPromise();
       if (!e) throw new Error('empty');
       this.entry.set(e);
       this.debriefDraft.set(parseDebrief(e.debriefJson));
@@ -320,7 +325,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   }
 
   private loadApplication(appId: string): void {
-    this.api.get<Application>(`/api/jobs/applications/${appId}`).subscribe({
+    this.jobsApi.getApplication(appId).subscribe({
       next: app => {
         this.application.set(app);
         if (app.companyId) this.loadCompanyProfile(app.companyId);
@@ -333,7 +338,7 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   /** Jobs Company 情报(Profile):与 Tracker 详情里单独查 Company 的口径一致。 */
   private loadCompanyProfile(companyId: string): void {
-    this.api.get<Company>(`/api/jobs/companies/${companyId}`).subscribe({
+    this.jobsApi.getCompany(companyId).subscribe({
       next: c => this.companyProfileText.set(c?.profile ?? null),
       error: () => undefined
     });
@@ -341,7 +346,7 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   /** 基础简历全文(Tracker 同源:/api/jobs/resume-text)。 */
   private loadBaseResumeText(): void {
-    this.api.get<{ resumeText: string | null }>('/api/jobs/resume-text').subscribe({
+    this.jobsApi.getResumeText().subscribe({
       next: r => this.baseResumeText.set(r?.resumeText ?? null),
       error: () => undefined
     });
@@ -355,8 +360,7 @@ export class PlaybookDetailComponent implements OnDestroy {
    * 时全文展示),并按 Tracker 同法取 resume-file 二进制在展开面板内嵌预览。
    */
   private loadResumeFile(appId: string): void {
-    this.api.get<{ kind?: string; fileName?: string | null; textContent?: string | null }>(
-      `/api/jobs/applications/${appId}/resume`)
+    this.jobsApi.getApplicationResume(appId)
       .subscribe({
         next: r => {
           const kind = r?.kind === 'tailored' || r?.kind === 'base' ? r.kind : 'none';
@@ -365,7 +369,7 @@ export class PlaybookDetailComponent implements OnDestroy {
             : null);
           this.setResumePdfUrl(null);
           if (kind !== 'none') {
-            this.api.getBlob(`/api/jobs/applications/${appId}/resume-file`).subscribe({
+            this.jobsApi.getApplicationResumeFile(appId).subscribe({
               next: blob => this.setResumePdfUrl(URL.createObjectURL(blob)),
               error: () => this.setResumePdfUrl(null)
             });
@@ -402,7 +406,7 @@ export class PlaybookDetailComponent implements OnDestroy {
       // 不用服务端 search 先过滤:search 是原文包含匹配,公司名只要差一个空格/
       // 标点(条目手填 vs Tracker 抓取)候选就会被滤掉,归一化匹配无从谈起。
       // 拉最近 50 条在客户端做归一化匹配(恰好 1 条才回填)。
-      const page = await this.api.get<Paged<Application>>('/api/jobs/applications', {
+      const page = await this.jobsApi.getApplications<Application>({
         page: 1, pageSize: 50
       }).toPromise();
       const hits = (page?.items ?? []).filter(a =>
@@ -415,8 +419,7 @@ export class PlaybookDetailComponent implements OnDestroy {
       this.loadBaseResumeText();
       void this.refreshPendingComm(app.id);
       try {
-        await this.api.post(`/api/interviews/${e.id}/link-application`,
-          { jobApplicationId: app.id }).toPromise();
+        await this.interviewsApi.linkApplication(e.id, app.id).toPromise();
         this.entry.set({ ...e, jobApplicationId: app.id });
       } catch { /* 回填失败不影响本次展示;下次打开会重新匹配 */ }
     } catch { /* 匹配失败保持未关联,不阻塞页面 */ }
@@ -494,7 +497,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     const e = this.entry();
     if (!e) return;
     try {
-      await this.api.put(`/api/interviews/${e.id}`, {
+      await this.interviewsApi.updateEntry(e.id, {
         companyName: this.bCompany(),
         role: this.bRole(),
         companyProfile: e.companyProfile ?? null,
@@ -521,7 +524,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   async deleteEntry(): Promise<void> {
     if (!this.confirmDelete()) { this.confirmDelete.set(true); return; }
     try {
-      await this.api.delete(`/api/interviews/${this.id()}`).toPromise();
+      await this.interviewsApi.deleteEntry(this.id()).toPromise();
       void this.router.navigate(['/playbook']);
     } catch {
       this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 });
@@ -534,7 +537,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     const title = this.newActionTitle().trim();
     if (!title) return;
     try {
-      await this.api.post(`/api/interviews/${this.id()}/actions`, { title }).toPromise();
+      await this.interviewsApi.createAction(this.id(), title).toPromise();
       this.newActionTitle.set('');
       await this.load();
     } catch {
@@ -546,7 +549,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     const action = this.entry()?.actions?.find(a => a.id === actionId);
     if (!action) return;
     try {
-      await this.api.patch(`/api/interviews/${this.id()}/actions/${actionId}`, { isDone: !action.isDone }).toPromise();
+      await this.interviewsApi.updateAction(this.id(), actionId, !action.isDone).toPromise();
     } catch {
       this.snack.open(this.t('pb.v2.d.toggleFailed'), this.t('common.close'), { duration: 3000 });
     }
@@ -554,7 +557,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   }
 
   async deleteAction(actionId: string): Promise<void> {
-    await this.api.delete(`/api/interviews/${this.id()}/actions/${actionId}`).toPromise()
+    await this.interviewsApi.deleteAction(this.id(), actionId).toPromise()
       .catch(() => undefined);
     await this.load();
   }
@@ -563,7 +566,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     const e = this.entry();
     if (!e) return;
     try {
-      await this.api.put(`/api/interviews/${e.id}`, {
+      await this.interviewsApi.updateEntry(e.id, {
         companyName: e.companyName,
         role: e.role,
         companyProfile: e.companyProfile ?? null,

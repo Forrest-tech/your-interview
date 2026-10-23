@@ -5,7 +5,7 @@ import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/materia
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { ApiClient } from '../../core/api/api-client';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { makeBriefT } from './components/brief/brief.helpers';
 
@@ -90,7 +90,7 @@ export interface PrepPlanResult {
 })
 export class PrepPlanDialogComponent {
   private readonly i18n = inject(I18nService);
-  private readonly api = inject(ApiClient);
+  private readonly interviewsApi = inject(InterviewsApiService);
   private readonly ref = inject(MatDialogRef<PrepPlanDialogComponent, PrepPlanResult | null>);
   readonly data = inject(MAT_DIALOG_DATA) as {
     roundOrder: number; jdHint: string; resumeHint?: string; prevRoundsCount: number;
@@ -118,8 +118,8 @@ export class PrepPlanDialogComponent {
       experiences: this.experiences.trim(),
       requirements: this.requirements.trim(),
     };
-    this.api.post<PrepPlanResult>(
-      `/api/interviews/${this.data.entryId}/rounds/${this.data.roundId}/prep-plan`, input)
+    this.interviewsApi.createPrepPlan<PrepPlanResult>(
+      this.data.entryId, this.data.roundId, input)
       .subscribe({
         next: (p) => { this.generating.set(false); this.ref.close(p); },
         error: (e: unknown) => {

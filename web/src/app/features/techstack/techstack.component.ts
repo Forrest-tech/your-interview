@@ -23,7 +23,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
 import { Subscription, catchError, of } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { KnowledgeApiService, ReviewOutcome } from '../../core/api/knowledge-api.service';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged, PlaybookCompany, PlaybookCompanyRound } from '../../core/models/api.models';
 import {
@@ -58,15 +59,6 @@ const CONFIDENCE_FOR: Record<ReviewResultLabel, number> = {
   Good: 4,
   Easy: 5
 };
-
-/** 后端 POST /api/knowledge/{id}/review 的回包形状(ReviewOutcomeDto)。 */
-interface ReviewOutcome {
-  nextReviewAt: string | null;
-  intervalDays: number;
-  easinessFactor: number;
-  mastery: string;
-  repetitionStreak: number;
-}
 
 /** 9 块详情里正文区的定义。用数据驱动模板,新增一块不用改 HTML。 */
 interface DetailBlock {
@@ -120,7 +112,8 @@ const DETAIL_BLOCKS: DetailBlock[] = [
   styleUrl: './techstack.component.scss'
 })
 export class TechStackComponent implements OnInit, OnDestroy {
-  private readonly api = inject(ApiClient);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
+  private readonly interviewsApi = inject(InterviewsApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly subnav = inject(SubnavService);
@@ -486,7 +479,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 来源公司清单属于可选增强(老库没有来源字段时为空),失败静默降级。 */
   loadSources(): void {
-    this.api.get<KnowledgeSourceCompany[]>('/api/knowledge/sources')
+    this.knowledgeApi.getSources()
       .pipe(catchError(() => of(null)))
       .subscribe((list) => {
         this.sourceCompanies.set(
@@ -496,7 +489,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 重复条目是"偶发需要"的功能:只报个数,点开才真正拉取分组。 */
   loadDuplicates(): void {
-    this.api.get<KnowledgeDuplicateGroup[]>('/api/knowledge/duplicates')
+    this.knowledgeApi.getDuplicates()
       .pipe(catchError(() => of(null)))
       .subscribe((groups) => this.duplicateGroups.set(
         Array.isArray(groups) ? groups : []));
@@ -524,7 +517,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
     // 列表路由是 /api/knowledge(不是 /items),筛选参数名是 mastery(不是 masteryLevel)。
     // 最初按直觉写的名字全 404 —— 前端对后端契约不能"看起来合理"就写。
-    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', {
+    this.knowledgeApi.getItems({
       page: this.page(),
       pageSize: this.pageSize(),
       topic: this.topic(),
@@ -564,7 +557,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 主题列表是可选增强:后端没这个接口(404)或出错都降级,不让页面挂掉。 */
   loadTopics(): void {
-    this.api.get<KnowledgeTopic[]>('/api/knowledge/topics')
+    this.knowledgeApi.getTopics()
       .pipe(catchError(() => of(null)))
       .subscribe((list) => {
         if (list && Array.isArray(list) && list.length > 0) {
@@ -581,7 +574,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   loadBuckets(): void {
     // 没有独立的 /mastery 端点 —— 分布数据在 /stats 的 byMastery 里。
     // 顺手把 totalItems 也拿来做分母,顶部统计条就不用再发一次请求。
-    this.api.get<KnowledgeStats>('/api/knowledge/stats')
+    this.knowledgeApi.getStats()
       .pipe(catchError(() => of(null)))
       .subscribe((st) => {
         if (!st) return;
@@ -692,7 +685,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
       queryParamsHandling: 'merge',
       replaceUrl: true
     });
-    this.api.get<KnowledgeItem>(`/api/knowledge/${item.id}`).subscribe({
+    this.knowledgeApi.getItem(item.id).subscribe({
       next: (full) => {
         this.selected.set(full);
         this.items.update(list => list.map((x) => x.id === full.id ? { ...x, ...full } : x));
@@ -752,7 +745,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
         .replace('{names}', names));
     if (!ok) return;
 
-    forkJoin(ids.map(id => this.api.delete<void>(`/api/knowledge/${id}`))).subscribe({
+    forkJoin(ids.map(id => this.knowledgeApi.deleteItem(id))).subscribe({
       next: () => {
         this.notify(this.t('ts.deleted'));
         this.editing.set(false);
@@ -768,7 +761,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   /** ★ 进入回收站:加载已删除的卡片。 */
   openTrash(): void {
     this.trashMode.set(true);
-    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', {
+    this.knowledgeApi.getItems({
       page: 1, pageSize: 100, includeDeleted: true
     }).subscribe({
       next: (p) => this.trashItems.set(p.items ?? []),
@@ -784,7 +777,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** ★ 从回收站恢复卡片。 */
   restoreItem(id: string): void {
-    this.api.post<void>(`/api/knowledge/${id}/restore`, {}).subscribe({
+    this.knowledgeApi.restoreItem(id).subscribe({
       next: () => {
         this.notify(this.t('ts.trash.restored'));
         this.openTrash(); // 刷新回收站列表
@@ -877,7 +870,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   /** 懒加载 Playbook 公司库(只加载一次)。 */
   loadPlaybookCompanies(): void {
     if (this.playbookCompanies().length > 0) return;
-    this.api.get<PlaybookCompany[]>('/api/interviews/companies').subscribe({
+    this.interviewsApi.getCompanies().subscribe({
       next: (list) => this.playbookCompanies.set(list ?? []),
       error: () => this.playbookCompanies.set([]),
     });
@@ -893,7 +886,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     this.newDetailSourceRound = null;
     this.newDetailSourceDate = '';
     this.companyRounds.set([]);
-    this.api.get<PlaybookCompanyRound[]>(`/api/interviews/companies/${c.companyId}/rounds`).subscribe({
+    this.interviewsApi.getCompanyRounds(c.companyId).subscribe({
       next: (list) => this.companyRounds.set(list ?? []),
       error: () => this.companyRounds.set([]),
     });
@@ -1043,7 +1036,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
       importance: d.importance,
       sourcesJson: d.sources.length > 0 ? JSON.stringify(d.sources) : null,
     };
-    this.api.put<void>(`/api/knowledge/${item.id}`, payload).subscribe({
+    this.knowledgeApi.updateItem(item.id, payload).subscribe({
       next: () => {
         this.savingDetail.set(false);
         this.detailEditing.set(false);
@@ -1102,7 +1095,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     if (!ok) return;
 
     this.acting.set(true);
-    this.api.post<KnowledgeItem>(`/api/knowledge/${item.id}/mastery`, {
+    this.knowledgeApi.updateMastery(item.id, {
       level: next,
       confidence: 0.7
     }).subscribe({
@@ -1136,8 +1129,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
    */
   review(item: KnowledgeItem, result: ReviewResultLabel = 'Good'): void {
     this.acting.set(true);
-    this.api
-      .post<ReviewOutcome>(`/api/knowledge/${item.id}/review`, {
+    this.knowledgeApi.review(item.id, {
         result,
         confidenceAfter: CONFIDENCE_FOR[result]
       })
@@ -1193,7 +1185,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   startReview(): void {
     if (this.reviewMode()) return;
     this.reviewLoading.set(true);
-    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', {
+    this.knowledgeApi.getItems({
       page: 1, pageSize: 200, dueOnly: true
     }).subscribe({
       next: (r) => {
@@ -1246,7 +1238,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const card = this.currentCard();
     if (!card || this.reviewRevealed()) return;
     this.reviewLoading.set(true);
-    this.api.get<KnowledgeItem>(`/api/knowledge/${card.id}`)
+    this.knowledgeApi.getItem(card.id)
       .pipe(catchError(() => of(null)))
       .subscribe((full) => {
         this.reviewLoading.set(false);
@@ -1266,8 +1258,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const card = this.currentCard();
     if (!card) return;
     this.reviewLoading.set(true);
-    this.api
-      .post<ReviewOutcome>(`/api/knowledge/${card.id}/review`, {
+    this.knowledgeApi.review(card.id, {
         result,
         confidenceAfter: CONFIDENCE_FOR[result]
       })
@@ -1371,7 +1362,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     if (!content.trim()) { this.notify(this.t('ts.detail.blockEmpty')); return; }
     // 用块内容的前 60 字作标题,全文作问题
     const title = content.trim().slice(0, 60) + (content.length > 60 ? '…' : '');
-    this.api.post<KnowledgeItem>('/api/knowledge', {
+    this.knowledgeApi.createItem({
       title: `🃏 ${title}`,
       topic: item.topic,
       question: content,

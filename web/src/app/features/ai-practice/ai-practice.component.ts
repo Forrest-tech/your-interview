@@ -24,7 +24,8 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-
 import { MaterialTransferDialogComponent } from './material-transfer-dialog.component';
 import { MaterialNodeDto, MaterialNodeIn, PracticeApi, PracticeCategoryDto } from '../../core/api/practice-api.service';
 import { KnowledgeItem, KnowledgeTopic, Paged } from '../../core/models/api.models';
-import { ApiClient } from '../../core/api/api-client';
+import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
+import { AiApiService } from '../../core/api/ai-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
 import {
@@ -838,7 +839,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   /** 后端访问层（素材树 / 录音 / 语音设置 / TTS）。 */
   private readonly practiceApi = inject(PracticeApi);
   /** Knowledge API(Tech Stack 实时视图用) */
-  private readonly knowledgeApi = inject(ApiClient);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
+  /** AI complete(追问生成) */
+  private readonly aiApi = inject(AiApiService);
 
   /** 统一确认弹窗(保存/删除都要先过这一关,Forrest 2026-09-20)。 */
   private readonly dialog = inject(MatDialog);
@@ -978,7 +981,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         return;
       }
       const u = updates[index];
-      this.knowledgeApi.put<void>(`/api/knowledge/${u.kid}/from-tech`, {
+      this.knowledgeApi.updateFromTech<void>(u.kid, {
         question: u.name || null,
         betterAnswer: u.content || null
       }).subscribe({
@@ -1337,7 +1340,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (!this.isFromTechSelected()) return;
     this.tsLoading.set(true);
     // From Tech:构建标准 MaterialNode 树(与普通分类同一套逻辑)
-    this.knowledgeApi.get<KnowledgeTopic[]>('/api/knowledge/topics').subscribe({
+    this.knowledgeApi.getTopics().subscribe({
       next: (list) => {
         const topics = (list ?? []).filter(t => t.topic).sort((a, b) => a.topic.localeCompare(b.topic));
         this.buildFromTechTree(topics);
@@ -1391,7 +1394,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
         categoryId: '__fromTech'
       };
       tree.push(folder);
-      this.knowledgeApi.get<Paged<KnowledgeItem>>('/api/knowledge', { topic: tp.topic, pageSize: 100 }).subscribe({
+      this.knowledgeApi.getItemsByTopic(tp.topic, 100).subscribe({
         next: (res) => {
           const items = res.items ?? [];
           folder.children = items.map(k => ({
@@ -1419,7 +1422,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   loadTsItems(topic: string): void {
     this.tsExpandedTopic.set(topic);
     this.tsLoading.set(true);
-    this.knowledgeApi.get<Paged<KnowledgeItem>>('/api/knowledge', { topic, pageSize: 100 }).subscribe({
+    this.knowledgeApi.getItemsByTopic(topic, 100).subscribe({
       next: (res) => {
         this.tsItems.set(res.items ?? []);
         this.tsLoading.set(false);
@@ -1813,7 +1816,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     const take = this.activeTake();
     const transcript = (take as any)?.transcript ?? '';
     try {
-      await this.knowledgeApi.post('/api/knowledge', {
+      await this.knowledgeApi.createItem({
         title: question.slice(0, 60),
         question: question,
         myAnswer: transcript.slice(0, 1000),
@@ -1837,7 +1840,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.followUpLoading.set(true);
     this.followUpQuestion.set(null);
     try {
-      const res = await this.knowledgeApi.post<{ text?: string; content?: string }>('/api/ai/complete', {
+      const res = await this.aiApi.complete({
         purpose: 'ai-practice-followup',
         systemPrompt: 'You are a senior technical interviewer. Based on the candidate\'s answer, ask ONE sharp follow-up question that digs deeper into a weak point, edge case, or design trade-off. Reply in the same language as the answer. Output only the question, no preamble.',
         prompt: `Original question: ${question}\n\nCandidate's answer:\n${transcript.slice(0, 2000)}`,
@@ -2383,7 +2386,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (id.startsWith('ts:item:')) {
       const kid = (target as any)?._kid as string;
       if (kid) {
-        this.knowledgeApi.put<void>(`/api/knowledge/${kid}/better-answer`, {
+        this.knowledgeApi.updateBetterAnswer<void>(kid, {
           betterAnswer: text || null
         }).subscribe({
           next: () => this.toast(this.t('dialog.saveDone')),

@@ -10,6 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { ApiClient } from '../../core/api/api-client';
+import { JobsApiService } from '../../core/api/jobs-api.service';
 import { extractPdfText } from '../../core/utils/pdf-text';
 import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
 import { resumeSaveBlock } from './resume.helpers';
@@ -38,6 +39,7 @@ export class ResumeComponent implements OnInit {
   private readonly i18n = inject(I18nService);
   private readonly snack = inject(MatSnackBar);
   private readonly api = inject(ApiClient);
+  private readonly jobsApi = inject(JobsApiService);
 
   readonly t = (key: string): string => this.i18n.t(key);
 
@@ -77,7 +79,7 @@ export class ResumeComponent implements OnInit {
         this.resumeDraft = text;
       } else {
         // localStorage 为空时,从后端拉(用户可能在别处存过)
-        this.api.get<{ resumeText: string | null }>('/api/jobs/resume-text').subscribe({
+        this.jobsApi.getResumeText().subscribe({
           next: (r) => {
             if (r.resumeText?.trim()) {
               this.resumeDraft = r.resumeText;
@@ -94,11 +96,11 @@ export class ResumeComponent implements OnInit {
   /** 从后端拉 PDF 预览(有才显示)。 */
   private loadPdfPreview(): void {
     // 元信息:后端是文件名真源(换浏览器/清缓存后 localStorage 没了,这里还能显示)
-    this.api.get<{ fileName: string }>('/api/jobs/resume-file/meta').subscribe({
+    this.jobsApi.getResumeFileMeta().subscribe({
       next: (m) => { if (m.fileName) this.resumeFileName.set(m.fileName); },
       error: () => { /* 没有 PDF 就不显示 */ }
     });
-    this.api.getBlob('/api/jobs/resume-file').subscribe({
+    this.jobsApi.getResumeFile().subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
         this.resumePdfRawUrl.set(url);
@@ -130,7 +132,7 @@ export class ResumeComponent implements OnInit {
       return;
     }
     // 同步到后端 —— 求职信生成、简历匹配都从这里读
-    this.api.put('/api/jobs/resume-text', { resumeText: text }).subscribe({
+    this.jobsApi.saveResumeText({ resumeText: text }).subscribe({
       next: () => {
         this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2500 });
         this.editing.set(false);
@@ -145,7 +147,7 @@ export class ResumeComponent implements OnInit {
       const fd = new FormData();
       fd.append('file', this.pendingPdf, this.pendingPdf.name);
       fd.append('textContent', text);
-      this.api.postForm('/api/jobs/resume-file', fd).subscribe({
+      this.jobsApi.uploadResumeFileForm(fd).subscribe({
         next: () => {
           this.pendingPdf = null;
           this.loadPdfPreview();
@@ -169,12 +171,12 @@ export class ResumeComponent implements OnInit {
     this.resumePdfUrl.set(null);
     this.refreshResumePreview();
     // 同步清空后端
-    this.api.put('/api/jobs/resume-text', { resumeText: '' }).subscribe({
+    this.jobsApi.saveResumeText({ resumeText: '' }).subscribe({
       next: () => this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2000 }),
       error: () => this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2000 })
     });
     // 后端 PDF 一起删
-    this.api.delete('/api/jobs/resume-file').subscribe({ error: () => { /* 忽略 */ } });
+    this.jobsApi.deleteResumeFile().subscribe({ error: () => { /* 忽略 */ } });
   }
 
   private refreshResumePreview(): void {

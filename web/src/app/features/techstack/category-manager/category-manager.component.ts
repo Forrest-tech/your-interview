@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ApiClient } from '../../../core/api/api-client';
+import { KnowledgeApiService } from '../../../core/api/knowledge-api.service';
 import { TechStackLocalService } from '../../../core/api/techstack-local.service';
 import {
   MAX_CATEGORY_NAME_LENGTH, validateCategoryName,
@@ -36,7 +36,7 @@ export interface CategoryInfo {
   styleUrl: './category-manager.component.scss'
 })
 export class CategoryManagerComponent {
-  private readonly api = inject(ApiClient);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
   private readonly tsLocal = inject(TechStackLocalService);
   private readonly dialogRef = inject(MatDialogRef<CategoryManagerComponent>);
   private readonly i18n = inject(I18nService);
@@ -186,8 +186,7 @@ export class CategoryManagerComponent {
       return;
     }
     this.busy.set(true);
-    this.api.put<number>(`/api/knowledge/topics/rename`,
-      { oldName, newName }).subscribe({
+    this.knowledgeApi.renameTopic(oldName, newName).subscribe({
       next: () => {
         this.categories.update(list => {
           // 移除旧分类
@@ -237,7 +236,7 @@ export class CategoryManagerComponent {
       this.changed = true;
       return;
     }
-    this.api.delete<number>(`/api/knowledge/topics/${encodeURIComponent(c.name)}`).subscribe({
+    this.knowledgeApi.deleteTopic(c.name).subscribe({
       next: () => {
         this.categories.update(list => list.filter(x => x.name !== c.name));
         // 票84:该名若同时是自定义行(先建空分类后挂条目,T6 同形),只删 topics

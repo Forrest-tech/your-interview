@@ -21,7 +21,9 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { JobsApiService } from '../../core/api/jobs-api.service';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { coverLetterMissingKey } from '../../core/i18n/localized-messages.helpers';
 import { SubnavService } from '../../layout/subnav.service';
@@ -322,7 +324,9 @@ export class ApplicationDialogComponent {
   styleUrl: './tracker.component.scss'
 })
 export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
-  private readonly api = inject(ApiClient);
+  private readonly jobsApi = inject(JobsApiService);
+  private readonly interviewsApi = inject(InterviewsApiService);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
   private readonly trackerApi = inject(TrackerApi);
   private readonly prefs = inject(TrackerPreferencesService);
   private readonly router = inject(Router);
@@ -452,7 +456,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // 状态流转走专门的 /status 接口(后端状态机校验合法流转),
     // 不能塞进 PUT body —— UpdateApplicationBody 没有 Status 字段,会被静默忽略。
-    this.api.post<void>(`/api/jobs/applications/${app.id}/status`, { status }).subscribe({
+    this.jobsApi.changeStatus(app.id, status).subscribe({
       next: () => {
         this.loadStats();
         // ★ #2:卡片进入 Interview → 从 JD 自动生成备战计划
@@ -491,7 +495,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
         // ★ F-B1: 直接创建 Playbook 条目并预填,不让用户重输
         // FUN-03:必须带 jobApplicationId —— 后端按它幂等,已有条目时返回既有 id,
         // 前端直接跳既有条目;此前这条路径没带,每次改状态到 Interview 都新建第二条。
-        this.api.post<{ id: string }>('/api/interviews', {
+        this.interviewsApi.createEntry<{ id: string }>({
           companyName: app.companyName,
           role: app.role,
           jobApplicationId: app.id,
@@ -557,14 +561,14 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     };
     // 申请
     try {
-      const apps = await this.api.get<Paged<Application>>('/api/jobs/applications', {
+      const apps = await this.jobsApi.getApplications<Application>({
         page: 1, pageSize: 1000
       }).toPromise();
       data['applications'] = apps?.items ?? [];
     } catch { data['applications'] = []; }
     // 知识库
     try {
-      const kb = await this.api.get<Paged<any>>('/api/knowledge', {
+      const kb = await this.knowledgeApi.getItems({
         page: 1, pageSize: 1000
       }).toPromise();
       data['knowledge'] = kb?.items ?? [];
@@ -676,7 +680,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
             notes: (r[8] ?? '').trim() || null,
           };
           if (!body.companyName || !body.role) { failed++; this.checkImportDone(++created + failed, total, created, failed); continue; }
-          this.api.post('/api/jobs/applications', body).subscribe({
+          this.jobsApi.createApplication(body).subscribe({
             next: () => { created++; this.checkImportDone(created + failed, total, created, failed); },
             error: () => { failed++; this.checkImportDone(created + failed, total, created, failed); }
           });
@@ -739,7 +743,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 /** 备战:从投递一键创建 Playbook 面试条目,JD/公司/职位/投递关联自动带入。 */  prepareInterview(app: Application, event: Event): void {
     event.stopPropagation();
     // 直接传 companyId,避免后端按名复用时找不到而生成随机 ID 导致孤儿条目。
-    this.api.post<{ id: string }>('/api/interviews', {
+    this.interviewsApi.createEntry<{ id: string }>({
       companyId: app.companyId,
       companyName: app.companyName,
       role: app.role,
@@ -871,7 +875,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     if (ids.length === 0) return;
     let done = 0, failed = 0;
     for (const id of ids) {
-      this.api.post<void>(`/api/jobs/applications/${id}/status`, { status }).subscribe({
+      this.jobsApi.changeStatus(id, status).subscribe({
         next: () => {
           done++;
           if (done + failed === ids.length) this.finishBulk(done, failed, 'status');
@@ -890,7 +894,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     if (ids.length === 0) return;
     let done = 0, failed = 0;
     for (const id of ids) {
-      this.api.post<void>(`/api/jobs/applications/${id}/archive`, {}).subscribe({
+      this.jobsApi.archive(id).subscribe({
         next: () => {
           done++;
           if (done + failed === ids.length) this.finishBulk(done, failed, 'archive');
@@ -926,7 +930,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       const ids = [...this.selected()];
       let done = 0, failed = 0;
       for (const id of ids) {
-        this.api.delete<void>(`/api/jobs/applications/${id}`).subscribe({
+        this.jobsApi.deleteApplication(id).subscribe({
           next: () => {
             done++;
             if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
@@ -1090,7 +1094,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     const start = TrackerComponent.weekStart().getTime();
     const pageSize = 200;
     const fetchPage = (page: number, acc: Application[]): void => {
-      this.api.get<Paged<Application>>('/api/jobs/applications', {
+      this.jobsApi.getApplications<Application>({
         page, pageSize, sortBy: 'updated'
       }).subscribe({
         next: (r) => {
@@ -1121,7 +1125,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.ghostingDismissed.set(true);
   }
   loadGhosting(): void {
-    this.api.get<Paged<Application>>('/api/jobs/applications', {
+    this.jobsApi.getApplications<Application>({
       page: 1, pageSize: 200, status: 'Applied'
     }).subscribe({
       next: (r) => {
@@ -1221,7 +1225,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.api.get<Paged<Application>>('/api/jobs/applications', {
+    this.jobsApi.getApplications<Application>({
       page: this.page(),
       pageSize: this.pageSize(),
       status: this.statusFilter(),
@@ -1245,7 +1249,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** 统计是"锦上添花",失败就静默降级 —— 列表本身还能用。 */
   loadStats(): void {
-    this.api.get<TrackerStats>('/api/jobs/stats')
+    (this.jobsApi.getStats() as unknown as Observable<TrackerStats>)
       .pipe(catchError(() => of(null)))
       .subscribe((s) => this.stats.set(s));
   }
@@ -1342,7 +1346,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     // 先按公司名解析/创建公司(幂等),拿到 companyId 再建投递 —— 否则后端会因缺 CompanyId 拒收。
     this.trackerApi.resolveCompany(form.companyName.trim()).subscribe({
       next: (c) => {
-        this.api.post<Application>('/api/jobs/applications', {
+        this.jobsApi.createApplication<Application>({
           companyId: c.id,
           role: form.role,
           location: form.location || null,
@@ -1375,13 +1379,12 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     if (path.length > 0) {
       // 按路径逐步流转(如 Saved→Applied→Screen→Interview),每步都是后端允许的合法流转
       const steps$: Observable<unknown>[] = path.map((s) =>
-        this.api.post<void>(`/api/jobs/applications/${app.id}/status`,
-          { status: s, note: this.t('tracker.historyCreated') }).pipe(catchError(() => of(null)))
+        this.jobsApi.changeStatus(app.id, s, this.t('tracker.historyCreated')).pipe(catchError(() => of(null)))
       );
       tasks.push(concat(...steps$));
     }
     if (form.needsConnectFirst || form.outreachMessage) {
-      tasks.push(this.api.put<void>(`/api/jobs/applications/${app.id}/outreach`,
+      tasks.push(this.jobsApi.updateOutreach(app.id,
         { posterName: null, needsConnectFirst: form.needsConnectFirst, message: form.outreachMessage || null })
         .pipe(catchError(() => of(null))));
     }
@@ -1397,7 +1400,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.updateAppPayload(existing, form).pipe(catchError((e: Error) => { this.notify(e.message, true); return of(null); }))
     ];
     if (form.needsConnectFirst || form.outreachMessage) {
-      tasks.push(this.api.put<void>(`/api/jobs/applications/${id}/outreach`,
+      tasks.push(this.jobsApi.updateOutreach(id,
         { posterName: null, needsConnectFirst: form.needsConnectFirst, message: form.outreachMessage || null })
         .pipe(catchError(() => of(null))));
     }
@@ -1412,7 +1415,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
    * 回填 —— 硬编码 null 在全量 PUT 下会把已有值误清。
    */
   private updateAppPayload(existing: Application, form: ApplicationForm): Observable<unknown> {
-    return this.api.put<void>(`/api/jobs/applications/${existing.id}`, {
+    return this.jobsApi.updateApplication(existing.id, {
       role: form.role,
       location: form.location || null,
       link: form.link || null,
@@ -1461,7 +1464,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     ev?.stopPropagation();
     void this.confirmDelete(this.tf('tracker.confirmDelete', { a: `${app.companyName} · ${app.role}` })).then((ok) => {
       if (!ok) return;
-      this.api.delete<void>(`/api/jobs/applications/${app.id}`).subscribe({
+      this.jobsApi.deleteApplication(app.id).subscribe({
         next: () => {
           this.notify(this.t('tracker.deleted'));
           this.reload();
@@ -1474,7 +1477,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   /** ★ 归档 (Simplify 对等)。 */
   archive(app: Application, ev?: Event): void {
     ev?.stopPropagation();
-    this.api.post<void>(`/api/jobs/applications/${app.id}/archive`, {}).subscribe({
+    this.jobsApi.archive(app.id).subscribe({
       next: () => {
         this.notify(this.t('tracker.archived'));
         this.reload();
@@ -1486,7 +1489,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   /** ★ 取消归档。 */
   unarchive(app: Application, ev?: Event): void {
     ev?.stopPropagation();
-    this.api.post<void>(`/api/jobs/applications/${app.id}/unarchive`, {}).subscribe({
+    this.jobsApi.unarchive(app.id).subscribe({
       next: () => {
         this.notify(this.t('tracker.unarchived'));
         this.reload();
@@ -2591,7 +2594,7 @@ function trimForm(f: ApplicationForm): ApplicationForm {
 })
 export class ApplicationDetailDialogComponent {
   readonly app = inject<Application>(MAT_DIALOG_DATA);
-  private readonly api = inject(ApiClient);
+  private readonly jobsApi = inject(JobsApiService);
   private readonly trackerApi = inject(TrackerApi);
   private readonly prefs = inject(TrackerPreferencesService);
   private readonly i18n = inject(I18nService);
@@ -2670,18 +2673,17 @@ export class ApplicationDetailDialogComponent {
    * kind=none → 提示上传。
    */
   private loadAppResume(): void {
-    this.api.get<{ kind: string; fileName: string | null; textContent: string | null }>(
-      `/api/jobs/applications/${this.app.id}/resume`).subscribe({
+    this.jobsApi.getApplicationResume(this.app.id).subscribe({
       next: (r) => {
         const kind = r.kind === 'tailored' ? 'tailored'
           : r.kind === 'base' ? 'base'
           : r.kind === 'text' ? 'text' : 'none';
         this.appResumeKind.set(kind);
-        this.resumeFileName.set(r.fileName);
-        this.appResumeText.set(r.textContent);
+        this.resumeFileName.set(r.fileName ?? null);
+        this.appResumeText.set(r.textContent ?? null);
         this.recomputeMatch();
         if (kind === 'tailored' || kind === 'base') {
-          this.api.getBlob(`/api/jobs/applications/${this.app.id}/resume-file`).subscribe({
+          this.jobsApi.getApplicationResumeFile(this.app.id).subscribe({
             next: (blob) => {
               const url = URL.createObjectURL(blob);
               this.resumePdfRawUrl.set(url);
@@ -2713,7 +2715,7 @@ export class ApplicationDetailDialogComponent {
       const fd = new FormData();
       fd.append('file', file, file.name);
       fd.append('textContent', text);
-      this.api.postForm(`/api/jobs/applications/${this.app.id}/resume`, fd).subscribe({
+      this.jobsApi.uploadApplicationResume(this.app.id, fd).subscribe({
         next: () => {
           this.snack.open(this.t('tracker.dResumeUploadOk'), this.t('common.close'), { duration: 2500 });
           this.loadAppResume();
@@ -2728,7 +2730,7 @@ export class ApplicationDetailDialogComponent {
   /** 删除 tailored 版本 —— 回落到基础简历(引用,不复制)。 */
   removeTailoredResume(): void {
     if (!confirm(this.t('tracker.dResumeRemoveTailored'))) return;
-    this.api.delete(`/api/jobs/applications/${this.app.id}/resume`).subscribe({
+    this.jobsApi.deleteApplicationResume(this.app.id).subscribe({
       next: () => this.loadAppResume(),
       error: () => this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 })
     });
@@ -2762,21 +2764,21 @@ export class ApplicationDetailDialogComponent {
 
   constructor() {
     // 全量详情:列表项不带轮次/历史/拒因,打开后以服务端为准替换(M1.5)
-    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
+    this.jobsApi.getApplication(this.app.id).subscribe({
       next: (a) => this.full.set(a),
       error: () => { this.loadError.set(true); /* P0-2:不再静默,模板显示过期警告 */ }
     });
 
     // 公司情报:Application 只带 companyId,要单独查
     if (this.app.companyId) {
-      this.api.get<Company>(`/api/jobs/companies/${this.app.companyId}`).subscribe({
+      this.jobsApi.getCompany(this.app.companyId).subscribe({
         next: (c) => this.company.set(c),
         error: () => { /* 拿不到公司情报不阻断详情展示 */ }
       });
     }
 
     // 简历全文:从 Profile 服务取(与 AI 练习共用同一份)
-    this.api.get<{ resumeText: string | null }>('/api/jobs/resume-text').subscribe({
+    this.jobsApi.getResumeText().subscribe({
       next: (r) => {
         this.resumeText.set(r.resumeText);
         this.recomputeMatch();
@@ -2804,7 +2806,7 @@ export class ApplicationDetailDialogComponent {
   // ---------------------------- 求职信方法 ----------------------------
 
   private loadCoverLetter(): void {
-    this.api.get<CoverLetterDto | null>(`/api/jobs/applications/${this.app.id}/cover-letter`).subscribe({
+    this.jobsApi.getCoverLetter<CoverLetterDto | null>(this.app.id).subscribe({
       next: (c) => {
         this.cl.set(c);
         this.clDraft = c?.content ?? '';
@@ -2814,7 +2816,7 @@ export class ApplicationDetailDialogComponent {
   }
 
   private loadReadiness(): void {
-    this.api.get<CoverLetterReadinessDto>(`/api/jobs/applications/${this.app.id}/cover-letter/readiness`)
+    this.jobsApi.getCoverLetterReadiness<CoverLetterReadinessDto>(this.app.id)
       .subscribe({
         next: (r) => this.clReadiness.set(r),
         error: () => { /* 体检失败不阻断 —— 生成时后端还会再校验一次 */ }
@@ -2832,8 +2834,7 @@ export class ApplicationDetailDialogComponent {
     if (hasContent && !confirm(this.t('tracker.dClOverwrite'))) return;
 
     this.clGenerating.set(true);
-    this.api.post<CoverLetterDto>(
-      `/api/jobs/applications/${this.app.id}/cover-letter/generate`,
+    this.jobsApi.generateCoverLetter<CoverLetterDto>(this.app.id,
       { extraInstructions: this.clExtra.trim() || null, overwrite: hasContent }
     ).subscribe({
       next: (c) => {
@@ -2854,7 +2855,7 @@ export class ApplicationDetailDialogComponent {
     const text = this.clDraft.trim();
     if (!text) { alert(this.t('tracker.dClEmptyErr')); return; }
 
-    this.api.put<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter`, { content: text })
+    this.jobsApi.saveCoverLetter<CoverLetterDto>(this.app.id, text)
       .subscribe({
         next: (c) => { this.cl.set(c); this.clEditing.set(false); },
         error: (err) => alert(this.readError(err))
@@ -2867,7 +2868,7 @@ export class ApplicationDetailDialogComponent {
   }
 
   markCoverLetterFinal(): void {
-    this.api.post<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter/final`)
+    this.jobsApi.finalizeCoverLetter<CoverLetterDto>(this.app.id)
       .subscribe({
         next: (c) => this.cl.set(c),
         error: (err) => alert(this.readError(err))
@@ -2876,7 +2877,7 @@ export class ApplicationDetailDialogComponent {
 
   deleteCoverLetter(): void {
     if (!confirm(this.t('tracker.dClDelete'))) return;
-    this.api.delete<void>(`/api/jobs/applications/${this.app.id}/cover-letter`)
+    this.jobsApi.deleteCoverLetter(this.app.id)
       .subscribe({
         next: () => { this.cl.set(null); this.clDraft = ''; this.clEditing.set(false); },
         error: (err) => alert(this.readError(err))
@@ -3003,7 +3004,7 @@ export class ApplicationDetailDialogComponent {
   }
 
   doArchive(): void {
-    this.api.post<void>(`/api/jobs/applications/${this.app.id}/archive`, {}).subscribe({
+    this.jobsApi.archive(this.app.id).subscribe({
       next: () => {
         this.snack.open(this.t('tracker.archived'), this.t('common.close'), { duration: 2000 });
         this.dialogRef.close(true);
@@ -3025,7 +3026,7 @@ export class ApplicationDetailDialogComponent {
     });
     ref.afterClosed().subscribe((v) => {
       if (v !== true) return;
-      this.api.delete<void>(`/api/jobs/applications/${this.app.id}`).subscribe({
+      this.jobsApi.deleteApplication(this.app.id).subscribe({
         next: () => {
           this.snack.open(this.t('tracker.deleted'), this.t('common.close'), { duration: 3000 });
           this.dialogRef.close(true);
@@ -3071,8 +3072,7 @@ export class ApplicationDetailDialogComponent {
   quickChangeStatus(ev: Event): void {
     const select = ev.target as HTMLSelectElement;
     const newStatus = select.value;
-    this.api.post<void>(`/api/jobs/applications/${this.app.id}/status`,
-      { status: newStatus }).subscribe({
+    this.jobsApi.changeStatus(this.app.id, newStatus as ApplicationStatus).subscribe({
       next: () => {
         this.snack.open(this.t('tracker.statusUpdated'), this.t('common.close'), { duration: 2000 });
         this.reloadDetail();
@@ -3082,7 +3082,7 @@ export class ApplicationDetailDialogComponent {
   }
 
   private reloadDetail(): void {
-    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
+    this.jobsApi.getApplication(this.app.id).subscribe({
       next: (app: Application) => this.full.set(app),
       error: () => this.loadError.set(true)
     });
@@ -3161,7 +3161,7 @@ export class ApplicationDetailDialogComponent {
   saveNotes(): void {
     const d = this.detail;
     this.notesSaving.set(true);
-    this.api.put(`/api/jobs/applications/${this.app.id}`, {
+    this.jobsApi.updateApplication(this.app.id, {
       role: d.role, location: d.location, link: d.link, salary: d.salary,
       // FUN-02 附带:全量 PUT 下缺省即 null,会误清已有 workMode/source —— 从详情回填
       workMode: d.workMode ?? null, source: d.source ?? null,
@@ -3201,7 +3201,7 @@ export class ApplicationDetailDialogComponent {
       return;
     }
     this.reparsing.set(true);
-    this.api.post('/api/jobs/parse-jd', { raw, useAi: false }).subscribe({
+    this.trackerApi.parseJd(raw, false).subscribe({
       next: (p: any) => {
         const upd: any = {};
         if (p.company) upd.company = p.company;
@@ -3214,7 +3214,7 @@ export class ApplicationDetailDialogComponent {
         if (p.requirements) upd.requirements = p.requirements;
         if (p.benefits) upd.benefits = p.benefits;
         if (p.companyDescription) upd.companyDescription = p.companyDescription;
-        this.api.put(`/api/jobs/applications/${this.app.id}`, upd).subscribe({
+        this.jobsApi.updateApplication(this.app.id, upd).subscribe({
           next: () => {
             this.reparsing.set(false);
             this.reloadDetail();
@@ -3359,7 +3359,7 @@ export class ApplicationDetailDialogComponent {
   saveJdSummary(): void {
     const d = this.detail;
     this.jdSummarySaving.set(true);
-    this.api.put(`/api/jobs/applications/${this.app.id}`, {
+    this.jobsApi.updateApplication(this.app.id, {
       role: d.role, location: d.location, link: d.link, salary: d.salary,
       // FUN-02 附带:同 saveNotes,回填表单外的 workMode/source 防全量 PUT 误清
       workMode: d.workMode ?? null, source: d.source ?? null,
@@ -3400,7 +3400,7 @@ export class ApplicationDetailDialogComponent {
 
   saveJdText(): void {
     this.jdTextSaving.set(true);
-    this.api.put(`/api/jobs/applications/${this.app.id}/jd`, {
+    this.jobsApi.saveApplicationJd(this.app.id, {
       jdText: this.jdTextDraft.trim() || null,
       jdSourceUrl: this.detail.jdSourceUrl ?? null,
     }).subscribe({
@@ -3419,7 +3419,7 @@ export class ApplicationDetailDialogComponent {
 
   /** 保存后重新拉详情,保证弹窗里显示的是最新数据。 */
   private refreshDetail(): void {
-    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
+    this.jobsApi.getApplication(this.app.id).subscribe({
       next: (a) => this.full.set(a),
       error: () => { this.loadError.set(true); }
     });

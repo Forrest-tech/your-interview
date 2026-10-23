@@ -18,9 +18,11 @@ import { PlaybookLocalService } from '../../core/api/playbook-local.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { JobsApiService } from '../../core/api/jobs-api.service';
 import { BRIEF_I18N } from './components/brief/brief.i18n';
 import { entryEndKey, entryResultOutcome } from './redesign/v2.helpers';
-import type { CoverageRow } from './components/brief/brief.models';
+import type { CoverageRow } from '../../core/api/jobs-api.service';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -96,6 +98,8 @@ interface NewEntryForm {
 })
 export class PlaybookComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  private readonly interviewsApi = inject(InterviewsApiService);
+  private readonly jobsApi = inject(JobsApiService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   /**
@@ -226,7 +230,7 @@ export class PlaybookComponent implements OnInit {
 
   /** 全局 upcoming 轮次:后端聚合,失败时静默留空(不挡主列表)。 */
   private loadUpcoming(): void {
-    this.api.get<UpcomingRound[]>('/api/interviews/rounds/upcoming', { days: 30 })
+    this.interviewsApi.getUpcomingRounds()
       .pipe(catchError(() => of([] as UpcomingRound[])))
       .subscribe((list) => this.upcomingRounds.set(list ?? []));
   }
@@ -248,7 +252,7 @@ export class PlaybookComponent implements OnInit {
 
     const size = 200;
     const fetchPage = (page: number, acc: InterviewEntry[]): void => {
-      this.api.get<Paged<InterviewEntry>>('/api/interviews', {
+      this.interviewsApi.getEntries({
         page,
         pageSize: size,
         // 后端只认 companyId(Guid):公司名先经聚合列表解析,解析不到就不带条件
@@ -280,7 +284,7 @@ export class PlaybookComponent implements OnInit {
 
   /** 公司聚合:用于过滤下拉。失败退化为空列表。 */
   private loadCompanies(): void {
-    this.api.get<CompanySummary[]>('/api/interviews/companies')
+    this.interviewsApi.getCompanies()
       .pipe(catchError(() => of([] as CompanySummary[])))
       .subscribe((list) => {
         this.companies.set(list ?? []);
@@ -292,7 +296,7 @@ export class PlaybookComponent implements OnInit {
 
   /** 统计:失败就当没有,不显示统计条即可。 */
   private loadStats(): void {
-    this.api.get<InterviewStats>('/api/interviews/stats')
+    this.interviewsApi.getStats()
       .pipe(catchError(() => of(null)))
       .subscribe((s) => this.stats.set(s));
   }
@@ -310,7 +314,7 @@ export class PlaybookComponent implements OnInit {
 
   private loadCoverage(): void {
     this.coverageLoading.set(true);
-    this.api.get<CoverageRow[]>('/api/interviews/coverage')
+    this.interviewsApi.getCoverage()
       .pipe(catchError(() => of([] as CoverageRow[])))
       .subscribe((list) => {
         this.coverage.set(list ?? []);
@@ -379,7 +383,7 @@ export class PlaybookComponent implements OnInit {
       notes: this.form.notes || null
     };
 
-    this.api.post<{ id: string }>('/api/interviews', body).subscribe({
+    this.interviewsApi.createEntry(body).subscribe({
       next: (r) => {
         this.saving.set(false);
         this.dialogOpen.set(false);
@@ -432,7 +436,7 @@ export class PlaybookComponent implements OnInit {
         .replace('{names}', names));
     if (!ok) return;
 
-    forkJoin(ids.map(id => this.api.delete<void>(`/api/interviews/${id}`))).subscribe({
+    forkJoin(ids.map(id => this.interviewsApi.deleteEntry(id))).subscribe({
       next: () => {
         this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
         this.editing.set(false);

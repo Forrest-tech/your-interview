@@ -7,7 +7,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
-import { ApiClient } from '../../core/api/api-client';
+import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeDuplicateGroup, KnowledgeItem } from '../../core/models/api.models';
 
@@ -112,7 +112,7 @@ export interface DuplicatesDialogData {
 export class DuplicatesDialogComponent {
   readonly dialogRef = inject(MatDialogRef<DuplicatesDialogComponent, boolean>);
   readonly data = inject<DuplicatesDialogData>(MAT_DIALOG_DATA);
-  private readonly api = inject(ApiClient);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
@@ -144,7 +144,7 @@ export class DuplicatesDialogComponent {
         this.dialogRef.close(true);
         return;
       }
-      this.api.post<void>('/api/knowledge/merge', {
+      this.knowledgeApi.merge({
         keepId: item.id,
         mergeId: others[done].id
       }).subscribe({

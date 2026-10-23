@@ -279,7 +279,7 @@ export class ProfileComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.api.get<AuthUser>('/api/auth/me').subscribe({
+    this.authApi.getMe().subscribe({
       next: (u) => {
         this.me.set(u);
         this.syncDrafts(u);

@@ -12,6 +12,7 @@ import {
 import { normalizeEmailDate, parsePastedEmail } from '../../components/brief/brief.helpers';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { PracticeApi } from '../../../../core/api/practice-api.service';
+import { OcrApiService } from '../../../../core/api/ocr-api.service';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, sortRoundsByDate } from '../v2.helpers';
@@ -58,8 +59,6 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
  *   覆盖(测试/降级模拟把地址指向死端口,验证视觉兜底分支被触发)。
  */
 export const SHARED_OCR_TIMEOUT_MS = 180_000;
-export const SHARED_OCR_BASE_URL: string =
-  (globalThis as { __SHARED_OCR_BASE_URL__?: string }).__SHARED_OCR_BASE_URL__ ?? '/api/ocr';
 
 /**
  * 条目级统一入口(2026-10-20 定稿):
@@ -405,6 +404,7 @@ export class IntakePanelComponent {
 
   private readonly api = inject(PlaybookV2Api);
   private readonly aiApi = inject(PracticeApi);
+  private readonly ocrApi = inject(OcrApiService);
   private readonly snack = inject(MatSnackBar);
   private readonly i18n = inject(I18nService);
   readonly t = makeV2T(this.i18n);
@@ -718,7 +718,7 @@ export class IntakePanelComponent {
     try {
       const { b64, mime } = await fileToBase64(s.file);
       const r = await this.aiApi.extractImageTextShared(
-        b64, mime, SHARED_OCR_TIMEOUT_MS, SHARED_OCR_BASE_URL).toPromise();
+        b64, mime, SHARED_OCR_TIMEOUT_MS, this.ocrApi.baseUrl).toPromise();
       const text = r?.text?.trim() ? r.text : null;
       return { status: r?.status === 'ok' && text ? 'ok' : 'failed', text };
     } catch {

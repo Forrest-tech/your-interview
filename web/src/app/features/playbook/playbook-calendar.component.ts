@@ -5,7 +5,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ApiClient } from '../../core/api/api-client';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { weekDayHeaders } from '../../core/i18n/localized-messages.helpers';
 import { UpcomingRound } from '../../core/models/api.models';
@@ -30,7 +30,7 @@ interface CalDay {
   styleUrl: './playbook-calendar.component.scss'
 })
 export class PlaybookCalendarComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly interviewsApi = inject(InterviewsApiService);
   private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
 
@@ -97,7 +97,7 @@ export class PlaybookCalendarComponent implements OnInit {
 
   reload(): void {
     this.loading.set(true);
-    this.api.get<UpcomingRound[]>(`/api/interviews/rounds/upcoming?days=60`).subscribe({
+    this.interviewsApi.getUpcomingRounds(60).subscribe({
       next: (list) => {
         this.rounds.set(list ?? []);
         this.loading.set(false);

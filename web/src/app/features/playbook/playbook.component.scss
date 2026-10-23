@@ -490,6 +490,16 @@
   font-size: 13px;
 }
 
+/* 票79:字段级错误(口径同票12 Knowledge 弹窗 .field-error:#ba1a1a/12px;
+   STAR 字段为行内流式排布,错误以块级独占一行紧贴标题行下方) */
+.field-error {
+  display: block;
+  width: 100%;
+  color: #ba1a1a;
+  font-size: 12px;
+  margin: -12px 0 8px 2px;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

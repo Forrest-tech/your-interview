@@ -1679,6 +1679,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.list.confirmDelete': { zh: '确认删除「{company} · {role}」这条机经?\n删除后材料与问答一并移除,不可恢复。', en: 'Delete the record "{company} · {role}"?\nAssets and Q&A will be removed too and cannot be recovered.', fr: 'Supprimer le dossier « {company} · {role} » ?\nLes documents et les Q&R seront aussi supprimés, sans possibilité de récupération.' },
   'pb.created': { zh: '条目已创建', en: 'Record created', fr: 'Dossier créé' },
   'pb.deleted': { zh: '已删除', en: 'Deleted', fr: 'Supprimé' },
+  'pb.star.titleRequired': { zh: '标题必填', en: 'Title is required', fr: 'Le titre est requis' },
+  'pb.star.titleTooLong': { zh: '标题不能超过 {max} 个字符', en: 'Title must be at most {max} characters', fr: 'Le titre ne doit pas dépasser {max} caractères' },
   'pb.round': { zh: '第 {n} 轮', en: 'Round {n}', fr: 'Tour {n}' },
   'pb.status.Draft': { zh: '草稿', en: 'Draft', fr: 'Brouillon' },
   'pb.status.AssetsUploaded': { zh: '材料已上传', en: 'Assets uploaded', fr: 'Documents importés' },

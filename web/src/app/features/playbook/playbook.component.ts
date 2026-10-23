@@ -17,7 +17,10 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { PlaybookLocalService } from '../../core/api/playbook-local.service';
-import { shouldStartStorySave } from '../../core/api/playbook-local.helpers';
+import {
+  STAR_STORY_TITLE_MAX, shouldStartStorySave, starStoryTitleError,
+  type StarStoryTitleError
+} from '../../core/api/playbook-local.helpers';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -530,19 +533,47 @@ export class PlaybookComponent implements OnInit {
   readonly starStories = this.localData.starStories;
   readonly showStarBank = signal(false);
   readonly editingStory = signal<StarStory | null>(null);
+  /**
+   * 票79:STAR 标题字段级错误(口径同票12 Knowledge 弹窗字段级呈现)——
+   * 点保存时由纯函数 starStoryTitleError 判定,错误文案挂在标题框下方;
+   * 用户补填标题(ngModelChange)即清除;开新表单/编辑/取消时一并清空。
+   */
+  readonly storyTitleError = signal<StarStoryTitleError>(null);
+  readonly storyTitleErrorText = computed(() => {
+    const e = this.storyTitleError();
+    if (e === 'required') return this.t('pb.star.titleRequired');
+    if (e === 'tooLong') return this.fmt('pb.star.titleTooLong', { max: STAR_STORY_TITLE_MAX });
+    return null;
+  });
   newStory(): void {
+    this.storyTitleError.set(null);
     this.editingStory.set({
       id: 's' + Date.now(), title: '', situation: '', task: '', action: '', result: '', tags: ''
     });
   }
   editStory(s: StarStory): void {
+    this.storyTitleError.set(null);
     this.editingStory.set({ ...s });
+  }
+  cancelStoryEdit(): void {
+    this.storyTitleError.set(null);
+    this.editingStory.set(null);
+  }
+  /** 票79:用户开始补填标题时先撤掉标题的旧错误(票12 clearFieldError 同口径)。 */
+  clearStoryTitleError(): void {
+    if (this.storyTitleError()) this.storyTitleError.set(null);
   }
   /** 票78:STAR 保存在飞守卫(口径同本组件 save() 的 saving 与票92)。 */
   readonly storySaving = signal(false);
   saveStory(s: StarStory): void {
     if (!shouldStartStorySave(this.storySaving())) return;
-    if (!s.title.trim()) return;
+    // 票79:标题必填/超长校验落到界面 —— 此前此处静默 return,用户只看到「点了没反应」
+    const titleError = starStoryTitleError(s.title);
+    if (titleError) {
+      this.storyTitleError.set(titleError);
+      return;
+    }
+    this.storyTitleError.set(null);
     // 空故事没有意义:标题之外 S/T/A/R 至少填一项,否则就是一张废卡
     const filled = [s.situation, s.task, s.action, s.result].filter(v => v && v.trim()).length;
     if (filled === 0) {

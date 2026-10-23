@@ -100,6 +100,25 @@ export function shouldStartStorySave(saving: boolean): boolean {
   return !saving;
 }
 
+/** STAR 故事标题上限 —— 与后端 StarStoryLimits.TitleMax 对齐(500,UTF-16 码元计数,两端一致)。 */
+export const STAR_STORY_TITLE_MAX = 500;
+
+/** STAR 故事标题校验结果(票79):null = 通过。 */
+export type StarStoryTitleError = 'required' | 'tooLong' | null;
+
+/**
+ * 票79:STAR 故事标题校验 —— 纯判定,供组件在保存入口调用并把结果映射为
+ * 字段级错误文案(口径同票12 Knowledge 弹窗的字段级呈现)。
+ * 空/null/纯空白 → 'required'(trim 判定,与后端 NotEmpty 拒空白一致);
+ * 原始长度超过上限 → 'tooLong'(后端 MaximumLength 按原始串计,故此处不 trim 后计长);
+ * required 优先于 tooLong(纯空白超长串先报必填)。
+ */
+export function starStoryTitleError(title: string | null | undefined): StarStoryTitleError {
+  if (title === null || title === undefined || title.trim().length === 0) return 'required';
+  if (title.length > STAR_STORY_TITLE_MAX) return 'tooLong';
+  return null;
+}
+
 /** 票78:某 clientId 是否已有保存在飞 —— 服务级按故事守卫的纯判定。 */
 export function shouldStartStorySaveFor(
   inFlightClientIds: ReadonlySet<string>, clientId: string

@@ -79,6 +79,50 @@ _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "未知契�
 }
 
 /// <summary>
+/// 轮次排期回写 Tracker(票114,REQ-02 残余/CONF-DASH-1)。
+///
+/// Playbook 排期落库 → Interviews 发 InterviewRoundScheduled → 本消费者调聚合
+/// RecordRoundSchedule:同步投影轮次排期;投递尚在 Saved/Applied/Screen 且该轮
+/// 未出结果时推进到 Interview,使 Dashboard interviewed 计数(Jobs 状态口径)
+/// 与 Upcoming(Interviews 排期口径)同屏不矛盾。推进/不覆盖/撤销/幂等/乱序
+/// 语义全在聚合 RecordRoundSchedule(定版见 evidence-114/STATUS §4)。
+///
+/// 与结果消费者同构:无 HTTP 上下文 → IgnoreQueryFilters 按 Id 取投递、
+/// 事件 UserId 显式校验归属;申请不存在/归属不一致记日志跳过(不进死信)。
+/// 本消费者不发任何事件 —— Jobs 侧排期同步不成回环。
+/// </summary>
+public sealed class InterviewRoundScheduledConsumer(
+JobsDbContext db,
+ILogger<InterviewRoundScheduledConsumer> logger): IConsumer<InterviewRoundScheduled>
+{
+public Task Consume(ConsumeContext<InterviewRoundScheduled> context)
+=> HandleAsync(context.Message, context.CancellationToken);
+
+/// <summary>消费者核心处理(与 MassTransit 上下文解耦,便于测试与直调验证)。</summary>
+public async Task HandleAsync(InterviewRoundScheduled e, CancellationToken ct)
+{
+var app = await db.Applications.IgnoreQueryFilters().Include(x => x.Rounds)
+.FirstOrDefaultAsync(x => x.Id == e.ApplicationId &&!x.IsDeleted, ct);
+if (app is null)
+{
+logger.LogWarning("申请 {AppId} 不存在(可能已删),排期回写跳过", e.ApplicationId);
+return;
+}
+if (app.UserId!= e.UserId)
+{
+logger.LogWarning("申请 {AppId} 归属用户与事件用户 {UserId} 不一致,排期回写跳过",
+e.ApplicationId, e.UserId);
+return;
+}
+
+app.RecordRoundSchedule(e.RoundNo, e.Stage, e.ScheduledDate);
+await db.SaveChangesAsync(ct);
+logger.LogInformation("排期回写完成:申请 {AppId} 第 {Round} 轮 → {Date}",
+e.ApplicationId, e.RoundNo, e.ScheduledDate?.ToString("yyyy-MM-dd")?? "(撤销)");
+}
+}
+
+/// <summary>
 ///
 /// 服务对象:契约升级(票04)前已发出、没有 Outcome 枚举的 InterviewOutcomeRecorded 消息。
 /// 新发布端一律填结构化枚举,不得再扩大此映射的适用范围;

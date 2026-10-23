@@ -56,6 +56,8 @@ builder.AddServiceDefaults(ServiceName, services =>
     {
         // M1.5:实战机经条目上填了结果 → 回写 Tracker 轮次 Outcome(被拒自动转 Rejected)
         x.AddConsumer<InterviewOutcomeRecordedConsumer>();
+        // 票114:实战机经轮次排期落库 → 回写 Tracker 投影排期 + 推进投递状态(CONF-DASH-1)
+        x.AddConsumer<InterviewRoundScheduledConsumer>();
     });
 });
 

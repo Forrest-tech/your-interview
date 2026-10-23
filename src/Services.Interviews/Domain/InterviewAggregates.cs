@@ -631,6 +631,7 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         var r = _rounds.FirstOrDefault(x => x.Id == roundId)
             ?? throw new InvalidOperationException("轮次不存在");
         var outcomeChanged = r.Outcome != outcome;
+        var oldScheduledDate = r.ScheduledDate;
         r.Update(stage, scheduledDate, interviewers, format, location, outcome, notes, feedback);
         Touch();
 
@@ -642,14 +643,32 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         if (outcomeChanged && JobApplicationId is not null)
             RaiseDomainEvent(new InterviewOutcomeRecordedDomainEvent(
                 Id, JobApplicationId.Value, r.Order, outcome.ToString(), UserId, outcome));
+
+        // 票114(REQ-02 残余/CONF-DASH-1):排期实际变化 = 回写事实 —— Jobs 据此
+        // 同步投影日期并推进投递状态(排了面试不能仍停在 Saved)。
+        // 守卫与结果事件同型:未关联投递不发;日期未变不发(票91 计数纪律 ——
+        // 内部补字段调用、邀请消费者同日期回放都不会误触发)。
+        if (oldScheduledDate != scheduledDate && JobApplicationId is not null)
+            RaiseDomainEvent(new InterviewRoundScheduledDomainEvent(
+                Id, JobApplicationId.Value, r.Order, r.Stage, scheduledDate, UserId));
     }
 
     public void RemoveRound(Guid roundId)
     {
         var r = _rounds.FirstOrDefault(x => x.Id == roundId)
             ?? throw new InvalidOperationException("轮次不存在");
+        var hadDate = r.ScheduledDate is not null;
+        var order = r.Order;
+        var stage = r.Stage;
         _rounds.Remove(r);
         Touch();
+
+        // 票114:删掉一个有日期的轮次 = 排期撤销 —— 以 ScheduledDate=null 形态
+        // 发排期事件,Jobs 只清投影日期、不回退投递状态(见契约注释)。
+        // 被删轮次本来就没日期时无排期事实可撤销,不发。
+        if (hadDate && JobApplicationId is not null)
+            RaiseDomainEvent(new InterviewRoundScheduledDomainEvent(
+                Id, JobApplicationId.Value, order, stage, null, UserId));
     }
 
     /// <summary>写入轮次的邮件时间线(A7):整体替换 EmailsJson。</summary>
@@ -1296,6 +1315,15 @@ public sealed record InterviewAnalysisFailedDomainEvent(Guid EntryId, string Rea
 public sealed record InterviewOutcomeRecordedDomainEvent(
     Guid EntryId, Guid ApplicationId, int RoundNo, string Result,
     Guid UserId = default, InterviewRoundOutcome? Outcome = null) : DomainEventBase;
+
+/// <summary>
+/// 轮次排期变更(票114):轮次 ScheduledDate 实际变化(含删有日期轮次的
+/// 撤销形态,ScheduledDate=null)。只有关联了 Tracker 申请的条目才发 ——
+/// Jobs 消费后同步投影轮次排期并按口径推进投递状态。
+/// </summary>
+public sealed record InterviewRoundScheduledDomainEvent(
+    Guid EntryId, Guid ApplicationId, int RoundNo, string? Stage,
+    DateOnly? ScheduledDate, Guid UserId = default) : DomainEventBase;
 
 // ============================ 分析回写用的 DTO(领域层不依赖 Application) ============================
 

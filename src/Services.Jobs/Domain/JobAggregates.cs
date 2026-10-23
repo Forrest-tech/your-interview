@@ -508,6 +508,57 @@ public sealed class JobApplication : AuditableAggregateRoot
                 break;
         }
     }
+
+    /// <summary>
+    /// 轮次排期回写(票114,REQ-02 残余/CONF-DASH-1):Playbook 里排了期,
+    /// Tracker 投影轮次同步排期,投递状态按口径推进 —— interviewed 计数
+    /// (Jobs 状态口径)与 Dashboard Upcoming(Interviews 排期口径)同屏不矛盾。
+    ///
+    /// 语义(定版,evidence-114/STATUS §4):
+    ///   · 投影同步:按 Order 找轮次,无则补建(带 Stage/日期,**不发邀请事件**防回环,
+    ///     与结果回写补建同型);有则同步 Stage(非空才覆盖)与 ScheduledDate。
+    ///   · 推进:ScheduledDate 非空、该轮投影 Outcome 仍 Pending、且状态 ∈
+    ///     {Saved, Applied, Screen} → 沿状态机走 Interview(与 Passed 回写同路:
+    ///     Saved 先 Applied,再 ChangeStatusCore 静默进 Interview)。
+    ///   · 不覆盖:状态 ∈ {Interview, Offer, Accepted, Rejected, Ghosted, Paused,
+    ///     Withdrawn} 一律不动 —— 已决定状态不因新排期「复活」;结果已先落
+    ///     (投影 Outcome 非 Pending)的轮次,迟到的排期事件只同步日期、永不
+    ///     推进状态(乱序不回退)。
+    ///   · 撤销(ScheduledDate=null:改期清空/删轮次):只清投影日期,**不回退
+    ///     状态** —— 状态机无 Interview→Applied 合法路径,「曾进入面试阶段」
+    ///     是历史事实。
+    ///   · 幂等:同事件重放 → 同值写入、推进分支不重复触发,无重复流转历史。
+    /// </summary>
+    public void RecordRoundSchedule(int roundOrder, string? stage, DateOnly? scheduledDate)
+    {
+        var round = _rounds.FirstOrDefault(r => r.Order == roundOrder);
+        if (round is null)
+        {
+            round = new InterviewRound(Id, roundOrder,
+                string.IsNullOrWhiteSpace(stage) ? "Technical" : stage.Trim(),
+                scheduledDate, null, null, null);
+            _rounds.Add(round);
+        }
+        else
+        {
+            round.RecordSchedule(stage, scheduledDate);
+        }
+
+        if (scheduledDate is not null
+            && round.Outcome == RoundOutcome.Pending
+            && Status is ApplicationStatus.Saved or ApplicationStatus.Applied
+                or ApplicationStatus.Screen)
+        {
+            var note = $"第 {roundOrder} 轮面试已排期";
+            if (Status == ApplicationStatus.Saved)
+                ChangeStatus(ApplicationStatus.Applied, note);
+            ChangeStatusCore(ApplicationStatus.Interview, note, null, fromAddRound: true);
+        }
+        else
+        {
+            Touch();
+        }
+    }
 }
 
 public sealed class ApplicationStatusChange : Entity
@@ -569,6 +620,16 @@ public sealed class InterviewRound : Entity
     /// 结果回写不该清掉用户已填的时间/面试官/形式。
     /// </summary>
     internal void RecordOutcome(RoundOutcome outcome) => Outcome = outcome;
+
+    /// <summary>
+    /// 只同步排期、不动结果/其它字段(票114)—— Stage 非空才覆盖(事件 Stage
+    /// 为空时不抹掉投影已有阶段),ScheduledDate 无条件同步(null = 排期撤销)。
+    /// </summary>
+    internal void RecordSchedule(string? stage, DateOnly? scheduledDate)
+    {
+        if (!string.IsNullOrWhiteSpace(stage)) Stage = stage;
+        ScheduledDate = scheduledDate;
+    }
 
     public void SetFeedback(string? feedback) => Feedback = feedback;
 }

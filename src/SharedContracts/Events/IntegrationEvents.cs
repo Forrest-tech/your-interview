@@ -99,6 +99,27 @@ public sealed record InterviewOutcomeRecorded(
     InterviewOutcome? Outcome = null
 ) : IntegrationEvent;
 
+/// <summary>
+/// Interviews:轮次排期落库(新建带日期/改期/清空日期/删轮次)→
+/// Jobs 同步对应轮次投影的排期,并在投递尚处 Saved/Applied/Screen 且该轮
+/// 未出结果时沿状态机推进到 Interview(票114 REQ-02 残余 / CONF-DASH-1:
+/// interviewed 按 Jobs 投递状态计数,排期不回写则 Dashboard Upcoming
+/// 有轮次而计数为 0,同屏矛盾)。
+/// ScheduledDate = null 专表「排期撤销」(改期清空或删轮次):Jobs 只清
+/// 投影日期,不回退投递状态(状态机无 Interview→Applied 合法路径,
+/// 「曾进入面试阶段」是历史事实)。
+/// 发布纪律:仅当条目已关联投递且轮次 ScheduledDate 实际变化时才发
+/// (日期未变的保存不发,票91 计数纪律)。
+/// </summary>
+public sealed record InterviewRoundScheduled(
+    Guid ApplicationId,
+    Guid EntryId,
+    Guid UserId,
+    int RoundNo,
+    string? Stage,
+    DateOnly? ScheduledDate
+) : IntegrationEvent;
+
 /// <summary>Identity:新用户注册 → 初始化该用户的默认工作区(默认知识库、默认管道列)。</summary>
 public sealed record UserRegistered(Guid UserId, string Email, string DisplayName) : IntegrationEvent;
 

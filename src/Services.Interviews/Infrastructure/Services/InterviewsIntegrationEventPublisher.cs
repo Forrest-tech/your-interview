@@ -30,7 +30,8 @@ public sealed class InterviewsIntegrationEventPublisher(
       INotificationHandler<DomainEventNotification<InterviewTranscribedDomainEvent>>,
       INotificationHandler<DomainEventNotification<InterviewAnalysisAppliedDomainEvent>>,
       INotificationHandler<DomainEventNotification<InterviewAnalysisFailedDomainEvent>>,
-      INotificationHandler<DomainEventNotification<InterviewOutcomeRecordedDomainEvent>>
+      INotificationHandler<DomainEventNotification<InterviewOutcomeRecordedDomainEvent>>,
+      INotificationHandler<DomainEventNotification<InterviewRoundScheduledDomainEvent>>
 {
     /// <summary>转写开始 —— 任务行已随业务变更同事务落库,由派发器投递,这里只记审计日志。</summary>
     public Task Handle(DomainEventNotification<InterviewTranscriptionStartedDomainEvent> n,
@@ -91,6 +92,21 @@ public sealed class InterviewsIntegrationEventPublisher(
         await publish.Publish(new SharedContracts.Events.InterviewOutcomeRecorded(
             e.ApplicationId, e.EntryId, e.UserId, e.RoundNo, e.Result,
             e.Outcome is null ? null : MapOutcome(e.Outcome.Value)), ct);
+    }
+
+    /// <summary>
+    /// 轮次排期变更(票114)→ 回写 Tracker:Jobs 同步投影轮次排期并按口径推进状态。
+    /// UserId 同结果转发:取领域事件自带,不依赖 ICurrentUser。
+    /// </summary>
+    public async Task Handle(DomainEventNotification<InterviewRoundScheduledDomainEvent> n,
+        CancellationToken ct)
+    {
+        var e = n.DomainEvent;
+        logger.LogInformation("轮次排期变更 EntryId={Id} 第 {Round} 轮 → {Date} → 回写 Tracker(申请 {AppId})",
+            e.EntryId, e.RoundNo, e.ScheduledDate?.ToString("yyyy-MM-dd") ?? "(撤销)", e.ApplicationId);
+
+        await publish.Publish(new SharedContracts.Events.InterviewRoundScheduled(
+            e.ApplicationId, e.EntryId, e.UserId, e.RoundNo, e.Stage, e.ScheduledDate), ct);
     }
 
     /// <summary>

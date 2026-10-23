@@ -48,12 +48,48 @@ public sealed class OutcomeDerivationBoundaryTests
     public void NumericStrings_InRange_AreNotControlledWords(string result)
         => AssertOutcome(result, null);
 
-    [Fact] // ⚠ 缺陷候选 D1(只登记不修,见 evidence-65/CLOSE-REPORT):
-           // 越界数字串 "-1" 被 TryParse 收为未定义枚举值,其 ToString() 恰为 "-1",
-           // 与原文相等 → 绕过规则 2 的名字校验,DTO Outcome 会输出 "-1"。
-           // 本例锁**现状**(特征测试),修复须另立票后同步改此期望。
-    public void OutOfRangeNumericString_CurrentlySlipsThroughAsUndefinedEnum()
-        => AssertOutcome("-1", "-1");
+    [Theory] // 票98 修复(源票65 D1;按票55 先例改断言,依据=票98 票面):
+             // 原特征测试 OutOfRangeNumericString_CurrentlySlipsThroughAsUndefinedEnum
+             // 锁现状("-1" → "-1");修复后规则 2 在 TryParse 之上加 Enum.IsDefined
+             // 校验,未定义枚举值一律不认 —— 越界数字串回落规则 3,纯数字串不含
+             // 任何关键词 → null,不再产出 "-1" 这类非法 Outcome。
+    [InlineData("-1")]        // 原 D1 复现例
+    [InlineData("99")]
+    [InlineData("6")]         // 紧邻定义域上界(5=NoShow)之外,同样曾绕过
+    [InlineData("-100")]
+    [InlineData("2147483647")] // int 上限:TryParse 收为未定义值,IsDefined 挡下
+    [InlineData("2147483648")] // 超 int 上限:TryParse 本就失败
+    [InlineData("99999999999999999999999999")] // 超大数:TryParse 失败
+    [InlineData("01")]        // 前导零:值落区间内(1=Passed)但名字对不上,既有口径挡下(零回退)
+    [InlineData("007")]       // 前导零 + 越界值
+    [InlineData("+1")]        // 正号:名字对不上,既有口径挡下(零回退)
+    [InlineData("+99")]       // 正号 + 越界值
+    [InlineData(" -1 ")]      // 空白包裹:Trim 后仍是越界数字串
+    [InlineData("\t99 ")]
+    [InlineData("1.0")]       // 小数形态:TryParse 失败 → 回落规则 3 → null
+    [InlineData("-1.5")]
+    public void OutOfRangeNumericStrings_NoLongerDeriveOutcome(string result)
+        => AssertOutcome(result, null);
+
+    [Theory] // 票98 §7:区间内合法面零回退 —— 合法枚举名(精确/大小写/Trim 形态)
+             // 与既有 ControlledVocabulary_Forms 互补,锁修复后仍按规则 2 命中。
+    [InlineData("Passed", "Passed")]
+    [InlineData("Rejected", "Rejected")]
+    [InlineData("Pending", "Pending")]
+    [InlineData("Ghosted", "Ghosted")]
+    [InlineData("Cancelled", "Cancelled")]
+    [InlineData("pAsSeD", "Passed")]     // 忽略大小写精确解析不变
+    [InlineData(" pending ", "Pending")] // Trim 后精确解析不变
+    public void ControlledVocabulary_LegalForms_UnchangedAfterFix(string result, string? expected)
+        => AssertOutcome(result, expected);
+
+    [Theory] // 票98 §7:区间内其余数字(既有 NumericStrings_InRange 覆盖 0/1/5)
+             // 修复后仍须按既有口径挡下 —— IsDefined 为真也过不了名字校验。
+    [InlineData("2")]
+    [InlineData("3")]
+    [InlineData("4")]
+    public void NumericStrings_InRange_RemainingValues_AreNotControlledWords(string result)
+        => AssertOutcome(result, null);
 
     [Fact] // 逗号组合:TryParse 按位或合并(Passed|Rejected=Ghosted),名字对不上被挡;
            // 随后关键词回落命中 reject → Rejected(现状锁定)。

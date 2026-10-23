@@ -51,6 +51,44 @@ public sealed class RenameTopicCommandValidator : AbstractValidator<RenameTopicC
     }
 }
 
+/// <summary>
+/// 票109:qa-import / prep-report 入库链(ImportInterviewCandidatesCommand)此前
+/// 无校验器,字段只有 EF 硬限 —— 超限穿透 DB 回 500。本校验器只补长度
+/// (上限 = KnowledgeItem 的 EF 映射逐字),不加 NotEmpty:Handler 对空
+/// Title/Topic 行是「跳过」语义,加必填会把整单变 400,属行为变更。
+/// text 字段(ConceptExplanation/BetterAnswer/KeyPointsJson)无 DB 限,不入围。
+/// </summary>
+public sealed class ImportInterviewCandidatesCommandValidator : AbstractValidator<ImportInterviewCandidatesCommand>
+{
+    public ImportInterviewCandidatesCommandValidator()
+    {
+        RuleFor(x => x.Company)
+            .MaximumLength(300).WithMessage("公司名称长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.RoundStage)
+            .MaximumLength(60).WithMessage("轮次阶段长度不能超过 {MaxLength} 个字符");
+        RuleForEach(x => x.Items).SetValidator(new InterviewCandidateRowValidator());
+    }
+}
+
+public sealed class InterviewCandidateRowValidator : AbstractValidator<InterviewCandidateRow>
+{
+    public InterviewCandidateRowValidator()
+    {
+        RuleFor(x => x.Title)
+            .MaximumLength(500).WithMessage("标题长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.Topic)
+            .MaximumLength(100).WithMessage("分类长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.SubTopic)
+            .MaximumLength(200).WithMessage("子分类长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.Question)
+            .MaximumLength(8000).WithMessage("问题长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.TagsJson)
+            .MaximumLength(1000).WithMessage("标签长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.ClientKey)
+            .MaximumLength(200).WithMessage("导入键长度不能超过 {MaxLength} 个字符");
+    }
+}
+
 public sealed class RecordReviewCommandValidator : AbstractValidator<RecordReviewCommand>
 {
     private static readonly string[] Allowed = ["Again", "Hard", "Good", "Easy"];

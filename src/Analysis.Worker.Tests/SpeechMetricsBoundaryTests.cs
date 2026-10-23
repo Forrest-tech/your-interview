@@ -185,14 +185,113 @@ public sealed class SpeechMetricsBoundaryTests
         m.ProblemWords.Should().HaveCount(20);
     }
 
-    [Fact] // ⚠ 缺陷候选 D2(只登记不修,见 evidence-65/CLOSE-REPORT):
-           // CriticalTerms 含 ".net",但匹配前先 Trim('.',',','?','!') 把 ".net" 削成 "net",
-           // 永远匹配不上 —— 65 分的 ".net"(术语阈值 <70 本应入选,非术语阈值 <50 又够不上)
-           // 直接漏出问题词列表。本例锁现状,修复须另立票后同步改期望。
-    public void DotNetTerm_TrimStripsDot_NeverMatchesCriticalTerms()
+    [Fact] // 票99 修复后期望(按票55先例改断言,依据:票99票面——修票65 D2):
+           // CriticalTerms 含 ".net",原匹配前 Trim('.',',','?','!') 把 ".net" 削成 "net"
+           // 永不命中,65 分只能走非术语通道(<50)而漏检;修复后按术语通道(<70)入选。
+    public void DotNetTerm_MatchesCriticalTerms_TermChannel()
     {
         var m = Calc([Seg(0, 10, "hello world")], [Pron(".net", 65)]);
+        m.ProblemWords.Select(p => p.Word).Should().Equal([".net"]);
+    }
+
+    // ---------- 票99 §7:".net" 得分谱与形态谱 ----------
+
+    [Theory] // 术语阈值 <70 谱:69(70-1)命中、70 边界不命中、71 不命中;
+             // 50(非术语阈值边界)与 49 亦经术语通道命中(单入不双计,见下例)
+    [InlineData(49, true)]
+    [InlineData(50, true)]
+    [InlineData(65, true)]
+    [InlineData(69, true)]
+    [InlineData(70, false)]
+    [InlineData(71, false)]
+    public void DotNetTerm_TermThresholdSpectrum(double score, bool included)
+    {
+        var m = Calc([Seg(0, 10, "hello world")], [Pron(".net", score)]);
+        m.ProblemWords.Should().HaveCount(included ? 1 : 0);
+    }
+
+    [Theory] // 大小写形态:原形比对前已 ToLowerInvariant,".NET" 等同 ".net"
+    [InlineData(".net")]
+    [InlineData(".NET")]
+    [InlineData(".Net")]
+    [InlineData(".nEt")]
+    public void DotNetTerm_CaseVariants(string word)
+    {
+        var m = Calc([Seg(0, 10, "hello world")], [Pron(word, 65)]);
+        m.ProblemWords.Select(p => p.Word).Should().Equal([word]);
+    }
+
+    [Theory] // 句中标点邻接:发音词带尾随标点时保留前导点剥尾随标点后命中
+    [InlineData(".net,")]
+    [InlineData(".net.")]
+    [InlineData(".net?")]
+    [InlineData(".net!")]
+    public void DotNetTerm_TrailingPunctuation(string word)
+    {
+        var m = Calc([Seg(0, 10, "hello world")], [Pron(word, 65)]);
+        m.ProblemWords.Select(p => p.Word).Should().Equal([word]);
+    }
+
+    [Fact] // 低于双阈值(40<50<70):术语通道收一次,非术语通道因同谓词取反不重复收
+    public void DotNetTerm_BelowBothThresholds_AppearsOnceOnly()
+    {
+        var m = Calc([Seg(0, 10, "hello world")], [Pron(".net", 40)]);
+        m.ProblemWords.Should().HaveCount(1);
+        m.ProblemWords[0].Word.Should().Be(".net");
+    }
+
+    [Fact] // 术语优先级:".net"(65)排在更低分的非术语词(30)之前(术语段在前拼接)
+    public void DotNetTerm_TermPriorityOrdering()
+    {
+        var m = Calc([Seg(0, 10, "hello world")],
+            [Pron("banana", 30), Pron(".net", 65)]);
+        m.ProblemWords.Select(p => p.Word).Should().Equal([".net", "banana"]);
+    }
+
+    [Theory] // 不误命中口径(读码定明,见 evidence-99/STATUS):形似词原形/尾剥/双端 Trim
+             // 三候选皆不等于 ".net",65 分(术语<70 与非术语<50 之间)一律不入选
+    [InlineData("asp.net")]
+    [InlineData("asp.net,")]
+    [InlineData("net")]
+    [InlineData("dotnet")]
+    [InlineData(".netx")]
+    public void DotNetLikeWords_NotCriticalTerms(string word)
+    {
+        var m = Calc([Seg(0, 10, "hello world")], [Pron(word, 65)]);
         m.ProblemWords.Should().BeEmpty();
+    }
+
+    [Fact] // 形似词不被吞:低于 50 时仍走非术语通道入选(按分数升序)
+    public void DotNetLikeWords_StillNonTermChannelBelow50()
+    {
+        var m = Calc([Seg(0, 10, "hello world")],
+            [Pron("net", 45), Pron("asp.net", 40)]);
+        m.ProblemWords.Select(p => p.Word).Should().Equal(["asp.net", "net"]);
+    }
+
+    [Theory] // 其他 CriticalTerms 命中零回退:原形/大小写/尾随标点/前导标点(双端 Trim 候选)形态不变
+    [InlineData("docker")]
+    [InlineData("DOCKER")]
+    [InlineData("Docker,")]
+    [InlineData("kubernetes")]
+    [InlineData("c#")]
+    [InlineData("on-call")]
+    [InlineData("sql,")]
+    [InlineData(",docker")]
+    [InlineData(".docker,")]
+    public void OtherCriticalTerms_ZeroRegression(string word)
+    {
+        var m = Calc([Seg(0, 10, "hello world")], [Pron(word, 65)]);
+        m.ProblemWords.Select(p => p.Word).Should().Equal([word]);
+    }
+
+    [Fact] // 普通词标点 Trim 行为不变:"banana," 65 分不入选(非术语须 <50),40 分经非术语通道入选
+    public void OrdinaryWord_PunctuationTrimUnchanged()
+    {
+        Calc([Seg(0, 10, "hello world")], [Pron("banana,", 65)])
+            .ProblemWords.Should().BeEmpty();
+        var m = Calc([Seg(0, 10, "hello world")], [Pron("banana,", 40)]);
+        m.ProblemWords.Select(p => p.Word).Should().Equal(["banana,"]);
     }
 
     // ---------- internal 纯函数 boundary(IVT 已开) ----------

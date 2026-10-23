@@ -133,7 +133,7 @@ public static class SpeechMetricsCalculator
         // 只挑"专业术语"里的低分词 —— 这才是真正影响可信度的部分
         var problemWords = scored
             .Where(p => p.AccuracyScore < 70)
-            .Where(p => CriticalTerms.Contains(p.Word.ToLowerInvariant().Trim('.',',','?','!')))
+            .Where(p => IsCriticalTerm(p.Word))
             .OrderBy(p => p.AccuracyScore)
             .Take(20)
             .ToList();
@@ -141,7 +141,7 @@ public static class SpeechMetricsCalculator
         // 术语读错的优先级高于普通词,所以问题词列表把术语排在前面
         var nonTermProblems = scored
             .Where(p => p.AccuracyScore < 50)
-            .Where(p => !CriticalTerms.Contains(p.Word.ToLowerInvariant().Trim('.',',','?','!')))
+            .Where(p => !IsCriticalTerm(p.Word))
             .OrderBy(p => p.AccuracyScore)
             .Take(10)
             .ToList();
@@ -167,6 +167,21 @@ public static class SpeechMetricsCalculator
             ProblemWords: [.. problemWords, .. nonTermProblems],
             StructureMarkers: markers,
             HasAudio: hasAudio);
+    }
+
+    /// <summary>
+    /// 术语命中判定(票99,修票65 D2):CriticalTerms 含 ".net" 这类前导点术语,
+    /// 原先匹配前双端 Trim('.',',','?','!') 把 ".net" 削成 "net" 永不命中。
+    /// 现按候选集比对:原形 → 保留前导点、只剥尾随标点的形态(".net,"→".net")
+    /// → 原双端 Trim 形态(其余术语与标点处理口径逐字不变,如 "Docker,"→"docker")。
+    /// 任一候选命中即术语。"asp.net" 三候选皆不等于 ".net"、纯 "net" 同理,均不误命中。
+    /// </summary>
+    private static bool IsCriticalTerm(string word)
+    {
+        var lower = word.ToLowerInvariant();
+        return CriticalTerms.Contains(lower)
+            || CriticalTerms.Contains(lower.TrimEnd('.', ',', '?', '!'))
+            || CriticalTerms.Contains(lower.Trim('.', ',', '?', '!'));
     }
 
     /// <summary>

@@ -11,7 +11,7 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   classifyFieldError, extractServerFieldErrors, fieldErrorFromServer,
-  serverFieldMessages, textLengthError,
+  serverFieldErrorSummary, serverFieldMessages, textLengthError,
 } from './validation-errors.helpers';
 
 /** ApiClient 包装后的形状:Error + original=原始 HttpErrorResponse。 */
@@ -153,5 +153,30 @@ describe('textLengthError(票75,提交前拦截)', () => {
   // [boundary-特殊字符] 特殊字符不影响长度判定
   it('special chars counted plainly', () => {
     expect(textLengthError('<b>&"\' '.repeat(500), 4000)).toBeNull();
+  });
+});
+
+describe('serverFieldErrorSummary(票109)', () => {
+  // 无字段锚点通道(flash/snack)透出具体文案:单字段原文
+  it('single field message returned verbatim', () => {
+    expect(serverFieldErrorSummary(apiClientError({ Model: ['模型名长度不能超过 200 个字符'] })))
+      .toBe('模型名长度不能超过 200 个字符');
+  });
+  // 多字段以 ； 拼接(原始形状同样可抠)
+  it('multiple fields joined, raw shape too', () => {
+    expect(serverFieldErrorSummary(rawError({
+      'Items[0].Topic': ['分类长度不能超过 100 个字符'],
+      Company: ['公司名称长度不能超过 300 个字符'],
+    }))).toBe('分类长度不能超过 100 个字符；公司名称长度不能超过 300 个字符');
+  });
+  // 非校验错误(无 errors{})→ null,调用方回落原路径
+  it('null when no field errors', () => {
+    expect(serverFieldErrorSummary(new Error('服务端内部错误'))).toBeNull();
+    expect(serverFieldErrorSummary(null)).toBeNull();
+    expect(serverFieldErrorSummary({ error: { detail: '只有 detail' } })).toBeNull();
+  });
+  // 空消息不算数
+  it('null when messages blank', () => {
+    expect(serverFieldErrorSummary(apiClientError({ Model: ['  '] }))).toBeNull();
   });
 });

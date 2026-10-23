@@ -57,6 +57,19 @@ export function extractServerFieldErrors(e: unknown): Record<string, string[]> |
   return null;
 }
 
+/**
+ * 无字段锚点的呈现通道(flash / snack / 表单级错误区)用的摘要(票109):
+ * 把 errors{} 全部消息以 '；' 拼成一句具体文案;无字段错误返回 null,
+ * 调用方回落原路径(e.message 等)。AI 设置 flash / 素材保存 / qa-import
+ * 此前只读 title,后端长度文案被通用英文标题吞掉 —— 本函数补上透出。
+ */
+export function serverFieldErrorSummary(e: unknown): string | null {
+  const dict = extractServerFieldErrors(e);
+  if (!dict) return null;
+  const msgs = Object.values(dict).flat().filter(m => m.trim());
+  return msgs.length ? msgs.join('；') : null;
+}
+
 /** 取某个字段的消息(字段名大小写不敏感 —— 后端 PascalCase、前端 camelCase 混用)。 */
 export function serverFieldMessages(e: unknown, field: string): string[] | null {
   const errors = extractServerFieldErrors(e);

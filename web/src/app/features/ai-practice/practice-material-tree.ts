@@ -4,6 +4,7 @@ import { MaterialNode } from '../../shared/material-tree/material-tree.component
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MaterialTransferDialogComponent } from './material-transfer-dialog.component';
 import { MaterialNodeDto, MaterialNodeIn, PracticeCategoryDto } from '../../core/api/practice-api.service';
+import { serverFieldErrorSummary } from '../../core/api/validation-errors.helpers';
 import { KnowledgeItem, KnowledgeTopic } from '../../core/models/api.models';
 import type { AiPracticeComponent } from './ai-practice.component';
 
@@ -916,7 +917,10 @@ export class PracticeMaterialTree {
   }
 
   errText(e: unknown): string {
-    return String((e as { message?: string } | null)?.message ?? e ?? this.host.t('practice.errUnknown')).slice(0, 200);
+    // 票109:字段级校验错误(errors{})优先透出具体文案(如素材名超 300),
+    // 只读 e.message 时只剩通用英文标题。
+    return (serverFieldErrorSummary(e)
+      ?? String((e as { message?: string } | null)?.message ?? e ?? this.host.t('practice.errUnknown'))).slice(0, 200);
   }
 
   // ---------- 2026-09-16 第十九轮:朗读文本「标记」开关 ----------

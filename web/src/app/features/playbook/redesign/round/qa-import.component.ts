@@ -10,6 +10,7 @@ import {
   InterviewDetail, InterviewQuestion, InterviewRound, KnowledgeItem
 } from '../../../../core/models/api.models';
 import { PlaybookV2Api } from '../playbook-v2.api';
+import { serverFieldErrorSummary } from '../../../../core/api/validation-errors.helpers';
 import { parseQuestionReview } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { makeV2Fmt, makeV2T } from '../v2.helpers';
@@ -201,8 +202,10 @@ export class QaImportComponent {
       const items = await this.api.listKnowledge().toPromise();
       if (items) this.knowledgeItems.set(items);
       this.changed.emit();
-    } catch {
-      this.snack.open(this.t('pb.v2.q.importFailed'), this.t('common.close'), { duration: 3000 });
+    } catch (e) {
+      // 票109:字段级校验错误(如分类超 100)透出后端具体文案,其余失败回落原通用提示。
+      this.snack.open(serverFieldErrorSummary(e) ?? this.t('pb.v2.q.importFailed'),
+        this.t('common.close'), { duration: 3000 });
     } finally {
       this.busy.set(false);
     }

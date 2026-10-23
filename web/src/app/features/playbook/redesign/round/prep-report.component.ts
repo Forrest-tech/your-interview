@@ -14,6 +14,7 @@ import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
 import { QaZoomService } from '../../../../core/qa-zoom/qa-zoom.service';
 import { TtsPlayerService } from '../../../../core/tts/tts-player.service';
 import { PlaybookV2Api } from '../playbook-v2.api';
+import { serverFieldErrorSummary } from '../../../../core/api/validation-errors.helpers';
 import {
   PrepBlock, PrepQuestionItem, PrepReport, PrepSection, prepStdText, safeJson
 } from '../v2.models';
@@ -603,8 +604,10 @@ export class PrepReportComponent {
       } else {
         this.snack.open(this.t('pb.v2.p.alreadyIn'), this.t('common.close'), { duration: 3000 });
       }
-    } catch {
-      this.snack.open(this.t('pb.v2.p.joinFailed'), this.t('common.close'), { duration: 3000 });
+    } catch (e) {
+      // 票109:字段级校验错误(如分类超 100)透出后端具体文案,其余失败回落原通用提示。
+      this.snack.open(serverFieldErrorSummary(e) ?? this.t('pb.v2.p.joinFailed'),
+        this.t('common.close'), { duration: 3000 });
     } finally {
       this.busy.set(false);
     }

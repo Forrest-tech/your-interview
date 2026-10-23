@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using YourInterview.BuildingBlocks.Storage;
 
 namespace YourInterview.Services.Interviews.Infrastructure.Storage;
 
@@ -40,15 +41,11 @@ public sealed class LocalInterviewAudioStore(IConfiguration config,
     ILogger<LocalInterviewAudioStore> logger) : IInterviewAudioStore
 {
     /// <summary>
-    /// 存储根目录 —— 解析链与分析 Worker 的 InterviewsRoot **完全一致**
-    /// (两处必须同步改,相对路径拼出来才是同一个文件):
-    ///   Storage:InterviewsRoot 配置 > INTERVIEW_STORAGE_DIR 环境变量 >
-    ///   {Storage:RootDirectory}/interviews > 仓库根/storage/interviews > cwd 兜底。
-    ///
-    /// docker-compose 里 interviews 与 analysis-worker 挂**同一个卷**
-    /// 到 /app/storage/interviews —— 上传方写、分析方读,路径天然一致。
+    /// 存储根目录 —— 解析链已收编 BuildingBlocks adapter(ARC-12/票39),
+    /// 本服务与分析 Worker 共用同一实现,禁止再另写一份:
+    /// 见 <see cref="StorageRootResolver.ResolveInterviewsRoot(IConfiguration)"/>。
     /// </summary>
-    private readonly string _root = ResolveRoot(config);
+    private readonly string _root = StorageRootResolver.ResolveInterviewsRoot(config);
 
     /// <summary>
     /// 允许的文件扩展名。白名单拒绝 —— 别让 .exe 伪装成材料混进存储区。
@@ -65,45 +62,6 @@ public sealed class LocalInterviewAudioStore(IConfiguration config,
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_root);
 
-    private static string ResolveRoot(IConfiguration config)
-    {
-        // 1. 专用配置/环境变量( docker-compose 里 interviews 与 worker 共卷,两边都设它 )
-        var dedicated = config["Storage:InterviewsRoot"];
-        if (!string.IsNullOrWhiteSpace(dedicated)) return dedicated;
-
-        var env = Environment.GetEnvironmentVariable("INTERVIEW_STORAGE_DIR");
-        if (!string.IsNullOrWhiteSpace(env)) return env;
-
-        // 2. 沙盒/统一 Storage 根派生:{Storage:RootDirectory}/interviews ——
-        //    和 Assessment 的 {root}/{user}/… 同一层级,一个根管所有录音。
-        var rootDir = config["Storage:RootDirectory"];
-        if (!string.IsNullOrWhiteSpace(rootDir)) return Path.Combine(rootDir, "interviews");
-
-        // 3. 本地裸跑(dotnet run):锚定到**仓库根**而不是进程 cwd ——
-        //    interviews 与 analysis-worker 的 cwd 不同,按 cwd 会指向两个地方。
-        var solutionRoot = FindSolutionRoot();
-        if (solutionRoot is not null) return Path.Combine(solutionRoot, "storage", "interviews");
-
-        return Path.Combine(Directory.GetCurrentDirectory(), "storage", "interviews");
-    }
-
-    /// <summary>
-    /// 从程序集位置向上找仓库根。优先含 docker-compose.yml 的目录(仓库根,
-    /// .sln 常在 src/ 子目录里,只认 sln 会锚错一层)。找不到 compose 再退回 sln。
-    /// 最多向上 8 层,找不到返回 null —— 只作兜底,不影响显式配置。
-    /// </summary>
-    private static string? FindSolutionRoot()
-    {
-        DirectoryInfo? withCompose = null, withSln = null;
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (var i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
-        {
-            if (dir.GetFiles("docker-compose.yml").Length > 0) withCompose = dir;
-            if (dir.GetFiles("*.sln").Length > 0) withSln = dir;
-        }
-        return (withCompose ?? withSln)?.FullName;
-    }
-
     public async Task<StoredAudioFile> SaveAsync(Guid entryId, string fileName, Stream content,
         CancellationToken ct)
     {
@@ -114,17 +72,14 @@ public sealed class LocalInterviewAudioStore(IConfiguration config,
         var relative = $"{relDir}/{fileNameOnDisk}";
 
         var absolute = Path.Combine(_root, relDir, fileNameOnDisk);
-        Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
 
-        // 先写临时文件再原子改名;同时流式计算 SHA-256 —— 只读一遍流。
-        var tmp = absolute + ".tmp";
-        long bytes;
-        string sha256;
-        await using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
-        using (var hasher = SHA256.Create())
+        // 先写临时文件再原子改名(机制已收编 BuildingBlocks adapter,ARC-12/票39);
+        // 同时流式计算 SHA-256 —— 只读一遍流。
+        long bytes = 0;
+        string sha256 = string.Empty;   // 实际值在原子写回调内赋值(回调必然先于下方日志执行)
+        await LocalFileStorage.WriteAtomicallyAsync(absolute, async fs =>
         {
-            // CopyToAsync 之后 hasher 里已有完整摘要,但要拿 hash 就不能再用 fs 的写入位置
-            bytes = 0;
+            using var hasher = SHA256.Create();
             var buffer = new byte[81920];
             int read;
             while ((read = await content.ReadAsync(buffer, ct)) > 0)
@@ -135,8 +90,7 @@ public sealed class LocalInterviewAudioStore(IConfiguration config,
             }
             hasher.TransformFinalBlock([], 0, 0);
             sha256 = Convert.ToHexString(hasher.Hash!);
-        }
-        File.Move(tmp, absolute, overwrite: true);
+        }, ct);
 
         logger.LogInformation("面试录音已保存 {Relative} ({Bytes} 字节, SHA256={Sha}…)",
             relative, bytes, sha256[..8]);
@@ -174,17 +128,11 @@ public sealed class LocalInterviewAudioStore(IConfiguration config,
         => ResolveAbsolute(relativePath) is { } absolute && File.Exists(absolute);
 
     /// <summary>
-    /// 相对路径 → 绝对路径。含路径穿越("..")或 rooted 的输入直接拒绝 ——
-    /// StoragePath 会进事件、跨服务传给 Worker,这里把它钉死在根目录内。
+    /// 相对路径 → 绝对路径 —— 守卫口径已收编 BuildingBlocks adapter(ARC-12/票39):
+    /// 见 <see cref="StorageRelativePaths.ResolveGuarded"/>。
     /// </summary>
     private string? ResolveAbsolute(string? relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath)) return null;
-        var normalized = relativePath.Replace('\\', '/');
-        if (Path.IsPathRooted(normalized) || normalized.Contains("..")) return null;
-
-        return Path.Combine(_root, normalized.Replace('/', Path.DirectorySeparatorChar));
-    }
+        => StorageRelativePaths.ResolveGuarded(_root, relativePath);
 
     /// <summary>扩展名归一化 + 白名单校验。不在白名单直接抛(由 Handler 转 400)。</summary>
     private static string NormalizeExtension(string ext)

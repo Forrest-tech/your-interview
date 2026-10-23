@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using YourInterview.BuildingBlocks.Storage;
 using YourInterview.Services.Assessment.Infrastructure.Persistence;
 
 namespace YourInterview.Services.Assessment.Infrastructure.Storage;
@@ -66,37 +67,14 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
     ILogger<LocalAudioStore> logger) : IAudioStore
 {
     /// <summary>
-    /// 部署层给的默认根目录。
-    /// 优先级:Storage:RootDirectory 配置 > PRACTICE_STORAGE_DIR 环境变量 > 仓库**同级**的 recordings/。
-    /// 未显式配置时落到一个**可预测**的目录,而不是随机临时目录 —— 否则重启后找不到文件。
+    /// 部署层给的默认根目录 —— 解析链已收编 BuildingBlocks adapter(ARC-12/票39),
+    /// 本类不再自带实现:见 <see cref="StorageRootResolver.ResolveAssessmentDefaultRoot(IConfiguration)"/>。
     /// </summary>
-    private readonly string _defaultRoot = ResolveRoot(config);
+    private readonly string _defaultRoot = StorageRootResolver.ResolveAssessmentDefaultRoot(config);
 
     public string DefaultRoot => _defaultRoot;
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_defaultRoot);
-
-    private static string ResolveRoot(IConfiguration config)
-    {
-        var configured = config["Storage:RootDirectory"];
-        if (!string.IsNullOrWhiteSpace(configured)) return configured;
-
-        var env = Environment.GetEnvironmentVariable("PRACTICE_STORAGE_DIR");
-        if (!string.IsNullOrWhiteSpace(env)) return env;
-
-        // 兜底(2026-09-27,Forrest 要求):录音**不能放进仓库里面**(防止误提交 GitHub),
-        //   统一放「仓库的同级 recordings/assessment/」—— 仓库在 ~/dev/your-interview,
-        //   录音在 ~/dev/recordings/assessment。再加一层 `assessment` 子目录,
-        //   是为了让 ../recordings 下能按服务分目录(interviews 的视频将来放 ../recordings/interviews …)。
-        //   向上找 .git 定位仓库根;找不到 .git(罕见)才退回旧位置。
-        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, ".git")))
-            dir = dir.Parent;
-
-        return dir is null
-            ? Path.Combine(Directory.GetCurrentDirectory(), "storage", "assessment")
-            : Path.GetFullPath(Path.Combine(dir.FullName, "..", "recordings", "assessment"));
-    }
 
     // ---------- 根目录解析 ----------
 
@@ -166,20 +144,14 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
         var relative = Path.Combine(relDir, fileName);
 
         var absolute = Path.Combine(roots.ActiveRoot, relative);
-        var dir = Path.GetDirectoryName(absolute)!;
-        Directory.CreateDirectory(dir);
 
         // 先写临时文件再原子改名:中途崩了也不会留下半截录音被当成完整文件
-        var tmp = absolute + ".tmp";
-        await using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            await content.CopyToAsync(fs, ct);
-        }
-        File.Move(tmp, absolute, overwrite: true);
+        // (机制已收编 BuildingBlocks adapter,ARC-12/票39)
+        await LocalFileStorage.WriteAtomicallyAsync(absolute, fs => content.CopyToAsync(fs, ct), ct);
 
         logger.LogInformation("录音已保存 {Relative} → {Root}({Bytes} 字节)",
             relative, roots.ActiveRoot, new FileInfo(absolute).Length);
-        return relative.Replace('\\', '/');   // 统一成正斜杠,跨平台可移植
+        return StorageRelativePaths.ToPortableRelative(relative);   // 统一成正斜杠,跨平台可移植
     }
 
     public async Task<Stream?> OpenReadAsync(Guid userId, string relativePath, CancellationToken ct)
@@ -192,7 +164,8 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
         var roots = await ResolveRootsAsync(userId, ct);
         foreach (var root in CandidateRoots(roots))
         {
-            var absolute = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            // 既有口径:无穿越守卫的组合(与 Interviews 的守卫口径差异见 adapter 文档,票39 保留不改)
+            var absolute = StorageRelativePaths.CombineUnderRoot(root, relativePath);
             if (!File.Exists(absolute)) continue;
 
             Stream s = new FileStream(absolute, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -212,7 +185,7 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
 
         foreach (var root in CandidateRoots(roots))
         {
-            var absolute = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            var absolute = StorageRelativePaths.CombineUnderRoot(root, relativePath);
             if (!File.Exists(absolute)) continue;
 
             try

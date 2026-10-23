@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SharedContracts\YourInterview.SharedContracts.csproj" />
+    <!-- 票39/ARC-12:文件存储 adapter(根目录解析单一实现)在 BuildingBlocks -->
+    <ProjectReference Include="..\BuildingBlocks\YourInterview.BuildingBlocks.csproj" />
   </ItemGroup>
 
 </Project>

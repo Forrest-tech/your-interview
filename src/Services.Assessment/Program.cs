@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using YourInterview.BuildingBlocks.Ai;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
@@ -51,8 +52,10 @@ builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.S
 // Azure 神经语音合成(示范朗读走 Azure 时用;key 与评分共用同一份)
 builder.Services.AddSingleton<YourInterview.Services.Assessment.Application.SpeechSynthesizer>();
 
-// M2.3:LLM 凭据与补全已收敛到 AiGateway(前端统一走 /api/ai/*),
-// Assessment 不再持有 LLM 客户端/凭据栈;历史数据由 RemoveAiSettings 迁移搬走后删表。
+// M2.3:LLM 凭据仍只存 AiGateway;票95 起 Assessment 经票38 单一 AiGatewayClient
+// 编排 Mock 出题/评分(凭据不落本服务,JWT 透传由客户端处理)。
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddAiGatewayClient(builder.Configuration["AiGateway:BaseUrl"]);
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 
 // ---------- 鉴权 ----------

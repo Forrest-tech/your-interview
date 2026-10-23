@@ -5,6 +5,7 @@ using YourInterview.BuildingBlocks.Security;
 using YourInterview.BuildingBlocks.Web;
 using YourInterview.Services.Assessment.Application;
 using YourInterview.Services.Assessment.Domain;
+using YourInterview.SharedContracts.Ai;
 using YourInterview.SharedContracts.Security;
 
 namespace YourInterview.Services.Assessment.Api;
@@ -104,6 +105,48 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         var r = await sender.Send(new AddQuestionsCommand(id, Me, body.Questions), ct);
         return r.IsSuccess ? Results.Ok(new { ids = r.Value }) : r.ToProblemDetails();
     }
+
+    /// <summary>票95:后端编排 AI 出题(幂等补差额;失败会话留 Draft 可重试)。</summary>
+    [HttpPost("sessions/{id:guid}/generate")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> Generate(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var r = await sender.Send(new GenerateQuestionsCommand(id, Me), ct);
+            if (r.IsSuccess) return Results.Ok(new { questionCount = r.Value });
+            if (r.Error.Code == "Mock.AiInvalidResponse")
+                return AiProblem(502, "Mock.AiGenerationFailed", "AI 出题失败", r.Error.Description);
+            return r.ToProblemDetails();
+        }
+        catch (AiGatewayException ex) { return MapAiError(ex, "Mock.AiGenerationFailed", "AI 出题失败"); }
+    }
+
+    /// <summary>票95:后端编排 AI 评分(答后调用;失败题停 Answered 可重试;已评分幂等)。</summary>
+    [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/score-ai")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> ScoreAi(Guid id, Guid questionId, CancellationToken ct)
+    {
+        try
+        {
+            var r = await sender.Send(new ScoreQuestionWithAiCommand(id, questionId, Me), ct);
+            if (r.IsSuccess) return Results.Ok(new { scored = true });
+            if (r.Error.Code == "Mock.AiInvalidResponse")
+                return AiProblem(502, "Mock.AiScoringFailed", "AI 评分失败", r.Error.Description);
+            return r.ToProblemDetails();
+        }
+        catch (AiGatewayException ex) { return MapAiError(ex, "Mock.AiScoringFailed", "AI 评分失败"); }
+    }
+
+    private static IResult MapAiError(AiGatewayException ex, string failCode, string failTitle)
+        => ex.IsConfigurationError
+            ? AiProblem(503, "Mock.AiNotConfigured", "AI 未配置",
+                "AI 服务尚未配置凭据,请先在设置里保存 LLM 密钥后再试。")
+            : AiProblem(502, failCode, failTitle, ex.Message);
+
+    private static IResult AiProblem(int status, string code, string title, string? detail)
+        => Results.Problem(title: title, detail: detail, statusCode: status,
+            extensions: new Dictionary<string, object?> { ["code"] = code });
 
     /// <summary>作答:提交文本或音频。</summary>
     [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/answer")]

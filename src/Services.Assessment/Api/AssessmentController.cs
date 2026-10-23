@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.BuildingBlocks.Web;
 using YourInterview.Services.Assessment.Application;
@@ -21,7 +22,8 @@ namespace YourInterview.Services.Assessment.Api;
 [Route("api/assessment")]
 [Authorize]
 public sealed class AssessmentController(ISender sender, ICurrentUser currentUser,
-    PronunciationAssessor assessor, SpeechSynthesizer synthesizer) : ControllerBase
+    PronunciationAssessor assessor, SpeechSynthesizer synthesizer,
+    ILogger<AssessmentController> logger) : ControllerBase
 {
     private Guid Me => currentUser.UserId ?? Guid.Empty;
 
@@ -120,7 +122,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                 return AiProblem(502, "Mock.AiGenerationFailed", "AI 出题失败", r.Error.Description);
             return r.ToProblemDetails();
         }
-        catch (AiGatewayException ex) { return MapAiError(ex, "Mock.AiGenerationFailed", "AI 出题失败"); }
+        catch (AiGatewayException ex) { return MapAiError(ex, scoring: false); }
     }
 
     /// <summary>票95:后端编排 AI 评分(答后调用;失败题停 Answered 可重试;已评分幂等)。</summary>
@@ -136,14 +138,17 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                 return AiProblem(502, "Mock.AiScoringFailed", "AI 评分失败", r.Error.Description);
             return r.ToProblemDetails();
         }
-        catch (AiGatewayException ex) { return MapAiError(ex, "Mock.AiScoringFailed", "AI 评分失败"); }
+        catch (AiGatewayException ex) { return MapAiError(ex, scoring: true); }
     }
 
-    private static IResult MapAiError(AiGatewayException ex, string failCode, string failTitle)
-        => ex.IsConfigurationError
-            ? AiProblem(503, "Mock.AiNotConfigured", "AI 未配置",
-                "AI 服务尚未配置凭据,请先在设置里保存 LLM 密钥后再试。")
-            : AiProblem(502, failCode, failTitle, ex.Message);
+    // 票116 F-H2:按票47 定版脱敏 —— 对外 detail 用 MockAiFailure 固定文案,
+    // 异常原文(含 AiGateway 连接细节)只进服务端日志,绝不下发。
+    private IResult MapAiError(AiGatewayException ex, bool scoring)
+    {
+        logger.LogWarning(ex, "Mock AI 编排调用 AiGateway 失败(scoring={Scoring})", scoring);
+        var p = MockAiFailure.For(ex, scoring);
+        return AiProblem(p.StatusCode, p.Code, p.Title, p.Detail);
+    }
 
     private static IResult AiProblem(int status, string code, string title, string? detail)
         => Results.Problem(title: title, detail: detail, statusCode: status,

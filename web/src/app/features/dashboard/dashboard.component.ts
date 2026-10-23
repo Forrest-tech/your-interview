@@ -8,6 +8,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ApiClient } from '../../core/api/api-client';
+import { JobsApiService } from '../../core/api/jobs-api.service';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { AnalyticsApiService } from '../../core/api/analytics-api.service';
 import { ActionCenter, Application, ApplicationStatus, Dashboard, UpcomingRound } from '../../core/models/api.models';
 import { weakestRadarPoints } from '../../core/models/radar.helpers';
 import {
@@ -42,6 +45,9 @@ interface ActionCard {
 })
 export class DashboardComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  private readonly jobsApi = inject(JobsApiService);
+  private readonly analyticsApi = inject(AnalyticsApiService);
+  private readonly interviewsApi = inject(InterviewsApiService);
   readonly auth = inject(AuthService);
   readonly i18n = inject(I18nService);
 
@@ -106,18 +112,18 @@ export class DashboardComponent implements OnInit {
     let pending = 3;
     const done = () => { if (--pending === 0) this.loading.set(false); };
 
-    this.api.get<ActionCenter>('/api/jobs/action-center').subscribe({
+    this.jobsApi.getActionCenter().subscribe({
       next: (d) => { this.actionCenter.set(d); done(); },
       error: (e: Error) => { this.error.set(e.message); done(); }
     });
 
-    this.api.get<Dashboard>('/api/analytics/dashboard').subscribe({
+    this.analyticsApi.getDashboard().subscribe({
       next: (d) => { this.dashboard.set(d); done(); },
       error: () => done()
     });
 
     // ★ 即将到来的面试轮次
-    this.api.get<UpcomingRound[]>('/api/interviews/rounds/upcoming', { days: 30 }).subscribe({
+    this.interviewsApi.getUpcomingRounds().subscribe({
       next: (list) => { this.upcomingRounds.set(list ?? []); done(); },
       error: () => done()
     });

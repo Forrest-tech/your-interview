@@ -12,6 +12,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ApiClient } from '../../core/api/api-client';
+import { AssessmentApiService } from '../../core/api/assessment-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MockSession, Paged } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -45,6 +46,7 @@ interface NewSessionForm {
 })
 export class MockComponent implements OnInit {
   private readonly api = inject(ApiClient);
+  private readonly assessmentApi = inject(AssessmentApiService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
@@ -111,7 +113,7 @@ export class MockComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.api.get<Paged<MockSession>>('/api/assessment/sessions', {
+    this.assessmentApi.getSessions({
       page: this.page(),
       pageSize: this.pageSize()
     }).subscribe({
@@ -175,7 +177,7 @@ export class MockComponent implements OnInit {
     this.saving.set(true);
     this.formError.set(null);
 
-    this.api.post<{ id: string }>('/api/assessment/sessions', {
+    this.assessmentApi.createSession({
       title: this.form.title.trim(),
       mode: this.form.mode,
       topic: this.form.topic.trim() || null,

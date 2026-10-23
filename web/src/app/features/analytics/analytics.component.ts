@@ -12,7 +12,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import * as echarts from 'echarts';
 import { catchError, of } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { AnalyticsApiService } from '../../core/api/analytics-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AbilityTrend, Dashboard } from '../../core/models/api.models';
 import { hasScoredRadarData, weakestRadarPoints } from '../../core/models/radar.helpers';
@@ -41,7 +41,7 @@ const FUNNEL_COLORS = ['#9fa8da', '#7986cb', '#5c6bc0', '#3f51b5', '#303f9f'];
   styleUrl: './analytics.component.scss'
 })
 export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
-  private readonly api = inject(ApiClient);
+  private readonly analyticsApi = inject(AnalyticsApiService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
@@ -175,14 +175,14 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     };
 
-    this.api.get<Dashboard>('/api/analytics/dashboard').subscribe({
+    this.analyticsApi.getDashboard().subscribe({
       next: (d) => { this.dashboard.set(d); done(); },
       error: (e: Error) => { this.error.set(e.message); done(); }
     });
 
     // 趋势接口为正式端点(FUN-08/票36:后端基于 AbilitySnapshots 按天聚合);
     // 请求失败时降级为空 series,让区块走本地化空态(an.trendEmpty),不让整页报错
-    this.api.get<AbilityTrend>('/api/analytics/ability/trend', { days: 30 })
+    this.analyticsApi.getAbilityTrend()
       .pipe(catchError(() => of<AbilityTrend>({ days: 30, series: [] })))
       .subscribe((t) => { this.trend.set(t); done(); });
   }

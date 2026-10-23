@@ -764,7 +764,7 @@
                                       (focus)="recogFocusIdx.set($index)"
                                       (keydown)="onWordKeydown($event, $index, sc.words.length)"
                                       (click)="wordClickAction(isFiller(w.word), w.offsetMs) === 'replay' ? replayAt(w.offsetMs!) : pickWord($index)"
-                                      [matTooltip]="(isFiller(w.word) ? '填充词' + (w.offsetMs ? ' · 点击回放' : '') + ' · ' : '') + errLabel(w.errorType) + ' · ' + w.accuracy">{{ w.word }}</span>
+                                      [matTooltip]="(isFiller(w.word) ? '填充词' + (w.offsetMs ? ' · 点击回放' : '') + ' · ' : '') + errLabel(w.errorType) + ' · ' + w.accuracy">{{ w.word }}</span>{{ ' ' }}
                               }
                             </p>
 

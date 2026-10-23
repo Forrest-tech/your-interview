@@ -3287,7 +3287,9 @@ button.zoom-label:hover { background: #e4eeff; color: #2f6fed; }
 /* Score Results 区 */
 .hist-card .report-section {
   /* ★ 第二十五轮:删除 Score Results 上方的那条横线,卡片② 内部保持纯净无分割线。 */
-  margin-top: 20px;
+  /* ★ 票121:报告内嵌到所属 Take 行下后,20px 上边距过松 —— 收紧到 6px,让报告紧贴所属行;
+     这是本票允许的唯一一处 margin 微调(规格)。 */
+  margin-top: 6px;
   padding-top: 0;
   border-top: 0;
 }

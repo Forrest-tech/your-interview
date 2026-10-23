@@ -772,9 +772,39 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   hasWordScore(w: { accuracy?: number; errorType?: string }): boolean { return this.grading.hasWordScore(w); }
   fmtDuration(sec: number): string { return this.grading.fmtDuration(sec); }
   fmtTime(ts: number): string { return this.grading.fmtTime(ts); }
-  toggleReport(): void { return this.grading.toggleReport(); }
+  toggleReport(): void {
+    // ★ 票121:唯一 TS 补丁(焦点归位) —— 报告头部 toggle 收起了报告:
+    // 销毁前记下该条行自身的 View Report/Collapse 按钮,销毁后 focus 回去,不许落回 body。
+    const btn = this.collapseFocusTarget();
+    const wasOpen = this.reportOpen();
+    this.grading.toggleReport();
+    if (wasOpen && !this.reportOpen() && btn) this.refocusAfterCollapse(btn);
+  }
   selectTake(id: string): void { return this.grading.selectTake(id); }
-  toggleTakeReport(id: string): void { return this.grading.toggleTakeReport(id); }
+  toggleTakeReport(id: string): void {
+    // ★ 票121:唯一 TS 补丁(焦点归位) —— 行内 Collapse 钮收起了本条报告:同上归位。
+    // 切换到另一条(本条本就没开)不做任何程序化焦点移动;滚动一概不动。
+    const btn = this.collapseFocusTarget();
+    const wasOpen = this.isTakeReportOpen(id);
+    this.grading.toggleTakeReport(id);
+    if (wasOpen && !this.isTakeReportOpen(id) && btn) this.refocusAfterCollapse(btn);
+  }
+  /**
+   * ★ 票121:收起动作执行"前"记录目标按钮 —— 行内 Collapse 钮即当前焦点;
+   * 报告头部 toggle 则从其所在 section 起向前找相邻 .hist-item 内的 .hi-view。
+   * 只做焦点归位,不做任何程序化滚动,不碰状态机语义。
+   */
+  private collapseFocusTarget(): HTMLButtonElement | null {
+    const anchor = document.activeElement as HTMLElement | null;
+    if (!anchor) return null;
+    if (anchor.classList.contains('hi-view')) return anchor as HTMLButtonElement;
+    const sec = anchor.closest('section.report-section');
+    return sec?.previousElementSibling?.querySelector<HTMLButtonElement>('.hi-view') ?? null;
+  }
+  /** ★ 票121:报告子树销毁"后"把焦点送回目标按钮(setTimeout 等 Angular 本轮变更检测完成)。 */
+  private refocusAfterCollapse(btn: HTMLButtonElement): void {
+    setTimeout(() => { if (btn.isConnected) btn.focus(); }, 0);
+  }
   isTakeReportOpen(id: string): boolean { return this.grading.isTakeReportOpen(id); }
   isPlaying(id: string): boolean { return this.grading.isPlaying(id); }
   togglePlay(r: Recording): void { return this.grading.togglePlay(r); }

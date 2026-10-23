@@ -174,6 +174,39 @@ public sealed class ImportLegacyPastedCommandValidator : AbstractValidator<Impor
     }
 }
 
+// ============================ STAR upsert 并发裁决(票78) ============================
+
+public static class StarStoryUpsertRules
+{
+    /// <summary>按 (UserId, ClientId) 回查到的故事行状态(upsert 裁决的输入)。</summary>
+    public enum ExistingStoryState { None, Active, SoftDeleted }
+
+    /// <summary>保存一个故事的处置裁决。</summary>
+    public enum UpsertDecision { Create, Update, Conflict }
+
+    /// <summary>
+    /// 票78:upsert 处置裁决(纯逻辑,单测覆盖全组合,口径同票92 DecideAddCategory)。
+    /// raceLost=false 是首次「先查」的结果;true 是 SaveChanges 撞 DbUpdateException
+    /// (唯一约束 23505 / xmin 并发)后的回查结果 —— 赢家行已在(Active/SoftDeleted)
+    /// 则按 upsert 语义把本请求的值整卡写到该行(last-write-wins,本请求即后写);
+    /// 回查仍无行,说明撞的是别的约束 → Conflict(409),不冒充成功。
+    /// </summary>
+    public static UpsertDecision DecideUpsert(ExistingStoryState state, bool raceLost)
+        => (state, raceLost) switch
+        {
+            (ExistingStoryState.Active, _) => UpsertDecision.Update,
+            (ExistingStoryState.SoftDeleted, _) => UpsertDecision.Update,
+            (ExistingStoryState.None, false) => UpsertDecision.Create,
+            _ => UpsertDecision.Conflict,
+        };
+
+    /// <summary>已存行内容与本次输入逐字段相等(整卡口径,含软删标记不算内容)。</summary>
+    public static bool HasSameContent(StarStory row, StarStoryInput input)
+        => row.Title == input.Title && row.Situation == input.Situation
+            && row.Task == input.Task && row.Action == input.Action
+            && row.Result == input.Result && row.Tags == input.Tags;
+}
+
 // ============================ Handler:STAR 故事库 ============================
 
 public sealed class ListStarStoriesQueryHandler(InterviewsDbContext db)
@@ -195,30 +228,62 @@ public sealed class ListStarStoriesQueryHandler(InterviewsDbContext db)
 public sealed class UpsertStarStoryCommandHandler(InterviewsDbContext db)
     : IRequestHandler<UpsertStarStoryCommand, Result<Guid>>
 {
+    // 票78 并发收敛:连点/多页签同发同一 ClientId 时「先查后写」有竞态窗 ——
+    // 双插撞 (UserId, ClientId) 唯一约束 23505、并发更新同一行撞 xmin,此前都
+    // 穿透成 500(票15 D2 实测)。本端点契约是 upsert(last-write-wins):撞
+    // DbUpdateException 后清跟踪回查、按 DecideUpsert(raceLost: true) 重新
+    // 裁决 —— 赢家行已在就把本请求的值整卡写入该行(本请求即后写,胜出);
+    // 回查仍无行 = 撞了别的约束 → 409 安全文案,绝不回原始异常。
+    // 尝试上限 5:每轮至少一个竞争者落库成功,余者回查后转为更新;内容与
+    // 已存行逐字段相等且行未删时免写直接成功(同帧连点的同值双发在此收敛,
+    // 不再互相撞 xmin)。全局 DbUpdate 映射仍归票90,本票只做本端点单点收敛
+    // (口径同票92 分类新增)。
+    private const int MaxAttempts = 5;
+
     public async Task<Result<Guid>> Handle(UpsertStarStoryCommand request, CancellationToken ct)
     {
         var input = request.Story;
-        // 含软删行查:删过的故事用同一 ClientId 重存必须恢复原行 ——
-        // (UserId, ClientId) 唯一索引不允许第二行(票14 收藏同口径)。
-        var existing = await db.StarStories.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(s => s.UserId == request.UserId && s.ClientId == input.ClientId, ct);
-        if (existing is not null)
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            existing.Update(input.Title, input.Situation, input.Task, input.Action,
-                input.Result, input.Tags);
-            if (existing.IsDeleted) existing.Restore();
-            await db.SaveChangesAsync(ct);
-            return Result.Success(existing.Id);
+            // 含软删行查:删过的故事用同一 ClientId 重存必须恢复原行 ——
+            // (UserId, ClientId) 唯一索引不允许第二行(票14 收藏同口径)。
+            var existing = await db.StarStories.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.UserId == request.UserId && s.ClientId == input.ClientId, ct);
+            var state = existing is null
+                ? StarStoryUpsertRules.ExistingStoryState.None
+                : existing.IsDeleted
+                    ? StarStoryUpsertRules.ExistingStoryState.SoftDeleted
+                    : StarStoryUpsertRules.ExistingStoryState.Active;
+            switch (StarStoryUpsertRules.DecideUpsert(state, raceLost: attempt > 0))
+            {
+                case StarStoryUpsertRules.UpsertDecision.Conflict:
+                    return Conflict();
+                case StarStoryUpsertRules.UpsertDecision.Update:
+                    if (!existing!.IsDeleted
+                        && StarStoryUpsertRules.HasSameContent(existing, input))
+                        return Result.Success(existing.Id); // 同值免写:已是后写结果
+                    existing.Update(input.Title, input.Situation, input.Task, input.Action,
+                        input.Result, input.Tags);
+                    if (existing.IsDeleted) existing.Restore();
+                    try { await db.SaveChangesAsync(ct); return Result.Success(existing.Id); }
+                    catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+                    break;
+                case StarStoryUpsertRules.UpsertDecision.Create:
+                    var nextOrder = await db.StarStories.IgnoreQueryFilters()
+                        .Where(s => s.UserId == request.UserId)
+                        .MaxAsync(s => (int?)s.SortOrder, ct) ?? 0;
+                    var story = new StarStory(request.UserId, input.ClientId, input.Title,
+                        input.Situation, input.Task, input.Action, input.Result, input.Tags, nextOrder + 1);
+                    db.StarStories.Add(story);
+                    try { await db.SaveChangesAsync(ct); return Result.Success(story.Id); }
+                    catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+                    break;
+            }
         }
+        return Conflict();
 
-        var nextOrder = await db.StarStories.IgnoreQueryFilters()
-            .Where(s => s.UserId == request.UserId)
-            .MaxAsync(s => (int?)s.SortOrder, ct) ?? 0;
-        var story = new StarStory(request.UserId, input.ClientId, input.Title,
-            input.Situation, input.Task, input.Action, input.Result, input.Tags, nextOrder + 1);
-        db.StarStories.Add(story);
-        await db.SaveChangesAsync(ct);
-        return Result.Success(story.Id);
+        static Result<Guid> Conflict() => Result.Failure<Guid>(Error.Conflict(
+            "StarStory.SaveConflict", "故事保存与并发请求冲突,请刷新后重试"));
     }
 }
 
@@ -240,7 +305,26 @@ public sealed class DeleteStarStoryCommandHandler(InterviewsDbContext db)
 public sealed class ImportStarStoriesCommandHandler(InterviewsDbContext db)
     : IRequestHandler<ImportStarStoriesCommand, Result<PlaybookImportResultDto>>
 {
+    // 票78 顺手核查(明示扩围,理由见 evidence-78/CLOSE-REPORT):本导入与
+    // upsert 同族竞态 —— 两会话并发同发同批时双插撞 23505 → 500(改前活体
+    // 实测)。导入契约本就是幂等(按 ClientId 去重),故同法收敛:撞
+    // DbUpdateException 清跟踪后整批重跑 —— 重跑时赢家行已在,按既有行
+    // 更新/计数口径自然收敛(imported 只数重跑时新建行,对账不虚报)。
+    private const int MaxAttempts = 3;
+
     public async Task<Result<PlaybookImportResultDto>> Handle(
+        ImportStarStoriesCommand request, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
+        {
+            try { return await HandleCore(request, ct); }
+            catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+        }
+        return Result.Failure<PlaybookImportResultDto>(Error.Conflict(
+            "StarStory.ImportConflict", "故事导入与并发请求冲突,请重试"));
+    }
+
+    private async Task<Result<PlaybookImportResultDto>> HandleCore(
         ImportStarStoriesCommand request, CancellationToken ct)
     {
         // 输入内先按 ClientId 去重(后出现的覆盖先出现的 —— 与本地数组
@@ -305,7 +389,24 @@ public sealed class ListLegacyDebriefsQueryHandler(InterviewsDbContext db)
 public sealed class ImportLegacyDebriefsCommandHandler(InterviewsDbContext db)
     : IRequestHandler<ImportLegacyDebriefsCommand, Result<PlaybookImportResultDto>>
 {
+    // 票78 同族收敛(同 ImportStarStories 口径):并发同发同批双插撞
+    // (UserId, EntryId) 唯一约束 → 500(改前活体实测);整批重跑时赢家行
+    // 已在 existingIds 中,按「首导为准」跳过,imported/total 自然收敛。
+    private const int MaxAttempts = 3;
+
     public async Task<Result<PlaybookImportResultDto>> Handle(
+        ImportLegacyDebriefsCommand request, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
+        {
+            try { return await HandleCore(request, ct); }
+            catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+        }
+        return Result.Failure<PlaybookImportResultDto>(Error.Conflict(
+            "LegacyDebrief.ImportConflict", "复盘导入与并发请求冲突,请重试"));
+    }
+
+    private async Task<Result<PlaybookImportResultDto>> HandleCore(
         ImportLegacyDebriefsCommand request, CancellationToken ct)
     {
         var byEntry = new Dictionary<Guid, string>();
@@ -363,7 +464,22 @@ public sealed class ListLegacyPastedQueryHandler(InterviewsDbContext db)
 public sealed class ImportLegacyPastedCommandHandler(InterviewsDbContext db)
     : IRequestHandler<ImportLegacyPastedCommand, Result<PlaybookImportResultDto>>
 {
+    // 票78 同族收敛(同 ImportLegacyDebriefs 口径)。
+    private const int MaxAttempts = 3;
+
     public async Task<Result<PlaybookImportResultDto>> Handle(
+        ImportLegacyPastedCommand request, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
+        {
+            try { return await HandleCore(request, ct); }
+            catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+        }
+        return Result.Failure<PlaybookImportResultDto>(Error.Conflict(
+            "LegacyPasted.ImportConflict", "粘贴材料导入与并发请求冲突,请重试"));
+    }
+
+    private async Task<Result<PlaybookImportResultDto>> HandleCore(
         ImportLegacyPastedCommand request, CancellationToken ct)
     {
         var byEntry = new Dictionary<Guid, string>();

@@ -40,6 +40,68 @@ mat-icon {
   text-rendering: optimizeLegibility;
 }
 
+/* ----------------------------------------------------------------------------
+   Space Grotesk(标题与数字的「声音」,票 118 设计系统)
+   同样自托管 —— 本项目禁止 Google Fonts CDN(见上)。只承担标题/卡片题/
+   统计数字/品牌字标;正文与数据仍走 Inter 栈(其 CJK 回落链经十二轮调试,
+   不重开)。字体文件:assets/fonts/space-grotesk-{500,600,700}.woff2。
+   ---------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/assets/fonts/space-grotesk-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/assets/fonts/space-grotesk-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/assets/fonts/space-grotesk-700.woff2') format('woff2');
+}
+
+$display-font: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+
+/* ----------------------------------------------------------------------------
+   票 118 设计令牌(全站唯一口径;设计契约见工作区 design-overhaul/DESIGN-PLAN.md)
+   语义色一句话:indigo = 进行中 · green = 已赢 · red = 已输 · amber = 需注意 ·
+   grey = 停放。任何组件不得在令牌之外另起强调色。
+   ---------------------------------------------------------------------------- */
+:root {
+  --midnight: #1b2350;
+  --brand: #2e3a8c;
+  --signal-tint: #e4e7f5;
+  --signal-soft: #c6cdea;
+  --go: #1b7f4b;
+  --go-tint: #e2f1e8;
+  --stop: #b3261e;
+  --stop-tint: #f9e8e5;
+  --attention: #b06a00;
+  --attention-tint: #faf0d2;
+  --parked: #68707e;
+  --parked-fill: #edf0f4;
+  --paper: #f5f6f8;
+  --surface: #ffffff;
+  --hairline: #e1e4ec;
+  --ink: #1f2430;
+  --ink-2: #5b6270;
+  --track: #e2e5ec;
+  /* MDC 形状令牌:按钮 8 · 输入框 6 · 弹窗 14(圆角阶梯 6/10/14/999) */
+  --mdc-filled-button-container-shape: 8px;
+  --mdc-outlined-button-container-shape: 8px;
+  --mdc-text-button-container-shape: 8px;
+  --mdc-outlined-text-field-container-shape: 6px;
+  --mdc-dialog-container-shape: 14px;
+}
+
 @include mat.core();
 
 /* 字体族抽成变量 —— 主题配置和 body 都要用同一份,硬编码两遍必然不同步。
@@ -51,8 +113,20 @@ mat-icon {
    Latin 走 Inter/Segoe,CJK 恒定走 苹方/思源/雅黑,与语言无关。 */
 $app-font: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', Roboto, Helvetica, Arial, sans-serif;
 
-/* 主题:靛蓝主色 + 琥珀强调。偏冷静专业,不抢数据本身的注意力。 */
-$primary: mat.define-palette(mat.$indigo-palette, 600);
+/* 主题:票 118 —— 深靛蓝主色(自登录页品牌板生长,比 stock #3F51B5 更深一号,
+   900 即壳色 midnight)+ 琥珀强调(仅语义「需注意」场合在组件层使用)。 */
+$brand-palette: (
+  50: #eef0f9, 100: #d9ddf2, 200: #b6bee6, 300: #8e9ad6, 400: #6673c2,
+  500: #3e4da3, 600: #2e3a8c, 700: #27316f, 800: #212a5c, 900: #1b2350,
+  A100: #d9dfff, A200: #a6b4ff, A400: #7387ff, A700: #5b74ff,
+  contrast: (
+    50: rgba(0, 0, 0, 0.87), 100: rgba(0, 0, 0, 0.87), 200: rgba(0, 0, 0, 0.87),
+    300: rgba(0, 0, 0, 0.87), 400: #fff, 500: #fff, 600: #fff, 700: #fff,
+    800: #fff, 900: #fff, A100: rgba(0, 0, 0, 0.87), A200: rgba(0, 0, 0, 0.87),
+    A400: #fff, A700: #fff,
+  ),
+);
+$primary: mat.define-palette($brand-palette, 600);
 $accent: mat.define-palette(mat.$amber-palette, 700);
 $warn: mat.define-palette(mat.$red-palette);
 
@@ -69,8 +143,8 @@ html, body {
   margin: 0;
   font-family: $app-font;
   font-size: 14px;
-  color: #24262b;
-  background: #fff;
+  color: var(--ink);
+  background: var(--paper);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -93,15 +167,16 @@ html, body {
 
   h2 {
     margin: 0;
-    font-size: 21px;
+    font-family: $display-font;
+    font-size: 24px;
     font-weight: 600;
-    letter-spacing: 0.2px;
+    letter-spacing: -0.01em;
   }
 
   .sub {
     margin: 5px 0 0;
     font-size: 13px;
-    color: #6b6f76;
+    color: var(--ink-2);
     line-height: 1.5;
   }
 
@@ -109,20 +184,24 @@ html, body {
     display: inline-block;
     margin-left: 2px;
     padding: 2px 8px;
-    border-radius: 5px;
-    background: rgba(63, 81, 181, 0.09);
-    color: #303f9f;
+    border-radius: 999px;
+    background: var(--signal-tint);
+    color: var(--brand);
   }
 }
 
-/* 卡片面板统一留白 —— Material 默认偏紧,内容多的页面会显得挤 */
+/* 卡片面板统一留白 —— Material 默认偏紧,内容多的页面会显得挤。
+   票 118:卡片改为扁平 —— 1px 细边 + 无静止阴影;阴影只留给真正浮起的层
+   (弹窗/菜单/抽屉),去掉「每张卡同一团柔和阴影」的套装感。 */
 mat-card {
   border-radius: 10px !important;
+  border: 1px solid var(--hairline);
+  box-shadow: none !important;
 }
 
 mat-card-header { padding-bottom: 6px; }
 
-mat-card-title { font-size: 15.5px !important; font-weight: 600 !important; }
+mat-card-title { font-family: $display-font; font-size: 15px !important; font-weight: 600 !important; }
 
 mat-card-subtitle { font-size: 12.5px !important; }
 
@@ -149,14 +228,16 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   white-space: nowrap;
 }
 
-.chip.saved     { background: #eceff1; color: #455a64; }
-.chip.applied   { background: #e3f2fd; color: #1565c0; }
-.chip.screen    { background: #fff8e1; color: #a06a00; }
-.chip.interview { background: #ede7f6; color: #4527a0; }
-.chip.offer     { background: #e8f5e9; color: #1b7f4b; }
-.chip.rejected  { background: #fdecea; color: #b3261e; }
-.chip.paused    { background: #f3f3f6; color: #6b6f76; }
-.chip.withdrawn { background: #f3f3f6; color: #6b6f76; }
+/* 票 118 语义色:进行中阶段一律 signal(applied/screen/interview 同一靛蓝),
+   offer = 已赢绿,rejected = 已输红,paused/withdrawn/saved = 停放灰。 */
+.chip.saved     { background: var(--parked-fill); color: var(--parked); }
+.chip.applied   { background: var(--signal-tint); color: var(--brand); }
+.chip.screen    { background: var(--signal-tint); color: var(--brand); }
+.chip.interview { background: var(--signal-tint); color: var(--brand); }
+.chip.offer     { background: var(--go-tint); color: var(--go); }
+.chip.rejected  { background: var(--stop-tint); color: var(--stop); }
+.chip.paused    { background: var(--parked-fill); color: var(--parked); }
+.chip.withdrawn { background: var(--parked-fill); color: var(--parked); }
 
 /* ---------------- 空态 ---------------- */
 
@@ -267,8 +348,8 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 }
 .app-menu .mat-mdc-menu-item:hover { background: #f3f6fa !important; }
 .app-menu .mat-mdc-menu-item.on {
-  color: #2f6fed !important;
-  background: #eef4ff !important;
+  color: var(--brand) !important;
+  background: var(--signal-tint) !important;
   font-weight: 600;
 }
 .app-menu .mat-mdc-menu-item mat-icon {
@@ -278,7 +359,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   margin-right: 8px;
   color: #6b7480;
 }
-.app-menu .mat-mdc-menu-item.on mat-icon { color: #2f6fed; }
+.app-menu .mat-mdc-menu-item.on mat-icon { color: var(--brand); }
 .app-menu .menu-sep { height: 1px; background: #eceff4; margin: 5px 6px; }
 
 /* 标记颜色菜单:Notion 同款的圆点色块 */
@@ -314,7 +395,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
    基准:白卡片、圆角 12、无 MDC 默认内边距(组件自控 22px)。 */
 .app-confirm .mat-mdc-dialog-container { padding: 0; }
 .app-confirm .mat-mdc-dialog-surface {
-  border-radius: 12px !important;
+  border-radius: 14px !important;
   padding: 0 !important;
   box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
 }
@@ -333,7 +414,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   min-height: 440px;
 }
 .app-transfer .mat-mdc-dialog-surface {
-  border-radius: 12px !important;
+  border-radius: 14px !important;
   padding: 0 !important;
   box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
   display: flex;
@@ -346,7 +427,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
    Material 的默认焦点样式很淡,键盘用户 Tab 到卡片/按钮时看不清位置。
    只在键盘导航时显示(:focus-visible),鼠标点击不打扰。 */
 :focus-visible {
-  outline: 2px solid #3f51b5;
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
   border-radius: 4px;
 }

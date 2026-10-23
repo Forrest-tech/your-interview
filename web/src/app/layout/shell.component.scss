@@ -24,7 +24,11 @@
   height: 60px;
   padding: 0 16px;
   gap: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  /* 票 118:壳色 = midnight —— 登录页品牌板的深靛蓝进壳,比主色再深一号;
+     底边以一道更深的墨线收口,不用投影「浮」在纸面上。 */
+  background: var(--midnight) !important;
+  border-bottom: 1px solid #12183a;
+  box-shadow: none;
   z-index: 10;
 }
 
@@ -46,9 +50,10 @@
 }
 
 .brand-name {
-  font-size: 16px;
+  font-family: 'Space Grotesk', Inter, -apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  font-size: 16.5px;
   font-weight: 600;
-  letter-spacing: 0.2px;
+  letter-spacing: 0;
 }
 
 /* 横向主导航:模块全在顶部 */
@@ -150,7 +155,7 @@
   border-radius: 50%;
   object-fit: cover;
   display: block;
-  background: rgba(63, 81, 181, 0.14);
+  background: rgba(46, 58, 140, 0.12);
 }
 
 /* 菜单头部:头像 + 姓名 + 角色(角色文字只在菜单里出现) */
@@ -170,7 +175,7 @@
   height: 34px;
   flex: 0 0 34px;
   border-radius: 50%;
-  background: rgba(63, 81, 181, 0.14);
+  background: rgba(46, 58, 140, 0.12);
   color: #303f9f;
   font-size: 14px;
   font-weight: 700;

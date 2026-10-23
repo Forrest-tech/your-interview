@@ -652,44 +652,6 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
         return r.IsSuccess ? Results.Ok(new { changed = r.Value }) : r.ToProblemDetails();
     }
 
-    /// <summary>v2:导出本轮日历 .ics(提醒提前 1 天 + 提前 1 小时)。</summary>
-    [HttpGet("{id:guid}/rounds/{roundId:guid}/ics")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
-    public async Task<IResult> RoundIcs(Guid id, Guid roundId, CancellationToken ct)
-    {
-        var r = await sender.Send(new GetEntryQuery(Me, id), ct);
-        if (!r.IsSuccess) return r.ToProblemDetails();
-        var round = r.Value.Rounds.FirstOrDefault(x => x.Id == roundId);
-        if (round is null)
-            return Results.Problem(title: "轮次不存在", statusCode: StatusCodes.Status404NotFound);
-        if (round.ScheduledDate is null)
-            return Results.Problem(title: "本轮尚未安排日期,无法导出日历",
-                statusCode: StatusCodes.Status400BadRequest);
-
-        var date = round.ScheduledDate.Value;
-        var start = TimeOnly.TryParse(round.ScheduledTime, out var t) ? t : new TimeOnly(10, 0);
-        var dtStart = new DateTime(date.Year, date.Month, date.Day, start.Hour, start.Minute, 0);
-        var dtEnd = dtStart.AddHours(1);
-        string Fmt(DateTime d) => d.ToString("yyyyMMdd'T'HHmmss");
-        string Esc(string s) => s.Replace("\\", "\\\\").Replace(";", "\\;").Replace(",", "\\,").Replace("\n", "\\n");
-        var summary = Esc($"{r.Value.CompanyName} 面试 Round {round.Order} · {round.Stage}");
-        var desc = Esc($"岗位:{r.Value.Role}\n面试官:{round.Interviewers ?? "-"}\n形式:{round.Format ?? "-"}" +
-                       (string.IsNullOrWhiteSpace(round.MeetingLink) ? "" : $"\n会议链接:{round.MeetingLink}"));
-        var ics = string.Join("\r\n",
-            "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//YourInterview//Playbook//EN",
-            "BEGIN:VEVENT",
-            $"UID:{round.Id}@your-interview",
-            $"DTSTAMP:{DateTime.UtcNow:yyyyMMdd'T'HHmmss'Z'}",
-            $"DTSTART:{Fmt(dtStart)}", $"DTEND:{Fmt(dtEnd)}",
-            $"SUMMARY:{summary}", $"DESCRIPTION:{desc}",
-            string.IsNullOrWhiteSpace(round.Location) ? "" : $"LOCATION:{Esc(round.Location!)}",
-            "BEGIN:VALARM", "TRIGGER:-P1D", "ACTION:DISPLAY", $"DESCRIPTION:{summary}", "END:VALARM",
-            "BEGIN:VALARM", "TRIGGER:-PT1H", "ACTION:DISPLAY", $"DESCRIPTION:{summary}", "END:VALARM",
-            "END:VEVENT", "END:VCALENDAR", "");
-        return Results.File(System.Text.Encoding.UTF8.GetBytes(ics), "text/calendar",
-            $"{r.Value.CompanyName}-Round{round.Order}.ics");
-    }
-
     /// <summary>
     /// 问答候选(缺口3):把该条目的问答转成候选列表,前端勾选后调
     /// POST /api/knowledge/import-candidates 导入 TechStack。

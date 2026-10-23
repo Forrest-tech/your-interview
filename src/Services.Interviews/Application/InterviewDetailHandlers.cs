@@ -16,7 +16,7 @@ using YourInterview.SharedContracts.Ai;
 namespace YourInterview.Services.Interviews.Application;
 
 // ============================ 详情页 v2(2026-10-20 定稿) ============================
-// 统一入口归属 / 逐题复盘 / 结构化备考报告 / 转写抽题 / 说话人改名 / ICS。
+// 统一入口归属 / 逐题复盘 / 结构化备考报告 / 转写抽题 / 说话人改名。
 // JSON 结构由前后端共同约定(见 replica/playbook-redesign-spec.md),后端负责生成与存储。
 
 /// <summary>改材料归属:RoundId=null → 条目级(沟通记录)。</summary>

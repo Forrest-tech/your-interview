@@ -158,14 +158,6 @@ export class PlaybookV2Api {
     return this.api.post(`${this.base(entryId)}/assets/${assetId}/transcribe`, {});
   }
 
-  roundIcsUrl(entryId: string, roundId: string): string {
-    return `${this.base(entryId)}/rounds/${roundId}/ics`;
-  }
-
-  downloadIcs(entryId: string, roundId: string): Observable<Blob> {
-    return this.api.getBlob(this.roundIcsUrl(entryId, roundId));
-  }
-
   // ---------------- Tech Stack(Knowledge) ----------------
 
   /** 列表接口是分页信封 {items,...};entryId 可按来源条目过滤。 */

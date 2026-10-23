@@ -89,6 +89,8 @@ export interface RecordingScoreDto {
   billedSeconds?: number | null;
   /** 送评的音频字节数(核对用)。 */
   billedBytes?: number | null;
+  /** ★ 票108 A10:评分行读时 xmin —— 重评分保存时回传钉版,过期得 409。 */
+  version?: number | null;
 }
 
 export interface RecordingDto {
@@ -371,6 +373,8 @@ export class PracticeApi {
     //   那条路径显示不出当时花了多少,信息残缺。
     billedSeconds?: number | null;
     billedBytes?: number | null;
+    /** ★ 票108 A10:被替换评分行的读时版本(首次评分不传)。 */
+    version?: number | null;
   }): Observable<RecordingScoreDto> {
     return this.api.post<RecordingScoreDto>(
       `${PracticeApi.BASE}/recordings/${recordingId}/score`, {
@@ -383,7 +387,8 @@ export class PracticeApi {
         referenceText: score.referenceText,
         words: score.words,
         billedSeconds: score.billedSeconds ?? null,
-        billedBytes: score.billedBytes ?? null
+        billedBytes: score.billedBytes ?? null,
+        version: score.version ?? null
       });
   }
 

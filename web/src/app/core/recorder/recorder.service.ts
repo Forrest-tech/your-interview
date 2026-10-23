@@ -60,6 +60,8 @@ export interface RecordingScore {
   billedSeconds?: number | null;
   /** 送评的音频字节数(核对用,非计费单位)。 */
   billedBytes?: number | null;
+  /** ★ 票108 A10:已存评分行的读时版本 —— 重评分落库时回传钉版。 */
+  version?: number | null;
 }
 
 /**
@@ -514,7 +516,8 @@ export class RecorderService {
       simulated: false,
       // ★ 第三十四轮:把库里的计费口径带上来 —— 刷新后也能显示花了多少
       billedSeconds: sc.billedSeconds ?? null,
-      billedBytes: sc.billedBytes ?? null
+      billedBytes: sc.billedBytes ?? null,
+      version: sc.version ?? null
     };
   }
 
@@ -1014,10 +1017,16 @@ export class RecorderService {
       words: score.words,
       referenceText,
       billedSeconds: score.billedSeconds ?? null,
-      billedBytes: score.billedBytes ?? null
+      billedBytes: score.billedBytes ?? null,
+      // ★ 票108 A10:钉住被替换的旧评分行版本(rec 是评分前快照,
+      //   其 score 即旧行;首次评分为 null = 新建不钉)。
+      version: rec.score?.version ?? null
     }).subscribe({
-      next: () => {
-        // 落库成功 → 从待补队列移除
+      next: (dto) => {
+        // 落库成功 → 同步本地评分行版本(供下次重评分续钉)+ 从待补队列移除
+        const cur = this.recordings().find((r) => r.id === id);
+        if (cur?.score && dto.version != null)
+          this.patch(id, { score: { ...cur.score, version: dto.version } });
         this.pendingScores.set(this.pendingScores().filter((x) => x.id !== id));
       },
       error: (e) => this.persistError.set(

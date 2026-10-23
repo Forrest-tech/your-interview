@@ -202,6 +202,10 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.Property(x => x.AzureRegion).HasMaxLength(50).IsRequired();
             e.Property(x => x.ReferenceText).HasColumnType("text").IsRequired();
 
+            // ★ 票108 A10:评分行补 xmin 并发令牌(PG 系统列,零迁移;
+            //   票101 J19/I06 子行先例)—— 重评分钉版防串行双写静默覆盖。
+            e.UseXminAsConcurrencyToken();
+
             // 拿不到的维度就是 NULL —— 数据库层也不给它默认值,防止有人偷偷塞 0
             e.Property(x => x.PronScore);
             e.Property(x => x.AccuracyScore);

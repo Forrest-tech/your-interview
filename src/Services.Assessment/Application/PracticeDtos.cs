@@ -33,7 +33,9 @@ public sealed record RecordingScoreDto(
     string ReferenceText, DateTimeOffset AssessedAt,
     // ★ 第三十四轮:计费口径(音频秒数),读库与新建都会带上。
     //   拿不到为 null —— 不编造。
-    double? BilledSeconds = null, int? BilledBytes = null);
+    double? BilledSeconds = null, int? BilledBytes = null,
+    // ★ 票108 A10:评分行读时 xmin —— 重评分保存时回传钉版,过期得 409。
+    uint? Version = null);
 
 public sealed record WordScoreDto(string Word, double Accuracy, string ErrorType);
 

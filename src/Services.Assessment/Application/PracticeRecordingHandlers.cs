@@ -32,7 +32,8 @@ public sealed class ListAllRecordingsQueryHandler(AssessmentDbContext db)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync(ct);
 
-        return rows.Select(ListRecordingsQueryHandler.ToDto).ToList();
+        var versions = await ListRecordingsQueryHandler.ScoreVersionsAsync(db, rows, ct);
+        return rows.Select(x => ListRecordingsQueryHandler.ToDto(x, versions)).ToList();
     }
 }
 
@@ -47,17 +48,35 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync(ct);
 
-        return rows.Select(ToDto).ToList();
+        var versions = await ScoreVersionsAsync(db, rows, ct);
+        return rows.Select(x => ToDto(x, versions)).ToList();
     }
 
-    internal static RecordingDto ToDto(PracticeRecording x) => new(
+    /// <summary>票108 A10:批量取评分行读时 xmin(影子属性须投影读,AsNoTracking 实体上取不到)。</summary>
+    internal static async Task<IReadOnlyDictionary<Guid, uint>> ScoreVersionsAsync(
+        AssessmentDbContext db, IReadOnlyList<PracticeRecording> rows, CancellationToken ct)
+    {
+        var ids = rows.Where(x => x.Score is not null).Select(x => x.Id).ToList();
+        if (ids.Count == 0) return new Dictionary<Guid, uint>();
+        var vs = await db.RecordingScores.AsNoTracking()
+            .Where(s => ids.Contains(s.RecordingId))
+            .Select(s => new { s.RecordingId, V = EF.Property<uint>(s, "xmin") })
+            .ToListAsync(ct);
+        return vs.ToDictionary(x => x.RecordingId, x => x.V);
+    }
+
+    internal static RecordingDto ToDto(PracticeRecording x,
+        IReadOnlyDictionary<Guid, uint>? scoreVersions = null) => new(
         x.Id, x.MaterialId, x.DurationSeconds, x.SizeBytes, x.ContentType, x.CreatedAt,
         x.Score is null ? null : new RecordingScoreDto(
             x.Score.PronScore, x.Score.AccuracyScore, x.Score.FluencyScore,
             x.Score.CompletenessScore, x.Score.ProsodyScore,
             x.Score.RecognizedText,
             DeserializeWords(x.Score.WordsJson),
-            x.Score.ReferenceText, x.Score.AssessedAt));
+            x.Score.ReferenceText, x.Score.AssessedAt,
+            // 计费两字段列表口径逐字不变(原实现未回填,本票不顺带改),只补 Version。
+            null, null,
+            scoreVersions is not null && scoreVersions.TryGetValue(x.Id, out var v) ? v : null));
 
     internal static IReadOnlyList<WordScoreDto> DeserializeWords(string? json)
     {
@@ -251,7 +270,9 @@ public sealed record SaveRecordingScoreCommand(Guid UserId, Guid RecordingId,
     double? CompletenessScore, double? ProsodyScore,
     string RecognizedText, string? WordsJson, string AzureRegion, string ReferenceText,
     // ★ 第三十四轮:评分计费口径(服务端精确算出的音频秒数)。
-    double? BilledSeconds = null, int? BilledBytes = null)
+    double? BilledSeconds = null, int? BilledBytes = null,
+    // ★ 票108 A10:既有评分行的读时 xmin(首次评分/旧调用方为 null = 不钉版兼容)。
+    uint? Version = null)
     : MediatR.IRequest<Result<RecordingScoreDto>>;
 
 public sealed class SaveRecordingScoreCommandHandler(AssessmentDbContext db)
@@ -283,9 +304,18 @@ public sealed class SaveRecordingScoreCommandHandler(AssessmentDbContext db)
             db.Entry(existing).CurrentValues.SetValues(score);
             rec.ReplaceScore(existing);
             score = existing;
+            // ★ 票108 A10:回传了读时版本就钉住评分行 —— 期间已被他人重评分则
+            //   UPDATE 带旧 xmin 谓词命中 0 行 → 409,不再静默覆盖(票101 子行模式)。
+            ConcurrencyPin.Pin(db, existing, r.Version);
         }
 
         await db.SaveChangesAsync(ct);
+
+        // 保存后回读新 xmin 供调用方续写(影子属性从投影读,口径确定)。
+        var newVersion = await db.RecordingScores.AsNoTracking()
+            .Where(x => x.RecordingId == r.RecordingId)
+            .Select(x => EF.Property<uint>(x, "xmin"))
+            .FirstAsync(ct);
 
         return Result.Success(new RecordingScoreDto(
             score.PronScore, score.AccuracyScore, score.FluencyScore,
@@ -293,7 +323,7 @@ public sealed class SaveRecordingScoreCommandHandler(AssessmentDbContext db)
             score.RecognizedText,
             ListRecordingsQueryHandler.DeserializeWords(score.WordsJson),
             score.ReferenceText, score.AssessedAt,
-            score.BilledSeconds, score.BilledBytes));
+            score.BilledSeconds, score.BilledBytes, newVersion));
     }
 }
 
@@ -313,13 +343,19 @@ public sealed class GetRecordingScoreQueryHandler(AssessmentDbContext db)
 
         if (score is null) return Result.Failure<RecordingScoreDto>(Error.NotFound("评分"));
 
+        // ★ 票108 A10:回传评分行读时 xmin,供重评分回传钉版。
+        var version = await db.RecordingScores.AsNoTracking()
+            .Where(x => x.RecordingId == r.RecordingId)
+            .Select(x => EF.Property<uint>(x, "xmin"))
+            .FirstAsync(ct);
+
         return Result.Success(new RecordingScoreDto(
             score.PronScore, score.AccuracyScore, score.FluencyScore,
             score.CompletenessScore, score.ProsodyScore,
             score.RecognizedText,
             ListRecordingsQueryHandler.DeserializeWords(score.WordsJson),
             score.ReferenceText, score.AssessedAt,
-            score.BilledSeconds, score.BilledBytes));
+            score.BilledSeconds, score.BilledBytes, version));
     }
 }
 

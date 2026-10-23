@@ -534,7 +534,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             // ★ 第三十四轮:计费口径由前端回传(它刚从 /pronunciation/assess
             //   的响应里拿到 billedSeconds/billedBytes)——
             //   这样读库路径也能显示"当时花了多少",信息不残缺。
-            body.BilledSeconds, body.BilledBytes), ct);
+            body.BilledSeconds, body.BilledBytes, body.Version), ct);
         return result.IsSuccess ? Results.Ok(result.Value) : result.ToProblemDetails();
     }
 
@@ -846,7 +846,9 @@ public sealed record RecordingScoreBody(
     // ★ 第三十四轮:评分时的音频时长(秒)/字节数 —— 由前端从
     //   /pronunciation/assess 的响应回传,用于在读数路径重现"花了多少"。
     double? BilledSeconds = null,
-    int? BilledBytes = null);
+    int? BilledBytes = null,
+    // ★ 票108 A10:既有评分行读时 xmin 回传钉版(不传 = 不钉,兼容旧调用方)。
+    uint? Version = null);
 
 /// <summary>逐词评分明细。</summary>
 public sealed record WordScoreIn(string Word, double Accuracy, string ErrorType);

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -24,6 +24,7 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-
 import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
 import { extractPdfText } from '../../core/utils/pdf-text';
 import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
+import { commFormMode, commSaveChannel } from './comm-form.helpers';
 import { computeMatch, type MatchResult } from '../../core/match/resume-match';
 
 /**
@@ -565,7 +566,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
           }
 
-          @if (commEditingId(); as editing) {
+          @if (commMode() !== 'closed') {
             <div class="comm-form">
               <div class="row2">
                 <mat-form-field appearance="outline">
@@ -617,7 +618,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
               }
               <div class="comm-form-actions">
                 <button mat-flat-button color="primary" [disabled]="!commDraft().content.trim()"
-                        (click)="saveComm()">{{ editing ? t('common.save') : t('tracker.commsAdd') }}</button>
+                        (click)="saveComm()">{{ commEditingId() ? t('common.save') : t('tracker.commsAdd') }}</button>
                 <button mat-button (click)="cancelComm()">{{ t('common.cancel') }}</button>
               </div>
             </div>
@@ -2030,6 +2031,10 @@ export class ApplicationDetailDialogComponent {
   readonly comms = signal<Communication[]>([]);
   readonly commsLoading = signal(false);
   readonly commEditingId = signal<string | null>(null);
+  /** 票105:新增态独立标记(同 questionAdding 先例)。新增时 commEditingId 恒为 null,
+   * 旧模板只看 commEditingId 渲染表单,新增入口点了没反应;模式判定走 comm-form.helpers。 */
+  readonly commAdding = signal(false);
+  readonly commMode = computed(() => commFormMode(this.commEditingId(), this.commAdding()));
   readonly commTypes: CommunicationType[] = ['Email', 'Call', 'Interview', 'Message', 'Note'];
 
   /** 编辑中的草稿(新增态时 commEditingId 为 null)。 */
@@ -2071,11 +2076,13 @@ export class ApplicationDetailDialogComponent {
 
   startAddComm(): void {
     this.commEditingId.set(null);
+    this.commAdding.set(true);
     this.commFieldErrors.set({});
     this.commDraft.set(this.blankDraft());
   }
 
   startEditComm(c: Communication): void {
+    this.commAdding.set(false);
     this.commEditingId.set(c.id);
     this.commFieldErrors.set({});
     this.commDraft.set({
@@ -2090,6 +2097,7 @@ export class ApplicationDetailDialogComponent {
 
   cancelComm(): void {
     this.commEditingId.set(null);
+    this.commAdding.set(false);
     this.commFieldErrors.set({});
   }
 
@@ -2116,12 +2124,13 @@ export class ApplicationDetailDialogComponent {
     if (Object.keys(preErrors).length > 0) { this.commFieldErrors.set(preErrors); return; }
     this.commFieldErrors.set({});
     const editing = this.commEditingId();
-    const req: Observable<unknown> = editing
+    const req: Observable<unknown> = commSaveChannel(editing) === 'update' && editing
       ? this.trackerApi.updateCommunication(this.app.id, editing, body)
       : this.trackerApi.createCommunication(this.app.id, body);
     req.subscribe({
       next: () => {
         this.commEditingId.set(null);
+        this.commAdding.set(false);
         this.loadCommunications();
         this.snack.open(this.t('tracker.commsSaved'), this.t('common.close'), { duration: 2500 });
       },
@@ -2145,6 +2154,7 @@ export class ApplicationDetailDialogComponent {
       this.trackerApi.deleteCommunication(this.app.id, c.id).subscribe({
         next: () => {
           this.commEditingId.set(null);
+          this.commAdding.set(false);
           this.loadCommunications();
           this.snack.open(this.t('tracker.commsDeleted'), this.t('common.close'), { duration: 2500 });
         },

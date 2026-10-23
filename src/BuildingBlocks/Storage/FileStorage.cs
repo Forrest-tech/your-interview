@@ -26,13 +26,17 @@ namespace YourInterview.BuildingBlocks.Storage;
 /// 它没有根目录、没有相对路径,与本 adapter 的「落盘+库引用」模型不同构,
 /// 故**刻意不收编**——日后 Jobs 若改落盘,应直接用本 adapter,而不是再写一份。
 ///
-/// ## 相对路径约定的两处既有差异(保留,不静默统一)
+/// ## 相对路径约定:统一规范守卫(票94 安全加固,supersede 票39 的差异保留)
 ///
-///   · Interviews 读路径走 <see cref="StorageRelativePaths.ResolveGuarded"/>:
-///     空/rooted/含 ".." 一律拒绝(StoragePath 会跨服务进事件,必须钉死在根内);
-///   · Assessment 读/删路径走 <see cref="StorageRelativePaths.CombineUnderRoot"/>:
-///     历史实现**没有**穿越守卫。本票按行为不变原则原样收编并以特征测试锁定;
-///     要不要给 Assessment 补守卫是**安全口径变更**,须另行申报立票,不借重构静默改。
+/// 票39 收编时两服务口径不同(Interviews 有守卫但以 ".." **子串**粗判、Assessment 无守卫),
+/// 当时按行为不变原则原样锁定,并注明「补守卫属安全口径变更,须另行立票」。
+/// 票94 即该立票的执行:两服务读/删路径统一走 <see cref="StorageRelativePaths.ResolveUnderRoot"/>
+/// 的**规范判定**——相对路径经分隔符归一与 <see cref="Path.GetFullPath(string)"/> 规范化后,
+/// 结果必须严格位于根目录之内,否则拒绝(null):
+///   · Assessment 读/删(<see cref="StorageRelativePaths.CombineUnderRoot"/>)自票94 起同样带守卫;
+///   · Interviews(<see cref="StorageRelativePaths.ResolveGuarded"/>)自票94 起不再用子串粗判:
+///     `a..b` 这类仅文件名含 ".." 子串、规范化后仍在根内的合法名**放行**,真穿越仍拒绝。
+/// Analysis.Worker 的事件路径信任口径不在此列(服务内部事件、信发送方,票94 盘点单列说明,不改)。
 /// </summary>
 public static class StorageRootResolver
 {
@@ -139,8 +143,8 @@ public static class StorageRootResolver
 
 /// <summary>
 /// 相对路径约定:入库一律存**正斜杠相对路径**(跨平台可移植、整个 storage 目录可整体搬走),
-/// 落盘/读盘时再转回当前 OS 的分隔符。两个解析原语的守卫差异见 <see cref="StorageRootResolver"/>
-/// 类注释 —— 是既有行为差异,不是疏漏,禁止静默统一。
+/// 落盘/读盘时再转回当前 OS 的分隔符。读/删路径的解析自票94 起统一走规范守卫
+/// <see cref="ResolveUnderRoot"/>(见 <see cref="StorageRootResolver"/> 类注释的票94 段)。
 /// </summary>
 public static class StorageRelativePaths
 {
@@ -149,28 +153,112 @@ public static class StorageRelativePaths
         relativePath.Replace('\\', '/');
 
     /// <summary>
-    /// 相对路径 → 根目录下的绝对路径(**无守卫**,Assessment 既有口径,特征测试锁定):
-    /// 就是 <see cref="Path.Combine(string, string)"/> 加分隔符还原 —— rooted 输入会
-    /// 绕过根、".." 会出根。本票不借重构改此安全口径(见类注释),调用方仅 Assessment Store。
+    /// 规范守卫(票94,两服务共用的唯一判定):相对路径 → 根目录内的绝对路径,越界返回 null。
+    ///
+    /// 判定流程:
+    ///   1. 空/空白/含 NUL → null;
+    ///   2. **URL 编码穿越**先行拦截:反复解码(至多 3 轮,挡双重编码)后的形态若越界,
+    ///      原始形态同样拒绝 —— `%2e%2e%2f`、`..%2f`、`%2e%2e%5c` 不得借编码绕过;
+    ///      解码仅用于判定,返回的仍是原始形态组合出的路径(字面 `%` 合法名不受影响);
+    ///   3. 分隔符归一(`/` 与 `\` 都按分隔符处理,挡 Windows 形态 `..\..\` 在任何 OS 上的穿越),
+    ///      rooted / 盘符 / UNC 形态一律拒绝(绝对路径不许借根组合胜出);
+    ///   4. <see cref="Path.GetFullPath(string)"/> 规范化后必须**严格**位于根内
+    ///      (带尾分隔符的前缀判定 —— 同前缀兄弟目录 `root2/` 不算根内;等于根本身不算文件,拒绝)。
+    /// 规范化后仍在根内的路径放行 —— 含 `a..b` 文件名、`a/./b`、`a/../b` 这类形态
+    /// (与票39 前 Interviews 的 ".." 子串粗判的区别正在于此,票94 票面批准的行为变化)。
     /// </summary>
-    public static string CombineUnderRoot(string root, string relativePath) =>
-        Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+    public static string? ResolveUnderRoot(string root, string? relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(relativePath)) return null;
+        if (relativePath.Contains('\0')) return null;
+
+        // URL 编码形态:解码后的形态若越界,按穿越拒绝(只判定、不拿解码结果拼路径)
+        var decoded = DecodeRepeatedly(relativePath);
+        if (!string.Equals(decoded, relativePath, StringComparison.Ordinal)
+            && !TryCanonicalUnderRoot(root, decoded, out _))
+            return null;
+
+        return TryCanonicalUnderRoot(root, relativePath, out var full) ? full : null;
+    }
+
+    /// <summary>去掉路径尾部的分隔符(文件系统根 "/" 本身保留)。</summary>
+    private static string TrimTrailingSeparator(string path)
+    {
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return trimmed.Length == 0 ? path[..1] : trimmed;
+    }
+
+    /// <summary>反复 URL 解码至稳定(至多 3 轮);解码失败按原样返回,不因此拒绝字面 `%` 文件名。</summary>
+    private static string DecodeRepeatedly(string value)
+    {
+        var current = value;
+        for (var i = 0; i < 3; i++)
+        {
+            string next;
+            try { next = Uri.UnescapeDataString(current); }
+            catch (UriFormatException) { return current; }
+            if (string.Equals(next, current, StringComparison.Ordinal)) return current;
+            current = next;
+        }
+        return current;
+    }
+
+    /// <summary>规范化 + 根内判定核心:成功时 <paramref name="fullPath"/> 为根内的规范绝对路径。</summary>
+    private static bool TryCanonicalUnderRoot(string root, string relativePath, out string? fullPath)
+    {
+        fullPath = null;
+        if (string.IsNullOrWhiteSpace(relativePath) || relativePath.Contains('\0')) return false;
+
+        // `/` 与 `\` 都按分隔符:入库形态是正斜杠,但外部带入的路径可能是 Windows 形态
+        var unified = relativePath.Replace('\\', '/');
+        if (unified.StartsWith('/')) return false;                                   // rooted / UNC(//…)
+        if (unified.Length >= 2 && char.IsLetter(unified[0]) && unified[1] == ':')   // 盘符 C:/…
+            return false;
+        if (Path.IsPathRooted(relativePath) || Path.IsPathFullyQualified(relativePath)) return false;
+
+        string fullRoot, candidate;
+        try
+        {
+            fullRoot = Path.GetFullPath(root);
+            candidate = Path.GetFullPath(Path.Combine(
+                fullRoot, unified.Replace('/', Path.DirectorySeparatorChar)));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+
+        // 去尾分隔符再比:防 "./" 这类输入规范化出的 "/root/" 与 "/root" 字符串不等而绕过「等于根」判定
+        fullRoot = TrimTrailingSeparator(fullRoot);
+        candidate = TrimTrailingSeparator(candidate);
+
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (string.Equals(candidate, fullRoot, comparison)) return false;   // 根本身不是文件
+        // 文件系统根("/"/盘根)在 Trim 后自带尾分隔符,不再叠加
+        var rootWithSep = fullRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? fullRoot : fullRoot + Path.DirectorySeparatorChar;
+        if (!candidate.StartsWith(rootWithSep, comparison)) return false;
+
+        fullPath = candidate;
+        return true;
+    }
 
     /// <summary>
-    /// 相对路径 → 根目录下的绝对路径(**带守卫**,Interviews 既有口径):
-    /// 含路径穿越("..")或 rooted 的输入直接拒绝返回 null —— 这类路径会进事件、
-    /// 跨服务传给 Worker,这里把它钉死在根目录内。空/空白同样返回 null。
-    /// 注:".." 是**任意位置子串**判定(连 `a..b` 这类文件名也会被拒)—— 既有口径,
-    /// 特征测试锁定,放宽须另行申报。
+    /// Assessment 读/删路径原语 —— 票39 时为**无守卫**的 <see cref="Path.Combine(string, string)"/>;
+    /// 票94 起改为与 <see cref="ResolveGuarded"/> 同一规范守卫(委托 <see cref="ResolveUnderRoot"/>),
+    /// 越界返回 null,调用方(Assessment Store)须按「无此文件」处理。名称保留以兼容既有调用点。
     /// </summary>
-    public static string? ResolveGuarded(string root, string? relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath)) return null;
-        var normalized = relativePath.Replace('\\', '/');
-        if (Path.IsPathRooted(normalized) || normalized.Contains("..")) return null;
+    public static string? CombineUnderRoot(string root, string? relativePath) =>
+        ResolveUnderRoot(root, relativePath);
 
-        return Path.Combine(root, normalized.Replace('/', Path.DirectorySeparatorChar));
-    }
+    /// <summary>
+    /// Interviews 读/删/存在性原语 —— 票39 时为 ".." **任意子串**粗判;
+    /// 票94 起改为与 <see cref="CombineUnderRoot"/> 同一规范守卫(委托 <see cref="ResolveUnderRoot"/>):
+    /// `a..b` 类合法名放行,`../`、`..\..\`、URL 编码穿越、rooted/绝对路径逃逸仍拒绝。空/空白返回 null。
+    /// </summary>
+    public static string? ResolveGuarded(string root, string? relativePath) =>
+        ResolveUnderRoot(root, relativePath);
 }
 
 /// <summary>本地落盘机制:两 Store 共用的「写临时文件 + 原子改名」。</summary>

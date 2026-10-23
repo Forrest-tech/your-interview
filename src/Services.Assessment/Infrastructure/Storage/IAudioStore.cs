@@ -164,9 +164,10 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
         var roots = await ResolveRootsAsync(userId, ct);
         foreach (var root in CandidateRoots(roots))
         {
-            // 既有口径:无穿越守卫的组合(与 Interviews 的守卫口径差异见 adapter 文档,票39 保留不改)
+            // 票94:规范守卫组合(与 Interviews 同一判定,见 adapter 文档)——
+            // 穿越/rooted 路径返回 null,按「该候选根下无此文件」跳过,绝不出根读
             var absolute = StorageRelativePaths.CombineUnderRoot(root, relativePath);
-            if (!File.Exists(absolute)) continue;
+            if (absolute is null || !File.Exists(absolute)) continue;
 
             Stream s = new FileStream(absolute, FileMode.Open, FileAccess.Read, FileShare.Read);
             return s;
@@ -185,8 +186,9 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
 
         foreach (var root in CandidateRoots(roots))
         {
+            // 票94:同 OpenReadAsync —— 穿越路径返回 null,视为无此文件(幂等),绝不出根删
             var absolute = StorageRelativePaths.CombineUnderRoot(root, relativePath);
-            if (!File.Exists(absolute)) continue;
+            if (absolute is null || !File.Exists(absolute)) continue;
 
             try
             {

@@ -11,6 +11,8 @@ namespace YourInterview.BuildingBlocks.Tests;
 /// 。
 /// 凡 characterization 用例都是把改前 Store 的既有行为**原样锁住**(含不理想的安全口径),
 /// 不是在批准新行为 —— 变更口径须另行申报(见 adapter 文档)。
+/// 例外(票94):路径守卫三例已按票94 票面改期望(票55 先例)——a..b 放行、Combine 穿越/rooted 拒绝,
+/// 原例名与旧口径在各用例注释里留痕;全谱守卫用例见 StoragePathTraversalGuardTests。
 /// </summary>
 public sealed class FileStorageAdapterTests: IDisposable
 {
@@ -211,7 +213,7 @@ Directory.CreateDirectory(cur);
 StorageRootResolver.FindSolutionRoot(cur).Should().BeNull();
 }
 
-// ---------------- ResolveGuarded(Interviews 读路径口径) ----------------
+// ---------------- ResolveGuarded(Interviews 读路径口径;票94 起规范判定) ----------------
 
 private const string Root = "/data/interviews";
 
@@ -248,10 +250,12 @@ public void Guarded_TraversalRejected(string rel)
 StorageRelativePaths.ResolveGuarded(Root, rel).Should().BeNull();
 }
 
-[Fact] // 文件名里含 ".." 子串(如 a..b)也被拒 —— 既有子串判定口径锁定
-public void Guarded_DotDotSubstringInFileName_AlsoRejected_Characterization()
+[Fact] // 票94 改期望(票55 先例,依据=票94 票面):文件名含 ".." 子串(a..b)规范化后仍在根内 → 放行;
+// 票39 时此例为 Guarded_DotDotSubstringInFileName_AlsoRejected_Characterization(子串粗判锁定)
+public void Guarded_DotDotSubstringInFileName_Allowed_Ticket94()
 {
-StorageRelativePaths.ResolveGuarded(Root, "entry/a..b.mp3").Should().BeNull();
+StorageRelativePaths.ResolveGuarded(Root, "entry/a..b.mp3")
+.Should().Be(Path.Combine(Root, "entry", "a..b.mp3"));
 }
 
 [Fact] // rooted 输入拒绝
@@ -275,7 +279,7 @@ StorageRelativePaths.ResolveGuarded(Root, "e/" + name)
 .Should().Be(Path.Combine(Root, "e", name));
 }
 
-// ---------------- CombineUnderRoot(Assessment 读/删既有口径) ----------------
+// ---------------- CombineUnderRoot(Assessment 读/删口径;票94 起与 ResolveGuarded 同一规范守卫) ----------------
 
 [Fact] // 正常相对路径组合到根下
 public void Combine_NormalRelative()
@@ -284,18 +288,18 @@ StorageRelativePaths.CombineUnderRoot("/data/assessment", "abcd1234/2026/10/rec.
 .Should().Be(Path.Combine("/data/assessment", "abcd1234", "2026", "10", "rec.mp3"));
 }
 
-[Fact] // ".." 不拦截、组合结果出根 —— Assessment 既有行为锁定,本票不改安全口径
-public void Combine_TraversalNotGuarded_Characterization()
+[Fact] // 票94 改期望(票55 先例,依据=票94 票面):".." 穿越自票94 起被规范守卫拒绝;
+// 票39 时此例为 Combine_TraversalNotGuarded_Characterization(锁定无守卫的出根组合)
+public void Combine_TraversalRejected_Ticket94()
 {
-var combined = StorageRelativePaths.CombineUnderRoot("/data/assessment", "../escape.mp3");
-Path.GetFullPath(combined).Should().Be(Path.GetFullPath("/data/escape.mp3"));
+StorageRelativePaths.CombineUnderRoot("/data/assessment", "../escape.mp3").Should().BeNull();
 }
 
-[Fact] // rooted 输入按 Path.Combine 语义直接胜出 —— 同上,既有行为锁定
-public void Combine_RootedWins_Characterization()
+[Fact] // 票94 改期望(票55 先例,依据=票94 票面):rooted 输入自票94 起被拒绝,不再按 Path.Combine 语义胜出;
+// 票39 时此例为 Combine_RootedWins_Characterization
+public void Combine_RootedRejected_Ticket94()
 {
-StorageRelativePaths.CombineUnderRoot("/data/assessment", "/abs/file.mp3")
-.Should().Be("/abs/file.mp3");
+StorageRelativePaths.CombineUnderRoot("/data/assessment", "/abs/file.mp3").Should().BeNull();
 }
 
 // ---------------- ToPortableRelative ----------------

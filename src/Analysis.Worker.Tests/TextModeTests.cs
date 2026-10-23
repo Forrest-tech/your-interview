@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using YourInterview.Analysis.Worker.Analysis;
 using Xunit;
+using YourInterview.SharedContracts.Analysis;
 
 namespace YourInterview.Analysis.Worker.Tests;
 

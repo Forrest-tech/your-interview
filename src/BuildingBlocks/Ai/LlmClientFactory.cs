@@ -1,20 +1,9 @@
-using Microsoft.Extensions.DependencyInjection;
+// 票40(ARC-15):工厂实现原在 SharedContracts/Ai/LlmClientFactory.cs,与接口同文件;
+// 现拆分——接口 ILlmClientFactory 留契约,实现迁 BuildingBlocks/Ai(票38 同构先例),方法体逐字不变。
 using Microsoft.Extensions.Logging;
+using YourInterview.SharedContracts.Ai;
 
-namespace YourInterview.SharedContracts.Ai;
-
-/// <summary>
-/// 按协议类型构造对应的 LLM 客户端。
-///
-/// 为什么用工厂而不是 DI 直接注入:连接参数是**用户级运行时数据**
-/// (用户在设置页填的 key/model),不是启动期配置 —— 无法在 DI 容器里单例化。
-/// 工厂按需创建,HttpClient 由 IHttpClientFactory 托管连接池。
-/// </summary>
-public interface ILlmClientFactory
-{
-    /// <summary>按连接参数建客户端。参数不合法时抛 LlmCallException(IsConfigurationError=true)。</summary>
-    ILlmClient Create(LlmConnection connection);
-}
+namespace YourInterview.BuildingBlocks.Ai;
 
 public sealed class LlmClientFactory(IHttpClientFactory httpFactory, ILoggerFactory loggerFactory) : ILlmClientFactory
 {

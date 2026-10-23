@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using YourInterview.SharedContracts.Analysis;
 
 namespace YourInterview.Analysis.Worker.Analysis;
 

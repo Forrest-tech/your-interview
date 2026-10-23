@@ -1,14 +1,17 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
+using YourInterview.SharedContracts.Analysis;
 
 namespace YourInterview.Analysis.Worker.Analysis;
 
 /// <summary>
-/// 六维评分 —— 与 SharedContracts.Analysis.AnalysisScores 保持同构。
-/// 放在 Worker 本地是为了让管线能独立测试(不必引用整个契约项目)。
-/// Pronunciation 可空:文本模式(粘贴文本、无音频)下发音无从测量,记 null
-/// 且不参与总分与最弱维度判定。
+/// 六维评分(Worker 内部评分结果,非跨服务契约)。
+/// 票40(ARC-15)盘点裁定:与 SharedContracts.Analysis.AnalysisScores 同为六维
+/// 划分,但 Pronunciation 在此为 int? —— 文本模式(粘贴文本、无音频)下发音
+/// 无从测量,记 null 且不参与总分与最弱维度判定;回写载荷的 null 会让
+/// Completed 消费者跳过 Analytics 发音维度。AnalysisScores 是全非空 int 的
+/// 报告契约,两者语义不同、名称不同,不构成副本,故不合一(见 evidence-40)。
 /// </summary>
 public sealed record DimensionScores(int? Pronunciation, int Fluency, int SentenceIntegrity,
     int Structure, int TechnicalDepth, int Relevance)

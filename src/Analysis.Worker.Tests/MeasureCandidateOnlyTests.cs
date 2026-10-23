@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Xunit;
 using YourInterview.Analysis.Worker.Analysis;
+using YourInterview.SharedContracts.Analysis;
 
 namespace YourInterview.Analysis.Worker.Tests;
 

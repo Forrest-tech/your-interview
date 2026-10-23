@@ -17,7 +17,7 @@ public sealed record InterviewAnalysisReport
     public AnalysisScores Scores { get; init; } = new();
 
     /// <summary>客观指标:语速/句长/填充词/停顿 —— Azure + 自研声学指标算出。</summary>
-    public SpeechMetrics Metrics { get; init; } = new();
+    public SpeechMetrics Metrics { get; init; } = new(0, 0, 0, 0, 0, 0, [], 0, 0, 0, 0, 0, []);
 
     /// <summary>说话人分离结果 + 每轮发言归属。</summary>
     public List<SpeakerTurn> Turns { get; init; } = [];
@@ -63,25 +63,6 @@ public sealed record AnalysisScores
     public int Relevance { get; init; }
     /// <summary>加权总分</summary>
     public int Overall { get; init; }
-}
-
-public sealed record SpeechMetrics
-{
-    public int UserWordCount { get; init; }
-    public int InterviewerWordCount { get; init; }
-    public double UserSpeakingRatio { get; init; }
-    public int UserTurnCount { get; init; }
-    public double SpeakingSeconds { get; init; }
-    public double WordsPerMinute { get; init; }
-    public double AverageSentenceLength { get; init; }
-    public int ShortSentenceCount { get; init; }
-    public int FillerWordCount { get; init; }
-    public double FillerPer100Words { get; init; }
-    public int SelfRepetitionCount { get; init; }
-    public int LongPauseCount { get; init; }
-    public double AveragePauseSeconds { get; init; }
-    public Dictionary<string, int> Fillers { get; init; } = new();
-    public Dictionary<string, int> TechnicalTerms { get; init; } = new();
 }
 
 public sealed record SpeakerTurn

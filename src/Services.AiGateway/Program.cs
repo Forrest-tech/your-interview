@@ -48,8 +48,9 @@ builder.Services.AddHttpClient("vision", c =>
 
 // 客户端工厂:按协议(openai-compatible / azure-openai / anthropic)派发。
 // 单例安全 —— 只持有 IHttpClientFactory 与 ILoggerFactory。
+// 票40(ARC-15):接口仍是 SharedContracts 契约,实现已迁 BuildingBlocks/Ai —— 仅实现类型全名变更,注册口径不变。
 builder.Services.AddSingleton<YourInterview.SharedContracts.Ai.ILlmClientFactory,
-    YourInterview.SharedContracts.Ai.LlmClientFactory>();
+    YourInterview.BuildingBlocks.Ai.LlmClientFactory>();
 
 // LLM 凭据解析(数据库 > 环境变量 > appsettings)。
 // 单例:内部用 IServiceScopeFactory 读 Scoped 的 DbContext,查完即释放。

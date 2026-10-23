@@ -4,6 +4,7 @@ using MassTransit;
 using YourInterview.Analysis.Worker.Analysis;
 using YourInterview.BuildingBlocks.Storage;
 using YourInterview.SharedContracts.Events;
+using YourInterview.SharedContracts.Analysis;
 
 namespace YourInterview.Analysis.Worker.Consumers;
 

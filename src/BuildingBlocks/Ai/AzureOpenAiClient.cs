@@ -1,8 +1,11 @@
+// 票40(ARC-15):本实现原在 SharedContracts/Ai,契约模块只留契约;实现迁 BuildingBlocks/Ai(与票38 AiGatewayClient 同构归属),方法体逐字不变。
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-namespace YourInterview.SharedContracts.Ai;
+using YourInterview.SharedContracts.Ai;
+
+namespace YourInterview.BuildingBlocks.Ai;
 
 /// <summary>
 /// Azure OpenAI 客户端。

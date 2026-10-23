@@ -296,3 +296,42 @@ export function topicDetailsAfterCategoryDelete<T extends { topic: string; total
   }
   return [...rest, { ...deleted, topic: UNCATEGORIZED_TOPIC }];
 }
+
+/**
+ * 票92:分类弹窗提交动作(Add/改名/删)的在飞守卫判定 —— 已有提交在飞时
+ * 拒绝再起一个。模板 [disabled] 靠变更检测刷新,同帧双击可能赶在 DOM
+ * 禁用生效前连发两次(复验 N1 实证 2×PUT);组件在每个提交动作入口先跑
+ * 本判定、并在起步时同步置 busy,双击的第二次调用必然被挡。
+ */
+export function shouldStartCategorySubmit(busy: boolean): boolean {
+  return !busy;
+}
+
+/** 票92:分类弹窗错误呈现的分类结果 —— 组件按 kind 取文案,纯判定在此。 */
+export type CategoryErrorText =
+  | { kind: 'tooLong' }
+  | { kind: 'validation'; text: string }
+  | { kind: 'generic' };
+
+/**
+ * 票92:错误 → 呈现文案的分类(票83 describeError 的收紧版)。
+ * 只透出两类「已知安全」文案:①服务层纯校验的 tooLong 标记;②后端
+ * ValidationProblemDetails 的 errors 字典(400 校验原文,含上限值)。
+ * 其余一律 generic —— 旧实现末路退 err.message,而 ApiClient 对 5xx 会
+ * 优先透传后端 ProblemDetails.detail,Dev 口径下即 EF/Npgsql 异常全文
+ * (N1:原始堆栈上弹窗)。未知错误宁可给通用文案,绝不露原始异常。
+ */
+export function classifyCategoryError(e: unknown): CategoryErrorText {
+  const err = e as {
+    validation?: { reason?: string };
+    original?: { error?: { errors?: Record<string, string[]> } };
+    error?: { errors?: Record<string, string[]> };
+  } | null;
+  if (err?.validation?.reason === 'tooLong') return { kind: 'tooLong' };
+  const raw = err?.original?.error?.errors ?? err?.error?.errors ?? null;
+  if (raw && typeof raw === 'object') {
+    const texts = Object.values(raw).flat().filter(Boolean);
+    if (texts.length) return { kind: 'validation', text: texts.join(' ') };
+  }
+  return { kind: 'generic' };
+}

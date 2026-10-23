@@ -1994,6 +1994,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'ts.cat.mergeWarn': { zh: '「{to}」已存在!将 {n} 个条目从「{from}」合并到「{to}」,此操作不可逆,继续?', en: '"{to}" already exists! Merge {n} items from "{from}" into "{to}"? This cannot be undone.', fr: '« {to} » existe déjà ! Fusionner {n} éléments de « {from} » vers « {to} » ? Irréversible.' },
   'ts.cat.deleteWarn': { zh: '删除分类「{name}」?其下 {n} 个条目将变为未分类(条目本身保留)。', en: 'Delete category "{name}"? Its {n} items will become uncategorized (items are kept).', fr: 'Supprimer la catégorie « {name} » ? Ses {n} éléments seront non classés (éléments conservés).' },
   'ts.cat.nameTooLong': { zh: '分类名过长,不能超过 {max} 个字符', en: 'Category name is too long — max {max} characters', fr: 'Nom de catégorie trop long — {max} caractères max' },
+  'ts.cat.genericError': { zh: '操作失败,请稍后重试', en: 'Something went wrong. Please try again.', fr: 'Une erreur est survenue. Veuillez réessayer.' },
   'ts.source.tooltip': { zh: '已掌握 {m} / 待复习 {d}', en: 'Mastered {m} / due {d}', fr: 'Maîtrisé {m} / à réviser {d}' },
   'ts.source.jumpBack': { zh: '来自实战机经,点击跳回:{src}', en: 'From Playbook — click to open: {src}', fr: 'Du Journal — cliquez pour ouvrir : {src}' },
   'ts.source.from': { zh: '来自实战机经:{src}', en: 'From Playbook: {src}', fr: 'Du Journal : {src}' },

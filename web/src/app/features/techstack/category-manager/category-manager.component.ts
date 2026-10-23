@@ -10,7 +10,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { KnowledgeApiService } from '../../../core/api/knowledge-api.service';
 import { TechStackLocalService } from '../../../core/api/techstack-local.service';
 import {
-  MAX_CATEGORY_NAME_LENGTH, validateCategoryName,
+  MAX_CATEGORY_NAME_LENGTH, classifyCategoryError, shouldStartCategorySubmit,
+  validateCategoryName,
 } from '../../../core/api/techstack-local.helpers';
 import { I18nService } from '../../../core/i18n/i18n.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog.component';
@@ -79,22 +80,16 @@ export class CategoryManagerComponent {
   /**
    * 票83:错误文案提取 —— 先看服务层纯校验标记(validation.reason),
    * 再按票12 applyServerError 先例从 ValidationProblemDetails 的
-   * errors 字典抠后端原文(含上限 100),最后退 e.message。
+   * errors 字典抠后端原文(含上限 100)。
+   * 票92 收紧:分类判定抽到纯函数 classifyCategoryError,未知错误一律
+   * 回落通用文案 —— 不再退 e.message(5xx 时它可能是后端透传的原始
+   * 异常全文,N1 实证)。
    */
   private describeError(e: unknown): string {
-    const err = e as {
-      message?: string;
-      validation?: { reason?: string };
-      original?: { error?: { errors?: Record<string, string[]> } };
-      error?: { errors?: Record<string, string[]> };
-    };
-    if (err?.validation?.reason === 'tooLong') return this.tooLongText();
-    const raw = err?.original?.error?.errors ?? err?.error?.errors ?? null;
-    if (raw && typeof raw === 'object') {
-      const texts = Object.values(raw).flat().filter(Boolean);
-      if (texts.length) return texts.join(' ');
-    }
-    return err?.message ?? String(e);
+    const c = classifyCategoryError(e);
+    if (c.kind === 'tooLong') return this.tooLongText();
+    if (c.kind === 'validation') return c.text;
+    return this.t('ts.cat.genericError');
   }
 
   /**
@@ -103,6 +98,8 @@ export class CategoryManagerComponent {
    * 失败只报错、不动列表(旧实现无条件加列表 = 假成功、刷新即失,D4b)。
    */
   addCategory(): void {
+    // 票92:在飞守卫 —— 同帧双击的第二次调用在入口即被挡(不依赖模板禁用生效时机)
+    if (!shouldStartCategorySubmit(this.busy())) return;
     const n = this.newName().trim();
     if (!n || this.newNameExists()) return;
     const v = validateCategoryName(n);
@@ -151,6 +148,8 @@ export class CategoryManagerComponent {
   }
 
   async confirmRename(c: CategoryInfo): Promise<void> {
+    // 票92:在飞守卫(与 Add 同口径)—— 确认框等待期间也算在飞,自起步即置 busy
+    if (!shouldStartCategorySubmit(this.busy())) return;
     const oldName = c.name;
     const newName = this.editDraft().trim();
     if (!newName || newName.toLowerCase() === oldName.toLowerCase()) {
@@ -164,18 +163,19 @@ export class CategoryManagerComponent {
     }
     // 合并:新名字已存在
     const target = this.categories().find(x => x.name.toLowerCase() === newName.toLowerCase());
-    if (target) {
-      const msg = this.t('ts.cat.mergeWarn')
-        .replace('{n}', String(c.count))
-        .replace('{from}', oldName)
-        .replace('{to}', target.name);
-      if (!(await this.confirmDlg(msg, false))) return;
-    } else if (c.count > 0) {
-      const msg = this.t('ts.cat.renameWarn')
-        .replace('{n}', String(c.count))
-        .replace('{from}', oldName)
-        .replace('{to}', newName);
-      if (!(await this.confirmDlg(msg, false))) return;
+    if (target || c.count > 0) {
+      // 票92:确认等待期置 busy 守住其他提交动作;取消则释放守卫原样返回
+      this.busy.set(true);
+      const msg = target
+        ? this.t('ts.cat.mergeWarn')
+          .replace('{n}', String(c.count))
+          .replace('{from}', oldName)
+          .replace('{to}', target.name)
+        : this.t('ts.cat.renameWarn')
+          .replace('{n}', String(c.count))
+          .replace('{from}', oldName)
+          .replace('{to}', newName);
+      if (!(await this.confirmDlg(msg, false))) { this.busy.set(false); return; }
     }
     // 空分类(0 条目)是后端分类表里的占位行,改名走分类服务(删旧+加新);
     // 改前实现对空分类也打 topics/rename(无条目可改、恒返回 0)且旧名残留
@@ -236,21 +236,25 @@ export class CategoryManagerComponent {
   }
 
   async deleteCategory(c: CategoryInfo): Promise<void> {
+    // 票92:在飞守卫(与 Add 同口径)—— 确认框等待期间也算在飞
+    if (!shouldStartCategorySubmit(this.busy())) return;
+    this.busy.set(true);
     if (c.count > 0) {
       const msg = this.t('ts.cat.deleteWarn')
         .replace('{n}', String(c.count))
         .replace('{name}', c.name);
-      if (!(await this.confirmDlg(msg, true))) return;
+      if (!(await this.confirmDlg(msg, true))) { this.busy.set(false); return; }
     }
-    this.busy.set(true);
     // 空分类(0 条目)是后端分类表占位行,经分类服务删除(票16)
     if (c.count === 0) {
       this.categories.update(list => list.filter(x => x.name !== c.name));
-      this.tsLocal.removeCategory(c.name);
+      // 票92:订阅删除结果,结算才释放守卫(旧实现同步置回 false = 守卫形同虚设)
+      this.tsLocal.removeCategory(c.name).subscribe({
+        complete: () => { this.busy.set(false); },
+      });
       // 票84:与 removeCategory 的乐观信号同拍通知页面(空分类无条目受影响,
       // 页面同步为无害空转;若计数口径下有漏计条目则正好一并回落)
       this.tsLocal.notifyCategoryDeleted(c.name);
-      this.busy.set(false);
       this.changed = true;
       return;
     }
@@ -261,13 +265,14 @@ export class CategoryManagerComponent {
         // 会把自定义行留在服务端 —— 整页刷新后它会以空分类身份在管理器复活。
         // 同一删除动作一并删掉该名的自定义行(端点幂等,不存在也成功;
         // 服务端各端点行为不动,只是前端把同一次删除做完整)。
-        this.tsLocal.removeCategory(c.name);
+        this.tsLocal.removeCategory(c.name).subscribe();
         // 票84:删除已落服务端 —— 通知页面即时回落条目卡/chip,不等关弹窗/刷新(F4)
         this.tsLocal.notifyCategoryDeleted(c.name);
         this.busy.set(false);
         this.changed = true;
       },
-      error: (e: unknown) => { this.error.set(e instanceof Error ? e.message : String(e)); this.busy.set(false); }
+      // 票92:与 Add/改名同走 describeError —— 未知错误回落通用文案,不露原始 message
+      error: (e: unknown) => { this.error.set(this.describeError(e)); this.busy.set(false); }
     });
   }
 

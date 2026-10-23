@@ -166,12 +166,19 @@ export class TechStackLocalService {
       }));
   }
 
-  /** 删除空分类:乐观移除,后端 DELETE 失败则回读纠正。 */
-  removeCategory(name: string): void {
+  /**
+   * 删除空分类:乐观移除,后端 DELETE 失败则回读纠正。
+   * 票92:改为返回 Observable 供调用方订阅并在结算时释放提交守卫
+   * (错误已被 catchError 收敛为正常完成,调用方无需再处理 error)。
+   */
+  removeCategory(name: string): Observable<void> {
     this.customCategories.update((list) =>
       list.filter((x) => x.toLowerCase() !== name.toLowerCase()));
-    this.api.delete(`/api/knowledge/custom-categories/${encodeURIComponent(name)}`)
-      .subscribe({ error: () => this.reloadCategories() });
+    return this.api.delete<void>(`/api/knowledge/custom-categories/${encodeURIComponent(name)}`)
+      .pipe(catchError(() => {
+        this.reloadCategories();
+        return of(undefined);
+      }));
   }
 
   /**

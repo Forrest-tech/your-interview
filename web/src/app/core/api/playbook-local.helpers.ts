@@ -34,8 +34,6 @@ export interface StarStoryDto {
 export interface LegacyDebriefImportItem { entryId: string; payloadJson: string }
 export interface LegacyPastedImportItem { entryId: string; content: string }
 
-const GUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-
 function asString(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
@@ -117,9 +115,11 @@ export function shouldAttemptImport(
 }
 
 /**
- * 从 localStorage 键值对快照里收集历史复盘(pb.debrief.<条目Guid>)。
- * payloadJson = 本地原值逐字(不解析不改写 —— 无损归档);键后缀不是 Guid、
- * 值为空的跳过(那不是旧详情页写出的数据形态)。
+ * 从 localStorage 键值对快照里收集历史复盘(pb.debrief.<后缀>)。
+ * payloadJson = 本地原值逐字(不解析不改写 —— 无损归档)。
+ * 票77:后缀不再限 Guid 形态 —— 匹配不上现存条目的孤儿键(条目已删等)
+ * 正是最需要保全的一类,以后缀原文为归档键一并收集;仅跳过空后缀/空值
+ * (那不是旧详情页写出的数据形态)。Guid 规范形归一在后端导入侧收口。
  */
 export function collectLegacyDebriefs(
   pairs: readonly { key: string; value: string | null }[]
@@ -128,7 +128,7 @@ export function collectLegacyDebriefs(
   for (const { key, value } of pairs) {
     if (!key.startsWith('pb.debrief.')) continue;
     const entryId = key.slice('pb.debrief.'.length);
-    if (!GUID_RE.test(entryId)) continue;
+    if (entryId === '') continue;
     if (value === null || value === '') continue;
     out.push({ entryId, payloadJson: value });
   }
@@ -136,8 +136,8 @@ export function collectLegacyDebriefs(
 }
 
 /**
- * 收集历史粘贴材料(pb-pasted-<条目Guid>):content = 本地原值逐字;
- * 口径同 collectLegacyDebriefs。
+ * 收集历史粘贴材料(pb-pasted-<后缀>):content = 本地原值逐字;
+ * 口径同 collectLegacyDebriefs(票77:孤儿后缀同样收集)。
  */
 export function collectLegacyPasted(
   pairs: readonly { key: string; value: string | null }[]
@@ -146,7 +146,7 @@ export function collectLegacyPasted(
   for (const { key, value } of pairs) {
     if (!key.startsWith('pb-pasted-')) continue;
     const entryId = key.slice('pb-pasted-'.length);
-    if (!GUID_RE.test(entryId)) continue;
+    if (entryId === '') continue;
     if (value === null || value === '') continue;
     out.push({ entryId, content: value });
   }

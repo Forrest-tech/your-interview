@@ -70,22 +70,35 @@ public sealed class StarStory : AuditableAggregateRoot
 /// v2 改版后本地键再无读写方,只剩用户浏览器里可能残留的历史数据。
 ///
 /// 本表只做**无损归档**:原始 JSON 逐字保存、后端可查,不映射进 DebriefJson
-/// (避免覆盖现行复盘、避免自创字段口径)。归属按 (UserId, EntryId),导入时
-/// 校验条目归当前用户(含软删条目 —— 数据保全优先),他人的/不存在的静默跳过。
+/// (避免覆盖现行复盘、避免自创字段口径)。
+///
+/// 票77 起归档键改为 **EntryKey(键后缀原文)**:票15 旧口径以「后缀 = 条目
+/// Guid」为前提,后缀匹配不上现存条目的孤儿键(典型成因正是条目已删)被
+/// 静默跳过、永不归档。现按 (UserId, EntryKey) 收口、不再校验条目存在性:
+/// 后缀能解析为 Guid 时 EntryKey 存其规范形(与旧口径的去重/读回逐字一致),
+/// EntryId 列保留原值;孤儿后缀逐字存 EntryKey,EntryId = Guid.Empty 占位
+/// (归档语义以 EntryKey 为准)。
 /// </summary>
 public sealed class LegacyDebrief : AuditableAggregateRoot
 {
     private LegacyDebrief() { }
 
-    public LegacyDebrief(Guid userId, Guid entryId, string payloadJson)
+    /// <param name="entryKey">归档键(已归一:Guid 后缀 = 规范 Guid 串,其余 = 后缀原文逐字)。</param>
+    public LegacyDebrief(Guid userId, string entryKey, string payloadJson)
     {
         UserId = userId;
-        EntryId = entryId;
+        EntryKey = entryKey;
+        EntryId = Guid.TryParse(entryKey, out var g) ? g : Guid.Empty;
         PayloadJson = payloadJson;
     }
 
     public Guid UserId { get; private set; }
+
+    /// <summary>旧列(保留):Guid 后缀时 = 该 Guid,孤儿键时 = Guid.Empty。</summary>
     public Guid EntryId { get; private set; }
+
+    /// <summary>归档键(票77):后缀原文(Guid 时为规范形),去重/读回以此为准。</summary>
+    public string EntryKey { get; private set; } = string.Empty;
 
     /// <summary>本地原值逐字(JSON 字符串,不解析不改写)。</summary>
     public string PayloadJson { get; private set; } = string.Empty;
@@ -97,21 +110,28 @@ public sealed class LegacyDebrief : AuditableAggregateRoot
 /// v2 改版后本地键再无读写方,现行 Guidance 走后端材料。
 ///
 /// 与 LegacyDebrief 同口径:原始字符串逐字无损归档、后端可查,不写现行
-/// Guidance 数据。归属与导入校验同 LegacyDebrief。
+/// Guidance 数据。归档键同 LegacyDebrief(票77 EntryKey,见该实体注释)。
 /// </summary>
 public sealed class LegacyPastedMaterial : AuditableAggregateRoot
 {
     private LegacyPastedMaterial() { }
 
-    public LegacyPastedMaterial(Guid userId, Guid entryId, string content)
+    /// <param name="entryKey">归档键(已归一:Guid 后缀 = 规范 Guid 串,其余 = 后缀原文逐字)。</param>
+    public LegacyPastedMaterial(Guid userId, string entryKey, string content)
     {
         UserId = userId;
-        EntryId = entryId;
+        EntryKey = entryKey;
+        EntryId = Guid.TryParse(entryKey, out var g) ? g : Guid.Empty;
         Content = content;
     }
 
     public Guid UserId { get; private set; }
+
+    /// <summary>旧列(保留):Guid 后缀时 = 该 Guid,孤儿键时 = Guid.Empty。</summary>
     public Guid EntryId { get; private set; }
+
+    /// <summary>归档键(票77):后缀原文(Guid 时为规范形),去重/读回以此为准。</summary>
+    public string EntryKey { get; private set; } = string.Empty;
 
     /// <summary>本地原值逐字(原始字符串,不加工)。</summary>
     public string Content { get; private set; } = string.Empty;

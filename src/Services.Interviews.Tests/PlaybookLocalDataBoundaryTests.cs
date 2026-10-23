@@ -7,7 +7,8 @@ namespace YourInterview.Services.Interviews.Tests;
 /// <summary>
 /// 票15(COD-10b)boundary 补测(总纲第七节):Playbook 本地数据三个导入/保存
 /// 校验器(纯函数,无需 DB)。每例标注 boundary 类别:
-///   空/null、空集合、超长上限±1、特殊字符/Unicode、Guid.Empty、计数上限。
+///   空/null、空集合、超长上限±1、特殊字符/Unicode、空归档键(票77 后
+///   entryId 为 string,旧 Guid.Empty 用例改为空串等价形)、计数上限。
 /// 不适用类别(本票 API 无日期/时间入参 —— CreatedAt 服务端生成;无文件入参):
 /// 日期时区临界、文件类(0 字节/损坏/超限)不设用例,理由见交付报告。
 /// </summary>
@@ -128,12 +129,14 @@ public sealed class PlaybookLocalDataBoundaryTests
 
     // ---------------- 复盘导入校验 ----------------
 
-    [Fact] // boundary: Guid.Empty —— 条目 id 为空 Guid 拒
+    [Fact] // boundary: 空 —— 归档键空串/纯空白拒(票77:旧 Guid.Empty 用例的 string 等价形,依据票77 票面 entryId 改 string)
     public void ImportDebriefs_EmptyEntryId_Rejected()
     {
         var v = new ImportLegacyDebriefsCommandValidator();
         v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
-            [new LegacyDebriefImportItem(Guid.Empty, "{}")])).IsValid.Should().BeFalse();
+            [new LegacyDebriefImportItem("", "{}")])).IsValid.Should().BeFalse();
+        v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
+            [new LegacyDebriefImportItem("   ", "{}")])).IsValid.Should().BeFalse();
     }
 
     [Fact] // boundary: 空 —— payload 空串拒(NotEmpty)
@@ -141,7 +144,7 @@ public sealed class PlaybookLocalDataBoundaryTests
     {
         var v = new ImportLegacyDebriefsCommandValidator();
         v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
-            [new LegacyDebriefImportItem(Guid.NewGuid(), "")])).IsValid.Should().BeFalse();
+            [new LegacyDebriefImportItem(Guid.NewGuid().ToString(), "")])).IsValid.Should().BeFalse();
     }
 
     [Fact] // boundary: 超长上限±1 —— payload 100000 放行 / 100001 拒
@@ -149,10 +152,10 @@ public sealed class PlaybookLocalDataBoundaryTests
     {
         var v = new ImportLegacyDebriefsCommandValidator();
         v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
-            [new LegacyDebriefImportItem(Guid.NewGuid(), new string('p', LegacyImportLimits.PayloadMax))]))
+            [new LegacyDebriefImportItem(Guid.NewGuid().ToString(), new string('p', LegacyImportLimits.PayloadMax))]))
             .IsValid.Should().BeTrue();
         v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
-            [new LegacyDebriefImportItem(Guid.NewGuid(), new string('p', LegacyImportLimits.PayloadMax + 1))]))
+            [new LegacyDebriefImportItem(Guid.NewGuid().ToString(), new string('p', LegacyImportLimits.PayloadMax + 1))]))
             .IsValid.Should().BeFalse();
     }
 
@@ -165,10 +168,10 @@ public sealed class PlaybookLocalDataBoundaryTests
         act().IsValid.Should().BeFalse();
 
         var atMax = Enumerable.Range(0, LegacyImportLimits.BatchMax)
-            .Select(_ => new LegacyDebriefImportItem(Guid.NewGuid(), "{}")).ToList();
+            .Select(_ => new LegacyDebriefImportItem(Guid.NewGuid().ToString(), "{}")).ToList();
         v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(), atMax)).IsValid.Should().BeTrue();
         var overMax = Enumerable.Range(0, LegacyImportLimits.BatchMax + 1)
-            .Select(_ => new LegacyDebriefImportItem(Guid.NewGuid(), "{}")).ToList();
+            .Select(_ => new LegacyDebriefImportItem(Guid.NewGuid().ToString(), "{}")).ToList();
         v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(), overMax)).IsValid.Should().BeFalse();
     }
 
@@ -177,20 +180,48 @@ public sealed class PlaybookLocalDataBoundaryTests
     {
         var v = new ImportLegacyDebriefsCommandValidator();
         v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
-            [new LegacyDebriefImportItem(Guid.NewGuid(), "{\"stuck\":\"卡点🎯 <script>\"}")]))
+            [new LegacyDebriefImportItem(Guid.NewGuid().ToString(), "{\"stuck\":\"卡点🎯 <script>\"}")]))
             .IsValid.Should().BeTrue();
+    }
+
+    [Fact] // 票77 boundary: 孤儿后缀(非 Guid 随机串)放行 —— 本票核心口径
+    public void ImportDebriefs_OrphanSuffix_Accepted()
+    {
+        var v = new ImportLegacyDebriefsCommandValidator();
+        v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
+            [new LegacyDebriefImportItem("a6test-7f3d", "{}")])).IsValid.Should().BeTrue();
+    }
+
+    [Fact] // 票77 boundary: 超长上限±1 —— 归档键 500 放行 / 501 拒
+    public void ImportDebriefs_EntryKeyLength_Boundary()
+    {
+        var v = new ImportLegacyDebriefsCommandValidator();
+        v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
+            [new LegacyDebriefImportItem(new string('k', LegacyImportLimits.EntryKeyMax), "{}")]))
+            .IsValid.Should().BeTrue();
+        v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
+            [new LegacyDebriefImportItem(new string('k', LegacyImportLimits.EntryKeyMax + 1), "{}")]))
+            .IsValid.Should().BeFalse();
+    }
+
+    [Fact] // 票77 boundary: Unicode 后缀 —— 中文/emoji 后缀逐字放行
+    public void ImportDebriefs_UnicodeSuffix_Accepted()
+    {
+        var v = new ImportLegacyDebriefsCommandValidator();
+        v.Validate(new ImportLegacyDebriefsCommand(Guid.NewGuid(),
+            [new LegacyDebriefImportItem("卡点🎯-复盘", "{}")])).IsValid.Should().BeTrue();
     }
 
     // ---------------- 粘贴材料导入校验 ----------------
 
-    [Fact] // boundary: Guid.Empty + 空内容
+    [Fact] // boundary: 空键(票77:旧 Guid.Empty 的 string 等价形)+ 空内容
     public void ImportPasted_EmptyEntryIdAndContent_Rejected()
     {
         var v = new ImportLegacyPastedCommandValidator();
         v.Validate(new ImportLegacyPastedCommand(Guid.NewGuid(),
-            [new LegacyPastedImportItem(Guid.Empty, "x")])).IsValid.Should().BeFalse();
+            [new LegacyPastedImportItem("", "x")])).IsValid.Should().BeFalse();
         v.Validate(new ImportLegacyPastedCommand(Guid.NewGuid(),
-            [new LegacyPastedImportItem(Guid.NewGuid(), "")])).IsValid.Should().BeFalse();
+            [new LegacyPastedImportItem(Guid.NewGuid().ToString(), "")])).IsValid.Should().BeFalse();
     }
 
     [Fact] // boundary: 超长上限±1 —— 内容 500000 放行 / 500001 拒
@@ -198,10 +229,24 @@ public sealed class PlaybookLocalDataBoundaryTests
     {
         var v = new ImportLegacyPastedCommandValidator();
         v.Validate(new ImportLegacyPastedCommand(Guid.NewGuid(),
-            [new LegacyPastedImportItem(Guid.NewGuid(), new string('c', LegacyImportLimits.ContentMax))]))
+            [new LegacyPastedImportItem(Guid.NewGuid().ToString(), new string('c', LegacyImportLimits.ContentMax))]))
             .IsValid.Should().BeTrue();
         v.Validate(new ImportLegacyPastedCommand(Guid.NewGuid(),
-            [new LegacyPastedImportItem(Guid.NewGuid(), new string('c', LegacyImportLimits.ContentMax + 1))]))
+            [new LegacyPastedImportItem(Guid.NewGuid().ToString(), new string('c', LegacyImportLimits.ContentMax + 1))]))
+            .IsValid.Should().BeFalse();
+    }
+
+    [Fact] // 票77 boundary: 孤儿后缀放行 + 归档键 500/501(粘贴面同口径)
+    public void ImportPasted_OrphanSuffixAndEntryKeyLength_Boundary()
+    {
+        var v = new ImportLegacyPastedCommandValidator();
+        v.Validate(new ImportLegacyPastedCommand(Guid.NewGuid(),
+            [new LegacyPastedImportItem("a6test-9e2b", "x")])).IsValid.Should().BeTrue();
+        v.Validate(new ImportLegacyPastedCommand(Guid.NewGuid(),
+            [new LegacyPastedImportItem(new string('k', LegacyImportLimits.EntryKeyMax), "x")]))
+            .IsValid.Should().BeTrue();
+        v.Validate(new ImportLegacyPastedCommand(Guid.NewGuid(),
+            [new LegacyPastedImportItem(new string('k', LegacyImportLimits.EntryKeyMax + 1), "x")]))
             .IsValid.Should().BeFalse();
     }
 

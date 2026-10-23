@@ -338,9 +338,11 @@ public sealed class InterviewsDbContext(
             e.HasKey(x => x.Id);
             // 原始 JSON 逐字归档:text 列不限长,上限由导入校验把关。
             e.Property(x => x.PayloadJson).HasColumnType("text").IsRequired();
+            // 票77:归档键(键后缀原文)—— 去重/唯一性以此为准;EntryId 旧列保留。
+            e.Property(x => x.EntryKey).HasColumnType("text").IsRequired();
             e.Property(x => x.UserId).IsRequired();
             e.HasIndex(x => x.UserId);
-            e.HasIndex(x => new { x.UserId, x.EntryId }).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.EntryKey }).IsUnique();
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
         });
@@ -350,9 +352,11 @@ public sealed class InterviewsDbContext(
             e.ToTable("legacy_pasted_materials");
             e.HasKey(x => x.Id);
             e.Property(x => x.Content).HasColumnType("text").IsRequired();
+            // 票77:同 LegacyDebrief —— 归档键 EntryKey。
+            e.Property(x => x.EntryKey).HasColumnType("text").IsRequired();
             e.Property(x => x.UserId).IsRequired();
             e.HasIndex(x => x.UserId);
-            e.HasIndex(x => new { x.UserId, x.EntryId }).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.EntryKey }).IsUnique();
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
         });

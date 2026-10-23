@@ -806,8 +806,9 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     }
 
     /// <summary>
-    /// 一次性导入本地历史复盘(pb.debrief.&lt;条目id&gt;)。幂等(按条目去重,
-    /// 首导为准不覆盖),返回对账 { imported, total };条目不属于当前用户的跳过。
+    /// 一次性导入本地历史复盘(pb.debrief.&lt;后缀&gt;)。幂等(按归档键去重,
+    /// 首导为准不覆盖),返回对账 { imported, total };票77 起后缀不要求是
+    /// 现存条目 id —— 孤儿键以后缀原文归档。
     /// </summary>
     [HttpPost("legacy-debriefs/import")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
@@ -815,7 +816,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
         CancellationToken ct)
     {
         var items = (body.Items ?? []).Select(i => new LegacyDebriefImportItem(
-            i.EntryId, i.PayloadJson ?? string.Empty)).ToList();
+            i.EntryId ?? string.Empty, i.PayloadJson ?? string.Empty)).ToList();
         var r = await sender.Send(new ImportLegacyDebriefsCommand(Me, items), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
@@ -829,14 +830,14 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
-    /// <summary>一次性导入本地历史粘贴材料(pb-pasted-&lt;条目id&gt;),口径同复盘导入。</summary>
+    /// <summary>一次性导入本地历史粘贴材料(pb-pasted-&lt;后缀&gt;),口径同复盘导入。</summary>
     [HttpPost("legacy-pasted/import")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
     public async Task<IResult> ImportLegacyPasted([FromBody] ImportLegacyPastedBody body,
         CancellationToken ct)
     {
         var items = (body.Items ?? []).Select(i => new LegacyPastedImportItem(
-            i.EntryId, i.Content ?? string.Empty)).ToList();
+            i.EntryId ?? string.Empty, i.Content ?? string.Empty)).ToList();
         var r = await sender.Send(new ImportLegacyPastedCommand(Me, items), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
@@ -871,11 +872,11 @@ public sealed record StarStoryImportItemBody(
 
 public sealed record ImportStarStoriesBody(List<StarStoryImportItemBody>? Stories);
 
-public sealed record LegacyDebriefImportItemBody(Guid EntryId, string? PayloadJson = null);
+public sealed record LegacyDebriefImportItemBody(string? EntryId = null, string? PayloadJson = null);
 
 public sealed record ImportLegacyDebriefsBody(List<LegacyDebriefImportItemBody>? Items);
 
-public sealed record LegacyPastedImportItemBody(Guid EntryId, string? Content = null);
+public sealed record LegacyPastedImportItemBody(string? EntryId = null, string? Content = null);
 
 public sealed record ImportLegacyPastedBody(List<LegacyPastedImportItemBody>? Items);
 

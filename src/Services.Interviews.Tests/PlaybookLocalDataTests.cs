@@ -190,7 +190,7 @@ public sealed class PlaybookLocalDataTests : IAsyncLifetime
         var entryId = await SeedEntryAsync(user);
         const string payload = "{\"questions\":\"Q1\\nQ2\",\"rating\":4,\"stuck\":\"卡点 🎯\"}";
         var handler = new ImportLegacyDebriefsCommandHandler(db);
-        var items = new[] { new LegacyDebriefImportItem(entryId, payload) };
+        var items = new[] { new LegacyDebriefImportItem(entryId.ToString(), payload) };
 
         var first = await handler.Handle(new ImportLegacyDebriefsCommand(user, items), default);
         first.Value.Should().Be(new PlaybookImportResultDto(1, 1));
@@ -200,25 +200,44 @@ public sealed class PlaybookLocalDataTests : IAsyncLifetime
 
         var list = await new ListLegacyDebriefsQueryHandler(db)
             .Handle(new ListLegacyDebriefsQuery(user), default);
-        list.Value.Should().ContainSingle(d => d.EntryId == entryId)
+        // 票77:DTO EntryId = 归档键 —— 真实条目行 = 原 Guid 规范串逐字(旧口径不变)
+        list.Value.Should().ContainSingle(d => d.EntryId == entryId.ToString())
             .Which.PayloadJson.Should().Be(payload); // 原值逐字,无损
     }
 
     [Fact]
-    public async Task LegacyDebrief_ForeignOrMissingEntry_SkippedSilently()
+    // 依据 = 票77 票面重新定义(按票55 先例改期望):票15 旧口径「后缀匹配不上
+    // 现存条目即静默跳过」正是本票要修的缺陷 —— 孤儿键以后缀原文为归档键
+    // 落库,归档行恒属导入者。他人条目 id 的后缀归档的是导入者本地的那份
+    // 数据(来自其浏览器),条目主人一方不可见(隔离断言在文末)。
+    public async Task LegacyDebrief_ForeignOrMissingEntry_ArchivedForImporter()
     {
         if (!_available) return;
+        var user = Guid.NewGuid(); // 独立用户:total 断言不受同类其它用例干扰
+        await using var db = NewDb(user);
         var foreignEntry = await SeedEntryAsync(Other);
         var missing = Guid.NewGuid();
         var items = new[]
         {
-            new LegacyDebriefImportItem(foreignEntry, "{}"), // 他人的条目
-            new LegacyDebriefImportItem(missing, "{}"),      // 不存在的条目
+            new LegacyDebriefImportItem(foreignEntry.ToString(), "{\"who\":\"foreign\"}"), // 他人的条目 id
+            new LegacyDebriefImportItem(missing.ToString(), "{\"who\":\"missing\"}"),      // 不存在的条目 id
         };
-        var r = await new ImportLegacyDebriefsCommandHandler(_db)
-            .Handle(new ImportLegacyDebriefsCommand(Owner, items), default);
+        var r = await new ImportLegacyDebriefsCommandHandler(db)
+            .Handle(new ImportLegacyDebriefsCommand(user, items), default);
         r.IsSuccess.Should().BeTrue();
-        r.Value.Imported.Should().Be(0); // 跳过不报错,靠对账发现
+        r.Value.Should().Be(new PlaybookImportResultDto(2, 2)); // 两键都归档,不再跳过
+
+        var list = await new ListLegacyDebriefsQueryHandler(db)
+            .Handle(new ListLegacyDebriefsQuery(user), default);
+        list.Value.Should().HaveCount(2);
+        list.Value.Should().Contain(d => d.EntryId == foreignEntry.ToString());
+        list.Value.Should().Contain(d => d.EntryId == missing.ToString());
+
+        // 隔离:条目主人(Other)看不到导入者以其条目 id 归档的行
+        await using var otherDb = NewDb(Other);
+        var otherList = await new ListLegacyDebriefsQueryHandler(otherDb)
+            .Handle(new ListLegacyDebriefsQuery(Other), default);
+        otherList.Value.Should().NotContain(d => d.EntryId == foreignEntry.ToString());
     }
 
     [Fact]
@@ -234,14 +253,17 @@ public sealed class PlaybookLocalDataTests : IAsyncLifetime
         }
         var r = await new ImportLegacyDebriefsCommandHandler(_db)
             .Handle(new ImportLegacyDebriefsCommand(Owner,
-                [new LegacyDebriefImportItem(entryId, "{\"text\":\"old\"}")]), default);
-        r.Value.Imported.Should().Be(1); // 软删条目的历史数据仍是用户数据,保全优先
+                [new LegacyDebriefImportItem(entryId.ToString(), "{\"text\":\"old\"}")]), default);
+        r.Value.Imported.Should().Be(1); // 软删条目的历史数据仍是用户数据,保全优先(票77 后更进一步:条目不存在也归档)
     }
 
     // ---------------- 历史粘贴材料:归档导入 ----------------
 
     [Fact]
-    public async Task LegacyPasted_Import_Idempotent_Verbatim_CrossUserSkipped()
+    // 依据 = 票77 票面重新定义(按票55 先例改期望):旧名 …_CrossUserSkipped 的
+    // 「他人条目键跳过」口径废止 —— 他人条目 id 后缀与自有条目键同等归档到
+    // 导入者名下(数据来自导入者浏览器);隔离改为「条目主人看不到该行」。
+    public async Task LegacyPasted_Import_Idempotent_Verbatim_ForeignKeyArchivedForImporter()
     {
         if (!_available) return;
         var user = Guid.NewGuid();
@@ -252,19 +274,27 @@ public sealed class PlaybookLocalDataTests : IAsyncLifetime
         var handler = new ImportLegacyPastedCommandHandler(db);
         var items = new[]
         {
-            new LegacyPastedImportItem(entryId, content),
-            new LegacyPastedImportItem(foreignEntry, "not mine"),
+            new LegacyPastedImportItem(entryId.ToString(), content),
+            new LegacyPastedImportItem(foreignEntry.ToString(), "importer's local copy"),
         };
 
         var first = await handler.Handle(new ImportLegacyPastedCommand(user, items), default);
-        first.Value.Should().Be(new PlaybookImportResultDto(1, 1));
+        first.Value.Should().Be(new PlaybookImportResultDto(2, 2)); // 两键都归档
 
         var second = await handler.Handle(new ImportLegacyPastedCommand(user, items), default);
-        second.Value.Should().Be(new PlaybookImportResultDto(0, 1));
+        second.Value.Should().Be(new PlaybookImportResultDto(0, 2)); // 幂等对账
 
         var list = await new ListLegacyPastedQueryHandler(db)
             .Handle(new ListLegacyPastedQuery(user), default);
-        list.Value.Should().ContainSingle(p => p.EntryId == entryId)
-            .Which.Content.Should().Be(content);
+        list.Value.Should().ContainSingle(p => p.EntryId == entryId.ToString())
+            .Which.Content.Should().Be(content); // 原值逐字
+        list.Value.Should().ContainSingle(p => p.EntryId == foreignEntry.ToString())
+            .Which.Content.Should().Be("importer's local copy");
+
+        // 隔离:条目主人(Other)看不到导入者以其条目 id 归档的行
+        await using var otherDb = NewDb(Other);
+        var otherList = await new ListLegacyPastedQueryHandler(otherDb)
+            .Handle(new ListLegacyPastedQuery(Other), default);
+        otherList.Value.Should().NotContain(p => p.EntryId == foreignEntry.ToString());
     }
 }

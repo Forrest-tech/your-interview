@@ -312,7 +312,7 @@ public sealed class StarStoryUpsertRaceTests : IAsyncLifetime
         if (!_available) return;
         var entryId = await SeedEntryAsync(_user);
         await using var db2 = NewDb(_user);
-        var items = new[] { new LegacyDebriefImportItem(entryId, "{\"q\":1}") };
+        var items = new[] { new LegacyDebriefImportItem(entryId.ToString(), "{\"q\":1}") };
         var gate = new TaskCompletionSource();
         async Task<Result<PlaybookImportResultDto>> Run(InterviewsDbContext db)
         {
@@ -335,7 +335,7 @@ public sealed class StarStoryUpsertRaceTests : IAsyncLifetime
         if (!_available) return;
         var entryId = await SeedEntryAsync(_user);
         await using var db2 = NewDb(_user);
-        var items = new[] { new LegacyPastedImportItem(entryId, "pasted") };
+        var items = new[] { new LegacyPastedImportItem(entryId.ToString(), "pasted") };
         var gate = new TaskCompletionSource();
         async Task<Result<PlaybookImportResultDto>> Run(InterviewsDbContext db)
         {

@@ -658,6 +658,10 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<Guid>("EntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("EntryKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -681,7 +685,7 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "EntryId")
+                    b.HasIndex("UserId", "EntryKey")
                         .IsUnique();
 
                     b.ToTable("legacy_debriefs", "interviews");
@@ -703,6 +707,10 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<Guid>("EntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("EntryKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -722,7 +730,7 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "EntryId")
+                    b.HasIndex("UserId", "EntryKey")
                         .IsUnique();
 
                     b.ToTable("legacy_pasted_materials", "interviews");

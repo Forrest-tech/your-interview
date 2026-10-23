@@ -20,13 +20,30 @@ public sealed record StarStoryInput(
     string ClientId, string Title, string? Situation, string? Task,
     string? Action, string? Result, string? Tags);
 
-public sealed record LegacyDebriefDto(Guid EntryId, string PayloadJson);
+/// <summary>
+/// 归档列表 DTO:EntryId 字段名不变(线上契约),票77 起类型 Guid → string、
+/// 值 = 归档键 EntryKey —— 匹配条目的行 = 原 Guid 规范串逐字(与旧口径
+/// 读回一致),孤儿行 = 本地键后缀原文逐字。
+/// </summary>
+public sealed record LegacyDebriefDto(string EntryId, string PayloadJson);
 
-public sealed record LegacyPastedDto(Guid EntryId, string Content);
+public sealed record LegacyPastedDto(string EntryId, string Content);
 
-public sealed record LegacyDebriefImportItem(Guid EntryId, string PayloadJson);
+/// <summary>导入条目:EntryId = 本地键后缀原文(票77,不再限 Guid 形态)。</summary>
+public sealed record LegacyDebriefImportItem(string EntryId, string PayloadJson);
 
-public sealed record LegacyPastedImportItem(Guid EntryId, string Content);
+public sealed record LegacyPastedImportItem(string EntryId, string Content);
+
+/// <summary>
+/// 票77:归档键归一(纯函数)。后缀能解析为 Guid 时存其规范形
+/// (Guid.ToString(),大小写/书写格式差异收敛为同一键 —— 与票15 旧口径
+/// 按 Guid 值去重/读回逐字一致);否则后缀原文逐字(孤儿键保全)。
+/// </summary>
+public static class LegacyEntryKeyRules
+{
+    public static string Normalize(string raw)
+        => Guid.TryParse(raw, out var g) ? g.ToString() : raw;
+}
 
 /// <summary>一次性导入(localStorage → 后端)的对账结果:本次新导入条数 + 导入后总数。</summary>
 public sealed record PlaybookImportResultDto(int Imported, int Total);
@@ -58,10 +75,11 @@ public sealed record ListLegacyDebriefsQuery(Guid UserId)
     : IRequest<Result<IReadOnlyList<LegacyDebriefDto>>>;
 
 /// <summary>
-/// 一次性导入本地历史复盘(pb.debrief.&lt;entryId&gt; → 后端归档)。
-/// 幂等:按 (UserId, EntryId) 去重,已有归档不覆盖(首导为准 —— 本地原值
-/// 逐字归档,重复导入没有新信息)。条目不属于当前用户的静默跳过(票14 脏 id
-/// 口径:本地可能残留已删/他人数据的键,导入不该整批失败;对账靠 imported/total)。
+/// 一次性导入本地历史复盘(pb.debrief.&lt;后缀&gt; → 后端归档)。
+/// 幂等:按 (UserId, EntryKey) 去重,已有归档不覆盖(首导为准 —— 本地原值
+/// 逐字归档,重复导入没有新信息)。票77:不再要求后缀能匹配现存条目 ——
+/// 孤儿键(条目已删等)以后缀原文为归档键落库(见 LegacyEntryKeyRules);
+/// 归档行恒属导入者,他人的条目 id 后缀只归档导入者本地的那份数据。
 /// </summary>
 public sealed record ImportLegacyDebriefsCommand(Guid UserId, IReadOnlyList<LegacyDebriefImportItem> Items)
     : IRequest<Result<PlaybookImportResultDto>>;
@@ -71,7 +89,7 @@ public sealed record ImportLegacyDebriefsCommand(Guid UserId, IReadOnlyList<Lega
 public sealed record ListLegacyPastedQuery(Guid UserId)
     : IRequest<Result<IReadOnlyList<LegacyPastedDto>>>;
 
-/// <summary>一次性导入本地历史粘贴材料(pb-pasted-&lt;entryId&gt;),口径同复盘导入。</summary>
+/// <summary>一次性导入本地历史粘贴材料(pb-pasted-&lt;后缀&gt;),口径同复盘导入。</summary>
 public sealed record ImportLegacyPastedCommand(Guid UserId, IReadOnlyList<LegacyPastedImportItem> Items)
     : IRequest<Result<PlaybookImportResultDto>>;
 
@@ -95,6 +113,8 @@ public static class LegacyImportLimits
     public const int BatchMax = 5000;
     public const int PayloadMax = 100000;
     public const int ContentMax = 500000;
+    /// <summary>票77:归档键(键后缀原文)上限 —— 本地键后缀是短串,500 足量且防滥用。</summary>
+    public const int EntryKeyMax = 500;
 }
 
 public sealed class UpsertStarStoryCommandValidator : AbstractValidator<UpsertStarStoryCommand>
@@ -151,7 +171,9 @@ public sealed class ImportLegacyDebriefsCommandValidator : AbstractValidator<Imp
             .WithMessage("一次导入的复盘数过多");
         RuleForEach(x => x.Items).ChildRules(i =>
         {
-            i.RuleFor(x => x.EntryId).NotEmpty().WithMessage("复盘必须带条目 id");
+            // 票77:归档键 = 键后缀原文,不再限 Guid 形态;空/超长仍拒。
+            i.RuleFor(x => x.EntryId).NotEmpty().MaximumLength(LegacyImportLimits.EntryKeyMax)
+                .WithMessage("复盘必须带归档键");
             i.RuleFor(x => x.PayloadJson).NotEmpty().MaximumLength(LegacyImportLimits.PayloadMax)
                 .WithMessage("复盘内容过长");
         });
@@ -167,7 +189,9 @@ public sealed class ImportLegacyPastedCommandValidator : AbstractValidator<Impor
             .WithMessage("一次导入的粘贴材料数过多");
         RuleForEach(x => x.Items).ChildRules(i =>
         {
-            i.RuleFor(x => x.EntryId).NotEmpty().WithMessage("粘贴材料必须带条目 id");
+            // 票77:口径同复盘导入(归档键 = 后缀原文)。
+            i.RuleFor(x => x.EntryId).NotEmpty().MaximumLength(LegacyImportLimits.EntryKeyMax)
+                .WithMessage("粘贴材料必须带归档键");
             i.RuleFor(x => x.Content).NotEmpty().MaximumLength(LegacyImportLimits.ContentMax)
                 .WithMessage("粘贴材料过长");
         });
@@ -392,7 +416,7 @@ public sealed class ListLegacyDebriefsQueryHandler(InterviewsDbContext db)
         var items = await db.LegacyDebriefs.AsNoTracking()
             .Where(d => d.UserId == request.UserId)
             .OrderBy(d => d.CreatedAt)
-            .Select(d => new LegacyDebriefDto(d.EntryId, d.PayloadJson))
+            .Select(d => new LegacyDebriefDto(d.EntryKey, d.PayloadJson))
             .ToListAsync(ct);
         return Result.Success<IReadOnlyList<LegacyDebriefDto>>(items);
     }
@@ -403,7 +427,8 @@ public sealed class ImportLegacyDebriefsCommandHandler(InterviewsDbContext db)
 {
     // 票78 同族收敛(同 ImportStarStories 口径):并发同发同批双插撞
     // (UserId, EntryId) 唯一约束 → 500(改前活体实测);整批重跑时赢家行
-    // 已在 existingIds 中,按「首导为准」跳过,imported/total 自然收敛。
+    // 已在既有键集中,按「首导为准」跳过,imported/total 自然收敛。
+    // (票77 后唯一键为 (UserId, EntryKey),收敛环结构不变。)
     private const int MaxAttempts = 3;
 
     public async Task<Result<PlaybookImportResultDto>> Handle(
@@ -421,31 +446,26 @@ public sealed class ImportLegacyDebriefsCommandHandler(InterviewsDbContext db)
     private async Task<Result<PlaybookImportResultDto>> HandleCore(
         ImportLegacyDebriefsCommand request, CancellationToken ct)
     {
-        var byEntry = new Dictionary<Guid, string>();
+        // 票77:按归档键收口 —— 后缀原文归一为 EntryKey(Guid 后缀存规范形、
+        // 孤儿后缀逐字),批内同键后出现的覆盖先出现的(与既有批内去重口径
+        // 一致);不再查 Entries 归属:孤儿键的条目本就可能已删,归档行恒属
+        // 导入者(UserId 收口),这正是本票要保全的数据。
+        var byKey = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var item in request.Items)
         {
-            if (item is null || item.EntryId == Guid.Empty || item.PayloadJson is null) continue;
-            byEntry[item.EntryId] = item.PayloadJson;
+            if (item is null || string.IsNullOrEmpty(item.EntryId) || item.PayloadJson is null) continue;
+            byKey[LegacyEntryKeyRules.Normalize(item.EntryId)] = item.PayloadJson;
         }
 
-        // 归属校验:条目属于当前用户才归档(含软删条目 —— 用户删了条目,
-        // 历史复盘仍是他的数据,保全优先);他人/不存在的条目静默跳过。
-        var wantedIds = byEntry.Keys.ToList();
-        var ownedIds = await db.Entries.IgnoreQueryFilters().AsNoTracking()
-            .Where(e => e.UserId == request.UserId && wantedIds.Contains(e.Id))
-            .Select(e => e.Id).ToListAsync(ct);
-        var owned = ownedIds.ToHashSet();
-
-        var existingIds = (await db.LegacyDebriefs.IgnoreQueryFilters().AsNoTracking()
+        var existingKeys = (await db.LegacyDebriefs.IgnoreQueryFilters().AsNoTracking()
             .Where(d => d.UserId == request.UserId)
-            .Select(d => d.EntryId).ToListAsync(ct)).ToHashSet();
+            .Select(d => d.EntryKey).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
 
         var imported = 0;
-        foreach (var (entryId, payload) in byEntry)
+        foreach (var (entryKey, payload) in byKey)
         {
-            if (!owned.Contains(entryId)) continue;
-            if (existingIds.Contains(entryId)) continue; // 已归档(含软删)不覆盖:首导为准
-            db.LegacyDebriefs.Add(new LegacyDebrief(request.UserId, entryId, payload));
+            if (existingKeys.Contains(entryKey)) continue; // 已归档(含软删)不覆盖:首导为准
+            db.LegacyDebriefs.Add(new LegacyDebrief(request.UserId, entryKey, payload));
             imported++;
         }
         if (imported > 0) await db.SaveChangesAsync(ct);
@@ -467,7 +487,7 @@ public sealed class ListLegacyPastedQueryHandler(InterviewsDbContext db)
         var items = await db.LegacyPastedMaterials.AsNoTracking()
             .Where(p => p.UserId == request.UserId)
             .OrderBy(p => p.CreatedAt)
-            .Select(p => new LegacyPastedDto(p.EntryId, p.Content))
+            .Select(p => new LegacyPastedDto(p.EntryKey, p.Content))
             .ToListAsync(ct);
         return Result.Success<IReadOnlyList<LegacyPastedDto>>(items);
     }
@@ -494,29 +514,23 @@ public sealed class ImportLegacyPastedCommandHandler(InterviewsDbContext db)
     private async Task<Result<PlaybookImportResultDto>> HandleCore(
         ImportLegacyPastedCommand request, CancellationToken ct)
     {
-        var byEntry = new Dictionary<Guid, string>();
+        // 票77:口径同复盘导入 —— 按 (UserId, EntryKey) 收口,不查条目归属。
+        var byKey = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var item in request.Items)
         {
-            if (item is null || item.EntryId == Guid.Empty || item.Content is null) continue;
-            byEntry[item.EntryId] = item.Content;
+            if (item is null || string.IsNullOrEmpty(item.EntryId) || item.Content is null) continue;
+            byKey[LegacyEntryKeyRules.Normalize(item.EntryId)] = item.Content;
         }
 
-        var wantedIds = byEntry.Keys.ToList();
-        var ownedIds = await db.Entries.IgnoreQueryFilters().AsNoTracking()
-            .Where(e => e.UserId == request.UserId && wantedIds.Contains(e.Id))
-            .Select(e => e.Id).ToListAsync(ct);
-        var owned = ownedIds.ToHashSet();
-
-        var existingIds = (await db.LegacyPastedMaterials.IgnoreQueryFilters().AsNoTracking()
+        var existingKeys = (await db.LegacyPastedMaterials.IgnoreQueryFilters().AsNoTracking()
             .Where(p => p.UserId == request.UserId)
-            .Select(p => p.EntryId).ToListAsync(ct)).ToHashSet();
+            .Select(p => p.EntryKey).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
 
         var imported = 0;
-        foreach (var (entryId, content) in byEntry)
+        foreach (var (entryKey, content) in byKey)
         {
-            if (!owned.Contains(entryId)) continue;
-            if (existingIds.Contains(entryId)) continue; // 首导为准,不覆盖
-            db.LegacyPastedMaterials.Add(new LegacyPastedMaterial(request.UserId, entryId, content));
+            if (existingKeys.Contains(entryKey)) continue; // 首导为准,不覆盖
+            db.LegacyPastedMaterials.Add(new LegacyPastedMaterial(request.UserId, entryKey, content));
             imported++;
         }
         if (imported > 0) await db.SaveChangesAsync(ct);

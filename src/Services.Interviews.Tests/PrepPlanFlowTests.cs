@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using YourInterview.Services.Interviews.Application;
 using YourInterview.Services.Interviews.Domain;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
-using YourInterview.Services.Interviews.Infrastructure.Services;
+using YourInterview.SharedContracts.Ai;
 using Xunit;
 
 namespace YourInterview.Services.Interviews.Tests;

@@ -5,6 +5,7 @@ using YourInterview.BuildingBlocks.Results;
 using YourInterview.Services.Jobs.Domain;
 using YourInterview.Services.Jobs.Infrastructure.Persistence;
 using YourInterview.Services.Jobs.Infrastructure.Services;
+using YourInterview.SharedContracts.Ai;
 
 namespace YourInterview.Services.Jobs.Application;
 

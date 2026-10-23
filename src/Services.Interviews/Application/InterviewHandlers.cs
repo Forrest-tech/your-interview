@@ -11,6 +11,7 @@ using YourInterview.Services.Interviews.Domain.JsonFields;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
 using YourInterview.Services.Interviews.Infrastructure.Services;
 using YourInterview.Services.Interviews.Infrastructure.Storage;
+using YourInterview.SharedContracts.Ai;
 
 namespace YourInterview.Services.Interviews.Application;
 

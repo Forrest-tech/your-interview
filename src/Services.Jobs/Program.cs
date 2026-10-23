@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using YourInterview.BuildingBlocks.Ai;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
@@ -29,14 +30,8 @@ builder.AddServiceDefaults(ServiceName, services =>
     // 地址优先取配置 AiGateway:BaseUrl(容器内 http://aigateway:8080/),
     // 宿主机直跑时回落到 5268。
     services.AddHttpContextAccessor();
-    services.AddHttpClient<IAiGatewayClient, AiGatewayClient>(http =>
-    {
-        var baseUrl = builder.Configuration["AiGateway:BaseUrl"] ?? "http://127.0.0.1:5268/";
-        http.BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/");
-        // 生成是长请求:LLM 输出 300-400 词通常 20-60 秒。
-        // 给到 3 分钟 —— 短于上游真实耗时会让用户看到"超时"而其实已经成功了。
-        http.Timeout = TimeSpan.FromMinutes(3);
-    });
+    // 票38:注册口径下沉 BuildingBlocks.AddAiGatewayClient(回落 5268、超时 3 分钟,原口径不变)。
+    services.AddAiGatewayClient(builder.Configuration["AiGateway:BaseUrl"]);
 
     // ---------- 招聘页面抓取(Smart paste 粘贴链接链路) ----------
     // 浏览器 UA:很多 ATS 站点对默认 HttpClient UA 返回 403。

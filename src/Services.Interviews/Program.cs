@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using YourInterview.BuildingBlocks.Ai;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
@@ -40,13 +41,8 @@ builder.Services.AddHealthChecks().AddDbContextCheck<InterviewsDbContext>("postg
 // ---------- AiGateway 内部客户端(2026-10-07,照 Jobs 同名客户端模式) ----------
 // 面试指导材料生成经此调 AiGateway —— 凭据只存网关一处,Interviews 不碰 key。
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddHttpClient<IAiGatewayClient, InterviewAiGatewayClient>(http =>
-{
-    var baseUrl = builder.Configuration["AiGateway:BaseUrl"] ?? "http://127.0.0.1:5268/";
-    http.BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/");
-    // 指导材料是长文本输出,给到 3 分钟。
-    http.Timeout = TimeSpan.FromMinutes(3);
-});
+// 票38:注册口径下沉 BuildingBlocks.AddAiGatewayClient(回落 5268、超时 3 分钟,原口径不变)。
+builder.Services.AddAiGatewayClient(builder.Configuration["AiGateway:BaseUrl"]);
 
 // ---------- 消息总线:转写完成 → 触发分析流水线 ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration, x =>

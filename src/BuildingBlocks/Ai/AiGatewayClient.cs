@@ -1,14 +1,24 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using YourInterview.SharedContracts.Ai;
 
-namespace YourInterview.Services.Interviews.Infrastructure.Services;
+namespace YourInterview.BuildingBlocks.Ai;
 
 // ============================================================================
-//  AiGateway 的内部客户端(2026-10-07,照 Jobs 同名客户端模式)
+//  AiGateway 的内部客户端 —— 全仓单一 adapter(票38 ARC-10,2026-10-22)
 //
-//  为什么不让 Jobs 直接建 ILlmClient:
-//    凭据、协议、端点、回退顺序都是实现细节。Jobs 只该说
+//  历史:Jobs(AiGatewayClient,2026-09-18)与 Interviews(InterviewAiGatewayClient,
+//  2026-10-07)各写一份,CompleteAsync 逐字相同,Interviews 多备考数据源两端点。
+//  本类是两副本的并集,方法体逐字承继,行为不变(差异裁定见 evidence-38/STATUS.md):
+//    · CompleteAsync 的超时文案与 isConfig 判定保留原样;
+//    · SendJsonAsync(备考数据源路径)的超时文案与 isConfig=false 保留原样,
+//      不与 CompleteAsync 静默合并。
+//
+//  为什么不让调用方直接建 ILlmClient:
+//    凭据、协议、端点、回退顺序都是实现细节。调用方只该说
 //    "帮我生成这段文本",不该知道用的是 DeepSeek 还是 Anthropic。
 //    凭据只存一处(AiGateway),换 key 只改一个地方。
 //
@@ -18,53 +28,10 @@ namespace YourInterview.Services.Interviews.Infrastructure.Services;
 //     所以必须把当前请求的 Authorization 头原样透传。
 // ============================================================================
 
-/// <summary>补全结果(与 AiGateway 的 AiCompletionResultDto 同字段)。</summary>
-public sealed record AiCompletionResult(
-    string Text, string Model, int? PromptTokens, int? CompletionTokens, int? LatencyMs);
-
-/// <summary>AiGateway 调用失败。区分"未配置"与"上游拒绝",便于上层选不同 HTTP 码。</summary>
-public sealed class AiGatewayException(string message, bool isConfigurationError = false, Exception? inner = null)
-    : Exception(message, inner)
-{
-    public bool IsConfigurationError { get; } = isConfigurationError;
-}
-
-/// <summary>备考数据源配置(与 AiGateway PrepSourceSettingsDto 同字段)。</summary>
-public sealed record PrepSourceSettingsDto(
-    bool QuestionBankEnabled, bool CompanyBackgroundEnabled,
-    bool WebExperiencesEnabled, bool GlassdoorEnabled,
-    string? SearchProvider, bool HasSearchKey, string? MaskedSearchKey,
-    DateTimeOffset? UpdatedAt);
-
-/// <summary>一条外部检索结果。</summary>
-public sealed record PrepSourceResultDto(string Title, string Url, string Snippet);
-
-/// <summary>一次外部源检索的状态与结果(状态口径见 AiGateway)。</summary>
-public sealed record PrepSourceSearchDto(
-    string Source, string Status, string? Provider,
-    IReadOnlyList<PrepSourceResultDto> Results, string? Message);
-
-public interface IAiGatewayClient
-{
-    /// <summary>
-    /// 通用补全。purpose 是用途标签(写入网关的 call_logs,便于按功能统计用量)。
-    /// 未配置凭据时抛 AiGatewayException(isConfigurationError: true)。
-    /// </summary>
-    Task<AiCompletionResult> CompleteAsync(string purpose, string prompt, string? systemPrompt,
-        double? temperature, int? maxTokens, CancellationToken ct);
-
-    /// <summary>读当前用户的备考数据源配置(开关 + 搜索服务是否已配)。</summary>
-    Task<PrepSourceSettingsDto> GetPrepSourceSettingsAsync(CancellationToken ct);
-
-    /// <summary>按公司 + 岗位检索一个外部数据源(web / glassdoor),状态如实返回。</summary>
-    Task<PrepSourceSearchDto> SearchPrepSourcesAsync(string source, string company,
-        string? role, string? stage, CancellationToken ct);
-}
-
-public sealed class InterviewAiGatewayClient(
+public sealed class AiGatewayClient(
     HttpClient http,
     IHttpContextAccessor httpContextAccessor,
-    ILogger<InterviewAiGatewayClient> logger) : IAiGatewayClient
+    ILogger<AiGatewayClient> logger) : IAiGatewayClient
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -185,5 +152,27 @@ public sealed class InterviewAiGatewayClient(
         }
         catch { /* 不是 JSON,交给调用方用状态码兜底 */ }
         return null;
+    }
+}
+
+public static class AiGatewayClientServiceCollectionExtensions
+{
+    /// <summary>AiGateway 回落地址(宿主机直跑;容器内由配置 AiGateway:BaseUrl 覆盖)。</summary>
+    public const string DefaultBaseUrl = "http://127.0.0.1:5268/";
+
+    /// <summary>
+    /// 两服务统一注册口径(原 Jobs/Interviews 两处 AddHttpClient 逐字同口径):
+    /// 地址优先取配置 AiGateway:BaseUrl,未配回落 5268;补尾斜杠;超时 3 分钟
+    /// (生成是长请求:LLM 输出通常 20-60 秒,短于上游真实耗时会误报超时)。
+    /// 调用方仍需自行 AddHttpContextAccessor(JWT 透传依赖之,两服务原位保留)。
+    /// </summary>
+    public static IHttpClientBuilder AddAiGatewayClient(this IServiceCollection services, string? configuredBaseUrl)
+    {
+        var baseUrl = string.IsNullOrWhiteSpace(configuredBaseUrl) ? DefaultBaseUrl : configuredBaseUrl;
+        return services.AddHttpClient<IAiGatewayClient, AiGatewayClient>(http =>
+        {
+            http.BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/");
+            http.Timeout = TimeSpan.FromMinutes(3);
+        });
     }
 }

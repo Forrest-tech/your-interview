@@ -116,6 +116,99 @@ describe('extractInterviewWhen(生产形态 + boundary 扩充,源码读证)', ()
   // [boundary-0与负数/文件类] 不适用:无数值/文件入参(票面口径注明)
 });
 
+describe('extractInterviewWhen(票104 日历合法性 boundary)', () => {
+  // 票104:三路(cn/iso/en)抽取结果产出前过日历合法性校验(同源复用票102
+  // isValidCalendarDate:月 1-12 / 日 ≤ 当月实际天数 / 闰年百年 400 规则),
+  // 非法 → 回落 null(该函数既有无匹配口径),走既有「无时间」路径。
+  // 注:三路年份正则均为 20\d{2}(2000-2099),百年负例(1900/2100)经正则
+  // 本就不可达;百年规则以 2000 年(被 400 整除→闰)正例 + 共享辅助同源守恒。
+  // [boundary-非法/cn] 平年 2/29 不存在
+  it('cn non-leap Feb 29 returns null', () => {
+    expect(extractInterviewWhen('面试时间:2026年2月29日 10:00')).toBeNull();
+  });
+  // [boundary-非法/cn] 4 月只有 30 天
+  it('cn Apr 31 returns null', () => {
+    expect(extractInterviewWhen('面试时间:2026年4月31日 10:00')).toBeNull();
+  });
+  // [boundary-非法/cn] 13 月不存在
+  it('cn month 13 returns null', () => {
+    expect(extractInterviewWhen('面试时间:2026年13月1日 10:00')).toBeNull();
+  });
+  // [boundary-非法/iso] 票面主例:2026 非闰年,2 月无 29 日
+  it('iso 2026-02-29 returns null', () => {
+    expect(extractInterviewWhen('Your interview is scheduled for 2026-02-29 10:00.')).toBeNull();
+  });
+  // [boundary-非法/iso] 4/31
+  it('iso Apr 31 returns null', () => {
+    expect(extractInterviewWhen('2026-04-31 10:00 开始')).toBeNull();
+  });
+  // [boundary-非法/iso] 13 月
+  it('iso month 13 returns null', () => {
+    expect(extractInterviewWhen('2026-13-01 10:00 开始')).toBeNull();
+  });
+  // [boundary-非法/iso] 斜杠分隔路同样校验
+  it('iso slash non-leap Feb 29 returns null', () => {
+    expect(extractInterviewWhen('时间 2026/02/29 10:00')).toBeNull();
+  });
+  // [boundary-非法/iso] 月 00
+  it('iso month 00 returns null', () => {
+    expect(extractInterviewWhen('2026-00-10 10:00 开始')).toBeNull();
+  });
+  // [boundary-非法/iso] 日 00
+  it('iso day 00 returns null', () => {
+    expect(extractInterviewWhen('2026-01-00 10:00 开始')).toBeNull();
+  });
+  // [boundary-非法/en] 平年 2/29
+  it('en Feb 29 2026 returns null', () => {
+    expect(extractInterviewWhen('scheduled for Feb 29, 2026 at 10:00 AM')).toBeNull();
+  });
+  // [boundary-非法/en] 4/31
+  it('en Apr 31 returns null', () => {
+    expect(extractInterviewWhen('scheduled for Apr 31, 2026 at 10:00 AM')).toBeNull();
+  });
+  // [合法守恒/cn] 闰年 2/29
+  it('cn leap Feb 29 extracts', () => {
+    expect(extractInterviewWhen('面试时间:2028年2月29日 10:00')).toBe('2028-02-29 10:00');
+  });
+  // [合法守恒/iso] 闰年 2/29
+  it('iso leap Feb 29 extracts', () => {
+    expect(extractInterviewWhen('Your interview is scheduled for 2028-02-29 10:00.'))
+      .toBe('2028-02-29 10:00');
+  });
+  // [合法守恒/en] 闰年 2/29
+  it('en leap Feb 29 extracts', () => {
+    expect(extractInterviewWhen('scheduled for Feb 29, 2028 at 10:00 AM')).toBe('2028-02-29 10:00');
+  });
+  // [合法守恒/iso-百年规则] 2000 被 400 整除 → 闰年,2/29 合法
+  it('iso year-2000 Feb 29 extracts (400-year leap rule)', () => {
+    expect(extractInterviewWhen('2000-02-29 10:00 开始')).toBe('2000-02-29 10:00');
+  });
+  // [合法守恒/cn-百年规则] 同上,cn 路
+  it('cn year-2000 Feb 29 extracts (400-year leap rule)', () => {
+    expect(extractInterviewWhen('面试时间:2000年2月29日 10:00')).toBe('2000-02-29 10:00');
+  });
+  // [合法守恒/en-百年规则] 同上,en 路
+  it('en year-2000 Feb 29 extracts (400-year leap rule)', () => {
+    expect(extractInterviewWhen('scheduled for Feb 29, 2000 at 10:00 AM')).toBe('2000-02-29 10:00');
+  });
+  // [合法守恒/iso] 平年 2/29 的次日(票面活体合法例)
+  it('iso 2026-03-01 extracts', () => {
+    expect(extractInterviewWhen('2026-03-01 10:00 开始')).toBe('2026-03-01 10:00');
+  });
+  // [合法守恒/iso] 平年 2/28 月末
+  it('iso 2026-02-28 extracts', () => {
+    expect(extractInterviewWhen('2026-02-28 10:00 开始')).toBe('2026-02-28 10:00');
+  });
+  // [合法守恒/cn] 4/30 月末
+  it('cn Apr 30 extracts', () => {
+    expect(extractInterviewWhen('面试时间:2026年4月30日 10:00')).toBe('2026-04-30 10:00');
+  });
+  // [合法守恒/en] 4/30 + PM 换算逐字守恒
+  it('en Apr 30 PM extracts', () => {
+    expect(extractInterviewWhen('April 30, 2026 at 2:30 PM')).toBe('2026-04-30 14:30');
+  });
+});
+
 describe('adaptLocalOcrEmailText(票60 形态集)', () => {
   // [形态-样本1] 票60:真实 OCR 文本 -> 合成头全文逐字(窗口标题前缀已剥、
   // 发件人行切 From/Sent、会议卡留在 body、发信时间不入 body)

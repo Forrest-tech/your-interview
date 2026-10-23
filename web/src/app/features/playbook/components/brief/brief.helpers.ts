@@ -191,8 +191,9 @@ export function renderMarkdown(md: string): string {
   return out.join('\n');
 }
 
-/** 日历合法性（票102）：月 1–12、日 1–当月实际天数；闰年 = 被 4 整除，百年须被 400 整除。 */
-function isValidCalendarDate(y: number, m: number, d: number): boolean {
+/** 日历合法性（票102）：月 1–12、日 1–当月实际天数；闰年 = 被 4 整除，百年须被 400 整除。
+ *  票104 起 export 供 intake 的 extractInterviewWhen 同源复用（三路抽取同一校验口径）。 */
+export function isValidCalendarDate(y: number, m: number, d: number): boolean {
   if (m < 1 || m > 12 || d < 1) return false;
   const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
   const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];

@@ -9,7 +9,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   InterviewDetail, InterviewRound
 } from '../../../../core/models/api.models';
-import { normalizeEmailDate, parsePastedEmail } from '../../components/brief/brief.helpers';
+import { isValidCalendarDate, normalizeEmailDate, parsePastedEmail } from '../../components/brief/brief.helpers';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { PracticeApi } from '../../../../core/api/practice-api.service';
 import { OcrApiService } from '../../../../core/api/ocr-api.service';
@@ -1259,14 +1259,19 @@ export function classifyEmail(subject: string, body: string): string {
  *  OCR 邀请卡格式也要认:"2026-10-13 周二 10:00～11:00"(星期夹中间)、"2026年10月13日(星期二) 14:00"。 */
 export function extractInterviewWhen(text: string): string | null {
   const p = (n: string) => n.padStart(2, '0');
+  // 票104:三路抽取结果产出前过日历合法性校验(同源复用票102 isValidCalendarDate);
+  // 某路命中但日期不存在(平年 2/29 / 13 月 / 4 月 31 日等)→ 回落 null,与
+  // 票102 normalizeEmailDate 命中非法即归空同构(不续试后续路),走既有无时间路径。
   // 年月日写法,日期与时间之间可夹星期;时段(～/〜/-)只取起始时间
   const cn = text.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日\s*(?:(?:星期|周)[一二三四五六日天]\s*)?(\d{1,2})[:：](\d{2})/);
   if (cn) {
+    if (!isValidCalendarDate(+cn[1], +cn[2], +cn[3])) return null;
     return `${cn[1]}-${p(cn[2])}-${p(cn[3])} ${p(cn[4])}:${cn[5]}`;
   }
   // ISO 日期与时间之间可夹星期("2026-10-13 周二 10:00～11:00"),或仍是单个空格/T 分隔
   const iso = text.match(/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})(?:[ T]|\s*(?:星期|周)[一二三四五六日天]\s*)(\d{1,2})[:：](\d{2})/);
   if (iso) {
+    if (!isValidCalendarDate(+iso[1], +iso[2], +iso[3])) return null;
     return `${iso[1]}-${p(iso[2])}-${p(iso[3])} ${p(iso[4])}:${iso[5]}`;
   }
   const months: Record<string, number> = {
@@ -1274,6 +1279,7 @@ export function extractInterviewWhen(text: string): string | null {
   };
   const en = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})[^0-9]{0,12}?(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (en) {
+    if (!isValidCalendarDate(+en[3], months[en[1].slice(0, 3).toLowerCase()], +en[2])) return null;
     const mon = months[en[1].slice(0, 3).toLowerCase()];
     let hh = Number(en[4]);
     if (en[6]?.toUpperCase() === 'PM' && hh < 12) hh += 12;

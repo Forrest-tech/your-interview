@@ -152,7 +152,11 @@ public static class InterviewMappingExtensions
         if (raw.Length == 0) return null;
 
         // 2. 受控词表精确解析(名字对上才算,防 "1" 之类数字串被 Enum.TryParse 误收)。
+        //    票98(源票65 D1):TryParse 还会把越界数字串("-1"/"99")收为未定义枚举值,
+        //    其 ToString() 恰等于原文、单靠名字校验挡不住 —— 须再过 Enum.IsDefined,
+        //    未定义一律不认、回落规则 3(与票58 adapter 的防数字串口径对齐)。
         if (Enum.TryParse<InterviewRoundOutcome>(raw, ignoreCase: true, out var parsed)
+            && Enum.IsDefined(parsed)
             && string.Equals(parsed.ToString(), raw, StringComparison.OrdinalIgnoreCase))
             return parsed;
 

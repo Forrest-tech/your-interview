@@ -61,6 +61,28 @@ public static class TechStackLocalDataRules
         => DateOnly.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture,
             DateTimeStyles.None, out date);
 
+    /// <summary>回查到的同名分类行状态(新增分类裁决的输入)。</summary>
+    public enum ExistingCategoryState { None, Active, SoftDeleted }
+
+    /// <summary>新增分类的处置裁决。</summary>
+    public enum CategoryAddDecision { Create, Satisfied, Restore, Conflict }
+
+    /// <summary>
+    /// 票92:新增分类的处置裁决(纯逻辑,单测覆盖全组合)。
+    /// raceLost=false 是首次「先查」的结果;true 是 SaveChanges 撞 DbUpdateException
+    /// (唯一约束 23505 / xmin 并发)后的回查结果 —— 同名行已被并发请求建好
+    /// (Active/SoftDeleted)则按本端点的幂等口径收敛为成功/恢复;回查仍无行,
+    /// 说明撞的是别的约束,不是「重复创建」→ Conflict(409),不冒充成功。
+    /// </summary>
+    public static CategoryAddDecision DecideAddCategory(ExistingCategoryState state, bool raceLost)
+        => (state, raceLost) switch
+        {
+            (ExistingCategoryState.Active, _) => CategoryAddDecision.Satisfied,
+            (ExistingCategoryState.SoftDeleted, _) => CategoryAddDecision.Restore,
+            (ExistingCategoryState.None, false) => CategoryAddDecision.Create,
+            _ => CategoryAddDecision.Conflict,
+        };
+
     /// <summary>复习导入批内合并:同日多条取 max(与跨批合并口径一致,只升不降)。</summary>
     public static IReadOnlyDictionary<DateOnly, int> MergeImportBatch(
         IEnumerable<(DateOnly Date, int Count)> entries)
@@ -194,19 +216,51 @@ public sealed class AddCustomCategoryCommandHandler(KnowledgeDbContext db)
 
         // 含软删行查:删除是软删,重加必须恢复原行 —— (UserId, Name) 唯一索引
         // 不允许第二行。比较口径与前端查重一致:大小写不敏感(同 RenameTopic 先例的 ToLower 比对)。
-        var existing = await db.CustomCategories.IgnoreQueryFilters()
-            .Where(c => c.UserId == request.UserId)
-            .FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower(), ct);
-        if (existing is not null)
+        //
+        // 票92 并发兜底(票90 清单 DbUpdateException 项的本路径单点落地):
+        // 双击/多标签同发时「先查后写」有竞态窗 —— 后插者撞唯一约束 23505、
+        // 并发恢复同一软删行者撞 xmin 并发异常,此前都穿透成 500 且 Dev 口径
+        // 把 EF/Npgsql 全文回给前端示人(N1)。本端点契约是幂等新增:撞异常后
+        // 清跟踪回查、按 DecideAddCategory(raceLost: true) 重新裁决 —— 赢家行
+        // 已在按幂等成功收敛(204,与顺序重复 PUT 同口径);回查仍无行 = 撞了
+        // 别的约束 → 409,绝不回原始异常。最多两轮,第二轮再撞直接 409。
+        // 全局 DbUpdate 映射仍归票90(见 evidence-92 划账)。
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            if (existing.IsDeleted) { existing.Restore(); await db.SaveChangesAsync(ct); }
-            return Result.Success();
+            var row = await FindAsync(request.UserId, name, ct);
+            switch (TechStackLocalDataRules.DecideAddCategory(StateOf(row), raceLost: attempt > 0))
+            {
+                case TechStackLocalDataRules.CategoryAddDecision.Satisfied:
+                    return Result.Success();
+                case TechStackLocalDataRules.CategoryAddDecision.Conflict:
+                    return Conflict();
+                case TechStackLocalDataRules.CategoryAddDecision.Restore:
+                    row!.Restore();
+                    try { await db.SaveChangesAsync(ct); return Result.Success(); }
+                    catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+                    break;
+                case TechStackLocalDataRules.CategoryAddDecision.Create:
+                    db.CustomCategories.Add(new TechStackCategory(request.UserId, name));
+                    try { await db.SaveChangesAsync(ct); return Result.Success(); }
+                    catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+                    break;
+            }
         }
+        return Conflict();
 
-        db.CustomCategories.Add(new TechStackCategory(request.UserId, name));
-        await db.SaveChangesAsync(ct);
-        return Result.Success();
+        static Result Conflict() => Result.Failure(Error.Conflict(
+            "Category.CreateConflict", "分类创建与并发请求冲突,请刷新后重试"));
     }
+
+    private Task<TechStackCategory?> FindAsync(Guid userId, string name, CancellationToken ct)
+        => db.CustomCategories.IgnoreQueryFilters()
+            .Where(c => c.UserId == userId)
+            .FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower(), ct);
+
+    private static TechStackLocalDataRules.ExistingCategoryState StateOf(TechStackCategory? row)
+        => row is null ? TechStackLocalDataRules.ExistingCategoryState.None
+            : row.IsDeleted ? TechStackLocalDataRules.ExistingCategoryState.SoftDeleted
+            : TechStackLocalDataRules.ExistingCategoryState.Active;
 }
 
 public sealed class RemoveCustomCategoryCommandHandler(KnowledgeDbContext db)

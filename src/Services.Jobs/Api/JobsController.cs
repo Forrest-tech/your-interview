@@ -70,9 +70,10 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
 
     [HttpDelete("companies/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
-    public async Task<IResult> DeleteCompany(Guid id, CancellationToken ct)
+    public async Task<IResult> DeleteCompany(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new DeleteCompanyCommand(Me, id), ct);
+        var r = await sender.Send(new DeleteCompanyCommand(Me, id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -142,9 +143,10 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
 
     [HttpDelete("applications/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
-    public async Task<IResult> DeleteApplication(Guid id, CancellationToken ct)
+    public async Task<IResult> DeleteApplication(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new DeleteApplicationCommand(Me, id), ct);
+        var r = await sender.Send(new DeleteApplicationCommand(Me, id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -500,7 +502,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     [RequestSizeLimit(12 * 1024 * 1024)]
     public async Task<IResult> UploadResumeFile(
-        IFormFile file, [FromForm] string? textContent, CancellationToken ct)
+        IFormFile file, [FromForm] string? textContent, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
         if (file is null || file.Length == 0)
             return Microsoft.AspNetCore.Http.Results.Problem(title: "没有收到文件",
@@ -512,7 +515,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         await using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);
         var r = await sender.Send(new SaveResumeFileCommand(Me, null, file.FileName,
-            file.ContentType, ms.ToArray(), textContent ?? string.Empty), ct);
+            file.ContentType, ms.ToArray(), textContent ?? string.Empty,
+            ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         if (!r.IsSuccess) return r.ToProblemDetails();
 
         // 文本同步进 resumes 表 —— 求职信生成/匹配分析的老链路继续走文本,不碰 PDF。
@@ -609,7 +613,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     [RequestSizeLimit(12 * 1024 * 1024)]
     public async Task<IResult> UploadApplicationResume(Guid applicationId,
-        IFormFile file, [FromForm] string? textContent, CancellationToken ct)
+        IFormFile file, [FromForm] string? textContent, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
         if (file is null || file.Length == 0)
             return Microsoft.AspNetCore.Http.Results.Problem(title: "没有收到文件",
@@ -621,7 +626,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         await using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);
         var r = await sender.Send(new SaveResumeFileCommand(Me, applicationId, file.FileName,
-            file.ContentType, ms.ToArray(), textContent ?? string.Empty), ct);
+            file.ContentType, ms.ToArray(), textContent ?? string.Empty,
+            ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(new { fileName = r.Value.FileName, size = r.Value.Size })
             : r.ToProblemDetails();

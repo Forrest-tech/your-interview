@@ -20,8 +20,8 @@ namespace YourInterview.Services.Assessment.Application;
 //   DELETE /categories/{id}     删除(素材由 DB 层 SetNull 回"未分类")
 // ============================================================
 
-/// <summary>与前端 PracticeCategory 形状对齐。</summary>
-public sealed record PracticeCategoryDto(Guid Id, string Name, int SortOrder, string? LinkedSource);
+/// <summary>与前端 PracticeCategory 形状对齐。★ 票111 段3(A06):补 Version(类别行读时 xmin,DELETE If-Match 钉版用;实体本有 xmin,零迁移)。</summary>
+public sealed record PracticeCategoryDto(Guid Id, string Name, int SortOrder, string? LinkedSource, uint? Version = null);
 
 // ---------- 列表 ----------
 
@@ -37,6 +37,10 @@ public sealed class ListCategoriesQueryHandler(AssessmentDbContext db)
             .Where(x => x.UserId == r.UserId)
             .OrderBy(x => x.SortOrder).ThenBy(x => x.CreatedAt)
             .ToListAsync(ct);
+        var versions = await db.Categories.AsNoTracking()
+            .Where(x => x.UserId == r.UserId)
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
 
         // 首次使用播种默认类别 —— 让下拉一开始就有内容,而不是逼用户先去"配置"。
         // 只在"一个类别都没有"时播种;用户删光全部类别后不再复活(那是明确意图)。
@@ -51,10 +55,12 @@ public sealed class ListCategoriesQueryHandler(AssessmentDbContext db)
             };
             db.Categories.AddRange(seeded);
             await db.SaveChangesAsync(ct);
-            return seeded.Select(x => new PracticeCategoryDto(x.Id, x.Name, x.SortOrder, x.LinkedSource)).ToList();
+            return seeded.Select(x => new PracticeCategoryDto(x.Id, x.Name, x.SortOrder, x.LinkedSource,
+                db.Entry(x).Property("xmin").CurrentValue is uint sv ? sv : null)).ToList();
         }
 
-        return list.Select(x => new PracticeCategoryDto(x.Id, x.Name, x.SortOrder, x.LinkedSource)).ToList();
+        return list.Select(x => new PracticeCategoryDto(x.Id, x.Name, x.SortOrder, x.LinkedSource,
+            versions.TryGetValue(x.Id, out var v) ? v : null)).ToList();
     }
 }
 
@@ -89,7 +95,8 @@ public sealed class CreateCategoryCommandHandler(AssessmentDbContext db)
         var entity = new PracticeCategory(r.UserId, name, maxOrder + 1);
         db.Categories.Add(entity);
         await db.SaveChangesAsync(ct);
-        return Result.Success(new PracticeCategoryDto(entity.Id, entity.Name, entity.SortOrder, entity.LinkedSource));
+        return Result.Success(new PracticeCategoryDto(entity.Id, entity.Name, entity.SortOrder, entity.LinkedSource,
+            db.Entry(entity).Property("xmin").CurrentValue is uint cv ? cv : null));
     }
 }
 
@@ -185,8 +192,8 @@ public sealed class ReorderCategoriesCommandHandler(AssessmentDbContext db)
 // ---------- 删除 ----------
 
 /// <summary>删类别本身;挂在它下面的素材由数据库 SetNull 自动回"未分类"。</summary>
-public sealed record DeleteCategoryCommand(Guid UserId, Guid CategoryId)
-    : MediatR.IRequest<Result<bool>>;
+public sealed record DeleteCategoryCommand(Guid UserId, Guid CategoryId, uint? Version = null)
+    : MediatR.IRequest<Result<bool>>; // 票111段3:If-Match 钉版
 
 public sealed class DeleteCategoryCommandHandler(AssessmentDbContext db)
     : MediatR.IRequestHandler<DeleteCategoryCommand, Result<bool>>
@@ -197,6 +204,7 @@ public sealed class DeleteCategoryCommandHandler(AssessmentDbContext db)
             .FirstOrDefaultAsync(x => x.UserId == r.UserId && x.Id == r.CategoryId, ct);
         if (entity is null) return Result.Failure<bool>(Error.NotFound("category"));
 
+        ConcurrencyPin.Pin(db, entity, r.Version);
         db.Categories.Remove(entity);
         await db.SaveChangesAsync(ct);
         return Result.Success(true);

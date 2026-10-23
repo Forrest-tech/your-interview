@@ -12,20 +12,56 @@ namespace YourInterview.Services.Assessment.Application;
 // 素材树:整树读写
 // ============================================================
 
+/// <summary>
+/// ★ 票111 段2(A01/A02,协调者裁定乙案):整树版本摘要 —— 定版算法,后续不得无声变更:
+///   treeVersion = LowerHex( SHA256( UTF8( S ) ) ),其中
+///   S = 树内全部**可见**材料行(软删行经查询过滤器排除)按 Id 升序(Guid.CompareTo)排列后,
+///       每行写成 "Id:xmin" 再以 ";" 连接(无尾随分隔符);空树 S = ""。
+///   Id 取 Guid 的 "D" 形态(小写带连字符);xmin 取该行读时 xmin(uint)的 base64 形态:
+///       Convert.ToBase64String(BitConverter.GetBytes(xmin))(小端 4 字节,含 "=" 填充)。
+/// 任一行被编辑/新增/删除/mark 改色都会推进其 xmin 或改变行集 → 摘要必变,
+/// 持旧摘要的整树保存被前置拒绝(409),这正是 A01 快照过期与 A02 mark 殃及的解法。
+/// </summary>
+public static class MaterialTreeVersion
+{
+    public static string Compute(IEnumerable<(Guid Id, uint Xmin)> rows)
+    {
+        var s = string.Join(";", rows
+            .OrderBy(x => x.Id)
+            .Select(x => $"{x.Id:D}:{Convert.ToBase64String(BitConverter.GetBytes(x.Xmin))}"));
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(s));
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>按当前库内可见行集重算某用户的树摘要(GET 回传与 PUT 前置比对/成功回传共用)。</summary>
+    public static async Task<string> ComputeForUserAsync(AssessmentDbContext db, Guid userId, CancellationToken ct)
+    {
+        var rows = await db.Materials.AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToListAsync(ct);
+        return Compute(rows.Select(x => (x.Id, x.V)));
+    }
+}
+
+/// <summary>整棵素材树 + 其树摘要(票111 包对象传输:GET 返回 { treeVersion, nodes })。</summary>
+public sealed record MaterialTreeDto(string TreeVersion, IReadOnlyList<MaterialNodeDto> Nodes);
+
 /// <summary>取我的整棵素材树(一次拿完,树规模小,不值得做增量加载)。</summary>
-public sealed record GetMaterialTreeQuery(Guid UserId) : MediatR.IRequest<IReadOnlyList<MaterialNodeDto>>;
+public sealed record GetMaterialTreeQuery(Guid UserId) : MediatR.IRequest<MaterialTreeDto>;
 
 public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
-    : MediatR.IRequestHandler<GetMaterialTreeQuery, IReadOnlyList<MaterialNodeDto>>
+    : MediatR.IRequestHandler<GetMaterialTreeQuery, MaterialTreeDto>
 {
-    public async Task<IReadOnlyList<MaterialNodeDto>> Handle(GetMaterialTreeQuery r, CancellationToken ct)
+    public async Task<MaterialTreeDto> Handle(GetMaterialTreeQuery r, CancellationToken ct)
     {
         var all = await db.Materials.AsNoTracking()
             .Where(x => x.UserId == r.UserId)
             .OrderBy(x => x.SortOrder).ThenBy(x => x.CreatedAt)
             .ToListAsync(ct);
 
-        return Build(all, null);
+        var treeVersion = await MaterialTreeVersion.ComputeForUserAsync(db, r.UserId, ct);
+        return new MaterialTreeDto(treeVersion, Build(all, null));
     }
 
     /// <summary>内存里拼树 —— 素材木只有几十个节点,一次查完比递归 SQL 更清晰也更快。</summary>
@@ -45,8 +81,14 @@ public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
 ///   整树提交是一个原子操作:要么全新状态,要么什么都没变。
 ///   素材树是纯私有小数据(几十节点、几 KB),整树传输的成本可以忽略。
 /// </remarks>
-public sealed record SaveMaterialTreeCommand(Guid UserId, IReadOnlyList<MaterialNodeIn> Nodes, bool Force = false)
-    : MediatR.IRequest<Result<int>>;
+public sealed record SaveMaterialTreeCommand(Guid UserId, IReadOnlyList<MaterialNodeIn> Nodes, bool Force = false,
+    // ★ 票111 段2:读树时拿到的树摘要(不透明串)。null = 旧调用方,不校验兼容;
+    //   非 null 时与库内现行摘要前置比对,不符 → 409 concurrency_conflict(零写入)。
+    string? TreeVersion = null)
+    : MediatR.IRequest<Result<SaveTreeResult>>;
+
+/// <summary>整树保存结果:已存节点数 + 保存后的新树摘要(省前端一次 GET)。</summary>
+public sealed record SaveTreeResult(int Saved, string TreeVersion);
 
 /// <summary>
 /// 票109:整树保存此前无应用层长度校验,Name 只有 EF 硬限(300)—— 超限
@@ -77,10 +119,20 @@ public sealed record MaterialNodeIn(
     IReadOnlyList<MaterialNodeIn>? Children, string? MarkColor = null, Guid? CategoryId = null);
 
 public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
-    : MediatR.IRequestHandler<SaveMaterialTreeCommand, Result<int>>
+    : MediatR.IRequestHandler<SaveMaterialTreeCommand, Result<SaveTreeResult>>
 {
-    public async Task<Result<int>> Handle(SaveMaterialTreeCommand r, CancellationToken ct)
+    public async Task<Result<SaveTreeResult>> Handle(SaveMaterialTreeCommand r, CancellationToken ct)
     {
+        // ★ 票111 段2 前置比对:摘要不符 = 读后树已变(编辑/新增/删除/mark 任一面),
+        //   在动手前拒绝,零写入;错误码与全站并发口径一致(concurrency_conflict → 409)。
+        if (r.TreeVersion is not null)
+        {
+            var current = await MaterialTreeVersion.ComputeForUserAsync(db, r.UserId, ct);
+            if (!string.Equals(current, r.TreeVersion, StringComparison.Ordinal))
+                return Result.Failure<SaveTreeResult>(Error.Conflict("concurrency_conflict",
+                    "素材树已被其他页签修改,本次整树保存未生效,请刷新后重试"));
+        }
+
         var existing = await db.Materials
             .IgnoreQueryFilters()
             .Where(x => x.UserId == r.UserId)
@@ -185,7 +237,7 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
         if (!r.Force && removed.Count >= 5 && aliveCount > 0
             && (double)removed.Count / aliveCount > 0.8)
         {
-            return Result.Failure<int>(Error.Validation("materials.guard",
+            return Result.Failure<SaveTreeResult>(Error.Validation("materials.guard",
                 $"为防止误删,本次保存被拦下:它将删除 {removed.Count}/{aliveCount} 个素材"
                 + "(超过 80%)。如确需删除请在请求中显式带上 force=true。"));
         }
@@ -196,7 +248,8 @@ public sealed class SaveMaterialTreeCommandHandler(AssessmentDbContext db)
         }
 
         await db.SaveChangesAsync(ct);
-        return Result.Success(incoming.Count);
+        var newVersion = await MaterialTreeVersion.ComputeForUserAsync(db, r.UserId, ct);
+        return Result.Success(new SaveTreeResult(incoming.Count, newVersion));
     }
 
     /// <summary>

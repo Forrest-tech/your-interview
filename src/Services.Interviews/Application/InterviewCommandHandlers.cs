@@ -125,6 +125,7 @@ public sealed class DeleteEntryCommandHandler(InterviewsDbContext db)
     {
         var e = await db.Entries.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        ConcurrencyPin.Pin(db, e, request.Version);
         e.MarkDeleted();   // 软删除:全局查询过滤器会自动隐藏
         await db.SaveChangesAsync(ct);
         return Result.Success();

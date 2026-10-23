@@ -666,7 +666,8 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       const ids = [...this.selected()];
       let done = 0, failed = 0;
       for (const id of ids) {
-        this.jobsApi.deleteApplication(id).subscribe({
+        this.jobsApi.deleteApplication(id,
+          this.items().find((a) => a.id === id)?.version ?? null).subscribe({
           next: () => {
             done++;
             if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
@@ -1210,7 +1211,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     ev?.stopPropagation();
     void this.confirmDelete(this.tf('tracker.confirmDelete', { a: `${app.companyName} · ${app.role}` })).then((ok) => {
       if (!ok) return;
-      this.jobsApi.deleteApplication(app.id).subscribe({
+      this.jobsApi.deleteApplication(app.id, app.version ?? null).subscribe({
         next: () => {
           this.notify(this.t('tracker.deleted'));
           this.reload();

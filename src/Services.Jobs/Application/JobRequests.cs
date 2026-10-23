@@ -60,7 +60,7 @@ public sealed record UpdateCompanyCommand(Guid UserId, Guid Id, string Name, str
     uint? Version = null) // 票101:同上
     : IRequest<Result>;
 
-public sealed record DeleteCompanyCommand(Guid UserId, Guid Id) : IRequest<Result>;
+public sealed record DeleteCompanyCommand(Guid UserId, Guid Id, uint? Version = null) : IRequest<Result>; // 票111段3:If-Match 读时 xmin 钉版,null=不钉兼容
 
 public sealed record CreateApplicationCommand(Guid UserId, Guid CompanyId, string Role, string? Location, string? Link,
     string? Salary, string? WorkMode, string? Source, string? JdSummary, string? Priority = null,
@@ -86,7 +86,7 @@ public sealed record UpdateApplicationCommand(Guid UserId, Guid Id, string Role,
 public sealed record ChangeApplicationStatusCommand(Guid UserId, Guid Id, string Status, string? Note, string? RejectionReason)
     : IRequest<Result>;
 
-public sealed record DeleteApplicationCommand(Guid UserId, Guid Id) : IRequest<Result>;
+public sealed record DeleteApplicationCommand(Guid UserId, Guid Id, uint? Version = null) : IRequest<Result>; // 票111段3:同 DeleteCompanyCommand
 public sealed record ArchiveApplicationCommand(Guid UserId, Guid Id) : IRequest<Result>;
 public sealed record UnarchiveApplicationCommand(Guid UserId, Guid Id) : IRequest<Result>;
 

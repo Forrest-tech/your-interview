@@ -38,8 +38,8 @@ export class KnowledgeApiService {
     return this.api.put<T>(`${KnowledgeApiService.BASE}/${id}`, body);
   }
 
-  deleteItem<T = void>(id: string): Observable<T> {
-    return this.api.delete<T>(`${KnowledgeApiService.BASE}/${id}`);
+  deleteItem<T = void>(id: string, version?: number | null): Observable<T> {
+    return this.api.delete<T>(`${KnowledgeApiService.BASE}/${id}`, ApiClient.ifMatch(version));
   }
 
   restoreItem<T = void>(id: string): Observable<T> {

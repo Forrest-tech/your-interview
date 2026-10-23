@@ -33,7 +33,8 @@ public sealed class ListAllRecordingsQueryHandler(AssessmentDbContext db)
             .ToListAsync(ct);
 
         var versions = await ListRecordingsQueryHandler.ScoreVersionsAsync(db, rows, ct);
-        return rows.Select(x => ListRecordingsQueryHandler.ToDto(x, versions)).ToList();
+        var recVersions = await ListRecordingsQueryHandler.RecordingVersionsAsync(db, rows, ct);
+        return rows.Select(x => ListRecordingsQueryHandler.ToDto(x, versions, recVersions)).ToList();
     }
 }
 
@@ -49,7 +50,8 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
             .ToListAsync(ct);
 
         var versions = await ScoreVersionsAsync(db, rows, ct);
-        return rows.Select(x => ToDto(x, versions)).ToList();
+        var recVersions = await RecordingVersionsAsync(db, rows, ct);
+        return rows.Select(x => ToDto(x, versions, recVersions)).ToList();
     }
 
     /// <summary>票108 A10:批量取评分行读时 xmin(影子属性须投影读,AsNoTracking 实体上取不到)。</summary>
@@ -65,8 +67,22 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
         return vs.ToDictionary(x => x.RecordingId, x => x.V);
     }
 
+    /// <summary>票111 A11:批量取录音行自身读时 xmin(影子属性须投影读)。</summary>
+    internal static async Task<IReadOnlyDictionary<Guid, uint>> RecordingVersionsAsync(
+        AssessmentDbContext db, IReadOnlyList<PracticeRecording> rows, CancellationToken ct)
+    {
+        var ids = rows.Select(x => x.Id).ToList();
+        if (ids.Count == 0) return new Dictionary<Guid, uint>();
+        var vs = await db.Recordings.AsNoTracking()
+            .Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToListAsync(ct);
+        return vs.ToDictionary(x => x.Id, x => x.V);
+    }
+
     internal static RecordingDto ToDto(PracticeRecording x,
-        IReadOnlyDictionary<Guid, uint>? scoreVersions = null) => new(
+        IReadOnlyDictionary<Guid, uint>? scoreVersions = null,
+        IReadOnlyDictionary<Guid, uint>? recordingVersions = null) => new(
         x.Id, x.MaterialId, x.DurationSeconds, x.SizeBytes, x.ContentType, x.CreatedAt,
         x.Score is null ? null : new RecordingScoreDto(
             x.Score.PronScore, x.Score.AccuracyScore, x.Score.FluencyScore,
@@ -76,7 +92,8 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
             x.Score.ReferenceText, x.Score.AssessedAt,
             // 计费两字段列表口径逐字不变(原实现未回填,本票不顺带改),只补 Version。
             null, null,
-            scoreVersions is not null && scoreVersions.TryGetValue(x.Id, out var v) ? v : null));
+            scoreVersions is not null && scoreVersions.TryGetValue(x.Id, out var v) ? v : null),
+        recordingVersions is not null && recordingVersions.TryGetValue(x.Id, out var rv) ? rv : null);
 
     internal static IReadOnlyList<WordScoreDto> DeserializeWords(string? json)
     {
@@ -223,7 +240,7 @@ public sealed class GetRecordingAudioQueryHandler(AssessmentDbContext db, IAudio
 ///     但记 Warning 日志 —— 此时会留下一个孤儿文件,需要人工/后台清理。
 ///     这是"宁可留孤儿文件,也不能让用户删不掉"的取舍。
 /// </remarks>
-public sealed record DeleteRecordingCommand(Guid UserId, Guid RecordingId) : MediatR.IRequest<Result>;
+public sealed record DeleteRecordingCommand(Guid UserId, Guid RecordingId, uint? Version = null) : MediatR.IRequest<Result>; // 票111段3:If-Match 钉版
 
 public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudioStore store,
     ILogger<DeleteRecordingCommandHandler> logger)
@@ -234,6 +251,19 @@ public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudio
         var rec = await db.Recordings
             .FirstOrDefaultAsync(x => x.Id == r.RecordingId && x.UserId == r.UserId, ct);
         if (rec is null) return Result.Failure(Error.NotFound("录音"));
+
+        // ★ 票111 A11:钉版必须在删文件之前比对 —— 本 handler 先删文件后删行,
+        //   若等 SaveChanges 才撞 xmin,文件已删而行还在,"409 且数据完好"不成立。
+        //   故先比对被跟踪行的当前 xmin,不符 → 409 先行拒绝(文件/行都不动);
+        //   再 Pin 让删行 UPDATE 自带 xmin 谓词兜住比对后的竞态。
+        if (r.Version is { } want)
+        {
+            var current = db.Entry(rec).Property("xmin").CurrentValue;
+            if (current is uint cur && cur != want)
+                return Result.Failure(Error.Conflict("concurrency_conflict",
+                    "录音已被其他页签修改,本次删除未生效,请刷新后重试"));
+            ConcurrencyPin.Pin(db, rec, r.Version);
+        }
 
         // ① 先删磁盘文件 —— 必须趁行还在(行一删,StoragePath 这条线索就断了)
         var path = rec.StoragePath;

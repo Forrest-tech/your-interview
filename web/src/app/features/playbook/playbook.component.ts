@@ -447,7 +447,8 @@ export class PlaybookComponent implements OnInit {
         .replace('{names}', names)).then((ok) => {
       if (!ok) return;
 
-      forkJoin(ids.map(id => this.interviewsApi.deleteEntry(id))).subscribe({
+      forkJoin(ids.map(id => this.interviewsApi.deleteEntry(id,
+        this.entries().find((e) => e.id === id)?.version ?? null))).subscribe({
         next: () => {
           this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
           this.editing.set(false);

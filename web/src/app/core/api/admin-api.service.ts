@@ -35,8 +35,8 @@ export class AdminApiService {
     return this.api.post<void>(`${AdminApiService.BASE}/users/${id}/unlock`, {});
   }
 
-  deleteUser(id: string): Observable<void> {
-    return this.api.delete<void>(`${AdminApiService.BASE}/users/${id}`);
+  deleteUser(id: string, version?: number | null): Observable<void> {
+    return this.api.delete<void>(`${AdminApiService.BASE}/users/${id}`, ApiClient.ifMatch(version));
   }
 
   getRoles(): Observable<AdminRole[]> {
@@ -55,8 +55,8 @@ export class AdminApiService {
     return this.api.put<void>(`${AdminApiService.BASE}/roles/${id}`, form);
   }
 
-  deleteRole(id: string): Observable<void> {
-    return this.api.delete<void>(`${AdminApiService.BASE}/roles/${id}`);
+  deleteRole(id: string, version?: number | null): Observable<void> {
+    return this.api.delete<void>(`${AdminApiService.BASE}/roles/${id}`, ApiClient.ifMatch(version));
   }
 
   getAudit(params?: Record<string, unknown>): Observable<Paged<AuditLog>> {

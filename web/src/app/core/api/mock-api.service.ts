@@ -22,8 +22,8 @@ export class MockApiService {
     return this.api.post<{ id: string }>(MockApiService.BASE, body);
   }
 
-  deleteSession(id: string): Observable<void> {
-    return this.api.delete<void>(`${MockApiService.BASE}/${id}`);
+  deleteSession(id: string, version?: number | null): Observable<void> {
+    return this.api.delete<void>(`${MockApiService.BASE}/${id}`, ApiClient.ifMatch(version));
   }
 
   answerQuestion<T>(sessionId: string, questionId: string, body: unknown): Observable<T> {

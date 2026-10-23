@@ -274,6 +274,7 @@ public sealed class DeleteApplicationCommandHandler(JobsDbContext db)
     {
         var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+        ConcurrencyPin.Pin(db, a, request.Version);
         a.MarkDeleted();
         await db.SaveChangesAsync(ct);
         return Result.Success();

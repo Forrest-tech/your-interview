@@ -60,7 +60,7 @@ public sealed record UpdateEntryCommand(
     string? QuestionsToAskJson = null, string? DebriefJson = null,
     uint? Version = null) : IRequest<Result>; // 票101 Version:读时 xmin 回传钉版,null=不钉
 
-public sealed record DeleteEntryCommand(Guid UserId, Guid Id) : IRequest<Result>;
+public sealed record DeleteEntryCommand(Guid UserId, Guid Id, uint? Version = null) : IRequest<Result>; // 票111段3:If-Match 读时 xmin 钉版,null=不钉兼容
 
 /// <summary>回填 Tracker 投递关联:additive —— 条目已有关联时不覆盖,原样返回成功。</summary>
 public sealed record LinkJobApplicationCommand(Guid UserId, Guid Id, Guid JobApplicationId) : IRequest<Result>;

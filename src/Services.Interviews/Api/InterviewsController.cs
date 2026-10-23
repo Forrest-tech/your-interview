@@ -111,9 +111,10 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsDelete)]
-    public async Task<IResult> Delete(Guid id, CancellationToken ct)
+    public async Task<IResult> Delete(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new DeleteEntryCommand(Me, id), ct);
+        var r = await sender.Send(new DeleteEntryCommand(Me, id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -736,9 +737,10 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     /// <summary>删除一个故事(软删,幂等)。</summary>
     [HttpDelete("star-stories/{clientId}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
-    public async Task<IResult> DeleteStarStory(string clientId, CancellationToken ct)
+    public async Task<IResult> DeleteStarStory(string clientId, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new DeleteStarStoryCommand(Me, clientId), ct);
+        var r = await sender.Send(new DeleteStarStoryCommand(Me, clientId, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 

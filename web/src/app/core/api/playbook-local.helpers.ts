@@ -10,6 +10,8 @@
 /** 前端故事形状(与 playbook.component 的 StarStory 结构一致)。 */
 export interface PlaybookStarStory {
   id: string;
+  /** ★ 票111 段3(I05):后端故事行读时 xmin,删除时 If-Match 回传;本地新建未落库为 undefined。 */
+  version?: number;
   title: string;
   situation: string;
   task: string;
@@ -29,6 +31,8 @@ export interface StarStoryDto {
   result: string | null;
   tags: string | null;
   sortOrder: number;
+  /** ★ 票111 段3(I05):故事行读时 xmin。 */
+  version?: number;
 }
 
 export interface LegacyDebriefImportItem { entryId: string; payloadJson: string }
@@ -182,6 +186,7 @@ export function toLocalStory(dto: StarStoryDto): PlaybookStarStory {
     action: dto.action ?? '',
     result: dto.result ?? '',
     tags: dto.tags ?? '',
+    version: dto.version,
   };
 }
 

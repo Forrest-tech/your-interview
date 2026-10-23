@@ -63,8 +63,8 @@ export class JobsApiService {
     return this.api.put<T>(`${JobsApiService.BASE}/applications/${id}`, body);
   }
 
-  deleteApplication<T = void>(id: string): Observable<T> {
-    return this.api.delete<T>(`${JobsApiService.BASE}/applications/${id}`);
+  deleteApplication<T = void>(id: string, version?: number | null): Observable<T> {
+    return this.api.delete<T>(`${JobsApiService.BASE}/applications/${id}`, ApiClient.ifMatch(version));
   }
 
   changeStatus<T = void>(id: string, status: ApplicationStatus, note?: string | null): Observable<T> {
@@ -105,16 +105,16 @@ export class JobsApiService {
     return this.api.put(`${JobsApiService.BASE}/resume-text`, body);
   }
 
-  uploadResumeFile(file: File): Observable<unknown> {
-    return this.api.upload(`${JobsApiService.BASE}/resume-file`, file);
+  uploadResumeFile(file: File, version?: number | null): Observable<unknown> {
+    return this.api.upload(`${JobsApiService.BASE}/resume-file`, file, undefined, ApiClient.ifMatch(version));
   }
 
   getResumeFileMeta(): Observable<{ fileName: string }> {
     return this.api.get<{ fileName: string }>(`${JobsApiService.BASE}/resume-file/meta`);
   }
 
-  uploadResumeFileForm(fd: FormData): Observable<unknown> {
-    return this.api.postForm(`${JobsApiService.BASE}/resume-file`, fd);
+  uploadResumeFileForm(fd: FormData, version?: number | null): Observable<unknown> {
+    return this.api.postForm(`${JobsApiService.BASE}/resume-file`, fd, ApiClient.ifMatch(version));
   }
 
   getResumeFile(): Observable<Blob> {
@@ -130,8 +130,8 @@ export class JobsApiService {
       `${JobsApiService.BASE}/applications/${appId}/resume`);
   }
 
-  uploadApplicationResume<T = unknown>(appId: string, fd: FormData): Observable<T> {
-    return this.api.postForm<T>(`${JobsApiService.BASE}/applications/${appId}/resume`, fd);
+  uploadApplicationResume<T = unknown>(appId: string, fd: FormData, version?: number | null): Observable<T> {
+    return this.api.postForm<T>(`${JobsApiService.BASE}/applications/${appId}/resume`, fd, ApiClient.ifMatch(version));
   }
 
   deleteApplicationResume<T = unknown>(appId: string): Observable<T> {

@@ -91,7 +91,7 @@ public sealed record UpdateQuestionCommand(Guid UserId, Guid Id, string? Questio
 /// <summary>From Tech 一次写回题目+推荐答案(避免并发 xmin 冲突)。</summary>
 public sealed record UpdateFromTechCommand(Guid UserId, Guid Id, string? Question, string? BetterAnswer, uint? Version = null) : IRequest<Result>; // 票101 Version
 
-public sealed record DeleteKnowledgeCommand(Guid UserId, Guid Id) : IRequest<Result>;
+public sealed record DeleteKnowledgeCommand(Guid UserId, Guid Id, uint? Version = null) : IRequest<Result>; // 票111段3:If-Match 钉版
 public sealed record RestoreKnowledgeCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
 /// <summary>重命名分类:返回受影响的条目数。新名字已存在时即为合并。</summary>

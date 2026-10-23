@@ -30,6 +30,8 @@ export interface Recording {
   uploaded: boolean;
   /** 评分失败原因。 */
   error: string | null;
+  /** ★ 票111 段3(A11):录音行读时 xmin,删除时 If-Match 回传;本地未落库为 undefined。 */
+  version?: number | null;
 }
 
 /** Azure 发音评估结果(与后端返回结构对齐)。 */
@@ -500,7 +502,8 @@ export class RecorderService {
       grading: false,
       // 能从后端列出来的录音,必然已在服务端存在
       uploaded: true,
-      error: null
+      error: null,
+      version: d.version ?? null
     };
   }
 
@@ -553,7 +556,7 @@ export class RecorderService {
 
     const snapshot = this.recordings();
     this.recordings.update((list) => list.filter((r) => r.id !== id));
-    this.practiceApi.deleteRecording(id).subscribe({
+    this.practiceApi.deleteRecording(id, rec.version ?? null).subscribe({
       // ★ 第四十七轮:删除成功后再过滤一次 ——
       //   Retry 在 remove 后会立刻 reloadForMaterial 重拉列表,
       //   GET 可能赶在 DELETE 落库前返回,把刚删的条目又带回来

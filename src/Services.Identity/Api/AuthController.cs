@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using MediatR;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.BuildingBlocks.Web;
+using YourInterview.Services.Identity.Application;
 using YourInterview.Services.Identity.Application.Abstractions;
 using YourInterview.Services.Identity.Application.Admin;
 using YourInterview.Services.Identity.Application.Auth;
@@ -183,9 +184,10 @@ public sealed class AdminController(ISender sender) : ControllerBase
 
     [HttpDelete("users/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminUsersWrite)]
-    public async Task<IResult> DeleteUser(Guid id, CancellationToken ct)
+    public async Task<IResult> DeleteUser(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new AdminDeleteUserCommand(id), ct);
+        var r = await sender.Send(new AdminDeleteUserCommand(id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -219,9 +221,10 @@ public sealed class AdminController(ISender sender) : ControllerBase
 
     [HttpDelete("roles/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminRolesWrite)]
-    public async Task<IResult> DeleteRole(Guid id, CancellationToken ct)
+    public async Task<IResult> DeleteRole(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new AdminDeleteRoleCommand(id), ct);
+        var r = await sender.Send(new AdminDeleteRoleCommand(id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 

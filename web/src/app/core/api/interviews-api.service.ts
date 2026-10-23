@@ -29,8 +29,8 @@ export class InterviewsApiService {
     return this.api.post<T>(`${InterviewsApiService.BASE}`, body);
   }
 
-  deleteEntry(id: string): Observable<void> {
-    return this.api.delete<void>(`${InterviewsApiService.BASE}/${id}`);
+  deleteEntry(id: string, version?: number | null): Observable<void> {
+    return this.api.delete<void>(`${InterviewsApiService.BASE}/${id}`, ApiClient.ifMatch(version));
   }
 
   getEntry(id: string): Observable<InterviewDetail> {

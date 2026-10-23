@@ -109,6 +109,8 @@ public sealed class DeleteCompanyCommandHandler(JobsDbContext db)
         var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("公司"));
 
+        ConcurrencyPin.Pin(db, c, request.Version);
+
         var count = await db.Applications.CountAsync(a => a.CompanyId == c.Id, ct);
         if (count > 0)
             return Result.Failure(Error.Conflict("Company.HasApplications",

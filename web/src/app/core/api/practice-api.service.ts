@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { map, timeout } from 'rxjs/operators';
+import { catchError, map, timeout } from 'rxjs/operators';
 
 import { ApiClient } from './api-client';
 
@@ -55,6 +55,8 @@ export interface PracticeCategoryDto {
   id: string;
   name: string;
   sortOrder: number;
+  /** ★ 票111 段3(A06):类别行读时 xmin,删除时 If-Match 回传。 */
+  version?: number | null;
   /** 链接的数据源: null=普通分类, "techstack"=Tech Stack 实时视图 */
   linkedSource?: string | null;
 }
@@ -101,6 +103,8 @@ export interface RecordingDto {
   contentType: string;
   createdAt: string;
   score: RecordingScoreDto | null;
+  /** ★ 票111 段3(A11):录音行自身读时 xmin(区别于 score.version),删除时 If-Match 回传。 */
+  version?: number | null;
 }
 
 // ---------- LLM 设置(2026-09-18 新增;M2.3 起收敛到 AiGateway:/api/ai/*) ----------
@@ -241,9 +245,19 @@ export class PracticeApi {
 
   // ---------- 素材树 ----------
 
-  /** 取整棵素材树。 */
+  /**
+   * ★ 票111 段2:最近一次读树/保存回传的树摘要(不透明串,前端只存不解析)。
+   *   整树保存时回传给服务端前置比对;树已被其他页签改动 → 409。
+   */
+  private treeVersion: string | null = null;
+
+  /** 取整棵素材树(包对象 { treeVersion, nodes },摘要在此留存供保存回传)。 */
   getMaterials(): Observable<MaterialNodeDto[]> {
-    return this.api.get<MaterialNodeDto[]>(`${PracticeApi.BASE}/materials`);
+    return this.api.get<{ treeVersion: string; nodes: MaterialNodeDto[] }>(`${PracticeApi.BASE}/materials`)
+      .pipe(map((r) => {
+        this.treeVersion = r.treeVersion ?? null;
+        return r.nodes ?? [];
+      }));
   }
 
   /**
@@ -251,9 +265,23 @@ export class PracticeApi {
    *
    * ★ 第四十轮:force=true 仅在**用户显式删除**时传,用于越过服务端
    *   "防误删熔断"(一次删掉 >80% 且 ≥5 个时会被拦)。
+   * ★ 票111 段2:带上读时树摘要;成功后用响应里的新摘要续接;409 时
+   *   响应体附有当前摘要 —— 先刷新本地留存,组件侧再回读整树对齐。
    */
   saveMaterials(nodes: MaterialNodeIn[], force = false): Observable<{ saved: number }> {
-    return this.api.put<{ saved: number }>(`${PracticeApi.BASE}/materials`, { nodes, force });
+    return this.api.put<{ saved: number; treeVersion?: string }>(`${PracticeApi.BASE}/materials`,
+      { nodes, force, treeVersion: this.treeVersion })
+      .pipe(
+        map((r) => {
+          if (r.treeVersion) this.treeVersion = r.treeVersion;
+          return { saved: r.saved };
+        }),
+        catchError((e: { original?: { error?: { treeVersion?: string } } }) => {
+          const cur = e?.original?.error?.treeVersion;
+          if (typeof cur === 'string') this.treeVersion = cur;
+          throw e;
+        })
+      );
   }
 
   // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
@@ -277,8 +305,8 @@ export class PracticeApi {
   }
 
   /** 删除类别;其下素材由服务端自动归入"未分类"。 */
-  deleteCategory(id: string): Observable<{ deleted: boolean }> {
-    return this.api.delete<{ deleted: boolean }>(`${PracticeApi.BASE}/categories/${id}`);
+  deleteCategory(id: string, version?: number | null): Observable<{ deleted: boolean }> {
+    return this.api.delete<{ deleted: boolean }>(`${PracticeApi.BASE}/categories/${id}`, ApiClient.ifMatch(version));
   }
 
   /** 设置/取消类别的数据源链接(如 "techstack")。null = 取消链接。 */
@@ -350,8 +378,8 @@ export class PracticeApi {
     return this.api.getBlob(`${PracticeApi.BASE}/recordings/${recordingId}/audio`);
   }
 
-  deleteRecording(recordingId: string): Observable<void> {
-    return this.api.delete<void>(`${PracticeApi.BASE}/recordings/${recordingId}`);
+  deleteRecording(recordingId: string, version?: number | null): Observable<void> {
+    return this.api.delete<void>(`${PracticeApi.BASE}/recordings/${recordingId}`, ApiClient.ifMatch(version));
   }
 
   /** 读已缓存的评分(不调 Azure)。命中就不必重新花额度。 */

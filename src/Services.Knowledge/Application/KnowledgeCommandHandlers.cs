@@ -77,6 +77,7 @@ public sealed class DeleteKnowledgeCommandHandler(KnowledgeDbContext db)
     {
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
+        ConcurrencyPin.Pin(db, k, request.Version);
         k.MarkDeleted();
         await db.SaveChangesAsync(ct);
         return Result.Success();

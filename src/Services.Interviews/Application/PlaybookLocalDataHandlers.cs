@@ -14,7 +14,9 @@ namespace YourInterview.Services.Interviews.Application;
 public sealed record StarStoryDto(
     Guid Id, string ClientId, string Title, string? Situation, string? Task,
     string? Action, string? Result, string? Tags, int SortOrder,
-    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
+    // ★ 票111 段3(I05):故事行读时 xmin —— DELETE 时 If-Match 回传钉版用。
+    uint Version = 0);
 
 public sealed record StarStoryInput(
     string ClientId, string Title, string? Situation, string? Task,
@@ -58,8 +60,8 @@ public sealed record UpsertStarStoryCommand(Guid UserId, StarStoryInput Story)
     : IRequest<Result<Guid>>;
 
 /// <summary>删除一个故事(软删;不存在也成功 —— 幂等)。</summary>
-public sealed record DeleteStarStoryCommand(Guid UserId, string ClientId)
-    : IRequest<Result>;
+public sealed record DeleteStarStoryCommand(Guid UserId, string ClientId, uint? Version = null)
+    : IRequest<Result>; // 票111段3:If-Match 钉版(故事行 xmin),null=不钉兼容;PUT upsert(I04)未动
 
 /// <summary>
 /// 一次性导入本地故事库(localStorage pb.starStories → 后端)。
@@ -244,7 +246,8 @@ public sealed class ListStarStoriesQueryHandler(InterviewsDbContext db)
             .Where(s => s.UserId == request.UserId)
             .OrderBy(s => s.SortOrder).ThenBy(s => s.CreatedAt)
             .Select(s => new StarStoryDto(s.Id, s.ClientId, s.Title, s.Situation, s.Task,
-                s.Action, s.Result, s.Tags, s.SortOrder, s.CreatedAt, s.UpdatedAt))
+                s.Action, s.Result, s.Tags, s.SortOrder, s.CreatedAt, s.UpdatedAt,
+                EF.Property<uint>(s, "xmin")))
             .ToListAsync(ct);
         return Result.Success<IReadOnlyList<StarStoryDto>>(items);
     }
@@ -321,6 +324,7 @@ public sealed class DeleteStarStoryCommandHandler(InterviewsDbContext db)
             s => s.UserId == request.UserId && s.ClientId == request.ClientId, ct);
         if (story is null) return Result.Success(); // 幂等:没这个故事也算删除成功
 
+        ConcurrencyPin.Pin(db, story, request.Version);
         story.MarkDeleted();
         await db.SaveChangesAsync(ct);
         return Result.Success();

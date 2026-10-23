@@ -20,7 +20,10 @@ public sealed record MaterialNodeDto(
 /// <summary>一条录音 + 可选评分。</summary>
 public sealed record RecordingDto(
     Guid Id, Guid MaterialId, double DurationSeconds, long SizeBytes,
-    string ContentType, DateTimeOffset CreatedAt, RecordingScoreDto? Score);
+    string ContentType, DateTimeOffset CreatedAt, RecordingScoreDto? Score,
+    // ★ 票111 段3(A11):录音行自身读时 xmin(区别于 Score.Version 评分行)——
+    //   DELETE recordings/{id} 时 If-Match 回传钉版用。
+    uint? Version = null);
 
 /// <summary>
 /// 发音评分结果。

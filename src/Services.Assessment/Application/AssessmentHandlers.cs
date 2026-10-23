@@ -40,7 +40,9 @@ public sealed record SessionDetailDto(Guid Id, string Title, string Mode, string
     string? CompanyStyle, string Status, int TargetQuestionCount, string Language,
     DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, string? OverallSummary,
     string? PriorityAction, int? OverallScore, ScoresDto? AverageScores,
-    IReadOnlyList<QuestionDto> Questions, IReadOnlyList<WeaknessBucketDto> Weaknesses);
+    IReadOnlyList<QuestionDto> Questions, IReadOnlyList<WeaknessBucketDto> Weaknesses,
+    // ★ 票111 段3(A08):会话行自身读时 xmin —— DELETE sessions/{id} 时 If-Match 回传钉版用。
+    uint? Version = null);
 
 public sealed record WeaknessBucketDto(string Dimension, int Count, double AvgSeverity);
 
@@ -136,6 +138,11 @@ public sealed class GetSessionQueryHandler(AssessmentDbContext db)
 
         if (s is null) return Result.Failure<SessionDetailDto>(Error.NotFound("模拟练习"));
 
+        // ★ 票111 A08:会话行自身读时 xmin(同题目口径投影读)。
+        var sessionVersion = await db.Sessions.AsNoTracking()
+            .Where(x => x.Id == s.Id)
+            .Select(x => EF.Property<uint>(x, "xmin")).FirstAsync(ct);
+
         // ★ 票108 A09:逐题读时 xmin(影子属性须投影读,AsNoTracking 实体上取不到)。
         var versions = await db.Questions.AsNoTracking()
             .Where(q => q.SessionId == s.Id)
@@ -149,7 +156,8 @@ public sealed class GetSessionQueryHandler(AssessmentDbContext db)
             ToScores(s.AverageScores()),
             s.Questions.OrderBy(q => q.Sequence)
                 .Select(q => ToQuestion(q, versions.TryGetValue(q.Id, out var v) ? v : null)).ToList(),
-            s.WeaknessSummary().Select(w => new WeaknessBucketDto(w.Dimension, w.Count, w.AvgSeverity)).ToList()));
+            s.WeaknessSummary().Select(w => new WeaknessBucketDto(w.Dimension, w.Count, w.AvgSeverity)).ToList(),
+            sessionVersion));
     }
 
     internal static QuestionDto ToQuestion(MockQuestion q, uint? version = null) => new(
@@ -536,7 +544,7 @@ public sealed class AbandonSessionCommandHandler(AssessmentDbContext db)
     }
 }
 
-public sealed record DeleteSessionCommand(Guid SessionId, Guid UserId) : IRequest<Result>;
+public sealed record DeleteSessionCommand(Guid SessionId, Guid UserId, uint? Version = null) : IRequest<Result>; // 票111段3:If-Match 钉版
 
 public sealed class DeleteSessionCommandHandler(AssessmentDbContext db)
     : IRequestHandler<DeleteSessionCommand, Result>
@@ -546,6 +554,7 @@ public sealed class DeleteSessionCommandHandler(AssessmentDbContext db)
         var s = await db.Sessions.FirstOrDefaultAsync(x => x.Id == r.SessionId && x.UserId == r.UserId, ct);
         if (s is null) return Result.Failure<SessionSummaryResult>(Error.NotFound("模拟练习"));
 
+        ConcurrencyPin.Pin(db, s, r.Version);
         s.MarkDeleted();
         await db.SaveChangesAsync(ct);
         return Result.Success();

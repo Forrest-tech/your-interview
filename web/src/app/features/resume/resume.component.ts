@@ -148,7 +148,7 @@ export class ResumeComponent implements OnInit {
       const fd = new FormData();
       fd.append('file', this.pendingPdf, this.pendingPdf.name);
       fd.append('textContent', text);
-      this.jobsApi.uploadResumeFileForm(fd).subscribe({
+      this.jobsApi.uploadResumeFileForm(fd, this.backendRowVersion).subscribe({
         next: () => {
           this.pendingPdf = null;
           this.loadPdfPreview();

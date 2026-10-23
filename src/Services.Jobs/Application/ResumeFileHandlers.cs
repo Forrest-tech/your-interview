@@ -43,7 +43,11 @@ public sealed record SaveResumeFileCommand(
     string FileName,
     string ContentType,
     byte[] Data,
-    string TextContent) : IRequest<Result<ResumeFileDto>>;
+    string TextContent,
+    // ★ 票111 段3(J12/J13 替换钉版):If-Match 回传的版本锚 —— J12(基础)= 简历文本行
+    //   RowVersion(resumes 行 xmin,GET resume-text 已暴露);J13(tailored)= 申请行 Version
+    //   (票101 J04 已暴露)。null = 不带头,兼容旧行为(LWW)。
+    uint? ExpectedVersion = null) : IRequest<Result<ResumeFileDto>>;
 
 /// <summary>PDF 上限 10MB —— 简历 PDF 通常 100KB~2MB,10MB 足够且防止恶意大文件拖垮行存储。</summary>
 public sealed class SaveResumeFileCommandValidator : AbstractValidator<SaveResumeFileCommand>
@@ -63,6 +67,30 @@ public sealed class SaveResumeFileCommandHandler(JobsDbContext db)
 {
     public async Task<Result<ResumeFileDto>> Handle(SaveResumeFileCommand request, CancellationToken ct)
     {
+        // ★ 票111 段3:写前钉版比对 —— 锚行当前 xmin 与 If-Match 不符 → 409 先行拒绝,
+        //   文件一行不落(与删除类服务端钉版同口径;不传 ExpectedVersion = 兼容 LWW)。
+        if (request.ExpectedVersion is { } expected)
+        {
+            uint? anchor;
+            if (request.ApplicationId is Guid aid)
+            {
+                var row = await db.Applications.AsNoTracking()
+                    .Where(x => x.Id == aid && x.UserId == request.UserId)
+                    .Select(x => new { V = EF.Property<uint>(x, "xmin") }).FirstOrDefaultAsync(ct);
+                anchor = row?.V;
+            }
+            else
+            {
+                var row = await db.Resumes.AsNoTracking()
+                    .Where(x => x.UserId == request.UserId)
+                    .Select(x => new { V = EF.Property<uint>(x, "xmin") }).FirstOrDefaultAsync(ct);
+                anchor = row?.V;
+            }
+            if (anchor is null || anchor.Value != expected)
+                return Result.Failure<ResumeFileDto>(Error.Conflict("concurrency_conflict",
+                    "简历已被其他页签修改,本次上传未生效,请刷新后重试"));
+        }
+
         // tailored 必须挂在真实存在的投递上
         if (request.ApplicationId is Guid appId)
         {

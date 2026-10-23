@@ -337,7 +337,7 @@ export class CategoryManagerDialogComponent {
 
   doDelete(c: PracticeCategoryDto): void {
     this.confirmDeleteId.set(null);
-    this.api.deleteCategory(c.id).subscribe({
+    this.api.deleteCategory(c.id, c.version ?? null).subscribe({
       next: () => {
         this.items.update((list) => list.filter((x) => x.id !== c.id));
         this.emitChanged();

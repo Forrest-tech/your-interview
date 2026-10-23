@@ -127,10 +127,11 @@ export class PlaybookLocalService {
     );
   }
 
-  /** 删除一个故事:乐观移除,后端 DELETE 失败则回读纠正。 */
+  /** 删除一个故事:乐观移除,后端 DELETE 失败则回读纠正。★ 票111 段3(I05):带本地所持故事行版本作 If-Match 钉版(无版本则不带,兼容)。 */
   deleteStory(clientId: string): void {
+    const version = this.starStories().find((x) => x.id === clientId)?.version;
     this.starStories.set(this.starStories().filter((x) => x.id !== clientId));
-    this.api.delete(`/api/interviews/star-stories/${encodeURIComponent(clientId)}`)
+    this.api.delete(`/api/interviews/star-stories/${encodeURIComponent(clientId)}`, ApiClient.ifMatch(version))
       .subscribe({ error: () => this.reloadStories() });
   }
 

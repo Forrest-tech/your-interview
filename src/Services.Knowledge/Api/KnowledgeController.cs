@@ -196,9 +196,10 @@ public sealed class KnowledgeController(ISender sender, ICurrentUser currentUser
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.KnowledgeDelete)]
-    public async Task<IResult> Delete(Guid id, CancellationToken ct)
+    public async Task<IResult> Delete(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new DeleteKnowledgeCommand(Me, id), ct);
+        var r = await sender.Send(new DeleteKnowledgeCommand(Me, id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 

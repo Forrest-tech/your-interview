@@ -338,7 +338,7 @@ export class AdminComponent implements OnInit {
     void this.confirmDlg(this.tn('admin.confirmDelete', u.email), true).then((ok) => {
       if (!ok) return;
 
-      this.adminApi.deleteUser(u.id).subscribe({
+      this.adminApi.deleteUser(u.id, u.version ?? null).subscribe({
         next: () => {
           this.notify(this.t('admin.deleted'));
           this.loadUsers();
@@ -430,7 +430,7 @@ export class AdminComponent implements OnInit {
     void this.confirmDlg(this.tn('admin.confirmDeleteRole', r.name), true).then((ok) => {
       if (!ok) return;
 
-      this.adminApi.deleteRole(r.id).subscribe({
+      this.adminApi.deleteRole(r.id, r.version ?? null).subscribe({
         next: () => {
           this.notify(this.t('admin.roleDeleted'));
           this.loadRoles();

@@ -1220,7 +1220,7 @@ export class ApplicationDetailDialogComponent {
       const fd = new FormData();
       fd.append('file', file, file.name);
       fd.append('textContent', text);
-      this.jobsApi.uploadApplicationResume(this.app.id, fd).subscribe({
+      this.jobsApi.uploadApplicationResume(this.app.id, fd, this.app.version ?? null).subscribe({
         next: () => {
           this.snack.open(this.t('tracker.dResumeUploadOk'), this.t('common.close'), { duration: 2500 });
           this.loadAppResume();
@@ -1558,7 +1558,7 @@ export class ApplicationDetailDialogComponent {
     });
     ref.afterClosed().subscribe((v) => {
       if (v !== true) return;
-      this.jobsApi.deleteApplication(this.app.id).subscribe({
+      this.jobsApi.deleteApplication(this.app.id, this.app.version ?? null).subscribe({
         next: () => {
           this.snack.open(this.t('tracker.deleted'), this.t('common.close'), { duration: 3000 });
           this.dialogRef.close(true);

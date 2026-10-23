@@ -523,7 +523,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   async deleteEntry(): Promise<void> {
     if (!this.confirmDelete()) { this.confirmDelete.set(true); return; }
     try {
-      await this.interviewsApi.deleteEntry(this.id()).toPromise();
+      await this.interviewsApi.deleteEntry(this.id(), this.entry()?.version ?? null).toPromise();
       void this.router.navigate(['/playbook']);
     } catch {
       this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 });

@@ -42,7 +42,7 @@ public sealed record AdminResetPasswordCommand(Guid UserId, string NewPassword) 
 /// <summary>M2.4:连续登录失败锁定的账号,管理员人工解锁。</summary>
 public sealed record AdminUnlockUserCommand(Guid UserId) : IRequest<Result>;
 
-public sealed record AdminDeleteUserCommand(Guid UserId) : IRequest<Result>;
+public sealed record AdminDeleteUserCommand(Guid UserId, uint? Version = null) : IRequest<Result>; // 票111段3:If-Match 钉版
 
 public sealed record RoleListItem(Guid Id, string Name, string? Description, bool IsSystemRole, string[] Permissions, int UserCount, uint Version = 0); // 票101 Version:行 xmin
 
@@ -51,7 +51,7 @@ public sealed record AdminRolesQuery : IRequest<Result<IReadOnlyList<RoleListIte
 public sealed record AdminUpsertRoleCommand(Guid? RoleId, string Name, string? Description, string[] Permissions, uint? Version = null)
     : IRequest<Result<Guid>>; // 票101 Version:编辑既有角色时回传读时 xmin
 
-public sealed record AdminDeleteRoleCommand(Guid RoleId) : IRequest<Result>;
+public sealed record AdminDeleteRoleCommand(Guid RoleId, uint? Version = null) : IRequest<Result>; // 票111段3:If-Match 钉版
 
 public sealed record PermissionCatalogItem(string Key, string Resource, string Action, string Description);
 
@@ -345,6 +345,8 @@ public sealed class AdminDeleteUserCommandHandler(IdentityDbContext db, ICurrent
             && await AdminGuard.ActiveAdminCountAsync(db, ct) <= 1)
             return Result.Failure(Error.Conflict("Admin.LastAdmin", "系统必须保留至少一个启用状态的管理员"));
 
+        ConcurrencyPin.Pin(db, user, request.Version);
+
         // 软删除(审计要求:记录保留,账号失效)
         user.Deactivate();
         user.MarkDeleted();
@@ -445,6 +447,7 @@ public sealed class AdminDeleteRoleCommandHandler(IdentityDbContext db, ICurrent
         if (await db.UserRoles.AnyAsync(ur => ur.RoleId == role.Id, ct))
             return Result.Failure(Error.Conflict("Role.InUse", "该角色仍被用户使用,请先调整用户角色"));
 
+        ConcurrencyPin.Pin(db, role, request.Version);
         role.MarkDeleted();
 
         AdminAudit.Write(db, currentUser, "admin.role.deleted", "AppRole", role.Id.ToString(),

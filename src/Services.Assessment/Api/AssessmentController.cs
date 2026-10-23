@@ -71,9 +71,10 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
     [HttpDelete("sessions/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> Delete(Guid id, CancellationToken ct)
+    public async Task<IResult> Delete(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new DeleteSessionCommand(id, Me), ct);
+        var r = await sender.Send(new DeleteSessionCommand(id, Me, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -315,14 +316,14 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
     // ---------- 素材树 ----------
 
-    /// <summary>取我的整棵素材树。</summary>
+    /// <summary>取我的整棵素材树。★ 票111 段2:包对象 { treeVersion, nodes }(乙案裁定传输形态)。</summary>
     [HttpGet("materials")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
     public async Task<IResult> GetMaterials(CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
         var tree = await sender.Send(new GetMaterialTreeQuery(userId), ct);
-        return Results.Ok(tree);
+        return Results.Ok(new { treeVersion = tree.TreeVersion, nodes = tree.Nodes });
     }
 
     /// <summary>
@@ -334,9 +335,24 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SaveMaterials([FromBody] SaveTreeBody body, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        var result = await sender.Send(new SaveMaterialTreeCommand(userId, body.Nodes ?? [], body.Force), ct);
-        return result.IsSuccess ? Results.Ok(new { saved = result.Value })
-                                : result.ToProblemDetails();
+        var result = await sender.Send(new SaveMaterialTreeCommand(userId, body.Nodes ?? [], body.Force, body.TreeVersion), ct);
+        if (result.IsSuccess)
+            return Results.Ok(new { saved = result.Value.Saved, treeVersion = result.Value.TreeVersion });
+        // ★ 票111 段2:409 响应体附当前 treeVersion,供前端刷新对齐(裁定要求)。
+        if (result.Error.Code == "concurrency_conflict")
+        {
+            var current = await sender.Send(new GetMaterialTreeQuery(userId), ct);
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Concurrency conflict",
+                detail: result.Error.Description,
+                extensions: new Dictionary<string, object?>
+                {
+                    ["code"] = "concurrency_conflict",
+                    ["treeVersion"] = current.TreeVersion
+                });
+        }
+        return result.ToProblemDetails();
     }
 
     /// <summary>
@@ -419,10 +435,11 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// <summary>删除类别;素材由数据库 SetNull 自动回"未分类",数据零丢失。</summary>
     [HttpDelete("categories/{categoryId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> DeleteCategory(Guid categoryId, CancellationToken ct)
+    public async Task<IResult> DeleteCategory(Guid categoryId, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
         var userId = currentUser.RequireUserId();
-        var result = await sender.Send(new DeleteCategoryCommand(userId, categoryId), ct);
+        var result = await sender.Send(new DeleteCategoryCommand(userId, categoryId, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return result.IsSuccess ? Results.Ok(new { deleted = true }) : result.ToProblemDetails();
     }
 
@@ -495,10 +512,11 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// <summary>删除一条录音(元数据软删 + 尽力删文件)。</summary>
     [HttpDelete("recordings/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> DeleteRecording(Guid id, CancellationToken ct)
+    public async Task<IResult> DeleteRecording(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
         var userId = currentUser.RequireUserId();
-        var result = await sender.Send(new DeleteRecordingCommand(userId, id), ct);
+        var result = await sender.Send(new DeleteRecordingCommand(userId, id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return result.IsSuccess ? Results.NoContent() : result.ToProblemDetails();
     }
 
@@ -821,8 +839,8 @@ public sealed record AssessPronunciationBody(
 
 // ---- /practice 页请求体(2026-09-15 第十七轮)----
 
-/// <summary>整树提交的根。</summary>
-public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessment.Application.MaterialNodeIn>? Nodes, bool Force = false);
+/// <summary>整树提交的根。★ 票111 段2:TreeVersion = 读树时摘要回传(缺省 null = 不校验兼容)。</summary>
+public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessment.Application.MaterialNodeIn>? Nodes, bool Force = false, string? TreeVersion = null);
 
 /// <summary>Azure Speech 设置提交。⚠️ 只入不出 —— 保存后绝不回传 key。</summary>
 public sealed record SpeechSettingsBody(string Key, string Region, string? Endpoint);

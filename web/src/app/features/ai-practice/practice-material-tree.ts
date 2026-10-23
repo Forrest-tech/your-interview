@@ -258,6 +258,9 @@ export class PracticeMaterialTree {
         // 绝不假装保存成功 —— 把后端给的真实原因显示出来
         this.treeError.set(this.errText(e));
         this.treeDirty.set(true);
+        // ★ 票111 段2:树摘要冲突(409)—— 提示已由 ApiClient 统一口径给出,
+        //   再回读整树对齐最新状态(本地这份快照已过期,留着只会再撞一次)。
+        if ((e as { status?: number })?.status === 409) this.refreshTreeFromServer();
       }
     });
   }
@@ -1150,6 +1153,8 @@ export class PracticeMaterialTree {
       error: (e) => {
         this.treeError.set(this.errText(e));
         this.treeDirty.set(true);
+        // ★ 票111 段2:同 doSaveTree —— 409 树摘要冲突时回读整树对齐。
+        if ((e as { status?: number })?.status === 409) this.refreshTreeFromServer();
         this.finishSave();
       }
     });

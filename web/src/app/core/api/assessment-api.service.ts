@@ -43,8 +43,8 @@ export class AssessmentApiService {
     return this.api.post<{ id: string }>(`${AssessmentApiService.BASE}`, body);
   }
 
-  deleteSession(id: string): Observable<void> {
-    return this.api.delete<void>(`${AssessmentApiService.BASE}/${id}`);
+  deleteSession(id: string, version?: number | null): Observable<void> {
+    return this.api.delete<void>(`${AssessmentApiService.BASE}/${id}`, ApiClient.ifMatch(version));
   }
 
   getSession(id: string): Observable<AssessmentSessionDetail> {

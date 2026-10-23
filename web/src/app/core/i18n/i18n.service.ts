@@ -47,6 +47,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'account.profile': { zh: '我的账户', en: 'My Account', fr: 'Mon compte' },
   'account.logout': { zh: '退出登录', en: 'Sign out', fr: 'Déconnexion' },
   'account.login': { zh: '登录', en: 'Sign in', fr: 'Connexion' },
+  // 页签标题专用(REQ-12):403 页此前无标题键,单独补一键,三语齐
+  'page.forbidden': { zh: '没有权限', en: 'Access denied', fr: 'Accès refusé' },
   'common.language': { zh: '语言', en: 'Language', fr: 'Langue' },
   'common.refresh': { zh: '刷新', en: 'Refresh', fr: 'Actualiser' },
   'common.loadFailed': { zh: '加载失败', en: 'Failed to load', fr: 'Échec du chargement' },

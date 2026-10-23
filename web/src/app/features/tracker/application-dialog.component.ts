@@ -161,7 +161,7 @@ import { textLengthError } from '../../core/api/validation-errors.helpers';
 
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>{{ t('common.cancel') }}</button>
-      <button mat-raised-button color="primary" [disabled]="!canSave()"
+      <button mat-raised-button color="primary"
               (click)="save()">
         {{ isEdit ? t('common.save') : t('common.create') }}
       </button>
@@ -173,20 +173,20 @@ import { textLengthError } from '../../core/api/validation-errors.helpers';
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .cell { min-width: 0; }
     /* 票75:字段级校验提示(对齐票12 口径) */
-    .field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
+    .field-error { color: var(--stop); font-size: 12px; margin: -14px 0 10px 2px; }
     mat-form-field { width: 100%; }
     .full { width: 100%; }
     mat-divider { margin: 6px 0 14px; }
     .err {
       display: flex; align-items: center; gap: 6px;
       margin-top: 12px; padding: 8px 12px; border-radius: 6px;
-      background: #fdecea; color: #b3261e; font-size: 13px;
+      background: var(--stop-tint); color: var(--stop); font-size: 13px;
     }
     .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .qa-row {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       padding: 10px 12px; margin-bottom: 4px; border-radius: 8px;
-      background: rgba(63, 81, 181, 0.06); border: 1px solid rgba(63, 81, 181, 0.16);
+      background: rgba(46, 58, 140, 0.06); border: 1px solid rgba(46, 58, 140, 0.16);
     }
     .qa-row .qa-hint { font-size: 12.5px; opacity: 0.7; }
     .qa-row mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; vertical-align: middle; }
@@ -255,7 +255,12 @@ export class ApplicationDialogComponent {
 
   save(): void {
     if (!this.canSave()) {
-      this.error.set(this.t('tracker.required'));
+      // 票 118 / D-6:校验全站统一为「提交不禁用、点提交后字段级报错」(对齐 Tech Stack 弹窗)。
+      // 必填缺失落到对应字段下方,不再只给一条顶部总报错、更不靠禁用按钮预防。
+      const errors: typeof this.fieldErrors = { ...this.fieldErrors };
+      if (!this.form.companyName.trim()) errors.companyName = this.t('tracker.required');
+      if (!this.form.role.trim()) errors.role = this.t('tracker.required');
+      this.fieldErrors = errors;
       return;
     }
     // 票75:长度拦截(弹窗关之前在字段下亮含上限提示;后端规则分新建/编辑两路——

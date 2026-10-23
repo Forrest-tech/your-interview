@@ -112,11 +112,11 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
 
       <!-- 字段网格: Location, Salary / Job type, Work authorization / Applied date, URL / Work mode -->
       <div class="fields">
-        <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.jobType') }}</span><span class="fvalue">{{ detail.jobType || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.workAuthorization') }}</span><span class="fvalue">{{ detail.workAuthorization || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue">{{ detail.appliedDate || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue" [class.missing]="!detail.location">{{ detail.location || t('tracker.notRecorded') }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue" [class.missing]="!detail.salary">{{ detail.salary || t('tracker.notRecorded') }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.jobType') }}</span><span class="fvalue" [class.missing]="!detail.jobType">{{ detail.jobType || t('tracker.notRecorded') }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.workAuthorization') }}</span><span class="fvalue" [class.missing]="!detail.workAuthorization">{{ detail.workAuthorization || t('tracker.notRecorded') }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue" [class.missing]="!detail.appliedDate">{{ detail.appliedDate || t('tracker.notRecorded') }}</span></div>
         <div class="field"><span class="flabel">URL</span>
           <span class="fvalue">
             @if (detail.link) {
@@ -127,7 +127,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
             } @else { — }
           </span>
         </div>
-        <div class="field"><span class="flabel">{{ t('tracker.saWorkMode') }}</span><span class="fvalue">{{ detail.workMode || '—' }}</span></div>
+        <div class="field"><span class="flabel">{{ t('tracker.saWorkMode') }}</span><span class="fvalue" [class.missing]="!detail.workMode">{{ detail.workMode || t('tracker.notRecorded') }}</span></div>
       </div>
 
       <!-- 2026-10-19:Simplify 风格 —— 无 "About the job" 大标题,JD 正文直接跟字段网格 -->
@@ -305,7 +305,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
               <button mat-button (click)="cancelEditNotes()">{{ t('common.cancel') }}</button>
             </div>
           } @else {
-            <p class="pre">{{ detail.notes || '—' }}</p>
+            <p class="pre" [class.missing]="!detail.notes">{{ detail.notes || t('tracker.dNoNotes') }}</p>
           }
         </div>
       </div><!-- /.side-col -->
@@ -721,16 +721,16 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       width: 20px; height: 20px; border-radius: 50%;
       border: 2px solid #D4D9E0; background: #fff;
     }
-    .tl-item.done .tl-dot { border-color: #2AAED3; }
+    .tl-item.done .tl-dot { border-color: var(--brand); }
     .tl-item.done .tl-dot::after {
       content: ''; position: absolute; left: 50%; top: 50%;
-      width: 8px; height: 8px; border-radius: 50%; background: #2AAED3;
+      width: 8px; height: 8px; border-radius: 50%; background: var(--brand);
       transform: translate(-50%, -50%);
     }
     .tl-name { font-size: 14px; font-weight: 600; color: #1F2937; }
     .tl-item:not(.done) .tl-name { font-weight: 500; color: #6E7681; }
     .tl-date { font-size: 13px; color: #8A94A6; margin-left: 8px; }
-    .tl-edit { margin-left: 8px; color: #2AAED3; cursor: pointer; font-size: 14px; }
+    .tl-edit { margin-left: 8px; color: var(--brand); cursor: pointer; font-size: 14px; }
     .notes-card {
       background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;
       padding: 24px;
@@ -757,6 +757,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .field { display: flex; flex-direction: column; gap: 4px; }
     .flabel { font-size: 12px; color: rgba(0,0,0,0.45); letter-spacing: 0.2px; }
     .fvalue { font-size: 14px; line-height: 1.5; }
+    .fvalue.missing, .pre.missing { color: var(--ink-2); }
     .kw-gap { margin: 0 0 20px; }
     .kw-gap .flabel { display: block; margin-bottom: 8px; }
     /* ---- Simplify 视觉:section 统一 ---- */
@@ -986,7 +987,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       border: 1px solid rgba(0,0,0,0.2); border-radius: 8px; resize: vertical;
       background: #fff; color: inherit;
     }
-    .plain-area:focus { outline: none; border-color: #1a73e8; }
+    .plain-area:focus { outline: none; border-color: var(--brand); }
     .plain-area::placeholder { color: rgba(0,0,0,0.35); }
     .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(0,0,0,0.45); line-height: 1.5; }
     /* 票75:字段级校验提示(对齐票12 Knowledge 弹窗 .field-error 口径:红色 12px、贴字段下方) */
@@ -1082,7 +1083,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     }
     .q-num {
       flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%;
-      background: #e8eaf6; color: #3f51b5; font-size: 12px; font-weight: 600;
+      background: var(--signal-tint); color: var(--brand); font-size: 12px; font-weight: 600;
       display: flex; align-items: center; justify-content: center;
     }
     .q-text {

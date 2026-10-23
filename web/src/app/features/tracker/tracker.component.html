@@ -84,7 +84,7 @@
       <div class="metric-val">{{ statInterview() }}</div>
       <div class="metric-label">{{ t('dash.interviewing') }}</div>
     </mat-card>
-    <mat-card class="metric highlight">
+    <mat-card class="metric" [class.highlight]="statOffer() > 0">
       <div class="metric-val">{{ statOffer() }}</div>
       <div class="metric-label">{{ t('dash.offer') }}</div>
     </mat-card>
@@ -249,8 +249,8 @@
     </mat-card>
   }
 
-  <!-- 看板 -->
-  @if (!loading() && items().length === 0) {
+  <!-- 空态(票 118 / F-2):全页只留一个 —— 看板用这张卡;列表/流程视图各有自己的空态,不再叠加 -->
+  @if (!loading() && items().length === 0 && viewMode() === 'board') {
     <mat-card class="empty-card">
       <mat-icon>inbox</mat-icon>
       <p>{{ t('tracker.empty') }}</p>
@@ -339,7 +339,7 @@
           }
 
           @if (col.items.length === 0) {
-            <div class="col-empty">—</div>
+            <div class="col-empty">{{ t('tracker.colEmpty') }}</div>
           }
         </div>
       </section>
@@ -358,7 +358,11 @@
   <div class="list-view" id="status">
     @for (a of displayItems(); track a.id) {
       <div class="list-row" (click)="openDetail(a)" [class.followup]="needsFollowUp(a)"
-           [class.selected]="isSelected(a.id)">
+           [class.selected]="isSelected(a.id)"
+           [class.term-offer]="a.status === 'Offer' || a.status === 'Accepted'"
+           [class.term-rejected]="a.status === 'Rejected'"
+           [class.term-ghosted]="a.status === 'Ghosted'"
+           [class.term-withdrawn]="a.status === 'Withdrawn'">
         @if (selectMode()) {
           <mat-checkbox class="select-box" [checked]="isSelected(a.id)"
                         (change)="toggleSelect(a.id, $event)"
@@ -395,13 +399,14 @@
               <span class="lr-loc"><mat-icon>place</mat-icon>{{ a.location }}</span>
             }
             @if (daysWaiting(a); as dw) {
-              <span class="lr-wait">{{ dw }}d</span>
+              <span class="lr-wait">{{ tf('tracker.daysInLoop', { n: dw }) }}</span>
             }
           </div>
         </div>
         <div class="lr-pipe">
           @for (s of pipelineStages; track s; let i = $index; let last = $last) {
-            <div class="sp-stage" [class.done]="stageReached(a, s)">
+            <div class="sp-stage" [class.done]="stageReached(a, s)"
+                 [class.current]="stageReached(a, s) && (last || !stageReached(a, pipelineStages[i + 1]))">
               <span class="sp-label">{{ t('status.' + s) }}</span>
               <span class="sp-track">
                 <span class="sp-dot"></span>
@@ -422,7 +427,7 @@
                   [matTooltip]="t('tracker.prepareInterview')" class="prep-btn">
             <mat-icon>school</mat-icon>{{ t('tracker.prepShort') }}
           </button>
-          <mat-form-field appearance="outline" class="lr-status">
+          <mat-form-field appearance="outline" class="lr-status" [ngClass]="'st-' + a.status.toLowerCase()">
             <mat-select [ngModel]="a.status" (ngModelChange)="quickChangeStatus(a, $event)"
                         [attr.aria-label]="t('tracker.changeStatus')"
                         [placeholder]="t('tracker.status')">
@@ -463,7 +468,7 @@
                              (flowChart().nodes[e.from].x + 130) + ' 110, ' +
                              (flowChart().nodes[e.to].x - 30) + ' 110, ' +
                              flowChart().nodes[e.to].x + ' 110'"
-                  fill="none" stroke="#90caf9"
+                  fill="none" stroke="#C6CDEA"
                   [attr.stroke-width]="e.width" opacity="0.6"/>
           }
           <!-- 节点(票73:点击选中阶段 → 下方条带展开该阶段;右上角红徽标 = 该阶段已收藏数) -->

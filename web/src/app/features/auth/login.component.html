@@ -91,7 +91,7 @@
           {{ busy() ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
 
-        @if (!humanOk && email && password) {
+        @if (!humanOk) {
           <p class="human-hint">{{ t('auth.humanHint') }}</p>
         }
       </form>

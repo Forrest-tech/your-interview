@@ -316,7 +316,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
       border: 1px solid rgba(0,0,0,0.14); background: transparent; font-size: 13px;
     }
     .mode-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .mode-btn.on { background: rgba(63,81,181,0.12); border-color: rgba(63,81,181,0.5); color: #3f51b5; font-weight: 600; }
+    .mode-btn.on { background: rgba(46,58,140,0.12); border-color: rgba(46,58,140,0.5); color: var(--brand); font-weight: 600; }
     .full { width: 100%; }
     mat-form-field { width: 100%; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -327,9 +327,9 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
     .note {
       display: flex; align-items: flex-start; gap: 6px; margin: 10px 0;
       padding: 8px 12px; border-radius: 6px; font-size: 13px;
-      background: rgba(76,175,80,0.10); color: #2e7d32;
+      background: var(--go-tint); color: var(--go);
     }
-    .note.warn { background: rgba(255,152,0,0.12); color: #a05a00; }
+    .note.warn { background: var(--attention-tint); color: var(--attention); }
     .note mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .hint { font-size: 12.5px; opacity: .7; margin: 8px 0 0; }
     .sad-sections { margin-top: 4px; }

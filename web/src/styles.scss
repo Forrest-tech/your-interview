@@ -390,6 +390,10 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   min-width: 0;
 }
 
+/* 票 118 / D-11:弹窗内容区顶部留白 —— outline 字段的浮动标签会升到字段框上方约 10px,
+   内容区顶边距不足时首行标签被滚动容器裁掉一半。全站弹窗统一在此兜底。 */
+.mat-mdc-dialog-container .mat-mdc-dialog-content { padding-top: 12px; }
+
 /* ---------------- 全站统一确认弹窗(app-confirm) ----------------
    ★ 2026-09-20(Forrest):所有确认弹窗(保存素材树 / 删除素材 /
    删除录音)都用同一个组件(shared/confirm-dialog),面板挂在全局

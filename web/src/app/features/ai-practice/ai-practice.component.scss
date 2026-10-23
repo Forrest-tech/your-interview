@@ -1345,7 +1345,7 @@
 .dict-passage { cursor: text; }
 .dict-word { cursor: pointer; border-radius: 4px; }
 .dict-word:hover { background: var(--signal-tint); }
-.dict-word.dict-looked { text-decoration: underline dotted var(--signal-soft); text-underline-offset: 4px; }
+/* 票126 §7:已查词点状虚线下划线整体移除(dict-looked 不再有任何视觉呈现) */
 .dict-word:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 
 /* ---------- ④ 录音状态区 ----------

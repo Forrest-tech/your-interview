@@ -53,11 +53,14 @@ public sealed class FormDto
 
 public sealed class AudioOptionDto
 {
-    /// <summary>oxford | commons | neural | device</summary>
-    public required string Kind { get; init; }
-    /// <summary>音频端点的不透明 key；kind=device 时无。</summary>
+    /// <summary>
+    /// oxford | commons（票126 §8.1：呈现 kind 只余真人录音两档）；
+    /// 无真人录音时为 null（序列化省略），以 Available=false 表达（票126 §8.2）。
+    /// </summary>
+    public string? Kind { get; init; }
+    /// <summary>音频端点的不透明 key；无真人录音时无。</summary>
     public string? Key { get; init; }
-    /// <summary>true = 有录音/合成来源可播；false = 仅设备 TTS 兜底（前端不渲染该口音按钮，SPEC §4.3）。</summary>
+    /// <summary>true = 有真人录音可播；false = 该口音无真人录音（前端不渲染播放钮，票126 §8.3/§8.4）。</summary>
     public required bool Available { get; init; }
 }
 
@@ -70,9 +73,14 @@ public sealed class AttributionDto
 
 public sealed class PronounceResponse
 {
-    /// <summary>oxford | commons | neural | device</summary>
-    public required string Kind { get; init; }
+    /// <summary>oxford | commons（票126 §8.1）；链耗尽时为 null（序列化省略）。</summary>
+    public string? Kind { get; init; }
     public string? Key { get; init; }
+    /// <summary>
+    /// 票126 §8.2：链耗尽 → Available=false（无 kind、无 key），端点仍回 200；
+    /// 不再以 device/neural 兜底填充（S-2 关掉机器兜底）。
+    /// </summary>
+    public bool Available { get; init; }
 }
 
 // ---------- 开放层内存模型 ----------

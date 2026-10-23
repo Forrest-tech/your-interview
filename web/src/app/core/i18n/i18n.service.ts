@@ -1410,6 +1410,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'dict.moreSenses': { zh: '还有 {n} 条义项', en: '{n} more senses', fr: '{n} sens de plus' },
   'dict.fewerSenses': { zh: '收起', en: 'Show less', fr: 'Réduire' },
   'dict.pronunciationSource': { zh: '发音来源', en: 'Pronunciation', fr: 'Prononciation' },
+  'dict.noAudio': { zh: '暂无发音', en: 'No pronunciation available', fr: 'Aucune prononciation disponible' },
   'practice.demoRead': { zh: '示范朗读', en: 'Demo read-aloud', fr: 'Lecture modèle' },
   'practice.rate': { zh: '语速', en: 'Speed', fr: 'Vitesse' },
   'practice.runGrade': { zh: '开始 AI 评分', en: 'Run AI grading', fr: 'Lancer la notation IA' },

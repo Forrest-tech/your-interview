@@ -57,6 +57,31 @@ export function output<T>(): EventEmitter<T> {
 // ---- @angular/common / forms / material ----
 export class CommonModule {}
 export class FormsModule {}
+
+// ---- @angular/common/http(票126 TJ-1 补:让真实 ApiClient 能在替身环境跑通) ----
+// HttpParams:ApiClient.toParams 只用 new + set(链式返回新实例口径以 this 近似,spec 不依赖参数内容)。
+export class HttpParams {
+  private readonly map = new Map<string, string>();
+  set(key: string, value: string): HttpParams {
+    this.map.set(key, value);
+    return this;
+  }
+  get(key: string): string | null { return this.map.get(key) ?? null; }
+}
+// HttpErrorResponse:最小真实类 —— 使「原生错误 instanceof 判定」与 ApiClient rethrow
+// 转型在 spec 里可区分(TJ-1 的接缝本体);字段与真实类同名同义。
+export class HttpErrorResponse {
+  readonly status: number;
+  readonly statusText: string;
+  readonly error: unknown;
+  constructor(init: { status?: number; statusText?: string; error?: unknown } = {}) {
+    this.status = init.status ?? 0;
+    this.statusText = init.statusText ?? '';
+    this.error = init.error ?? null;
+  }
+}
+export class HttpClient {}
+export class HttpResponse<T = unknown> { body: T | null = null; }
 export class MatButtonModule {}
 export class MatIconModule {}
 export class MatSnackBar {

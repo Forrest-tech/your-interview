@@ -293,13 +293,8 @@
             @if (readonlyText()) {
               <!-- ★ 第十三轮(Forrest):标记属于素材本身,不再给正文涂色 -->
               <!-- 票119:篇章点词查词典 —— token 化渲染(分隔符为显式 token,模板内不留游离空白节点) -->
-              <p class="read-text dict-passage" (keydown)="dict.onPassageKeydown($event)">@for (tok of dict.tokens(); track $index) {@if (tok.kind === 'word') {<span class="dict-word" [class.dict-looked]="dict.isLookedUp(tok)" [attr.data-wi]="tok.wordIndex" [attr.tabindex]="dict.roving() === tok.wordIndex ? 0 : -1" aria-haspopup="dialog" [attr.aria-expanded]="dict.openWordIndex() === tok.wordIndex" (click)="dict.onWordClick(tok, $event)">{{ tok.text }}</span>} @else {{{ tok.text }}}}</p>
-              @if (dict.state(); as dictState) {
-                <app-dictionary-card [state]="dictState"
-                                     (closeRequested)="dict.close(true)"
-                                     (retryRequested)="dict.retry()"
-                                     (playRequested)="dict.play($event)"></app-dictionary-card>
-              }
+              <p class="read-text dict-passage" (keydown)="dict.onPassageKeydown($event)">@for (tok of dict.tokens(); track $index) {@if (tok.kind === 'word') {<span class="dict-word" [attr.data-wi]="tok.wordIndex" [attr.tabindex]="dict.roving() === tok.wordIndex ? 0 : -1" aria-haspopup="dialog" [attr.aria-expanded]="dict.openWordIndex() === tok.wordIndex" (click)="dict.onWordClick(tok, $event)">{{ tok.text }}</span>} @else {{{ tok.text }}}}</p>
+              <!-- 票126 §6:词典卡改 popup 浮层(见文末 #dictPopupTpl),篇章文档流内不再有卡节点 -->
             } @else {
               <p class="readonly-empty">{{ t('practice.emptyContent') }}</p>
             }
@@ -853,3 +848,14 @@
     </div>
   }
 </div>
+
+<!-- 票126 §6:词典卡 popup 浮层模板(由宿主 openDictPopup 挂进 CDK Overlay,锚定触发词) -->
+<ng-template #dictPopupTpl>
+  @if (dict.state(); as dictState) {
+    <app-dictionary-card [state]="dictState"
+                         (closeRequested)="dict.close(true)"
+                         (retryRequested)="dict.retry()"
+                         (playRequested)="dict.play($event)"
+                         (layoutChanged)="refreshDictPopupPosition()"></app-dictionary-card>
+  }
+</ng-template>

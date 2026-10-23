@@ -1,10 +1,9 @@
 import { computed, signal } from '@angular/core';
-import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { Howl } from 'howler';
 import type { AiPracticeComponent } from './ai-practice.component';
 import {
-  DictAccent, DictCardState, PassageToken, isRovingKey, lookupKeyOf,
+  DictAccent, DictCardState, PassageToken, errorStatusOf, isRovingKey, lookupKeyOf,
   nextRovingIndex, tokenizePassage,
 } from './dictionary.helpers';
 import type { DictPlayRequest } from './dictionary-card.component';
@@ -14,10 +13,12 @@ import type { DictPlayRequest } from './dictionary-card.component';
  * 篇章 token 化、查词状态机、roving tabindex、发音链播放入口都在这里,
  * 宿主组件只挂模板与一行 effect(换素材即 reset)。
  *
- * 发音一律先走后端 pronounce 端点解析链(卡内已知 key 与端点结果同源;
- * neural 档的 key 只能由端点合成后给出),拿到 key 再取流播放;
- * 取流失败或链落到 device → speechSynthesis 朗读(SPEC §2.1 Tier 3,
- * 仅词典卡范围,不涉及篇章示范朗读)。
+ * 票126 变更:
+ * - 卡载体改 popup 浮层(§6):开/关卡时通知宿主把卡挂到锚定触发词的 overlay 上,
+ *   篇章文档流内不再有卡节点,开卡零版面位移。
+ * - F-1(§4.2):404 判定改读转换后错误的状态码(errorStatusOf),不再 instanceof 硬判。
+ * - S-2(§8.1):发音只走 pronounce 端点解析的真人录音链;链耗尽(available=false)
+ *   即无发音,不再有设备朗读兜底(词典代码内浏览器朗读 API 调用数 = 0)。
  */
 export class PracticeDictionary {
   constructor(private readonly host: AiPracticeComponent) {
@@ -42,13 +43,18 @@ export class PracticeDictionary {
   readonly openWordIndex = signal(-1);
   /** roving tabindex 停靠的词序(区内仅此词 tabindex=0)。 */
   readonly roving = signal(0);
-  /** 已查过的词键(本地状态:词面小写键 + 词元,渲染浅色点线)。 */
+  /** 已查过的词键(本地状态:词面小写键 + 词元;票126 §7 起无任何视觉呈现,仅作状态钩子)。 */
   readonly lookedUp = signal<ReadonlySet<string>>(new Set());
 
   private triggerEl: HTMLElement | null = null;
   private requestSeq = 0;
   private howl: Howl | null = null;
   private objectUrl: string | null = null;
+
+  /** 当前触发词元素(宿主 overlay 滚动跟随/出视口判定用)。 */
+  get triggerElement(): HTMLElement | null {
+    return this.triggerEl;
+  }
 
   /** 换素材时由宿主 effect 调用:关卡、清已查标记、roving 归首。 */
   reset(): void {
@@ -58,6 +64,7 @@ export class PracticeDictionary {
     this.roving.set(0);
     this.lookedUp.set(new Set());
     this.triggerEl = null;
+    this.host.closeDictPopup();
   }
 
   destroy(): void {
@@ -87,6 +94,8 @@ export class PracticeDictionary {
     this.openWordIndex.set(token.wordIndex);
     this.roving.set(token.wordIndex);
     this.state.set({ status: 'loading', query: key });
+    // popup 先行挂出(骨架在浮层内呈现,§6.3);点另一词时宿主把浮层重新锚定到新词。
+    if (el) this.host.openDictPopup(el);
     const seq = ++this.requestSeq;
     try {
       const dto = await firstValueFrom(this.host.practiceApi.lookupDictionaryWord(key));
@@ -96,12 +105,16 @@ export class PracticeDictionary {
     } catch (err) {
       if (seq !== this.requestSeq) return;
       this.markLookedUp(key);
+      // F-1(§4.2):状态判定认转换后错误的状态码;404 → 负卡,其余一切错误 → 错误卡。
       this.state.set(
-        err instanceof HttpErrorResponse && err.status === 404
+        errorStatusOf(err) === 404
           ? { status: 'notfound', query: key }
           : { status: 'error', query: key },
       );
     }
+    // 内容落定后卡高才稳定:让宿主按真实高度重选浮层位序(开卡瞬间量到的是骨架高,
+    // CDK 不会自行翻转 —— E2 活体实测)。
+    this.host.refreshDictPopupPosition();
   }
 
   /** 关闭词卡;returnFocus 时焦点送回触发词(Esc 路径,SPEC §6.3)。 */
@@ -109,7 +122,20 @@ export class PracticeDictionary {
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
+    this.host.closeDictPopup();
     if (returnFocus) this.triggerEl?.focus();
+  }
+
+  /**
+   * 滚动被动关闭(票126 §6.6 + M-5):触发词滚出视口时宿主调用。
+   * 与 Esc 主动关闭分开:焦点返回必须 preventScroll——不许把用户刚滚走的页面又拉回来。
+   */
+  closeFromScroll(): void {
+    this.requestSeq++;
+    this.state.set(null);
+    this.openWordIndex.set(-1);
+    this.host.closeDictPopup();
+    this.triggerEl?.focus({ preventScroll: true });
   }
 
   /** 错误简卡重试:以当前 query 重新查词。 */
@@ -150,34 +176,32 @@ export class PracticeDictionary {
 
   // ---------- 发音 ----------
 
-  /** 卡内播放请求分发:口音钮 / 词形钮 / 设备朗读钮。 */
+  /** 卡内播放请求分发:口音钮 / 词形钮(票126 后不再有设备朗读钮)。 */
   play(req: DictPlayRequest): void {
     const st = this.state();
     if (!st) return;
     if (req.target === 'accent') {
       const word = st.status === 'ok' ? st.card.lemma : st.query;
       void this.pronounceAndPlay(word, req.accent);
-    } else if (req.target === 'form') {
-      void this.pronounceAndPlay(req.text, req.accent);
     } else {
-      void this.pronounceAndPlay(st.query, req.accent);
+      void this.pronounceAndPlay(req.text, req.accent);
     }
   }
 
-  /** pronounce 端点解析链 → 有 key 取流播;落 device 或任何失败 → 设备朗读。 */
+  /**
+   * pronounce 端点解析真人录音链 → 有 key 取流播。
+   * 票126 §8.1/§8.2(S-2):链耗尽(available=false)或端点失败 → 无发音,就此静默,
+   * 绝不回退任何机器发音(设备 TTS 档已整级移除)。
+   */
   private async pronounceAndPlay(word: string, accent: DictAccent): Promise<void> {
     try {
       const dto = await firstValueFrom(
         this.host.practiceApi.pronounceDictionaryWord(word, accent),
       );
-      if (dto.key) {
-        const played = await this.playKey(dto.key);
-        if (played) return;
-      }
+      if (dto.available && dto.key) await this.playKey(dto.key);
     } catch {
-      /* 端点失败 → 设备朗读兜底 */
+      /* 端点失败 → 无发音(卡面状态文案已说明,不另行兜底) */
     }
-    this.speak(word, accent);
   }
 
   private async playKey(key: string): Promise<boolean> {
@@ -192,20 +216,6 @@ export class PracticeDictionary {
       return true;
     } catch {
       return false;
-    }
-  }
-
-  /** Tier 3 设备 TTS(仅词典卡发音兜底,SPEC §2.1)。 */
-  private speak(text: string, accent: DictAccent): void {
-    try {
-      const synth = window.speechSynthesis;
-      if (!synth) return;
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = accent === 'uk' ? 'en-GB' : 'en-US';
-      synth.cancel();
-      synth.speak(utter);
-    } catch {
-      /* 设备无语音能力时静默(卡面信息仍完整) */
     }
   }
 

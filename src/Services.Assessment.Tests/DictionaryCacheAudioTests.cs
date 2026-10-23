@@ -134,22 +134,31 @@ public class DictionaryCacheAudioTests
     }
 
     [Fact]
-    public void PronunciationChain_NoRecording_DeviceFallback_NotAvailable()
+    public void PronunciationChain_NoRecording_ChainEnds_UnavailableNoKind_Ticket126()
     {
+        // 票126 §8.1/§8.2（supersede 119 的 device 兜底口径）：链耗尽 → 无 kind、无 key、Available=false
         var svc = BuildService(StoreWithAudio(), packDir: null).Service;
         var r = svc.Lookup("neuralon")!;
         Assert.All(r.Audio.Values, p =>
         {
-            Assert.Equal("device", p.Kind);
-            Assert.False(p.Available); // device 不是真人录音:卡上不渲染该口音钮(§4.3)
+            Assert.Null(p.Kind); // 呈现 kind 只余 oxford/commons；无真人录音时不给 kind
+            Assert.False(p.Available);
             Assert.Null(p.Key);
         });
+        var pron = svc.PronounceAsync("neuralon", "us", CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Assert.False(pron.Available);
+        Assert.Null(pron.Kind);
+        Assert.Null(pron.Key);
     }
 
     [Fact]
-    public void PronunciationChain_NeuralTts_PronounceSynthesizesAndCaches_WhenEnabled()
+    public void PronunciationChain_NeuralEnabled_PresentationNeverConsumes_Ticket126()
     {
+        // 票126 §3/§8.1：NeuralTts 配置项不动，但卡与 pronounce 的呈现不得消费合成结果；
+        // 链耗尽仍是 Available=false，且不得发出任何合成 HTTP 调用。
         var root = Path.Combine(Path.GetTempPath(), "dict-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
         try
         {
             var handler = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
@@ -170,22 +179,18 @@ public class DictionaryCacheAudioTests
             var built = BuildService(StoreWithAudio(), packDir: null, options: options,
                 httpHandler: handler, cacheDir: Path.Combine(root, "cache"));
             var card = built.Service.Lookup("neuralon")!;
-            Assert.All(card.Audio.Values, p => Assert.Equal("neural", p.Kind));
+            Assert.All(card.Audio.Values, p =>
+            {
+                Assert.Null(p.Kind);
+                Assert.False(p.Available);
+            });
 
             var pron = built.Service.PronounceAsync("neuralon", "us", CancellationToken.None)
                 .GetAwaiter().GetResult();
-            Assert.Equal("neural", pron.Kind);
-            Assert.NotNull(pron.Key);
-            Assert.StartsWith("neural-", pron.Key);
-            var path = built.Audio.GetAudioFileAsync(pron.Key!, CancellationToken.None)
-                .GetAwaiter().GetResult();
-            Assert.NotNull(path);
-            Assert.Equal([7, 7], File.ReadAllBytes(path!));
-            var callsAfterFirst = handler.RequestedUrls.Count;
-            var pron2 = built.Service.PronounceAsync("neuralon", "us", CancellationToken.None)
-                .GetAwaiter().GetResult();
-            Assert.Equal(pron.Key, pron2.Key);
-            Assert.Equal(callsAfterFirst, handler.RequestedUrls.Count); // 命中缓存不重复合成
+            Assert.False(pron.Available);
+            Assert.Null(pron.Kind);
+            Assert.Null(pron.Key);
+            Assert.Empty(handler.RequestedUrls); // 呈现层零合成调用
         }
         finally { Directory.Delete(root, recursive: true); }
     }

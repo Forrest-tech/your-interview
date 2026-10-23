@@ -1,6 +1,9 @@
+import { HttpErrorResponse } from '@angular/common/http';
+
 /**
  * 票119:篇章点词词典的**纯决策函数** —— 篇章切分(保标点/空白)、义项折叠视图、
  * roving tabindex 导航、口音可用性与卡状态模型。
+ * 票126 增补:分词规则 R-T1…R-T5、错误状态码判定(§4.2)、口音记忆(§8.5)、归元角色(§9.1)。
  *
  * 与 word-click.helpers(票120)同例:决策逻辑抽成纯函数进 Jest,组件只作调用与
  * DOM 落地。切分教训(票120 模板空白剥离吞词间空格):分隔符必须是显式 token,
@@ -16,10 +19,32 @@ export interface PassageToken {
 }
 
 /**
- * 词形正则:字母/数字串,允许内部 ' ’ -(两侧必须有字母数字)。
- * 连字符词(year-old)整体一词 —— 后端有连字符回退,前端不拆。
+ * 候选串正则:字母/数字串,允许内部 ' ’ -(两侧必须有字母数字)。
+ * 候选串只是切分原料,是否成词跨度由 R-T2…R-T5 判定(票126 §5)。
  */
 const WORD_RE = /[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*/g;
+
+/**
+ * 候选串 → 可点词跨度(票126 §5.1,返回 [起点偏移, 跨度文本],至多一段):
+ * - R-T2 字母复合(可含内部撇号/连字符,无数字)→ 整体成跨度:don't / well-known / year-old。
+ * - R-T3 纯数字 → 不成跨度(普通文本):80 / 3.5 的每段 / 1,000 的每段。
+ * - R-T4 数字-连字符-字母复合 → 在「数字段 + 其后连字符」之后切开,字母段成跨度:
+ *   14-year-old → year-old;5-year → year。前提:余段全部由字母起头段组成。
+ * - R-T5 其余含数字混合串(a1 / 20th / B2)→ 整体不成跨度,宁缺勿假。
+ */
+export function wordSpanOf(candidate: string): [number, string] | null {
+  if (!/\d/.test(candidate)) return [0, candidate]; // R-T2
+  if (/^\d+$/.test(candidate)) return null; // R-T3
+  const m = /^(\d+)-(.+)$/.exec(candidate); // R-T4:数字段 + 连字符 + 余段
+  if (m) {
+    const rest = m[2];
+    const segments = rest.split(/['’-]/);
+    if (/^[A-Za-z]/.test(rest) && segments.every((s) => /^[A-Za-z]/.test(s))) {
+      return [candidate.length - rest.length, rest];
+    }
+  }
+  return null; // R-T5
+}
 
 /** 按 token 切分篇章:word 与 sep 交替,拼接全部 token.text === 原文。 */
 export function tokenizePassage(text: string): PassageToken[] {
@@ -27,19 +52,71 @@ export function tokenizePassage(text: string): PassageToken[] {
   if (!text) return tokens;
   let last = 0;
   let wordIndex = 0;
+  const pushSep = (from: number, to: number): void => {
+    if (to > from) tokens.push({ kind: 'sep', text: text.slice(from, to), wordIndex: -1 });
+  };
   for (const m of text.matchAll(WORD_RE)) {
     const start = m.index ?? 0;
-    if (start > last) tokens.push({ kind: 'sep', text: text.slice(last, start), wordIndex: -1 });
-    tokens.push({ kind: 'word', text: m[0], wordIndex: wordIndex++ });
-    last = start + m[0].length;
+    const span = wordSpanOf(m[0]);
+    if (span === null) continue; // 不成跨度:整段候选并入 sep(由相邻 pushSep 合并覆盖)
+    const [offset, spanText] = span;
+    pushSep(last, start + offset);
+    tokens.push({ kind: 'word', text: spanText, wordIndex: wordIndex++ });
+    last = start + offset + spanText.length;
   }
-  if (last < text.length) tokens.push({ kind: 'sep', text: text.slice(last), wordIndex: -1 });
+  pushSep(last, text.length);
   return tokens;
 }
 
 /** 查词键:词面小写(后端再作完整归一化;前端只负责大小写)。 */
 export function lookupKeyOf(wordText: string): string {
   return wordText.toLowerCase();
+}
+
+/**
+ * 错误状态码判定(票126 §4.2,F-1 收口):同时认两路错误形态——
+ * 原生 HttpErrorResponse 的 .status,与经 ApiClient rethrow 转换后的普通 Error
+ * (状态码挂在 .status 上、原文在 .original)。无状态码(网络断等)返回 null。
+ * F-1 的根因正是只认 instanceof HttpErrorResponse:经 ApiClient 后恒假、404 恒落 error 态。
+ */
+export function errorStatusOf(err: unknown): number | null {
+  // typeof 守卫:仓内 Jest 基建把 @angular/* 映射为替身(该导出在替身里不存在),
+  // 无守卫时 instanceof 会对 undefined 抛错;生产环境恒为真实类,行为不变。
+  if (typeof HttpErrorResponse === 'function' && err instanceof HttpErrorResponse) return err.status;
+  const status = (err as { status?: unknown } | null | undefined)?.status;
+  return typeof status === 'number' ? status : null;
+}
+
+/** 口音记忆键(票126 §8.5,键名钉死 dict.accent)。 */
+export const DICT_ACCENT_STORAGE_KEY = 'dict.accent';
+
+/** 读回记忆口音;无记忆/异常 → 默认 US(S-1 美音优先)。 */
+export function loadDictAccent(): DictAccent {
+  try {
+    return localStorage.getItem(DICT_ACCENT_STORAGE_KEY) === 'uk' ? 'uk' : 'us';
+  } catch {
+    return 'us';
+  }
+}
+
+export function saveDictAccent(accent: DictAccent): void {
+  try {
+    localStorage.setItem(DICT_ACCENT_STORAGE_KEY, accent);
+  } catch {
+    /* 存储不可用时仅影响记忆,不影响当次使用 */
+  }
+}
+
+/**
+ * 归元标注的词形角色(票126 §9.1):取 forms 中 text == 所查词形的条目的 label(可多个)。
+ * 标注由数据生成,不硬编码角色名。
+ */
+export function lemmaRoleLabels(
+  forms: { label: string; text: string }[],
+  queriedForm: string,
+): string[] {
+  const q = queriedForm.toLowerCase();
+  return forms.filter((f) => f.text.toLowerCase() === q).map((f) => f.label);
 }
 
 /** 义项折叠视图(SPEC §6.2:每组默认展开前 2 条,余者折叠)。 */
@@ -86,9 +163,9 @@ export function isRovingKey(key: string): boolean {
     || key === 'ArrowUp' || key === 'Home' || key === 'End';
 }
 
-/** 与后端 schema v2 对齐的音频选项(单个口音)。 */
+/** 与后端 schema 对齐的音频选项(单个口音;票126 §8.1:kind 只余真人录音两档,无录音时为 null)。 */
 export interface DictAudioOption {
-  kind: 'oxford' | 'commons' | 'neural' | 'device';
+  kind?: 'oxford' | 'commons' | null;
   key?: string | null;
   available: boolean;
 }
@@ -96,8 +173,8 @@ export interface DictAudioOption {
 export type DictAccent = 'us' | 'uk';
 
 /**
- * 口音钮渲染判定(SPEC §4.3/§6.2):available 的口音才渲染钮;
- * 两口音都不可用 → 显示通用设备发音钮(Tier 3,走 pronounce/speechSynthesis)。
+ * 口音播放钮渲染判定:available(有真人录音)的口音才渲染播放钮。
+ * 两口音都不可用 → 不渲染任何播放钮,卡上只出「暂无发音」状态文案(票126 §8.3,S-2)。
  */
 export function accentButtonVisible(
   audio: Partial<Record<DictAccent, DictAudioOption>> | null | undefined,
@@ -139,7 +216,8 @@ export interface DictCardData {
 }
 
 /**
- * 负结果简卡模型(SPEC §6.2):词头 + 发音钮 + 「暂无词条释义」一行。
+ * 负结果简卡模型(票126 §4.3,supersede 119 §6.2):词头 + 「暂无词条释义」一行,
+ * 无发音钮、无发音区(S-2③:负卡不出现任何机器朗读呈现)。
  * 全卡禁「—」占位符 —— 本模型不产出任何占位文案,Jest 钉住。
  */
 export function negativeCardLines(query: string, noEntryText: string): string[] {

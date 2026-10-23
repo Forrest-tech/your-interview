@@ -389,7 +389,7 @@ export class PracticeApi {
       `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}`);
   }
 
-  /** 发音链单点解析:词未命中也可成立(Tier 2/3 对任意词可达)。 */
+  /** 发音链单点解析(票126 §8.2):只供卡内播放入口;链耗尽回 {available:false}。 */
   pronounceDictionaryWord(word: string, accent: 'us' | 'uk'): Observable<DictionaryPronounceDto> {
     return this.api.get<DictionaryPronounceDto>(
       `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}/pronounce?accent=${accent}`);
@@ -613,7 +613,8 @@ export class PracticeApi {
 /** 示范朗读合成结果:音频字节 + 是否来自本地缓存(诚实来源标记)。 */
 /** 票119 词典卡 DTO(后端 schema v2,GET /dictionary/{word})。 */
 export interface DictionaryAudioOptionDto {
-  kind: 'oxford' | 'commons' | 'neural' | 'device';
+  /** 票126 §8.1:呈现 kind 只余真人录音两档;无真人录音时后端省略此字段(available=false)。 */
+  kind?: 'oxford' | 'commons' | null;
   key?: string | null;
   available: boolean;
 }
@@ -645,8 +646,10 @@ export interface DictionaryCardDto {
 }
 
 export interface DictionaryPronounceDto {
-  kind: 'oxford' | 'commons' | 'neural' | 'device';
+  /** 票126 §8.2:链耗尽 → available=false 且无 kind/key(端点回 200,不再有 device/neural 兜底)。 */
+  kind?: 'oxford' | 'commons' | null;
   key?: string | null;
+  available: boolean;
 }
 
 export interface TtsSynthesisResult {

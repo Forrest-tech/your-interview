@@ -33,7 +33,7 @@ public sealed class DictionaryController(DictionaryService dictionary, AudioReso
         return Results.Json(result, JsonOptions);
     }
 
-    /// <summary>发音链单点解析：词未命中也可成立（Tier 2/3 对任意词可达，SPEC §4.3 注）。</summary>
+    /// <summary>发音链单点解析（票126 §8.2）：只供卡内播放入口；链耗尽回 200 {available:false}，不再有 device/neural 兜底。</summary>
     [HttpGet("{word}/pronounce")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
     public async Task<IResult> Pronounce(string word, [FromQuery] string accent = "us", CancellationToken ct = default)

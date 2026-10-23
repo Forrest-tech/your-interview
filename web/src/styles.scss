@@ -506,3 +506,14 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
+
+/* ---------------- 票126 词典卡 popup 浮层(§6.3:宽 = min(400px, 视口宽 − 16px)) ---------------- */
+.dict-popup-panel {
+  width: min(400px, calc(100vw - 16px));
+  filter: drop-shadow(0 14px 34px rgba(15, 23, 42, .20));
+}
+@media (max-width: 639px) {
+  /* 移动 sheet:宿主 global 以 left 8px 定锚,本宽保证右侧同为 8px
+     (CDK global 同时给 left+right 只落一边 margin,E7 活体实测) */
+  .dict-popup-panel { width: calc(100vw - 16px); }
+}

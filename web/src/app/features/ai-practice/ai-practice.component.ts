@@ -1,4 +1,6 @@
-import { ChangeDetectorRef, Component, HostListener, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, HostListener, OnDestroy, OnInit, TemplateRef, ViewChild, ViewContainerRef, computed, effect, inject, signal } from '@angular/core';
+import { Overlay, OverlayRef } from '@angular/cdk/overlay';
+import { TemplatePortal } from '@angular/cdk/portal';
 import { Howler } from 'howler';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -74,6 +76,81 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly grading = new PracticeGradingSession(this);  readonly recError = this.grading.recError;
   /** 票119 篇章点词词典(状态机/发音链全在委托类)。 */
   readonly dict = new PracticeDictionary(this);
+
+  // ---------- 票126 词典卡 popup 浮层宿主(§6:CDK Overlay,锚定触发词) ----------
+  private readonly overlay = inject(Overlay);
+  private readonly vcr = inject(ViewContainerRef);
+  @ViewChild('dictPopupTpl') private dictPopupTpl?: TemplateRef<unknown>;
+  private dictOverlayRef: OverlayRef | null = null;
+
+  /** 开浮层:锚定触发词跨度;已开时先拆旧层再按新锚点重挂(点另一词 = 内容切换 + 重新锚定,§6.7)。 */
+  openDictPopup(anchor: HTMLElement): void {
+    if (!this.dictPopupTpl) return;
+    this.closeDictPopup();
+    const ref = window.innerWidth < 640
+      ? this.overlay.create({
+          // §6.5 移动端:底部 sheet(左右/底部各 8px),锚定/翻转规则不适用
+          // 注:global 同时给 left+right 时 CDK 只落一边 margin(E7 活体实测 left 丢失);
+          // 改以 left+bottom 定锚,右边距由面板宽 calc(100vw - 16px)(styles.scss)保证。
+          positionStrategy: this.overlay.position().global().left('8px').bottom('8px'),
+          scrollStrategy: this.overlay.scrollStrategies.noop(),
+          panelClass: 'dict-popup-panel',
+        })
+      : this.overlay.create({
+          positionStrategy: this.overlay.position()
+            .flexibleConnectedTo(anchor)
+            .withPositions([
+              // 首选:锚点下方、左缘对齐、间距 8px(§6.2)
+              { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 8 },
+              // 下方不足 → 翻转至上方
+              { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 },
+              // 右侧溢出 → 右对齐兜底(及其翻转)
+              { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 8 },
+              { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -8 },
+            ])
+            .withViewportMargin(8)
+            .withPush(false)
+            // flexibleDimensions 必须关:开着时 CDK 优先「缩面板」而非走位置回退,
+            // 而卡高由卡自身 max-height 决定、面板缩不动 → 翻转永不触发、卡溢出视口
+            // (E2 活体实测)。关后四位序回退按序生效;卡自身 max-height+内滚兜底封顶。
+            .withFlexibleDimensions(false),
+          scrollStrategy: this.overlay.scrollStrategies.noop(),
+          panelClass: 'dict-popup-panel',
+        });
+    this.dictOverlayRef = ref;
+    ref.attach(new TemplatePortal(this.dictPopupTpl, this.vcr));
+    document.addEventListener('scroll', this.dictScrollHandler, true);
+  }
+
+  /**
+   * 按卡的真实高度让 CDK 重选浮层位序:开卡瞬间 CDK 量到的是骨架(loading)高度,
+   * 内容落定/折叠切换后必须重选,否则下方空间不足时翻转永不触发、卡溢出视口(E2 实测)。
+   * rAF 一帧:等信号驱动的渲染落定后再量高。
+   */
+  refreshDictPopupPosition(): void {
+    requestAnimationFrame(() => this.dictOverlayRef?.updatePosition());
+  }
+
+  /** 关浮层(幂等):PracticeDictionary 的 close/reset 路径与本组件卸载都经此收口。 */
+  closeDictPopup(): void {
+    document.removeEventListener('scroll', this.dictScrollHandler, true);
+    this.dictOverlayRef?.dispose();
+    this.dictOverlayRef = null;
+  }
+
+  /**
+   * §6.6 滚动跟随:页面/篇章滚动时浮层重定位保持与锚点的相对关系;
+   * 触发词完全滚出视口 → 被动关闭(焦点处置走 dict.closeFromScroll 的 preventScroll 路径,M-5)。
+   */
+  private readonly dictScrollHandler = (): void => {
+    const ref = this.dictOverlayRef;
+    if (!ref) return;
+    const trigger = this.dict.triggerElement;
+    if (!trigger) return;
+    const r = trigger.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) this.dict.closeFromScroll();
+    else ref.updatePosition();
+  };
   readonly myRecordings = this.grading.myRecordings;
   readonly nodes = this.tree.nodes;
   readonly fromTechNodes = this.tree.fromTechNodes;
@@ -546,6 +623,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       this.tts.ttsUrl = null;
     }
     this.grading.stopPlayback();
+    document.removeEventListener('scroll', this.dictScrollHandler, true);
+    this.closeDictPopup();
     this.dict.destroy();
     // ★ 第二十六轮:回收鉴权拉流产生的 objectURL(否则离页泄漏)
     for (const u of this.grading.audioBlobUrls.values()) URL.revokeObjectURL(u);

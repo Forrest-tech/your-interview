@@ -1,27 +1,33 @@
 import {
   AfterViewInit, Component, ElementRef, EventEmitter, Input, OnChanges, Output,
-  SimpleChanges, ViewChild, inject, signal,
+  SimpleChanges, ViewChild, computed, inject, signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   DictAccent, DictCardState, accentButtonVisible, anyAccentAvailable, foldView,
+  lemmaRoleLabels, loadDictAccent, saveDictAccent,
 } from './dictionary.helpers';
 
-/** 卡内播放请求:宿主负责真正的取流/合成/设备朗读,卡只表达意图。 */
+/** 卡内播放请求:宿主负责真正的取流播放,卡只表达意图(票126 后不再有设备朗读请求)。 */
 export type DictPlayRequest =
   | { target: 'accent'; accent: DictAccent }
-  | { target: 'form'; text: string; accent: DictAccent }
-  | { target: 'speak'; accent: DictAccent };
+  | { target: 'form'; text: string; accent: DictAccent };
 
 /**
- * 票119 词典卡(SPEC §6.2/§6.3):篇章点词后在篇章区下方就地展开。
- * 结构:词头行(词元 + 归元标注)→ 音标行(UK/US 各自的音标 + 播放钮,口音可切换)
+ * 词典卡(票119 建,票126 改 popup 载体):
+ * 宿主把本组件挂进锚定触发词的 overlay 浮层呈现(§6),卡本身只管内容与卡内交互。
+ * 结构:词头行(词元 + 归元标注)→ 音标行(UK/US 音标 + 播放钮,口音可切换)
  * → 词性组(标签 → 义项[默认前 2 条,余者折叠] → 中文行)→ 词形行 → 来源行。
  * 缺失即省略,全卡不出现「—」占位符。
- * 无障碍:role=dialog、以词头为 aria-label;打开后焦点移入首个可交互元素;
- * Esc 关闭(宿主把焦点送回触发词);卡内 Tab 首尾回绕(轻量焦点陷阱)。
+ * 票126 口径:
+ * - Close 钮在 DOM 末位(§6.8:Tab 序与视觉序一致,Close 末位),视觉靠绝对定位回右上角。
+ * - 入卡首焦点 = 视觉序首个可交互元素(M-6/§6.7),不再写死播放钮优先。
+ * - 口音记忆 localStorage(dict.accent,§8.5),默认 US;某口音无真人录音 → 其 tab 禁用并标注(§8.4)。
+ * - 两口音皆无真人录音 → 无播放钮,只出「暂无发音」状态文案(§8.3,S-2);负卡无任何发音呈现(§4.3)。
+ * - 归元标注由 forms 数据生成、须指明所点词形角色(§9.1)。
+ * 无障碍:role=dialog、以词头为 aria-label;Esc 关闭(宿主把焦点送回触发词);卡内 Tab 首尾回绕。
  */
 @Component({
   selector: 'app-dictionary-card',
@@ -42,77 +48,64 @@ export type DictPlayRequest =
         @case ('error') {
           <div class="dict-head-row">
             <span class="dict-headword">{{ state.query }}</span>
-            <button type="button" class="dict-icon-btn" (click)="closeRequested.emit()"
-                    [attr.aria-label]="t('dict.close')">
-              <mat-icon>close</mat-icon>
-            </button>
           </div>
           <p class="dict-none">{{ t('dict.loadFailed') }}</p>
           <button type="button" class="dict-retry" (click)="retryRequested.emit()">
             {{ t('dict.retry') }}
           </button>
+          <button type="button" class="dict-icon-btn dict-close" (click)="closeRequested.emit()"
+                  [attr.aria-label]="t('dict.close')">
+            <mat-icon>close</mat-icon>
+          </button>
         }
         @case ('notfound') {
           <div class="dict-head-row">
             <span class="dict-headword">{{ state.query }}</span>
-            <button type="button" class="dict-play-btn"
-                    (click)="playRequested.emit({ target: 'speak', accent: 'us' })"
-                    [attr.aria-label]="t('dict.speakWord')">
-              <mat-icon>volume_up</mat-icon>
-            </button>
-            <button type="button" class="dict-icon-btn" (click)="closeRequested.emit()"
-                    [attr.aria-label]="t('dict.close')">
-              <mat-icon>close</mat-icon>
-            </button>
           </div>
           <p class="dict-none">{{ t('dict.noEntry') }}</p>
+          <button type="button" class="dict-icon-btn dict-close" (click)="closeRequested.emit()"
+                  [attr.aria-label]="t('dict.close')">
+            <mat-icon>close</mat-icon>
+          </button>
         }
         @case ('ok') {
           @if (card(); as c) {
             <div class="dict-head-row">
               <span class="dict-headword">{{ c.lemma }}</span>
-              @if (c.query !== c.lemma) {
-                <span class="dict-lemma-note">{{ tf('dict.formOf', { lemma: c.lemma }) }}</span>
+              @if (roleNote(c); as note) {
+                <span class="dict-lemma-note">{{ note }}</span>
               }
               <span class="dict-spacer"></span>
-              <button type="button" class="dict-icon-btn" (click)="closeRequested.emit()"
-                      [attr.aria-label]="t('dict.close')">
-                <mat-icon>close</mat-icon>
-              </button>
             </div>
 
-            @if (c.phonetics.uk || c.phonetics.us || anyAccent(c)) {
-              <div class="dict-phon-row">
-                @for (acc of accents; track acc) {
-                  @if (phoneticOf(c, acc) || accentVisible(c, acc)) {
-                    <span class="dict-phon" [class.dict-phon-active]="accent() === acc">
-                      <button type="button" class="dict-accent-tag"
-                              (click)="accent.set(acc)"
-                              [attr.aria-label]="acc === 'us' ? t('dict.accentUs') : t('dict.accentUk')">
-                        {{ acc === 'us' ? 'US' : 'UK' }}
+            <div class="dict-phon-row">
+              @for (acc of accents(); track acc) {
+                @if (phoneticOf(c, acc) || accentVisible(c, acc)) {
+                  <span class="dict-phon" [class.dict-phon-active]="accent() === acc">
+                    <button type="button" class="dict-accent-tag"
+                            (click)="setAccent(acc)"
+                            [disabled]="!accentVisible(c, acc)"
+                            [attr.title]="!accentVisible(c, acc) ? noAudioLabel(acc) : null"
+                            [attr.aria-label]="!accentVisible(c, acc) ? noAudioLabel(acc) : (acc === 'us' ? t('dict.accentUs') : t('dict.accentUk'))">
+                      {{ acc === 'us' ? 'US' : 'UK' }}
+                    </button>
+                    @if (phoneticOf(c, acc); as ipa) {
+                      <span class="dict-ipa">{{ ipa }}</span>
+                    }
+                    @if (accentVisible(c, acc)) {
+                      <button type="button" class="dict-play-btn"
+                              (click)="playRequested.emit({ target: 'accent', accent: acc })"
+                              [attr.aria-label]="acc === 'us' ? t('dict.playUs') : t('dict.playUk')">
+                        <mat-icon>volume_up</mat-icon>
                       </button>
-                      @if (phoneticOf(c, acc); as ipa) {
-                        <span class="dict-ipa">{{ ipa }}</span>
-                      }
-                      @if (accentVisible(c, acc)) {
-                        <button type="button" class="dict-play-btn"
-                                (click)="playRequested.emit({ target: 'accent', accent: acc })"
-                                [attr.aria-label]="acc === 'us' ? t('dict.playUs') : t('dict.playUk')">
-                          <mat-icon>volume_up</mat-icon>
-                        </button>
-                      }
-                    </span>
-                  }
+                    }
+                  </span>
                 }
-                @if (!anyAccent(c)) {
-                  <button type="button" class="dict-play-btn"
-                          (click)="playRequested.emit({ target: 'speak', accent: accent() })"
-                          [attr.aria-label]="t('dict.speakWord')">
-                    <mat-icon>volume_up</mat-icon>
-                  </button>
-                }
-              </div>
-            }
+              }
+              @if (!anyAccent(c)) {
+                <span class="dict-noaudio">{{ t('dict.noAudio') }}</span>
+              }
+            </div>
 
             @for (block of c.posBlocks; track block.pos; let bi = $index) {
               <div class="dict-pos-block">
@@ -178,6 +171,11 @@ export type DictPlayRequest =
                 <span class="dict-source-audio">{{ t('dict.pronunciationSource') }}: {{ c.attribution.audioSource }}</span>
               }
             </div>
+
+            <button type="button" class="dict-icon-btn dict-close" (click)="closeRequested.emit()"
+                    [attr.aria-label]="t('dict.close')">
+              <mat-icon>close</mat-icon>
+            </button>
           }
         }
       }
@@ -185,9 +183,14 @@ export type DictPlayRequest =
   `,
   styles: [`
     .dict-card {
-      margin-top: 12px; padding: 14px 16px;
+      position: relative;
+      padding: 14px 16px;
       background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
       color: var(--ink);
+      max-height: 70vh; overflow-y: auto;
+    }
+    @media (max-width: 639px) {
+      .dict-card { max-height: 60vh; }
     }
     .dict-skeleton { height: 132px; display: flex; flex-direction: column; gap: 10px; }
     .sk { border-radius: 6px; background: var(--parked-fill); animation: dict-pulse 1.2s ease-in-out infinite; }
@@ -196,7 +199,7 @@ export type DictPlayRequest =
     .sk-line.short { width: 64%; }
     @keyframes dict-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
     .dict-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-    .dict-head-row { display: flex; align-items: center; gap: 8px; }
+    .dict-head-row { display: flex; align-items: center; gap: 8px; padding-right: 36px; }
     .dict-headword { font-size: 22px; font-weight: 600; color: var(--ink); }
     .dict-lemma-note { font-size: 13px; color: var(--ink-2); }
     .dict-spacer { flex: 1; }
@@ -206,6 +209,7 @@ export type DictPlayRequest =
       background: transparent; color: var(--brand); cursor: pointer; padding: 0;
     }
     .dict-icon-btn { color: var(--ink-2); }
+    .dict-close { position: absolute; top: 10px; right: 10px; }
     .dict-icon-btn:hover, .dict-play-btn:hover { background: var(--signal-tint); }
     .dict-icon-btn:focus-visible, .dict-play-btn:focus-visible,
     .dict-accent-tag:focus-visible, .dict-fold-btn:focus-visible, .dict-retry:focus-visible {
@@ -219,8 +223,10 @@ export type DictPlayRequest =
       border: 1px solid var(--hairline); background: var(--paper); color: var(--ink-2);
       border-radius: 6px; font-size: 11px; font-weight: 600; padding: 2px 6px; cursor: pointer;
     }
+    .dict-accent-tag[disabled] { opacity: .55; cursor: not-allowed; }
     .dict-phon-active .dict-accent-tag { background: var(--signal-tint); color: var(--brand); border-color: var(--signal-soft); }
     .dict-ipa { font-size: 15px; color: var(--ink); }
+    .dict-noaudio { font-size: 13px; color: var(--ink-2); }
     .dict-pos-block { margin-top: 12px; }
     .dict-pos-label {
       display: inline-block; font-size: 12px; font-weight: 600; color: var(--brand);
@@ -260,13 +266,17 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
   @Output() closeRequested = new EventEmitter<void>();
   @Output() retryRequested = new EventEmitter<void>();
   @Output() playRequested = new EventEmitter<DictPlayRequest>();
+  /** 卡高变化(折叠展开/收起)→ 宿主据此让浮层按真实高度重选位序(§6.3 完整可见)。 */
+  @Output() layoutChanged = new EventEmitter<void>();
 
   @ViewChild('cardRoot') private cardRoot?: ElementRef<HTMLElement>;
 
   private readonly i18n = inject(I18nService);
-  protected readonly accents: DictAccent[] = ['uk', 'us'];
-  /** 当前口音(影响词形播放与设备朗读的口音选择)。 */
-  protected readonly accent = signal<DictAccent>('us');
+  /** 音标行序:当前口音行在前(119 既有;§6.8 首焦点「当前口音播放钮」依赖此序)。 */
+  protected readonly accents = computed<DictAccent[]>(() =>
+    this.accent() === 'uk' ? ['uk', 'us'] : ['us', 'uk']);
+  /** 当前口音(影响词形播放):初值读 localStorage 记忆,无记忆默认 US(§8.5/S-1)。 */
+  protected readonly accent = signal<DictAccent>(loadDictAccent());
   private readonly expandedBlocks = signal<ReadonlySet<number>>(new Set());
   /** 换词待聚焦标记:新词卡落定(ok/notfound/error)后把焦点移入一次。 */
   private pendingFocus = false;
@@ -295,6 +305,27 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
     return anyAccentAvailable(c.audio);
   }
 
+  /** §8.4 禁用标注:「暂无发音 · UK」式(dict.noAudio + 口音名,不新造键)。 */
+  protected noAudioLabel(acc: DictAccent): string {
+    return `${this.t('dict.noAudio')} · ${acc === 'us' ? 'US' : 'UK'}`;
+  }
+
+  /** 切换口音并落 localStorage 记忆(§8.5);禁用 tab 原生不触发 click。 */
+  protected setAccent(acc: DictAccent): void {
+    this.accent.set(acc);
+    saveDictAccent(acc);
+  }
+
+  /**
+   * 归元标注(§9.1):所查即原形 → 不渲染;否则 = formOf 文案 + forms 数据里的词形角色。
+   */
+  protected roleNote(c: NonNullable<ReturnType<typeof this.card>>): string | null {
+    if (c.query === c.lemma) return null;
+    const base = this.tf('dict.formOf', { lemma: c.lemma });
+    const labels = lemmaRoleLabels(c.forms, c.query);
+    return labels.length > 0 ? `${base} · ${labels.join('、')}` : base;
+  }
+
   protected isExpanded(blockIndex: number): boolean {
     return this.expandedBlocks().has(blockIndex);
   }
@@ -315,6 +346,7 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
       else next.add(blockIndex);
       return next;
     });
+    this.layoutChanged.emit();
   }
 
   ngAfterViewInit(): void {
@@ -325,29 +357,26 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
     if (changes['state']) {
       const prev = changes['state'].previousValue as DictCardState | undefined;
       if (!prev || prev.query !== this.state.query || prev.status === 'error') {
-        // 换词即重置折叠与口音(卡内容整体切换,不继承上一个词的展开态)
+        // 换词重置折叠态(卡内容整体切换);口音不复位——走 localStorage 记忆(§8.5)
         this.expandedBlocks.set(new Set());
-        this.accent.set('us');
         this.pendingFocus = true;
       }
       this.maybeFocusFirst();
     }
   }
 
-  /** 卡落定后把焦点移入卡内首个可交互元素(SPEC §6.3,默认播放钮);loading 骨架期不抢焦点。 */
+  /** 卡落定后把焦点移入视觉序首个可交互元素(M-6/§6.7);loading 骨架期不抢焦点。 */
   private maybeFocusFirst(): void {
     if (!this.pendingFocus || !this.state || this.state.status === 'loading') return;
     this.pendingFocus = false;
     queueMicrotask(() => {
       const root = this.cardRoot?.nativeElement;
       if (!root) return;
-      const target = root.querySelector<HTMLElement>('.dict-play-btn:not([disabled])')
-        ?? root.querySelector<HTMLElement>('button:not([disabled])');
-      target?.focus();
+      root.querySelector<HTMLElement>('button:not([disabled])')?.focus();
     });
   }
 
-  /** 卡内键盘:Esc 关闭;Tab 在卡内首尾回绕(轻量焦点陷阱)。 */
+  /** 卡内键盘:Esc 关闭;Tab 在卡内首尾回绕(轻量焦点陷阱,序 = DOM 序,Close 末位)。 */
   protected onCardKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.stopPropagation();

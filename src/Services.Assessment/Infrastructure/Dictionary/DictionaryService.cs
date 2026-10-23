@@ -61,22 +61,21 @@ public sealed class DictionaryService
         return response;
     }
 
-    /// <summary>发音链单点解析（SPEC §4.3 pronounce 端点）：未命中词亦可成立（Tier 2/3）。</summary>
-    public async Task<PronounceResponse> PronounceAsync(string word, string accent, CancellationToken ct)
+    /// <summary>
+    /// 发音链单点解析（票126 §8.1/§8.2  supersede 119 §4.3 注）：只供卡内播放入口；
+    /// 链耗尽 → Available=false（无 kind、无 key），不用 404、更不以 device/neural 兜底。
+    /// 神经 TTS 配置（Dictionary:NeuralTts）本票不动，但 pronounce 呈现不消费其合成结果（S-2）。
+    /// </summary>
+    public Task<PronounceResponse> PronounceAsync(string word, string accent, CancellationToken ct)
     {
         var q = NormalizeQuery(word);
-        if (q.Length == 0) return new PronounceResponse { Kind = "device" };
+        if (q.Length == 0) return Task.FromResult(new PronounceResponse { Available = false });
         accent = accent == "uk" ? "uk" : "us";
         var lemma = ResolveLemma(q)?.Lemma ?? q;
         var option = ResolveAudio(lemma, q, accent);
-        if (option.Kind == "neural")
-        {
-            var key = await _audio.SynthesizeNeuralAsync(q, ct);
-            return key is not null
-                ? new PronounceResponse { Kind = "neural", Key = key }
-                : new PronounceResponse { Kind = "device" };
-        }
-        return new PronounceResponse { Kind = option.Kind, Key = option.Key };
+        return Task.FromResult(option is { Available: true, Key: not null }
+            ? new PronounceResponse { Kind = option.Kind, Key = option.Key, Available = true }
+            : new PronounceResponse { Available = false });
     }
 
     // ---------- 归一化（§4.1，顺序固定） ----------
@@ -167,7 +166,8 @@ public sealed class DictionaryService
             });
         }
 
-        var forms = MergeForms(entry.Forms.Select(f => (f.Label, f.Text)));
+        // 票126 §9.2：牛津包词形 label 经映射表出（neg/short/rareshortform 等英文码不得透传）
+        var forms = MergeForms(entry.Forms.Select(f => (FormLabelOf(f.Label), f.Text)));
         if (forms.Count == 0)
             forms = EcdictForms(lemma); // P1：开放层只补牛津缺失的词形
 
@@ -369,11 +369,10 @@ public sealed class DictionaryService
         var rec = PickIndexRec(lemma, accent) ?? (queriedForm != lemma ? PickIndexRec(queriedForm, accent) : null);
         if (rec is not null)
             return new AudioOptionDto { Kind = "commons", Key = AudioResolver.Mp3FileName(rec), Available = true };
-        // 4) Tier 2 神经 TTS（配置启用时）
-        if (_options.NeuralTts.Enabled)
-            return new AudioOptionDto { Kind = "neural", Available = true };
-        // 5) Tier 3 设备 TTS（available=false：前端不渲染该口音按钮，简卡发音钮走 pronounce）
-        return new AudioOptionDto { Kind = "device", Available = false };
+        // 票126 §8.1（S-2 关掉机器兜底）：链到此为止。
+        // Tier 2 神经 TTS 配置项不动，但词典呈现不消费（呈现 kind 只余 oxford/commons）；
+        // Tier 3 设备 TTS 整级移除。耗尽即无发音：Available=false、无 kind、无 key（§8.2）。
+        return new AudioOptionDto { Kind = null, Key = null, Available = false };
     }
 
     private AudioFileRec? PickIndexRec(string word, string accent)
@@ -394,7 +393,6 @@ public sealed class DictionaryService
                 {
                     "oxford" => "Oxford Advanced Learner's Dictionary 10 (local pack)",
                     "commons" => "Wikimedia Commons",
-                    "neural" => "Neural TTS",
                     _ => null,
                 };
             }
@@ -438,7 +436,7 @@ public sealed class DictionaryService
         return output;
     }
 
-    // ---------- 词性标签（§9.2.4 学习者标签，源记号不直出） ----------
+    // ---------- 词性/词形标签（§9.2.4 学习者标签，源记号不直出） ----------
 
     public static string NormalizePosName(string pos) => pos switch
     {
@@ -449,23 +447,81 @@ public sealed class DictionaryService
         _ => pos.Trim().ToLowerInvariant(),
     };
 
-    public static string PosLabel(string pos) => NormalizePosName(pos) switch
+    /// <summary>
+    /// 词性标签映射（票126 §9.2 补全至实测可达全集）：单值标签逐个映射；
+    /// 牛津组合标签（如 "adverb, adjective"）按分量逐个映射后以「/」拼合（同 MergeForms 口径）。
+    /// 全集普查（2026-10-23 实现期收集，见 VERIFY-126 §9.2 清单）：Tier 0 牛津包 posBlocks.pos
+    /// 全量枚举 + ECDICT 中文段 PosKey 集 + WordNet n/v/a/r——集合内标签必须有映射值、不得透传。
+    /// </summary>
+    private static readonly Dictionary<string, string> PosLabels = new()
     {
-        "noun" => "名词",
-        "verb" => "动词",
-        "adjective" => "形容词",
-        "adverb" => "副词",
-        "preposition" => "介词",
-        "conjunction" => "连词",
-        "pronoun" => "代词",
-        "determiner" => "限定词",
-        "interjection" => "感叹词",
-        "auxiliary verb" => "助动词",
-        "modal verb" => "情态动词",
-        "article" => "冠词",
-        "numeral" => "数词",
-        "phrasal verb" => "短语动词",
-        "" => "",
-        var other => other,
+        ["noun"] = "名词",
+        ["verb"] = "动词",
+        ["adjective"] = "形容词",
+        ["adverb"] = "副词",
+        ["preposition"] = "介词",
+        ["conjunction"] = "连词",
+        ["pronoun"] = "代词",
+        ["determiner"] = "限定词",
+        ["interjection"] = "感叹词",
+        ["exclamation"] = "感叹词",
+        ["auxiliary verb"] = "助动词",
+        ["modal verb"] = "情态动词",
+        ["linking verb"] = "系动词",
+        ["article"] = "冠词",
+        ["definite article"] = "定冠词",
+        ["indefinite article"] = "不定冠词",
+        ["numeral"] = "数词",
+        ["number"] = "数词",
+        ["ordinal number"] = "序数词",
+        ["phrasal verb"] = "短语动词",
+        ["abbreviation"] = "缩略词",
+        ["short form"] = "缩略形式",
+        ["symbol"] = "符号",
+        ["prefix"] = "前缀",
+        ["suffix"] = "后缀",
+        ["combining form"] = "构词成分",
+        ["infinitive marker"] = "不定式标记",
     };
+
+    public static string PosLabel(string pos)
+    {
+        var name = NormalizePosName(pos);
+        if (name.Length == 0) return "";
+        var parts = name.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return string.Join("/", parts.Select(p => PosLabels.TryGetValue(p, out var label) ? label : p));
+    }
+
+    /// <summary>
+    /// 词形标签映射（票126 §9.2）：牛津包词形 label 多为中文现值（恒等登记入表，作值域单一事实源），
+    /// 漏网英文码 neg/short/rareshortform 在此补映射；ECDICT exchange 映射值（过去式等）同表登记。
+    /// </summary>
+    private static readonly Dictionary<string, string> FormLabels = new()
+    {
+        ["原形"] = "原形",
+        ["第三人称单数"] = "第三人称单数",
+        ["过去式"] = "过去式",
+        ["过去分词"] = "过去分词",
+        ["现在分词"] = "现在分词",
+        ["复数"] = "复数",
+        ["比较级"] = "比较级",
+        ["最高级"] = "最高级",
+        ["neg"] = "否定形式",
+        ["short"] = "缩略形式",
+        ["rareshortform"] = "罕用缩略形式",
+    };
+
+    public static string FormLabelOf(string label) =>
+        FormLabels.TryGetValue(label, out var mapped) ? mapped : label;
+
+    /// <summary>标签映射值域（TB-2 断言用）：单个标签值必须落在此集合内。</summary>
+    public static IReadOnlySet<string> LabelValueDomain { get; } =
+        PosLabels.Values.Concat(FormLabels.Values).Append("").ToHashSet();
+
+    /// <summary>
+    /// 响应 label 的值域判定（TB-2）：label 可为「/」拼合的合并标签（MergeForms 与组合词性），
+    /// 每个分量都必须是映射值才算落域——拼合本身合法，分量透传不合法。
+    /// </summary>
+    public static bool LabelIsInDomain(string label) =>
+        label.Split('/').All(part => LabelValueDomain.Contains(part));
 }

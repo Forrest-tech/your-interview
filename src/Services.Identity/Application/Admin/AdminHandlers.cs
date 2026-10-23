@@ -20,7 +20,8 @@ namespace YourInterview.Services.Identity.Application.Admin;
 public sealed record AdminUserListItem(
     Guid Id, string Email, string DisplayName, bool IsActive, bool MustChangePassword,
     DateTimeOffset? LastLoginAt, DateTimeOffset CreatedAt, string[] Roles, string? AvatarUrl,
-    DateTimeOffset? LockedUntil);
+    DateTimeOffset? LockedUntil,
+    uint Version = 0); // 票101 Version:行 xmin
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
 {
@@ -33,8 +34,8 @@ public sealed record AdminUserQuery(string? Search, string? Role, bool? IsActive
 public sealed record AdminCreateUserCommand(string Email, string DisplayName, string Password, string[] Roles)
     : IRequest<Result<Guid>>;
 
-public sealed record AdminUpdateUserCommand(Guid UserId, string DisplayName, bool IsActive, bool RequirePasswordChange, string[] Roles)
-    : IRequest<Result>;
+public sealed record AdminUpdateUserCommand(Guid UserId, string DisplayName, bool IsActive, bool RequirePasswordChange, string[] Roles, uint? Version = null)
+    : IRequest<Result>; // 票101 Version:读时 xmin
 
 public sealed record AdminResetPasswordCommand(Guid UserId, string NewPassword) : IRequest<Result>;
 
@@ -43,12 +44,12 @@ public sealed record AdminUnlockUserCommand(Guid UserId) : IRequest<Result>;
 
 public sealed record AdminDeleteUserCommand(Guid UserId) : IRequest<Result>;
 
-public sealed record RoleListItem(Guid Id, string Name, string? Description, bool IsSystemRole, string[] Permissions, int UserCount);
+public sealed record RoleListItem(Guid Id, string Name, string? Description, bool IsSystemRole, string[] Permissions, int UserCount, uint Version = 0); // 票101 Version:行 xmin
 
 public sealed record AdminRolesQuery : IRequest<Result<IReadOnlyList<RoleListItem>>>;
 
-public sealed record AdminUpsertRoleCommand(Guid? RoleId, string Name, string? Description, string[] Permissions)
-    : IRequest<Result<Guid>>;
+public sealed record AdminUpsertRoleCommand(Guid? RoleId, string Name, string? Description, string[] Permissions, uint? Version = null)
+    : IRequest<Result<Guid>>; // 票101 Version:编辑既有角色时回传读时 xmin
 
 public sealed record AdminDeleteRoleCommand(Guid RoleId) : IRequest<Result>;
 
@@ -176,6 +177,7 @@ public sealed class AdminUserQueryHandler(IdentityDbContext db)
             {
                 u.Id, u.Email, u.DisplayName, u.IsActive, u.MustChangePassword,
                 u.LastLoginAt, u.CreatedAt, u.AvatarUrl, u.LockedUntil,
+                Xmin = EF.Property<uint>(u, "xmin"), // 票101
                 Roles = (from ur in db.UserRoles
                          join r in db.Roles on ur.RoleId equals r.Id
                          where ur.UserId == u.Id
@@ -185,7 +187,7 @@ public sealed class AdminUserQueryHandler(IdentityDbContext db)
 
         var items = users.Select(u => new AdminUserListItem(
             u.Id, u.Email, u.DisplayName, u.IsActive, u.MustChangePassword,
-            u.LastLoginAt, u.CreatedAt, u.Roles, u.AvatarUrl, u.LockedUntil)).ToList();
+            u.LastLoginAt, u.CreatedAt, u.Roles, u.AvatarUrl, u.LockedUntil, u.Xmin)).ToList();
 
         return Result.Success(new PagedResult<AdminUserListItem>(items, total, page, size));
     }
@@ -237,6 +239,8 @@ public sealed class AdminUpdateUserCommandHandler(IdentityDbContext db, ICurrent
         var user = await db.Users.Include(u => u.Roles)
             .FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
         if (user is null) return Result.Failure(Error.NotFound("用户"));
+
+        ConcurrencyPin.Pin(db, user, request.Version); // 票101:旧版本保存 → 409
 
         var isSelf = currentUser.UserId == request.UserId;
 
@@ -362,7 +366,8 @@ public sealed class AdminRolesQueryHandler(IdentityDbContext db)
             .Select(r => new RoleListItem(
                 r.Id, r.Name, r.Description, r.IsSystemRole,
                 db.RolePermissions.Where(p => p.RoleId == r.Id).Select(p => p.Permission).ToArray(),
-                db.UserRoles.Count(ur => ur.RoleId == r.Id)))
+                db.UserRoles.Count(ur => ur.RoleId == r.Id),
+                EF.Property<uint>(r, "xmin"))) // 票101
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<RoleListItem>>(roles);
@@ -383,6 +388,7 @@ public sealed class AdminUpsertRoleCommandHandler(IdentityDbContext db, ICurrent
                 .FirstOrDefaultAsync(r => r.Id == request.RoleId.Value, ct);
             if (found is null) return Result.Failure<Guid>(Error.NotFound("角色"));
             role = found;
+            ConcurrencyPin.Pin(db, role, request.Version); // 票101:旧版本保存 → 409
 
             if (role.IsSystemRole && role.Name != request.Name)
                 return Result.Failure<Guid>(Error.Conflict("Role.System", "系统内置角色不允许改名"));

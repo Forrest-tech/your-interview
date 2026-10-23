@@ -45,6 +45,8 @@ export interface AuthUser {
   timeZone?: string | null;
   /** 账号创建时间。 */
   createdAt?: string;
+  /** 票101:读时 xmin(PUT /auth/me 回传)。 */
+  version?: number;
 }
 
 export interface AuthResult {
@@ -842,6 +844,8 @@ export interface AdminUser {
   avatarUrl?: string;
   /** 锁定到期时间;大于当前时间即处于锁定状态。 */
   lockedUntil?: string;
+  /** 票101:读时 xmin(管理员保存回传)。 */
+  version?: number;
 }
 
 export interface AdminRole {
@@ -851,6 +855,8 @@ export interface AdminRole {
   isSystemRole: boolean;
   permissions: string[];
   userCount: number;
+  /** 票101:读时 xmin(角色保存回传)。 */
+  version?: number;
 }
 
 /** GET /api/admin/permissions —— 权限点目录(按资源分组渲染勾选框)。 */

@@ -20,7 +20,8 @@ public sealed record UserProfile(
     Guid Id, string Email, string DisplayName, string? AvatarUrl,
     bool MustChangePassword, string[] Roles, string[] Permissions,
     DateTimeOffset? LastLoginAt, string? PreferredLanguage, string? TimeZone,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    uint Version = 0); // 票101 Version:行 xmin(读时回传给全量保存)
 
 public sealed record AuthResult(AuthTokens Tokens, UserProfile Profile);
 
@@ -38,7 +39,7 @@ public sealed record LogoutCommand(string RefreshToken) : IRequest<Result>;
 public sealed record ChangePasswordCommand(Guid UserId, string CurrentPassword, string NewPassword)
     : IRequest<Result>;
 
-public sealed record UpdateProfileCommand(Guid UserId, string DisplayName, string? AvatarUrl, string? PreferredLanguage, string? TimeZone)
+public sealed record UpdateProfileCommand(Guid UserId, string DisplayName, string? AvatarUrl, string? PreferredLanguage, string? TimeZone, uint? Version = null) // 票101 Version:读时 xmin
     : IRequest<Result<UserProfile>>;
 
 public sealed record GetCurrentUserQuery(Guid UserId) : IRequest<Result<UserProfile>>;
@@ -152,7 +153,8 @@ public sealed class AuthResponseBuilder(
 
         var profile = new UserProfile(user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage,
-            user.TimeZone, user.CreatedAt);
+            user.TimeZone, user.CreatedAt,
+            db.Entry(user).Property<uint>("xmin").CurrentValue); // 票101
 
         return new AuthResult(
             new AuthTokens(access, accessExp, rawRefresh, refreshExpires),
@@ -328,6 +330,7 @@ public sealed class UpdateProfileCommandHandler(IdentityDbContext db, UserPermis
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
         if (user is null) return Result.Failure<UserProfile>(Error.NotFound("用户"));
 
+        ConcurrencyPin.Pin(db, user, request.Version); // 票101:旧版本保存 → 409
         user.Rename(request.DisplayName);
         // ⚠️ null = 不修改(保留现值);空串 = 显式清除。
         // 之前无条件 SetAvatar(request.AvatarUrl),而 JSON 里缺省就是 null ——
@@ -339,7 +342,8 @@ public sealed class UpdateProfileCommandHandler(IdentityDbContext db, UserPermis
         var (roles, permissions) = await resolver.ResolveAsync(user.Id, ct);
         return Result.Success(new UserProfile(user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage,
-            user.TimeZone, user.CreatedAt));
+            user.TimeZone, user.CreatedAt,
+            db.Entry(user).Property<uint>("xmin").CurrentValue)); // 票101
     }
 }
 
@@ -354,6 +358,7 @@ public sealed class GetCurrentUserQueryHandler(IdentityDbContext db, UserPermiss
         var (roles, permissions) = await resolver.ResolveAsync(user.Id, ct);
         return Result.Success(new UserProfile(user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.MustChangePassword, roles, permissions, user.LastLoginAt, user.PreferredLanguage,
-            user.TimeZone, user.CreatedAt));
+            user.TimeZone, user.CreatedAt,
+            db.Entry(user).Property<uint>("xmin").CurrentValue)); // 票101
     }
 }

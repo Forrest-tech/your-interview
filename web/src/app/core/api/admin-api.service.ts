@@ -51,7 +51,7 @@ export class AdminApiService {
     return this.api.post<{ id: string }>(`${AdminApiService.BASE}/roles`, form);
   }
 
-  updateRole(id: string, form: Partial<AdminRole>): Observable<void> {
+  updateRole(id: string, form: Record<string, unknown>): Observable<void> {
     return this.api.put<void>(`${AdminApiService.BASE}/roles/${id}`, form);
   }
 

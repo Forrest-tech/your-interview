@@ -251,7 +251,8 @@ export class AdminComponent implements OnInit {
         displayName: form.displayName,
         isActive: form.isActive,
         requirePasswordChange: form.requirePasswordChange,
-        roles: form.roles
+        roles: form.roles,
+        version: u.version ?? null // 票101
       }).subscribe({
         next: () => {
           this.notify(this.t('admin.saved'));
@@ -291,7 +292,8 @@ export class AdminComponent implements OnInit {
           displayName: u.displayName,
           isActive: next,
           requirePasswordChange: u.mustChangePassword,
-          roles: [...(u.roles ?? [])]
+          roles: [...(u.roles ?? [])],
+          version: u.version ?? null // 票101
         }).subscribe({
           next: () => {
             this.notify(next ? this.t('admin.activated') : this.t('admin.deactivated'));
@@ -409,7 +411,7 @@ export class AdminComponent implements OnInit {
     });
     ref.afterClosed().subscribe((form?: AdminRoleForm | null) => {
       if (!form) return;
-      this.adminApi.updateRole(r.id, form).subscribe({
+      this.adminApi.updateRole(r.id, { ...form, version: r.version ?? null }).subscribe({
         next: () => {
           this.notify(this.t('admin.roleSaved'));
           this.loadRoles();

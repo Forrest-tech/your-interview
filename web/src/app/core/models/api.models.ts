@@ -544,6 +544,8 @@ export interface KnowledgeItem {
   relations?: KnowledgeRelation[];
   createdAt?: string;
   updatedAt?: string;
+  /** 票70:读详情时的 xmin 并发版本;详情编辑保存时原样回传,过期保存会被后端 409 拒绝。列表项不带此字段。 */
+  version?: number;
 
   // ---- 来源标记(需求 6.4.2 / 6.4.4)----
   /** 来源实战机经条目 id。 */

@@ -52,6 +52,12 @@ public sealed class UpdateKnowledgeCommandHandler(KnowledgeDbContext db)
         var k = await db.Items.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (k is null) return Result.Failure(Error.NotFound("知识点"));
 
+        // 票70:回传了读时版本就把 xmin 的 OriginalValue 钉回读时值——本请求现查现改
+        // 默认拿到的是最新 xmin,串行双页签永远命中;钉回旧值后,若期间已被他人保存
+        // (xmin 已推进),SaveChanges 影响 0 行 → DbUpdateConcurrencyException → 409。
+        if (request.Version is { } version)
+            db.Entry(k).Property<uint>("xmin").OriginalValue = version;
+
         k.UpdateDetails(request.Title, request.Topic, request.SubTopic, request.Question,
             request.Difficulty, request.Importance, request.TagsJson,
             request.ConceptExplanation, request.MyAnswer, request.BetterAnswer,

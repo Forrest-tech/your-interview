@@ -27,7 +27,11 @@ public sealed record KnowledgeItemDto(
     string? SourcesJson,
     bool IsDue, int DueInDays,
     List<ReviewLogDto> ReviewLogs, List<RelationDto> Relations,
-    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
+    // 票70:读时 xmin 并发令牌。详情编辑保存时原样回传(见 UpdateKnowledgeCommand.Version),
+    // 服务端据此判过期 → DbUpdateConcurrencyException → 409 concurrency_conflict。
+    // 仅详情 GET 填充真值;其余构造点缺省 0 表示未知。
+    uint Version = 0);
 
 public sealed record KnowledgeListItemDto(
     Guid Id, string Title, string Topic, string? SubTopic, string Mastery, string Source,

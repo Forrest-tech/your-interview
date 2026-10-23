@@ -92,10 +92,17 @@ public sealed class GetKnowledgeItemQueryHandler(KnowledgeDbContext db, TimeProv
             .Include(x => x.ReviewLogs)
             .Include(x => x.Relations)
             .FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
+        if (k is null)
+            return Result.Failure<KnowledgeItemDto>(Error.NotFound("知识点"));
 
-        return k is null
-            ? Result.Failure<KnowledgeItemDto>(Error.NotFound("知识点"))
-            : Result.Success(k.ToDto(clock.GetUtcNow()));
+        // 票70:读时 xmin 一并投影取出,作为 DTO.Version 交客户端在保存时回传校验。
+        // 实体走 AsNoTracking + Include,影子属性不便从实体状态读,故单独一条投影查询。
+        var version = await db.Items.AsNoTracking()
+            .Where(x => x.Id == k.Id)
+            .Select(x => EF.Property<uint>(x, "xmin"))
+            .FirstAsync(ct);
+
+        return Result.Success(k.ToDto(clock.GetUtcNow(), version));
     }
 }
 

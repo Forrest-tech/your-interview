@@ -73,7 +73,11 @@ public sealed record UpdateKnowledgeCommand(
     Guid UserId, Guid Id, string Title, string Topic, string? SubTopic, string Question,
     int Difficulty, int Importance, string? TagsJson, string? ConceptExplanation,
     string? MyAnswer, string? BetterAnswer, string? KeyPointsJson, string? CommonMistakesJson,
-    string? FollowUpsJson, string? ReferencesJson, string? SourcesJson = null) : IRequest<Result>;
+    string? FollowUpsJson, string? ReferencesJson, string? SourcesJson = null,
+    // 票70:客户端读详情时拿到的 xmin 版本回传。有值 → Handler 设为 xmin OriginalValue,
+    // 过期(已被他人先存)时 SaveChanges 抛 DbUpdateConcurrencyException → 全局映射 409。
+    // null = 老调用方/脚本,不做版本检查(向后兼容,行为与票70前一致)。
+    uint? Version = null) : IRequest<Result>;
 
 /// <summary>只更新我的回答(Playbook Q&A 页签用,避免全量 PUT 误清空)。</summary>
 public sealed record UpdateMyAnswerCommand(Guid UserId, Guid Id, string? MyAnswer) : IRequest<Result>;

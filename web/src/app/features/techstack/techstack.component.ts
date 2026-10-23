@@ -1053,6 +1053,9 @@ export class TechStackComponent implements OnInit, OnDestroy {
       difficulty: d.difficulty,
       importance: d.importance,
       sourcesJson: d.sources.length > 0 ? JSON.stringify(d.sources) : null,
+      // 票70:回传打开详情时读到的版本;期间被他人(或另一页签)先存过,后端 409 拦下,
+      // 不再静默覆盖。version 缺失(列表项直达等)时传 null,后端按老口径不检查。
+      version: item.version ?? null,
     };
     this.knowledgeApi.updateItem(item.id, payload).subscribe({
       next: () => {
@@ -1076,6 +1079,15 @@ export class TechStackComponent implements OnInit, OnDestroy {
         this.selected.set(updated);
         this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
         this.loadTopics();
+        // 票70:本地拼的 updated 不带新 version —— 保存后重拉详情刷新 version,
+        // 否则同页签连续编辑会拿旧版本误报 409。重拉失败不回滚已保存结果,保持本地值。
+        this.knowledgeApi.getItem(item.id).subscribe({
+          next: (fresh) => {
+            if (this.selected()?.id === fresh.id) this.selected.set(fresh);
+            this.items.update(list => list.map((x) => x.id === fresh.id ? { ...x, version: fresh.version } : x));
+          },
+          error: () => { /* 已保存成功,刷新版本失败仅影响下次编辑的并发校验,不打扰用户 */ }
+        });
       },
       error: (e: Error) => {
         this.savingDetail.set(false);

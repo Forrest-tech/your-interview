@@ -42,7 +42,7 @@ public static class KnowledgeMappingExtensions
     public static RelationDto ToDto(this KnowledgeRelation r) => new(
         r.Id, r.RelatedItemId, r.RelationType.ToString(), r.Note);
 
-    public static KnowledgeItemDto ToDto(this KnowledgeItem k, DateTimeOffset now)
+    public static KnowledgeItemDto ToDto(this KnowledgeItem k, DateTimeOffset now, uint version = 0)
     {
         var dueInDays = k.NextReviewAt is null
             ? 0
@@ -61,7 +61,7 @@ public static class KnowledgeMappingExtensions
             KnowledgeDue.IsDue(k, now), dueInDays,
             k.ReviewLogs.OrderByDescending(l => l.ReviewedAt).Select(l => l.ToDto()).ToList(),
             k.Relations.Select(r => r.ToDto()).ToList(),
-            k.CreatedAt, k.UpdatedAt);
+            k.CreatedAt, k.UpdatedAt, version);
     }
 
     public static KnowledgeListItemDto ToListItemDto(this KnowledgeItem k, DateTimeOffset now) => new(

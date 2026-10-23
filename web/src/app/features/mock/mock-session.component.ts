@@ -10,6 +10,8 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MatDividerModule } from '@angular/material/divider';
 import { catchError, of } from 'rxjs';
 import { MockApiService } from '../../core/api/mock-api.service';
@@ -97,7 +99,7 @@ interface AssessmentSessionDetail {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule,
-    MatSnackBarModule, MatDividerModule
+    MatSnackBarModule, MatDividerModule, MatDialogModule
   ],
   templateUrl: './mock-session.component.html',
   styleUrl: './mock-session.component.scss'
@@ -105,6 +107,7 @@ interface AssessmentSessionDetail {
 export class MockSessionComponent implements OnInit, OnDestroy {
   private readonly mockApi = inject(MockApiService);
   private readonly route = inject(ActivatedRoute);
+  private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
   private readonly i18n = inject(I18nService);
@@ -310,8 +313,21 @@ export class MockSessionComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------- 结束
 
   complete(): void {
-    if (!confirm(this.t('mock.confirmComplete'))) return;
+    // 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.confirmTitle'), body: this.t('mock.confirmComplete'),
+        confirmText: this.t('common.confirm'), cancelText: this.t('common.cancel'),
+      } as ConfirmDialogData,
+    });
+    ref.afterClosed().subscribe((v) => {
+      if (v !== true) return;
+      this.doComplete();
+    });
+  }
 
+  private doComplete(): void {
     this.busy.set('complete');
     this.mockApi.completeSession<{
       overallScore?: number;

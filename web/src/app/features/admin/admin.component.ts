@@ -17,6 +17,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of } from 'rxjs';
 
 import { AdminApiService } from '../../core/api/admin-api.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { AuthService } from '../../core/auth/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
@@ -262,25 +263,44 @@ export class AdminComponent implements OnInit {
     });
   }
 
+  /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
+   *  true 才执行,取消/Esc/点遮罩一律不执行(与原生 confirm 的 false 同义)。 */
+  private confirmDlg(body: string, danger: boolean): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: danger ? this.t('common.delete') : this.t('common.confirmTitle'),
+        body,
+        confirmText: danger ? this.t('common.delete') : this.t('common.confirm'),
+        cancelText: this.t('common.cancel'),
+        danger,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
   /** 启用/停用:整体更新语义,把当前字段一起回传。 */
   toggleActive(u: AdminUser, ev?: Event): void {
     ev?.stopPropagation();
     const next = !u.isActive;
-    if (!confirm(this.tn(next ? 'admin.confirmActivate' : 'admin.confirmDeactivate', u.email))) return;
+    void this.confirmDlg(this.tn(next ? 'admin.confirmActivate' : 'admin.confirmDeactivate', u.email), false)
+      .then((ok) => {
+        if (!ok) return;
 
-    this.adminApi.updateUser(u.id, {
-      displayName: u.displayName,
-      isActive: next,
-      requirePasswordChange: u.mustChangePassword,
-      roles: [...(u.roles ?? [])]
-    }).subscribe({
-      next: () => {
-        this.notify(next ? this.t('admin.activated') : this.t('admin.deactivated'));
-        this.loadUsers();
-        this.loadStats();
-      },
-      error: (e: Error) => this.notify(e.message, true)
-    });
+        this.adminApi.updateUser(u.id, {
+          displayName: u.displayName,
+          isActive: next,
+          requirePasswordChange: u.mustChangePassword,
+          roles: [...(u.roles ?? [])]
+        }).subscribe({
+          next: () => {
+            this.notify(next ? this.t('admin.activated') : this.t('admin.deactivated'));
+            this.loadUsers();
+            this.loadStats();
+          },
+          error: (e: Error) => this.notify(e.message, true)
+        });
+      });
   }
 
   resetPassword(u: AdminUser, ev?: Event): void {
@@ -313,15 +333,17 @@ export class AdminComponent implements OnInit {
 
   deleteUser(u: AdminUser, ev?: Event): void {
     ev?.stopPropagation();
-    if (!confirm(this.tn('admin.confirmDelete', u.email))) return;
+    void this.confirmDlg(this.tn('admin.confirmDelete', u.email), true).then((ok) => {
+      if (!ok) return;
 
-    this.adminApi.deleteUser(u.id).subscribe({
-      next: () => {
-        this.notify(this.t('admin.deleted'));
-        this.loadUsers();
-        this.loadStats();
-      },
-      error: (e: Error) => this.notify(e.message, true)
+      this.adminApi.deleteUser(u.id).subscribe({
+        next: () => {
+          this.notify(this.t('admin.deleted'));
+          this.loadUsers();
+          this.loadStats();
+        },
+        error: (e: Error) => this.notify(e.message, true)
+      });
     });
   }
 
@@ -403,15 +425,17 @@ export class AdminComponent implements OnInit {
       this.notify(this.t('admin.systemRoleReadonly'), true);
       return;
     }
-    if (!confirm(this.tn('admin.confirmDeleteRole', r.name))) return;
+    void this.confirmDlg(this.tn('admin.confirmDeleteRole', r.name), true).then((ok) => {
+      if (!ok) return;
 
-    this.adminApi.deleteRole(r.id).subscribe({
-      next: () => {
-        this.notify(this.t('admin.roleDeleted'));
-        this.loadRoles();
-        this.loadStats();
-      },
-      error: (e: Error) => this.notify(e.message, true)
+      this.adminApi.deleteRole(r.id).subscribe({
+        next: () => {
+          this.notify(this.t('admin.roleDeleted'));
+          this.loadRoles();
+          this.loadStats();
+        },
+        error: (e: Error) => this.notify(e.message, true)
+      });
     });
   }
 

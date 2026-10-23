@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DocViewerComponent } from '../../shared/doc-viewer/doc-viewer.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { CategoryManagerComponent } from './category-manager/category-manager.component';
 import { forkJoin } from 'rxjs';
 import { CommonModule } from '@angular/common';
@@ -733,28 +734,45 @@ export class TechStackComponent implements OnInit, OnDestroy {
       list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
   }
 
+  /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
+   *  true 才执行,取消/Esc/点遮罩一律不执行(与原生 confirm 的 false 同义)。 */
+  private confirmDlg(body: string, danger: boolean): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: danger ? this.t('common.delete') : this.t('common.confirmTitle'),
+        body,
+        confirmText: danger ? this.t('common.delete') : this.t('common.confirm'),
+        cancelText: this.t('common.cancel'),
+        danger,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
   /** 批量删除:逐个调删除接口(后端暂无批量接口),完成后退出编辑模式并刷新。 */
   deleteSelected(): void {
     const ids = this.batchIds();
     if (ids.length === 0) return;
     const names = this.items().filter(e => ids.includes(e.id))
       .map(e => e.title).join('、');
-    const ok = confirm(
+    void this.confirmDlg(
       this.t('ts.list.confirmDeleteBatch')
         .replace('{n}', String(ids.length))
-        .replace('{names}', names));
-    if (!ok) return;
+        .replace('{names}', names), true).then((ok) => {
+      if (!ok) return;
 
-    forkJoin(ids.map(id => this.knowledgeApi.deleteItem(id))).subscribe({
-      next: () => {
-        this.notify(this.t('ts.deleted'));
-        this.editing.set(false);
-        this.batchIds.set([]);
-        this.selected.set(null);
-        this.clearUrlId();
-        this.reload();
-      },
-      error: (e: Error) => this.notify(e.message, true)
+      forkJoin(ids.map(id => this.knowledgeApi.deleteItem(id))).subscribe({
+        next: () => {
+          this.notify(this.t('ts.deleted'));
+          this.editing.set(false);
+          this.batchIds.set([]);
+          this.selected.set(null);
+          this.clearUrlId();
+          this.reload();
+        },
+        error: (e: Error) => this.notify(e.message, true)
+      });
     });
   }
 
@@ -1086,31 +1104,31 @@ export class TechStackComponent implements OnInit, OnDestroy {
       return;
     }
     const next = PROMOTE_ORDER[idx + 1];
-    const ok = confirm(
+    void this.confirmDlg(
       this.t('ts.promote.confirm')
         .replace('{title}', item.title)
         .replace('{from}', this.masteryLabel(item.mastery))
-        .replace('{to}', this.masteryLabel(next))
-    );
-    if (!ok) return;
+        .replace('{to}', this.masteryLabel(next)), false).then((ok) => {
+      if (!ok) return;
 
-    this.acting.set(true);
-    this.knowledgeApi.updateMastery(item.id, {
-      level: next,
-      confidence: 0.7
-    }).subscribe({
-      next: (updated) => {
-        this.acting.set(false);
-        this.notify(this.t('ts.promote.done').replace('{to}', this.masteryLabel(next)));
-        this.applyUpdate(updated, item.id);
-        this.loadBuckets();
-        // 主题列表可能因为新条目而需要刷新,顺手重拉
-        this.loadTopics();
-      },
-      error: (e: Error) => {
-        this.acting.set(false);
-        this.notify(e.message, true);
-      }
+      this.acting.set(true);
+      this.knowledgeApi.updateMastery(item.id, {
+        level: next,
+        confidence: 0.7
+      }).subscribe({
+        next: (updated) => {
+          this.acting.set(false);
+          this.notify(this.t('ts.promote.done').replace('{to}', this.masteryLabel(next)));
+          this.applyUpdate(updated, item.id);
+          this.loadBuckets();
+          // 主题列表可能因为新条目而需要刷新,顺手重拉
+          this.loadTopics();
+        },
+        error: (e: Error) => {
+          this.acting.set(false);
+          this.notify(e.message, true);
+        }
+      });
     });
   }
 

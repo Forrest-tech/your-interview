@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -11,6 +11,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Observable } from 'rxjs';
 
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { TrackerApi } from '../../core/api/tracker-api.service';
 import { AnswerTemplate } from '../../core/models/api.models';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -147,6 +148,7 @@ export class AnswerLibraryDialogComponent {
   readonly data = inject<DialogData>(MAT_DIALOG_DATA);
   private readonly dialogRef = inject(MatDialogRef<AnswerLibraryDialogComponent, AnswerTemplate | null>);
   private readonly trackerApi = inject(TrackerApi);
+  private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
@@ -202,7 +204,8 @@ export class AnswerLibraryDialogComponent {
 
   save(): void {
     if (!this.question.trim() || !this.answer.trim()) {
-      alert(this.t('tracker.alRequired'));
+      // 票45 REQ-14:原生 alert 改走本弹窗既有 snack 通道,文案逐字不变
+      this.snack.open(this.t('tracker.alRequired'), this.t('common.close'), { duration: 3000 });
       return;
     }
     const body = {
@@ -221,18 +224,29 @@ export class AnswerLibraryDialogComponent {
         this.load();
         this.snack.open(this.t(editing ? 'tracker.alSaved' : 'tracker.alCreated'), this.t('common.close'), { duration: 2200 });
       },
-      error: (err) => alert(this.readError(err))
+      error: (err) => this.snack.open(this.readError(err), this.t('common.close'), { duration: 3000 })
     });
   }
 
   remove(item: AnswerTemplate): void {
-    if (!confirm(this.t('tracker.alConfirmDelete'))) return;
-    this.trackerApi.deleteAnswerTemplate(item.id).subscribe({
-      next: () => {
-        this.load();
-        this.snack.open(this.t('tracker.alDeleted'), this.t('common.close'), { duration: 2200 });
-      },
-      error: (err) => alert(this.readError(err))
+    // 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.delete'), body: this.t('tracker.alConfirmDelete'),
+        confirmText: this.t('common.delete'), cancelText: this.t('common.cancel'),
+        danger: true,
+      } as ConfirmDialogData,
+    });
+    ref.afterClosed().subscribe((v) => {
+      if (v !== true) return;
+      this.trackerApi.deleteAnswerTemplate(item.id).subscribe({
+        next: () => {
+          this.load();
+          this.snack.open(this.t('tracker.alDeleted'), this.t('common.close'), { duration: 2200 });
+        },
+        error: (err) => this.snack.open(this.readError(err), this.t('common.close'), { duration: 3000 })
+      });
     });
   }
 

@@ -13,6 +13,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AssessmentApiService } from '../../core/api/assessment-api.service';
 import { MockApiService } from '../../core/api/mock-api.service';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MockSession, Paged } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -39,7 +41,7 @@ interface NewSessionForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule, MatTooltipModule
+    MatSnackBarModule, MatTooltipModule, MatDialogModule
   ],
   templateUrl: './mock.component.html',
   styleUrl: './mock.component.scss'
@@ -54,6 +56,7 @@ export class MockComponent implements OnInit {
 
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
 
@@ -202,15 +205,25 @@ export class MockComponent implements OnInit {
     ev.preventDefault();
     ev.stopPropagation();
 
-    if (!confirm(this.tn('mock.confirmDelete', s.title))) return;
-
-    this.mockApi.deleteSession(s.id).subscribe({
-      next: () => {
-        this.snack.open(this.t('mock.deletedToast'), this.t('common.close'), { duration: 3000 });
-        if (this.sessions().length === 1 && this.page() > 1) this.page.update((p) => p - 1);
-        this.load();
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
+    // 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.delete'), body: this.tn('mock.confirmDelete', s.title),
+        confirmText: this.t('common.delete'), cancelText: this.t('common.cancel'),
+        danger: true,
+      } as ConfirmDialogData,
+    });
+    ref.afterClosed().subscribe((v) => {
+      if (v !== true) return;
+      this.mockApi.deleteSession(s.id).subscribe({
+        next: () => {
+          this.snack.open(this.t('mock.deletedToast'), this.t('common.close'), { duration: 3000 });
+          if (this.sessions().length === 1 && this.page() > 1) this.page.update((p) => p - 1);
+          this.load();
+        },
+        error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
+      });
     });
   }
 

@@ -31,6 +31,8 @@ import { TrackerApi, ApplicationQuestionDto } from '../../core/api/tracker-api.s
 import { TrackerPreferencesService } from '../../core/api/tracker-preferences.service';
 import { Application, ApplicationStatus, AnswerTemplate, Communication, CommunicationType, Company, Paged, TrackerStats } from '../../core/models/api.models';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
+import { InputDialogComponent, InputDialogData } from '../../shared/input-dialog/input-dialog.component';
+import { parseWeeklyGoalInput, clampWeeklyGoal } from './tracker-goal.helpers';
 import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
 import { SmartAddDialogComponent } from './smart-add-dialog.component';
 import { extractPdfText } from '../../core/utils/pdf-text';
@@ -907,7 +909,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  /** ★ F-02:删除确认统一走全站确认弹窗 —— 原生 confirm() 在无弹窗处理的环境
+  /** ★ F-02:删除确认统一走全站确认弹窗 —— 原生 confirm 在无弹窗处理的环境
    *  (自动化测试/某些内嵌浏览器)会被静默 dismiss,删除看起来"点了没反应"。 */
   private confirmDelete(body: string): Promise<boolean> {
     const ref = this.dialog.open(ConfirmDialogComponent, {
@@ -1052,13 +1054,22 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.showStaleOnly() ? all.filter(a => this.staleIds().has(a.id)) : all;
   });
 
-  /** 点击每周目标卡片:用原生 prompt 改数字(简单直接,比再开一个 dialog 轻)。 */
+  /** 点击每周目标卡片:站内输入弹窗改数字(票45 REQ-14,替代原生 prompt ——
+   *  与 F-02 同理,原生 prompt 在无弹窗处理的环境会被静默 dismiss)。
+   *  解析/校验口径逐字不变:取消/空/非数字/≤0 静默不改,>100 由 setWeeklyGoal 钳到 100。 */
   promptGoal(): void {
-    const cur = this.weeklyGoal();
-    const raw = window.prompt(this.i18n.t('tracker.goalPrompt'), String(cur));
-    if (raw === null) return;
-    const n = parseInt(raw, 10);
-    if (Number.isFinite(n) && n > 0) this.setWeeklyGoal(n);
+    const ref = this.dialog.open(InputDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('tracker.goalTitle'), label: this.i18n.t('tracker.goalPrompt'),
+        initialValue: String(this.weeklyGoal()),
+        confirmText: this.t('common.save'), cancelText: this.t('common.cancel'),
+      } as InputDialogData,
+    });
+    ref.afterClosed().subscribe((raw) => {
+      const n = parseWeeklyGoalInput(raw);
+      if (n !== null) this.setWeeklyGoal(n);
+    });
   }
 
   // ------------------------------ Simplify 对标:每周目标 ------------------------------
@@ -1072,7 +1083,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     } catch { return 5; }
   }
   setWeeklyGoal(n: number): void {
-    const v = Math.max(1, Math.min(100, Math.round(n) || 5));
+    const v = clampWeeklyGoal(n);
     this.weeklyGoal.set(v);
     try { localStorage.setItem(TrackerComponent.GOAL_KEY, String(v)); } catch { /* 忽略 */ }
   }
@@ -2729,10 +2740,12 @@ export class ApplicationDetailDialogComponent {
 
   /** 删除 tailored 版本 —— 回落到基础简历(引用,不复制)。 */
   removeTailoredResume(): void {
-    if (!confirm(this.t('tracker.dResumeRemoveTailored'))) return;
-    this.jobsApi.deleteApplicationResume(this.app.id).subscribe({
-      next: () => this.loadAppResume(),
-      error: () => this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 })
+    void this.confirmDlg(this.t('tracker.dResumeRemoveTailored'), true).then((ok) => {
+      if (!ok) return;
+      this.jobsApi.deleteApplicationResume(this.app.id).subscribe({
+        next: () => this.loadAppResume(),
+        error: () => this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 })
+      });
     });
   }
 
@@ -2831,34 +2844,36 @@ export class ApplicationDetailDialogComponent {
    */
   generateCoverLetter(): void {
     const hasContent = !!this.cl()?.content;
-    if (hasContent && !confirm(this.t('tracker.dClOverwrite'))) return;
+    void (async () => {
+      if (hasContent && !(await this.confirmDlg(this.t('tracker.dClOverwrite'), false))) return;
 
-    this.clGenerating.set(true);
-    this.jobsApi.generateCoverLetter<CoverLetterDto>(this.app.id,
-      { extraInstructions: this.clExtra.trim() || null, overwrite: hasContent }
-    ).subscribe({
-      next: (c) => {
-        this.cl.set(c);
-        this.clDraft = c.content;
-        this.clEditing.set(false);
-        this.clGenerating.set(false);
-      },
-      error: (err) => {
-        this.clGenerating.set(false);
-        // 后端的 ProblemDetails.description 已经是人话,直接透出
-        alert(this.readError(err));
-      }
-    });
+      this.clGenerating.set(true);
+      this.jobsApi.generateCoverLetter<CoverLetterDto>(this.app.id,
+        { extraInstructions: this.clExtra.trim() || null, overwrite: hasContent }
+      ).subscribe({
+        next: (c) => {
+          this.cl.set(c);
+          this.clDraft = c.content;
+          this.clEditing.set(false);
+          this.clGenerating.set(false);
+        },
+        error: (err) => {
+          this.clGenerating.set(false);
+          // 后端的 ProblemDetails.description 已经是人话,直接透出
+          this.alertError(this.readError(err));
+        }
+      });
+    })();
   }
 
   saveCoverLetter(): void {
     const text = this.clDraft.trim();
-    if (!text) { alert(this.t('tracker.dClEmptyErr')); return; }
+    if (!text) { this.alertError(this.t('tracker.dClEmptyErr')); return; }
 
     this.jobsApi.saveCoverLetter<CoverLetterDto>(this.app.id, text)
       .subscribe({
         next: (c) => { this.cl.set(c); this.clEditing.set(false); },
-        error: (err) => alert(this.readError(err))
+        error: (err) => this.alertError(this.readError(err))
       });
   }
 
@@ -2871,17 +2886,19 @@ export class ApplicationDetailDialogComponent {
     this.jobsApi.finalizeCoverLetter<CoverLetterDto>(this.app.id)
       .subscribe({
         next: (c) => this.cl.set(c),
-        error: (err) => alert(this.readError(err))
+        error: (err) => this.alertError(this.readError(err))
       });
   }
 
   deleteCoverLetter(): void {
-    if (!confirm(this.t('tracker.dClDelete'))) return;
-    this.jobsApi.deleteCoverLetter(this.app.id)
-      .subscribe({
-        next: () => { this.cl.set(null); this.clDraft = ''; this.clEditing.set(false); },
-        error: (err) => alert(this.readError(err))
-      });
+    void this.confirmDlg(this.t('tracker.dClDelete'), true).then((ok) => {
+      if (!ok) return;
+      this.jobsApi.deleteCoverLetter(this.app.id)
+        .subscribe({
+          next: () => { this.cl.set(null); this.clDraft = ''; this.clEditing.set(false); },
+          error: (err) => this.alertError(this.readError(err))
+        });
+    });
   }
 
   clStatusLabel(s: string): string {
@@ -2991,6 +3008,27 @@ export class ApplicationDetailDialogComponent {
 
   /* ★ Simplify 真站:头部操作按钮 */
   readonly dialogRef = inject(MatDialogRef<ApplicationDetailDialogComponent>);
+
+  /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
+   *  true 才执行后续动作,取消/Esc/点遮罩一律不执行(与原生 confirm 的 false 同义)。 */
+  private confirmDlg(body: string, danger: boolean): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: danger ? this.t('common.delete') : this.t('common.confirmTitle'),
+        body,
+        confirmText: danger ? this.t('common.delete') : this.t('common.confirm'),
+        cancelText: this.t('common.cancel'),
+        danger,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
+  /** 票45 REQ-14:错误提示替代原生 alert —— 走本类既有 snack 通道,文案逐字不变。 */
+  private alertError(msg: string): void {
+    this.snack.open(msg, this.t('common.close'), { duration: 3000 });
+  }
 
   /** 收藏与列表共用同一路径(TrackerPreferencesService)—— 不再各读各的 localStorage。 */
   isFav(): boolean {
@@ -3177,7 +3215,7 @@ export class ApplicationDetailDialogComponent {
       },
       error: (err) => {
         this.notesSaving.set(false);
-        alert(this.readError(err));
+        this.alertError(this.readError(err));
       }
     });
   }
@@ -3374,7 +3412,7 @@ export class ApplicationDetailDialogComponent {
       },
       error: (err) => {
         this.jdSummarySaving.set(false);
-        alert(this.readError(err));
+        this.alertError(this.readError(err));
       }
     });
   }
@@ -3412,7 +3450,7 @@ export class ApplicationDetailDialogComponent {
       },
       error: (err) => {
         this.jdTextSaving.set(false);
-        alert(this.readError(err));
+        this.alertError(this.readError(err));
       }
     });
   }
@@ -3511,19 +3549,21 @@ export class ApplicationDetailDialogComponent {
         this.loadCommunications();
         this.snack.open(this.t('tracker.commsSaved'), this.t('common.close'), { duration: 2500 });
       },
-      error: (err) => alert(this.readError(err))
+      error: (err) => this.alertError(this.readError(err))
     });
   }
 
   deleteComm(c: Communication): void {
-    if (!confirm(this.t('tracker.commsConfirmDelete'))) return;
-    this.trackerApi.deleteCommunication(this.app.id, c.id).subscribe({
-      next: () => {
-        this.commEditingId.set(null);
-        this.loadCommunications();
-        this.snack.open(this.t('tracker.commsDeleted'), this.t('common.close'), { duration: 2500 });
-      },
-      error: (err) => alert(this.readError(err))
+    void this.confirmDlg(this.t('tracker.commsConfirmDelete'), true).then((ok) => {
+      if (!ok) return;
+      this.trackerApi.deleteCommunication(this.app.id, c.id).subscribe({
+        next: () => {
+          this.commEditingId.set(null);
+          this.loadCommunications();
+          this.snack.open(this.t('tracker.commsDeleted'), this.t('common.close'), { duration: 2500 });
+        },
+        error: (err) => this.alertError(this.readError(err))
+      });
     });
   }
 

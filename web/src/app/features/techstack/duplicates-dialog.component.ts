@@ -2,12 +2,13 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeDuplicateGroup, KnowledgeItem } from '../../core/models/api.models';
 
@@ -113,6 +114,7 @@ export class DuplicatesDialogComponent {
   readonly dialogRef = inject(MatDialogRef<DuplicatesDialogComponent, boolean>);
   readonly data = inject<DuplicatesDialogData>(MAT_DIALOG_DATA);
   private readonly knowledgeApi = inject(KnowledgeApiService);
+  private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
@@ -122,14 +124,23 @@ export class DuplicatesDialogComponent {
   readonly msg = signal<string | null>(null);
 
   /** 保留 keep,把同组其余条目依次并进来。 */
-  keep(item: KnowledgeItem, group: KnowledgeDuplicateGroup): void {
+  async keep(item: KnowledgeItem, group: KnowledgeDuplicateGroup): Promise<void> {
     const others = group.items.filter((x) => x.id !== item.id);
     if (others.length === 0) return;
 
-    const ok = confirm(
-      this.t('ts.dup.confirmMerge')
-        .replace('{count}', String(others.length))
-        .replace('{title}', item.title));
+    // 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.confirmTitle'),
+        body: this.t('ts.dup.confirmMerge')
+          .replace('{count}', String(others.length))
+          .replace('{title}', item.title),
+        confirmText: this.t('common.confirm'), cancelText: this.t('common.cancel'),
+      } as ConfirmDialogData,
+    });
+    const ok = await new Promise<boolean>(
+      (resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
     if (!ok) return;
 
     this.busy.set(true);

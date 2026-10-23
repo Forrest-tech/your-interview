@@ -11,6 +11,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
@@ -91,7 +93,7 @@ interface NewEntryForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule, MatTooltipModule, MatCheckboxModule, MatExpansionModule
+    MatSnackBarModule, MatTooltipModule, MatCheckboxModule, MatExpansionModule, MatDialogModule
   ],
   templateUrl: './playbook.component.html',
   styleUrl: './playbook.component.scss'
@@ -124,6 +126,7 @@ export class PlaybookComponent implements OnInit {
   private readonly localData = inject(PlaybookLocalService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
 
@@ -424,27 +427,42 @@ export class PlaybookComponent implements OnInit {
       list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
   }
 
+  /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
+   *  true 才执行,取消/Esc/点遮罩一律不执行(与原生 confirm 的 false 同义)。 */
+  private confirmDeleteDlg(body: string): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.delete'), body,
+        confirmText: this.t('common.delete'), cancelText: this.t('common.cancel'),
+        danger: true,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
   /** 批量删除:逐个调删除接口(后端暂无批量接口),全部完成后退出编辑模式。 */
   deleteSelected(): void {
     const ids = this.selectedIds();
     if (ids.length === 0) return;
     const names = this.entries().filter(e => ids.includes(e.id))
       .map(e => `${e.companyName}·${e.role}`).join('、');
-    const ok = confirm(
+    void this.confirmDeleteDlg(
       this.t('pb.list.confirmDeleteBatch')
         .replace('{n}', String(ids.length))
-        .replace('{names}', names));
-    if (!ok) return;
+        .replace('{names}', names)).then((ok) => {
+      if (!ok) return;
 
-    forkJoin(ids.map(id => this.interviewsApi.deleteEntry(id))).subscribe({
-      next: () => {
-        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
-        this.editing.set(false);
-        this.selectedIds.set([]);
-        this.load();
-        this.loadStats();
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
+      forkJoin(ids.map(id => this.interviewsApi.deleteEntry(id))).subscribe({
+        next: () => {
+          this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
+          this.editing.set(false);
+          this.selectedIds.set([]);
+          this.load();
+          this.loadStats();
+        },
+        error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
+      });
     });
   }
 
@@ -539,8 +557,11 @@ export class PlaybookComponent implements OnInit {
     this.editingStory.set(null);
   }
   deleteStory(id: string): void {
-    if (!confirm('删除这个故事?')) return;
-    this.localData.deleteStory(id);
+    // 票45 REQ-14:站内确认弹窗替代原生 confirm;原文案为硬编码中文,逐字作 body 保留
+    void this.confirmDeleteDlg('删除这个故事?').then((ok) => {
+      if (!ok) return;
+      this.localData.deleteStory(id);
+    });
   }
   /** ★ #13:按 JD 关键词推荐故事 */
   recommendStories(jdText: string): StarStory[] {

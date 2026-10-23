@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -13,6 +13,7 @@ import {
   MAX_CATEGORY_NAME_LENGTH, validateCategoryName,
 } from '../../../core/api/techstack-local.helpers';
 import { I18nService } from '../../../core/i18n/i18n.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog.component';
 
 export interface CategoryInfo {
   name: string;
@@ -38,6 +39,7 @@ export interface CategoryInfo {
 export class CategoryManagerComponent {
   private readonly knowledgeApi = inject(KnowledgeApiService);
   private readonly tsLocal = inject(TechStackLocalService);
+  private readonly dialog = inject(MatDialog);
   private readonly dialogRef = inject(MatDialogRef<CategoryManagerComponent>);
   private readonly i18n = inject(I18nService);
 
@@ -132,7 +134,23 @@ export class CategoryManagerComponent {
     this.error.set('');
   }
 
-  confirmRename(c: CategoryInfo): void {
+  /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
+   *  true 才继续,取消/Esc/点遮罩一律中止(与原生 confirm 的 false 同义)。 */
+  private confirmDlg(body: string, danger: boolean): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: danger ? this.t('common.delete') : this.t('common.confirmTitle'),
+        body,
+        confirmText: danger ? this.t('common.delete') : this.t('common.confirm'),
+        cancelText: this.t('common.cancel'),
+        danger,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
+  async confirmRename(c: CategoryInfo): Promise<void> {
     const oldName = c.name;
     const newName = this.editDraft().trim();
     if (!newName || newName.toLowerCase() === oldName.toLowerCase()) {
@@ -151,13 +169,13 @@ export class CategoryManagerComponent {
         .replace('{n}', String(c.count))
         .replace('{from}', oldName)
         .replace('{to}', target.name);
-      if (!confirm(msg)) return;
+      if (!(await this.confirmDlg(msg, false))) return;
     } else if (c.count > 0) {
       const msg = this.t('ts.cat.renameWarn')
         .replace('{n}', String(c.count))
         .replace('{from}', oldName)
         .replace('{to}', newName);
-      if (!confirm(msg)) return;
+      if (!(await this.confirmDlg(msg, false))) return;
     }
     // 空分类(0 条目)是后端分类表里的占位行,改名走分类服务(删旧+加新);
     // 改前实现对空分类也打 topics/rename(无条目可改、恒返回 0)且旧名残留
@@ -217,12 +235,12 @@ export class CategoryManagerComponent {
     });
   }
 
-  deleteCategory(c: CategoryInfo): void {
+  async deleteCategory(c: CategoryInfo): Promise<void> {
     if (c.count > 0) {
       const msg = this.t('ts.cat.deleteWarn')
         .replace('{n}', String(c.count))
         .replace('{name}', c.name);
-      if (!confirm(msg)) return;
+      if (!(await this.confirmDlg(msg, true))) return;
     }
     this.busy.set(true);
     // 空分类(0 条目)是后端分类表占位行,经分类服务删除(票16)

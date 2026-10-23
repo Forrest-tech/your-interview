@@ -49,10 +49,13 @@ public sealed class RegisterUserCommandValidator : AbstractValidator<RegisterUse
 {
     public RegisterUserCommandValidator()
     {
-        RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(320)
-            .WithMessage("请输入合法邮箱地址");
-        RuleFor(x => x.DisplayName).NotEmpty().MaximumLength(200)
-            .WithMessage("显示名称不能为空");
+        // 票107:文案分挂各规则(WithMessage 只挂紧邻的前一条规则)——原写法把
+        // 格式文案挂在 MaximumLength 上,超长邮箱被误标格式错误、空值只回英文默认。
+        RuleFor(x => x.Email).NotEmpty().WithMessage("邮箱不能为空")
+            .EmailAddress().WithMessage("请输入合法邮箱地址")
+            .MaximumLength(320).WithMessage("邮箱长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.DisplayName).NotEmpty().WithMessage("显示名称不能为空")
+            .MaximumLength(200).WithMessage("显示名称长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.Password)
             .NotEmpty()
             .MinimumLength(12).WithMessage("密码至少 12 位(OWASP 建议)")
@@ -94,8 +97,8 @@ public sealed class UpdateProfileCommandValidator : AbstractValidator<UpdateProf
 {
     public UpdateProfileCommandValidator()
     {
-        RuleFor(x => x.DisplayName).NotEmpty().MaximumLength(200)
-            .WithMessage("显示名称不能为空");
+        RuleFor(x => x.DisplayName).NotEmpty().WithMessage("显示名称不能为空")
+            .MaximumLength(200).WithMessage("显示名称长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.PreferredLanguage)
             .Must(l => l is null || l is "zh" or "en" or "fr")
             .WithMessage("语言仅支持 zh/en/fr");

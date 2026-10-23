@@ -68,8 +68,13 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
+    // 票68(用户裁决 B,2026-10-23):本控制器全部 DELETE 端点统一 JobsWrite 口径。
+    // 默认 User 角色没有 JobsDelete(只有 PowerUser/Admin),删自己的数据是普通用户
+    // 日常操作,原 JobsDelete 口径下恒 403。归属隔离由各 Handler 按 UserId 校验
+    // (他人数据回 404),不靠权限点把关 —— 同 DeleteCoverLetter 先例。JobsDelete
+    // 权限点本身保留,PowerUser/Admin 发放不变。
     [HttpDelete("companies/{id:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteCompany(Guid id, CancellationToken ct,
         [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
@@ -142,7 +147,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     }
 
     [HttpDelete("applications/{id:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteApplication(Guid id, CancellationToken ct,
         [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
@@ -477,7 +482,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
 
     /// <summary>清空简历(回到未设置状态)。</summary>
     [HttpDelete("resume-text")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteResumeText(CancellationToken ct)
     {
         var r = await sender.Send(new DeleteResumeCommand(Me), ct);
@@ -560,7 +565,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
 
     /// <summary>删除基础简历 PDF(文本记录不动 —— /resume 页的"清空"才清文本)。</summary>
     [HttpDelete("resume-file")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteResumeFile(CancellationToken ct)
     {
         var r = await sender.Send(new DeleteResumeFileCommand(Me, null), ct);
@@ -635,7 +640,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
 
     /// <summary>删除某条投递的 tailored 简历 —— 删完回落到基础简历(引用,不复制)。</summary>
     [HttpDelete("applications/{applicationId:guid}/resume")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteApplicationResume(Guid applicationId, CancellationToken ct)
     {
         var r = await sender.Send(new DeleteResumeFileCommand(Me, applicationId), ct);
@@ -738,7 +743,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     }
 
     [HttpDelete("answer-templates/{id:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteAnswerTemplate(Guid id, CancellationToken ct)
     {
         var r = await sender.Send(new DeleteAnswerTemplateCommand(id, Me), ct);
@@ -787,7 +792,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     }
 
     [HttpDelete("applications/{id:guid}/communications/{commId:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteCommunication(Guid id, Guid commId, CancellationToken ct)
     {
         var r = await sender.Send(new DeleteCommunicationCommand(Me, commId, id), ct);

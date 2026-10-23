@@ -315,7 +315,7 @@ export class PrepReportComponent {
   /**
    * 展示用报告:已生成 → 用生成的;未生成 → 默认框架(2026-10-21 定稿 4.1)。
    * 框架是确定性模板:与生成报告同构(八段 + 左目录 + 滚动高亮),文案全走
-   * v2.i18n 三语键,不调 AI、不落库;生成入口(gen-box)保留在框架上方。
+   * 核心字典 pb.v2 三语键(票43 并入),不调 AI、不落库;生成入口(gen-box)保留在框架上方。
    */
   readonly displayReport = computed<PrepReport | null>(
     () => this.report() ?? this.frameworkReport());

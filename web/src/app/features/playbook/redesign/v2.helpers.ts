@@ -1,20 +1,13 @@
 import { I18nService } from '../../../core/i18n/i18n.service';
 import { applyParams } from '../components/brief/brief.helpers';
-import { V2_I18N } from './v2.i18n';
 
 /**
- * v2 组件共用的 t():先查本地 V2_I18N(按当前语言),查不到再回退全局
- * I18nService —— 与 brief 的 makeBriefT 同一套接线方式。
+ * v2 组件共用的 t():票43 ARC-13 起本地 V2_I18N 已全量并入核心
+ * I18nService 字典(pb.v2.* 命名空间,键名与三语值逐字不变),
+ * 本函数只作签名兼容的直委托 —— 与 brief 的 makeBriefT 同一口径。
  */
 export function makeV2T(i18n: I18nService): (key: string) => string {
-  return (key: string): string => {
-    const e = V2_I18N[key];
-    if (e) {
-      const l = i18n.lang();
-      return e[l] ?? e.en ?? e.zh ?? key;
-    }
-    return i18n.t(key);
-  };
+  return (key: string): string => i18n.t(key);
 }
 
 /** 带 {param} 插值的版本:fmt('pb.v2.d.scorePts', { n: 87 }) */

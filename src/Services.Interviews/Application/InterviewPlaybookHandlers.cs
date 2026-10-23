@@ -27,6 +27,13 @@ public sealed class UpdateQuestionMasteryCommandHandler(InterviewsDbContext db)
             .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
+        // 票101:钉版对象是题目行本身。
+        if (request.Version is { } qv)
+        {
+            var q = e.Questions.FirstOrDefault(x => x.Id == request.QuestionId);
+            if (q is not null) ConcurrencyPin.Pin(db, q, qv);
+        }
+
         try
         {
             e.SetQuestionMastery(request.QuestionId, request.Mastery);
@@ -261,6 +268,13 @@ public sealed class UpdateRoundEmailsCommandHandler(InterviewsDbContext db)
         var e = await db.Entries.Include(x => x.Rounds)
             .FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+
+        // 票101:钉版对象是轮次行本身。
+        if (request.Version is { } rv)
+        {
+            var r0 = e.Rounds.FirstOrDefault(x => x.Id == request.RoundId);
+            if (r0 is not null) ConcurrencyPin.Pin(db, r0, rv);
+        }
 
         try
         {

@@ -509,7 +509,8 @@ export class PlaybookDetailComponent implements OnDestroy {
         result: this.bResult() || null,
         notes: this.bNotes() || null,
         questionsToAskJson: e.questionsToAskJson ?? null,
-        debriefJson: e.debriefJson ?? null
+        debriefJson: e.debriefJson ?? null,
+        version: e.version ?? null
       }).toPromise();
       this.editingBasic.set(false);
       this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2000 });
@@ -578,7 +579,8 @@ export class PlaybookDetailComponent implements OnDestroy {
         result: e.result ?? null,
         notes: e.notes ?? null,
         questionsToAskJson: e.questionsToAskJson ?? null,
-        debriefJson: JSON.stringify({ text: this.debriefDraft() })
+        debriefJson: JSON.stringify({ text: this.debriefDraft() }),
+        version: e.version ?? null
       }).toPromise();
       this.snack.open(this.t('pb.v2.d.debriefSaved'), this.t('common.close'), { duration: 2000 });
     } catch {

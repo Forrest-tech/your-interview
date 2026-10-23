@@ -92,7 +92,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
         var r = await sender.Send(new UpdateEntryCommand(Me, id, body.CompanyName, body.Role,
             body.CompanyProfile, body.JdText, body.JdSummary, body.RoundNo, body.InterviewDate,
             body.InterviewFormat, body.Interviewers, body.Location, body.Result, body.Notes,
-            body.QuestionsToAskJson, body.DebriefJson), ct);
+            body.QuestionsToAskJson, body.DebriefJson, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -314,7 +314,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     {
         var r = await sender.Send(new UpdateQuestionCommand(Me, id, questionId, body.QuestionText,
             body.MyAnswerText, body.Category, body.Difficulty, body.Assessment, body.GotStuck,
-            body.StuckReason, body.RecommendedAnswer), ct);
+            body.StuckReason, body.RecommendedAnswer, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -332,7 +332,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SetQuestionMastery(Guid id, Guid questionId,
         [FromBody] SetQuestionMasteryBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateQuestionMasteryCommand(Me, id, questionId, body.Mastery), ct);
+        var r = await sender.Send(new UpdateQuestionMasteryCommand(Me, id, questionId, body.Mastery, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -466,7 +466,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
             body.Interviewers, body.Format, body.Location, body.Outcome ?? "Pending",
             body.Notes, body.Feedback, body.MeetingLink, body.ScheduledTime,
             body.PrepQuestionsJson, body.EmailsJson, body.Transcript, body.RecordingUrl,
-            body.ChecklistJson), ct);
+            body.ChecklistJson, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -487,7 +487,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> UpdateRoundEmails(Guid id, Guid roundId,
         [FromBody] UpdateRoundEmailsBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateRoundEmailsCommand(Me, id, roundId, body.Emails), ct);
+        var r = await sender.Send(new UpdateRoundEmailsCommand(Me, id, roundId, body.Emails, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -560,7 +560,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> ReassignAsset(Guid id, Guid assetId,
         [FromBody] ReassignAssetBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ReassignAssetCommand(Me, id, assetId, body.RoundId), ct);
+        var r = await sender.Send(new ReassignAssetCommand(Me, id, assetId, body.RoundId, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -570,7 +570,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> UpdateAssetMeta(Guid id, Guid assetId,
         [FromBody] AssetMetaBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateAssetMetaCommand(Me, id, assetId, body.MetaJson), ct);
+        var r = await sender.Send(new UpdateAssetMetaCommand(Me, id, assetId, body.MetaJson, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -589,7 +589,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SetQuestionReview(Guid id, Guid questionId,
         [FromBody] ReviewJsonBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetQuestionReviewCommand(Me, id, questionId, body.ReviewJson), ct);
+        var r = await sender.Send(new SetQuestionReviewCommand(Me, id, questionId, body.ReviewJson, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -599,7 +599,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SetRoundReview(Guid id, Guid roundId,
         [FromBody] ReviewJsonBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetRoundReviewCommand(Me, id, roundId, body.ReviewJson), ct);
+        var r = await sender.Send(new SetRoundReviewCommand(Me, id, roundId, body.ReviewJson, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -627,7 +627,7 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SetPrepReport(Guid id, Guid roundId,
         [FromBody] PrepReportBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetRoundPrepReportCommand(Me, id, roundId, body.PrepReportJson), ct);
+        var r = await sender.Send(new SetRoundPrepReportCommand(Me, id, roundId, body.PrepReportJson, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -886,7 +886,7 @@ public sealed record UpdateEntryBody(
     string CompanyName, string Role, string? CompanyProfile, string? JdText, string? JdSummary,
     int RoundNo, DateOnly? InterviewDate, string? InterviewFormat, string? Interviewers,
     string? Location, string? Result, string? Notes, string? QuestionsToAskJson = null,
-    string? DebriefJson = null);
+    string? DebriefJson = null, uint? Version = null); // 票101 Version:读时 xmin 回传钉版
 
 public sealed record AttachAssetBody(
     string Kind, string FileName, string? ContentType = null, long SizeBytes = 0,
@@ -902,13 +902,13 @@ public sealed record GeneratePrepPlanBody(
 
 // ---------------- 详情页 v2 请求体 ----------------
 
-public sealed record ReassignAssetBody(Guid? RoundId);
+public sealed record ReassignAssetBody(Guid? RoundId, uint? Version = null); // 票101 Version:材料行 xmin
 
-public sealed record AssetMetaBody(string? MetaJson);
+public sealed record AssetMetaBody(string? MetaJson, uint? Version = null); // 票101 Version:材料行 xmin
 
-public sealed record ReviewJsonBody(string? ReviewJson);
+public sealed record ReviewJsonBody(string? ReviewJson, uint? Version = null); // 票101 Version:目标行(题/轮)xmin
 
-public sealed record PrepReportBody(string? PrepReportJson);
+public sealed record PrepReportBody(string? PrepReportJson, uint? Version = null); // 票101 Version:轮次行 xmin
 
 public sealed record GeneratePrepReportBody(
     string? JdText = null, string? ResumeText = null, string? Experiences = null,
@@ -943,14 +943,15 @@ public sealed record UpdateRoundBody(
     string? MeetingLink = null, string? ScheduledTime = null,
     string? PrepQuestionsJson = null, string? EmailsJson = null,
     string? Transcript = null, string? RecordingUrl = null,
-    string? ChecklistJson = null);
+    string? ChecklistJson = null, uint? Version = null); // 票101 Version:轮次行 xmin
 
 public sealed record UpdateQuestionBody(
     string QuestionText, string? MyAnswerText, string Category, int Difficulty,
-    string? Assessment, bool GotStuck, string? StuckReason, string? RecommendedAnswer);
+    string? Assessment, bool GotStuck, string? StuckReason, string? RecommendedAnswer,
+    uint? Version = null); // 票101 Version:题目行 xmin
 
 /// <summary>A1:body { mastery: int }。</summary>
-public sealed record SetQuestionMasteryBody(int Mastery);
+public sealed record SetQuestionMasteryBody(int Mastery, uint? Version = null); // 票101 Version:题目行 xmin
 
 /// <summary>A2:POST body { title, detail?, dueDate? }。</summary>
 public sealed record CreateActionBody(
@@ -961,4 +962,4 @@ public sealed record UpdateActionBody(
     string? Title = null, bool? IsDone = null, DateTimeOffset? DueDate = null);
 
 /// <summary>A7:body { emails: [{from, subject, date, snippet}] }。</summary>
-public sealed record UpdateRoundEmailsBody(List<RoundEmailItem> Emails);
+public sealed record UpdateRoundEmailsBody(List<RoundEmailItem> Emails, uint? Version = null); // 票101 Version:轮次行 xmin

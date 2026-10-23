@@ -433,7 +433,7 @@ export class RoundRecordComponent {
         ? { ai: rv.stdTechnical?.ai ?? null, user: draft.technical }
         : rv.stdTechnical
     };
-    await this.api.setQuestionReview(this.entry().id, q.id, serializeQuestionReview(next)).toPromise();
+    await this.api.setQuestionReview(this.entry().id, q.id, serializeQuestionReview(next), q.version ?? null).toPromise();
     this.editingQ.set(null);
     this.snack.open(this.t('pb.v2.rec.savedYours'), this.t('common.close'), { duration: 2200 });
     this.changed.emit();
@@ -445,7 +445,7 @@ export class RoundRecordComponent {
     const next: QuestionReview = { ...rv };
     if (key === 'spoken') next.stdSpoken = { ai: rv.stdSpoken?.ai ?? null, user: null };
     else next.stdTechnical = { ai: rv.stdTechnical?.ai ?? null, user: null };
-    await this.api.setQuestionReview(this.entry().id, q.id, serializeQuestionReview(next)).toPromise();
+    await this.api.setQuestionReview(this.entry().id, q.id, serializeQuestionReview(next), q.version ?? null).toPromise();
     this.snack.open(this.t('pb.v2.rec.restoredAi'), this.t('common.close'), { duration: 2200 });
     this.changed.emit();
   }

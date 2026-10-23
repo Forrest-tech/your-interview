@@ -184,6 +184,8 @@ public sealed class InterviewsDbContext(
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.RoundId });
             e.HasIndex(x => x.StoragePath);                       // 巡检按路径反查;软删条目清理孤儿文件也走它
+            // 票101:材料行纳入 xmin 并发令牌(系统列,零迁移)——meta/归属编辑回传钉版。
+            e.UseXminAsConcurrencyToken();
         });
 
         b.Entity<InterviewQuestion>(e =>
@@ -211,6 +213,8 @@ public sealed class InterviewsDbContext(
             e.Metadata.FindProperty(nameof(InterviewQuestion.MissedPointsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Sequence });
+            // 票101:题目行纳入 xmin 并发令牌(系统列,零迁移)——题目编辑/mastery/复盘回传钉版。
+            e.UseXminAsConcurrencyToken();
         });
 
         b.Entity<InterviewWeakness>(e =>
@@ -255,6 +259,8 @@ public sealed class InterviewsDbContext(
             e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Order }).IsUnique();
+            // 票101:轮次行纳入 xmin 并发令牌(系统列,零迁移)——轮次编辑/邮件/复盘/备考报告回传钉版。
+            e.UseXminAsConcurrencyToken();
         });
 
         b.Entity<GeneratedMaterial>(e =>

@@ -91,6 +91,7 @@ public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
         // 必须带 Rounds 加载,否则 _rounds 为空、事件永远无枚举。
         var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        ConcurrencyPin.Pin(db, e, request.Version);
 
         e.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,
             request.JdText, request.JdSummary, request.RoundNo, request.InterviewDate,
@@ -435,6 +436,13 @@ public sealed class UpdateQuestionCommandHandler(InterviewsDbContext db)
         if (!Enum.TryParse<QuestionCategory>(request.Category, true, out var cat))
             return Result.Failure(Error.Validation("Question.InvalidCategory", "问题类型无效"));
 
+        // 票101:钉版对象是题目行本身。
+        if (request.Version is { } qv)
+        {
+            var q = e.Questions.FirstOrDefault(x => x.Id == request.QuestionId);
+            if (q is not null) ConcurrencyPin.Pin(db, q, qv);
+        }
+
         try
         {
             e.UpdateQuestion(request.QuestionId, request.QuestionText, request.MyAnswerText, cat,
@@ -718,6 +726,13 @@ public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
 
         if (!Enum.TryParse<InterviewRoundOutcome>(request.Outcome, true, out var outcome))
             return Result.Failure(Error.Validation("Round.InvalidOutcome", "轮次结果无效"));
+
+        // 票101:钉版对象是轮次行本身。
+        if (request.Version is { } rv)
+        {
+            var r0 = e.Rounds.FirstOrDefault(x => x.Id == request.RoundId);
+            if (r0 is not null) ConcurrencyPin.Pin(db, r0, rv);
+        }
 
         try
         {

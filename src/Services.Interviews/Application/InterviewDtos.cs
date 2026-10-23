@@ -27,7 +27,9 @@ public sealed record AssetDto(
     // 2026-10-19:资产按 Round 管理。RoundId/Phase 为 null = 历史遗留未归类材料。
     Guid? RoundId = null, string? Phase = null,
     // 2026-10-20 详情页 v2:统一入口解析字段/摘要/处理状态等元数据 JSON。
-    string? MetaJson = null);
+    string? MetaJson = null,
+    // 票101:读时 xmin(meta/归属更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 public sealed record QuestionDto(
     Guid Id, int Sequence, string QuestionText, string? MyAnswerText, string Category,
@@ -35,7 +37,9 @@ public sealed record QuestionDto(
     string? RecommendedAnswer, double? AskedAtSeconds, string? WeaknessTagsJson,
     string? FollowUpQuestionsJson, string? MissedPointsJson, int Mastery = 0,
     // 2026-10-20 详情页 v2:归轮 / 提问人 / 逐题复盘 JSON。
-    Guid? RoundId = null, string? AskedBy = null, string? ReviewJson = null);
+    Guid? RoundId = null, string? AskedBy = null, string? ReviewJson = null,
+    // 票101:读时 xmin(题目更新/mastery/复盘回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 public sealed record WeaknessDto(
     Guid Id, string Category, string Title, string? Detail, string? Evidence,
@@ -48,7 +52,9 @@ public sealed record RoundDto(
     string? MeetingLink, string? ScheduledTime, string? EmailsJson, string? Transcript,
     string? PrepQuestionsJson = null, string? RecordingUrl = null, string? ChecklistJson = null,
     // 2026-10-20 详情页 v2:整轮复盘汇总 / 结构化备考报告 JSON。
-    string? ReviewJson = null, string? PrepReportJson = null);
+    string? ReviewJson = null, string? PrepReportJson = null,
+    // 票101:读时 xmin(轮次更新/邮件/复盘/备考报告回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 /// <summary>全局 upcoming:跨所有条目的未来轮次,带公司/职位上下文,供日历视图用。</summary>
 public sealed record UpcomingRoundDto(
@@ -105,7 +111,9 @@ public sealed record InterviewEntryDto(
     // 票05(ARC-14):结构化结果 —— 后端按 DeriveOutcome 单一口径派生(值域与
     // SharedContracts InterviewOutcome / 轮次 InterviewRoundOutcome 同名同值),
     // 前端只消费此字段分组/展示,不再本地判读 Result 自由文本。
-    string? Outcome = null);
+    string? Outcome = null,
+    // 票101:读时 xmin(条目全量更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 public sealed record InterviewEntryListItemDto(
     Guid Id, Guid CompanyId, string CompanyName, string Role, int RoundNo,

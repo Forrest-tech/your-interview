@@ -20,7 +20,8 @@ namespace YourInterview.Services.Interviews.Application;
 // JSON 结构由前后端共同约定(见 replica/playbook-redesign-spec.md),后端负责生成与存储。
 
 /// <summary>改材料归属:RoundId=null → 条目级(沟通记录)。</summary>
-public sealed record ReassignAssetCommand(Guid UserId, Guid EntryId, Guid AssetId, Guid? RoundId) : IRequest<Result>;
+public sealed record ReassignAssetCommand(Guid UserId, Guid EntryId, Guid AssetId, Guid? RoundId,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:材料行 xmin
 
 /// <summary>删除材料(2026-10-20 v2 补齐)。</summary>
 public sealed record DeleteAssetCommand(Guid UserId, Guid EntryId, Guid AssetId) : IRequest<Result>;
@@ -46,6 +47,12 @@ public sealed class ReassignAssetCommandHandler(InterviewsDbContext db)
     {
         var e = await LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        // 票101:钉版对象是材料行本身。
+        if (request.Version is { } av)
+        {
+            var a0 = e.Assets.FirstOrDefault(x => x.Id == request.AssetId);
+            if (a0 is not null) ConcurrencyPin.Pin(db, a0, av);
+        }
         try { e.ReassignAsset(request.AssetId, request.RoundId); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Asset.Reassign", ex.Message)); }
         await db.SaveChangesAsync(ct);
@@ -59,7 +66,8 @@ public sealed class ReassignAssetCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>更新材料元数据 JSON(解析字段/AI 摘要/提取安排/处理状态)。</summary>
-public sealed record UpdateAssetMetaCommand(Guid UserId, Guid EntryId, Guid AssetId, string? MetaJson) : IRequest<Result>;
+public sealed record UpdateAssetMetaCommand(Guid UserId, Guid EntryId, Guid AssetId, string? MetaJson,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:材料行 xmin
 
 public sealed class UpdateAssetMetaCommandHandler(InterviewsDbContext db)
     : IRequestHandler<UpdateAssetMetaCommand, Result>
@@ -68,6 +76,11 @@ public sealed class UpdateAssetMetaCommandHandler(InterviewsDbContext db)
     {
         var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        if (request.Version is { } av)
+        {
+            var x0 = e.Assets.FirstOrDefault(x => x.Id == request.AssetId);
+            if (x0 is not null) ConcurrencyPin.Pin(db, x0, av);
+        }
         try { e.UpdateAssetMeta(request.AssetId, request.MetaJson); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Asset.Meta", ex.Message)); }
         await db.SaveChangesAsync(ct);
@@ -76,7 +89,8 @@ public sealed class UpdateAssetMetaCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>写入逐题复盘 JSON(含标准答案用户编辑版)。</summary>
-public sealed record SetQuestionReviewCommand(Guid UserId, Guid EntryId, Guid QuestionId, string? ReviewJson) : IRequest<Result>;
+public sealed record SetQuestionReviewCommand(Guid UserId, Guid EntryId, Guid QuestionId, string? ReviewJson,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:题目行 xmin
 
 public sealed class SetQuestionReviewCommandHandler(InterviewsDbContext db)
     : IRequestHandler<SetQuestionReviewCommand, Result>
@@ -85,6 +99,11 @@ public sealed class SetQuestionReviewCommandHandler(InterviewsDbContext db)
     {
         var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        if (request.Version is { } qv)
+        {
+            var x0 = e.Questions.FirstOrDefault(x => x.Id == request.QuestionId);
+            if (x0 is not null) ConcurrencyPin.Pin(db, x0, qv);
+        }
         try { e.SetQuestionReview(request.QuestionId, request.ReviewJson); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Question.Review", ex.Message)); }
         await db.SaveChangesAsync(ct);
@@ -93,7 +112,8 @@ public sealed class SetQuestionReviewCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>写入整轮复盘汇总 JSON。</summary>
-public sealed record SetRoundReviewCommand(Guid UserId, Guid EntryId, Guid RoundId, string? ReviewJson) : IRequest<Result>;
+public sealed record SetRoundReviewCommand(Guid UserId, Guid EntryId, Guid RoundId, string? ReviewJson,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:轮次行 xmin
 
 public sealed class SetRoundReviewCommandHandler(InterviewsDbContext db)
     : IRequestHandler<SetRoundReviewCommand, Result>
@@ -102,6 +122,11 @@ public sealed class SetRoundReviewCommandHandler(InterviewsDbContext db)
     {
         var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        if (request.Version is { } rv)
+        {
+            var x0 = e.Rounds.FirstOrDefault(x => x.Id == request.RoundId);
+            if (x0 is not null) ConcurrencyPin.Pin(db, x0, rv);
+        }
         try { e.SetRoundReview(request.RoundId, request.ReviewJson); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Round.Review", ex.Message)); }
         await db.SaveChangesAsync(ct);
@@ -110,7 +135,8 @@ public sealed class SetRoundReviewCommandHandler(InterviewsDbContext db)
 }
 
 /// <summary>写入结构化备考报告 JSON(前端编辑 Tech Stack 关联后回存也走这里)。</summary>
-public sealed record SetRoundPrepReportCommand(Guid UserId, Guid EntryId, Guid RoundId, string? PrepReportJson) : IRequest<Result>;
+public sealed record SetRoundPrepReportCommand(Guid UserId, Guid EntryId, Guid RoundId, string? PrepReportJson,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:轮次行 xmin
 
 public sealed class SetRoundPrepReportCommandHandler(InterviewsDbContext db)
     : IRequestHandler<SetRoundPrepReportCommand, Result>
@@ -119,6 +145,11 @@ public sealed class SetRoundPrepReportCommandHandler(InterviewsDbContext db)
     {
         var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
+        if (request.Version is { } rv)
+        {
+            var x0 = e.Rounds.FirstOrDefault(x => x.Id == request.RoundId);
+            if (x0 is not null) ConcurrencyPin.Pin(db, x0, rv);
+        }
         try { e.SetRoundPrepReport(request.RoundId, request.PrepReportJson); }
         catch (InvalidOperationException ex) { return Result.Failure(Error.Conflict("Round.PrepReport", ex.Message)); }
         await db.SaveChangesAsync(ct);

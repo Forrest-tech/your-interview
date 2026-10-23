@@ -57,7 +57,8 @@ public sealed record UpdateEntryCommand(
     Guid UserId, Guid Id, string CompanyName, string Role, string? CompanyProfile, string? JdText,
     string? JdSummary, int RoundNo, DateOnly? InterviewDate, string? InterviewFormat,
     string? Interviewers, string? Location, string? Result, string? Notes,
-    string? QuestionsToAskJson = null, string? DebriefJson = null) : IRequest<Result>;
+    string? QuestionsToAskJson = null, string? DebriefJson = null,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:读时 xmin 回传钉版,null=不钉
 
 public sealed record DeleteEntryCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
@@ -139,14 +140,15 @@ public sealed record AddQuestionCommand(
 public sealed record UpdateQuestionCommand(
     Guid UserId, Guid EntryId, Guid QuestionId, string QuestionText, string? MyAnswerText, string Category,
     int Difficulty, string? Assessment, bool GotStuck, string? StuckReason,
-    string? RecommendedAnswer) : IRequest<Result>;
+    string? RecommendedAnswer, uint? Version = null) : IRequest<Result>; // 票101 Version:题目行 xmin
 
 public sealed record RemoveQuestionCommand(Guid UserId, Guid EntryId, Guid QuestionId) : IRequest<Result>;
 
 // ============================ Playbook 重做(A1–A7/F3):命令与查询 ============================
 
 /// <summary>A1:设置题目掌握度(0=待练,1=练习中,2=已掌握,3=还卡壳)。</summary>
-public sealed record UpdateQuestionMasteryCommand(Guid UserId, Guid EntryId, Guid QuestionId, int Mastery)
+public sealed record UpdateQuestionMasteryCommand(Guid UserId, Guid EntryId, Guid QuestionId, int Mastery,
+    uint? Version = null) // 票101 Version:题目行 xmin
     : IRequest<Result>;
 
 /// <summary>A2:待办列表。</summary>
@@ -182,7 +184,8 @@ public sealed record GetCoverageQuery(Guid UserId) : IRequest<Result<IReadOnlyLi
 
 /// <summary>A7:整体替换某轮次的邮件时间线。</summary>
 public sealed record UpdateRoundEmailsCommand(
-    Guid UserId, Guid EntryId, Guid RoundId, List<RoundEmailItem> Emails) : IRequest<Result>;
+    Guid UserId, Guid EntryId, Guid RoundId, List<RoundEmailItem> Emails,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:轮次行 xmin
 
 // ============================ 轮次(缺口1) ============================
 
@@ -202,7 +205,8 @@ public sealed record UpdateRoundCommand(
     string? Feedback, string? MeetingLink = null, string? ScheduledTime = null,
     string? PrepQuestionsJson = null, string? EmailsJson = null,
     string? Transcript = null, string? RecordingUrl = null,
-    string? ChecklistJson = null) : IRequest<Result>;
+    string? ChecklistJson = null,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:轮次行 xmin
 
 public sealed record RemoveRoundCommand(Guid UserId, Guid EntryId, Guid RoundId) : IRequest<Result>;
 

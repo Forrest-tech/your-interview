@@ -103,12 +103,12 @@ export class PlaybookV2Api {
     return this.api.delete(`${this.base(entryId)}/rounds/${roundId}`);
   }
 
-  setQuestionReview(entryId: string, questionId: string, reviewJson: string): Observable<unknown> {
-    return this.api.put(`${this.base(entryId)}/questions/${questionId}/review`, { reviewJson });
+  setQuestionReview(entryId: string, questionId: string, reviewJson: string, version?: number | null): Observable<unknown> {
+    return this.api.put(`${this.base(entryId)}/questions/${questionId}/review`, { reviewJson, version: version ?? null });
   }
 
-  setRoundReview(entryId: string, roundId: string, reviewJson: string): Observable<unknown> {
-    return this.api.put(`${this.base(entryId)}/rounds/${roundId}/review`, { reviewJson });
+  setRoundReview(entryId: string, roundId: string, reviewJson: string, version?: number | null): Observable<unknown> {
+    return this.api.put(`${this.base(entryId)}/rounds/${roundId}/review`, { reviewJson, version: version ?? null });
   }
 
   generateRoundReview(entryId: string, roundId: string): Observable<{ reviewJson: string }> {

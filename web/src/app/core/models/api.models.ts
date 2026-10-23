@@ -118,6 +118,8 @@ export interface Application {
   rounds?: InterviewRound[];
   createdAt: string;
   updatedAt?: string;
+  /** 票101:读时 xmin 乐观并发版本(保存时回传,过期后端 409)。 */
+  version?: number;
 }
 
 /** 公司(2026-09-18:补 Profile 公司情报,面试前准备包的输入之一)。 */
@@ -137,6 +139,8 @@ export interface Company {
   /** 公司情报来源 URL(JSON 数组字符串)。 */
   profileSourcesJson?: string;
   createdAt: string;
+  /** 票101:读时 xmin(同 Application.version)。 */
+  version?: number;
 }
 
 /** Playbook 公司聚合(后端 CompanySummaryDto 子集):备考中的公司。 */
@@ -199,6 +203,8 @@ export interface AnswerTemplate {
   sortOrder: number;
   createdAt: string;
   updatedAt?: string | null;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 /** M3:沟通记录类型。 */
@@ -217,6 +223,8 @@ export interface Communication {
   occurredAt: string;
   createdAt: string;
   updatedAt?: string | null;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 // ============================ 实战机经(Interviews) ============================
@@ -265,6 +273,8 @@ export interface InterviewEntry {
   hasTranscript?: boolean;
   createdAt: string;
   analyzedAt?: string;
+  /** 票101:读时 xmin(全量保存回传,过期后端 409)。 */
+  version?: number;
 }
 
 export interface InterviewQuestion {
@@ -287,6 +297,8 @@ export interface InterviewQuestion {
   askedBy?: string | null;
   reviewJson?: string | null;
   mastery?: number;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 export interface InterviewRound {
@@ -310,6 +322,8 @@ export interface InterviewRound {
   /** 2026-10-20 v2:整轮复盘汇总 / 结构化备考报告 JSON。 */
   reviewJson?: string | null;
   prepReportJson?: string | null;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 export interface PrepQuestion {

@@ -282,7 +282,8 @@ export class RoundCardComponent {
         location: this.eLocation() || null,
         meetingLink: this.eLink(),
         outcome: this.eOutcome(),
-        feedback: this.eFeedback() || null
+        feedback: this.eFeedback() || null,
+        version: this.round().version ?? null
       }).toPromise();
       this.editing.set(false);
       this.snack.open(this.t('pb.v2.r.roundSaved'), this.t('common.close'), { duration: 2000 });

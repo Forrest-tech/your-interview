@@ -19,19 +19,19 @@ namespace YourInterview.Services.Interviews.Application;
 
 public static class InterviewMappingExtensions
 {
-    public static AssetDto ToDto(this InterviewAsset a) => new(
+    public static AssetDto ToDto(this InterviewAsset a, uint version = 0) => new(
         a.Id, a.Kind.ToString(), a.FileName, a.ContentType, a.SizeBytes, a.BlobUrl,
         a.DurationSeconds, a.SourceLanguage, a.HasTranscript,
         a.TranscriptText?.Length ?? 0, a.UploadedAt,
         a.StoragePath, a.Sha256, a.FileExists,
         a.IntegrityStatus?.ToString(), a.LastVerifiedAt,
-        a.RoundId, a.Phase?.ToString(), a.MetaJson);
+        a.RoundId, a.Phase?.ToString(), a.MetaJson, version);
 
-    public static QuestionDto ToDto(this InterviewQuestion q) => new(
+    public static QuestionDto ToDto(this InterviewQuestion q, uint version = 0) => new(
         q.Id, q.Sequence, q.QuestionText, q.MyAnswerText, q.Category.ToString(), q.Difficulty,
         q.Assessment, q.GotStuck, q.StuckReason, q.RecommendedAnswer, q.AskedAtSeconds,
         q.WeaknessTagsJson, q.FollowUpQuestionsJson, q.MissedPointsJson, q.Mastery,
-        q.RoundId, q.AskedBy, q.ReviewJson);
+        q.RoundId, q.AskedBy, q.ReviewJson, version);
 
     public static ActionDto ToDto(this InterviewAction a) => new(
         a.Id, a.Title, a.Detail, a.DueDate, a.IsDone, a.CreatedAt);
@@ -40,12 +40,12 @@ public static class InterviewMappingExtensions
         w.Id, w.Category.ToString(), w.Title, w.Detail, w.Evidence, w.Severity, w.Suggestion,
         w.OccurrenceCount, w.SourceType.ToString(), w.CreatedAt);
 
-    public static RoundDto ToDto(this InterviewRound r) => new(
+    public static RoundDto ToDto(this InterviewRound r, uint version = 0) => new(
         r.Id, r.Order, r.Stage, r.ScheduledDate, r.Interviewers, r.Format, r.Location,
         r.Outcome.ToString(), r.Notes, r.Feedback,
         r.MeetingLink, r.ScheduledTime, r.EmailsJson, r.Transcript,
         r.PrepQuestionsJson, r.RecordingUrl, r.ChecklistJson,
-        r.ReviewJson, r.PrepReportJson);
+        r.ReviewJson, r.PrepReportJson, version);
 
     public static GuidanceMaterialDto ToDto(this GeneratedMaterial m) => new(
         m.Id, m.Version, m.ContentMarkdown, m.Model, m.GeneratedAt,
@@ -55,7 +55,10 @@ public static class InterviewMappingExtensions
         q.Id, q.QuestionText, q.MyAnswerText, q.RecommendedAnswer,
         q.Category.ToString(), q.Difficulty, q.GotStuck, q.Assessment);
 
-    public static InterviewEntryDto ToDto(this InterviewEntry e) => new(
+    public static InterviewEntryDto ToDto(this InterviewEntry e, uint version = 0,
+        IReadOnlyDictionary<Guid, uint>? questionVersions = null,
+        IReadOnlyDictionary<Guid, uint>? roundVersions = null,
+        IReadOnlyDictionary<Guid, uint>? assetVersions = null) => new(
         e.Id, e.CompanyId, e.CompanyName, e.JobApplicationId, e.Role,
         e.CompanyProfile, e.JdText, e.JdSummary,
         e.RoundNo, e.InterviewDate, e.InterviewFormat, e.Interviewers, e.Location, e.Result, e.Notes,
@@ -64,15 +67,18 @@ public static class InterviewMappingExtensions
         e.TechnicalDepthScore, e.RelevanceScore, e.AnalysisSummary,
         ParseSpeechMetrics(e.SpeechMetricsJson), e.CandidateTranscript,
         e.Assets.Count, e.Questions.Count, e.Weaknesses.Count, e.Rounds.Count,
-        e.Assets.OrderBy(x => x.UploadedAt).Select(x => x.ToDto()).ToList(),
-        e.Questions.OrderBy(x => x.Sequence).Select(x => x.ToDto()).ToList(),
+        e.Assets.OrderBy(x => x.UploadedAt).Select(x => x.ToDto(
+            assetVersions is not null && assetVersions.TryGetValue(x.Id, out var av) ? av : 0)).ToList(),
+        e.Questions.OrderBy(x => x.Sequence).Select(x => x.ToDto(
+            questionVersions is not null && questionVersions.TryGetValue(x.Id, out var qv) ? qv : 0)).ToList(),
         e.Weaknesses.OrderByDescending(x => x.Severity).Select(x => x.ToDto()).ToList(),
-        e.Rounds.OrderBy(x => x.Order).Select(x => x.ToDto()).ToList(),
+        e.Rounds.OrderBy(x => x.Order).Select(x => x.ToDto(
+            roundVersions is not null && roundVersions.TryGetValue(x.Id, out var rv) ? rv : 0)).ToList(),
         e.CreatedAt, e.UpdatedAt,
         e.QuestionsToAskJson, e.Actions.Count,
         e.Actions.OrderBy(x => x.IsDone).ThenBy(x => x.CreatedAt)
             .Select(x => x.ToDto()).ToList(), e.DebriefJson,
-        DeriveOutcome(e)?.ToString());
+        DeriveOutcome(e)?.ToString(), version);
 
     /// <summary>指标 JSON 反序列化(票19:经 JsonFieldAdapter 强类型读):坏数据/缺字段时返回 null,前端按"无指标"处理。</summary>
     private static SpeechMetricsDto? ParseSpeechMetrics(string? json)

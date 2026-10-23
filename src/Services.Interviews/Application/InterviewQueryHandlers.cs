@@ -74,9 +74,22 @@ public sealed class GetEntryQueryHandler(InterviewsDbContext db)
                 .Include(x => x.Actions)
                 .Include(x => x.Rounds), ct);
 
-        return e is null
-            ? Result.Failure<InterviewEntryDto>(Error.NotFound("面试条目"))
-            : Result.Success(e.ToDto());
+        if (e is null)
+            return Result.Failure<InterviewEntryDto>(Error.NotFound("面试条目"));
+
+        // 票101:读时 xmin(条目行 + 题目/轮次/材料子行)随 DTO 带出。
+        var version = await db.Entries.AsNoTracking().Where(x => x.Id == e.Id)
+            .Select(x => EF.Property<uint>(x, "xmin")).FirstAsync(ct);
+        var questionVersions = await db.Questions.AsNoTracking().Where(x => x.InterviewEntryId == e.Id)
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+        var roundVersions = await db.Rounds.AsNoTracking().Where(x => x.InterviewEntryId == e.Id)
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+        var assetVersions = await db.Assets.AsNoTracking().Where(x => x.InterviewEntryId == e.Id)
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+        return Result.Success(e.ToDto(version, questionVersions, roundVersions, assetVersions));
     }
 }
 

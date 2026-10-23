@@ -40,5 +40,9 @@ public sealed record RecordingScoreDto(
     // ★ 票108 A10:评分行读时 xmin —— 重评分保存时回传钉版,过期得 409。
     uint? Version = null);
 
-public sealed record WordScoreDto(string Word, double Accuracy, string ErrorType);
+/// <summary>逐词评分读出 DTO。★ 票122:补 OffsetMs/DurationMs(默认值参数)——
+/// 旧 WordsJson 无此两键 → STJ 绑定得 0,前端分发据真值走弹层(与旧行为逐字
+/// 相同,不假 seek);新落库记录原值读出,重载后点填充词可 seek。</summary>
+public sealed record WordScoreDto(string Word, double Accuracy, string ErrorType,
+    double OffsetMs = 0, double DurationMs = 0);
 

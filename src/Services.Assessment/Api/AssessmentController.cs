@@ -899,8 +899,12 @@ public sealed record RecordingScoreBody(
     // ★ 票108 A10:既有评分行读时 xmin 回传钉版(不传 = 不钉,兼容旧调用方)。
     uint? Version = null);
 
-/// <summary>逐词评分明细。</summary>
-public sealed record WordScoreIn(string Word, double Accuracy, string ErrorType);
+/// <summary>逐词评分明细。★ 票122:补 OffsetMs/DurationMs(默认值参数)——
+/// 此前仅三字段,前端透传的词级时间偏移在 STJ 绑定时被当未知属性丢弃,
+/// 重载报告点词 seek 结构性不可达。补后保存路径逐字序列化自动进 WordsJson;
+/// 旧客户端不传 → 0 = 「无偏移」语义,与落库旧记录同口径。</summary>
+public sealed record WordScoreIn(string Word, double Accuracy, string ErrorType,
+    double OffsetMs = 0, double DurationMs = 0);
 
 /// <summary>
 /// 示范朗读合成请求。

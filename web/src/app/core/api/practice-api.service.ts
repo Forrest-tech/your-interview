@@ -67,6 +67,9 @@ export interface WordScoreDto {
   word: string;
   accuracy: number;
   errorType: string;
+  /** ★ 票122:词级时间偏移(后端落库读出);旧记录无此两键 → undefined = 无偏移。 */
+  offsetMs?: number;
+  durationMs?: number;
 }
 
 /**

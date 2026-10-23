@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { RoundRemindersService } from './redesign/round/round-reminders.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { weekDayHeaders } from '../../core/i18n/localized-messages.helpers';
 import { UpcomingRound } from '../../core/models/api.models';
@@ -31,8 +32,12 @@ interface CalDay {
 })
 export class PlaybookCalendarComponent implements OnInit {
   private readonly interviewsApi = inject(InterviewsApiService);
+  private readonly remindersSvc = inject(RoundRemindersService);
   private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
+
+  /** CONF-CAL-2:已到期未确认的提醒(横幅数据源,与轮次卡共用同一份状态)。 */
+  readonly dueList = this.remindersSvc.due;
 
   readonly t = (key: string) => this.i18n.t(key);
 
@@ -93,6 +98,12 @@ export class PlaybookCalendarComponent implements OnInit {
 
   ngOnInit(): void {
     this.reload();
+    this.remindersSvc.ensureLoaded();
+  }
+
+  /** CONF-CAL-2:确认一条到期提醒,横幅即时消失。 */
+  ackReminder(id: string): void {
+    this.remindersSvc.ack(id);
   }
 
   reload(): void {

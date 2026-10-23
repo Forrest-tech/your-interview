@@ -350,6 +350,27 @@ export interface UpcomingRound {
   outcome: string;
 }
 
+/**
+ * CONF-CAL-2 轮次提醒(应用内):后端 RoundReminderDto 的前端镜像。
+ * isDue 由后端按服务器时钟判定,前端不重算;status 列表端点只回 Pending。
+ */
+export interface RoundReminderDto {
+  id: string;
+  entryId: string;
+  roundId: string;
+  companyName: string;
+  role: string;
+  stage: string;
+  roundOrder: number;
+  scheduledDate?: string | null;
+  scheduledTime?: string | null;
+  startAt: string;
+  kind: 'DayBefore' | 'HourBefore';
+  remindAt: string;
+  isDue: boolean;
+  status: string;
+}
+
 /** 轮次通过概率:基于历史同 stage 通过率 + 准备度信号。 */
 export interface PassProbability {
   probability: number;

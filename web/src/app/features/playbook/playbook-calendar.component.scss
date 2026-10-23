@@ -14,6 +14,19 @@
 
 .cal-loading, .cal-empty { text-align: center; padding: 40px 0; opacity: 0.55; }
 
+/* CONF-CAL-2:到期提醒横幅 */
+.cal-due-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; margin-bottom: 10px;
+  border: 1px solid rgba(244, 67, 54, 0.45); border-radius: 8px;
+  background: rgba(244, 67, 54, 0.07);
+
+  mat-icon { color: #d32f2f; }
+  .due-title { font-weight: 600; }
+  .due-body { opacity: 0.85; }
+  .due-spacer { flex: 1; }
+}
+
 .cal-grid { padding: 0; overflow: hidden; }
 
 .cal-week-head, .cal-week { display: grid; grid-template-columns: repeat(7, 1fr); }

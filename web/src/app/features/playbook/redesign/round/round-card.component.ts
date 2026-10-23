@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Output, computed, effect, inject, input, signal
+  Component, EventEmitter, OnInit, Output, computed, effect, inject, input, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -11,6 +11,8 @@ import {
   InterviewDetail, InterviewRound
 } from '../../../../core/models/api.models';
 import { PlaybookV2Api } from '../playbook-v2.api';
+import { RoundRemindersService } from './round-reminders.service';
+import { formatRemindAt, reminderStateForRound } from './reminders.helpers';
 import { TranscriptSegment, parseQuestionReview, safeJson } from '../v2.models';
 import { PrepReportComponent } from './prep-report.component';
 import { RoundRecordComponent } from './round-record.component';
@@ -68,6 +70,11 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
           <mat-icon>event</mat-icon>
           <span>{{ t('pb.v2.r.calInApp') }}</span>
           <span class="cal-remind">{{ t('pb.v2.r.calReminders') }}</span>
+          @if (reminderState().kind === 'due') {
+            <span class="cal-due" data-testid="round-cal-due">{{ t('pb.v2.r.calDue') }}</span>
+          } @else if (reminderState().kind === 'upcoming') {
+            <span class="cal-next" data-testid="round-cal-next">{{ t('pb.v2.r.calNext') }} {{ nextRemindLabel() }}</span>
+          }
           <span class="spacer"></span>
           <button type="button" class="mini-btn" (click)="toggleEdit()">{{ t('pb.v2.r.editRound') }}</button>
         </div>
@@ -153,6 +160,8 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
                border: 1px dashed var(--yi-border, #bbb); border-radius: 10px; padding: 7px 12px; }
     .cal-bar mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--yi-accent, #3f51b5); }
     .cal-bar .cal-remind { color: var(--yi-text-muted, #777); }
+    .cal-bar .cal-due { color: #d32f2f; font-weight: 600; }
+    .cal-bar .cal-next { color: var(--yi-text-muted, #777); }
     .rc-outcome a { color: var(--yi-accent, #3f51b5); }
     .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
                 border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 500; cursor: pointer; }
@@ -176,7 +185,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
     .file-label { display: inline-flex; align-items: center; }
   `]
 })
-export class RoundCardComponent {
+export class RoundCardComponent implements OnInit {
   readonly entry = input.required<InterviewDetail>();
   readonly round = input.required<InterviewRound>();
   /** 票30(REQ-10):展示编号(日期序位置),由详情页传入;缺省回落存储 order(其他调用方零感知)。 */
@@ -185,11 +194,24 @@ export class RoundCardComponent {
   @Output() readonly addMaterialHere = new EventEmitter<string>();
 
   private readonly api = inject(PlaybookV2Api);
+  private readonly remindersSvc = inject(RoundRemindersService);
   private readonly snack = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18nService);
   readonly t = makeV2T(this.i18n);
   readonly fmt = makeV2Fmt(this.i18n);
+
+  /** CONF-CAL-2:本轮真实提醒状态(与日历页横幅共用 RoundRemindersService 一份数据)。 */
+  readonly reminderState = computed(() =>
+    reminderStateForRound(this.remindersSvc.reminders(), this.round().id));
+  readonly nextRemindLabel = computed(() => {
+    const s = this.reminderState();
+    return s.kind === 'upcoming' ? formatRemindAt(s.next.remindAt) : '';
+  });
+
+  ngOnInit(): void {
+    this.remindersSvc.ensureLoaded();
+  }
 
   readonly tab = signal<RoundTab>('prep');
   readonly editing = signal(false);
@@ -329,6 +351,7 @@ export class RoundCardComponent {
       }).toPromise();
       this.editing.set(false);
       this.snack.open(this.t('pb.v2.r.roundSaved'), this.t('common.close'), { duration: 2000 });
+      this.remindersSvc.refresh();   // CONF-CAL-2:排期可能已变,提醒状态重新对账
       this.changed.emit();
     } catch (e) {
       // 票106(C2):errors{Stage/Interviewers/Location} 落字段下方;非字段级失败回落原通用 snack
@@ -346,7 +369,7 @@ export class RoundCardComponent {
 
   deleteRound(): void {
     this.api.deleteRound(this.entry().id, this.round().id).subscribe({
-      next: () => { this.snack.open(this.t('pb.v2.r.roundDeleted'), this.t('common.close'), { duration: 2000 }); this.changed.emit(); },
+      next: () => { this.snack.open(this.t('pb.v2.r.roundDeleted'), this.t('common.close'), { duration: 2000 }); this.remindersSvc.refresh(); this.changed.emit(); },
       error: () => this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 })
     });
   }

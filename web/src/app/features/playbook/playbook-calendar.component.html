@@ -13,6 +13,16 @@
     </div>
   </div>
 
+  @for (r of dueList(); track r.id) {
+    <div class="cal-due-banner" data-testid="reminder-due-banner">
+      <mat-icon>notifications_active</mat-icon>
+      <span class="due-title">{{ t('pb.cal.reminderTitle') }}</span>
+      <span class="due-body">{{ r.companyName }} · {{ r.stage }} · {{ r.scheduledDate }} {{ r.scheduledTime }}</span>
+      <span class="due-spacer"></span>
+      <button mat-button (click)="ackReminder(r.id)">{{ t('pb.cal.reminderAck') }}</button>
+    </div>
+  }
+
   @if (loading()) {
     <p class="cal-loading">{{ t('common.loading') }}</p>
   } @else {

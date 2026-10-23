@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiClient } from './api-client';
-import { Application, InterviewDetail, InterviewEntry, Paged, UpcomingRound } from '../models/api.models';
+import { Application, InterviewDetail, InterviewEntry, Paged, RoundReminderDto, UpcomingRound } from '../models/api.models';
 import { CompanySummary, CoverageRow, InterviewStats } from './jobs-api.service';
 
 /** 后端 PrepPlanDto。 */
@@ -76,6 +76,21 @@ export class InterviewsApiService {
 
   getUpcomingRounds(days = 30): Observable<UpcomingRound[]> {
     return this.api.get<UpcomingRound[]>(`${InterviewsApiService.BASE}/rounds/upcoming`, { days });
+  }
+
+  /** CONF-CAL-2:我的全部待触发轮次提醒(后端查询时对账生成,按触发时刻升序)。 */
+  getReminders(): Observable<RoundReminderDto[]> {
+    return this.api.get<RoundReminderDto[]>(`${InterviewsApiService.BASE}/reminders`);
+  }
+
+  /** CONF-CAL-2:已到期未确认的提醒(日历页横幅数据源)。 */
+  getDueReminders(): Observable<RoundReminderDto[]> {
+    return this.api.get<RoundReminderDto[]>(`${InterviewsApiService.BASE}/reminders/due`);
+  }
+
+  /** CONF-CAL-2:确认一条提醒(点「知道了」);成功后该提醒离开列表。 */
+  acknowledgeReminder(id: string): Observable<void> {
+    return this.api.post<void>(`${InterviewsApiService.BASE}/reminders/${id}/ack`, {});
   }
 
   createPrepPlan<T = PrepPlanResult>(entryId: string, roundId: string, body: unknown): Observable<T> {

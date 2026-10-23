@@ -235,6 +235,20 @@ export function entryStatusBadgeKey(outcome: string | null | undefined): string 
   return `pb.roundOutcome.${outcome}`;
 }
 
+/**
+ * 票116 F-H1:待办 toggle 的 PATCH 失败后,checkbox 应呈现的勾选态。
+ * 服务端真值优先:取回读(actions)中该行的 isDone;回读缺失/无此行时
+ * 回落点选前的真值(失败即未变更,点前值就是最后已知真值)。
+ * 纯函数供组件回写 DOM 与 Jest 断言共用。
+ */
+export function resolveActionDoneState(
+  actions: readonly { id: string; isDone: boolean }[] | null | undefined,
+  actionId: string,
+  fallbackDone: boolean
+): boolean {
+  return actions?.find(a => a.id === actionId)?.isDone ?? fallbackDone;
+}
+
 /** Completed 排序键:InterviewDate(回落 CreatedAt 日期)—— 与列表页口径一致。 */
 export function entryEndKey(e: { interviewDate?: string | null; createdAt?: string | null }): string {
   return e.interviewDate || (e.createdAt ?? '').slice(0, 10);

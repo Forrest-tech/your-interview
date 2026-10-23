@@ -226,7 +226,7 @@
           <div class="actions-list">
             @for (a of e.actions ?? []; track a.id) {
               <div class="action-row">
-                <input type="checkbox" [checked]="a.isDone" (change)="toggleAction(a.id)">
+                <input type="checkbox" [checked]="a.isDone" (change)="toggleAction(a.id, $event)">
                 <span [class.done]="a.isDone">{{ a.title }}</span>
                 @if (a.dueDate) { <span class="a-due">{{ a.dueDate.slice(0, 10) }}</span> }
                 <span class="spacer"></span>

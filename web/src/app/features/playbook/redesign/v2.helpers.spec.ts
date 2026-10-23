@@ -9,7 +9,7 @@
  * 特征测试锁现状,不改被测函数行为。
  */
 import { describe, expect, it } from '@jest/globals';
-import { entryResultOutcome } from './v2.helpers';
+import { entryResultOutcome, resolveActionDoneState } from './v2.helpers';
 
 describe('entryResultOutcome(枚举全值,源码 switch 逐值)', () => {
   // [枚举-终局] Rejected -> rejected
@@ -76,4 +76,36 @@ describe('entryResultOutcome(null/未知值,boundary)', () => {
     expect(entryResultOutcome('X'.repeat(10000))).toBeNull();
   });
   // [boundary-0与负数/日期/文件类] 不适用:入参为枚举名字符串,无数值/日期/文件语义
+});
+
+describe('resolveActionDoneState(票116 F-H1:toggle 失败后 checkbox 呈现值)', () => {
+  const rows = [
+    { id: 'a1', isDone: true },
+    { id: 'a2', isDone: false },
+  ];
+  // [回归-F-H1 主形态] 点前 isDone=true、PATCH 失败、回读仍 true -> 呈现 true
+  // (改前缺陷:DOM 残留点击翻转后的 false,与标签 done 类/服务端打架)
+  it('failed toggle re-read true -> true (regression F-H1)', () => {
+    expect(resolveActionDoneState(rows, 'a1', true)).toBe(true);
+  });
+  // [回归-反向] 点前 false、失败、回读仍 false -> 呈现 false
+  it('failed toggle re-read false -> false', () => {
+    expect(resolveActionDoneState(rows, 'a2', false)).toBe(false);
+  });
+  // [服务端真值优先] 回读值与点前回落值不同(如并发已变更) -> 以回读为准
+  it('re-read wins over fallback when they differ', () => {
+    expect(resolveActionDoneState(rows, 'a1', false)).toBe(true);
+    expect(resolveActionDoneState(rows, 'a2', true)).toBe(false);
+  });
+  // [boundary-缺行] 回读列表无此行 -> 回落点前真值(两向)
+  it('missing row -> fallback', () => {
+    expect(resolveActionDoneState(rows, 'nope', true)).toBe(true);
+    expect(resolveActionDoneState(rows, 'nope', false)).toBe(false);
+  });
+  // [boundary-空/null] 回读为空数组/null/undefined -> 回落,不抛
+  it('empty or null actions -> fallback', () => {
+    expect(resolveActionDoneState([], 'a1', true)).toBe(true);
+    expect(resolveActionDoneState(null, 'a1', false)).toBe(false);
+    expect(resolveActionDoneState(undefined, 'a1', true)).toBe(true);
+  });
 });

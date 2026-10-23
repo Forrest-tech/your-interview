@@ -21,7 +21,7 @@ import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
   entryEndKey, entryResultOutcome, entryStatusBadgeKey, htmlToPlainText, makeV2Fmt, makeV2T,
-  roundDisplayNo, sortRoundsByDate
+  resolveActionDoneState, roundDisplayNo, sortRoundsByDate
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
@@ -544,15 +544,25 @@ export class PlaybookDetailComponent implements OnDestroy {
     }
   }
 
-  async toggleAction(actionId: string): Promise<void> {
+  async toggleAction(actionId: string, ev?: Event): Promise<void> {
     const action = this.entry()?.actions?.find(a => a.id === actionId);
     if (!action) return;
+    const beforeDone = action.isDone;
+    let failed = false;
     try {
-      await this.interviewsApi.updateAction(this.id(), actionId, !action.isDone).toPromise();
+      await this.interviewsApi.updateAction(this.id(), actionId, !beforeDone).toPromise();
     } catch {
+      failed = true;
       this.snack.open(this.t('pb.v2.d.toggleFailed'), this.t('common.close'), { duration: 3000 });
     }
     await this.load();
+    if (failed) {
+      // 票116 F-H1:点击已由浏览器原生翻转 checkbox DOM,而失败后 load() 载回的
+      // isDone 与点前同值,[checked] 单向绑定不会重写 DOM —— 显式按回读后的
+      // 服务端真值回写该 checkbox,使勾选态/标签(done 类同源真值)/服务端三方一致。
+      const box = ev?.target as HTMLInputElement | null;
+      if (box) box.checked = resolveActionDoneState(this.entry()?.actions, actionId, beforeDone);
+    }
   }
 
   async deleteAction(actionId: string): Promise<void> {

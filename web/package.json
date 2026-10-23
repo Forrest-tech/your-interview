@@ -6,7 +6,9 @@
     "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:karma": "ng test",
     "start:host": "ng serve --proxy-config proxy.conf.json --host 0.0.0.0 --disable-host-check",
     "check-templates": "node tools/check-templates.mjs",
     "prestart": "npm run check-templates",
@@ -46,11 +48,13 @@
     "@playwright/test": "^1.64.1",
     "@types/jasmine": "~5.1.0",
     "jasmine-core": "~5.1.0",
+    "jest": "^29.7.0",
     "karma": "~6.4.0",
     "karma-chrome-launcher": "~3.2.0",
     "karma-coverage": "~2.2.0",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
+    "ts-jest": "^29.4.15",
     "typescript": "~5.4.2"
   }
 }

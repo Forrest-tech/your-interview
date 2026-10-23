@@ -16,6 +16,7 @@ import { OcrApiService } from '../../../../core/api/ocr-api.service';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, sortRoundsByDate } from '../v2.helpers';
+import { textLengthError } from '../../../../core/api/validation-errors.helpers';
 
 export type IntakeType = 'email' | 'transcript' | 'note';
 /** 「录音·转写文本」类型内部的二选一模式:一次只呈现/保存一种来源。 */
@@ -273,7 +274,8 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
                 <div class="pv-grid">
                   <label>{{ t('pb.v2.i.arrDate') }} <input class="fld" type="date" [ngModel]="arrDate()" (ngModelChange)="arrDate.set($event)"></label>
                   <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.arrTimePh')" [ngModel]="arrTime()" (ngModelChange)="arrTime.set($event)"></label>
-                  <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.arrStagePh')" [ngModel]="arrStage()" (ngModelChange)="arrStage.set($event)"></label>
+                  <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.arrStagePh')" [ngModel]="arrStage()" (ngModelChange)="setArrStage($event)">
+                    @if (stageErrors().arr) { <span class="field-error" role="alert">{{ stageErrors().arr }}</span> }</label>
                 </div>
               }
             }
@@ -304,7 +306,8 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
               <div class="pv-grid">
                 <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="nrDate()" (ngModelChange)="nrDate.set($event)"></label>
                 <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.nrTimePh')" [ngModel]="nrTime()" (ngModelChange)="nrTime.set($event)"></label>
-                <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.nrStagePh')" [ngModel]="nrStage()" (ngModelChange)="nrStage.set($event)"></label>
+                <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.nrStagePh')" [ngModel]="nrStage()" (ngModelChange)="setNrStage($event)">
+                  @if (stageErrors().nr) { <span class="field-error" role="alert">{{ stageErrors().nr }}</span> }</label>
                 <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="nrInterviewers()" (ngModelChange)="nrInterviewers.set($event)"></label>
                 <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [placeholder]="t('pb.v2.i.nrFormatPh')" [ngModel]="nrFormat()" (ngModelChange)="nrFormat.set($event)"></label>
               </div>
@@ -393,6 +396,7 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
     .bcard-body::-webkit-scrollbar-thumb:hover { background: #3f51b5; }
     .row.tight { margin-top: 6px; }
     .err { color: #b3261e; font-size: 13px; }
+    .field-error { color: #ba1a1a; font-size: 12px; }
     .ok-row { font-size: 14px; color: #2e7d32; }
     .link-btn { border: none; background: none; color: var(--yi-accent, #3f51b5); cursor: pointer;
                 font-size: 14px; text-decoration: underline; padding: 0; }
@@ -487,6 +491,23 @@ export class IntakePanelComponent {
   /** 「添加到本轮」快捷入口的显式预设轮次:解析建议不得覆盖它。 */
   readonly presetRoundId = signal<string | null>(null);
   readonly errorMsg = signal<string | null>(null);
+  /** 票106(C2):Stage 字段级错误(后端 AddRound 校验器 Stage≤50;arrStage 经 meta 在 comm-log 建轮时同命中此限)。 */
+  readonly STAGE_MAX = 50;
+  readonly stageErrors = signal<Partial<Record<'nr' | 'arr', string>>>({});
+
+  private stageTooLongText(): string {
+    return this.i18n.tf('validation.tooLong', { max: this.STAGE_MAX });
+  }
+
+  setNrStage(v: string): void {
+    this.nrStage.set(v);
+    if (this.stageErrors().nr) this.stageErrors.update(s => ({ ...s, nr: undefined }));
+  }
+
+  setArrStage(v: string): void {
+    this.arrStage.set(v);
+    if (this.stageErrors().arr) this.stageErrors.update(s => ({ ...s, arr: undefined }));
+  }
   readonly duplicate = signal(false);
 
   // 票30(REQ-10):归属列表与详情页 stepper 同一日期序、同一展示编号
@@ -511,6 +532,7 @@ export class IntakePanelComponent {
     this.transcriptMode.set('text');
     this.step.set('input');
     this.errorMsg.set(null);
+    this.stageErrors.set({});
     this.presetRoundId.set(roundId ?? null);
     this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
     this.open.set(true);
@@ -980,6 +1002,16 @@ export class IntakePanelComponent {
   // ---------------- 保存 ----------------
 
   async save(): Promise<void> {
+    // 票106(C2):Stage 长度先挡(≤50),超限字段下亮含上限提示,不进保存流水线
+    const stageErrs: Partial<Record<'nr' | 'arr', string>> = {};
+    if (this.target().kind === 'new' && textLengthError(this.nrStage().trim(), this.STAGE_MAX)) {
+      stageErrs.nr = this.stageTooLongText();
+    }
+    if (this.hasArrangement() && textLengthError(this.arrStage().trim(), this.STAGE_MAX)) {
+      stageErrs.arr = this.stageTooLongText();
+    }
+    if (Object.keys(stageErrs).length > 0) { this.stageErrors.set(stageErrs); return; }
+    this.stageErrors.set({});
     this.busy.set(true);
     this.errorMsg.set(null);
     try {

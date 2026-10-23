@@ -13,6 +13,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthApiService } from '../../core/api/auth-api.service';
+import { fieldErrorFromServer } from '../../core/api/validation-errors.helpers';
 import { PracticeApi, StorageSettingDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -119,6 +120,14 @@ export class ProfileComponent implements OnInit {
   readonly editingName = signal(false);
   readonly savingName = signal(false);
   nameDraft = '';
+  /**
+   * 票106(C6):显示名字段级错误。前端拦截半边已由模板 maxlength="200" 承担
+   * (与后端 UpdateProfile 校验器 DisplayName≤200 同口径);这里补服务端映射半边:
+   * 此前 saveName 失败被静默吞没,现在 errors{DisplayName} 落字段下方;
+   * 非字段级失败仍保持原静默行为(不变项)。
+   */
+  readonly DISPLAY_NAME_MAX = 200;
+  readonly nameError = signal<string | null>(null);
 
   // ---------- 偏好 ----------
 
@@ -304,10 +313,12 @@ export class ProfileComponent implements OnInit {
 
   startEditName(): void {
     this.nameDraft = this.user()?.displayName ?? '';
+    this.nameError.set(null);
     this.editingName.set(true);
   }
 
   cancelEditName(): void {
+    this.nameError.set(null);
     this.editingName.set(false);
   }
 
@@ -319,9 +330,20 @@ export class ProfileComponent implements OnInit {
       next: (u) => {
         this.me.set(u);
         this.savingName.set(false);
+        this.nameError.set(null);
         this.editingName.set(false);
       },
-      error: () => this.savingName.set(false)
+      error: (e) => {
+        this.savingName.set(false);
+        // 票106(C6):errors{DisplayName} 落字段下方;映射不到保持原静默行为
+        const c = fieldErrorFromServer(e, 'DisplayName', { sentLength: name.length, max: this.DISPLAY_NAME_MAX });
+        if (c) {
+          this.nameError.set(
+            c.kind === 'tooLong' ? this.i18n.tf('validation.tooLong', { max: this.DISPLAY_NAME_MAX })
+              : c.kind === 'required' ? this.t('validation.required')
+                : c.text);
+        }
+      }
     });
   }
 

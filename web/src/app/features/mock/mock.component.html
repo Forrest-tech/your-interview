@@ -180,12 +180,16 @@
           <mat-form-field appearance="outline" class="wide">
             <mat-label>{{ t('mock.fieldTitle') }} *</mat-label>
             <input matInput [(ngModel)]="form.title"
+                   (ngModelChange)="clearFieldError('title')"
                    [placeholder]="t('mock.titlePlaceholder')" />
           </mat-form-field>
+          @if (fieldErrors().title) {
+            <div class="field-error" role="alert">{{ fieldErrors().title }}</div>
+          }
 
           <mat-form-field appearance="outline" class="wide">
             <mat-label>{{ t('mock.fieldMode') }}</mat-label>
-            <mat-select [(ngModel)]="form.mode">
+            <mat-select [(ngModel)]="form.mode" (ngModelChange)="clearFieldError('mode')">
               @for (m of modeOptions(); track m.value) {
                 <mat-option [value]="m.value">
                   {{ m.label }}
@@ -194,15 +198,22 @@
               }
             </mat-select>
           </mat-form-field>
+          @if (fieldErrors().mode) {
+            <div class="field-error" role="alert">{{ fieldErrors().mode }}</div>
+          }
 
           <mat-form-field appearance="outline" class="wide">
             <mat-label>
               @if (form.mode === 'CompanyStyle') { {{ t('mock.fieldTopicCompany') }} * } @else { {{ t('mock.fieldTopic') }} * }
             </mat-label>
             <input matInput [(ngModel)]="form.topic"
+                   (ngModelChange)="clearFieldError('topic')"
                    [placeholder]="form.mode === 'CompanyStyle'
                      ? t('mock.topicCompanyPlaceholder') : t('mock.topicPlaceholder')" />
           </mat-form-field>
+          @if (fieldErrors().topic) {
+            <div class="field-error" role="alert">{{ fieldErrors().topic }}</div>
+          }
 
           <mat-form-field appearance="outline" class="wide">
             <mat-label>{{ t('mock.fieldDifficulty') }}</mat-label>

@@ -38,6 +38,7 @@ import {
   topicNamesAfterCategoryDelete, topicNamesAfterCategoryRename,
 } from '../../core/api/techstack-local.helpers';
 import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
+import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 import { SubnavService } from '../../layout/subnav.service';
 
@@ -856,6 +857,31 @@ export class TechStackComponent implements OnInit, OnDestroy {
   /** 详情是否处于编辑态。右上角 Edit 进入,Save/Cancel 退出。 */
   readonly detailEditing = signal(false);
   readonly savingDetail = signal(false);
+  /** 票106(C1):详情编辑字段级错误(后端 UpdateKnowledge 校验器 Title≤500 / Topic≤100)。 */
+  readonly DETAIL_TITLE_MAX = 500;
+  readonly DETAIL_TOPIC_MAX = 100;
+  readonly detailFieldErrors = signal<Partial<Record<'title' | 'topic', string>>>({});
+
+  private tooLongText(max: number): string {
+    return this.tf('validation.tooLong', { max });
+  }
+
+  /** 服务端字段错误 → 本地化文案(票75 mapFieldError 同型);无该字段错误返回 null,调用方回落原路径。 */
+  private mapDetailFieldError(e: unknown, field: string, sentLength: number, max: number): string | null {
+    const c = fieldErrorFromServer(e, field, { sentLength, max });
+    if (!c) return null;
+    if (c.kind === 'tooLong') return this.tooLongText(max);
+    if (c.kind === 'required') return this.t('validation.required');
+    return c.text;
+  }
+
+  clearDetailFieldError(field: 'title' | 'topic'): void {
+    if (this.detailFieldErrors()[field]) {
+      const next = { ...this.detailFieldErrors() };
+      delete next[field];
+      this.detailFieldErrors.set(next);
+    }
+  }
   readonly difficultyOptions = [1, 2, 3, 4, 5];
   /** 编辑态下所有字段的草稿。 */
   detailDraft: {
@@ -1000,10 +1026,12 @@ export class TechStackComponent implements OnInit, OnDestroy {
     this.selectedEntryId.set(null);
     this.companyRounds.set([]);
     this.showDetailSourceForm.set(false);
+    this.detailFieldErrors.set({});
     this.detailEditing.set(true);
   }
 
   cancelDetailEdit(): void {
+    this.detailFieldErrors.set({});
     this.detailEditing.set(false);
   }
 
@@ -1037,8 +1065,15 @@ export class TechStackComponent implements OnInit, OnDestroy {
   saveDetailEdit(item: KnowledgeItem): void {
     const title = this.detailDraft.title.trim();
     if (!title) return;
-    this.savingDetail.set(true);
     const d = this.detailDraft;
+    const topic = d.topic.trim() || item.topic;
+    // 票106(C1):长度先挡(Title≤500 / Topic≤100),超限字段下亮含上限提示,不走通用 snack
+    const preErrors: Partial<Record<'title' | 'topic', string>> = {};
+    if (textLengthError(title, this.DETAIL_TITLE_MAX)) preErrors.title = this.tooLongText(this.DETAIL_TITLE_MAX);
+    if (textLengthError(topic, this.DETAIL_TOPIC_MAX)) preErrors.topic = this.tooLongText(this.DETAIL_TOPIC_MAX);
+    if (Object.keys(preErrors).length > 0) { this.detailFieldErrors.set(preErrors); return; }
+    this.detailFieldErrors.set({});
+    this.savingDetail.set(true);
     const payload: Record<string, unknown> = {
       title,
       topic: d.topic.trim() || item.topic,
@@ -1091,6 +1126,13 @@ export class TechStackComponent implements OnInit, OnDestroy {
       },
       error: (e: Error) => {
         this.savingDetail.set(false);
+        // 票106(C1):errors{Title/Topic} 落字段下方;非字段级失败回落原通用 notify
+        const mapped: Partial<Record<'title' | 'topic', string>> = {};
+        const titleText = this.mapDetailFieldError(e, 'Title', title.length, this.DETAIL_TITLE_MAX);
+        if (titleText) mapped.title = titleText;
+        const topicText = this.mapDetailFieldError(e, 'Topic', topic.length, this.DETAIL_TOPIC_MAX);
+        if (topicText) mapped.topic = topicText;
+        if (Object.keys(mapped).length > 0) { this.detailFieldErrors.set(mapped); return; }
         this.notify(e.message, true);
       }
     });

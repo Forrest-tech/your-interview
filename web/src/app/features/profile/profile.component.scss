@@ -131,6 +131,9 @@ mat-card { border-radius: 8px; }
 .stack mat-form-field.full { margin-bottom: 6px; }
 
 /* 修改密码的表单级错误行 */
+/* 票106(C6):字段级校验提示(对齐票12/75 .field-error 口径) */
+.field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 8px 2px; }
+
 .pwd-err {
   display: flex;
   align-items: center;

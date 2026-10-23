@@ -242,6 +242,9 @@
   color: #999;
 }
 
+/* 票106(C3):字段级校验提示(对齐票12/75 .field-error 口径) */
+.field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
+
 .form-err {
   display: flex;
   align-items: center;

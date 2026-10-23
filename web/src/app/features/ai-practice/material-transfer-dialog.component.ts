@@ -583,9 +583,12 @@ export class MaterialTransferDialogComponent implements OnInit {
         categoryId = created.id;
       }
       this.close({ importedNodes: this.toMaterialNodes(cats, categoryId) });
-    } catch {
+    } catch (e) {
       this.importing.set(false);
-      this.notify(this.t('practice.errUnknown'));
+      // 票106(C4):建类别失败时透出后端 detail(含上限/重名具体原因,经 ApiClient 已提升为
+      // e.message),不再一律吞成通用 errUnknown;确实没文案时才回落原通用提示
+      const msg = (e as { message?: string } | null)?.message;
+      this.notify(msg || this.t('practice.errUnknown'));
     }
   }
 

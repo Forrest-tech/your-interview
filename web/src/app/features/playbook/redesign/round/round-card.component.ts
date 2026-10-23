@@ -20,6 +20,7 @@ import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog
 import { ExportBlock, ExportDoc } from '../export/export-doc';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
+import { fieldErrorFromServer, textLengthError } from '../../../../core/api/validation-errors.helpers';
 
 type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
 
@@ -75,15 +76,18 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
       @if (editing()) {
         <div class="edit-grid">
           <label>{{ t('pb.v2.r.fStage') }}
-            <select class="fld" data-testid="round-stage-select" [ngModel]="eStage()" (ngModelChange)="eStage.set($event)">
+            <select class="fld" data-testid="round-stage-select" [ngModel]="eStage()" (ngModelChange)="setStage($event)">
               @for (s of stageOptions(); track s) { <option [value]="s">{{ stageLabel(s) }}</option> }
             </select>
+            @if (fieldErrors().stage) { <span class="field-error" role="alert">{{ fieldErrors().stage }}</span> }
           </label>
           <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="eDate()" (ngModelChange)="eDate.set($event)"></label>
           <label>{{ t('pb.v2.r.fTime') }} <input class="fld" placeholder="11:00" [ngModel]="eTime()" (ngModelChange)="eTime.set($event)"></label>
-          <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="eInterviewers()" (ngModelChange)="eInterviewers.set($event)"></label>
+          <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="eInterviewers()" (ngModelChange)="setInterviewers($event)">
+            @if (fieldErrors().interviewers) { <span class="field-error" role="alert">{{ fieldErrors().interviewers }}</span> }</label>
           <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [ngModel]="eFormat()" (ngModelChange)="eFormat.set($event)"></label>
-          <label>{{ t('pb.v2.r.fLocation') }} <input class="fld" [ngModel]="eLocation()" (ngModelChange)="eLocation.set($event)"></label>
+          <label>{{ t('pb.v2.r.fLocation') }} <input class="fld" [ngModel]="eLocation()" (ngModelChange)="setLocation($event)">
+            @if (fieldErrors().location) { <span class="field-error" role="alert">{{ fieldErrors().location }}</span> }</label>
           <label>{{ t('pb.v2.r.meetingLink') }} <input class="fld" [ngModel]="eLink()" (ngModelChange)="eLink.set($event)"></label>
           <label>{{ t('pb.v2.r.fOutcome') }}
             <select class="fld" [ngModel]="eOutcome()" (ngModelChange)="eOutcome.set($event)">
@@ -159,6 +163,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
     .edit-grid .wide { grid-column: span 2; }
     .fld { border: 1px solid var(--yi-border, #ccc); border-radius: 8px; padding: 7px 9px;
            font-size: 14px; background: transparent; color: inherit; }
+    .field-error { color: #ba1a1a; font-size: 12px; }
     .row { display: flex; gap: 8px; align-items: center; }
     .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e0e0e0); margin: 14px 0 10px; flex-wrap: wrap; }
     .rtab { border: none; background: transparent; color: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
@@ -197,6 +202,35 @@ export class RoundCardComponent {
   readonly eLink = signal('');
   readonly eOutcome = signal('Pending');
   readonly eFeedback = signal('');
+  /** 票106(C2):轮次编辑字段级错误(后端 UpdateRound 校验器 Stage≤50 / Interviewers≤1000 / Location≤300)。 */
+  readonly STAGE_MAX = 50;
+  readonly INTERVIEWERS_MAX = 1000;
+  readonly LOCATION_MAX = 300;
+  readonly fieldErrors = signal<Partial<Record<'stage' | 'interviewers' | 'location', string>>>({});
+
+  private tooLongText(max: number): string {
+    return this.i18n.tf('validation.tooLong', { max });
+  }
+
+  private mapFieldError(e: unknown, field: string, sentLength: number, max: number): string | null {
+    const c = fieldErrorFromServer(e, field, { sentLength, max });
+    if (!c) return null;
+    if (c.kind === 'tooLong') return this.tooLongText(max);
+    if (c.kind === 'required') return this.t('validation.required');
+    return c.text;
+  }
+
+  private clearFieldError(field: 'stage' | 'interviewers' | 'location'): void {
+    if (this.fieldErrors()[field]) {
+      const next = { ...this.fieldErrors() };
+      delete next[field];
+      this.fieldErrors.set(next);
+    }
+  }
+
+  setStage(v: string): void { this.eStage.set(v); this.clearFieldError('stage'); }
+  setInterviewers(v: string): void { this.eInterviewers.set(v); this.clearFieldError('interviewers'); }
+  setLocation(v: string): void { this.eLocation.set(v); this.clearFieldError('location'); }
 
   private tabRoundId = '';
 
@@ -266,10 +300,18 @@ export class RoundCardComponent {
     this.eLink.set(r.meetingLink ?? '');
     this.eOutcome.set(r.outcome);
     this.eFeedback.set(r.feedback ?? '');
+    this.fieldErrors.set({});
     this.editing.set(!this.editing());
   }
 
   async saveEdit(): Promise<void> {
+    // 票106(C2):长度先挡,超限字段下亮含上限提示、编辑保持打开,不走通用 saveFailed
+    const preErrors: Partial<Record<'stage' | 'interviewers' | 'location', string>> = {};
+    if (textLengthError(this.eStage(), this.STAGE_MAX)) preErrors.stage = this.tooLongText(this.STAGE_MAX);
+    if (textLengthError(this.eInterviewers(), this.INTERVIEWERS_MAX)) preErrors.interviewers = this.tooLongText(this.INTERVIEWERS_MAX);
+    if (textLengthError(this.eLocation(), this.LOCATION_MAX)) preErrors.location = this.tooLongText(this.LOCATION_MAX);
+    if (Object.keys(preErrors).length > 0) { this.fieldErrors.set(preErrors); return; }
+    this.fieldErrors.set({});
     try {
       await this.api.updateRound(this.entry().id, this.round().id, {
         stage: this.eStage(),
@@ -288,7 +330,16 @@ export class RoundCardComponent {
       this.editing.set(false);
       this.snack.open(this.t('pb.v2.r.roundSaved'), this.t('common.close'), { duration: 2000 });
       this.changed.emit();
-    } catch {
+    } catch (e) {
+      // 票106(C2):errors{Stage/Interviewers/Location} 落字段下方;非字段级失败回落原通用 snack
+      const mapped: Partial<Record<'stage' | 'interviewers' | 'location', string>> = {};
+      const stageText = this.mapFieldError(e, 'Stage', this.eStage().length, this.STAGE_MAX);
+      if (stageText) mapped.stage = stageText;
+      const intText = this.mapFieldError(e, 'Interviewers', this.eInterviewers().length, this.INTERVIEWERS_MAX);
+      if (intText) mapped.interviewers = intText;
+      const locText = this.mapFieldError(e, 'Location', this.eLocation().length, this.LOCATION_MAX);
+      if (locText) mapped.location = locText;
+      if (Object.keys(mapped).length > 0) { this.fieldErrors.set(mapped); return; }
       this.snack.open(this.t('pb.v2.d.saveFailed'), this.t('common.close'), { duration: 3000 });
     }
   }

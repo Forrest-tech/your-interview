@@ -53,7 +53,9 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
                       [matTooltip]="t('practice.categoryDrag')">drag_indicator</mat-icon>
 
             @if (editingId() === c.id) {
-              <input class="cat-edit" [(ngModel)]="editName"
+              <!-- 票106(C4):后端类别名上限 100(Handler 校验),重命名输入此前独缺 maxlength,
+                   与同弹窗新增输入(已有 maxlength=100)同口径补齐前端拦截 -->
+              <input class="cat-edit" [(ngModel)]="editName" maxlength="100"
                      (keyup.enter)="commitRename(c)" (keyup.escape)="cancelRename()"
                      (blur)="commitRename(c)" />
             } @else {

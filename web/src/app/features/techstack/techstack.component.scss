@@ -533,6 +533,8 @@ mat-form-field { width: 100%; }
 
 /* 元数据行内编辑 */
 .meta-title-field { flex: 1 1 280px; min-width: 200px; }
+/* 票106(C1):字段级校验提示(对齐票12/75 .field-error 口径:红色 12px、贴字段下方) */
+.field-error { color: #ba1a1a; font-size: 12px; margin: 2px 0 6px 2px; flex-basis: 100%; }
 .meta-field { width: 130px; }
 .dh-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dh-zh { font-size: 14px; opacity: 0.6; }

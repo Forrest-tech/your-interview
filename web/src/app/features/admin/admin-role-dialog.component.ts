@@ -10,6 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AdminPermission, AdminRole } from '../../core/models/api.models';
+import { textLengthError } from '../../core/api/validation-errors.helpers';
 
 export interface AdminRoleDialogData {
   mode: 'create' | 'edit';
@@ -51,13 +52,20 @@ interface PermGroup {
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('admin.fieldRoleName') }}</mat-label>
         <input matInput name="roleName" [disabled]="systemRole" [(ngModel)]="name"
-               autocomplete="off">
+               (ngModelChange)="clearFieldError('name')" autocomplete="off">
       </mat-form-field>
+      @if (fieldErrors().name) {
+        <div class="field-error" role="alert">{{ fieldErrors().name }}</div>
+      }
 
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('admin.fieldRoleDesc') }}</mat-label>
-        <input matInput name="roleDesc" [(ngModel)]="description" autocomplete="off">
+        <input matInput name="roleDesc" [(ngModel)]="description"
+               (ngModelChange)="clearFieldError('description')" autocomplete="off">
       </mat-form-field>
+      @if (fieldErrors().description) {
+        <div class="field-error" role="alert">{{ fieldErrors().description }}</div>
+      }
 
       @if (systemRole) {
         <p class="sys-note"><mat-icon>lock</mat-icon> {{ t('admin.systemRoleReadonly') }}</p>
@@ -138,6 +146,8 @@ interface PermGroup {
       background: #fdecea; color: #b3261e; font-size: 13px;
     }
     .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    /* 票106(C5):字段级校验提示(对齐票12/75 .field-error 口径) */
+    .field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
   `]
 })
 export class AdminRoleDialogComponent {
@@ -156,6 +166,23 @@ export class AdminRoleDialogComponent {
   description = this.data.role?.description ?? '';
   readonly selected = signal<string[]>([...(this.data.role?.permissions ?? [])]);
   readonly error = signal<string | null>(null);
+  /**
+   * 票106(C5):角色字段级长度错误。后端上限:Name≤100(AdminUpsertRoleCommandValidator,
+   * 建/改同命令);Description 校验器无规则,但 AppRole.Description 的 EF
+   * HasMaxLength(500) 为硬上限(超限落库 500),一并按 500 拦截。
+   * 与用户弹窗同构(票75 B7):只有前端拦截半边,服务端映射无字段锚点不可达。
+   */
+  readonly ROLE_NAME_MAX = 100;
+  readonly ROLE_DESC_MAX = 500;
+  readonly fieldErrors = signal<Partial<Record<'name' | 'description', string>>>({});
+
+  clearFieldError(field: 'name' | 'description'): void {
+    if (this.fieldErrors()[field]) {
+      const next = { ...this.fieldErrors() };
+      delete next[field];
+      this.fieldErrors.set(next);
+    }
+  }
 
   readonly groups = computed<PermGroup[]>(() => {
     const byResource = new Map<string, AdminPermission[]>();
@@ -200,6 +227,16 @@ export class AdminRoleDialogComponent {
   }
 
   save(): void {
+    // 票106(C5):长度拦截先于既有 canSave 校验,超限亮字段下含上限提示、弹窗不关
+    const preErrors: Partial<Record<'name' | 'description', string>> = {};
+    if (textLengthError(this.name.trim(), this.ROLE_NAME_MAX)) {
+      preErrors.name = this.i18n.tf('validation.tooLong', { max: this.ROLE_NAME_MAX });
+    }
+    if (textLengthError(this.description?.trim(), this.ROLE_DESC_MAX)) {
+      preErrors.description = this.i18n.tf('validation.tooLong', { max: this.ROLE_DESC_MAX });
+    }
+    if (Object.keys(preErrors).length > 0) { this.fieldErrors.set(preErrors); return; }
+    this.fieldErrors.set({});
     if (!this.canSave()) {
       this.error.set(this.t('admin.fieldRoleName'));
       return;

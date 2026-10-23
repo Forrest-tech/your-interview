@@ -324,8 +324,12 @@
             @if (detailEditing()) {
               <mat-form-field class="meta-title-field" subscriptSizing="dynamic">
                 <mat-label>{{ t('ts.detail.titleLabel') }}</mat-label>
-                <input matInput [(ngModel)]="detailDraft.title" />
+                <input matInput [(ngModel)]="detailDraft.title"
+                       (ngModelChange)="clearDetailFieldError('title')" />
               </mat-form-field>
+              @if (detailFieldErrors().title) {
+                <div class="field-error" role="alert">{{ detailFieldErrors().title }}</div>
+              }
             } @else {
               <h3>{{ it.title }}</h3>
             }
@@ -385,12 +389,16 @@
               <div class="detail-meta-row">
                 <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
                   <mat-label>{{ t('ts.filter.topic') }}</mat-label>
-                  <mat-select [(ngModel)]="detailDraft.topic">
+                  <mat-select [(ngModel)]="detailDraft.topic"
+                              (ngModelChange)="clearDetailFieldError('topic')">
                     @for (tp of topics(); track tp) {
                       <mat-option [value]="tp">{{ tp }}</mat-option>
                     }
                   </mat-select>
                 </mat-form-field>
+                @if (detailFieldErrors().topic) {
+                  <div class="field-error" role="alert">{{ detailFieldErrors().topic }}</div>
+                }
                 <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
                   <mat-label>{{ t('ts.detail.difficultyLabel') }}</mat-label>
                   <mat-select [(ngModel)]="detailDraft.difficulty">

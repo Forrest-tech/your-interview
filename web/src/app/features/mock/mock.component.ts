@@ -18,6 +18,7 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MockSession, Paged } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
+import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 /** 新建模拟表单。字段与后端 CreateSessionBody 对齐。 */
@@ -76,7 +77,32 @@ export class MockComponent implements OnInit {
   readonly dialogOpen = signal(false);
   readonly saving = signal(false);
   readonly formError = signal<string | null>(null);
+  /** 票106(C3):建会话字段级错误(后端 CreateSession 校验器 Title≤200 / Topic≤200 / CompanyStyle≤200)。 */
+  readonly TITLE_MAX = 200;
+  readonly TOPIC_MAX = 200;
+  readonly fieldErrors = signal<Partial<Record<'title' | 'mode' | 'topic', string>>>({});
   form: NewSessionForm = this.emptyForm();
+
+  private tooLongText(max: number): string {
+    return this.i18n.tf('validation.tooLong', { max });
+  }
+
+  /** 服务端字段错误 → 本地化文案(票75 同型);无该字段错误返回 null,调用方回落原 formError 路径。 */
+  private mapFieldError(e: unknown, field: string, sentLength: number, max: number): string | null {
+    const c = fieldErrorFromServer(e, field, { sentLength, max });
+    if (!c) return null;
+    if (c.kind === 'tooLong') return this.tooLongText(max);
+    if (c.kind === 'required') return this.t('validation.required');
+    return c.text;
+  }
+
+  clearFieldError(field: 'title' | 'mode' | 'topic'): void {
+    if (this.fieldErrors()[field]) {
+      const next = { ...this.fieldErrors() };
+      delete next[field];
+      this.fieldErrors.set(next);
+    }
+  }
 
   /**
    * 后端 SessionMode 枚举值:TopicDrill / CompanyStyle / WeaknessFocus / FullLoop。
@@ -115,6 +141,7 @@ export class MockComponent implements OnInit {
       this.form.mode = 'CompanyStyle';
       this.form.topic = role ?? '';
       this.formError.set(null);
+      this.fieldErrors.set({});
       this.dialogOpen.set(true);
     }
   }
@@ -173,6 +200,7 @@ export class MockComponent implements OnInit {
     this.form.mode = sug.mode.charAt(0).toUpperCase() + sug.mode.slice(1);
     this.form.topic = sug.topic ?? '';
     this.formError.set(null);
+    this.fieldErrors.set({});
     this.dialogOpen.set(true);
   }
 
@@ -181,6 +209,7 @@ export class MockComponent implements OnInit {
   openDialog(): void {
     this.form = this.emptyForm();
     this.formError.set(null);
+    this.fieldErrors.set({});
     this.dialogOpen.set(true);
   }
 
@@ -209,13 +238,22 @@ export class MockComponent implements OnInit {
       return;
     }
 
+    // 票106(C3):长度拦截(必填检查之后、原顺序不变)——超限字段下亮含上限提示,不走表单级 formError
+    const sentTitle = this.form.title.trim();
+    const sentTopic = this.form.topic.trim();
+    const preErrors: Partial<Record<'title' | 'mode' | 'topic', string>> = {};
+    if (textLengthError(sentTitle, this.TITLE_MAX)) preErrors.title = this.tooLongText(this.TITLE_MAX);
+    if (textLengthError(sentTopic, this.TOPIC_MAX)) preErrors.topic = this.tooLongText(this.TOPIC_MAX);
+    if (Object.keys(preErrors).length > 0) { this.fieldErrors.set(preErrors); return; }
+    this.fieldErrors.set({});
+
     this.saving.set(true);
     this.formError.set(null);
 
     this.assessmentApi.createSession({
-      title: this.form.title.trim(),
+      title: sentTitle,
       mode: this.form.mode,
-      topic: this.form.topic.trim() || null,
+      topic: sentTopic || null,
       difficulty: this.form.difficulty || 3
     }).subscribe({
       next: (r) => {
@@ -226,6 +264,21 @@ export class MockComponent implements OnInit {
       },
       error: (e: Error) => {
         this.saving.set(false);
+        // 票106(C3):errors{Title/Topic/CompanyStyle/Mode} 落字段下方(CompanyStyle 与 Topic
+        // 共用 topic 输入——前端提交结构里只有 topic 一个文本字段);无字段级错误回落原 formError
+        const mapped: Partial<Record<'title' | 'mode' | 'topic', string>> = {};
+        const titleText = this.mapFieldError(e, 'Title', sentTitle.length, this.TITLE_MAX);
+        if (titleText) mapped.title = titleText;
+        const topicText = this.mapFieldError(e, 'Topic', sentTopic.length, this.TOPIC_MAX)
+          ?? this.mapFieldError(e, 'CompanyStyle', sentTopic.length, this.TOPIC_MAX);
+        if (topicText) mapped.topic = topicText;
+        // Mode 无长度上限:只取后端原文/必填分类,不传长度判据(防 classify 按长度误判 tooLong)
+        const modeClassified = fieldErrorFromServer(e, 'Mode');
+        const modeText = modeClassified
+          ? (modeClassified.kind === 'required' ? this.t('validation.required') : modeClassified.text)
+          : null;
+        if (modeText) mapped.mode = modeText;
+        if (Object.keys(mapped).length > 0) { this.fieldErrors.set(mapped); return; }
         this.formError.set(e.message);
       }
     });

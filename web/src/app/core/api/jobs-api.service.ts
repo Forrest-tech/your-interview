@@ -91,13 +91,13 @@ export class JobsApiService {
     return this.api.post(`${JobsApiService.BASE}/parse-jd`, { raw, useAi });
   }
 
-  saveApplicationJd<T = void>(id: string, body: { jdText: string | null; jdSourceUrl?: string | null }): Observable<T> {
+  saveApplicationJd<T = void>(id: string, body: { jdText: string | null; jdSourceUrl?: string | null; version?: number | null }): Observable<T> {
     return this.api.put<T>(`${JobsApiService.BASE}/applications/${id}/jd`, body);
   }
 
   // ---------- 简历 ----------
 
-  getResumeText(): Observable<{ resumeText: string | null }> {
+  getResumeText(): Observable<{ resumeText: string | null; version?: number; rowVersion?: number }> {
     return this.api.get<{ resumeText: string | null }>(`${JobsApiService.BASE}/resume-text`);
   }
 
@@ -163,8 +163,9 @@ export class JobsApiService {
     return this.api.post<T>(`${JobsApiService.BASE}/applications/${appId}/cover-letter/generate`, body);
   }
 
-  saveCoverLetter<T = unknown>(appId: string, content: string): Observable<T> {
-    return this.api.put<T>(`${JobsApiService.BASE}/applications/${appId}/cover-letter`, { content });
+  saveCoverLetter<T = unknown>(appId: string, content: string, version?: number | null): Observable<T> {
+    // 票101:回传读时 xmin(过期后端 409);不传 = 旧行为不钉版
+    return this.api.put<T>(`${JobsApiService.BASE}/applications/${appId}/cover-letter`, { content, version: version ?? null });
   }
 
   finalizeCoverLetter<T = unknown>(appId: string): Observable<T> {

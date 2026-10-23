@@ -68,9 +68,21 @@ public sealed class ListApplicationsQueryHandler(JobsDbContext db)
             .Where(c => companyIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.LogoUrl, ct);
 
+        // 票101:列表行同样带读时 xmin(单查整页,避免列表来源的编辑表单钉错版)。
+        var rowIds = rows.Select(r => r.Id).ToList();
+        var versions = await db.Applications.AsNoTracking().Where(x => rowIds.Contains(x.Id))
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+        var roundVersions = await db.Rounds.AsNoTracking().Where(r => rowIds.Contains(r.ApplicationId))
+            .Select(r => new { r.ApplicationId, r.Id, V = EF.Property<uint>(r, "xmin") })
+            .ToListAsync(ct);
+        var roundVerByApp = roundVersions.GroupBy(x => x.ApplicationId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyDictionary<Guid, uint>)g.ToDictionary(x => x.Id, x => x.V));
         var items = rows.Select(r => r.ToDto(
             names.TryGetValue(r.CompanyId, out var n) ? n : "—",
-            logoUrls.TryGetValue(r.CompanyId, out var l) ? l : null)).ToList();
+            logoUrls.TryGetValue(r.CompanyId, out var l) ? l : null,
+            versions.TryGetValue(r.Id, out var v) ? v : 0,
+            roundVerByApp.TryGetValue(r.Id, out var rv) ? rv : null)).ToList();
         return Result.Success(new PagedResult<ApplicationDto>(items, total, page, size));
     }
 }
@@ -86,6 +98,7 @@ public sealed class SetJdContentCommandHandler(JobsDbContext db)
     {
         var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+        ConcurrencyPin.Pin(db, a, request.Version);
 
         a.SetJdContent(request.JdText, request.JdSourceUrl);
         await db.SaveChangesAsync(ct);
@@ -101,6 +114,7 @@ public sealed class SetCompanyProfileCommandHandler(JobsDbContext db)
     {
         var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("公司"));
+        ConcurrencyPin.Pin(db, c, request.Version);
 
         c.UpdateProfile(request.Profile, request.ProfileSourcesJson);
         await db.SaveChangesAsync(ct);
@@ -123,7 +137,13 @@ public sealed class GetApplicationQueryHandler(JobsDbContext db)
 
         var company = await db.Companies.AsNoTracking().Where(c => c.Id == a.CompanyId)
             .Select(c => new { c.Name, c.LogoUrl }).FirstOrDefaultAsync(ct);
-        return Result.Success(a.ToDto(company?.Name ?? "—", company?.LogoUrl));
+        // 票101:读时 xmin(投递行 + 各轮次行)随 DTO 带出。
+        var version = await db.Applications.AsNoTracking().Where(x => x.Id == a.Id)
+            .Select(x => EF.Property<uint>(x, "xmin")).FirstAsync(ct);
+        var roundVersions = await db.Rounds.AsNoTracking().Where(r => r.ApplicationId == a.Id)
+            .Select(r => new { r.Id, V = EF.Property<uint>(r, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+        return Result.Success(a.ToDto(company?.Name ?? "—", company?.LogoUrl, version, roundVersions));
     }
 }
 
@@ -190,6 +210,7 @@ public sealed class UpdateApplicationCommandHandler(JobsDbContext db)
     {
         var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+        ConcurrencyPin.Pin(db, a, request.Version);
 
         a.UpdateDetails(request.Role, request.Location, request.Link, request.Salary,
             request.WorkMode, request.Source, request.JdSummary, request.Notes,
@@ -294,6 +315,7 @@ public sealed class SetApplicationAnalysisCommandHandler(JobsDbContext db)
     {
         var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+        ConcurrencyPin.Pin(db, a, request.Version);
         a.SetAnalysis(request.ResumeScore, request.PassRateEstimate, request.MatchKeywords);
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -307,6 +329,7 @@ public sealed class SetOutreachCommandHandler(JobsDbContext db)
     {
         var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+        ConcurrencyPin.Pin(db, a, request.Version);
         a.SetOutreach(request.PosterName, request.NeedsConnectFirst, request.Message);
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -333,6 +356,7 @@ public sealed class ScheduleFollowUpCommandHandler(JobsDbContext db)
     {
         var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (a is null) return Result.Failure(Error.NotFound("投递记录"));
+        ConcurrencyPin.Pin(db, a, request.Version);
         a.ScheduleFollowUp(request.At);
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -370,6 +394,13 @@ public sealed class UpdateInterviewRoundCommandHandler(JobsDbContext db)
 
         if (!Enum.TryParse<RoundOutcome>(request.Outcome, true, out var outcome))
             return Result.Failure(Error.Validation("Outcome.Invalid", "无效的轮次结果"));
+
+        // 票101:钉版对象是轮次行本身(其 xmin 独立于投递行)。
+        if (request.Version is { } rv)
+        {
+            var round = a.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
+            if (round is not null) ConcurrencyPin.Pin(db, round, rv);
+        }
 
         try
         {

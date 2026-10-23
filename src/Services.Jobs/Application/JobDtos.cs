@@ -14,12 +14,16 @@ public sealed record CompanyDto(Guid Id, string Name, string? Website, string? I
     // 公司情报(2026-09-18:面试前准备包的输入)。
     // 同 ApplyProfile:同一公司多个岗位共享一份,存 Company 而非 JobApplication。
     string? Profile, string? ProfileSourcesJson,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // 票101:读时 xmin 乐观并发版本(更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 public sealed record StatusChangeDto(string Status, string? Note, DateTimeOffset ChangedAt);
 
 public sealed record InterviewRoundDto(Guid Id, int Order, string Stage, DateOnly? ScheduledDate,
-    string? Interviewer, string? Format, string Outcome, string? Notes, string? Feedback);
+    string? Interviewer, string? Format, string Outcome, string? Notes, string? Feedback,
+    // 票101:读时 xmin(轮次更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 public sealed record ApplicationDto(
     Guid Id, Guid CompanyId, string CompanyName, string? CompanyLogoUrl, string Role, string? Location, string? Link,
@@ -43,7 +47,9 @@ public sealed record ApplicationDto(
     string? Notes, string? PosterName, bool NeedsConnectFirst, string? OutreachMessage,
     DateTimeOffset? OutreachSentAt, string? RejectionReason,
     IReadOnlyList<StatusChangeDto> History, IReadOnlyList<InterviewRoundDto> Rounds,
-    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
+    // 票101:读时 xmin 乐观并发版本(更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
 {

@@ -162,7 +162,7 @@ export class TrackerApi {
     return this.api.post<{ id: string }>(`${TrackerApi.BASE}/answer-templates`, body);
   }
 
-  updateAnswerTemplate(id: string, body: { category: string; question: string; answer: string }):
+  updateAnswerTemplate(id: string, body: { category: string; question: string; answer: string; version?: number | null }):
     Observable<void> {
     return this.api.put<void>(`${TrackerApi.BASE}/answer-templates/${id}`, body);
   }
@@ -189,6 +189,7 @@ export class TrackerApi {
   updateCommunication(applicationId: string, commId: string, body: {
     type: CommunicationType; subject: string | null; content: string;
     contactName: string | null; contactEmail: string | null; occurredAt: string;
+    version?: number | null;
   }): Observable<void> {
     return this.api.put<void>(
       `${TrackerApi.BASE}/applications/${applicationId}/communications/${commId}`, body);

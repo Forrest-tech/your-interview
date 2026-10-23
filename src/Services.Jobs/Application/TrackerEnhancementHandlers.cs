@@ -11,14 +11,18 @@ namespace YourInterview.Services.Jobs.Application;
 
 public sealed record AnswerTemplateDto(
     Guid Id, string Category, string Question, string Answer, int SortOrder,
-    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
+    // 票101:读时 xmin(更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 public sealed record CommunicationDto(
     Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
     string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
     // 2026-10-20 Playbook v2:解析元数据 + 安排处理状态(Tracker 旧 UI 忽略)。
-    string? MetaJson = null, string? HandlingStatus = null);
+    string? MetaJson = null, string? HandlingStatus = null,
+    // 票101:读时 xmin(更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 // ============================ 申请问答库(用户级) ============================
 
@@ -28,7 +32,8 @@ public sealed record ListAnswerTemplatesQuery(Guid UserId, string? Category = nu
 public sealed record CreateAnswerTemplateCommand(Guid UserId, string Category, string Question, string Answer)
     : IRequest<Result<Guid>>;
 
-public sealed record UpdateAnswerTemplateCommand(Guid Id, Guid UserId, string Category, string Question, string Answer)
+public sealed record UpdateAnswerTemplateCommand(Guid Id, Guid UserId, string Category, string Question, string Answer,
+    uint? Version = null) // 票101:读时 xmin 回传钉版,null=旧调用方不钉
     : IRequest<Result>;
 
 public sealed record DeleteAnswerTemplateCommand(Guid Id, Guid UserId) : IRequest<Result>;
@@ -46,7 +51,8 @@ public sealed record CreateCommunicationCommand(
 
 public sealed record UpdateCommunicationCommand(
     Guid UserId, Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
-    string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt)
+    string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
+    uint? Version = null) // 票101:同 UpdateAnswerTemplateCommand
     : IRequest<Result>;
 
 /// <summary>Playbook v2:单独更新沟通的元数据 / 安排处理状态(不动正文)。</summary>
@@ -99,7 +105,8 @@ public sealed class ListAnswerTemplatesQueryHandler(JobsDbContext db)
             q = q.Where(t => t.Category == request.Category.Trim());
 
         var items = await q.OrderBy(t => t.Category).ThenBy(t => t.SortOrder).ThenBy(t => t.Question)
-            .Select(t => new AnswerTemplateDto(t.Id, t.Category, t.Question, t.Answer, t.SortOrder, t.CreatedAt, t.UpdatedAt))
+            .Select(t => new AnswerTemplateDto(t.Id, t.Category, t.Question, t.Answer, t.SortOrder, t.CreatedAt, t.UpdatedAt,
+                EF.Property<uint>(t, "xmin")))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<AnswerTemplateDto>>(items);
@@ -129,6 +136,7 @@ public sealed class UpdateAnswerTemplateCommandHandler(JobsDbContext db)
     {
         var t = await db.AnswerTemplates.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (t is null) return Result.Failure(Error.NotFound("问答模板"));
+        ConcurrencyPin.Pin(db, t, request.Version);
 
         t.Update(request.Category.Trim(), request.Question.Trim(), request.Answer, t.SortOrder);
         await db.SaveChangesAsync(ct);
@@ -165,7 +173,7 @@ public sealed class ListCommunicationsQueryHandler(JobsDbContext db)
             .OrderByDescending(c => c.OccurredAt).ThenByDescending(c => c.CreatedAt)
             .Select(c => new CommunicationDto(c.Id, c.ApplicationId, c.Type, c.Subject, c.Content,
                 c.ContactName, c.ContactEmail, c.OccurredAt, c.CreatedAt, c.UpdatedAt,
-                c.MetaJson, c.HandlingStatus))
+                c.MetaJson, c.HandlingStatus, EF.Property<uint>(c, "xmin")))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<CommunicationDto>>(items);
@@ -218,6 +226,7 @@ public sealed class UpdateCommunicationCommandHandler(JobsDbContext db)
         var c = await db.Communications.FirstOrDefaultAsync(
             x => x.Id == request.Id && x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("沟通记录"));
+        ConcurrencyPin.Pin(db, c, request.Version);
 
         c.Update(request.Type, request.Subject, request.Content, request.ContactName,
             request.ContactEmail, request.OccurredAt);

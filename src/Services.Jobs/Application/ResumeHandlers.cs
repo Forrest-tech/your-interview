@@ -15,8 +15,9 @@ namespace YourInterview.Services.Jobs.Application;
 //  Forrest 2026-09-18 定夺:放 Jobs 域(求职资产),不放 Assessment。
 // ============================================================================
 
-/// <summary>简历读取结果。未设置时返回空内容 + Version 0(不是失败)。</summary>
-public sealed record ResumeDto(string Content, int Version, DateTimeOffset? UpdatedAt);
+/// <summary>简历读取结果。未设置时返回空内容 + Version 0(不是失败)。
+/// 票101:RowVersion = 读时 xmin(与域内 Version 计数是两回事;保存回传钉版用)。</summary>
+public sealed record ResumeDto(string Content, int Version, DateTimeOffset? UpdatedAt, uint RowVersion = 0);
 
 /// <summary>读简历。未设置返回空 DTO 而不是 NotFound —— 前端据此提示"先录入简历"。</summary>
 public sealed record GetResumeQuery(Guid UserId) : IRequest<Result<ResumeDto>>;
@@ -26,13 +27,15 @@ public sealed class GetResumeQueryHandler(JobsDbContext db)
 {
     public async Task<Result<ResumeDto>> Handle(GetResumeQuery request, CancellationToken ct)
     {
-        var r = await db.Resumes.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.UserId == request.UserId, ct);
+        var row = await db.Resumes.AsNoTracking()
+            .Where(x => x.UserId == request.UserId)
+            .Select(x => new { x.Content, x.Version, x.UpdatedAt, RowVersion = EF.Property<uint>(x, "xmin") })
+            .FirstOrDefaultAsync(ct);
 
         // 未设置是正常状态,不是错误。
-        return Result.Success(r is null
+        return Result.Success(row is null
             ? new ResumeDto(string.Empty, 0, null)
-            : new ResumeDto(r.Content, r.Version, r.UpdatedAt));
+            : new ResumeDto(row.Content, row.Version, row.UpdatedAt, row.RowVersion));
     }
 }
 
@@ -40,7 +43,7 @@ public sealed class GetResumeQueryHandler(JobsDbContext db)
 /// 存/覆盖简历。空内容视为"清空"(删除记录),避免库里留一条空字符串记录 ——
 /// 空串和"没设置"在查询里表现不同,会制造"明明清空了却还说有简历"的怪象。
 /// </summary>
-public sealed record SaveResumeCommand(Guid UserId, string Content) : IRequest<Result<ResumeDto>>;
+public sealed record SaveResumeCommand(Guid UserId, string Content, uint? RowVersion = null) : IRequest<Result<ResumeDto>>;
 
 public sealed class SaveResumeCommandHandler(JobsDbContext db)
     : IRequestHandler<SaveResumeCommand, Result<ResumeDto>>
@@ -60,6 +63,7 @@ public sealed class SaveResumeCommandHandler(JobsDbContext db)
             return Result.Success(new ResumeDto(created.Content, created.Version, created.UpdatedAt));
         }
 
+        ConcurrencyPin.Pin(db, existing, request.RowVersion);
         existing.Update(request.Content.Trim());
         await db.SaveChangesAsync(ct);
         return Result.Success(new ResumeDto(existing.Content, existing.Version, existing.UpdatedAt));

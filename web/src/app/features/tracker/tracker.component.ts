@@ -1177,7 +1177,8 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       companyDescription: existing.companyDescription ?? null,
       workAuthorization: existing.workAuthorization ?? null,
       requirements: existing.requirements ?? null,
-      benefits: existing.benefits ?? null
+      benefits: existing.benefits ?? null,
+      version: existing.version ?? null
     });
   }
 

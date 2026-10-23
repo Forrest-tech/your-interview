@@ -172,6 +172,8 @@ public sealed class JobsDbContext(
             e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Feedback).HasMaxLength(4000);
             e.HasIndex(x => x.ApplicationId);
+            // 票101:轮次行纳入 xmin 并发令牌(系统列,零迁移)——轮次详情编辑回传钉版。
+            e.UseXminAsConcurrencyToken();
         });
 
         // 求职信(2026-09-18)。一条投递一封 —— ApplicationId 唯一。

@@ -46,6 +46,8 @@ export class ResumeComponent implements OnInit {
   resumeFileName = signal('');
   /** 待上传的 PDF 文件(选完文件、点保存后才真正上传)。 */
   private pendingPdf: File | null = null;
+  /** 票101:后端简历行读时 xmin(拉取时记下,保存回传钉版;本地优先流程未拉取时为 null = 不钉版)。 */
+  private backendRowVersion: number | null = null;
   /** PDF 预览 URL(blob)。null = 后端没有存 PDF。 */
   readonly resumePdfUrl = signal<SafeResourceUrl | null>(null);
   readonly resumePdfRawUrl = signal<string | null>(null);
@@ -79,6 +81,7 @@ export class ResumeComponent implements OnInit {
         // localStorage 为空时,从后端拉(用户可能在别处存过)
         this.jobsApi.getResumeText().subscribe({
           next: (r) => {
+            this.backendRowVersion = r.rowVersion ?? null;
             if (r.resumeText?.trim()) {
               this.resumeDraft = r.resumeText;
               try { localStorage.setItem(this.resumeKey, r.resumeText); } catch { /* 忽略 */ }
@@ -130,7 +133,7 @@ export class ResumeComponent implements OnInit {
       return;
     }
     // 同步到后端 —— 求职信生成、简历匹配都从这里读
-    this.jobsApi.saveResumeText({ resumeText: text }).subscribe({
+    this.jobsApi.saveResumeText({ resumeText: text, rowVersion: this.backendRowVersion }).subscribe({
       next: () => {
         this.snack.open(this.t('profile.resumeSaved'), this.t('common.close'), { duration: 2500 });
         this.editing.set(false);

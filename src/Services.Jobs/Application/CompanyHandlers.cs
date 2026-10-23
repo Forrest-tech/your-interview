@@ -28,7 +28,7 @@ public sealed class ListCompaniesQueryHandler(JobsDbContext db)
             .Select(c => new CompanyDto(c.Id, c.Name, c.Website, c.Industry, c.Location, c.LogoUrl,
                 c.Notes, c.IsBlacklisted, c.CompanyType,
                 db.Applications.Count(a => a.CompanyId == c.Id),
-                c.Profile, c.ProfileSourcesJson, c.CreatedAt))
+                c.Profile, c.ProfileSourcesJson, c.CreatedAt, EF.Property<uint>(c, "xmin")))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<CompanyDto>>(items);
@@ -43,7 +43,10 @@ public sealed class GetCompanyQueryHandler(JobsDbContext db)
         var c = await db.Companies.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure<CompanyDto>(Error.NotFound("公司"));
         var count = await db.Applications.CountAsync(a => a.CompanyId == c.Id && a.UserId == request.UserId, ct);
-        return Result.Success(c.ToDto(count));
+        // 票101:读时 xmin 随 DTO 带出(投影直查,AsNoTracking 实体不带影子值)。
+        var version = await db.Companies.AsNoTracking().Where(x => x.Id == c.Id)
+            .Select(x => EF.Property<uint>(x, "xmin")).FirstAsync(ct);
+        return Result.Success(c.ToDto(count, version));
     }
 }
 
@@ -83,6 +86,7 @@ public sealed class UpdateCompanyCommandHandler(JobsDbContext db)
     {
         var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("公司"));
+        ConcurrencyPin.Pin(db, c, request.Version);
 
         // Logo 自动解析:用户没显式给 Logo 且填了官网时,按官网 host 推导 favicon 地址。
         var logoUrl = string.IsNullOrWhiteSpace(request.LogoUrl)

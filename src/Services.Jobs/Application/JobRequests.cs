@@ -17,11 +17,13 @@ public sealed record ListCompaniesQuery(Guid UserId, string? Search, bool Includ
 /// 独立命令而非并入 UpdateApplicationCommand —— 粘贴 JD 是高频动作,
 /// 不该要求调用方传齐 Role/Salary 等字段(两端都会互相覆盖)。
 /// </summary>
-public sealed record SetJdContentCommand(Guid UserId, Guid Id, string? JdText, string? JdSourceUrl)
+public sealed record SetJdContentCommand(Guid UserId, Guid Id, string? JdText, string? JdSourceUrl,
+    uint? Version = null) // 票101:读时 xmin 回传钉版,null=旧调用方不钉
     : IRequest<Result>;
 
 /// <summary>设置公司情报长文本。与 UpdateCompanyCommand 分开,理由同上。</summary>
-public sealed record SetCompanyProfileCommand(Guid UserId, Guid Id, string? Profile, string? ProfileSourcesJson)
+public sealed record SetCompanyProfileCommand(Guid UserId, Guid Id, string? Profile, string? ProfileSourcesJson,
+    uint? Version = null) // 票101:同 SetJdContentCommand
     : IRequest<Result>;
 
 public sealed record GetCompanyQuery(Guid UserId, Guid Id) : IRequest<Result<CompanyDto>>;
@@ -54,7 +56,8 @@ public sealed record CreateCompanyCommand(Guid UserId, string Name, string? Webs
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateCompanyCommand(Guid UserId, Guid Id, string Name, string? Website, string? Industry,
-    string? Location, string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted)
+    string? Location, string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted,
+    uint? Version = null) // 票101:同上
     : IRequest<Result>;
 
 public sealed record DeleteCompanyCommand(Guid UserId, Guid Id) : IRequest<Result>;
@@ -76,7 +79,8 @@ public sealed record UpdateApplicationCommand(Guid UserId, Guid Id, string Role,
     string? Requirements = null, string? Benefits = null,
     // FUN-02:JD 全文纳入全量更新。语义: null = 调用方未提供该字段,保持原值
     // (详情页局部保存不带 jdText,不能误清); 非 null (含空串) = 明确的新值,空串归一为清空。
-    string? JdText = null)
+    string? JdText = null,
+    uint? Version = null) // 票101:读时 xmin 回传钉版,null=旧调用方不钉
     : IRequest<Result>;
 
 public sealed record ChangeApplicationStatusCommand(Guid UserId, Guid Id, string Status, string? Note, string? RejectionReason)
@@ -87,20 +91,22 @@ public sealed record ArchiveApplicationCommand(Guid UserId, Guid Id) : IRequest<
 public sealed record UnarchiveApplicationCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
 public sealed record SetApplicationAnalysisCommand(Guid UserId, Guid Id, int? ResumeScore, string? PassRateEstimate,
-    string? MatchKeywords) : IRequest<Result>;
+    string? MatchKeywords, uint? Version = null) : IRequest<Result>; // 票101 Version:同 UpdateApplicationCommand
 
-public sealed record SetOutreachCommand(Guid UserId, Guid Id, string? PosterName, bool NeedsConnectFirst, string? Message)
-    : IRequest<Result>;
+public sealed record SetOutreachCommand(Guid UserId, Guid Id, string? PosterName, bool NeedsConnectFirst, string? Message,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:同上
 
 public sealed record MarkOutreachSentCommand(Guid UserId, Guid Id) : IRequest<Result>;
 
-public sealed record ScheduleFollowUpCommand(Guid UserId, Guid Id, DateTimeOffset? At) : IRequest<Result>;
+public sealed record ScheduleFollowUpCommand(Guid UserId, Guid Id, DateTimeOffset? At,
+    uint? Version = null) : IRequest<Result>; // 票101 Version:同上
 
 public sealed record AddInterviewRoundCommand(Guid UserId, Guid ApplicationId, string Stage, DateOnly? ScheduledDate,
     string? Interviewer, string? Format, string? Notes) : IRequest<Result<Guid>>;
 
 public sealed record UpdateInterviewRoundCommand(Guid UserId, Guid ApplicationId, Guid RoundId, string? Stage,
-    DateOnly? ScheduledDate, string? Interviewer, string? Format, string Outcome, string? Notes)
+    DateOnly? ScheduledDate, string? Interviewer, string? Format, string Outcome, string? Notes,
+    uint? Version = null) // 票101:轮次行 xmin 回传钉版
     : IRequest<Result>;
 
 public sealed record BulkImportApplicationsCommand(Guid UserId, IReadOnlyList<BulkImportRow> Rows) : IRequest<Result<BulkImportResult>>;

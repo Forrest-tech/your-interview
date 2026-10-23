@@ -254,7 +254,8 @@ export class AnswerLibraryDialogComponent {
     this.fieldErrors.set({});
     const editing = this.editingId();
     const req: Observable<unknown> = editing
-      ? this.trackerApi.updateAnswerTemplate(editing, body)
+      ? this.trackerApi.updateAnswerTemplate(editing,
+          { ...body, version: this.list().find(t => t.id === editing)?.version ?? null })
       : this.trackerApi.createAnswerTemplate(body);
     req.subscribe({
       next: () => {

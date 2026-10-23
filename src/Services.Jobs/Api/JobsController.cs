@@ -52,7 +52,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     public async Task<IResult> UpdateCompany(Guid id, [FromBody] UpdateCompanyBody body, CancellationToken ct)
     {
         var r = await sender.Send(new UpdateCompanyCommand(Me, id, body.Name, body.Website, body.Industry,
-            body.Location, body.LogoUrl, body.Notes, body.CompanyType, body.EmployeeCount, body.IsBlacklisted), ct);
+            body.Location, body.LogoUrl, body.Notes, body.CompanyType, body.EmployeeCount, body.IsBlacklisted, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -64,7 +64,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetCompanyProfile(Guid id, [FromBody] CompanyProfileBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetCompanyProfileCommand(Me, id, body.Profile, body.ProfileSourcesJson), ct);
+        var r = await sender.Send(new SetCompanyProfileCommand(Me, id, body.Profile, body.ProfileSourcesJson, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -114,7 +114,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         var r = await sender.Send(new UpdateApplicationCommand(Me, id, body.Role, body.Location, body.Link,
             body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline,
             body.AppliedDate, body.CompanyDescription, body.WorkAuthorization, null,
-            body.Requirements, body.Benefits, body.JdText), ct);
+            body.Requirements, body.Benefits, body.JdText, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -127,7 +127,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetJdContent(Guid id, [FromBody] JdContentBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetJdContentCommand(Me, id, body.JdText, body.JdSourceUrl), ct);
+        var r = await sender.Send(new SetJdContentCommand(Me, id, body.JdText, body.JdSourceUrl, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -171,7 +171,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetAnalysis(Guid id, [FromBody] AnalysisBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetApplicationAnalysisCommand(Me, id, body.ResumeScore, body.PassRateEstimate, body.MatchKeywords), ct);
+        var r = await sender.Send(new SetApplicationAnalysisCommand(Me, id, body.ResumeScore, body.PassRateEstimate, body.MatchKeywords, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -180,7 +180,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetOutreach(Guid id, [FromBody] OutreachBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetOutreachCommand(Me, id, body.PosterName, body.NeedsConnectFirst, body.Message), ct);
+        var r = await sender.Send(new SetOutreachCommand(Me, id, body.PosterName, body.NeedsConnectFirst, body.Message, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -196,7 +196,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> ScheduleFollowUp(Guid id, [FromBody] FollowUpBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ScheduleFollowUpCommand(Me, id, body.At), ct);
+        var r = await sender.Send(new ScheduleFollowUpCommand(Me, id, body.At, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -218,7 +218,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     public async Task<IResult> UpdateRound(Guid id, Guid roundId, [FromBody] UpdateRoundBody body, CancellationToken ct)
     {
         var r = await sender.Send(new UpdateInterviewRoundCommand(Me, id, roundId, body.Stage, body.ScheduledDate,
-            body.Interviewer, body.Format, body.Outcome, body.Notes), ct);
+            body.Interviewer, body.Format, body.Outcome, body.Notes, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -396,25 +396,27 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     }
 
     public sealed record UpdateCompanyBody(string Name, string? Website, string? Industry, string? Location,
-        string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted);
+        string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted,
+        uint? Version = null); // 票101:读时 xmin 回传钉版
     public sealed record UpdateApplicationBody(string Role, string? Location, string? Link, string? Salary,
         string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority, DateOnly? Deadline,
         DateOnly? AppliedDate, string? CompanyDescription, string? WorkAuthorization,
         string? Requirements = null, string? Benefits = null,
         // FUN-02:编辑负载补齐 JD 全文。不带该字段 (null) 时后端保持原值,见 UpdateApplicationCommand。
-        string? JdText = null);
+        string? JdText = null,
+        uint? Version = null); // 票101:同 UpdateCompanyBody
     public sealed record ChangeStatusBody(string Status, string? Note, string? RejectionReason);
     /// <summary>JD 全文提交。空串由领域方法归一为 null。</summary>
-    public sealed record JdContentBody(string? JdText, string? JdSourceUrl);
+    public sealed record JdContentBody(string? JdText, string? JdSourceUrl, uint? Version = null); // 票101 Version:同上
 
     /// <summary>公司情报提交。ProfileSourcesJson 是来源 URL 的 JSON 数组字符串。</summary>
-    public sealed record CompanyProfileBody(string? Profile, string? ProfileSourcesJson);
-    public sealed record AnalysisBody(int? ResumeScore, string? PassRateEstimate, string? MatchKeywords);
-    public sealed record OutreachBody(string? PosterName, bool NeedsConnectFirst, string? Message);
-    public sealed record FollowUpBody(DateTimeOffset? At);
+    public sealed record CompanyProfileBody(string? Profile, string? ProfileSourcesJson, uint? Version = null); // 票101
+    public sealed record AnalysisBody(int? ResumeScore, string? PassRateEstimate, string? MatchKeywords, uint? Version = null); // 票101
+    public sealed record OutreachBody(string? PosterName, bool NeedsConnectFirst, string? Message, uint? Version = null); // 票101
+    public sealed record FollowUpBody(DateTimeOffset? At, uint? Version = null); // 票101
     public sealed record AddRoundBody(string Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format, string? Notes);
     public sealed record UpdateRoundBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
-        string? Format, string Outcome, string? Notes);
+        string? Format, string Outcome, string? Notes, uint? Version = null); // 票101:轮次行 xmin
 
     // ---- 智能粘贴请求体 ----
 
@@ -454,6 +456,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
               {
                   resumeText = string.IsNullOrEmpty(r.Value.Content) ? null : r.Value.Content,
                   version = r.Value.Version,
+                  rowVersion = r.Value.RowVersion,
                   updatedAt = r.Value.UpdatedAt
               })
             : r.ToProblemDetails();
@@ -464,7 +467,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SaveResumeText([FromBody] ResumeTextBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SaveResumeCommand(Me, body.ResumeText ?? string.Empty), ct);
+        var r = await sender.Send(new SaveResumeCommand(Me, body.ResumeText ?? string.Empty, body.RowVersion), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(new { version = r.Value.Version, updatedAt = r.Value.UpdatedAt })
             : r.ToProblemDetails();
@@ -665,7 +668,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SaveCoverLetter(Guid applicationId, [FromBody] CoverLetterBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SaveCoverLetterCommand(applicationId, Me, body.Content ?? string.Empty), ct);
+        var r = await sender.Send(new SaveCoverLetterCommand(applicationId, Me, body.Content ?? string.Empty, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -724,7 +727,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateAnswerTemplate(Guid id, [FromBody] AnswerTemplateBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateAnswerTemplateCommand(id, Me, body.Category, body.Question, body.Answer), ct);
+        var r = await sender.Send(new UpdateAnswerTemplateCommand(id, Me, body.Category, body.Question, body.Answer, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -773,7 +776,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     public async Task<IResult> UpdateCommunication(Guid id, Guid commId, [FromBody] CommunicationBody body, CancellationToken ct)
     {
         var r = await sender.Send(new UpdateCommunicationCommand(Me, commId, id, body.Type, body.Subject, body.Content,
-            body.ContactName, body.ContactEmail, body.OccurredAt), ct);
+            body.ContactName, body.ContactEmail, body.OccurredAt, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -875,21 +878,21 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
     public sealed record ApplicationQuestionBody(string? Text);
     public sealed record ImportQuestionsBody(string[]? Questions);
 
-    public sealed record AnswerTemplateBody(string Category, string Question, string Answer);
+    public sealed record AnswerTemplateBody(string Category, string Question, string Answer, uint? Version = null); // 票101
 
     public sealed record CommunicationBody(string Type, string? Subject, string Content,
         string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
-        string? MetaJson = null, string? HandlingStatus = null);
+        string? MetaJson = null, string? HandlingStatus = null, uint? Version = null); // 票101 Version:读时 xmin
 
     public sealed record CommunicationMetaBody(string? MetaJson = null, string? HandlingStatus = null);
 
 }
 
 /// <summary>简历正文提交。空串由 Handler 归一为"清空"。</summary>
-public sealed record ResumeTextBody(string? ResumeText);
+public sealed record ResumeTextBody(string? ResumeText, uint? RowVersion = null); // 票101 RowVersion:读时 xmin
 
 /// <summary>求职信人工保存体。</summary>
-public sealed record CoverLetterBody(string? Content);
+public sealed record CoverLetterBody(string? Content, uint? Version = null); // 票101
 
 /// <summary>求职信生成体。Overwrite=false 时已有内容不会被覆盖。</summary>
 public sealed record GenerateCoverLetterBody(string? ExtraInstructions, bool Overwrite = false);

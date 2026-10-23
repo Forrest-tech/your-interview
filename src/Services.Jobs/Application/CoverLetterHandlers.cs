@@ -36,7 +36,9 @@ public sealed record CoverLetterDto(
     DateTimeOffset? UpdatedAt,
     /// <summary>生成时所用简历的版本 vs 当前简历版本不一致 → 可能已过期。</summary>
     bool IsStale,
-    int CurrentResumeVersion);
+    int CurrentResumeVersion,
+    // 票101:读时 xmin(保存回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 /// <summary>生成请求的输入齐备情况,供前端在点"生成"前提示缺什么。</summary>
 public sealed record CoverLetterReadinessDto(
@@ -83,16 +85,21 @@ public sealed class GetCoverLetterQueryHandler(JobsDbContext db)
             .Select(x => (int?)x.Version)
             .FirstOrDefaultAsync(ct) ?? 0;
 
-        return Result.Success<CoverLetterDto?>(ToDto(letter, resumeVersion));
+        // 票101:读时 xmin 随 DTO 带出。
+        var rowVersion = await db.CoverLetters.AsNoTracking()
+            .Where(x => x.Id == letter.Id)
+            .Select(x => EF.Property<uint>(x, "xmin")).FirstAsync(ct);
+        return Result.Success<CoverLetterDto?>(ToDto(letter, resumeVersion, rowVersion));
     }
 
     /// <summary>统一映射口径 —— 各处返回同一形状,避免字段口径分叉。</summary>
-    internal static CoverLetterDto ToDto(CoverLetter l, int currentResumeVersion) => new(
+    internal static CoverLetterDto ToDto(CoverLetter l, int currentResumeVersion, uint version = 0) => new(
         l.Id, l.ApplicationId, l.Content, l.Status.ToString(),
         l.GeneratedByModel, l.ResumeVersion, l.LastPromptHint, l.GeneratedAt, l.UpdatedAt,
         // 只有 AI 生成过、且简历版本已前进,才算过期;人工写的信不参与版本比对
         IsStale: l.ResumeVersion is int rv && rv > 0 && currentResumeVersion > rv,
-        CurrentResumeVersion: currentResumeVersion);
+        CurrentResumeVersion: currentResumeVersion,
+        Version: version);
 }
 
 /// <summary>生成前的输入体检:告诉前端缺什么,而不是等生成了才报错。</summary>
@@ -131,7 +138,8 @@ public sealed class GetCoverLetterReadinessQueryHandler(JobsDbContext db)
 // ---------------------------- 写(人工) ----------------------------
 
 /// <summary>人工保存/覆盖求职信内容。不存在则创建。</summary>
-public sealed record SaveCoverLetterCommand(Guid ApplicationId, Guid UserId, string Content)
+public sealed record SaveCoverLetterCommand(Guid ApplicationId, Guid UserId, string Content,
+    uint? Version = null) // 票101:读时 xmin 回传钉版,null=旧调用方不钉
     : IRequest<Result<CoverLetterDto>>;
 
 public sealed class SaveCoverLetterCommandValidator : AbstractValidator<SaveCoverLetterCommand>
@@ -159,6 +167,7 @@ public sealed class SaveCoverLetterCommandHandler(JobsDbContext db)
         }
         else
         {
+            ConcurrencyPin.Pin(db, letter, request.Version);
             letter.UpdateContent(content);
         }
 

@@ -1364,7 +1364,7 @@ export class ApplicationDetailDialogComponent {
     const text = this.clDraft.trim();
     if (!text) { this.alertError(this.t('tracker.dClEmptyErr')); return; }
 
-    this.jobsApi.saveCoverLetter<CoverLetterDto>(this.app.id, text)
+    this.jobsApi.saveCoverLetter<CoverLetterDto>(this.app.id, text, this.cl()?.version ?? null)
       .subscribe({
         next: (c) => { this.cl.set(c); this.clEditing.set(false); },
         error: (err) => this.alertError(this.readError(err))
@@ -1751,6 +1751,7 @@ export class ApplicationDetailDialogComponent {
       jdSummary: d.jdSummary,
       notes: this.notesDraft.trim() || null, priority: d.priority,
       deadline: d.deadline, appliedDate: d.appliedDate,
+      version: d.version ?? null,
     }).subscribe({
       next: () => {
         this.notesSaving.set(false);
@@ -1787,7 +1788,7 @@ export class ApplicationDetailDialogComponent {
     this.reparsing.set(true);
     this.trackerApi.parseJd(raw, false).subscribe({
       next: (p: any) => {
-        const upd: any = {};
+        const upd: any = { version: this.detail.version ?? null };
         if (p.company) upd.company = p.company;
         if (p.role) upd.role = p.role;
         if (p.location) upd.location = p.location;
@@ -1955,6 +1956,7 @@ export class ApplicationDetailDialogComponent {
       workMode: d.workMode ?? null, source: d.source ?? null,
       jdSummary: this.jdSummaryDraft.trim() || null, notes: d.notes,
       priority: d.priority, deadline: d.deadline, appliedDate: d.appliedDate,
+      version: d.version ?? null,
     }).subscribe({
       next: () => {
         this.jdSummarySaving.set(false);
@@ -2002,6 +2004,7 @@ export class ApplicationDetailDialogComponent {
     this.jobsApi.saveApplicationJd(this.app.id, {
       jdText: this.jdTextDraft.trim() || null,
       jdSourceUrl: this.detail.jdSourceUrl ?? null,
+      version: this.detail.version ?? null,
     }).subscribe({
       next: () => {
         this.jdTextSaving.set(false);
@@ -2125,7 +2128,8 @@ export class ApplicationDetailDialogComponent {
     this.commFieldErrors.set({});
     const editing = this.commEditingId();
     const req: Observable<unknown> = commSaveChannel(editing) === 'update' && editing
-      ? this.trackerApi.updateCommunication(this.app.id, editing, body)
+      ? this.trackerApi.updateCommunication(this.app.id, editing,
+          { ...body, version: this.comms().find(c => c.id === editing)?.version ?? null })
       : this.trackerApi.createCommunication(this.app.id, body);
     req.subscribe({
       next: () => {
@@ -2211,6 +2215,8 @@ export interface CoverLetterDto {
   /** 简历已更新到更新版本 → 这封信可能已过期。 */
   isStale: boolean;
   currentResumeVersion: number;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 /** 生成前的输入体检。 */

@@ -39,6 +39,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.Know
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.Analytics.Tests", "Services.Analytics.Tests\YourInterview.Services.Analytics.Tests.csproj", "{BED6E365-773C-4ABC-AB95-0FE046DA7204}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YourInterview.Services.AiGateway.Tests", "Services.AiGateway.Tests\YourInterview.Services.AiGateway.Tests.csproj", "{5C470B70-E9A1-42A1-9A78-365E2A58F48A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -120,5 +122,9 @@ Global
 		{BED6E365-773C-4ABC-AB95-0FE046DA7204}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BED6E365-773C-4ABC-AB95-0FE046DA7204}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BED6E365-773C-4ABC-AB95-0FE046DA7204}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5C470B70-E9A1-42A1-9A78-365E2A58F48A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5C470B70-E9A1-42A1-9A78-365E2A58F48A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5C470B70-E9A1-42A1-9A78-365E2A58F48A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5C470B70-E9A1-42A1-9A78-365E2A58F48A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -7,7 +7,7 @@
 > - **事实源**：`docs/fix-program/source/`（AUDIT.md + 票面 + replica 定稿 + HANDOVER.md）
 > - **本文件纪律**：队列与状态唯一事实源；没到远端且验过的成果，不报「已完成」。
 
-> **当前 DOING**：票 42 · ARC-11 前端 API 层收敛（已实现并推送 `277919c`，待 CI E2E 复跑转 VERIFIED；下一票 43 ARC-13 i18n 收口）
+> **当前 DOING**：票 43 · ARC-13 i18n 机制收敛为一套（本地字典 498 键并入核心 DICT，两本地文件下线；parity+boundary 42/42、引用键审计 570/0、tsc 0 错、ng build exit 0；证据 evidence-43/。注：初始 bundle 预算调整已登记待确认区，见 §二）
 
 ---
 
@@ -17,7 +17,8 @@
 |---|---|---|
 | **VERIFIED** | 41 | CI run `39888149532` Backend/Frontend/E2E 全 success；证据 `docs/fix-program/evidence-41/` |
 | **PUSHED** | 42 | ARC-11 前端 API 层收敛收口；远端 `277919c`；证据 `docs/fix-program/evidence-42/`（PLAN + VERIFICATION）；features/** 字面量归零、tsc --noEmit 0 错；**待 CI E2E 黄金路径复跑确认后转 VERIFIED**（协议 §3 第四步） |
-| **TODO（S3 优先）** | 43, 45, 48, 49, 50 | 42 VERIFIED 后按 S2→S3→S4 顺序清；票 47 已由并行执行线落远端，本台账仅登记为 PUSHED 待其补证据 |
+| **DOING** | 43 | ARC-13 i18n 机制收敛为一套；本地字典 498 键并入核心 DICT 命名空间分区、v2.i18n/brief.i18n 下线、三处接线改委托 i18n.t；parity+boundary 42/42、引用键审计 570 引用 0 缺失、tsc 0 错、ng build exit 0；证据 `docs/fix-program/evidence-43/`；**初始 bundle 预算 1mb→1.2mb 已登记 §二 待确认区** |
+| **TODO（S3 优先）** | 45, 48, 49, 50 | 43 推远端后按 S2→S3→S4 顺序清；票 47 已由并行执行线落远端，本台账仅登记为 PUSHED 待其补证据 |
 | **PUSHED（非本执行线）** | 47 | 远端 `13e2e144` 已含票 47 实现；CI 同 run `39888149532` 全绿；但非我实现，证据不由我登记 |
 | **TODO（重构批）** | 51, 52, 53, 54 | 纯重构，S4 功能票清完后再动 |
 | **TODO（平台/跟进）** | 64, 65, 67, 70, 71, 72, 74, 75, 77, 78, 79, 88 | 主线清完后或按需要插队 |
@@ -63,6 +64,7 @@
 | 票 73 | **待 Forrest 拍板** | Tracker 收藏入口，属呈现新需求，需先出效果图 |
 | 票 94 | 排进主线队列待修 | 网关 /health/live 恒 503、OCR 集群无服务，挡着票 93 起后自检口径 |
 | 票 90/91/92 | **B 组暂停** | 剩余审查票清完前不开工 |
+| 票 43 | 初始 bundle 预算 1mb→1.2mb 是否认可（ARC-13 并表使字典从懒加载移入即时加载核心 service，+86.3 KiB 超原预算，ng build 会红灯 CI）/ A：认可 1.2mb（合并本体不受影响，一行可回退）；B：不认可，则需为核心字典设计懒加载分区（改 I18nService 加载形态，违背本票「API 不动」不变项，建议另票）/ 推荐 A，理由：票面 mandate 优先于现有配置（协议 §1），总包体未增、仅加载时机再分配，1.2mb 留 ~12% 余量 |
 
 ---
 

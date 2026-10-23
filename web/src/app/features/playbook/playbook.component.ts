@@ -20,7 +20,6 @@ import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../cor
 import { AuthService } from '../../core/auth/auth.service';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { JobsApiService } from '../../core/api/jobs-api.service';
-import { BRIEF_I18N } from './components/brief/brief.i18n';
 import { entryEndKey, entryResultOutcome } from './redesign/v2.helpers';
 import type { CoverageRow } from '../../core/api/jobs-api.service';
 
@@ -103,17 +102,10 @@ export class PlaybookComponent implements OnInit {
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   /**
-   * ★ F6（2026-10-16）：技术覆盖图谱文案走 brief/ 本地 BRIEF_I18N（key 前缀 pb.br.），
-   * 先查本地表再回退全局 service —— coordinator 并入全局字典后行为不变。
+   * ★ F6（2026-10-16 立）：技术覆盖图谱文案走 pb.br.* 键；
+   * 2026-10-23 票43（ARC-13）本地字典并入核心 I18nService 后，直接走全局 service 一套机制。
    */
-  t = (key: string): string => {
-    const e = BRIEF_I18N[key];
-    if (e) {
-      const l = this.i18n.lang();
-      return e[l] ?? e.en ?? e.zh ?? key;
-    }
-    return this.i18n.t(key);
-  };
+  t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
   fmt = (key: string, params: Record<string, string | number>): string => {
     let s = this.t(key);

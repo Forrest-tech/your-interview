@@ -1,21 +1,13 @@
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { BRIEF_I18N } from './brief.i18n';
 import type { BriefQuestion, BriefRound, Keyword, RoundEmailItem } from './brief.models';
 
 /**
- * 各组件共用的 t()：先查本地 BRIEF_I18N（按当前语言），
- * 查不到再回退全局 I18nService —— 所以 common.* / pb.roundOutcome.* 等全局键照样能用。
- * Coordinator 把 BRIEF_I18N 并入全局 service 后，行为不变。
+ * 各组件共用的 t():票43(ARC-13)起 brief.i18n 本地字典已并入核心 I18nService
+ * 命名空间分区(pb.br.*),文案机制收敛为一套 —— 直接委托 i18n.t。
+ * common.* / pb.roundOutcome.* 等全局键照常用;键名与三语文案逐字不变。
  */
 export function makeBriefT(i18n: I18nService): (key: string) => string {
-  return (key: string): string => {
-    const e = BRIEF_I18N[key];
-    if (e) {
-      const l = i18n.lang();
-      return e[l] ?? e.en ?? e.zh ?? key;
-    }
-    return i18n.t(key);
-  };
+  return (key: string): string => i18n.t(key);
 }
 
 /** 模板文案插值：fmt('pb.br.countdown.daysLeft', { n: 3 }) */

@@ -8,7 +8,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { ApiClient } from '../../core/api/api-client';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { JobsApiService } from '../../core/api/jobs-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -62,7 +61,6 @@ export class PlaybookDetailComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
-  private readonly api = inject(ApiClient);
   private readonly interviewsApi = inject(InterviewsApiService);
   private readonly jobsApi = inject(JobsApiService);
   private readonly v2 = inject(PlaybookV2Api);

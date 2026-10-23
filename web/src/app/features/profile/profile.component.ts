@@ -12,7 +12,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSelectModule } from '@angular/material/select';
-import { ApiClient } from '../../core/api/api-client';
 import { AuthApiService } from '../../core/api/auth-api.service';
 import { PracticeApi, StorageSettingDto } from '../../core/api/practice-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -52,7 +51,6 @@ interface TzOption { id: string; label: string; }
   styleUrl: './profile.component.scss'
 })
 export class ProfileComponent implements OnInit {
-  private readonly api = inject(ApiClient);
   private readonly authApi = inject(AuthApiService);
   /** 录音存储目录的接口在 Assessment 服务上(不是 Identity),所以走练习页那套 API 层。 */
   private readonly practice = inject(PracticeApi);

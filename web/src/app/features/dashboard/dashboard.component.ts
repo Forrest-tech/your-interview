@@ -7,7 +7,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { ApiClient } from '../../core/api/api-client';
 import { JobsApiService } from '../../core/api/jobs-api.service';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { AnalyticsApiService } from '../../core/api/analytics-api.service';
@@ -44,7 +43,6 @@ interface ActionCard {
   styleUrl: './dashboard.component.scss'
 })
 export class DashboardComponent implements OnInit {
-  private readonly api = inject(ApiClient);
   private readonly jobsApi = inject(JobsApiService);
   private readonly analyticsApi = inject(AnalyticsApiService);
   private readonly interviewsApi = inject(InterviewsApiService);

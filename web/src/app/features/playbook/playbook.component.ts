@@ -15,7 +15,6 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, forkJoin, of } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
 import { PlaybookLocalService } from '../../core/api/playbook-local.service';
 import {
   STAR_STORY_TITLE_MAX, shouldStartStorySave, starStoryTitleError,
@@ -102,7 +101,6 @@ interface NewEntryForm {
   styleUrl: './playbook.component.scss'
 })
 export class PlaybookComponent implements OnInit {
-  private readonly api = inject(ApiClient);
   private readonly interviewsApi = inject(InterviewsApiService);
   private readonly jobsApi = inject(JobsApiService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */

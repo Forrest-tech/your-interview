@@ -9,7 +9,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { ApiClient } from '../../core/api/api-client';
 import { JobsApiService } from '../../core/api/jobs-api.service';
 import { extractPdfText } from '../../core/utils/pdf-text';
 import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
@@ -38,7 +37,6 @@ import { resumeSaveBlock } from './resume.helpers';
 export class ResumeComponent implements OnInit {
   private readonly i18n = inject(I18nService);
   private readonly snack = inject(MatSnackBar);
-  private readonly api = inject(ApiClient);
   private readonly jobsApi = inject(JobsApiService);
 
   readonly t = (key: string): string => this.i18n.t(key);

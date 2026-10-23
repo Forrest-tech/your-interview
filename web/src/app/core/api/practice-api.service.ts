@@ -399,11 +399,6 @@ export class PracticeApi {
       `${PracticeApi.BASE}/speech/settings`, { key, region, endpoint });
   }
 
-  /** 真连通性测试 —— 拿当前 key 去 Azure 走一次。失败会返回 401/403。 */
-  testSpeech(): Observable<{ ok: boolean; message: string }> {
-    return this.api.post<{ ok: boolean; message: string }>(`${PracticeApi.BASE}/speech/test`);
-  }
-
   // ---------- 本机录音存储目录(★ 2026-09-27 Forrest:"我的账户"里可自选) ----------
 
   /**
@@ -434,9 +429,7 @@ export class PracticeApi {
   /**
    * 测试一把**尚未保存**的候选凭据(先测后存)。
    *
-   * 2026-09-16(Forrest 第 1 条):与 testSpeech() 的区别在于 ——
-   *   · testSpeech()          → 测服务端**已保存**的 key
-   *   · testSpeechCredential() → 测请求体里这把**候选** key,不落库
+   * 2026-09-16(Forrest 第 1 条):测请求体里这把**候选** key,不落库。
    * 失败时后端返回 502(凭据错)或 400(没填全)。
    */
   testSpeechCredential(key: string, region: string): Observable<{ ok: boolean; message: string }> {

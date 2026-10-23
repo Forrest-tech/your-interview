@@ -9,7 +9,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
 import { I18nService } from '../../core/i18n/i18n.service';
-import { ApiClient } from '../../core/api/api-client';
 import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
 
 
@@ -193,7 +192,6 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
 export class KnowledgeDialogComponent {
   private readonly ref = inject(MatDialogRef<KnowledgeDialogComponent>);
   private readonly i18n = inject(I18nService);
-  private readonly api = inject(ApiClient);
   private readonly knowledgeApi = inject(KnowledgeApiService);
   t = (key: string): string => this.i18n.t(key);
 

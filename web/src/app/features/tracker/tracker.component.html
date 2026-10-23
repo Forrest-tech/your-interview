@@ -414,6 +414,10 @@
           }
         </div>
         <div class="lr-side" (click)="$event.stopPropagation()">
+          <button mat-icon-button class="fav-btn" (click)="toggleFavorite(a.id); $event.stopPropagation()"
+                  [color]="isFavorite(a.id) ? 'warn' : undefined">
+            <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
+          </button>
           <button mat-stroked-button (click)="prepareInterview(a, $event)"
                   [matTooltip]="t('tracker.prepareInterview')" class="prep-btn">
             <mat-icon>school</mat-icon>{{ t('tracker.prepShort') }}
@@ -462,14 +466,22 @@
                   fill="none" stroke="#90caf9"
                   [attr.stroke-width]="e.width" opacity="0.6"/>
           }
-          <!-- 节点 -->
+          <!-- 节点(票73:点击选中阶段 → 下方条带展开该阶段;右上角红徽标 = 该阶段已收藏数) -->
           @for (n of flowChart().nodes; track n.status) {
-            <g [attr.transform]="'translate(' + n.x + ', 0)'">
+            <g [attr.transform]="'translate(' + n.x + ', 0)'" class="sankey-node-g"
+               (click)="selectFlowStage(n.status)">
               <rect x="0" y="60" width="100" [attr.height]="n.height"
-                    rx="8" class="sankey-node" [class.empty]="n.count === 0"/>
+                    rx="8" class="sankey-node" [class.empty]="n.count === 0"
+                    [class.selected]="flowStage() === n.status"/>
               <text x="50" y="45" text-anchor="middle" class="sankey-label">{{ n.label }}</text>
               <text x="50" [attr.y]="60 + n.height / 2 + 5" text-anchor="middle"
                     class="sankey-count">{{ n.count }}</text>
+              @if (flowFavCount(n.status) > 0) {
+                <g class="sankey-fav-badge">
+                  <circle cx="100" cy="60" r="11"/>
+                  <text x="100" y="65" text-anchor="middle">{{ flowFavCount(n.status) }}</text>
+                </g>
+              }
             </g>
           }
         </svg>
@@ -494,6 +506,26 @@
               <span class="term-chip ghosted">{{ t('status.Ghosted') }}: {{ flowChart().ghosted }}</span>
             }
           </div>
+        }
+      </div>
+      <!-- ★ 票73:收藏条带 —— 默认「收藏的投递」;选中阶段节点后展开该阶段全部投递 -->
+      <div class="flow-strip" data-testid="flow-fav-strip">
+        <div class="flow-strip-title">
+          {{ flowStage() ? t('status.' + flowStage()) : t('tracker.favStripTitle') }}
+        </div>
+        @for (a of flowStripItems(); track a.id) {
+          <div class="flow-strip-row" (click)="openDetail(a)">
+            <span class="fs-role">{{ a.role }}</span>
+            <span class="fs-company">· {{ a.companyName }}</span>
+            <span class="fs-spacer"></span>
+            <span class="fs-stage">{{ t('status.' + a.status) }}</span>
+            <button mat-icon-button class="fav-btn" (click)="toggleFavorite(a.id); $event.stopPropagation()"
+                    [color]="isFavorite(a.id) ? 'warn' : undefined">
+              <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
+            </button>
+          </div>
+        } @empty {
+          <p class="flow-strip-empty">{{ flowStage() ? t('tracker.favStripStageEmpty') : t('tracker.favStripEmpty') }}</p>
         }
       </div>
     } @else {

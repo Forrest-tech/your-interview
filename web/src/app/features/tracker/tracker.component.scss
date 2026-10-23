@@ -678,6 +678,26 @@ mat-form-field { width: 100%; }
 .sankey-node.empty { fill: #f5f5f5; stroke: #e0e0e0; }
 .sankey-label { font-size: 13px; fill: rgba(0,0,0,0.7); font-weight: 500; }
 .sankey-count { font-size: 18px; fill: #1565c0; font-weight: 700; }
+/* 票73:节点可点(条带阶段切换)+ 选中描边加粗 + 收藏数红徽标 */
+.sankey-node-g { cursor: pointer; }
+.sankey-node.selected { stroke: #1565c0; stroke-width: 3.5; }
+.sankey-fav-badge circle { fill: #e53935; stroke: #fff; stroke-width: 2; }
+.sankey-fav-badge text { fill: #fff; font-size: 11px; font-weight: 700; }
+/* 票73:图下收藏条带 */
+.flow-strip { margin-top: 14px; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 10px; }
+.flow-strip-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.flow-strip-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 6px; border-radius: 6px; cursor: pointer;
+}
+.flow-strip-row:hover { background: rgba(0,0,0,0.04); }
+.flow-strip-row .fs-company { color: rgba(0,0,0,0.55); }
+.flow-strip-row .fs-spacer { flex: 1; }
+.flow-strip-row .fs-stage {
+  font-size: 12px; padding: 2px 8px; border-radius: 10px;
+  background: #e8eaf6; color: #3f51b5;
+}
+.flow-strip-empty { color: rgba(0,0,0,0.45); font-size: 13px; margin: 4px 0; }
 .chart-rates { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .rate-chip {
   font-size: 12px; padding: 4px 10px; border-radius: 12px;

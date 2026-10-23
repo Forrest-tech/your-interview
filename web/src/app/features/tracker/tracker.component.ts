@@ -36,6 +36,9 @@ import { STATUS_ORDER, STATUS_PATH_FROM_SAVED, ApplicationForm } from './tracker
 import { ApplicationDialogComponent } from './application-dialog.component';
 import { ApplicationDetailDialogComponent } from './application-detail-dialog.component';
 import { PrepPlanDialogComponent } from './prep-plan-dialog.component';
+import {
+  favCountsByStatus, favoriteItems, itemsAtStatus, nextFlowStageSelection
+} from './tracker-flow-favorites.helpers';
 
 /**
  * 投递看板。
@@ -85,6 +88,10 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   setViewMode(m: 'board' | 'list' | 'chart'): void {
     this.viewMode.set(m);
+    // ★ 票73:切走流程视图后条带恢复默认态(再点节点选中口径见 selectFlowStage);
+    // 进入流程视图时刷新全量缓存(徽标/条带的全量口径)。
+    if (m !== 'chart') this.flowStage.set(null);
+    if (m === 'chart') this.loadFlowAll();
     try { localStorage.setItem('yi-tracker-view', m); } catch { /* 忽略 */ }
   }
 
@@ -924,9 +931,55 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     };
   });
 
+  // ------------------------------ 票73:流程视图收藏 ------------------------------
+  /**
+   * 流程图是聚合图(stats 口径),徽标与条带需要投递全量:items() 只是分页
+   * 切片(同 weeklyAppliedCount 的教训),故进流程视图时逐页拉全量缓存。
+   * 收藏真源仍只有 prefs.favorites 一份信号 —— 切换后徽标/条带经下面的
+   * computed 即时同步,缓存本身不随切换刷新(状态变更不在流程视图发生)。
+   */
+  readonly flowAllItems = signal<Application[]>([]);
+  /** 条带选中的阶段;null = 默认条带「收藏的投递」。 */
+  readonly flowStage = signal<ApplicationStatus | null>(null);
+  readonly flowFavCounts = computed(() =>
+    favCountsByStatus(this.flowAllItems(), this.prefs.favorites()));
+  readonly flowStripItems = computed(() => {
+    const stage = this.flowStage();
+    return stage
+      ? itemsAtStatus(this.flowAllItems(), stage)
+      : favoriteItems(this.flowAllItems(), this.prefs.favorites());
+  });
+
+  flowFavCount(status: ApplicationStatus): number {
+    return this.flowFavCounts().get(status) ?? 0;
+  }
+
+  /** 点阶段节点:选中 ↔ 取消(回默认条带)↔ 切换阶段。 */
+  selectFlowStage(status: ApplicationStatus): void {
+    this.flowStage.update(cur => nextFlowStageSelection(cur, status) as ApplicationStatus | null);
+  }
+
+  private loadFlowAll(): void {
+    const pageSize = 200;
+    const fetchPage = (page: number, acc: Application[]): void => {
+      this.jobsApi.getApplications<Application>({
+        page, pageSize, sortBy: 'updated', archived: false
+      }).subscribe({
+        next: (r) => {
+          const all = acc.concat(r.items ?? []);
+          if (page < (r.totalPages ?? 1)) fetchPage(page + 1, all);
+          else this.flowAllItems.set(all);
+        },
+        error: () => { /* 失败保留旧缓存,主流程不受影响 */ }
+      });
+    };
+    fetchPage(1, []);
+  }
+
   ngOnInit(): void {
     this.reload();
     this.prefs.ensureFavoritesLoaded(); // ★ 票14:收藏读后端 + 本地旧数据一次性导入
+    if (this.viewMode() === 'chart') this.loadFlowAll(); // ★ 票73:刷新后直落流程视图时也要全量缓存
     this.loadGhosting(); // ★ #18
     // ★ 子导航:有实际功能 —— Status 切看板, List 切列表, Overview 滚到指标区
     this.subnav.register('/tracker', [

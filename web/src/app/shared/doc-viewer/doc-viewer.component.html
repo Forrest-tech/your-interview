@@ -6,14 +6,14 @@
       @if (showZoom()) {
         <div class="zoom-controls">
           <button class="zoom-btn" (click)="zoomOut()" [disabled]="!canDecrease()"
-                  matTooltip="缩小" aria-label="decrease font size">−</button>
+                  [matTooltip]="t('doc.zoomOut')" [attr.aria-label]="t('doc.zoomOut')">−</button>
           <span class="zoom-label">{{ zoom() }}%</span>
           <button class="zoom-btn" (click)="zoomIn()" [disabled]="!canIncrease()"
-                  matTooltip="放大" aria-label="increase font size">+</button>
+                  [matTooltip]="t('doc.zoomIn')" [attr.aria-label]="t('doc.zoomIn')">+</button>
         </div>
       }
       @if (editable() && !editing()) {
-        <button class="icon-btn" (click)="startEdit()" matTooltip="编辑" aria-label="edit">
+        <button class="icon-btn" (click)="startEdit()" [matTooltip]="t('common.edit')" [attr.aria-label]="t('common.edit')">
           <mat-icon>edit</mat-icon>
         </button>
       }
@@ -24,11 +24,11 @@
     @if (editing()) {
       <textarea class="doc-editor" [(ngModel)]="draft" rows="10"></textarea>
       <div class="doc-edit-actions">
-        <button mat-button (click)="cancelEdit()">取消</button>
-        <button mat-raised-button color="primary" (click)="saveEdit()">保存</button>
+        <button mat-button (click)="cancelEdit()">{{ t('common.cancel') }}</button>
+        <button mat-raised-button color="primary" (click)="saveEdit()">{{ t('common.save') }}</button>
       </div>
     } @else {
-      <p class="doc-text">{{ content() || '暂无内容' }}</p>
+      <p class="doc-text">{{ content() || t('doc.empty') }}</p>
     }
   </div>
 </div>

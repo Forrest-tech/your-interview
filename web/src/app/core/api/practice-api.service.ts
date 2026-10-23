@@ -381,6 +381,25 @@ export class PracticeApi {
     return this.api.getBlob(`${PracticeApi.BASE}/recordings/${recordingId}/audio`);
   }
 
+  // ---------- 票119 词典(点词查词典) ----------
+
+  /** 查词:命中任一层回 schema v2 词卡;全层未命中后端回 404(调用方据状态码分简卡)。 */
+  lookupDictionaryWord(word: string): Observable<DictionaryCardDto> {
+    return this.api.get<DictionaryCardDto>(
+      `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}`);
+  }
+
+  /** 发音链单点解析:词未命中也可成立(Tier 2/3 对任意词可达)。 */
+  pronounceDictionaryWord(word: string, accent: 'us' | 'uk'): Observable<DictionaryPronounceDto> {
+    return this.api.get<DictionaryPronounceDto>(
+      `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}/pronounce?accent=${accent}`);
+  }
+
+  /** 词典音频流:走 ApiClient 附鉴权头拿 Blob(同 fetchRecordingAudio 口径),调用方转 ObjectURL 播放。 */
+  fetchDictionaryAudio(key: string): Observable<Blob> {
+    return this.api.getBlob(`${PracticeApi.BASE}/dictionary/audio/${encodeURIComponent(key)}`);
+  }
+
   deleteRecording(recordingId: string, version?: number | null): Observable<void> {
     return this.api.delete<void>(`${PracticeApi.BASE}/recordings/${recordingId}`, ApiClient.ifMatch(version));
   }
@@ -592,6 +611,44 @@ export class PracticeApi {
 }
 
 /** 示范朗读合成结果:音频字节 + 是否来自本地缓存(诚实来源标记)。 */
+/** 票119 词典卡 DTO(后端 schema v2,GET /dictionary/{word})。 */
+export interface DictionaryAudioOptionDto {
+  kind: 'oxford' | 'commons' | 'neural' | 'device';
+  key?: string | null;
+  available: boolean;
+}
+
+export interface DictionarySenseDto {
+  defEn: string;
+  glossZh?: string | null;
+  example?: { en: string; zh?: string | null } | null;
+}
+
+export interface DictionaryPosBlockDto {
+  pos: string;
+  label: string;
+  senses: DictionarySenseDto[];
+  foldedCount: number;
+  zhLines: string[];
+}
+
+export interface DictionaryCardDto {
+  query: string;
+  lemma: string;
+  matchedVia: string;
+  tier: 'oxford' | 'open';
+  phonetics: { uk?: string | null; us?: string | null };
+  posBlocks: DictionaryPosBlockDto[];
+  forms: { label: string; text: string }[];
+  audio: { us: DictionaryAudioOptionDto; uk: DictionaryAudioOptionDto };
+  attribution: { source: string; audioSource?: string | null };
+}
+
+export interface DictionaryPronounceDto {
+  kind: 'oxford' | 'commons' | 'neural' | 'device';
+  key?: string | null;
+}
+
 export interface TtsSynthesisResult {
   blob: Blob;
   /**

@@ -25,6 +25,8 @@ import { PracticeMaterialTree } from './practice-material-tree';
 import { PracticeTtsPlayer } from './practice-tts-player';
 import { PracticeGradingSession } from './practice-grading-session';
 import { clampFocusIndex, hasSeekableFiller, wordClickAction } from './word-click.helpers';
+import { PracticeDictionary } from './practice-dictionary';
+import { DictionaryCardComponent } from './dictionary-card.component';
 import type { MarkColor } from './practice-material-tree';
 
 
@@ -61,7 +63,7 @@ function readZoomFromStorage(): number {
     CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule,
     MatFormFieldModule, MatInputModule, MatSelectModule, MatDividerModule,
     MatSliderModule, MatSlideToggleModule, MatMenuModule, MatProgressBarModule,
-    MaterialTreeComponent
+    MaterialTreeComponent, DictionaryCardComponent
   ],
   templateUrl: './ai-practice.component.html',
   styleUrl: './ai-practice.component.scss'
@@ -70,6 +72,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly tree = new PracticeMaterialTree(this);
   readonly tts = new PracticeTtsPlayer(this);
   readonly grading = new PracticeGradingSession(this);  readonly recError = this.grading.recError;
+  /** 票119 篇章点词词典(状态机/发音链全在委托类)。 */
+  readonly dict = new PracticeDictionary(this);
   readonly myRecordings = this.grading.myRecordings;
   readonly nodes = this.tree.nodes;
   readonly fromTechNodes = this.tree.fromTechNodes;
@@ -542,6 +546,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       this.tts.ttsUrl = null;
     }
     this.grading.stopPlayback();
+    this.dict.destroy();
     // ★ 第二十六轮:回收鉴权拉流产生的 objectURL(否则离页泄漏)
     for (const u of this.grading.audioBlobUrls.values()) URL.revokeObjectURL(u);
     this.grading.audioBlobUrls.clear();
@@ -695,6 +700,12 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     effect(() => {
       this.recorder.recordings();   // 依赖
       this.grading.syncPendingIdRemap();
+    });
+
+    // 票119:换素材即关词典卡并清已查标记(词卡状态属于具体篇章,不跨素材残留)。
+    effect(() => {
+      this.selectedId();   // 依赖
+      queueMicrotask(() => this.dict.reset());
     });
 
     // ★ 第二十九轮(对齐 ynwac 参考站):评分一产出,就把该录音的

@@ -1340,6 +1340,14 @@
   min-height: 170px;
 }
 
+/* ---------- 票119 篇章点词词典 ---------- */
+/* 词跨度:悬停令牌色高亮;已查词加浅色点线下划(本地状态);焦点环走票118 令牌口径。 */
+.dict-passage { cursor: text; }
+.dict-word { cursor: pointer; border-radius: 4px; }
+.dict-word:hover { background: var(--signal-tint); }
+.dict-word.dict-looked { text-decoration: underline dotted var(--signal-soft); text-underline-offset: 4px; }
+.dict-word:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
 /* ---------- ④ 录音状态区 ----------
    ★ 2026-09-16 第二十轮:旧规则 .rec-center { position:absolute; left:50%; top:50%;
    transform:translate(-50%,-50%) } 已【删除】—— 这就是"麦克风飘到音频条上方"的真凶。

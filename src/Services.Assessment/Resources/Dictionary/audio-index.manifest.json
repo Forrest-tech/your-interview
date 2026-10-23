@@ -1,0 +1,15 @@
+{
+ "builder": "build_audio_index.py (stage1 stream) + build_audio_index_stage2.py",
+ "words": 40608,
+ "files": 54337,
+ "byAccent": {
+  "us": 28904,
+  "uk": 19858,
+  "other": 5575
+ },
+ "commonsSupplementChecked": 29702,
+ "commonsSupplementAdded": 6515,
+ "licensesFilled": 47355,
+ "outputBytes": 15081819,
+ "source": "Kaikki English JSONL 2026-10-21 (3,430,807,113 B / 1,499,161 lines, local verified copy) + Commons API"
+}

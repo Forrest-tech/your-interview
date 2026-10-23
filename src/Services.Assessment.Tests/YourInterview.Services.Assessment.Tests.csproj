@@ -23,4 +23,10 @@
     <ProjectReference Include="..\Services.Assessment\YourInterview.Services.Assessment.csproj" />
   </ItemGroup>
 
+  <!-- 票119 测试夹具:频带抽样词表(TST-R2-1 种子 119)与中文行回归快照基线(RSK-R2-1) -->
+  <ItemGroup>
+    <EmbeddedResource Include="band-fixture.json" />
+    <EmbeddedResource Include="zh-snapshot.json" />
+  </ItemGroup>
+
 </Project>

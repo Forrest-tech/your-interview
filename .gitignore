@@ -82,3 +82,10 @@ web/e2e/.results/
 web/e2e/.report/
 web/test-results/
 web/playwright-report/
+
+# --- 票119 词典本地数据(牛津包为用户个人版权数据,永不入库;SPEC §5.1) ---
+dict-data/
+**/dict-data/
+*.mdx
+*.mdd
+*oxford-pack*

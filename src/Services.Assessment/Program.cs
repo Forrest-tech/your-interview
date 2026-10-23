@@ -64,6 +64,26 @@ builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddAuthorization(options => PermissionPolicy.AddPermissionPolicies(options));
 
+// ---------- 票119 词典模块（静态数据：嵌入资源 + 本地数据目录，不落库） ----------
+builder.Services.Configure<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryOptions>(
+    builder.Configuration.GetSection(YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryOptions.SectionName));
+builder.Services.AddSingleton(sp =>
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<
+        YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryOptions>>().Value);
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(new Lazy<YourInterview.Services.Assessment.Infrastructure.Dictionary.OpenLayerStore>(
+    YourInterview.Services.Assessment.Infrastructure.Dictionary.OpenLayerStore.LoadFromEmbeddedResources));
+builder.Services.AddSingleton(sp => new YourInterview.Services.Assessment.Infrastructure.Dictionary.OxfordPackStore(
+    sp.GetRequiredService<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryOptions>().Oxford.PackDir));
+// Wikimedia 等源站按 UA 礼仪拒绝无 UA/库默认 UA（403）：统一带描述性 UA。
+builder.Services.AddHttpClient("dictionary-audio", c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(30);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("YourInterview-Dictionary/1.0 (personal vocabulary learning)");
+});
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Dictionary.AudioResolver>();
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryService>();
+
 var app = builder.Build();
 
 app.UseServiceDefaults("assessment-api");

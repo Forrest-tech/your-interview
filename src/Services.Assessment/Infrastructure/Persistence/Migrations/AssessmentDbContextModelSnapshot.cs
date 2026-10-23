@@ -218,6 +218,10 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LinkedSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -228,10 +232,6 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LinkedSource")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -498,27 +498,6 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.HasKey("UserId");
 
                     b.ToTable("speech_settings", "assessment");
-                });
-
-            modelBuilder.Entity("YourInterview.Services.Assessment.Domain.UserResume", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer");
-
-                    b.HasKey("UserId");
-
-                    b.ToTable("resumes", "assessment");
                 });
 
             modelBuilder.Entity("YourInterview.Services.Assessment.Domain.UserStorageSetting", b =>

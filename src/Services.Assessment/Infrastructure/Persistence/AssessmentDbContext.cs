@@ -153,6 +153,10 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.ToTable("practice_categories");
             e.HasKey(x => x.Id);
             e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            // ★ 票87 D2 对齐:快照/存量库该列为 varchar(20),模型此前无长度配置(约定 text)
+            //   致 has-pending 恒报漂移。补 HasMaxLength(20) 使模型=快照=存量库,零 DB 变更;
+            //   取值域封闭(null 或 "techstack",领域层 SetLinkedSource 硬校验),20 永不触顶。
+            e.Property(x => x.LinkedSource).HasMaxLength(20);
 
             // 同一用户内类别名唯一(忽略大小写靠应用层归一化,这里保证精确唯一)
             e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();

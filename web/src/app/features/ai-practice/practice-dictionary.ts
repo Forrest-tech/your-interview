@@ -6,6 +6,7 @@ import {
   DictAccent, DictCardState, PassageToken, errorStatusOf, isRovingKey, lookupKeyOf,
   nextRovingIndex, tokenizePassage,
 } from './dictionary.helpers';
+import { DictionaryShadowSession, DictShadowAction } from './dictionary-shadow';
 import type { DictPlayRequest } from './dictionary-card.component';
 
 /**
@@ -25,9 +26,35 @@ export class PracticeDictionary {
     document.addEventListener('click', this.docClickHandler);
   }
 
+  /**
+   * 票127 跟读会话:目标解析/状态机/评分复用都在 DictionaryShadowSession;
+   * 本类只做卡生命周期接线(begin/attach/teardown)与手势口径(§9.4)。
+   * 依赖以闭包注入 —— 方法缺失的替身宿主下调用即抛,被会话内 try/catch 归 F-S7,不伤查词主链。
+   */
+  readonly shadow = new DictionaryShadowSession({
+    pronounce: (word, accent) => this.host.practiceApi.pronounceDictionaryWord(word, accent),
+    fetchAudio: (key) => this.host.practiceApi.fetchDictionaryAudio(key),
+    // ⚠️ 惰性代理:本类在宿主字段初始化序上早于 recorder/practiceApi 的 inject,
+    // 构造期直取必为 undefined —— 全部依赖一律闭包延迟到调用时求值(查词主链同例)。
+    recorder: {
+      startShadowRecording: () => this.host.recorder.startShadowRecording(),
+      stopShadowRecording: () => this.host.recorder.stopShadowRecording(),
+      cancelShadowRecording: () => this.host.recorder.cancelShadowRecording(),
+      assessShadowRecording: (blob, referenceText) =>
+        this.host.recorder.assessShadowRecording(blob, referenceText),
+    },
+  });
+
+  /** 卡内跟读动作回抛入口(模板绑定)。 */
+  shadowAction(a: DictShadowAction): void {
+    this.shadow.action(a);
+  }
+
   /** 点卡外关闭(SPEC §6.1):词跨度与卡本体内的点击不算「卡外」。 */
   private readonly docClickHandler = (event: MouseEvent): void => {
     if (this.state() === null) return;
+    // 票127 §9.4:跟读录音态下点外不关卡(关闭手势被忽略,防手滑点空丢录音)。
+    if (this.shadow.isRecording) return;
     const target = event.target as HTMLElement | null;
     if (!target || target.closest('.dict-word, app-dictionary-card')) return;
     this.close(false);
@@ -58,6 +85,7 @@ export class PracticeDictionary {
 
   /** 换素材时由宿主 effect 调用:关卡、清已查标记、roving 归首。 */
   reset(): void {
+    this.shadow.teardown();
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -68,6 +96,7 @@ export class PracticeDictionary {
   }
 
   destroy(): void {
+    this.shadow.teardown();
     document.removeEventListener('click', this.docClickHandler);
     this.howl?.unload();
     this.howl = null;
@@ -81,6 +110,8 @@ export class PracticeDictionary {
 
   /** 点击词:同词再点关闭;点另一词直接切换内容(SPEC §6.1)。 */
   onWordClick(token: PassageToken, event: MouseEvent): void {
+    // 票127 §9.4:跟读录音态下点任何词都不关不换(关闭/换词手势被忽略)。
+    if (this.shadow.isRecording) return;
     if (this.openWordIndex() === token.wordIndex && this.state() !== null) {
       this.close(false);
       return;
@@ -97,11 +128,14 @@ export class PracticeDictionary {
     // popup 先行挂出(骨架在浮层内呈现,§6.3);点另一词时宿主把浮层重新锚定到新词。
     if (el) this.host.openDictPopup(el);
     const seq = ++this.requestSeq;
+    // 票127 §5.2:跟读目标解析与卡内容加载并行开跑(自带代际丢弃,不与查词主链互相等待)。
+    this.shadow.begin(key);
     try {
       const dto = await firstValueFrom(this.host.practiceApi.lookupDictionaryWord(key));
       if (seq !== this.requestSeq) return;
       this.markLookedUp(key, dto.lemma);
       this.state.set({ status: 'ok', query: key, card: dto });
+      this.shadow.attachCard(dto);
     } catch (err) {
       if (seq !== this.requestSeq) return;
       this.markLookedUp(key);
@@ -111,6 +145,8 @@ export class PracticeDictionary {
           ? { status: 'notfound', query: key }
           : { status: 'error', query: key },
       );
+      // 负卡/错误卡无跟读区(票127 §5.1)。
+      this.shadow.attachNoCard();
     }
     // 内容落定后卡高才稳定:让宿主按真实高度重选浮层位序(开卡瞬间量到的是骨架高,
     // CDK 不会自行翻转 —— E2 活体实测)。
@@ -119,6 +155,8 @@ export class PracticeDictionary {
 
   /** 关闭词卡;returnFocus 时焦点送回触发词(Esc 路径,SPEC §6.3)。 */
   close(returnFocus: boolean): void {
+    // 票127 §6.5/§9.4:关卡即 teardown 跟读(录音中经 Close 关闭 = 先停录丢弃再关卡)。
+    this.shadow.teardown();
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -131,6 +169,7 @@ export class PracticeDictionary {
    * 与 Esc 主动关闭分开:焦点返回必须 preventScroll——不许把用户刚滚走的页面又拉回来。
    */
   closeFromScroll(): void {
+    this.shadow.teardown();
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -166,6 +205,8 @@ export class PracticeDictionary {
       return;
     }
     if (event.key === 'Enter' || event.key === ' ') {
+      // 票127 §9.4:跟读录音态下键盘换词/关卡同点词口径,一律忽略。
+      if (this.shadow.isRecording) return;
       event.preventDefault();
       const token = this.tokens().find((t) => t.kind === 'word' && t.wordIndex === wi);
       if (!token) return;

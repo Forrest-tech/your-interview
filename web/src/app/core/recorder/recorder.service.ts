@@ -66,6 +66,36 @@ export interface RecordingScore {
   version?: number | null;
 }
 
+/** ★ 票127:跟读录音一段(内存态;不落库、不进 recordings/pendingTake —— D4)。 */
+export interface ShadowRecordingTake {
+  blob: Blob;
+  /** 实测时长(毫秒;卡侧据此判 <300ms 空录音 F-S6)。 */
+  durationMs: number;
+}
+
+/**
+ * ★ 票127:跟读送评的原始分数形(assess 响应直映,分项保留 null —— 不填 0、不编造;
+ * 总分归一与呈现加工在卡侧视图层做,口径见票127 §7.3)。
+ */
+export interface ShadowAssessScore {
+  pronScore: number | null;
+  accuracyScore: number | null;
+  fluencyScore: number | null;
+  completenessScore: number | null;
+  prosodyScore: number | null;
+  recognized: string;
+  words: { word: string; accuracy: number; errorType: string }[];
+  billedSeconds: number | null;
+  billedBytes: number | null;
+}
+
+/** ★ 票127:跟读送评结果分类(卡侧按 F-S2/F-S3/F-S4 诚实呈现,不静默、不假分)。 */
+export type ShadowAssessOutcome =
+  | { kind: 'score'; score: ShadowAssessScore }
+  | { kind: 'unavailable' }
+  | { kind: 'failed'; status: number | null }
+  | { kind: 'decode-failed' };
+
 /**
  * 录音仓库(阶段一:内存)。
  *
@@ -1190,5 +1220,196 @@ export class RecorderService {
     this.stopLiveWave();
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
+  }
+
+  // ============================================================
+  // ★ 票127:跟读采集与送评接缝(不落库,D3/D4/D5)
+  //   词典 popup 跟读复用本服务的解码/重采样/WAV 打包与 assess 链(与 grade
+  //   同构),但**不走** take 的 start/finalize/grade —— 采集状态独立一份
+  //   (shadow* 字段),跟读录音不进 recordings、不进 pendingTake、不落库;
+  //   与 take 录音共用麦克风,同一时刻只服务一处,另一处以 busy 诚实拒绝。
+  // ============================================================
+
+  /** 跟读录音时长上限(规格 §6.3:30 秒到限自动停,按停止处理)。 */
+  private static readonly SHADOW_MAX_MS = 30_000;
+
+  private shadowRecorder: MediaRecorder | null = null;
+  private shadowChunks: Blob[] = [];
+  private shadowStream: MediaStream | null = null;
+  private shadowStartedAt = 0;
+  private shadowAutoStop: ReturnType<typeof setTimeout> | null = null;
+  private shadowDoneResolve: ((take: ShadowRecordingTake | null) => void) | null = null;
+  private shadowDiscard = false;
+
+  /** 是否有跟读录音在途。 */
+  get shadowRecordingActive(): boolean {
+    return this.shadowRecorder !== null;
+  }
+
+  /**
+   * 开始一次跟读录音。成功返回 done 承诺:停录(手动停/到限自动停)后以
+   * {blob, durationMs} 兑现;被 cancel 或空录音以 null 兑现。
+   * 失败分类:'mic-denied' = 麦克风权限被拒/无设备(F-S1);
+   * 'unavailable' = 不支持录音、take 录音正占用麦克风、或启动失败。
+   */
+  async startShadowRecording(): Promise<
+    | { status: 'started'; done: Promise<ShadowRecordingTake | null> }
+    | { status: 'mic-denied' | 'unavailable' }
+  > {
+    if (this.shadowRecorder || this.recording()) return { status: 'unavailable' };
+    if (!this.supported) return { status: 'unavailable' };
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      return { status: 'mic-denied' };
+    }
+    // 等权限期间若已被抢占(双路并发),后到者释放自己的流并拒绝。
+    if (this.shadowRecorder || this.recording()) {
+      stream.getTracks().forEach((t) => t.stop());
+      return { status: 'unavailable' };
+    }
+    this.shadowStream = stream;
+    this.shadowChunks = [];
+    this.shadowDiscard = false;
+    const mime = this.pickMime();
+    try {
+      this.shadowRecorder = mime
+        ? new MediaRecorder(stream, { mimeType: mime })
+        : new MediaRecorder(stream);
+    } catch {
+      try {
+        this.shadowRecorder = new MediaRecorder(stream);
+      } catch {
+        this.releaseShadowStream();
+        return { status: 'unavailable' };
+      }
+    }
+    const done = new Promise<ShadowRecordingTake | null>((resolve) => {
+      this.shadowDoneResolve = resolve;
+    });
+    this.shadowRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) this.shadowChunks.push(e.data);
+    };
+    // 同 finalize() 口径:MediaRecorder 属性式回调脱离 Zone,必须 zone.run 拉回,
+    // 否则卡侧 signal 写入不触发刷新(根因见 zone 字段处说明)。
+    this.shadowRecorder.onstop = () => this.zone.run(() => this.finalizeShadowRecording());
+    this.shadowStartedAt = Date.now();
+    this.shadowRecorder.start();
+    this.shadowAutoStop = setTimeout(
+      () => this.stopShadowRecording(), RecorderService.SHADOW_MAX_MS);
+    return { status: 'started', done };
+  }
+
+  /** 停止跟读录音(done 承诺随之兑现);未在录时无操作。 */
+  stopShadowRecording(): void {
+    if (this.shadowAutoStop) {
+      clearTimeout(this.shadowAutoStop);
+      this.shadowAutoStop = null;
+    }
+    if (this.shadowRecorder && this.shadowRecorder.state !== 'inactive') {
+      this.shadowRecorder.stop();
+    }
+  }
+
+  /** 丢弃跟读录音(关卡/换词 teardown):done 以 null 兑现,字节不交付。 */
+  cancelShadowRecording(): void {
+    if (this.shadowAutoStop) {
+      clearTimeout(this.shadowAutoStop);
+      this.shadowAutoStop = null;
+    }
+    if (!this.shadowRecorder) return;
+    this.shadowDiscard = true;
+    const recorder = this.shadowRecorder;
+    this.shadowRecorder = null;
+    recorder.onstop = null;
+    if (recorder.state !== 'inactive') {
+      try { recorder.stop(); } catch { /* 已停止 */ }
+    }
+    this.shadowChunks = [];
+    this.releaseShadowStream();
+    this.settleShadowDone(null);
+  }
+
+  private finalizeShadowRecording(): void {
+    const recorder = this.shadowRecorder;
+    this.shadowRecorder = null;
+    if (this.shadowAutoStop) {
+      clearTimeout(this.shadowAutoStop);
+      this.shadowAutoStop = null;
+    }
+    const blob = new Blob(this.shadowChunks, {
+      // 同 finalize():Safari 的 mp4 兜底不能写死 webm。
+      type: recorder?.mimeType || this.shadowChunks[0]?.type || 'audio/webm',
+    });
+    const durationMs = Math.max(0, Date.now() - this.shadowStartedAt);
+    this.shadowChunks = [];
+    this.releaseShadowStream();
+    if (this.shadowDiscard || blob.size === 0) {
+      this.shadowDiscard = false;
+      this.settleShadowDone(null);
+      return;
+    }
+    this.settleShadowDone({ blob, durationMs });
+  }
+
+  private settleShadowDone(take: ShadowRecordingTake | null): void {
+    const resolve = this.shadowDoneResolve;
+    this.shadowDoneResolve = null;
+    resolve?.(take);
+  }
+
+  private releaseShadowStream(): void {
+    this.shadowStream?.getTracks().forEach((t) => t.stop());
+    this.shadowStream = null;
+  }
+
+  /**
+   * 跟读送评:与 grade() 同链同构 —— 解码 → 16k 重采样 → WAV base64 →
+   * POST /api/assessment/pronunciation/assess(规格 §7.1:referenceText = 跟读
+   * 目标文本、language 恒 'en-US')。唯一区别:结果**不落库、不写 recordings**,
+   * 以返回值交回卡侧会话持有(D4)。失败如实分类,不造分、不静默。
+   */
+  async assessShadowRecording(blob: Blob, referenceText: string): Promise<ShadowAssessOutcome> {
+    const samples = await this.decodeToPcm(blob);
+    if (!samples) return { kind: 'decode-failed' };
+    const pcm16k = RecorderService.resample(
+      samples.data, samples.rate, RecorderService.ASSESS_RATE);
+    const wavBase64 = RecorderService.encodeWavBase64(pcm16k, RecorderService.ASSESS_RATE);
+    try {
+      const res = await firstValueFrom(
+        this.api.post<{
+          pronScore: number | null; accuracyScore: number | null;
+          fluencyScore: number | null; completenessScore: number | null;
+          prosodyScore: number | null; recognized: string;
+          words: { word: string; accuracy: number; errorType: string }[];
+          billedSeconds?: number | null;
+          billedBytes?: number | null;
+        }>('/api/assessment/pronunciation/assess', {
+          wavBase64,
+          referenceText,
+          language: 'en-US',
+        }),
+      );
+      return {
+        kind: 'score',
+        score: {
+          pronScore: res.pronScore ?? null,
+          accuracyScore: res.accuracyScore ?? null,
+          fluencyScore: res.fluencyScore ?? null,
+          completenessScore: res.completenessScore ?? null,
+          prosodyScore: res.prosodyScore ?? null,
+          recognized: res.recognized ?? '',
+          words: res.words ?? [],
+          billedSeconds: res.billedSeconds ?? null,
+          billedBytes: res.billedBytes ?? null,
+        },
+      };
+    } catch (e) {
+      const status = (e as { status?: unknown } | null)?.status;
+      const code = typeof status === 'number' ? status : null;
+      // 503 = Azure 未配置(沙盒常态,F-S2);其余归 F-S3。
+      return code === 503 ? { kind: 'unavailable' } : { kind: 'failed', status: code };
+    }
   }
 }

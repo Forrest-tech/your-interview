@@ -9,6 +9,9 @@ import {
   DictAccent, DictCardState, accentButtonVisible, anyAccentAvailable, foldView,
   lemmaRoleLabels, loadDictAccent, saveDictAccent,
 } from './dictionary.helpers';
+import {
+  DictShadowAction, DictShadowView, shadowErrorLabelKey,
+} from './dictionary-shadow';
 
 /** 卡内播放请求:宿主负责真正的取流播放,卡只表达意图(票126 后不再有设备朗读请求)。 */
 export type DictPlayRequest =
@@ -106,6 +109,170 @@ export type DictPlayRequest =
                 <span class="dict-noaudio">{{ t('dict.noAudio') }}</span>
               }
             </div>
+
+            @if (shadow; as sh) {
+              <div class="dict-shadow" data-dict-shadow>
+                <div class="dict-shadow-head">
+                  <span class="dict-shadow-title">{{ t('dict.shadow.title') }}</span>
+                  @if (sh.targetText) {
+                    <span class="dict-shadow-target" data-shadow-target>{{ sh.targetText }}</span>
+                  }
+                </div>
+
+                @switch (sh.phase) {
+                  @case ('resolveFailed') {
+                    <p class="dict-shadow-msg" data-shadow-error>{{ t(\'dict.shadow.resolveFailed\') }}</p>
+                    <button type="button" class="dict-shadow-btn" data-shadow-retry
+                            (click)="shadowAction.emit({ type: \'retryResolve\' })">
+                      {{ t('dict.retry') }}
+                    </button>
+                  }
+                  @case ('idle') {
+                    @if (sh.notice === 'tooShort') {
+                      <p class="dict-shadow-msg">{{ t('dict.shadow.tooShort') }}</p>
+                    }
+                    <div class="dict-shadow-row">
+                      <button type="button" class="dict-shadow-btn" data-shadow-play-original
+                              (click)="shadowAction.emit({ type: \'playOriginal\' })">
+                        {{ t('dict.shadow.playOriginal') }}
+                      </button>
+                      <button type="button" class="dict-shadow-btn" data-shadow-record
+                              (click)="shadowAction.emit({ type: \'record\' })">
+                        {{ t(\'dict.shadow.record\') }}
+                      </button>
+                    </div>
+                  }
+                  @case ('playing') {
+                    <div class="dict-shadow-row">
+                      <button type="button" class="dict-shadow-btn" data-shadow-play-original disabled>
+                        {{ t('dict.shadow.playOriginal') }}
+                      </button>
+                      @if (sh.hasRecording) {
+                        <button type="button" class="dict-shadow-btn" data-shadow-play-mine disabled>
+                          {{ t('dict.shadow.myRecording') }}
+                        </button>
+                      }
+                      <button type="button" class="dict-shadow-btn" data-shadow-record disabled>
+                          {{ t('dict.shadow.record') }}
+                      </button>
+                    </div>
+                  }
+                  @case ('recording') {
+                    <div class="dict-shadow-row">
+                      <span class="dict-shadow-rec">
+                        <span class="dict-shadow-dot"></span>{{ t('dict.shadow.recording') }} {{ sh.elapsedSec }}s
+                      </span>
+                      <button type="button" class="dict-shadow-btn" data-shadow-stop
+                              (click)="shadowAction.emit({ type: 'stop' })">
+                        {{ t('dict.shadow.stop') }}
+                      </button>
+                    </div>
+                  }
+                  @case ('recorded') {
+                    <div class="dict-shadow-row">
+                      <button type="button" class="dict-shadow-btn" data-shadow-play-original
+                              (click)="shadowAction.emit({ type: \'playOriginal\' })">
+                        {{ t('dict.shadow.original') }}
+                      </button>
+                      <button type="button" class="dict-shadow-btn" data-shadow-play-mine
+                              (click)="shadowAction.emit({ type: \'playMine\' })">
+                        {{ t('dict.shadow.myRecording') }}
+                      </button>
+                      <button type="button" class="dict-shadow-btn" data-shadow-score
+                              (click)="shadowAction.emit({ type: 'score' })">
+                        {{ t('dict.shadow.score') }}
+                      </button>
+                      <button type="button" class="dict-shadow-btn" data-shadow-rerecord
+                              (click)="shadowAction.emit({ type: \'reRecord\' })">
+                        {{ t('dict.shadow.reRecord') }}
+                      </button>
+                    </div>
+                  }
+                  @case ('scoring') {
+                    <p class="dict-shadow-msg">{{ t('dict.shadow.scoring') }}</p>
+                  }
+                  @case ('result') {
+                    @if (sh.result; as r) {
+                      <div class="dict-shadow-result" aria-live="polite">
+                        <div class="dict-shadow-total" data-shadow-score-total>
+                          <span>{{ t('dim.pronunciation') }}</span>
+                          <b>{{ r.total }}</b><i>{{ t('practice.points') }}</i>
+                        </div>
+                        @if (r.dims.length > 0) {
+                          <div class="dict-shadow-dims">
+                            @for (d of r.dims; track d.labelKey) {
+                              <span class="dict-shadow-dim">{{ t(d.labelKey) }}<b>{{ d.score }}</b></span>
+                            }
+                          </div>
+                        }
+                        @if (r.recognized) {
+                          <p class="dict-shadow-recog">{{ r.recognized }}</p>
+                        }
+                        @for (w of r.words; track $index) {
+                          <p class="dict-shadow-word">
+                            {{ w.word }} · {{ w.accuracy }} · {{ t(wordErrorKey(w.errorType)) }}
+                          </p>
+                        }
+                        @if (r.billedSeconds !== null) {
+                          <p class="dict-shadow-billed">{{ r.billedSeconds }}s</p>
+                        }
+                      </div>
+                    }
+                    <div class="dict-shadow-row">
+                      <button type="button" class="dict-shadow-btn" data-shadow-play-original
+                              (click)="shadowAction.emit({ type: \'playOriginal\' })">
+                        {{ t('dict.shadow.original') }}
+                      </button>
+                      <button type="button" class="dict-shadow-btn" data-shadow-play-mine
+                              (click)="shadowAction.emit({ type: \'playMine\' })">
+                        {{ t('dict.shadow.myRecording') }}
+                      </button>
+                      <button type="button" class="dict-shadow-btn"
+                              (click)="shadowAction.emit({ type: 'again' })">
+                        {{ t('dict.shadow.again') }}
+                      </button>
+                      <button type="button" class="dict-shadow-btn" data-shadow-rerecord
+                              (click)="shadowAction.emit({ type: \'reRecord\' })">
+                        {{ t('dict.shadow.reRecord') }}
+                      </button>
+                    </div>
+                  }
+                  @case ('error') {
+                    <p class="dict-shadow-msg" data-shadow-error>{{ t(shadowErrorKey(sh.errorKind)) }}</p>
+                    <div class="dict-shadow-row">
+                      @if (sh.hasRecording) {
+                        <button type="button" class="dict-shadow-btn" [disabled]="sh.originalFailed" data-shadow-play-original
+                                (click)="shadowAction.emit({ type: \'playOriginal\' })">
+                          {{ t('dict.shadow.original') }}
+                        </button>
+                        <button type="button" class="dict-shadow-btn" data-shadow-play-mine
+                                (click)="shadowAction.emit({ type: \'playMine\' })">
+                          {{ t('dict.shadow.myRecording') }}
+                        </button>
+                      }
+                      @if (sh.errorKind === 'micDenied') {
+                        <button type="button" class="dict-shadow-btn" data-shadow-retry
+                                (click)="shadowAction.emit({ type: \'record\' })">
+                          {{ t(\'dict.retry\') }}
+                        </button>
+                      }
+                      @if (sh.errorKind === 'scoringUnavailable' || sh.errorKind === 'scoringFailed') {
+                        <button type="button" class="dict-shadow-btn" data-shadow-score
+                                (click)="shadowAction.emit({ type: 'score' })">
+                          {{ t('dict.shadow.score') }}
+                        </button>
+                      }
+                      @if (sh.errorKind === 'notRecognized') {
+                        <button type="button" class="dict-shadow-btn" data-shadow-rerecord
+                                (click)="shadowAction.emit({ type: \'reRecord\' })">
+                          {{ t('dict.shadow.reRecord') }}
+                        </button>
+                      }
+                    </div>
+                  }
+                }
+              </div>
+            }
 
             @for (block of c.posBlocks; track block.pos; let bi = $index) {
               <div class="dict-pos-block">
@@ -227,6 +394,36 @@ export type DictPlayRequest =
     .dict-phon-active .dict-accent-tag { background: var(--signal-tint); color: var(--brand); border-color: var(--signal-soft); }
     .dict-ipa { font-size: 15px; color: var(--ink); }
     .dict-noaudio { font-size: 13px; color: var(--ink-2); }
+    .dict-shadow { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+    .dict-shadow-head { display: flex; align-items: baseline; gap: 8px; }
+    .dict-shadow-title {
+      font-size: 12px; font-weight: 600; color: var(--brand);
+      background: var(--signal-tint); border-radius: 6px; padding: 2px 8px;
+    }
+    .dict-shadow-target { font-size: 14px; font-weight: 500; color: var(--ink); }
+    .dict-shadow-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .dict-shadow-btn {
+      border: 1px solid var(--hairline); background: var(--surface); color: var(--brand);
+      border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px;
+    }
+    .dict-shadow-btn:hover { background: var(--signal-tint); }
+    .dict-shadow-btn[disabled] { opacity: .55; cursor: not-allowed; }
+    .dict-shadow-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+    .dict-shadow-msg { margin: 8px 0 0; font-size: 13.5px; color: var(--ink-2); }
+    .dict-shadow-rec { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink); }
+    .dict-shadow-dot {
+      width: 8px; height: 8px; border-radius: 999px; background: #d33;
+      animation: dict-pulse 1.2s ease-in-out infinite;
+    }
+    .dict-shadow-result { margin-top: 8px; }
+    .dict-shadow-total { display: flex; align-items: baseline; gap: 6px; font-size: 14px; color: var(--ink-2); }
+    .dict-shadow-total b { font-size: 20px; color: var(--ink); }
+    .dict-shadow-total i { font-style: normal; font-size: 12px; }
+    .dict-shadow-dims { display: flex; gap: 6px 14px; flex-wrap: wrap; margin-top: 6px; font-size: 13px; color: var(--ink-2); }
+    .dict-shadow-dim b { margin-left: 4px; color: var(--ink); }
+    .dict-shadow-recog { margin: 6px 0 0; font-size: 14px; color: var(--ink); }
+    .dict-shadow-word { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
+    .dict-shadow-billed { margin: 4px 0 0; font-size: 12px; color: var(--ink-2); }
     .dict-pos-block { margin-top: 12px; }
     .dict-pos-label {
       display: inline-block; font-size: 12px; font-weight: 600; color: var(--brand);
@@ -263,9 +460,13 @@ export type DictPlayRequest =
 })
 export class DictionaryCardComponent implements AfterViewInit, OnChanges {
   @Input({ required: true }) state!: DictCardState;
+  /** 票127 跟读区视图(null = 不渲染:无美音真人录音/解析中/非 ok 卡)。 */
+  @Input() shadow: DictShadowView | null = null;
   @Output() closeRequested = new EventEmitter<void>();
   @Output() retryRequested = new EventEmitter<void>();
   @Output() playRequested = new EventEmitter<DictPlayRequest>();
+  /** 票127 跟读动作回抛(会话状态机在宿主侧 DictionaryShadowSession)。 */
+  @Output() shadowAction = new EventEmitter<DictShadowAction>();
   /** 卡高变化(折叠展开/收起)→ 宿主据此让浮层按真实高度重选位序(§6.3 完整可见)。 */
   @Output() layoutChanged = new EventEmitter<void>();
 
@@ -363,6 +564,42 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
       }
       this.maybeFocusFirst();
     }
+    if (changes['shadow']) {
+      const prev = changes['shadow'].previousValue as DictShadowView | null | undefined;
+      const cur = this.shadow;
+      if (prev?.phase !== cur?.phase || prev?.targetText !== cur?.targetText) {
+        // 跟读区高度变化 → 宿主按真实高度重选浮层位序(§9.5:不撑破上限、不传导页面位移)
+        this.layoutChanged.emit();
+        // 焦点衔接(§9.2):录音钮被停止钮替换时把焦点接住,不让键盘用户掉到 body;
+        // 仅在焦点本就在卡内时接管,不抢焦点。结果呈现不移焦点(aria-live 播报)。
+        const root = this.cardRoot?.nativeElement;
+        if (root && root.contains(document.activeElement)) {
+          if (cur?.phase === 'recording' && prev?.phase !== 'recording') {
+            queueMicrotask(() =>
+              this.cardRoot?.nativeElement.querySelector<HTMLElement>('[data-shadow-stop]')?.focus());
+          } else if (cur?.phase === 'recorded' && prev?.phase === 'recording') {
+            queueMicrotask(() =>
+              this.cardRoot?.nativeElement.querySelector<HTMLElement>('[data-shadow-score]')?.focus());
+          }
+        }
+      }
+    }
+  }
+
+  /** 逐词 errorType 文案键(票127 §7.3:沿用现有报告 err.* 映射,不重造)。 */
+  protected wordErrorKey(errorType: string): string {
+    return shadowErrorLabelKey(errorType);
+  }
+
+  /** 跟读失败文案键(票127 §10 子型 → dict.shadow.* 键)。 */
+  protected shadowErrorKey(kind: DictShadowView['errorKind']): string {
+    switch (kind) {
+      case 'micDenied': return 'dict.shadow.micDenied';
+      case 'scoringUnavailable': return 'dict.shadow.scoringUnavailable';
+      case 'notRecognized': return 'dict.shadow.notRecognized';
+      case 'originalFailed': return 'dict.shadow.originalFailed';
+      default: return 'dict.shadow.scoringFailed';
+    }
   }
 
   /** 卡落定后把焦点移入视觉序首个可交互元素(M-6/§6.7);loading 骨架期不抢焦点。 */
@@ -376,10 +613,17 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
     });
   }
 
-  /** 卡内键盘:Esc 关闭;Tab 在卡内首尾回绕(轻量焦点陷阱,序 = DOM 序,Close 末位)。 */
+  /**
+   * 卡内键盘:Esc 关闭;Tab 在卡内首尾回绕(轻量焦点陷阱,序 = DOM 序,Close 末位)。
+   * 票127 §9.3 Esc 分层:跟读录音态下 Esc 先停录(进 recorded),不关卡;再次 Esc 才关。
+   */
   protected onCardKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.stopPropagation();
+      if (this.shadow?.phase === 'recording') {
+        this.shadowAction.emit({ type: 'stop' });
+        return;
+      }
       this.closeRequested.emit();
       return;
     }

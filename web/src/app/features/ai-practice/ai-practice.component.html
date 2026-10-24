@@ -853,9 +853,11 @@
 <ng-template #dictPopupTpl>
   @if (dict.state(); as dictState) {
     <app-dictionary-card [state]="dictState"
+                         [shadow]="dict.shadow.view()"
                          (closeRequested)="dict.close(true)"
                          (retryRequested)="dict.retry()"
                          (playRequested)="dict.play($event)"
+                         (shadowAction)="dict.shadowAction($event)"
                          (layoutChanged)="refreshDictPopupPosition()"></app-dictionary-card>
   }
 </ng-template>

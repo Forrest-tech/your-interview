@@ -498,3 +498,15 @@
  - **票 96 关闭（主线，2026-10-24）** — 独立复测 `~/workspace/ticket96/VERIFY-96.md` 通过（基线 c1d3690；其后 tip 推进仅前端 134 与台账文字提交，Knowledge 代码零改动，结论在现 tip 下依然适用）：迁移三件套齐全（Up 删旧索引 + SQL 建 lower(Name) 函数唯一索引，Down 可逆；DbContext/Snapshot/Designer 无唯一索引残留）；独立 scratch 库全链 apply 验证（函数索引在位、旧索引消失；Down 回滚复位；Up 重入 history 顶复为 96 迁移）；Race 13/13 + LocalData 24/24 + Boundary 26/26 = 63/63（新变体屏障用例单验真实执行通过，非跳过）；应用层零改动（提交 6 文件无 Handler/Application 文件；票 92 回查环 + ToLower 口径在位；票 83/84/导入口径未动）。不符清单空。注：vstest 两次宿主握手超时 abort 属 harness 问题，xunit console 一次跑通；存量重复行处置裁决（A/B/C）仍待定，只影响 Mac 主库 apply 时刻，不阻塞关闭；scratch 库已 DROP、共享库全程未动。
 
  - **票 94 已推、聚合活体待 Mac/CI 验证（主线，2026-10-24，用户已选此路径）** — 实现 `fb2e6a5`（rebase 自 `67e5e8a`）：网关 appsettings 补 `ReverseProxy.HealthChecks.EnabledClusters = identity,jobs,interviews,knowledge,assessment,analytics,aigateway`（OCR 排除；机制早已在 Program.cs:31-83，只差配开关）；docker-compose.hybrid.yml 保留 4 集群环境变量覆盖（hybrid 模式运行集就是 4 个，按模式分工、不打架；原“两个下游”笔误已更正）；web/e2e/health.setup.ts 改回先等 /health/live 200（登录检查保留作第二道 guard；OCR“不存在”旧前提已更正）。已证实：7 服务个体健康全 200、探活清单复现恰好 7 集群无 5300、Program.cs 过滤逻辑主线亲读无误。未在沙盒完成：聚合活体正向 200 + 反向 503——沙盒 other_tcp 策略拦截网关出站 HTTP（主线亲手复现：健康服务探活亦被策略消息拦；用户改 Ask 后重跑仍同症、无审批卡；前台直起 + 清 proxy 变量亦无效），故 94 状态为 PUSHED 待 Mac/CI 聚合验证，不算 VERIFIED；S0 环境外清单须含此项。收官后跟进项：① jobs 目的端口漂移（仓内网关 jobs 仍指 5263，沙盒实际 5125，影响 dotnet-run 下 /api/jobs/* 转发，需另立项）；② web/e2e/t81-ocr-entry-to-card.spec.ts:10 注释仍有 OCR“不存在”旧前提未改。
+
+## 交叉验收
+
+### 第 1 轮（R0-C1）——进行中
+
+- 冻结代码基线：6c65ca81（develop-new-features，CI run 40113214031 全绿）；main 88b2607 未动。
+- 交接文件：`docs/fix-program/source/cross-test-round-1.md`（进仓提交即轮次 bump，代码基线不变）。
+- WorkBuddy 被测面：130/131/132/133 + 126–128（P1+P2，SC-1～SC-7）；修复票 WB-FIX-123（D-123-2）、WB-FIX-124（D-124-1）。
+- 主线被测面：123/124/125（主线自测）；主线修复票 ML-FIX-130（条件性，待裁决）、ML-FIX-UI、ML-FIX-PREP（分诊依据 TRIAGE-S1.md §3，工作区文件，不进仓）。
+- 分诊依据：`~/workspace/final-acceptance/rounds/R0/TRIAGE-S1.md`（工作区文件，不进仓；内含待用户裁定包，裁定后才进仓）。
+- 轮末回执（待 WorkBuddy 回复后补）：完成场景数 __ / 新发现数 __ / 缺陷指针 __。
+- 收敛条件（§5.7）：S1/S2 清零；S3 修 + 复测或用户书面豁免；S4 不阻塞。

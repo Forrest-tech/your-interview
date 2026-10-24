@@ -226,59 +226,59 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .pre { white-space: pre-wrap; }
     .prep-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
     .ph-title { font-size: 16px; font-weight: 600; }
-    .ph-sub { font-size: 13px; color: var(--yi-text-muted, #888); margin-top: 2px; max-width: 560px; }
+    .ph-sub { font-size: 13px; color: var(--yi-text-muted, #5b6270); margin-top: 2px; max-width: 560px; }
     .ph-sub.src-details { display: flex; gap: 2px 14px; flex-wrap: wrap; max-width: none; }
     .src-detail { white-space: nowrap; }
     .spacer { flex: 1; }
-    .notice { font-size: 13px; color: var(--yi-text-muted, #777); }
+    .notice { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
     .notice.warn { color: #b3261e; }
     .gen-box { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; max-width: 720px; }
     .gen-box label { display: flex; flex-direction: column; gap: 5px; font-size: 13px;
-                     color: var(--yi-text-muted, #777); }
-    .fld { border: 1px solid var(--yi-border, #ccc); border-radius: 8px; padding: 8px 10px;
+                     color: var(--yi-text-muted, #5b6270); }
+    .fld { border: 1px solid var(--yi-border, #e1e4ec); border-radius: 8px; padding: 8px 10px;
            font-size: 14px; background: transparent; color: inherit; box-sizing: border-box; }
     .fld.sm { padding: 5px 8px; font-size: 14px; }
-    .hint { font-size: 13px; color: var(--yi-text-muted, #999); }
+    .hint { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
     .prep-body { display: grid; grid-template-columns: 170px 1fr; gap: 20px; margin-top: 12px; }
     @media (max-width: 760px) { .prep-body { grid-template-columns: 1fr; } .toc { position: static !important; flex-direction: row !important; flex-wrap: wrap; } }
     .toc { position: sticky; top: 8px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
     .toc-item { text-align: left; border: none; background: transparent; color: inherit; cursor: pointer;
-                font-size: 14px; padding: 6px 9px; border-radius: 7px; }
-    .toc-item.on { background: color-mix(in srgb, var(--yi-accent, #3f51b5) 14%, transparent); font-weight: 700; }
+                font-size: 14px; padding: 6px 9px; border-radius: 6px; }
+    .toc-item.on { background: color-mix(in srgb, var(--yi-accent, #2e3a8c) 14%, transparent); font-weight: 700; }
     .psec { margin-bottom: 22px; scroll-margin-top: 10px; }
     .psec h4 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
-    .script-box { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 8px 0; }
-    .sb-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); margin-bottom: 4px; }
+    .script-box { border: 1px solid var(--yi-border, #e1e4ec); border-radius: 10px; padding: 11px 13px; margin: 8px 0; }
+    .sb-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #5b6270); margin-bottom: 4px; }
     .script-box p { margin: 2px 0 8px; }
     .pts { margin: 4px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.65; }
     .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
-    .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+    .mini-btn { border: 1px solid var(--yi-border, #e1e4ec); background: transparent; color: inherit;
                 border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 500; cursor: pointer; }
-    .mine-tag { font-size: 12px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+    .mine-tag { font-size: 12px; font-weight: 700; color: #1b7f4b; border: 1px solid #e2f1e8;
                 border-radius: 999px; padding: 1px 7px; }
-    .pq { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 9px 0; }
-    .pq.weak { border-color: #e57373; background: color-mix(in srgb, #e57373 5%, transparent); }
+    .pq { border: 1px solid var(--yi-border, #e1e4ec); border-radius: 10px; padding: 11px 13px; margin: 9px 0; }
+    .pq.weak { border-color: #f9e8e5; background: color-mix(in srgb, #f9e8e5 5%, transparent); }
     .pq-head { display: flex; gap: 8px; align-items: flex-start; }
-    .weak-pin { font-size: 12px; font-weight: 700; color: #c62828; white-space: nowrap; margin-top: 3px; }
+    .weak-pin { font-size: 12px; font-weight: 700; color: #b3261e; white-space: nowrap; margin-top: 3px; }
     .pq-text { font-weight: 600; }
     .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
-    .tag { font-size: 12px; border: 1px solid var(--yi-border, #ccc); border-radius: 999px; padding: 1px 8px;
-           color: var(--yi-text-muted, #777); }
+    .tag { font-size: 12px; border: 1px solid var(--yi-border, #e1e4ec); border-radius: 999px; padding: 1px 8px;
+           color: var(--yi-text-muted, #5b6270); }
     .sync-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
-    .sync-tag { font-size: 12px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+    .sync-tag { font-size: 12px; font-weight: 700; color: #1b7f4b; border: 1px solid #e2f1e8;
                 border-radius: 999px; padding: 2px 9px; }
-    .sync-note { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .sync-note { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
     .sync-answer { margin-top: 6px; }
-    .sa-label { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); }
+    .sa-label { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #5b6270); }
     .sync-answer p { margin: 4px 0; }
     .std-line { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
-    .std-label { font-size: 13px; font-weight: 700; color: var(--yi-accent, #3f51b5); }
+    .std-label { font-size: 13px; font-weight: 700; color: var(--yi-accent, #2e3a8c); }
     .std-p { margin: 4px 0 2px; }
     .join-row { display: flex; gap: 10px; align-items: flex-end; margin-top: 10px; flex-wrap: wrap;
-                border-top: 1px dashed var(--yi-border, #ddd); padding-top: 10px; }
+                border-top: 1px dashed var(--yi-border, #e1e4ec); padding-top: 10px; }
     .join-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
-                      color: var(--yi-text-muted, #777); }
-    .join-note { font-size: 13px; color: var(--yi-text-muted, #999); }
+                      color: var(--yi-text-muted, #5b6270); }
+    .join-note { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
   `]
 })
 export class PrepReportComponent {

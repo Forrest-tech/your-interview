@@ -414,7 +414,7 @@ export type DictPlayRequest =
     .dict-shadow-msg { margin: 8px 0 0; font-size: 13.5px; color: var(--ink-2); }
     .dict-shadow-rec { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink); }
     .dict-shadow-dot {
-      width: 8px; height: 8px; border-radius: 999px; background: #d33;
+      width: 8px; height: 8px; border-radius: 999px; background: #b3261e;
       animation: dict-pulse 1.2s ease-in-out infinite;
     }
     .dict-shadow-result { margin-top: 8px; }

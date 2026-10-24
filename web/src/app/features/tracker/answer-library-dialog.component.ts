@@ -133,28 +133,28 @@ interface DialogData {
     .al-empty { font-size: 13px; opacity: 0.55; margin: 6px 0 0; }
     .al-form {
       padding: 12px; margin-bottom: 14px; border-radius: 10px;
-      background: rgba(0,0,0,0.025); border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(31, 36, 48, 0.025); border: 1px solid rgba(31, 36, 48, 0.08);
     }
     .al-form mat-form-field { width: 100%; }
     /* 票75:字段级校验提示(对齐票12 口径) */
-    .field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
+    .field-error { color: #b3261e; font-size: 12px; margin: -14px 0 10px 2px; }
     .al-form .full { width: 100%; }
     .al-form-actions { display: flex; gap: 8px; }
     .al-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
     .al-item {
       display: flex; gap: 10px; align-items: flex-start;
-      padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08);
+      padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(31, 36, 48, 0.08);
     }
     .al-main { flex: 1; min-width: 0; }
     .al-cat {
       display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: 10px;
-      background: rgba(48,63,159,0.1); color: #303f9f; font-size: 11px;
+      background: rgba(46,58,140,0.1); color: #2e3a8c; font-size: 11px;
     }
     .al-q { font-size: 13.5px; font-weight: 600; margin-bottom: 4px; }
     .al-a { margin: 0; font-size: 13px; line-height: 1.65; white-space: pre-wrap;
             word-break: break-word; opacity: 0.82; max-height: 160px; overflow-y: auto; }
     .al-actions { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
-    .al-actions .danger { color: #c62828; }
+    .al-actions .danger { color: #b3261e; }
   `]
 })
 export class AnswerLibraryDialogComponent {

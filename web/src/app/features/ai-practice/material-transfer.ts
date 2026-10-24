@@ -265,13 +265,13 @@ function toPrintHtml(payload: TransferPayload): string {
 <html lang="zh"><head><meta charset="utf-8"><title>${escHtml(payload.categories.map((c) => c.name).join(' / '))}</title>
 <style>
   @page { margin: 18mm 16mm; }
-  body { font: 14px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif; color: #1c1e21; max-width: 780px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 14px; border-bottom: 2px solid #e3e7ee; padding-bottom: 8px; }
+  body { font: 14px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif; color: #1f2430; max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 14px; border-bottom: 2px solid #e1e4ec; padding-bottom: 8px; }
   h2 { font-size: 18px; margin: 20px 0 8px; }
   h3 { font-size: 15.5px; margin: 16px 0 6px; }
   h4 { font-size: 14px; margin: 14px 0 4px; }
-  .no { display: inline-block; min-width: 3.2em; color: #6b7280; font-weight: 600; }
-  .body { white-space: normal; color: #33383f; margin: 0 0 10px 3.2em; }
+  .no { display: inline-block; min-width: 3.2em; color: #68707e; font-weight: 600; }
+  .body { white-space: normal; color: #1f2430; margin: 0 0 10px 3.2em; }
 </style></head><body>${rows.join('')}</body></html>`;
 }
 

@@ -22,7 +22,7 @@
   .sub {
     margin: 0;
     font-size: 13px;
-    color: var(--mat-sys-on-surface-variant, #666);
+    color: var(--mat-sys-on-surface-variant, #5b6270);
   }
 }
 
@@ -37,21 +37,21 @@
   align-items: center;
   gap: 12px;
   padding: 16px;
-  border-left: 4px solid #d32f2f;
+  border-left: 4px solid #b3261e;
 
-  mat-icon { color: #d32f2f; }
+  mat-icon { color: #b3261e; }
 
   p {
     margin: 4px 0 0;
     font-size: 13px;
-    color: #666;
+    color: #5b6270;
   }
 }
 
 .section-title {
   margin: 0 0 10px;
   font-size: 15px;
-  color: #444;
+  color: #1f2430;
 }
 
 .grid {
@@ -69,13 +69,13 @@
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 
   &:hover {
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 6px 18px rgba(31, 36, 48, 0.12);
     transform: translateY(-1px);
   }
 
   /* 进行中的卡片描边强调:视觉上告诉用户"这个还没做完" */
   &.active {
-    border-left: 4px solid #1565c0;
+    border-left: 4px solid #2e3a8c;
   }
 }
 
@@ -94,9 +94,9 @@
   font-size: 12px;
   white-space: nowrap;
 
-  &.ok { background: #e8f5e9; color: #2e7d32; }
-  &.busy { background: #e3f2fd; color: #1565c0; }
-  &.idle { background: #eeeeee; color: #616161; }
+  &.ok { background: #e2f1e8; color: #1b7f4b; }
+  &.busy { background: #e4e7f5; color: #2e3a8c; }
+  &.idle { background: #edf0f4; color: #5b6270; }
 }
 
 .s-meta {
@@ -108,11 +108,11 @@
   .mode {
     padding: 1px 8px;
     border-radius: 10px;
-    background: #eef2f7;
-    color: #445;
+    background: #e1e4ec;
+    color: #1f2430;
   }
 
-  .topic { color: #888; }
+  .topic { color: #68707e; }
 }
 
 .progress-row {
@@ -122,7 +122,7 @@
 
   .prog-text {
     font-size: 12px;
-    color: #666;
+    color: #5b6270;
     text-align: right;
   }
 }
@@ -132,8 +132,8 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding: 10px 0;
-  border-top: 1px solid #f0f0f0;
-  border-bottom: 1px solid #f0f0f0;
+  border-top: 1px solid #edf0f4;
+  border-bottom: 1px solid #edf0f4;
 
   .stat {
     display: flex;
@@ -148,7 +148,7 @@
     .lbl {
       margin-top: 2px;
       font-size: 11px;
-      color: #888;
+      color: #68707e;
     }
   }
 }
@@ -157,7 +157,7 @@
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: #555;
+  color: #5b6270;
 
   /* 摘要只露三行:卡片不是读长文的地方,细节进详情页 */
   display: -webkit-box;
@@ -174,10 +174,10 @@
 }
 
 /* 分数色档统一阈值 */
-.good { color: #2e7d32; }
-.mid { color: #f57f17; }
-.bad { color: #c62828; }
-.none { color: #bbb; }
+.good { color: #1b7f4b; }
+.mid { color: #b06a00; }
+.bad { color: #b3261e; }
+.none { color: #68707e; }
 
 .empty-card {
   display: flex;
@@ -191,7 +191,7 @@
     font-size: 40px;
     width: 40px;
     height: 40px;
-    color: #bbb;
+    color: #68707e;
   }
 
   h3 { margin: 0; font-size: 17px; }
@@ -199,7 +199,7 @@
   p {
     margin: 0 0 8px;
     font-size: 13px;
-    color: #666;
+    color: #5b6270;
   }
 }
 
@@ -212,7 +212,7 @@
 
   .pager-info {
     font-size: 13px;
-    color: #666;
+    color: #5b6270;
   }
 }
 
@@ -226,7 +226,7 @@
   justify-content: center;
   padding: 40px 16px;
   overflow-y: auto;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(31, 36, 48, 0.4);
 }
 
 .dialog {
@@ -239,11 +239,11 @@
 
 .opt-hint {
   font-size: 12px;
-  color: #999;
+  color: #68707e;
 }
 
 /* 票106(C3):字段级校验提示(对齐票12/75 .field-error 口径) */
-.field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
+.field-error { color: #b3261e; font-size: 12px; margin: -14px 0 10px 2px; }
 
 .form-err {
   display: flex;
@@ -251,7 +251,7 @@
   gap: 6px;
   margin: 4px 0 0;
   font-size: 13px;
-  color: #c62828;
+  color: #b3261e;
 }
 
 .dialog-actions {

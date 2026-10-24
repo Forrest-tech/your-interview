@@ -96,18 +96,18 @@ export interface DuplicatesDialogData {
     .g-count { opacity: .65; }
     .row {
       display: flex; align-items: center; gap: 12px;
-      padding: 10px 12px; border-top: 1px solid rgba(0,0,0,0.06);
+      padding: 10px 12px; border-top: 1px solid rgba(31, 36, 48, 0.06);
     }
     .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .r-title { font-size: 13.5px; }
     .r-meta { font-size: 12px; opacity: .6; }
     .r-has {
       display: inline-flex; align-items: center; gap: 4px;
-      font-size: 11.5px; padding: 1px 6px; border-radius: 4px;
-      background: rgba(63,81,181,0.10); color: #3f51b5; width: fit-content;
+      font-size: 11.5px; padding: 1px 6px; border-radius: 999px;
+      background: rgba(46, 58, 140, 0.10); color: #2e3a8c; width: fit-content;
     }
     .r-has mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .msg { font-size: 12.5px; color: #a05a00; margin: 8px 0 0; }
+    .msg { font-size: 12.5px; color: #b06a00; margin: 8px 0 0; }
   `]
 })
 export class DuplicatesDialogComponent {

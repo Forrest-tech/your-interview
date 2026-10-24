@@ -46,17 +46,17 @@ import { I18nService } from '../../core/i18n/i18n.service';
       align-items: center;
       gap: 12px;
       padding: 10px 14px;
-      border: 1px solid rgba(0, 0, 0, 0.18);
-      border-radius: 4px;
-      background: #fafafa;
+      border: 1px solid rgba(31, 36, 48, 0.18);
+      border-radius: 6px;
+      background: #f5f6f8;
       cursor: pointer;
       user-select: none;
       max-width: 300px;
       transition: border-color 150ms ease, box-shadow 150ms ease;
     }
-    .hc:hover { border-color: rgba(0, 0, 0, 0.32); }
+    .hc:hover { border-color: rgba(31, 36, 48, 0.32); }
     .hc:focus-visible {
-      outline: 2px solid #3f51b5;
+      outline: 2px solid #2e3a8c;
       outline-offset: 2px;
     }
     .hc-box {
@@ -66,15 +66,15 @@ import { I18nService } from '../../core/i18n/i18n.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 2px solid rgba(0, 0, 0, 0.4);
-      border-radius: 3px;
-      background: #fff;
+      border: 2px solid rgba(31, 36, 48, 0.4);
+      border-radius: 6px;
+      background: #ffffff;
     }
     .hc-empty { width: 100%; height: 100%; }
     .hc-check {
-      color: #fff;
-      background: #2e7d32;
-      border-radius: 2px;
+      color: #ffffff;
+      background: #1b7f4b;
+      border-radius: 6px;
       font-size: 20px;
       width: 24px;
       height: 24px;
@@ -83,11 +83,11 @@ import { I18nService } from '../../core/i18n/i18n.service';
       justify-content: center;
       margin: -2px;
     }
-    .hc-verified .hc-box { border-color: #2e7d32; }
+    .hc-verified .hc-box { border-color: #1b7f4b; }
     .hc-label {
       flex: 1;
       font-size: 14px;
-      color: rgba(0, 0, 0, 0.75);
+      color: rgba(31, 36, 48, 0.75);
     }
     .hc-brand {
       display: flex;
@@ -100,12 +100,12 @@ import { I18nService } from '../../core/i18n/i18n.service';
       font-size: 22px;
       width: 22px;
       height: 22px;
-      color: #5f6368;
+      color: #5b6270;
     }
     .hc-brand-text {
       font-size: 8.5px;
       letter-spacing: 0.2px;
-      color: #5f6368;
+      color: #5b6270;
       white-space: nowrap;
     }
   `]

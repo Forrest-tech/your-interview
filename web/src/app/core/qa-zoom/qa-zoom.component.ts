@@ -33,15 +33,15 @@ import { I18nService } from '../i18n/i18n.service';
   `,
   styles: [`
     .qa-zoom { display: inline-flex; align-items: center; gap: 5px; }
-    .qa-zoom-label { font-size: 11px; color: var(--yi-text-muted, #888); margin-right: 2px; }
-    .zbtn { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--yi-border, #d0d0d0);
+    .qa-zoom-label { font-size: 11px; color: var(--yi-text-muted, #5b6270); margin-right: 2px; }
+    .zbtn { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--yi-border, #e1e4ec);
             background: transparent; color: inherit; font-size: 14px; line-height: 1; cursor: pointer; }
     .zbtn:disabled { opacity: .4; cursor: default; }
     .zpct { min-width: 52px; text-align: center; font-size: 12px; font-weight: 700;
-            border: 1px solid var(--yi-border, #d0d0d0); border-radius: 7px; padding: 4px 4px;
+            border: 1px solid var(--yi-border, #e1e4ec); border-radius: 7px; padding: 4px 4px;
             background: transparent; color: inherit; cursor: text; }
     .zpct-input { width: 52px; text-align: center; font-size: 12px; font-weight: 700;
-                  border: 1px solid var(--yi-accent, #3f51b5); border-radius: 7px; padding: 4px 4px; }
+                  border: 1px solid var(--yi-accent, #2e3a8c); border-radius: 7px; padding: 4px 4px; }
   `]
 })
 export class QaZoomComponent {

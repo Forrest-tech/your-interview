@@ -153,36 +153,36 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   styles: [`
     .card { padding: 2px 2px 0; margin-top: 14px; }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .rc-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
-    .rc-meta { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .rc-head h3 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; }
+    .rc-meta { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
     .spacer { flex: 1; }
-    .rc-outcome { font-size: 14px; color: var(--yi-text-muted, #777); margin-top: 5px; }
+    .rc-outcome { font-size: 14px; color: var(--yi-text-muted, #5b6270); margin-top: 5px; }
     .cal-bar { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 14px;
-               border: 1px dashed var(--yi-border, #bbb); border-radius: 10px; padding: 7px 12px; }
-    .cal-bar mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--yi-accent, #3f51b5); }
-    .cal-bar .cal-remind { color: var(--yi-text-muted, #777); }
-    .cal-bar .cal-due { color: #d32f2f; font-weight: 600; }
-    .cal-bar .cal-next { color: var(--yi-text-muted, #777); }
-    .rc-outcome a { color: var(--yi-accent, #3f51b5); }
-    .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+               border: 1px dashed var(--yi-border, #e1e4ec); border-radius: 10px; padding: 7px 12px; }
+    .cal-bar mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--yi-accent, #2e3a8c); }
+    .cal-bar .cal-remind { color: var(--yi-text-muted, #5b6270); }
+    .cal-bar .cal-due { color: #b3261e; font-weight: 600; }
+    .cal-bar .cal-next { color: var(--yi-text-muted, #5b6270); }
+    .rc-outcome a { color: var(--yi-accent, #2e3a8c); }
+    .mini-btn { border: 1px solid var(--yi-border, #e1e4ec); background: transparent; color: inherit;
                 border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 500; cursor: pointer; }
     .edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
                  gap: 10px 14px; margin: 12px 0; }
     .edit-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
-                       color: var(--yi-text-muted, #777); }
+                       color: var(--yi-text-muted, #5b6270); }
     .edit-grid .wide { grid-column: span 2; }
-    .fld { border: 1px solid var(--yi-border, #ccc); border-radius: 8px; padding: 7px 9px;
+    .fld { border: 1px solid var(--yi-border, #e1e4ec); border-radius: 8px; padding: 7px 9px;
            font-size: 14px; background: transparent; color: inherit; }
-    .field-error { color: #ba1a1a; font-size: 12px; }
+    .field-error { color: #b3261e; font-size: 12px; }
     .row { display: flex; gap: 8px; align-items: center; }
-    .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e0e0e0); margin: 14px 0 10px; flex-wrap: wrap; }
+    .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e1e4ec); margin: 14px 0 10px; flex-wrap: wrap; }
     .rtab { border: none; background: transparent; color: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
             padding: 8px 13px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; }
-    .rtab.on { border-bottom-color: var(--yi-accent, #3f51b5); font-weight: 700; }
-    .cnt { font-size: 12px; font-weight: 700; background: color-mix(in srgb, var(--yi-text, #222) 10%, transparent);
+    .rtab.on { border-bottom-color: var(--yi-accent, #2e3a8c); font-weight: 700; }
+    .cnt { font-size: 12px; font-weight: 700; background: color-mix(in srgb, var(--yi-text, #1f2430) 10%, transparent);
            border-radius: 999px; padding: 1px 7px; margin-left: 5px; }
     .mat-head-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .mh-note { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .mh-note { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
     .file-label { display: inline-flex; align-items: center; }
   `]
 })

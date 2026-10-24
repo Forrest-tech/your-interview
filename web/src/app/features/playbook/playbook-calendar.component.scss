@@ -32,8 +32,8 @@
 .cal-week-head, .cal-week { display: grid; grid-template-columns: repeat(7, 1fr); }
 
 .cal-week-head {
-  background: rgba(0, 0, 0, 0.03);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(31, 36, 48, 0.03);
+  border-bottom: 1px solid rgba(31, 36, 48, 0.08);
 }
 
 .cal-dow {
@@ -41,20 +41,20 @@
   font-size: 12px; font-weight: 600; opacity: 0.55;
 }
 
-.cal-week { border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.cal-week { border-bottom: 1px solid rgba(31, 36, 48, 0.06); }
 .cal-week:last-child { border-bottom: none; }
 
 .cal-cell {
   min-height: 96px; padding: 6px 8px;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  border-right: 1px solid rgba(31, 36, 48, 0.06);
   display: flex; flex-direction: column; gap: 4px;
   cursor: default;
 }
 .cal-cell:last-child { border-right: none; }
-.cal-cell.outside { background: rgba(0, 0, 0, 0.02); }
+.cal-cell.outside { background: rgba(31, 36, 48, 0.02); }
 .cal-cell.outside .cal-date { opacity: 0.35; }
 .cal-cell.today .cal-date {
-  background: var(--brand); color: #fff;
+  background: var(--brand); color: #ffffff;
   border-radius: 50%; width: 26px; height: 26px;
   display: inline-flex; align-items: center; justify-content: center;
 }

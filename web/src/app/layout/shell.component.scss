@@ -27,7 +27,7 @@
   /* 票 118:壳色 = midnight —— 登录页品牌板的深靛蓝进壳,比主色再深一号;
      底边以一道更深的墨线收口,不用投影「浮」在纸面上。 */
   background: var(--midnight) !important;
-  border-bottom: 1px solid #12183a;
+  border-bottom: 1px solid #1b2350;
   box-shadow: none;
   z-index: 10;
 }
@@ -176,7 +176,7 @@
   flex: 0 0 34px;
   border-radius: 50%;
   background: rgba(46, 58, 140, 0.12);
-  color: #303f9f;
+  color: #2e3a8c;
   font-size: 14px;
   font-weight: 700;
 }
@@ -201,14 +201,14 @@
 .sidebar {
   flex: 0 0 200px;
   width: 200px;
-  border-right: 1px solid rgba(0, 0, 0, 0.09);
+  border-right: 1px solid rgba(31, 36, 48, 0.09);
   padding: 10px 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
   transition: flex-basis 160ms ease, width 160ms ease;
-  background: #fff;
+  background: #ffffff;
 }
 
 .sidebar.collapsed {
@@ -221,14 +221,14 @@
   border: 0;
   background: transparent;
   cursor: pointer;
-  color: #6b6f76;
+  color: #68707e;
   border-radius: 6px;
   padding: 4px;
   margin-bottom: 6px;
   display: inline-flex;
 }
 
-.side-toggle:hover { background: rgba(0, 0, 0, 0.06); }
+.side-toggle:hover { background: rgba(31, 36, 48, 0.06); }
 
 .side-item {
   display: flex;
@@ -240,7 +240,7 @@
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
-  color: #33363d;
+  color: #1f2430;
   font-size: 14px;
   line-height: 1.2;
   transition: background 120ms ease, color 120ms ease;
@@ -249,11 +249,11 @@
   font-family: inherit;
 }
 
-.side-item:hover { background: rgba(0, 0, 0, 0.05); }
+.side-item:hover { background: rgba(31, 36, 48, 0.05); }
 
 .side-item.active {
-  background: rgba(63, 81, 181, 0.12);
-  color: #303f9f;
+  background: rgba(46, 58, 140, 0.12);
+  color: #2e3a8c;
   font-weight: 600;
 }
 
@@ -279,7 +279,7 @@
   /* ⚠️ 第十六轮:下内边距 48px 会额外把页面撑高,配合下面 .content:has()
      的"零底部内边距"规则,让 /practice 这类满屏页不产生外层滚动。 */
   padding: 24px 28px 48px;
-  /* 票 118:内容区底色 = paper 令牌,白色卡片靠发丝边浮在纸面上(原 #fff 让卡片无界) */
+  /* 票 118:内容区底色 = paper 令牌,白色卡片靠发丝边浮在纸面上(原 #ffffff 让卡片无界) */
   background: var(--paper);
 }
 
@@ -308,8 +308,8 @@
    ============================================================ */
 .app-footer {
   flex: 0 0 auto;
-  background-color: #111827;
-  color: #9ca3af;
+  background-color: #1f2430;
+  color: #68707e;
   /* Forrest 第十一轮:还是太高 → 再压。ynwac 实测约 90-110px 总高。 */
   padding: 20px 24px;
   font-size: 13px;
@@ -333,7 +333,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  color: #f3f4f6;
+  color: #f5f6f8;
   font-size: 14px;
   font-weight: 700;
 }
@@ -341,7 +341,7 @@
   font-size: 18px;
   width: 18px;
   height: 18px;
-  color: #6b7280;
+  color: #68707e;
 }
 
 /* 链接组 */
@@ -353,12 +353,12 @@
   flex-wrap: wrap;
 }
 .f-links a {
-  color: #d1d5db;
+  color: #e1e4ec;
   text-decoration: none;
   transition: color .15s ease;
 }
-.f-links a:hover { color: #fff; }
-.f-dot { color: #4b5563; }
+.f-links a:hover { color: #ffffff; }
+.f-dot { color: #1f2430; }
 
 /* 联系 + 地址:同一行居中的两个小块 */
 .f-meta {
@@ -372,17 +372,17 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #d1d5db;
+  color: #e1e4ec;
   text-decoration: none;
   transition: color .15s ease;
 }
-.f-contact:hover { color: #fff; }
+.f-contact:hover { color: #ffffff; }
 .f-contact mat-icon,
 .f-addr mat-icon {
   font-size: 15px;
   width: 15px;
   height: 15px;
-  color: #6b7280;
+  color: #68707e;
   flex: 0 0 auto;
 }
 .f-addr {
@@ -406,13 +406,13 @@
 }
 .f-legal {
   margin: 0;
-  color: #7b8494;
+  color: #68707e;
   font-size: 12px;
   max-width: 760px;
 }
 .f-copy {
   margin: 0;
-  color: #6b7280;
+  color: #68707e;
   font-size: 12px;
   white-space: nowrap;
 }

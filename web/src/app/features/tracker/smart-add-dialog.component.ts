@@ -313,7 +313,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
     .mode-btn {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 6px 14px; border-radius: 999px; cursor: pointer;
-      border: 1px solid rgba(0,0,0,0.14); background: transparent; font-size: 13px;
+      border: 1px solid rgba(31, 36, 48, 0.14); background: transparent; font-size: 13px;
     }
     .mode-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .mode-btn.on { background: rgba(46,58,140,0.12); border-color: rgba(46,58,140,0.5); color: var(--brand); font-weight: 600; }

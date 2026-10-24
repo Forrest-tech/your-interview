@@ -1,5 +1,5 @@
 /* 素材「导入 / 导出」弹窗样式(★ 第五轮重排,Forrest)。
-   与全站同一套设计令牌:白卡片、细边框 #e3e7ee、中性灰阶、主蓝 #2f6fed。
+   与全站同一套设计令牌:白卡片、细边框 #e1e4ec、中性灰阶、主蓝 #2e3a8c。
    面板外壳(.app-transfer)写在全局 styles.scss —— overlay 不在组件 DOM 里。
    这里只管内容:标题栏、两个标签页、表单控件、范围树、预览。 */
 
@@ -12,42 +12,42 @@
       且选择器要比".类.类"更具体(这里用 宿主 + 控件类 + 自有类)。 */
 
 :host ::ng-deep .mat-mdc-checkbox.pk-check {
-  --mdc-checkbox-selected-icon-color: #2f6fed;
-  --mdc-checkbox-selected-hover-icon-color: #2f6fed;
-  --mdc-checkbox-selected-focus-icon-color: #2f6fed;
-  --mdc-checkbox-selected-pressed-icon-color: #2f6fed;
-  --mdc-checkbox-selected-checkmark-color: #fff;
-  --mdc-checkbox-selected-focus-state-layer-color: #2f6fed;
-  --mdc-checkbox-selected-hover-state-layer-color: #2f6fed;
-  --mdc-checkbox-selected-pressed-state-layer-color: #2f6fed;
-  --mdc-checkbox-unselected-icon-color: #b3bcc9;
-  --mdc-checkbox-unselected-hover-icon-color: #2f6fed;
-  --mdc-checkbox-unselected-focus-icon-color: #2f6fed;
-  --mdc-checkbox-unselected-pressed-icon-color: #2f6fed;
-  --mdc-checkbox-unselected-hover-state-layer-color: #2f6fed;
-  --mdc-checkbox-unselected-focus-state-layer-color: #2f6fed;
-  --mdc-checkbox-unselected-pressed-state-layer-color: #2f6fed;
+  --mdc-checkbox-selected-icon-color: #2e3a8c;
+  --mdc-checkbox-selected-hover-icon-color: #2e3a8c;
+  --mdc-checkbox-selected-focus-icon-color: #2e3a8c;
+  --mdc-checkbox-selected-pressed-icon-color: #2e3a8c;
+  --mdc-checkbox-selected-checkmark-color: #ffffff;
+  --mdc-checkbox-selected-focus-state-layer-color: #2e3a8c;
+  --mdc-checkbox-selected-hover-state-layer-color: #2e3a8c;
+  --mdc-checkbox-selected-pressed-state-layer-color: #2e3a8c;
+  --mdc-checkbox-unselected-icon-color: #e1e4ec;
+  --mdc-checkbox-unselected-hover-icon-color: #2e3a8c;
+  --mdc-checkbox-unselected-focus-icon-color: #2e3a8c;
+  --mdc-checkbox-unselected-pressed-icon-color: #2e3a8c;
+  --mdc-checkbox-unselected-hover-state-layer-color: #2e3a8c;
+  --mdc-checkbox-unselected-focus-state-layer-color: #2e3a8c;
+  --mdc-checkbox-unselected-pressed-state-layer-color: #2e3a8c;
 }
 
 :host ::ng-deep .mat-mdc-radio-button.tf-fmt {
-  --mdc-radio-selected-icon-color: #2f6fed;
-  --mdc-radio-selected-hover-icon-color: #2f6fed;
-  --mdc-radio-selected-focus-icon-color: #2f6fed;
-  --mdc-radio-selected-pressed-icon-color: #2f6fed;
-  --mdc-radio-unselected-icon-color: #b3bcc9;
-  --mdc-radio-unselected-hover-icon-color: #2f6fed;
-  --mdc-radio-unselected-focus-icon-color: #2f6fed;
-  --mat-radio-ripple-color: #2f6fed;
+  --mdc-radio-selected-icon-color: #2e3a8c;
+  --mdc-radio-selected-hover-icon-color: #2e3a8c;
+  --mdc-radio-selected-focus-icon-color: #2e3a8c;
+  --mdc-radio-selected-pressed-icon-color: #2e3a8c;
+  --mdc-radio-unselected-icon-color: #e1e4ec;
+  --mdc-radio-unselected-hover-icon-color: #2e3a8c;
+  --mdc-radio-unselected-focus-icon-color: #2e3a8c;
+  --mat-radio-ripple-color: #2e3a8c;
 }
 
 :host ::ng-deep .mat-mdc-tab-group.tf-tabs {
-  --mdc-tab-indicator-active-indicator-color: #2f6fed;
-  --mat-tab-header-active-label-text-color: #1f2733;
-  --mat-tab-header-inactive-label-text-color: #7a8393;
-  --mat-tab-header-active-hover-indicator-color: #2f6fed;
-  --mat-tab-header-active-focus-indicator-color: #2f6fed;
-  --mat-tab-header-active-hover-label-text-color: #1f2733;
-  --mat-tab-header-active-focus-label-text-color: #1f2733;
+  --mdc-tab-indicator-active-indicator-color: #2e3a8c;
+  --mat-tab-header-active-label-text-color: #1f2430;
+  --mat-tab-header-inactive-label-text-color: #68707e;
+  --mat-tab-header-active-hover-indicator-color: #2e3a8c;
+  --mat-tab-header-active-focus-indicator-color: #2e3a8c;
+  --mat-tab-header-active-hover-label-text-color: #1f2430;
+  --mat-tab-header-active-focus-label-text-color: #1f2430;
 }
 
 /* ---------- 根容器:撑满弹窗表面,高度跟随用户拖拽 ---------- */
@@ -65,7 +65,7 @@
   gap: 10px;
   margin: 0;
   padding: 14px 16px 12px 18px;
-  border-bottom: 1px solid #eef0f4;
+  border-bottom: 1px solid #edf0f4;
   flex: 0 0 auto;
 }
 
@@ -73,21 +73,21 @@
   font-size: 20px;
   width: 20px;
   height: 20px;
-  color: #2f6fed;
+  color: #2e3a8c;
 }
 
 .tf-head-title {
   font-size: 15px;
   font-weight: 600;
-  color: #1f2733;
+  color: #1f2430;
   line-height: 1.4;
 }
 
 .tf-close {
-  color: #8a93a2;
+  color: #68707e;
 }
 
-.tf-close:hover { color: #333a44; }
+.tf-close:hover { color: #1f2430; }
 
 /* ---------- 内容区 ----------
    ★ 第九轮:三个页签共用同一块内容区,内容超高时页签内部滚动,
@@ -169,7 +169,7 @@
   margin-top: 10px;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7484;
+  color: #5b6270;
 }
 
 .tf-scope-head .tf-label { margin-top: 0; }
@@ -179,15 +179,15 @@
   padding: 0 8px;
   font-size: 13px;
   font-family: inherit;
-  color: #333a44;
-  border: 1px solid #d7dce4;
+  color: #1f2430;
+  border: 1px solid #e1e4ec;
   border-radius: 6px;
   outline: none;
-  background: #fff;
+  background: #ffffff;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 
-.tf-select:focus { border-color: #2f6fed; box-shadow: 0 0 0 2px rgba(47, 111, 237, .14); }
+.tf-select:focus { border-color: #2e3a8c; box-shadow: 0 0 0 2px rgba(46, 58, 140, .14); }
 
 .tf-row-between {
   display: flex;
@@ -196,7 +196,7 @@
   gap: 8px;
 }
 
-.tf-mini { font-size: 12px; color: #9aa3b0; }
+.tf-mini { font-size: 12px; color: #68707e; }
 
 .link {
   border: 0;
@@ -204,24 +204,24 @@
   padding: 0;
   font-size: 12px;
   font-family: inherit;
-  color: #2f6fed;
+  color: #2e3a8c;
   cursor: pointer;
 }
 
 .link:hover { text-decoration: underline; }
-.dot { margin: 0 4px; color: #c8ced8; }
+.dot { margin: 0 4px; color: #e1e4ec; }
 
 /* ---------- 勾选范围树 ---------- */
 .tf-tree {
   max-height: 208px;
   overflow: auto;
   padding: 6px 4px;
-  border: 1px solid #e6eaf0;
+  border: 1px solid #e1e4ec;
   border-radius: 8px;
-  background: #fbfcfe;
+  background: #e4e7f5;
 }
 
-.tf-empty { margin: 8px 6px; font-size: 12.5px; color: #9aa3b0; }
+.tf-empty { margin: 8px 6px; font-size: 12.5px; color: #68707e; }
 
 .pk-row {
   display: flex;
@@ -238,7 +238,7 @@
   background: none;
   padding: 0;
   cursor: pointer;
-  color: #a2abb9;
+  color: #68707e;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -249,7 +249,7 @@
 
 .pk-check { flex: 1; min-width: 0; }
 
-.pk-check ::ng-deep .mdc-label { font-size: 13px; color: #333a44; padding-left: 6px; }
+.pk-check ::ng-deep .mdc-label { font-size: 13px; color: #1f2430; padding-left: 6px; }
 
 .pk-name {
   overflow: hidden;
@@ -261,7 +261,7 @@
   flex: 0 0 auto;
   margin-right: 8px;
   font-size: 11px;
-  color: #9aa3b0;
+  color: #68707e;
 }
 
 /* ---------- 格式 / 目标单选 ---------- */
@@ -275,7 +275,7 @@
 .tf-fmt { font-size: 13px; }
 .tf-fmt ::ng-deep .mdc-form-field > label {
   font-size: 13px;
-  color: #333a44;
+  color: #1f2430;
   padding-left: 6px;
 }
 
@@ -293,8 +293,8 @@
   padding: 0 10px;
   font-size: 13px;
   font-family: inherit;
-  color: #333a44;
-  border: 1px solid #d7dce4;
+  color: #1f2430;
+  border: 1px solid #e1e4ec;
   border-right: 0;
   border-radius: 6px 0 0 6px;
   outline: none;
@@ -302,8 +302,8 @@
 }
 
 .tf-name:focus {
-  border-color: #2f6fed;
-  box-shadow: 0 0 0 2px rgba(47, 111, 237, .14);
+  border-color: #2e3a8c;
+  box-shadow: 0 0 0 2px rgba(46, 58, 140, .14);
 }
 
 /* 后缀块:不可编辑,让扩展名永远与格式一致(Chrome「另存为」同款) */
@@ -313,14 +313,14 @@
   padding: 0 10px;
   font-size: 12.5px;
   font-weight: 600;
-  color: #55606f;
-  background: #f3f5f9;
-  border: 1px solid #d7dce4;
+  color: #5b6270;
+  background: #e4e7f5;
+  border: 1px solid #e1e4ec;
   border-radius: 0 6px 6px 0;
   user-select: none;
 }
 
-.tf-name:focus + .tf-ext { border-color: #2f6fed; }
+.tf-name:focus + .tf-ext { border-color: #2e3a8c; }
 
 /* ---------- 保存位置:用户自选的本地文件夹路径(第九轮) ---------- */
 .tf-dir {
@@ -328,12 +328,12 @@
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  background: #fbfcfe;
-  border: 1px solid #e3e7ee;
+  background: #e4e7f5;
+  border: 1px solid #e1e4ec;
   border-radius: 8px;
 }
 
-.tf-dir-ico { font-size: 18px; width: 18px; height: 18px; color: #8a93a2; }
+.tf-dir-ico { font-size: 18px; width: 18px; height: 18px; color: #68707e; }
 
 .tf-dir-path {
   min-width: 0;
@@ -341,14 +341,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
-  color: #333a44;
+  color: #1f2430;
 }
 
-.tf-dir-path.is-default { color: #7a8393; }
+.tf-dir-path.is-default { color: #68707e; }
 
 .tf-dir-pick {
-  --mdc-outlined-button-label-text-color: #2f6fed;
-  --mdc-outlined-button-outline-color: #2f6fed;
+  --mdc-outlined-button-label-text-color: #2e3a8c;
+  --mdc-outlined-button-outline-color: #2e3a8c;
   --mdc-outlined-button-container-height: 30px;
   border-radius: 6px;
   font-size: 12.5px;
@@ -368,8 +368,8 @@
 }
 
 .tf-pick {
-  --mdc-outlined-button-label-text-color: #333a44;
-  --mdc-outlined-button-outline-color: #d7dce4;
+  --mdc-outlined-button-label-text-color: #1f2430;
+  --mdc-outlined-button-outline-color: #e1e4ec;
   --mdc-outlined-button-container-height: 32px;
   border-radius: 6px;
   font-size: 13px;
@@ -384,10 +384,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12.5px;
-  color: #333a44;
+  color: #1f2430;
 }
 
-.tf-picked.is-empty { color: #9aa3b0; }
+.tf-picked.is-empty { color: #68707e; }
 
 /* 示例文件下载链接:与「全选 · 清空」同一档次的轻量链接 */
 .tf-sample {
@@ -399,7 +399,7 @@
 
 .tf-sample mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
-.tf-hint { margin: 2px 0 0; font-size: 12px; color: #9aa3b0; }
+.tf-hint { margin: 2px 0 0; font-size: 12px; color: #68707e; }
 /* 浏览器不支持选位置时的说明 —— 要醒目一点,别让用户以为功能丢了 */
 .tf-hint-warn { color: #b06a00; }
 
@@ -407,9 +407,9 @@
 .tf-preview {
   margin-top: 10px;
   padding: 8px 10px;
-  border: 1px solid #e6eaf0;
+  border: 1px solid #e1e4ec;
   border-radius: 8px;
-  background: #fbfcfe;
+  background: #e4e7f5;
 }
 
 .tf-preview-head {
@@ -417,10 +417,10 @@
   align-items: center;
   gap: 6px;
   font-size: 12.5px;
-  color: #55606f;
+  color: #5b6270;
 }
 
-.tf-preview-head mat-icon { font-size: 16px; width: 16px; height: 16px; color: #8a93a2; }
+.tf-preview-head mat-icon { font-size: 16px; width: 16px; height: 16px; color: #68707e; }
 .tf-preview-head b { font-weight: 600; }
 .spacer { flex: 1; }
 
@@ -430,7 +430,7 @@
   max-height: 120px;
   overflow: auto;
   font-size: 12.5px;
-  color: #6b7484;
+  color: #5b6270;
 }
 
 .tf-preview-list li { margin: 1px 0; }
@@ -441,7 +441,7 @@
   gap: 4px 10px;
   margin: 6px 0 0;
   font-size: 12px;
-  color: #c0392b;
+  color: #b3261e;
 }
 
 /* ---------- 动作区:主操作 = 站内蓝实心(与确认弹窗的「确认」按钮同款) ---------- */
@@ -452,8 +452,8 @@
 }
 
 .tf-primary {
-  --mdc-filled-button-container-color: #2f6fed;
-  --mdc-filled-button-label-text-color: #fff;
+  --mdc-filled-button-container-color: #2e3a8c;
+  --mdc-filled-button-label-text-color: #ffffff;
   border-radius: 8px;
   font-size: 13px;
 }

@@ -9,7 +9,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: #fff;
+  background: #ffffff;
   /* ★ 2026-09-26(Forrest):右边框删除 —— 外层 .col-tree 已经画了
      分隔线,这里再画一条就变成"两条竖线"。分隔职责归外层,只留一条。 */
 }
@@ -21,7 +21,7 @@
   align-items: stretch;
   gap: 0;
   padding: 8px 8px 6px 14px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  border-bottom: 1px solid rgba(31, 36, 48, 0.07);
   flex: 0 0 auto;
   /* ★ 2026-09-26:头部内按钮的隐形触摸目标(Material touch-target)
      会向右探出几px,裁在头部内部,不再把 scrollWidth 撑过容器。 */
@@ -32,14 +32,14 @@
   font-size: 18px;
   width: 18px;
   height: 18px;
-  color: #5a6270;
+  color: #5b6270;
 }
 
 .head-title {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  color: #3a3f47;
+  color: #1f2430;
 }
 
 .spacer { flex: 1 1 auto; }
@@ -48,13 +48,13 @@
    标题"材料"(随语言设置) + 新建文件夹 / 新建素材 / 展开·收起 在左,
    编辑(编辑中变 保存/取消 成对按钮)在同一行最右。
    ★ 行高/间距恒定:按钮样式与右侧内容区 .ch-edit 同一套设计
-   (白底、细边框 #e2e8f0、中性字色、悬停浅灰),默认不带选中高亮。 */
+   (白底、细边框 #e1e4ec、中性字色、悬停浅灰),默认不带选中高亮。 */
 /* ---------- 头部两行(2026-09-23 Forrest 第四十四轮) ----------
    第一行:标题"材料"(随语言设置),右侧留白(页面的折叠按钮浮在最右);
    第二行:新建文件夹 / 新建素材 / 展开·收起 靠左,
    编辑(编辑中变 保存/取消 成对按钮)在同一行最右。
    ★ 行高/间距恒定:按钮样式与右侧内容区 .ch-edit 同一套设计
-   (白底、细边框 #e2e8f0、中性字色、悬停浅灰),默认不带选中高亮。 */
+   (白底、细边框 #e1e4ec、中性字色、悬停浅灰),默认不带选中高亮。 */
 .th-row {
   display: flex;
   align-items: center;
@@ -83,11 +83,11 @@
   height: 28px;
   padding: 0 24px 0 8px;
   font-size: 12.5px;
-  color: #3a3f47;
-  background: #fff
+  color: #1f2430;
+  background: #ffffff
     url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237a8393' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")
     no-repeat right 8px center;
-  border: 1px solid #d7dce4;
+  border: 1px solid #e1e4ec;
   border-radius: 6px;
   appearance: none;
   -webkit-appearance: none;
@@ -95,11 +95,11 @@
   text-overflow: ellipsis;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.cat-select:hover { border-color: #b9c2d0; }
+.cat-select:hover { border-color: #e1e4ec; }
 .cat-select:focus {
   outline: none;
-  border-color: #2f6fed;
-  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.14);
+  border-color: #2e3a8c;
+  box-shadow: 0 0 0 2px rgba(46, 58, 140, 0.14);
 }
 
 .cat-manage {
@@ -116,7 +116,7 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  color: #3a3f47;
+  color: #1f2430;
   margin-right: 8px;
 }
 
@@ -127,7 +127,7 @@
   height: 26px !important;
   line-height: 26px !important;
   padding: 0 !important;
-  color: #7a8393 !important;
+  color: #68707e !important;
   border-radius: 6px;
 }
 .head-tool mat-icon {
@@ -136,8 +136,8 @@
   height: 17px;
 }
 .head-tool:hover {
-  color: #2f6fed !important;
-  background: #eef4ff;
+  color: #2e3a8c !important;
+  background: #e4e7f5;
 }
 
 /* ---------- 展开/收起双箭头(2026-09-23 第十二轮) ----------
@@ -163,7 +163,7 @@
    默认不带任何"选中"高亮;保存无改动时置灰。 */
 /* ★ 2026-09-23(Forrest 第九轮):树头的「编辑 / 保存 / 取消」
    与右侧内容区的 .ch-edit 完全同一套视觉语言 ——
-   白底 + 1px #e2e8f0 边框 + 中性字色,默认状态**不带选中高亮**;
+   白底 + 1px #e1e4ec 边框 + 中性字色,默认状态**不带选中高亮**;
    只是尺寸按侧栏宽度收到 30px(右侧内容区是 36px),
    圆角、边框色、悬浮/置灰反馈逐项对齐。 */
 .head-act {
@@ -173,24 +173,24 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e1e4ec;
   border-radius: 9px;
-  background: #fff;
-  color: #475569;
+  background: #ffffff;
+  color: #5b6270;
   cursor: pointer;
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 .head-act:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #1e293b;
+  background: #f5f6f8;
+  border-color: #e1e4ec;
+  color: #1f2430;
 }
 .head-act[disabled] {
   opacity: .45;
   cursor: not-allowed;
 }
 .head-act:focus-visible {
-  outline: 2px solid #2f6fed;
+  outline: 2px solid #2e3a8c;
   outline-offset: 1px;
 }
 .head-act + .head-act { margin-left: 6px; }
@@ -215,7 +215,7 @@
   margin: 18px 16px;
   font-size: 12.5px;
   line-height: 1.7;
-  color: #8a9099;
+  color: #68707e;
 }
 
 /* ---------- 节点行 ----------
@@ -230,18 +230,18 @@
   padding: 4px 6px 4px 0;
   cursor: pointer;
   font-size: 13.5px;
-  color: #363a41;
+  color: #1f2430;
   border-radius: 6px;
   margin: 0 6px;
   transition: background 110ms ease;
   user-select: none;
 }
 
-.node-row:hover { background: rgba(0, 0, 0, 0.045); }
+.node-row:hover { background: rgba(31, 36, 48, 0.045); }
 
 .node-row.selected {
-  background: rgba(63, 81, 181, 0.13);
-  color: #303f9f;
+  background: rgba(46, 58, 140, 0.13);
+  color: #2e3a8c;
   font-weight: 600;
 }
 
@@ -250,7 +250,7 @@
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
-  color: #7b828c;
+  color: #68707e;
 }
 
 .chev-ph {
@@ -265,8 +265,8 @@
   flex: 0 0 17px;
 }
 
-.node-icon.folder { color: #d9a326; }
-.node-icon.file { color: #6d7787; }
+.node-icon.folder { color: #b06a00; }
+.node-icon.file { color: #5b6270; }
 
 /* ★ 第四十三轮(Forrest):标记色圆点 —— 标记属于素材条目本身,
    有标记的素材在树上直接可见,之后可按颜色筛选(如"只看红色")。 */
@@ -276,7 +276,7 @@
   height: 8px;
   border-radius: 50%;
   margin-right: 7px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+  box-shadow: inset 0 0 0 1px rgba(31, 36, 48, .08);
 }
 
 .node-name {
@@ -288,7 +288,7 @@
 
 .node-count {
   font-size: 11px;
-  color: #9aa1ab;
+  color: #68707e;
   padding: 0 4px;
 }
 
@@ -298,7 +298,7 @@
   font-size: 13px;
   font-family: inherit;
   padding: 2px 6px;
-  border: 1px solid #3f51b5;
+  border: 1px solid #2e3a8c;
   border-radius: 4px;
   outline: none;
 }
@@ -337,24 +337,24 @@
 
 /* 移入文件夹:整行高亮 + 蓝色描边 */
 .node-row.drop-into {
-  background: rgba(63, 81, 181, 0.16);
-  box-shadow: inset 0 0 0 2px #3f51b5;
+  background: rgba(46, 58, 140, 0.16);
+  box-shadow: inset 0 0 0 2px #2e3a8c;
 }
 
 /* 插到前面:顶部一条粗线 */
 .node-row.drop-before {
-  box-shadow: inset 0 3px 0 0 #3f51b5;
+  box-shadow: inset 0 3px 0 0 #2e3a8c;
 }
 
 /* 插到后面:底部一条粗线 */
 .node-row.drop-after {
-  box-shadow: inset 0 -3px 0 0 #3f51b5;
+  box-shadow: inset 0 -3px 0 0 #2e3a8c;
 }
 
 /* 空白区落点:虚线框提示"放这里=移到最外层" */
 .tree-body.root-drop {
-  background: rgba(63, 81, 181, 0.06);
-  outline: 2px dashed #3f51b5;
+  background: rgba(46, 58, 140, 0.06);
+  outline: 2px dashed #2e3a8c;
   outline-offset: -6px;
 }
 
@@ -362,17 +362,17 @@
 .move-panel {
   margin: 4px 10px 8px;
   padding: 6px;
-  border: 1px solid rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(46, 58, 140, 0.3);
   border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.09);
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(31, 36, 48, 0.09);
 }
 
 .move-title {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.4px;
-  color: #7b828c;
+  color: #68707e;
   text-transform: uppercase;
   padding: 4px 6px 6px;
 }
@@ -388,28 +388,28 @@
   background: transparent;
   font-size: 12.5px;
   font-family: inherit;
-  color: #363a41;
+  color: #1f2430;
   text-align: left;
   cursor: pointer;
 }
 
-.move-item:hover { background: rgba(63, 81, 181, 0.1); }
+.move-item:hover { background: rgba(46, 58, 140, 0.1); }
 
 /* ★ 2026-09-25:类别分区 —— 图标用中性蓝灰(区别于文件夹的黄),可辨识即可 */
-.move-item.is-category mat-icon { color: #5b7fd4; }
+.move-item.is-category mat-icon { color: #2e3a8c; }
 
 /* 类别分区与文件夹分区之间的细分隔线(Notion Move to 同款分组法) */
 .move-divider {
   height: 1px;
   margin: 4px 6px;
-  background: rgba(63, 81, 181, 0.16);
+  background: rgba(46, 58, 140, 0.16);
 }
 
 .move-item mat-icon {
   font-size: 16px;
   width: 16px;
   height: 16px;
-  color: #d9a326;
+  color: #b06a00;
   flex: 0 0 16px;
 }
 
@@ -422,5 +422,5 @@
 .move-empty {
   margin: 4px 8px;
   font-size: 11.5px;
-  color: #9aa1ab;
+  color: #68707e;
 }

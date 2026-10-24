@@ -78,7 +78,7 @@ export interface GuidanceInputData {
   styles: [`
     .guidance-input { min-width: 600px; }
     .full { width: 100%; margin-bottom: 8px; }
-    .hint { color: #666; font-size: 13px; margin: 0 0 12px; }
+    .hint { color: #5b6270; font-size: 13px; margin: 0 0 12px; }
     textarea { font-family: inherit; }
   `]
 })

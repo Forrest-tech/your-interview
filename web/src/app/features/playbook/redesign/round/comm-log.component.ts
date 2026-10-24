@@ -121,39 +121,39 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject, r
     .comm { padding: 6px 2px; }
     .thread-head { display: flex; align-items: center; gap: 9px; margin: 16px 0 2px; }
     .thread-subject { font-size: 14px; font-weight: 600; }
-    .thread-count { font-size: 12px; font-weight: 700; color: #475467; background: #eef2f7;
+    .thread-count { font-size: 12px; font-weight: 700; color: #5b6270; background: #e1e4ec;
                     border-radius: 999px; padding: 1px 9px; }
-    .pending-banner { background: #fdecea; border: 1px solid #f0b8b2; color: #7c1d16;
+    .pending-banner { background: #f9e8e5; border: 1px solid #f9e8e5; color: #b3261e;
                         border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 12px; }
-    .empty, .hint { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .empty, .hint { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
     .empty { font-size: 14px; }
-    .citem { border: 1px solid var(--yi-border, #ddd); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
-    .citem.pending { border-color: #e57373; }
+    .citem { border: 1px solid var(--yi-border, #e1e4ec); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+    .citem.pending { border-color: #f9e8e5; }
     .ci-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
     .ci-icon { font-size: 15px; }
     .ci-title { font-size: 14px; font-weight: 600; }
-    .ci-contact, .ci-date { font-size: 13px; color: var(--yi-text-muted, #888); }
-    .pend-tag { font-size: 12px; font-weight: 700; color: #b3261e; border: 1px solid #f0b8b2;
+    .ci-contact, .ci-date { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
+    .pend-tag { font-size: 12px; font-weight: 700; color: #b3261e; border: 1px solid #f9e8e5;
                 border-radius: 999px; padding: 1px 8px; }
-    .done-tag { font-size: 12px; font-weight: 600; color: var(--yi-text-muted, #888);
-                border: 1px solid var(--yi-border, #ccc); border-radius: 999px; padding: 1px 8px; }
+    .done-tag { font-size: 12px; font-weight: 600; color: var(--yi-text-muted, #5b6270);
+                border: 1px solid var(--yi-border, #e1e4ec); border-radius: 999px; padding: 1px 8px; }
     .spacer { flex: 1; }
     .icon-btn { border: none; background: transparent; cursor: pointer; color: inherit; display: inline-flex; }
     .icon-btn.danger { color: #b3261e; }
     .icon-btn mat-icon { font-size: 19px; width: 19px; height: 19px; }
-    .ci-summary { font-size: 13px; color: var(--yi-text-muted, #666); margin: 7px 0 0; }
+    .ci-summary { font-size: 13px; color: var(--yi-text-muted, #5b6270); margin: 7px 0 0; }
     .ci-body { font-size: 14px; line-height: 1.6; margin: 6px 0 0; white-space: pre-wrap; }
     .ci-full { white-space: pre-wrap; font-size: 14px; line-height: 1.6; font-family: inherit;
-               border-top: 1px dashed var(--yi-border, #ddd); padding-top: 8px; }
-    .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+               border-top: 1px dashed var(--yi-border, #e1e4ec); padding-top: 8px; }
+    .mini-btn { border: 1px solid var(--yi-border, #e1e4ec); background: transparent; color: inherit;
                 border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 6px; }
-    .arr-box { border: 1px dashed #e6a23c; border-radius: 10px; padding: 10px 12px; margin-top: 10px;
-               background: color-mix(in srgb, #e6a23c 6%, transparent); }
+    .arr-box { border: 1px dashed #b06a00; border-radius: 10px; padding: 10px 12px; margin-top: 10px;
+               background: color-mix(in srgb, #b06a00 6%, transparent); }
     .arr-title { font-size: 14px; font-weight: 600; }
     .arr-actions { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
     .loose-title { font-size: 16px; font-weight: 600; margin: 18px 0 4px; }
-    .move-row { margin-top: 9px; font-size: 13px; color: var(--yi-text-muted, #777); }
-    .fld.sm { border: 1px solid var(--yi-border, #ccc); border-radius: 7px; padding: 4px 7px;
+    .move-row { margin-top: 9px; font-size: 13px; color: var(--yi-text-muted, #5b6270); }
+    .fld.sm { border: 1px solid var(--yi-border, #e1e4ec); border-radius: 6px; padding: 4px 7px;
               font-size: 14px; background: transparent; color: inherit; margin-left: 6px; }
   `]
 })

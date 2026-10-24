@@ -131,7 +131,7 @@ interface PermGroup {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 10px; max-height: 46vh; overflow-y: auto; padding-right: 4px;
     }
-    .perm-group { border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 8px; padding: 8px 10px; }
+    .perm-group { border: 1px solid rgba(31, 36, 48, 0.08); border-radius: 8px; padding: 8px 10px; }
     .group-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .group-name { font-size: 13px; font-weight: 600; text-transform: capitalize; }
     .group-meta { font-size: 11.5px; opacity: 0.5; }
@@ -143,11 +143,11 @@ interface PermGroup {
     .err {
       display: flex; align-items: center; gap: 6px;
       margin-top: 8px; padding: 8px 12px; border-radius: 6px;
-      background: #fdecea; color: #b3261e; font-size: 13px;
+      background: #f9e8e5; color: #b3261e; font-size: 13px;
     }
     .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
     /* 票106(C5):字段级校验提示(对齐票12/75 .field-error 口径) */
-    .field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
+    .field-error { color: #b3261e; font-size: 12px; margin: -14px 0 10px 2px; }
   `]
 })
 export class AdminRoleDialogComponent {

@@ -19,8 +19,8 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
  * 关闭值:确认 = 输入框当前原始字符串(不做任何解析/校验,口径留给调用方,
  * 与原生 prompt 返回原始字符串一致);取消/Esc/点遮罩 = undefined。
  *
- * 风格基准与 ConfirmDialog 同套(白卡片 · 圆角 12 · 标题 15px/600 #1f2733 ·
- * 取消=描边按钮 · 确认=实心蓝 #2f6fed)。
+ * 风格基准与 ConfirmDialog 同套(白卡片 · 圆角 12 · 标题 15px/600 #1f2430 ·
+ * 取消=描边按钮 · 确认=实心蓝 #2e3a8c)。
  */
 export interface InputDialogData {
   title: string;
@@ -70,8 +70,8 @@ export interface InputDialogData {
   styles: [`
     .cf-wrap { padding: 22px 22px 18px; }
     .cf-head { display: flex; align-items: center; gap: 10px; }
-    .cf-icon { font-size: 22px; width: 22px; height: 22px; color: #2f6fed; }
-    .cf-title { font-size: 15px; font-weight: 600; color: #1f2733; line-height: 1.4; }
+    .cf-icon { font-size: 22px; width: 22px; height: 22px; color: #2e3a8c; }
+    .cf-title { font-size: 15px; font-weight: 600; color: #1f2430; line-height: 1.4; }
     .cf-field { display: block; margin: 14px 0 0 32px; }
     .cf-actions button { white-space: nowrap; }
     .cf-actions {
@@ -81,12 +81,12 @@ export interface InputDialogData {
     }
     .cf-spacer { flex: 1 1 auto; }
     .cf-cancel {
-      --mdc-outlined-button-label-text-color: #5a6472;
-      --mdc-outlined-button-outline-color: #dde3ec;
+      --mdc-outlined-button-label-text-color: #5b6270;
+      --mdc-outlined-button-outline-color: #e1e4ec;
       border-radius: 8px;
     }
     .cf-ok {
-      --mdc-filled-button-container-color: #2f6fed;
+      --mdc-filled-button-container-color: #2e3a8c;
       border-radius: 8px;
     }
   `]

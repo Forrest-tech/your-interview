@@ -220,7 +220,7 @@ export class MaterialTreeComponent {
    * 色值与右侧 Mark 按钮同一套(Notion 浅色图标色)。
    */
   private static readonly MARK_DOTS: Record<string, string> = {
-    orange: '#d9730d', red: '#d44c47', green: '#448361'
+    orange: '#b06a00', red: '#b3261e', green: '#2e3a8c'
   };
   markDot(color?: string | null): string | null {
     return (color && MaterialTreeComponent.MARK_DOTS[color]) || null;

@@ -458,8 +458,8 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
           <div class="score-side">
             <div class="gauge-wrap">
               <svg class="gauge" viewBox="0 0 190 190" width="190" height="190">
-                <circle cx="95" cy="95" r="80" fill="none" stroke="#e9ebee" stroke-width="16"/>
-                <circle cx="95" cy="95" r="80" fill="none" stroke="#2bb5d8" stroke-width="16"
+                <circle cx="95" cy="95" r="80" fill="none" stroke="#e1e4ec" stroke-width="16"/>
+                <circle cx="95" cy="95" r="80" fill="none" stroke="#2e3a8c" stroke-width="16"
                         stroke-linecap="round" [attr.stroke-dasharray]="gaugeArc(m.score)"
                         transform="rotate(-90 95 95)"/>
               </svg>
@@ -663,31 +663,31 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     h2[mat-dialog-title].detail-header {
       display: flex; align-items: flex-start; gap: 16px;
       margin: 0; padding: 24px 32px 20px;
-      border-bottom: 1px solid #ECEEF1;
+      border-bottom: 1px solid #e1e4ec;
     }
     h2 .title-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-    h2 .main-title { font-size: 20px; font-weight: 700; line-height: 1.3; color: #1A1D23; }
-    h2 .sub-title { font-size: 15px; font-weight: 400; color: #6E7681; }
+    h2 .main-title { font-size: 20px; font-weight: 700; line-height: 1.3; color: #1f2430; }
+    h2 .sub-title { font-size: 15px; font-weight: 400; color: #5b6270; }
     .detail-header .logo-wrap { flex: 0 0 62px; width: 62px; height: 62px; }
-    .detail-header .logo-avatar { width: 62px; height: 62px; border-radius: 12px; font-size: 22px; }
-    .detail-header .logo { width: 62px; height: 62px; border-radius: 12px; }
+    .detail-header .logo-avatar { width: 62px; height: 62px; border-radius: 10px; font-size: 22px; }
+    .detail-header .logo { width: 62px; height: 62px; border-radius: 10px; }
     .header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
     .hdr-btn {
       display: inline-flex; align-items: center; gap: 8px;
       height: 38px; padding: 0 16px;
-      background: #fff; border: 1px solid #E3E6EA; border-radius: 8px;
-      font-size: 14px; color: #3D4451; cursor: pointer;
+      background: #ffffff; border: 1px solid #e1e4ec; border-radius: 8px;
+      font-size: 14px; color: #1f2430; cursor: pointer;
     }
-    .hdr-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #6E7681; }
-    .hdr-btn:hover { background: #F7F8FA; }
-    .hdr-btn.danger { border-color: #EF4444; color: #EF4444; }
-    .hdr-btn.danger mat-icon { color: #EF4444; }
+    .hdr-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #5b6270; }
+    .hdr-btn:hover { background: #f5f6f8; }
+    .hdr-btn.danger { border-color: #b3261e; color: #b3261e; }
+    .hdr-btn.danger mat-icon { color: #b3261e; }
     .hdr-close {
       display: inline-flex; align-items: center; justify-content: center;
       width: 38px; height: 38px; border: none; background: none; cursor: pointer;
-      color: #3D4451; border-radius: 8px;
+      color: #1f2430; border-radius: 8px;
     }
-    .hdr-close:hover { background: #F7F8FA; }
+    .hdr-close:hover { background: #f5f6f8; }
     .detail-body { padding: 0 !important; flex: 1 1 auto !important; overflow-y: auto !important; min-height: 0 !important; }
     /* ★ Simplify 真站:双栏布局 */
     .two-col { display: flex; min-height: 100%; align-items: stretch; }
@@ -695,31 +695,31 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .side-col {
       flex: 0 0 360px; width: 360px;
       padding: 24px 32px 24px 0;
-      border-left: 1px solid #ECEEF1;
+      border-left: 1px solid #e1e4ec;
       margin-left: 32px; padding-left: 32px;
     }
     .status-card {
-      background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;
+      background: #ffffff; border: 1px solid #e1e4ec; border-radius: 10px;
       padding: 24px; margin-bottom: 24px;
     }
-    .status-card h3 { font-size: 16px; font-weight: 700; color: #1A1D23; margin: 0 0 16px; }
+    .status-card h3 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; color: #1f2430; margin: 0 0 16px; }
     .status-select {
       width: 100%; height: 40px; padding: 0 16px;
-      border: 1px solid #E3E6EA; border-radius: 8px;
-      font-size: 14px; color: #1F2937; background: #fff;
+      border: 1px solid #e1e4ec; border-radius: 8px;
+      font-size: 14px; color: #1f2430; background: #ffffff;
       margin-bottom: 20px; cursor: pointer;
     }
     .timeline { position: relative; padding-left: 28px; }
     .timeline::before {
       content: ''; position: absolute; left: 9px; top: 8px; bottom: 8px;
-      width: 2px; background: #E3E6EA;
+      width: 2px; background: #e1e4ec;
     }
     .tl-item { position: relative; padding: 0 0 20px; }
     .tl-item:last-child { padding-bottom: 0; }
     .tl-dot {
       position: absolute; left: -28px; top: 2px;
       width: 20px; height: 20px; border-radius: 50%;
-      border: 2px solid #D4D9E0; background: #fff;
+      border: 2px solid #c6cdea; background: #ffffff;
     }
     .tl-item.done .tl-dot { border-color: var(--brand); }
     .tl-item.done .tl-dot::after {
@@ -727,47 +727,47 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       width: 8px; height: 8px; border-radius: 50%; background: var(--brand);
       transform: translate(-50%, -50%);
     }
-    .tl-name { font-size: 14px; font-weight: 600; color: #1F2937; }
-    .tl-item:not(.done) .tl-name { font-weight: 500; color: #6E7681; }
-    .tl-date { font-size: 13px; color: #8A94A6; margin-left: 8px; }
+    .tl-name { font-size: 14px; font-weight: 600; color: #1f2430; }
+    .tl-item:not(.done) .tl-name { font-weight: 500; color: #5b6270; }
+    .tl-date { font-size: 13px; color: #68707e; margin-left: 8px; }
     .tl-edit { margin-left: 8px; color: var(--brand); cursor: pointer; font-size: 14px; }
     .notes-card {
-      background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;
+      background: #ffffff; border: 1px solid #e1e4ec; border-radius: 10px;
       padding: 24px;
     }
-    .notes-card h3 { font-size: 16px; font-weight: 700; color: #1A1D23; margin: 0 0 16px; }
+    .notes-card h3 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; color: #1f2430; margin: 0 0 16px; }
     .notes-card .nc-head { display: flex; align-items: center; justify-content: space-between; }
     .tab-body { padding: 24px 32px; box-sizing: border-box; }
     .tab-body > section:first-child { margin-top: 0; }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
-    .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
+    .rejection { margin: 6px 0 0; font-size: 13px; color: #b3261e; }
     /* ★ Simplify 对齐:状态 pill (灰色圆角) */
     .status-pill {
-      display: inline-block; padding: 6px 16px; border-radius: 16px;
-      background: rgba(0,0,0,0.06); font-size: 13px; font-weight: 500;
+      display: inline-block; padding: 6px 16px; border-radius: 999px;
+      background: rgba(31, 36, 48, 0.06); font-size: 13px; font-weight: 500;
       margin-right: 8px; margin-bottom: 4px;
     }
-    .status-pill.warn { background: #fff3e0; color: #e65100; }
+    .status-pill.warn { background: #faf0d2; color: #b06a00; }
     /* ★ Simplify 对齐:字段两列,标签小灰字在上 */
     .fields {
       display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px;
       margin: 0 0 24px;
     }
     .field { display: flex; flex-direction: column; gap: 4px; }
-    .flabel { font-size: 12px; color: rgba(0,0,0,0.45); letter-spacing: 0.2px; }
+    .flabel { font-size: 12px; color: rgba(31, 36, 48, 0.45); letter-spacing: 0.2px; }
     .fvalue { font-size: 14px; line-height: 1.5; }
     .fvalue.missing, .pre.missing { color: var(--ink-2); }
     .kw-gap { margin: 0 0 20px; }
     .kw-gap .flabel { display: block; margin-bottom: 8px; }
     /* ---- Simplify 视觉:section 统一 ---- */
     section { margin: 0; padding: 18px 0; }
-    section + section, mat-divider + section { border-top: 1px solid rgba(0,0,0,0.08); }
+    section + section, mat-divider + section { border-top: 1px solid rgba(31, 36, 48, 0.08); }
     mat-divider { display: none; }
     .sec-head {
       display: flex; align-items: center; gap: 6px;
       margin: 0 0 16px; font-size: 17px; font-weight: 700;
-      color: #1A1D23; letter-spacing: 0;
+      color: #1f2430; letter-spacing: 0;
     }
     .sec-head .edit-btn { margin-left: auto; }
     /* ---- 2026-10-19:Simplify 像素级 Resume Score ---- */
@@ -775,20 +775,20 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .score-cols { display: flex; gap: 24px; align-items: flex-start; }
     .score-jd-card {
       flex: 1.2; min-width: 0;
-      border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;
-      background: #fff;
+      border: 1px solid #e1e4ec; border-radius: 10px; overflow: hidden;
+      background: #ffffff;
     }
     .score-jd-head {
       display: flex; align-items: center; gap: 8px;
-      padding: 14px 20px; background: #f9fafb;
-      border-bottom: 1px solid #e5e7eb;
-      font-size: 15px; font-weight: 700; color: #111827;
+      padding: 14px 20px; background: #f5f6f8;
+      border-bottom: 1px solid #e1e4ec;
+      font-size: 15px; font-weight: 700; color: #1f2430;
     }
-    .score-jd-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: #6b7280; }
-    .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #1f2937; max-height: 560px; overflow-y: auto; }
+    .score-jd-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: #68707e; }
+    .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #1f2430; max-height: 560px; overflow-y: auto; }
     .score-jd-body p { margin: 0 0 12px; }
     .hl-kw {
-      color: #0e7490; background: #cffafe; border-radius: 4px;
+      color: #2e3a8c; background: #e4e7f5; border-radius: 999px;
       padding: 1px 6px; font-weight: 600; white-space: nowrap;
     }
     .score-side { flex: 1; min-width: 0; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -798,43 +798,43 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       position: absolute; inset: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
     }
-    .gauge-num { font-size: 52px; font-weight: 800; color: #111827; line-height: 1; }
+    .gauge-num { font-size: 52px; font-weight: 800; color: #1f2430; line-height: 1; }
     .gauge-pill {
       font-size: 12px; font-weight: 700; border-radius: 999px; padding: 4px 12px;
     }
-    .gauge-pill.good { background: #d1fae5; color: #065f46; }
-    .gauge-pill.fair { background: #fde68a; color: #92400e; }
-    .gauge-pill.poor { background: #fecdd3; color: #9f1239; }
+    .gauge-pill.good { background: #e2f1e8; color: #1b7f4b; }
+    .gauge-pill.fair { background: #faf0d2; color: #b06a00; }
+    .gauge-pill.poor { background: #f9e8e5; color: #b3261e; }
     .score-banner {
       display: flex; align-items: center; gap: 10px;
-      width: 100%; border-radius: 12px; padding: 14px 18px;
-      font-size: 14px; color: #111827;
+      width: 100%; border-radius: 10px; padding: 14px 18px;
+      font-size: 14px; color: #1f2430;
     }
-    .score-banner.ok { background: #d1fae5; }
-    .score-banner.warn { background: #fef3c7; }
+    .score-banner.ok { background: #e2f1e8; }
+    .score-banner.warn { background: #faf0d2; }
     .score-banner mat-icon { font-size: 24px; width: 24px; height: 24px; flex-shrink: 0; }
-    .score-banner.ok mat-icon { color: #059669; }
-    .score-banner.warn mat-icon { color: #d97706; }
+    .score-banner.ok mat-icon { color: #1b7f4b; }
+    .score-banner.warn mat-icon { color: #b06a00; }
     .kw-card {
-      width: 100%; border: 1px solid #e5e7eb; border-radius: 12px;
-      padding: 20px; background: #fff;
+      width: 100%; border: 1px solid #e1e4ec; border-radius: 10px;
+      padding: 20px; background: #ffffff;
     }
-    .kw-card-title { font-size: 15px; font-weight: 700; color: #111827; margin: 0 0 16px; }
+    .kw-card-title { font-size: 15px; font-weight: 700; color: #1f2430; margin: 0 0 16px; }
     .kw-pills { display: flex; flex-wrap: wrap; gap: 8px; }
     .kw-pill {
       font-size: 13px; font-weight: 500; border-radius: 999px; padding: 6px 14px;
     }
-    .kw-pill.miss { background: #fecdd3; color: #9f1239; }
-    .kw-pill.hit { background: #d9f7e8; color: #065f46; }
+    .kw-pill.miss { background: #f9e8e5; color: #b3261e; }
+    .kw-pill.hit { background: #e2f1e8; color: #1b7f4b; }
     .about-job-edit { display: flex; justify-content: flex-end; margin: 0 0 8px; }
     .about-job-edit .edit-btn { margin: 0; }
     .about-job .jd-subhead {
       margin: 22px 0 10px; font-size: 14px; font-weight: 700;
-      color: #1f2937;
+      color: #1f2430;
     }
-    .about-job p { margin: 0 0 16px; line-height: 1.7; font-size: 14px; color: #1f2937; }
+    .about-job p { margin: 0 0 16px; line-height: 1.7; font-size: 14px; color: #1f2430; }
     .about-job .jd-list { margin: 0 0 16px; padding-left: 20px; }
-    .about-job .jd-list li { margin: 0 0 8px; line-height: 1.6; font-size: 14px; color: #333; }
+    .about-job .jd-list li { margin: 0 0 8px; line-height: 1.6; font-size: 14px; color: #1f2430; }
     /* LinkedIn 风格:长描述默认折叠 */
     .about-job-body.collapsed { max-height: 320px; overflow: hidden; position: relative; }
     .about-job-body.collapsed::after {
@@ -845,38 +845,41 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .doc-filename {
       display: flex; align-items: center; gap: 8px;
       font-weight: 600; font-size: 14px; margin: 12px 0;
-      color: #1f2937;
+      color: #1f2430;
     }
-    .doc-filename mat-icon { color: #d32f2f; }
+    .doc-filename mat-icon { color: #b3261e; }
     .resume-text-view {
       white-space: pre-wrap; word-break: break-word;
-      font-size: 13px; line-height: 1.6; color: #1f2937;
-      background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+      /* 票123 R-1.6:<pre> 的 UA 默认 font-family 是 monospace,
+         这会让简历正文读数成等宽(与全站正文声音不符)。显式 inherit 回正文栈。 */
+      font-family: inherit;
+      font-size: 13px; line-height: 1.6; color: #1f2430;
+      background: #f5f6f8; border: 1px solid #e1e4ec; border-radius: 8px;
       padding: 12px 14px; margin: 12px 0; max-height: 480px; overflow: auto;
     }
     .doc-pdf-viewer {
-      width: 100%; height: 700px; border: 1px solid #e5e7eb;
-      border-radius: 8px; background: #f9fafb;
+      width: 100%; height: 700px; border: 1px solid #e1e4ec;
+      border-radius: 8px; background: #f5f6f8;
     }
     .more-link {
       background: none; border: none; padding: 4px 0; cursor: pointer;
-      color: #666; font-size: 14px; font-weight: 500;
+      color: #5b6270; font-size: 14px; font-weight: 500;
     }
-    .more-link:hover { color: #0A66C2; text-decoration: underline; }
+    .more-link:hover { color: #2e3a8c; text-decoration: underline; }
     .teal-link {
-      color: #0E9FCC; font-weight: 500; text-decoration: none;
+      color: #2e3a8c; font-weight: 500; text-decoration: none;
       display: inline-flex; align-items: center; gap: 6px;
     }
     .teal-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
     .teal-link:hover { text-decoration: underline; }
     .import-jd-btn {
-      margin-left: 8px; font-size: 13px; color: #0E9FCC;
+      margin-left: 8px; font-size: 13px; color: #2e3a8c;
       padding: 2px 8px; min-width: 0; line-height: 1.5;
     }
     .import-jd-btn mat-icon { font-size: 14px; width: 14px; height: 14px; margin-right: 4px; }
     .jd-body { margin-top: 24px; }
-    .jd-body p { font-size: 14px; color: #3D4451; line-height: 1.57; margin: 0 0 14px; }
-    .jd-body .dim { color: #8A94A6; }
+    .jd-body p { font-size: 14px; color: #1f2430; line-height: 1.57; margin: 0 0 14px; }
+    .jd-body .dim { color: #68707e; }
     section h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.3px; opacity: 0.7; }
     .pre { margin: 0; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
     .history { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.9; }
@@ -889,11 +892,11 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .rounds { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.8; }
     .tag {
       display: inline-block; margin-left: 6px; padding: 1px 7px;
-      border-radius: 10px; background: rgba(0, 0, 0, 0.06); font-size: 11.5px;
+      border-radius: 10px; background: rgba(31, 36, 48, 0.06); font-size: 11.5px;
     }
-    .tag.outcome-pass { background: #e8f5e9; color: #2e7d32; }
-    .tag.outcome-fail { background: #ffebee; color: #c62828; }
-    .link { font-size: 13px; word-break: break-all; color: #303f9f; }
+    .tag.outcome-pass { background: #e2f1e8; color: #1b7f4b; }
+    .tag.outcome-fail { background: #f9e8e5; color: #b3261e; }
+    .link { font-size: 13px; word-break: break-all; color: #2e3a8c; }
     /* ---- 匹配分析 ---- */
     .match-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
     .score {
@@ -902,29 +905,29 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     }
     .score-num { font-size: 26px; line-height: 1; }
     .score-unit { font-size: 12px; }
-    .score.good { background: #e8f5e9; color: #2e7d32; }
-    .score.fair { background: #fff8e1; color: #ef6c00; }
-    .score.poor { background: #ffebee; color: #c62828; }
+    .score.good { background: #e2f1e8; color: #1b7f4b; }
+    .score.fair { background: #faf0d2; color: #b06a00; }
+    .score.poor { background: #f9e8e5; color: #b3261e; }
     .score-note { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
-    .score-note strong.good { color: #2e7d32; }
-    .score-note strong.fair { color: #ef6c00; }
-    .score-note strong.poor { color: #c62828; }
+    .score-note strong.good { color: #1b7f4b; }
+    .score-note strong.fair { color: #b06a00; }
+    .score-note strong.poor { color: #b3261e; }
     .score-note span { opacity: 0.6; }
     .kw-group { margin-bottom: 12px; }
     .kw-title { display: block; font-size: 11.5px; opacity: 0.55; margin-bottom: 6px; }
     .kw-list { display: flex; flex-wrap: wrap; gap: 6px; }
     .kw {
-      padding: 2px 9px; border-radius: 11px; font-size: 12px;
+      padding: 2px 9px; border-radius: 999px; font-size: 12px;
       border: 1px solid transparent;
     }
-    .kw.miss { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
-    .kw.ok { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
+    .kw.miss { background: #f9e8e5; color: #b3261e; border-color: #f9e8e5; }
+    .kw.ok { background: #e2f1e8; color: #1b7f4b; border-color: #e2f1e8; }
     .soft-note { margin: 8px 0 0; font-size: 12px; opacity: 0.55; line-height: 1.6; }
     /* ---- JD 全文折叠 ---- */
     .fold-head { cursor: default; }
     .fold-head > span:first-child { display: flex; align-items: center; gap: 6px; }
     .fold-head:hover { opacity: 1; }
-    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(0,0,0,0.45); }
+    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(31, 36, 48, 0.45); }
     .fold-len { font-size: 11.5px; opacity: 0.45; font-weight: 400; }
     /* Documents tab 简历区:右侧操作按钮 */
     .doc-actions { margin-left: auto; display: flex; gap: 4px; align-items: center; }
@@ -936,7 +939,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .jd-peek { opacity: 0.65; }
     .src-link {
       display: inline-flex; align-items: center; gap: 4px;
-      font-size: 12.5px; color: #303f9f; margin-bottom: 8px;
+      font-size: 12.5px; color: #2e3a8c; margin-bottom: 8px;
     }
     .src-link mat-icon { font-size: 15px; width: 15px; height: 15px; }
     /* ---- 求职信 ---- */
@@ -944,15 +947,15 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       margin-left: 6px; padding: 1px 8px; border-radius: 10px;
       font-size: 11px; font-weight: 500;
     }
-    .cl-status.cl-draft { background: rgba(0,0,0,0.07); }
-    .cl-status.cl-generated { background: #e3f2fd; color: #1565c0; }
-    .cl-status.cl-final { background: #e8f5e9; color: #2e7d32; }
+    .cl-status.cl-draft { background: rgba(31, 36, 48, 0.07); }
+    .cl-status.cl-generated { background: #e4e7f5; color: #2e3a8c; }
+    .cl-status.cl-final { background: #e2f1e8; color: #1b7f4b; }
     .cl-hint {
       display: flex; align-items: flex-start; gap: 6px;
       margin: 0 0 10px; padding: 9px 11px; border-radius: 8px;
-      background: #fff8e1; font-size: 12.5px; line-height: 1.6;
+      background: #faf0d2; font-size: 12.5px; line-height: 1.6;
     }
-    .cl-hint.stale { background: #f3e5f5; }
+    .cl-hint.stale { background: #e4e7f5; }
     .cl-hint mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
     .cl-extra { width: 100%; margin-bottom: 4px; }
     .cl-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
@@ -962,12 +965,12 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .cl-editor {
       width: 100%; margin-top: 10px; padding: 12px;
       font-family: inherit; font-size: 13.5px; line-height: 1.7;
-      border: 1px solid rgba(0,0,0,0.18); border-radius: 8px;
+      border: 1px solid rgba(31, 36, 48, 0.18); border-radius: 8px;
       resize: vertical; box-sizing: border-box;
     }
     .cl-preview {
       margin-top: 10px; padding: 14px 16px; border-radius: 8px;
-      background: rgba(0,0,0,0.028); font-size: 13.5px; line-height: 1.75;
+      background: rgba(31, 36, 48, 0.028); font-size: 13.5px; line-height: 1.75;
       white-space: pre-wrap; word-break: break-word;
       max-height: 420px; overflow-y: auto;
     }
@@ -976,23 +979,23 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .warn-banner {
       display: flex; align-items: flex-start; gap: 8px;
       margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
-      background: #fef9e7; border: 1px solid #f9e79f;
-      font-size: 12.5px; line-height: 1.6; color: #7d6608;
+      background: #faf0d2; border: 1px solid #faf0d2;
+      font-size: 12.5px; line-height: 1.6; color: #b06a00;
     }
     .warn-banner mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
     /* ★ Simplify 对齐:朴素 textarea (非 mat-form-field) */
     .plain-area {
       width: 100%; box-sizing: border-box;
       padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.6;
-      border: 1px solid rgba(0,0,0,0.2); border-radius: 8px; resize: vertical;
-      background: #fff; color: inherit;
+      border: 1px solid rgba(31, 36, 48, 0.2); border-radius: 8px; resize: vertical;
+      background: #ffffff; color: inherit;
     }
     .plain-area:focus { outline: none; border-color: var(--brand); }
-    .plain-area::placeholder { color: rgba(0,0,0,0.35); }
-    .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(0,0,0,0.45); line-height: 1.5; }
+    .plain-area::placeholder { color: rgba(31, 36, 48, 0.35); }
+    .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(31, 36, 48, 0.45); line-height: 1.5; }
     /* 票75:字段级校验提示(对齐票12 Knowledge 弹窗 .field-error 口径:红色 12px、贴字段下方) */
-    .field-error { color: #ba1a1a; font-size: 12px; margin: -14px 0 10px 2px; }
-    .field-error-plain { color: #ba1a1a; font-size: 12px; margin: 4px 0 8px 2px; }
+    .field-error { color: #b3261e; font-size: 12px; margin: -14px 0 10px 2px; }
+    .field-error-plain { color: #b3261e; font-size: 12px; margin: 4px 0 8px 2px; }
     .gen-btn { margin: 2px 0 4px; }
     .gen-btn[disabled] { opacity: 0.5; }
 
@@ -1001,13 +1004,13 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .logo-avatar {
       display: flex; align-items: center; justify-content: center;
       width: 40px; height: 40px; border-radius: 10px;
-      color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
+      color: #ffffff; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
       text-transform: uppercase; overflow: hidden;
     }
     .logo {
       position: absolute; inset: 0;
       width: 40px; height: 40px; border-radius: 10px; object-fit: contain;
-      background: #fff;
+      background: #ffffff;
     }
     .detail-logo { margin-right: 0; flex: 0 0 40px; }
 
@@ -1015,20 +1018,20 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     /* ★ Simplify 真站:5 tab */
     .tabs {
       display: flex; gap: 30px; margin: 0; padding: 0 32px;
-      border-bottom: 1px solid #ECEEF1;
+      border-bottom: 1px solid #e1e4ec;
     }
     .tab {
       appearance: none; background: none; border: none; cursor: pointer;
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 14px 2px; font-size: 14px; color: #8A94A6;
+      padding: 14px 2px; font-size: 14px; color: #68707e;
       border-bottom: 3px solid transparent; margin-bottom: -1px;
     }
     .tab mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .tab:hover { color: #3D4451; }
-    .tab.active { color: #1A1D23; font-weight: 600; border-bottom-color: #1A1D23; }
+    .tab:hover { color: #1f2430; }
+    .tab.active { color: #1f2430; font-weight: 600; border-bottom-color: #1f2430; }
     .tab-placeholder {
       display: flex; flex-direction: column; align-items: center; gap: 12px;
-      padding: 60px 32px; color: #8A94A6;
+      padding: 60px 32px; color: #68707e;
     }
     .tab-placeholder mat-icon { font-size: 48px; width: 48px; height: 48px; opacity: 0.4; }
     .tab-placeholder p { font-size: 16px; margin: 0; }
@@ -1038,7 +1041,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .comms-empty { font-size: 13px; opacity: 0.55; margin: 4px 0 0; }
     .comm-form {
       padding: 12px; margin-bottom: 14px; border-radius: 10px;
-      background: rgba(0,0,0,0.025); border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(31, 36, 48, 0.025); border: 1px solid rgba(31, 36, 48, 0.08);
     }
     .comm-form mat-form-field { width: 100%; }
     .comm-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -1047,23 +1050,23 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .comm-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
     .comm-item {
       display: flex; gap: 10px; align-items: flex-start;
-      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08);
+      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(31, 36, 48, 0.08);
     }
     .comm-type {
       flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px;
-      background: rgba(0,0,0,0.06);
+      background: rgba(31, 36, 48, 0.06);
     }
-    .comm-type.ct-email { background: #e3f2fd; color: #1565c0; }
-    .comm-type.ct-call { background: #e8f5e9; color: #2e7d32; }
-    .comm-type.ct-interview { background: #fff3e0; color: #ef6c00; }
-    .comm-type.ct-message { background: #f3e5f5; color: #7b1fa2; }
-    .comm-type.ct-note { background: #eceff1; color: #455a64; }
+    .comm-type.ct-email { background: #e4e7f5; color: #2e3a8c; }
+    .comm-type.ct-call { background: #e2f1e8; color: #1b7f4b; }
+    .comm-type.ct-interview { background: #faf0d2; color: #b06a00; }
+    .comm-type.ct-message { background: #e4e7f5; color: #2e3a8c; }
+    .comm-type.ct-note { background: #e1e4ec; color: #5b6270; }
     .comm-body { flex: 1; min-width: 0; }
     .comm-subject { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
     .comm-content { margin: 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
     .comm-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 11.5px; opacity: 0.6; }
     .comm-actions { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
-    .comm-actions .danger { color: #c62828; }
+    .comm-actions .danger { color: #b3261e; }
 
     /* ---- 自备问题 (Questions, G-07) ---- */
     /* ★ 票74:q-* 原在 tracker.component.scss,票52 拆分抽屉时漏迁 —— 封装作用域
@@ -1072,14 +1075,14 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
        .q-text 另加换行约束(min-width:0 + overflow-wrap:anywhere +
        word-break:break-word,与本文件 .comm-content/.pre 口径一致)。 */
     .q-empty {
-      text-align: center; padding: 32px 16px; color: rgba(0,0,0,0.45);
+      text-align: center; padding: 32px 16px; color: rgba(31, 36, 48, 0.45);
     }
     .q-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.4; }
     .q-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
     .q-item {
       display: flex; align-items: flex-start; gap: 12px;
-      padding: 12px 14px; border: 1px solid rgba(0,0,0,0.08);
-      border-radius: 8px; background: #fff;
+      padding: 12px 14px; border: 1px solid rgba(31, 36, 48, 0.08);
+      border-radius: 8px; background: #ffffff;
     }
     .q-num {
       flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%;
@@ -1091,7 +1094,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       overflow-wrap: anywhere; word-break: break-word;
     }
     .q-del { flex: 0 0 auto; opacity: 0.5; }
-    .q-del:hover { opacity: 1; color: #c62828; }
+    .q-del:hover { opacity: 1; color: #b3261e; }
     .q-add-form { margin-bottom: 16px; }
     .q-add-form .full { width: 100%; }
     .q-add-actions { display: flex; gap: 8px; margin-top: 8px; }

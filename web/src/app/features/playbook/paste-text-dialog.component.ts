@@ -39,7 +39,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
   styles: [`
     .paste-text { min-width: 560px; }
     .full { width: 100%; }
-    .hint { color: #666; font-size: 13px; margin: 0 0 12px; }
+    .hint { color: #5b6270; font-size: 13px; margin: 0 0 12px; }
     textarea { font-family: inherit; }
   `]
 })

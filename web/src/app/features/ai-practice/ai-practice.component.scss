@@ -1743,13 +1743,13 @@
   line-height: 1.35;
   color: var(--ink-2);
 }
-.ec.e-mispron b { background: #fff4d6; color: #9a6b00; }
-.ec.e-omission b { background: #f1f3f5; color: var(--parked); } /* 遗漏数字对比度例外:#98a1ad 压 #f1f3f5 仅约 2.3:1,数字改用 parked(约 4.6:1),chip 底色不变 */
+.ec.e-mispron b { background: #fff4d6; color: #906500; } /* 票129 段二(票120 偏差1 A 案收口,2026-10-23 Forrest 裁 A):仅图例 chip 数字同色系加深 #9a6b00→#906500,实测 4.28→4.73:1;正文 .rw.e-mispron 色值不动 */
+.ec.e-omission b { background: #f1f3f5; color: #616976; } /* 遗漏数字:#98a1ad 压 #f1f3f5 仅约 2.3:1,原改用 parked #68707e 实测 4.49 仍差 4.5 一线;票129 段二(票120 偏差1 A 案)chip 作用域内改同色系加深 #616976(实测 4.98:1),chip 底色不变、全局 --parked 不动 */
 .ec.e-insertion b { background: #fde8f0; color: #b8266b; }
 .ec.e-break b { background: #ffe4e0; color: #c5221f; }
 .ec.e-pause b { background: #e8eef7; color: #4a6285; }
 /* n=0 弱化只由 chip 承担:chip 转停放灰,标签保持 --ink-2 全强度(标签是数据,须过对比) */
-.ec.ec-zero b { background: var(--parked-fill); color: var(--parked); }
+.ec.ec-zero b { background: var(--parked-fill); color: #616976; } /* 票129 段二(票120 偏差1 A 案):全 0 态数字原 parked #68707e 压 parked-fill 实测 4.37<4.5,chip 作用域内加深 #616976(实测 4.85:1);底色与全局令牌不动 */
 
 /* ---------- 单词弹层:音标 + 错误类型 + 得分 ---------- */
 .word-pop {

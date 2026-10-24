@@ -141,6 +141,8 @@ export interface PrepQuestionItem {
   weaknessRelated?: boolean;
   stdSpoken?: string | { ai?: string | null; user?: string | null } | null;
   stdTechnical?: string | { ai?: string | null; user?: string | null } | null;
+  /** 弱点预案卡的内部诊断(票133):卡因 / 匹配弱点建议;只在卡片内显示一行,永不进入导出。 */
+  note?: string | null;
   /** 已入 Tech Stack 时挂接的条目 id —— 答案以 Tech Stack 那份为准(同一条记录)。 */
   knowledgeId?: string | null;
   /** 我的回答(入 Tech Stack 时用作 myAnswer 的补充)。 */

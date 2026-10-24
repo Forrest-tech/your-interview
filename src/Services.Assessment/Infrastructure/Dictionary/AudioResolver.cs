@@ -60,38 +60,61 @@ public sealed class AudioResolver
 
     // ---------- 核心包（构建期 manifest 驱动） ----------
 
+    private readonly object _coreLock = new();
+
+    /// <summary>测试可见：核心包 manifest 实际构建次数（票130 TB-2 并发单次构建断言用）。</summary>
+    internal int CoreBuildCountForTests;
+
+    /// <summary>核心包表是否已一次性发布（票130 预热 W3 完成标志）。</summary>
+    internal bool CoreTablePublished => Volatile.Read(ref _coreByWord) is not null;
+
+    /// <summary>票130 预热入口：强制核心包表构建完成（与 ResolveCore 同一路径，不旁路）。</summary>
+    internal void WarmCore() => EnsureCoreLoaded();
+
     private void EnsureCoreLoaded()
     {
-        if (_coreByWord is not null) return;
-        _coreByWord = [];
-        _coreByKey = [];
-        try
+        if (Volatile.Read(ref _coreByWord) is not null) return;
+        lock (_coreLock)
         {
-            var manifestPath = Path.Combine(_options.ResolveAudioCoreDir(), "audio-core-manifest.json");
-            if (!File.Exists(manifestPath)) return;
-            var doc = JsonDocument.Parse(File.ReadAllText(manifestPath)).RootElement;
-            foreach (var f in doc.GetProperty("files").EnumerateArray())
+            if (_coreByWord is not null) return;
+            // 票130 §4.3 一次性发布：本地建完才对外可见——构建进行中其他线程阻塞在锁上，
+            // 读不到「表非 null 但条目未填齐」的半成品（基线先发布空表再逐条填充的竞态在此收口）。
+            var byWord = new Dictionary<(string Word, string Accent), (string Key, string FileName)>();
+            var byKey = new Dictionary<string, (string Word, string Accent, string FileName)>();
+            CoreBuildCountForTests++;
+            try
             {
-                var key = f.GetProperty("key").GetString()!;
-                var word = f.GetProperty("word").GetString()!;
-                var accent = f.GetProperty("accent").GetString()!;
-                var stored = f.TryGetProperty("storedAs", out var s) ? s.GetString()! : $"{key}.mp3";
-                _coreByWord[(word, accent)] = (key, stored);
-                _coreByKey[key] = (word, accent, stored);
+                var manifestPath = Path.Combine(_options.ResolveAudioCoreDir(), "audio-core-manifest.json");
+                if (File.Exists(manifestPath))
+                {
+                    var doc = JsonDocument.Parse(File.ReadAllText(manifestPath)).RootElement;
+                    foreach (var f in doc.GetProperty("files").EnumerateArray())
+                    {
+                        var key = f.GetProperty("key").GetString()!;
+                        var word = f.GetProperty("word").GetString()!;
+                        var accent = f.GetProperty("accent").GetString()!;
+                        var stored = f.TryGetProperty("storedAs", out var s) ? s.GetString()! : $"{key}.mp3";
+                        byWord[(word, accent)] = (key, stored);
+                        byKey[key] = (word, accent, stored);
+                    }
+                }
             }
-        }
-        catch (Exception)
-        {
-            // manifest 损坏 → 核心包按缺席处理（懒缓存层仍在）
-            _coreByWord = [];
-            _coreByKey = [];
+            catch (Exception)
+            {
+                // manifest 损坏 → 核心包按缺席处理（懒缓存层仍在）
+                byWord = [];
+                byKey = [];
+            }
+            Volatile.Write(ref _coreByKey, byKey);
+            Volatile.Write(ref _coreByWord, byWord);
         }
     }
 
     public (string Key, string FileName)? ResolveCore(string word, string accent)
     {
         EnsureCoreLoaded();
-        return _coreByWord!.TryGetValue((word, accent), out var hit) ? hit : null;
+        var table = Volatile.Read(ref _coreByWord)!;
+        return table.TryGetValue((word, accent), out var hit) ? hit : null;
     }
 
     // ---------- audio-index 反查（懒拉取用） ----------

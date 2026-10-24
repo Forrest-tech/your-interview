@@ -83,6 +83,9 @@ builder.Services.AddHttpClient("dictionary-audio", c =>
 });
 builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Dictionary.AudioResolver>();
 builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryService>();
+// 票130 §4:启动预热(主机启动层一次性后台触发,把一次性构建搬出第一次查词;失败诚实降级不拖垮启动)
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryWarmup>();
+builder.Services.AddHostedService<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryWarmupHostedService>();
 
 var app = builder.Build();
 

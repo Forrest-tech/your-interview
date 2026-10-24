@@ -190,6 +190,28 @@ export function anyAccentAvailable(
 }
 
 /**
+ * 票131 §4 R-T1:口音页签放行判据（卡级析取）——词元该口音有真人录音，
+ * 或任一词形该口音有真人录音。词形侧走 formPlayable 严格口径
+ * （audio 缺失/null/口音值非布尔 → false）；只读已到达卡面的 DTO，零请求。
+ * 与 accentButtonVisible（词元播放钮判据）隔离：页签放行 ≠ 词元钮出现。
+ */
+export function tabEnabled(
+  card: Pick<DictCardData, 'audio' | 'forms'>,
+  accent: DictAccent,
+): boolean {
+  return accentButtonVisible(card.audio, accent)
+    || (card.forms ?? []).some((f) => formPlayable(f, accent));
+}
+
+/**
+ * 票131 §4 R-T1 / 126 §8.3 卡级原文口径：整卡任一口音有声 ⟺
+ * 任一口音页签放行。整卡「暂无发音」行出现 ⟺ 本函数为 false。
+ */
+export function cardHasAnyAudio(card: Pick<DictCardData, 'audio' | 'forms'>): boolean {
+  return tabEnabled(card, 'us') || tabEnabled(card, 'uk');
+}
+
+/**
  * 词形播放钮渲染判据(票128 §6 R-F1/R-F6,纯函数):钮渲染 ⟺ form.audio 存在
  * 且当前口音值严格为布尔 true。audio 缺失(旧后端混搭)/null/口音值非布尔
  * 一律无钮——诚实默认「不确定就不给假钮」,逐词形隔离,不牵连其他词形与整卡。

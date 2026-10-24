@@ -6,8 +6,9 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  DictAccent, DictCardState, accentButtonVisible, anyAccentAvailable, foldView,
-  formPlayable, lemmaRoleLabels, loadDictAccent, saveDictAccent,
+  DictAccent, DictCardState, accentButtonVisible, cardHasAnyAudio as cardHasAnyAudioOf,
+  foldView, formPlayable, lemmaRoleLabels, loadDictAccent, saveDictAccent,
+  tabEnabled as tabEnabledOf,
 } from './dictionary.helpers';
 import {
   DictShadowAction, DictShadowView, shadowErrorLabelKey, shadowSettleFocusSelectors,
@@ -83,13 +84,13 @@ export type DictPlayRequest =
 
             <div class="dict-phon-row">
               @for (acc of accents(); track acc) {
-                @if (phoneticOf(c, acc) || accentVisible(c, acc)) {
+                @if (phoneticOf(c, acc) || tabEnabled(c, acc)) {
                   <span class="dict-phon" [class.dict-phon-active]="accent() === acc">
                     <button type="button" class="dict-accent-tag"
                             (click)="setAccent(acc)"
-                            [disabled]="!accentVisible(c, acc)"
-                            [attr.title]="!accentVisible(c, acc) ? noAudioLabel(acc) : null"
-                            [attr.aria-label]="!accentVisible(c, acc) ? noAudioLabel(acc) : (acc === 'us' ? t('dict.accentUs') : t('dict.accentUk'))">
+                            [disabled]="!tabEnabled(c, acc)"
+                            [attr.title]="!tabEnabled(c, acc) ? noAudioLabel(acc) : null"
+                            [attr.aria-label]="!tabEnabled(c, acc) ? noAudioLabel(acc) : (acc === 'us' ? t('dict.accentUs') : t('dict.accentUk'))">
                       {{ acc === 'us' ? 'US' : 'UK' }}
                     </button>
                     @if (phoneticOf(c, acc); as ipa) {
@@ -105,7 +106,7 @@ export type DictPlayRequest =
                   </span>
                 }
               }
-              @if (!anyAccent(c)) {
+              @if (!cardHasAnyAudio(c)) {
                 <span class="dict-noaudio">{{ t('dict.noAudio') }}</span>
               }
             </div>
@@ -351,8 +352,12 @@ export type DictPlayRequest =
     </section>
   `,
   styles: [`
+    /* 票130 H1 定宽:宿主在浮层内撑满面板宽,卡随之为面板宽(全状态恒等,§5.1)——
+       骨架条的百分比宽据此解析出真实宽度,不再塌成 0(白条根因)。 */
+    :host { display: block; width: 100%; }
     .dict-card {
       position: relative;
+      width: 100%; box-sizing: border-box;
       padding: 14px 16px;
       background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
       color: var(--ink);
@@ -506,8 +511,17 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
     return accentButtonVisible(c.audio, acc);
   }
 
-  protected anyAccent(c: NonNullable<ReturnType<typeof this.card>>): boolean {
-    return anyAccentAvailable(c.audio);
+  /**
+   * 票131 §4 R-T1:口音页签放行 = 卡级析取（词元 ∨ 任一词形），只消费 helpers
+   * 纯函数；词元播放钮仍走 accentVisible（R-T4 隔离），两者不许混同。
+   */
+  protected tabEnabled(c: NonNullable<ReturnType<typeof this.card>>, acc: DictAccent): boolean {
+    return tabEnabledOf(c, acc);
+  }
+
+  /** 票131 §4 R-T7:整卡有声 = 任一口音页签放行；状态行判据唯一来源。 */
+  protected cardHasAnyAudio(c: NonNullable<ReturnType<typeof this.card>>): boolean {
+    return cardHasAnyAudioOf(c);
   }
 
   /**

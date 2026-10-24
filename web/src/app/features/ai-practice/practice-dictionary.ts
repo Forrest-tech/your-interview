@@ -9,6 +9,9 @@ import {
 import { DictionaryShadowSession, DictShadowAction } from './dictionary-shadow';
 import type { DictPlayRequest } from './dictionary-card.component';
 
+/** 票130 H3:空壳延迟出示阈值(ms)——落定快于此值不挂浮层、内容直达;慢于此值才挂骨架壳。 */
+export const DICT_POPUP_DELAY_MS = 150;
+
 /**
  * 票119 篇章点词词典(宿主委托类,同 PracticeTtsPlayer 例):
  * 篇章 token 化、查词状态机、roving tabindex、发音链播放入口都在这里,
@@ -24,6 +27,8 @@ import type { DictPlayRequest } from './dictionary-card.component';
 export class PracticeDictionary {
   constructor(private readonly host: AiPracticeComponent) {
     document.addEventListener('click', this.docClickHandler);
+    document.addEventListener('keydown', this.docKeydownHandler);
+    document.addEventListener('scroll', this.pendingScrollHandler, true);
   }
 
   /**
@@ -60,6 +65,26 @@ export class PracticeDictionary {
     this.close(false);
   };
 
+  /**
+   * 票130 §6.3:待挂出态下 Esc 取消本次开卡。焦点此时仍在触发词上(浮层未挂、焦点未入卡),
+   * 卡根 keydown 够不着,必须在文档层接住;卡已挂出时焦点在卡内,Esc 由卡根处理并
+   * stopPropagation,不会与此重复触发。取消后按既有 Esc 收口(焦点留/回触发词)。
+   */
+  private readonly docKeydownHandler = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || !this.pendingMount) return;
+    if (this.shadow.isRecording) return;
+    this.close(true);
+  };
+
+  /**
+   * 票130 §6.3:待挂出态无浮层可依宿主滚动跟随——滚动时只记录锚点是否已出视口,
+   * 挂出动作(阈值到时/落定直达)发生前以 anchorInView() 复核,出视口则不挂出。
+   */
+  private readonly pendingScrollHandler = (): void => {
+    if (!this.pendingMount || !this.triggerEl) return;
+    if (!this.anchorInView()) this.anchorOutOfView = true;
+  };
+
   /** 篇章 token(词/分隔符交替,拼接恒等于原文)。 */
   readonly tokens = computed(() => tokenizePassage(this.host.readonlyText() ?? ''));
   readonly wordCount = computed(() => this.tokens().reduce((n, t) => n + (t.kind === 'word' ? 1 : 0), 0));
@@ -78,6 +103,16 @@ export class PracticeDictionary {
   private howl: Howl | null = null;
   private objectUrl: string | null = null;
 
+  // ---------- 票130 H3 空壳延迟出示状态 ----------
+  /** 浮层当前是否已挂出(挂出动作只经 mountPopup 收口,关闭路径统一清)。 */
+  private popupMounted = false;
+  /** 本次开卡处于延迟窗内(已点词、未挂出):三事件状态机(§6.2)的「待挂出」态。 */
+  private pendingMount = false;
+  /** 延迟窗计时器(阈值事件);落定/取消先到即作废。 */
+  private mountTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 待挂出期间锚点曾滚出视口(挂出前复核命中即不挂出,§6.3)。 */
+  private anchorOutOfView = false;
+
   /** 当前触发词元素(宿主 overlay 滚动跟随/出视口判定用)。 */
   get triggerElement(): HTMLElement | null {
     return this.triggerEl;
@@ -86,6 +121,8 @@ export class PracticeDictionary {
   /** 换素材时由宿主 effect 调用:关卡、清已查标记、roving 归首。 */
   reset(): void {
     this.shadow.teardown();
+    this.cancelPendingMount();
+    this.popupMounted = false;
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -97,7 +134,10 @@ export class PracticeDictionary {
 
   destroy(): void {
     this.shadow.teardown();
+    this.cancelPendingMount();
     document.removeEventListener('click', this.docClickHandler);
+    document.removeEventListener('keydown', this.docKeydownHandler);
+    document.removeEventListener('scroll', this.pendingScrollHandler, true);
     this.howl?.unload();
     this.howl = null;
     if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
@@ -119,15 +159,47 @@ export class PracticeDictionary {
     void this.open(token, event.currentTarget as HTMLElement | null);
   }
 
-  async open(token: PassageToken, el: HTMLElement | null): Promise<void> {
+  async open(
+    token: PassageToken,
+    el: HTMLElement | null,
+    opts?: { keepCurrentCardUntilSettle?: boolean },
+  ): Promise<void> {
     const key = lookupKeyOf(token.text);
+    const seq = ++this.requestSeq;
     this.triggerEl = el;
     this.openWordIndex.set(token.wordIndex);
     this.roving.set(token.wordIndex);
-    this.state.set({ status: 'loading', query: key });
-    // popup 先行挂出(骨架在浮层内呈现,§6.3);点另一词时宿主把浮层重新锚定到新词。
-    if (el) this.host.openDictPopup(el);
-    const seq = ++this.requestSeq;
+    // K-2 裁决(评分门微瑕,主线裁):错误卡重试时旧卡保留在席直至新结果落定——
+    // 不卸下、不换骨架、不重锚;150ms 延迟窗只管「无卡在席」的全新挂载(与 §6.5 同界)。
+    const keepCurrent = !!opts?.keepCurrentCardUntilSettle
+      && this.popupMounted
+      && this.state()?.status === 'error';
+    if (keepCurrent) {
+      this.cancelPendingMount();
+    } else if (this.popupMounted) {
+      // §6.5 已挂出切换:立即重锚、新词 loading 立即可见,不进延迟窗(D7)。
+      this.cancelPendingMount();
+      this.state.set({ status: 'loading', query: key });
+      if (el) this.host.openDictPopup(el);
+    } else {
+      // §6.2 全新挂载进延迟窗:落定先到直达挂出(事件 1)、150ms 阈值先到挂骨架壳
+      // (事件 2)、取消先到永不挂出(事件 3,见 close/reset/代际校验)。
+      this.cancelPendingMount();
+      this.state.set({ status: 'loading', query: key });
+      this.anchorOutOfView = false;
+      this.pendingMount = true;
+      this.mountTimer = setTimeout(() => {
+        this.mountTimer = null;
+        if (seq !== this.requestSeq || !this.pendingMount) return;
+        this.pendingMount = false;
+        if (!this.anchorInView()) {
+          // §6.3:锚点已出视口 → 不挂出,按 closeFromScroll 语义收口。
+          this.closeFromScroll();
+          return;
+        }
+        this.mountPopup(el);
+      }, DICT_POPUP_DELAY_MS);
+    }
     // 票127 §5.2:跟读目标解析与卡内容加载并行开跑(自带代际丢弃,不与查词主链互相等待)。
     this.shadow.begin(key);
     try {
@@ -148,15 +220,67 @@ export class PracticeDictionary {
       // 负卡/错误卡无跟读区(票127 §5.1)。
       this.shadow.attachNoCard();
     }
+    if (seq !== this.requestSeq) return;
+    // §6.2 事件 1:终态先于阈值抵达 → 立即以终态挂出,全程无 loading 帧(§6.4 错误同理不等阈值)。
+    this.settleMount(el);
     // 内容落定后卡高才稳定:让宿主按真实高度重选浮层位序(开卡瞬间量到的是骨架高,
     // CDK 不会自行翻转 —— E2 活体实测)。
     this.host.refreshDictPopupPosition();
+  }
+
+  /** 挂出浮层的唯一收口(挂出后 popupMounted 为真;后续落定在同一浮层内原地换内容)。 */
+  private mountPopup(el: HTMLElement | null): void {
+    if (!el) return;
+    this.host.openDictPopup(el);
+    this.popupMounted = true;
+  }
+
+  /** 落定收口:待挂出态下终态抵达 → 作废计时器、复核锚点、立即以终态挂出。 */
+  private settleMount(el: HTMLElement | null): void {
+    if (!this.pendingMount) return;
+    this.clearMountTimer();
+    this.pendingMount = false;
+    if (!this.anchorInView()) {
+      this.closeFromScroll();
+      return;
+    }
+    this.mountPopup(el);
+  }
+
+  private clearMountTimer(): void {
+    if (this.mountTimer !== null) {
+      clearTimeout(this.mountTimer);
+      this.mountTimer = null;
+    }
+  }
+
+  /** 取消待挂出(关闭/重置/新开卡接管时):计时器作废、本次开卡永不挂出。 */
+  private cancelPendingMount(): void {
+    this.clearMountTimer();
+    this.pendingMount = false;
+  }
+
+  /**
+   * 锚点是否仍在视口内(判据与宿主滚动跟随一致:底缘出顶或顶缘出底即出视口)。
+   * 元素无几何能力(测试替身)或视口高度不可得时按在视口内处理,不误杀。
+   */
+  private anchorInView(): boolean {
+    if (this.anchorOutOfView) return false;
+    const el = this.triggerEl;
+    if (!el || typeof el.getBoundingClientRect !== 'function') return true;
+    const vh = (globalThis as { innerHeight?: number }).innerHeight;
+    if (vh === undefined) return true;
+    const r = el.getBoundingClientRect();
+    return !(r.bottom < 0 || r.top > vh);
   }
 
   /** 关闭词卡;returnFocus 时焦点送回触发词(Esc 路径,SPEC §6.3)。 */
   close(returnFocus: boolean): void {
     // 票127 §6.5/§9.4:关卡即 teardown 跟读(录音中经 Close 关闭 = 先停录丢弃再关卡)。
     this.shadow.teardown();
+    // 票130 §6.3:待挂出态被关闭 → 计时器作废、永不挂出(取消事件)。
+    this.cancelPendingMount();
+    this.popupMounted = false;
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -170,6 +294,8 @@ export class PracticeDictionary {
    */
   closeFromScroll(): void {
     this.shadow.teardown();
+    this.cancelPendingMount();
+    this.popupMounted = false;
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -177,12 +303,12 @@ export class PracticeDictionary {
     this.triggerEl?.focus({ preventScroll: true });
   }
 
-  /** 错误简卡重试:以当前 query 重新查词。 */
+  /** 错误简卡重试:以当前 query 重新查词(K-2:旧错误卡保留在席直至新结果落定)。 */
   retry(): void {
     const st = this.state();
     if (!st) return;
     const token: PassageToken = { kind: 'word', text: st.query, wordIndex: this.openWordIndex() };
-    void this.open(token, this.triggerEl);
+    void this.open(token, this.triggerEl, { keepCurrentCardUntilSettle: true });
   }
 
   /**

@@ -18,6 +18,7 @@
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { of } from 'rxjs';
 import { describe, expect, it, beforeEach } from '@jest/globals';
 import { PracticeGradingSession } from './practice-grading-session';
 import { wordClickAction } from './word-click.helpers';
@@ -62,6 +63,10 @@ function makeSession(words: WordScoreDto[]): { session: PracticeGradingSession; 
   const host = {
     selectedId: () => 'mat-1',
     recorder: { forMaterial: () => [take] },
+    // 票132 supersede 接缝(规格 §9.1 登记):replayAt 对本地无真源的重载
+    // take 改走鉴权懒拉取,宿主替身补 practiceApi——fetch 同步回真 blob,
+    // 分发去向/seek/不开 pop 的断言口径不变。
+    practiceApi: { fetchRecordingAudio: (_id: string) => of(new Blob(['real-audio'])) },
     t: (key: string) => key,
     toast: (msg: string) => { toasts.push(msg); },
     toasts,

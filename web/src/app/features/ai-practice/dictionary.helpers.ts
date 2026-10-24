@@ -189,6 +189,81 @@ export function anyAccentAvailable(
   return accentButtonVisible(audio, 'us') || accentButtonVisible(audio, 'uk');
 }
 
+/** popup 与锚点间距(票126 §6.2:首选位/翻转位均为 8px)。 */
+export const DICT_POPUP_GAP_PX = 8;
+
+/** popup 高度上限(票126 §6.3:≤ 70vh,超出卡内纵向滚动;移动 sheet 的 60vh 由卡 CSS 媒体查询管,不走本 helper)。 */
+export const DICT_POPUP_MAX_VH_RATIO = 0.7;
+
+export interface DictPopupGeometryInput {
+  /** 视口高(px)。 */
+  viewportHeight: number;
+  /** 锚点(触发词)矩形的视口顶/底(px)。 */
+  anchorTop: number;
+  anchorBottom: number;
+  /** 卡自然高度(内容全高;宿主以 scrollHeight 量,未受任何 max-height 钳制的内容高)。 */
+  naturalHeight: number;
+  /**
+   * 宿主已由 CDK 落位定侧时传入,helper 按该侧钳制/预测,不再自选侧;
+   * 缺省时按 §6.2 自选侧:下方装得下 → 下方;上方装得下 → 上方;双侧皆不足 → 较大一侧。
+   */
+  side?: 'above' | 'below';
+}
+
+export interface DictPopupGeometry {
+  side: 'above' | 'below';
+  /** 所选侧可用空间:锚点到该侧视口缘的距离扣 8px 间距(§6.2)。 */
+  sideSpace: number;
+  /** 70vh 上限(px,向下取整,与卡 CSS 的 70vh 同值)。 */
+  vhCap: number;
+  /** 应施加的最大高度 = min(70vh, 所选侧可用空间);双侧不足时即 §6.2 末条的钳制值。 */
+  maxHeight: number;
+  /** maxHeight 是否低于 70vh 上限(发生了空间钳制,宿主据此决定是否落 inline max-height)。 */
+  clamped: boolean;
+  /** 以 min(自然高, maxHeight) 渲染的实际高度。 */
+  renderedHeight: number;
+  /** 渲染后卡的视口顶/底(钳制正确时恒 cardTop ≥ 0 且 cardBottom ≤ viewportHeight)。 */
+  cardTop: number;
+  cardBottom: number;
+}
+
+/**
+ * popup 高度钳制几何(票126 §6.2 末条 + 复测缺陷 F-126-R1):
+ * 上下皆不足以容纳整卡时,取可用空间较大一侧、卡高收至该侧可用空间、卡内纵向滚动。
+ * 缺陷原形(复测 r08):视口 560、词顶 308/词底 ≈318、卡高 392(=70vh)——
+ * 只翻转不钳高时卡顶 = 308 − 8 − 392 = −92,词头/Close 溢出视口上方不可达;
+ * 经本 helper 钳制:maxHeight = min(392, 300) = 300 → 卡顶 = 0、卡底 = 300,完整在视口内。
+ * 纯函数:宿主把 CDK 落位后的实测矩形喂进来定侧与落值,Jest 直接钉几何(无 DOM)。
+ */
+export function dictPopupGeometry(input: DictPopupGeometryInput): DictPopupGeometry {
+  const gap = DICT_POPUP_GAP_PX;
+  const vhCap = Math.floor(input.viewportHeight * DICT_POPUP_MAX_VH_RATIO);
+  const spaceBelow = input.viewportHeight - input.anchorBottom - gap;
+  const spaceAbove = input.anchorTop - gap;
+  const cappedNatural = Math.min(input.naturalHeight, vhCap);
+  let side = input.side;
+  if (!side) {
+    if (cappedNatural <= spaceBelow) side = 'below';
+    else if (cappedNatural <= spaceAbove) side = 'above';
+    else side = spaceAbove >= spaceBelow ? 'above' : 'below';
+  }
+  const sideSpace = side === 'above' ? spaceAbove : spaceBelow;
+  const maxHeight = Math.max(0, Math.min(vhCap, sideSpace));
+  const renderedHeight = Math.max(0, Math.min(input.naturalHeight, maxHeight));
+  const cardTop = side === 'below' ? input.anchorBottom + gap : input.anchorTop - gap - renderedHeight;
+  const cardBottom = side === 'below' ? cardTop + renderedHeight : input.anchorTop - gap;
+  return {
+    side,
+    sideSpace,
+    vhCap,
+    maxHeight,
+    clamped: maxHeight < vhCap,
+    renderedHeight,
+    cardTop,
+    cardBottom,
+  };
+}
+
 /** 词典卡状态机(组件与卡共用):加载 / 命中 / 负结果 / 网络失败。 */
 export type DictCardState =
   | { status: 'loading'; query: string }

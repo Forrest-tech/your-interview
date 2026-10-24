@@ -21,7 +21,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import * as ngCore from '@angular/core';
 import { ApiClient } from '../../core/api/api-client';
 import { PracticeDictionary } from './practice-dictionary';
-import { negativeCardLines, PassageToken } from './dictionary.helpers';
+import { dictPopupGeometry, negativeCardLines, PassageToken } from './dictionary.helpers';
 
 beforeAll(() => {
   // PracticeDictionary 构造期挂 document 监听;node 环境无 document,给最小替身。
@@ -202,6 +202,85 @@ describe('TJ-6(S-2③:负卡无任何发音呈现)', () => {
     for (const f of ['dictionary-card.component.ts', 'practice-dictionary.ts', 'dictionary.helpers.ts']) {
       expect(readSrc(f)).not.toContain('speechSynthesis');
     }
+  });
+});
+
+describe('F-126-R1(复测缺陷:popup 双侧不足高度钳制,规格 §6.2 末条)', () => {
+  // 复测 r08 的实测几何:视口高 560、末行词顶 308/词底 ≈318、卡高 392(=70vh 上限)。
+  const defect = { viewportHeight: 560, anchorTop: 308, anchorBottom: 318, naturalHeight: 500 };
+
+  it('缺陷原形(无钳制):只翻转不钳高 → 卡顶 = 308 − 8 − 392 = −92,词头/Close 溢出视口上方', () => {
+    // 这行算术即复测实测值 −92:翻转与间距都对,缺的只是高度钳制。
+    expect(defect.anchorTop - 8 - 392).toBe(-92);
+  });
+
+  it('双侧不足(上 300 > 下 234)→ 取较大侧上方,卡高钳至 300,卡顶 ≥ 0 且卡底 ≤ 视口高', () => {
+    const g = dictPopupGeometry(defect);
+    expect(g.side).toBe('above');
+    expect(g.sideSpace).toBe(300);
+    expect(g.vhCap).toBe(392);
+    expect(g.clamped).toBe(true);
+    expect(g.maxHeight).toBe(300);
+    expect(g.cardTop).toBe(0);
+    expect(g.cardBottom).toBe(300);
+    expect(g.cardTop).toBeGreaterThanOrEqual(0);
+    expect(g.cardBottom).toBeLessThanOrEqual(defect.viewportHeight);
+  });
+
+  it('词头与 Close 在视口内可达:二者都在卡顶起始段(词头行/Close 顶距 10px),卡顶 ≥ 0 即整段在视口内', () => {
+    const g = dictPopupGeometry(defect);
+    // 卡内布局:词头行自卡顶起(14px padding + 22px 词头),Close 钮 absolute top:10px——
+    // 均落在卡顶 + 48px 以内;卡顶 ≥ 0 且该段底 ≤ 视口高 ⇒ 二者可见可点。
+    expect(g.cardTop).toBeGreaterThanOrEqual(0);
+    expect(g.cardTop + 48).toBeLessThanOrEqual(defect.viewportHeight);
+  });
+
+  it('宿主定侧模式(side=above)与自选侧同钳制(CDK 落位后宿主按实测侧落值)', () => {
+    const g = dictPopupGeometry({ ...defect, side: 'above' });
+    expect(g.maxHeight).toBe(300);
+    expect(g.cardTop).toBe(0);
+    expect(g.cardBottom).toBe(300);
+  });
+
+  it('双侧不足但下方较大 → 取下方钳高,卡底恰抵视口底缘、不溢出', () => {
+    const g = dictPopupGeometry({ viewportHeight: 560, anchorTop: 200, anchorBottom: 210, naturalHeight: 500 });
+    expect(g.side).toBe('below');
+    expect(g.sideSpace).toBe(342);
+    expect(g.maxHeight).toBe(342);
+    expect(g.cardTop).toBe(218);
+    expect(g.cardBottom).toBe(560);
+    expect(g.cardBottom).toBeLessThanOrEqual(560);
+  });
+
+  it('单侧充足不钳制:下方装得下整卡 → 下方位、maxHeight 回 70vh 上限、clamped=false', () => {
+    const g = dictPopupGeometry({ viewportHeight: 900, anchorTop: 100, anchorBottom: 118, naturalHeight: 500 });
+    expect(g.side).toBe('below');
+    expect(g.clamped).toBe(false);
+    expect(g.maxHeight).toBe(630);
+    expect(g.renderedHeight).toBe(500);
+    expect(g.cardTop).toBe(126);
+    expect(g.cardBottom).toBe(626);
+  });
+
+  it('下方不足、上方装得下 → 翻转上方且不钳高(既有翻转行为不回归)', () => {
+    const g = dictPopupGeometry({ viewportHeight: 560, anchorTop: 400, anchorBottom: 418, naturalHeight: 350 });
+    expect(g.side).toBe('above');
+    expect(g.clamped).toBe(false);
+    expect(g.renderedHeight).toBe(350);
+    expect(g.cardBottom).toBe(392); // 词顶 − 8
+    expect(g.cardTop).toBe(42);
+  });
+
+  it('宿主契约:落位收尾走 dictPopupGeometry 钳高(inline max-height),开卡/落定/滚动三路都接', () => {
+    const ts = readSrc('ai-practice.component.ts');
+    expect(ts).toContain('dictPopupGeometry({');
+    expect(ts).toContain('applyDictPopupClamp');
+    expect(ts).toContain("querySelector<HTMLElement>('.dict-card')");
+    expect(ts).toContain('card.scrollHeight');
+    expect(ts).toContain('card.style.maxHeight');
+    // 滚动路径:updatePosition 后同步重算钳高(锚点位置变 → 可用空间变)
+    const scrollBlock = ts.slice(ts.indexOf('dictScrollHandler'));
+    expect(scrollBlock).toContain('applyDictPopupClamp()');
   });
 });
 

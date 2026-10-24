@@ -29,6 +29,7 @@ import { PracticeGradingSession } from './practice-grading-session';
 import { clampFocusIndex, hasSeekableFiller, wordClickAction } from './word-click.helpers';
 import { PracticeDictionary } from './practice-dictionary';
 import { DictionaryCardComponent } from './dictionary-card.component';
+import { dictPopupGeometry } from './dictionary.helpers';
 import type { MarkColor } from './practice-material-tree';
 
 
@@ -82,11 +83,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   private readonly vcr = inject(ViewContainerRef);
   @ViewChild('dictPopupTpl') private dictPopupTpl?: TemplateRef<unknown>;
   private dictOverlayRef: OverlayRef | null = null;
+  /** 当前浮层是否为桌面锚定模式(移动 sheet 不走 §6.2 高度钳制,其 60vh 上限归卡 CSS 媒体查询)。 */
+  private dictPopupAnchored = false;
 
   /** 开浮层:锚定触发词跨度;已开时先拆旧层再按新锚点重挂(点另一词 = 内容切换 + 重新锚定,§6.7)。 */
   openDictPopup(anchor: HTMLElement): void {
     if (!this.dictPopupTpl) return;
     this.closeDictPopup();
+    this.dictPopupAnchored = window.innerWidth >= 640;
     const ref = window.innerWidth < 640
       ? this.overlay.create({
           // §6.5 移动端:底部 sheet(左右/底部各 8px),锚定/翻转规则不适用
@@ -120,22 +124,68 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     this.dictOverlayRef = ref;
     ref.attach(new TemplatePortal(this.dictPopupTpl, this.vcr));
     document.addEventListener('scroll', this.dictScrollHandler, true);
+    // 骨架高度下先行一轮钳制(内容落定后 refreshDictPopupPosition 会按真实高度再钳)。
+    requestAnimationFrame(() => this.applyDictPopupClamp());
   }
 
   /**
    * 按卡的真实高度让 CDK 重选浮层位序:开卡瞬间 CDK 量到的是骨架(loading)高度,
    * 内容落定/折叠切换后必须重选,否则下方空间不足时翻转永不触发、卡溢出视口(E2 实测)。
-   * rAF 一帧:等信号驱动的渲染落定后再量高。
+   * rAF 一帧:等信号驱动的渲染落定后再量高;重选后随即按 §6.2 末条钳高(F-126-R1)。
    */
   refreshDictPopupPosition(): void {
-    requestAnimationFrame(() => this.dictOverlayRef?.updatePosition());
+    requestAnimationFrame(() => {
+      this.dictOverlayRef?.updatePosition();
+      this.applyDictPopupClamp();
+    });
+  }
+
+  /**
+   * §6.2 末条高度钳制(复测缺陷 F-126-R1):CDK 只负责选侧与 8px 间距,卡高原本只受卡自身
+   * max-height:70vh 约束——视口矮且所点词上下空间皆不足时(如 560px 视口、词顶 308、
+   * 上 300/下 234 皆 < 392),翻转落位正确但整卡仍 392 高,卡顶被推到 −92px,
+   * 词头/音标/Close/播放钮溢出视口上方不可达。
+   * 本方法在每次落位后收尾:以面板与锚点的实测相对位置定侧(不猜 CDK 的选择),
+   * 用 dictPopupGeometry 按该侧可用空间算钳制值,低于 70vh 时落到卡的 inline max-height
+   * (卡自带 overflow-y:auto,钳后即卡内滚动),再 updatePosition 以钳后高度重新锚定
+   * (上方落位时把卡顶拉回视口内)。空间充足时清掉 inline 值,回归卡 CSS 的 70vh 口径。
+   * 移动 sheet(<640)不走本钳制(§6.5:60vh + bottom 8px 已保证完整在视口内)。
+   */
+  private applyDictPopupClamp(): void {
+    const ref = this.dictOverlayRef;
+    if (!ref || !this.dictPopupAnchored) return;
+    const trigger = this.dict.triggerElement;
+    if (!trigger) return;
+    const card = ref.overlayElement.querySelector<HTMLElement>('.dict-card');
+    if (!card) return;
+    const anchor = trigger.getBoundingClientRect();
+    const pane = ref.overlayElement.getBoundingClientRect();
+    // 面板整体在锚点上方(底缘不低于词顶)即上方落位,其余按下方落位(含右对齐兜底位序)。
+    const side: 'above' | 'below' = pane.bottom <= anchor.top + 1 ? 'above' : 'below';
+    const geo = dictPopupGeometry({
+      viewportHeight: window.innerHeight,
+      anchorTop: anchor.top,
+      anchorBottom: anchor.bottom,
+      // scrollHeight = 未受 max-height 钳制的内容全高(卡 overflow-y:auto,量得到全高)。
+      naturalHeight: card.scrollHeight,
+      side,
+    });
+    const next = geo.clamped ? `${geo.maxHeight}px` : '';
+    if (card.style.maxHeight !== next) {
+      card.style.maxHeight = next;
+      ref.updatePosition();
+    }
   }
 
   /** 关浮层(幂等):PracticeDictionary 的 close/reset 路径与本组件卸载都经此收口。 */
   closeDictPopup(): void {
     document.removeEventListener('scroll', this.dictScrollHandler, true);
+    // 钳制 inline 值随浮层一并清(卡经模板视图复用,不清会把上一词的钳高带进下一次开卡的首帧)。
+    const card = this.dictOverlayRef?.overlayElement.querySelector<HTMLElement>('.dict-card');
+    if (card) card.style.maxHeight = '';
     this.dictOverlayRef?.dispose();
     this.dictOverlayRef = null;
+    this.dictPopupAnchored = false;
   }
 
   /**
@@ -149,7 +199,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (!trigger) return;
     const r = trigger.getBoundingClientRect();
     if (r.bottom < 0 || r.top > window.innerHeight) this.dict.closeFromScroll();
-    else ref.updatePosition();
+    else {
+      ref.updatePosition();
+      // 滚动改锚点位置 → 所选侧可用空间随之变,钳高同步重算(F-126-R1)。
+      this.applyDictPopupClamp();
+    }
   };
   readonly myRecordings = this.grading.myRecordings;
   readonly nodes = this.tree.nodes;

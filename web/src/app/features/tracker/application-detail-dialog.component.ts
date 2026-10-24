@@ -125,7 +125,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
               <button mat-button class="import-jd-btn" (click)="startEditJdText(); scrollToJd()">
                 <mat-icon>input</mat-icon>{{ t('tracker.dImportJd') }}
               </button>
-            } @else { — }
+            } @else { <span class="missing">{{ t('tracker.notRecorded') }}</span> }
           </span>
         </div>
         <div class="field"><span class="flabel">{{ t('tracker.saWorkMode') }}</span><span class="fvalue" [class.missing]="!detail.workMode">{{ detail.workMode || t('tracker.notRecorded') }}</span></div>

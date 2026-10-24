@@ -1,0 +1,71 @@
+// ============================================================================
+// 票123 R-9:The Track 的**唯一几何样式源**
+// ============================================================================
+//
+// 定稿(REMEDIATION-PLAN §R-9「The geometry contract」):
+//
+//   The stepper, the band, the rounds track, and the Tracker drawer's
+//   communication timeline must share **one** style source: node diameter
+//   **16px**, node border **2px**, rail width **2px**, the state treatments and
+//   rail colors quoted above, defined once (shared SCSS partial / CSS custom
+//   properties) and consumed by all four.
+//
+//   Three dialects exist in the tree today, measured in R2: the stepper
+//   (16px / 2px); the **drawer timeline** — `.tl-dot` is **20px** with a 2px
+//   `#D4D9E0` border, its rail is **2px `#E3E6EA`**, and its done glyph is a
+//   brand border + 8px brand center dot; and R1's mock invention (struck).
+//   The drawer timeline is therefore **migrated** onto the shared constants.
+//
+// 本文件是那个「shared SCSS partial」。四个消费者:
+//   1. Tracker 列表 stepper      features/tracker/tracker.component.scss
+//   2. Dashboard Pipeline Band   features/dashboard/dashboard.component.scss
+//   3. Playbook 详情 Rounds Track features/playbook/playbook-detail.component.scss
+//   4. Tracker 抽屉时间轴        features/tracker/application-detail-dialog.component.ts
+//
+// 为什么是 CSS 自定义属性而不是 SCSS mixin:几何值要能被**运行时**读到
+// (几何探针在浏览器里量 computed style),而且四个消费者分布在四个文件里
+// (其中一个是组件内联样式表),自定义属性是唯一能让它们真正共用一份声明的机制。
+// ============================================================================
+
+:root {
+  // ---- 节点几何 ----
+  --track-node-size: 16px;
+  --track-node-border: 2px;
+
+  // ---- 轨道几何 ----
+  --track-rail-width: 2px;
+
+  // ---- 节点状态 ----
+  // 已到达(reached):品牌色实心 + 品牌色描边 + 4px 光晕
+  --track-node-reached-fill: var(--brand);
+  --track-node-reached-border: var(--brand);
+  --track-node-reached-halo: 0 0 0 4px rgba(46, 58, 140, 0.14);
+
+  // 未到达(future):空心 + 未来描边色
+  --track-node-future-fill: #ffffff;
+  --track-node-future-border: #c3c9d4;
+
+  // 终局裁决(go / stop):空心 + 裁决色描边 + 裁决色光晕
+  --track-node-go-fill: #ffffff;
+  --track-node-go-border: var(--go);
+  --track-node-go-halo: 0 0 0 4px rgba(27, 127, 75, 0.15);
+
+  --track-node-stop-fill: #ffffff;
+  --track-node-stop-border: var(--stop);
+  --track-node-stop-halo: 0 0 0 4px rgba(179, 38, 30, 0.13);
+
+  --track-node-attention-fill: #ffffff;
+  --track-node-attention-border: var(--attention);
+  --track-node-attention-halo: 0 0 0 4px rgba(176, 106, 0, 0.15);
+
+  --track-node-parked-fill: #ffffff;
+  --track-node-parked-border: var(--parked);
+  --track-node-parked-halo: none;
+
+  // ---- 轨道颜色 ----
+  --track-rail-pending: rgba(0, 0, 0, 0.12);
+  --track-rail-done: rgba(46, 58, 140, 0.45);
+
+  // ---- 断口(阶段序列与终局裁决之间)----
+  --track-break-color: #c3c9d4;
+}

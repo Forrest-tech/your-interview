@@ -5,6 +5,10 @@
    ============================================================================ */
 
 @use '@angular/material' as mat;
+/* 票123 R-9:The Track 的唯一几何样式源 —— 四个消费者(Tracker 列表 stepper /
+   Dashboard Pipeline Band / Playbook Rounds Track / Tracker 抽屉时间轴)共用这一份声明。
+   详见 styles/_track-geometry.scss 的头注。 */
+@use './styles/track-geometry';
 
 /* ----------------------------------------------------------------------------
    Material Icons 字体(必须自托管,不能用 Google Fonts CDN)

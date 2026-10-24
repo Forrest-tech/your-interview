@@ -259,30 +259,116 @@
   border-radius: 10px; padding: 10px 14px; font-size: 14px;
 }
 
-/* ---------- ④ stepper ---------- */
-.stepper {
-  display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+/* ---------- ④ Rounds Track(票123 R-9:取代轮次 chip 选择器)---------- */
+/* 几何值读共享样式源(styles/_track-geometry.scss):16px 节点 / 2px 描边 / 2px 轨道。
+   与 Tracker 列表 stepper、Dashboard Pipeline Band、抽屉时间轴同源。 */
+.rtrack {
+  position: relative;
+  margin-top: 8px;
 }
-.step {
-  flex: 1 1 150px; max-width: 240px;
-  border: 1px solid var(--yi-border, #e1e4ec); border-radius: 10px;
-  background: transparent; color: inherit; cursor: pointer; text-align: left;
-  padding: 11px 13px; display: flex; flex-direction: column; gap: 5px;
-  &.on { border-color: var(--yi-accent, #2e3a8c); outline: 1.5px solid var(--yi-accent, #2e3a8c); }
-  &.add { border-style: dashed; align-items: flex-start; justify-content: center; }
+
+/* 轨道:待决色。已完成的一段由 .fill 覆盖成 done 色。 */
+.rtrack .rail {
+  position: absolute;
+  left: 7px;
+  top: 37px;
+  bottom: 26px;
+  width: var(--track-rail-width);
+  background: var(--track-rail-pending);
 }
-.step-top { display: flex; align-items: center; gap: 8px; }
-.step-badge {
-  width: 21px; height: 21px; border-radius: 50%; font-size: 12px; font-weight: 800;
-  border: 1.5px solid var(--yi-border, #e1e4ec); color: var(--yi-text-muted, #5b6270);
-  display: inline-flex; align-items: center; justify-content: center;
-  &.passed { border-color: #1b7f4b; color: #1b7f4b; }
-  &.failed { border-color: #b3261e; color: #b3261e; }
+.rtrack .rail.fill {
+  background: var(--track-rail-done);
+  bottom: auto;
 }
-.step-name { font-size: 14px; font-weight: 700; }
-.step-sub { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
- /* 票123 R-3:分数从日期后的中点串改为独立行(标签/值不再串在一条正文里)。 */
-.step-score { display: block; font-size: 12px; }
+
+.rnode {
+  position: relative;
+  padding: 12px 0 16px 36px;
+}
+
+/* 节点:16px 圆点 —— 与 Tracker stepper 逐字一致 */
+.rnode .dot {
+  position: absolute;
+  left: 0;
+  top: 17px;
+  width: var(--track-node-size);
+  height: var(--track-node-size);
+  border-radius: 50%;
+}
+.rnode .dot.reached {
+  background: var(--track-node-reached-fill);
+  border: var(--track-node-border) solid var(--track-node-reached-border);
+  box-shadow: var(--track-node-reached-halo);
+}
+.rnode .dot.hollow {
+  background: var(--track-node-future-fill);
+  border: var(--track-node-border) solid var(--track-node-future-border);
+}
+/* 「加一轮」是轨道的终点节点:虚线空心 */
+.rnode.add .dot {
+  background: var(--track-node-future-fill);
+  border: var(--track-node-border) dashed var(--track-node-future-border);
+  box-shadow: none;
+}
+
+.rhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rhead h3 {
+  margin: 0;
+  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.stagechip {
+  background: var(--signal-tint);
+  color: var(--brand);
+  border-radius: 999px;
+  padding: 1.5px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.rwhen {
+  display: flex;
+  flex-direction: column;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+/* 事实行:Outcome / Materials / Interviewers —— 与轮次工作卡的标签/值口径一致 */
+.rfacts {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.rfact { display: flex; align-items: baseline; gap: 6px; }
+.rfact .k { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.rfact .v { font-size: 13px; font-weight: 500; color: var(--ink); }
+.rfact .v.go { color: var(--go); }
+.rfact .v.stop { color: var(--stop); }
+
+/* 加一轮的终点卡 */
+.rnode.add .addcard {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  border: var(--track-node-border) dashed var(--track-node-future-border);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 11px 13px;
+}
+.rnode.add .addcard .t { font-size: 14px; font-weight: 700; }
+.rnode.add .addcard .d { font-size: 13px; color: var(--ink-2); }
 
 /* ---------- ⑤ 复盘与待办(与 Round 同属下区,仅内部分隔线,不再自起外框) ---------- */
 .tail-card {

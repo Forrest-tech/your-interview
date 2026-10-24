@@ -108,6 +108,10 @@ const DICT: Record<string, Record<Lang, string>> = {
   'dash.goHandle': { zh: '去处理', en: 'Handle', fr: 'Traiter' },
   'dash.goPractice': { zh: '去练习', en: 'Practice', fr: 'Pratiquer' },
   'dash.viewTracker': { zh: '查看投递', en: 'View applications', fr: 'Voir les candidatures' },
+  /* 票123 R-9:Pipeline Band 的说明行 —— 只绑载荷真正带得动的字段
+     (activeCount / followUps.length),不编造按阶段的等待时长。 */
+  'dash.bandMoving': { zh: '{n} 条投递仍在进行中。', en: '{n} applications are still moving.', fr: '{n} candidatures toujours en cours.' },
+  'dash.bandFollowUp': { zh: '{n} 条等待跟进。', en: '{n} waiting on a follow-up.', fr: '{n} en attente de suivi.' },
   'dash.followUpAt': { zh: '跟进于', en: 'Follow up on', fr: 'Suivre le' },
   'dash.deadlineOn': { zh: '截止于', en: 'Due on', fr: 'Échéance le' },
   'dash.none': { zh: '今天没有紧急待办,保持节奏 🎯', en: 'Nothing urgent today — keep the momentum 🎯', fr: 'Rien d’urgent aujourd’hui — gardez le cap 🎯' },

@@ -27,6 +27,48 @@
     </mat-card>
   }
 
+  <!-- 票123 R-9:Pipeline Band —— 取代原来那张「投递漏斗」chip 卡。
+       它不是卡片:是一条坐在纸面上、两道发丝线之间的带子。
+       节点 = 规范阶段序列(共享常量)+ 断口后的终局裁决节点;
+       计数取自 ActionCenter.byStatus(缺席 ⇒ 0)—— 不新增任何 API。
+       每个节点都是一条链接,点进去就是 Tracker 按该阶段过滤好的视图。 -->
+  @if (actionCenter(); as ac) {
+    <section class="band" [attr.aria-label]="t('dash.pipeline')">
+      <div class="brow">
+        @for (n of bandNodes(); track n.status; let i = $index) {
+          @if (n.verdict) {
+            <!-- 断口:阶段序列与终局裁决之间 -->
+            <div class="bgap" aria-hidden="true"></div>
+          }
+          <a class="bcell" [class.verdict]="n.verdict" [class.laststage]="!n.verdict && i === bandNodes().length - 2"
+             [routerLink]="['/tracker']" [queryParams]="{ status: n.status }">
+            <div class="bnum" [class.zero]="n.count === 0">{{ n.count }}</div>
+            <div class="btrack">
+              @if (!n.verdict) {
+                <span class="seg" [class.done]="bandSegmentDone(i)"></span>
+              }
+              <span class="bdot" [class]="bandNodeClass(n)"></span>
+            </div>
+            <div class="blab">{{ statusLabel(n.status) }}</div>
+          </a>
+        }
+      </div>
+      <div class="band-cap">
+        <div class="note">
+          @if (ac.total === 0) {
+            {{ t('tracker.empty') }}
+          } @else {
+            <b>{{ tn('dash.bandMoving', ac.activeCount) }}</b>
+            @if (ac.followUps.length > 0) {
+              <span>{{ tn('dash.bandFollowUp', ac.followUps.length) }}</span>
+            }
+          }
+        </div>
+        <a [routerLink]="['/tracker']">{{ t('dash.viewTracker') }}</a>
+      </div>
+    </section>
+  }
+
   <!-- 行动中心(M4):把聚合数据变成"今天该做什么" -->
   @if (actionCenter(); as ac) {
     <section class="action-center">
@@ -132,11 +174,9 @@
                   }
                 </div>
               } @else if (c.kind === 'pipeline') {
-                <div class="ac-chips">
-                  @for (s of ac.byStatus; track s.status) {
-                    <span class="chip" [class]="s.status.toLowerCase()"><b>{{ s.count }}</b> {{ statusLabel(s.status) }}</span>
-                  }
-                </div>
+                <!-- 票123 R-9:「投递漏斗」chip 卡已删,漏斗改由页面上方的 Pipeline Band 承担。
+                     这一格保留为空分支,是为了不改动 cards() 的类型与既有分支结构 ——
+                     但 pipeline 卡不再被 push 进 cards()(见 dashboard.component.ts)。 -->
               }
 
               <a mat-stroked-button color="primary" [routerLink]="c.link" class="ac-cta">

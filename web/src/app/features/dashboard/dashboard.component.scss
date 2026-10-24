@@ -115,6 +115,140 @@
 
 .actions a { font-size: 13.5px; font-weight: 500; color: var(--ink); }
 
+// ===================== 票123 R-9:Pipeline Band =====================
+// 它不是卡片:是一条坐在纸面上、两道发丝线之间的带子。
+// 几何值读共享样式源(styles/_track-geometry.scss),与 Tracker 列表 stepper
+// / Playbook 轮次轨道 / 抽屉时间轴同源。
+.band {
+  margin-top: 20px;
+  padding: 16px 10px 12px;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.band .brow {
+  display: flex;
+  align-items: flex-start;
+}
+
+.band .bcell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  text-decoration: none;
+  color: inherit;
+}
+
+.band .bnum {
+  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.1;
+  height: 26px;
+  color: var(--ink);
+}
+.band .bnum.zero { color: var(--ink-2); }
+
+.band .btrack {
+  height: 19px;
+  width: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.band .seg {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: var(--track-rail-width);
+  left: 0;
+  right: 0;
+  background: var(--track-rail-pending);
+}
+.band .seg.done { background: var(--track-rail-done); }
+.band .bcell:first-child .seg { left: 50%; }
+.band .bcell.laststage .seg { right: 50%; }
+
+/* 节点:16px 圆点 + 2px 描边 —— 与 Tracker stepper 逐字一致 */
+.band .bdot {
+  width: var(--track-node-size);
+  height: var(--track-node-size);
+  border-radius: 50%;
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+}
+.band .bdot.reached {
+  background: var(--track-node-reached-fill);
+  border: var(--track-node-border) solid var(--track-node-reached-border);
+  box-shadow: var(--track-node-reached-halo);
+}
+.band .bdot.hollow {
+  background: var(--track-node-future-fill);
+  border: var(--track-node-border) solid var(--track-node-future-border);
+}
+.band .bdot.go {
+  background: var(--track-node-go-fill);
+  border: var(--track-node-border) solid var(--track-node-go-border);
+  box-shadow: var(--track-node-go-halo);
+}
+.band .bdot.stop {
+  background: var(--track-node-stop-fill);
+  border: var(--track-node-border) solid var(--track-node-stop-border);
+  box-shadow: var(--track-node-stop-halo);
+}
+
+.band .blab {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-weight: 500;
+  margin-top: 1px;
+  white-space: nowrap;
+}
+
+/* 断口:阶段序列与终局裁决之间的一段虚线 */
+.band .bcell.verdict { flex: 0 0 132px; }
+.band .bcell.verdict .seg { display: none; }
+.band .bgap {
+  flex: 0 0 30px;
+  position: relative;
+  align-self: center;
+  height: 19px;
+}
+.band .bgap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  right: 6px;
+  border-top: var(--track-rail-width) dotted var(--track-break-color);
+}
+
+/* 说明行:主句 + 跟进句 + 一个不带箭头的行动 */
+.band-cap {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 10px;
+  padding: 0 2px;
+}
+.band-cap .note {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.band-cap .note b { color: var(--ink); font-weight: 600; }
+.band-cap .note span { margin-left: 6px; }
+.band-cap a {
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 // ===================== 行动中心(M4) =====================
 .action-center { margin-bottom: 18px; }
 

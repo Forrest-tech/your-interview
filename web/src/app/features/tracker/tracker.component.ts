@@ -13,7 +13,7 @@ import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -27,6 +27,7 @@ import { SubnavService } from '../../layout/subnav.service';
 import { TrackerApi } from '../../core/api/tracker-api.service';
 import { TrackerPreferencesService } from '../../core/api/tracker-preferences.service';
 import { Application, ApplicationStatus, Company, TrackerStats } from '../../core/models/api.models';
+import { PIPELINE_STAGES } from '../../core/models/pipeline-stages';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { InputDialogComponent, InputDialogData } from '../../shared/input-dialog/input-dialog.component';
 import { parseWeeklyGoalInput, clampWeeklyGoal } from './tracker-goal.helpers';
@@ -69,6 +70,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly trackerApi = inject(TrackerApi);
   private readonly prefs = inject(TrackerPreferencesService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly subnav = inject(SubnavService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
@@ -119,9 +121,11 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     }))
   );
 
-  /** 列表视图的 pipeline stepper:5 个阶段。 */
+  /** 列表视图的 pipeline stepper:5 个阶段。
+   *  票123 R-9:阶段序列搬进共享常量(core/models/pipeline-stages)——
+   *  Dashboard 的 Pipeline Band 读同一份,两处不可能再分叉。行为不变。 */
   readonly pipelineStages: ApplicationStatus[] =
-    ['Saved', 'Applied', 'Screen', 'Interview', 'Offer'] as ApplicationStatus[];
+    [...PIPELINE_STAGES] as ApplicationStatus[];
 
   /** 某申请在某阶段的到达日期(从 history 里找),没到过返回 null。 */
   stageDate(app: Application, stage: ApplicationStatus): string | null {
@@ -1001,6 +1005,22 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.prefs.ensureFavoritesLoaded(); // ★ 票14:收藏读后端 + 本地旧数据一次性导入
     if (this.viewMode() === 'chart') this.loadFlowAll(); // ★ 票73:刷新后直落流程视图时也要全量缓存
     this.loadGhosting(); // ★ #18
+
+    // ★ 票123 R-9:Dashboard Pipeline Band 的节点链接带着 ?status=<阶段> 进来。
+    //   定稿:「Tracker — which today reads **no route input** — gains one
+    //   `route.queryParamMap` subscription in `ngOnInit` that applies a valid
+    //   `status` param through the same `setStatusFilter`; an absent or invalid
+    //   param changes nothing, so the band link behaves exactly like today's
+    //   plain `/tracker` link whenever the param isn't there.」
+    //   机制沿用应用自己的跨页先例(反方向):Tracker 已经在用 queryParams 跳
+    //   /playbook?company=…,而 Playbook 正是用 route.queryParamMap 读的。
+    this.route.queryParamMap.subscribe(params => {
+      const s = params.get('status');
+      if (!s) return;                       // 没有这个参数 —— 什么都不改
+      if (!STATUS_ORDER.includes(s as ApplicationStatus)) return; // 非法值 —— 什么都不改
+      if (this.statusFilter() === s) return; // 已是该过滤 —— 不重复触发
+      this.setStatusFilter(s as ApplicationStatus);
+    });
     // ★ 子导航:有实际功能 —— Status 切看板, List 切列表, Overview 滚到指标区
     this.subnav.register('/tracker', [
       {

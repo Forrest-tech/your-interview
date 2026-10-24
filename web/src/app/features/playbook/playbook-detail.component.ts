@@ -223,6 +223,99 @@ export class PlaybookDetailComponent implements OnDestroy {
     return rs.find(r => r.id === this.selectedRoundId()) ?? rs[rs.length - 1];
   });
 
+  // ── 票123 R-9:Rounds Track(垂直轨道)────────────────────────────────────
+  // 定稿的填充规则(逐字):「a round counts as "done" for fill purposes **iff** it
+  // has a recorded outcome **or** its date is past; "current" = the earliest round
+  // with a future date and no outcome. Node glyphs on the track are only
+  // reached/hollow — a round's verdict is stated in its fact row, never implied
+  // by the node.」
+
+  /**
+   * 某轮是否算「已完成」(轨道填充判据)。
+   * 有记录结果,或日期已过 —— 二者之一即成立。
+   */
+  roundIsDone(r: InterviewRound): boolean {
+    if (r.outcome && r.outcome !== 'Pending' && r.outcome !== '') return true;
+    return this.roundDatePassed(r);
+  }
+
+  /** 该轮的日期是否已过(没有日期则不算过)。 */
+  private roundDatePassed(r: InterviewRound): boolean {
+    if (!r.scheduledDate) return false;
+    const d = new Date(r.scheduledDate);
+    if (Number.isNaN(d.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() < today.getTime();
+  }
+
+  /**
+   * 当前轮 = 最早的一个「日期在未来且没有结果」的轮。
+   * 若不存在(全都有结果或都已过期),当前轮 = 最后一轮。
+   */
+  readonly currentRoundId = computed<string | null>(() => {
+    const rs = this.rounds();
+    if (!rs.length) return null;
+    const future = rs.find(r => !this.roundIsDone(r) && !this.roundDatePassed(r));
+    return (future ?? rs[rs.length - 1]).id;
+  });
+
+  /**
+   * 轨道上某节点的填充状态。
+   * 已完成轮 + 当前轮 = reached(实心 + 光晕);其余 = hollow(空心)。
+   * 与 Tracker 列表 stepper 的 frontier 语义一致:当前节点与已完成节点同形,
+   * 靠位置与展开状态区分,不靠特殊字形。
+   */
+  roundNodeState(r: InterviewRound): 'reached' | 'hollow' {
+    if (this.roundIsDone(r)) return 'reached';
+    if (r.id === this.currentRoundId()) return 'reached';
+    return 'hollow';
+  }
+
+  /** 轨道段:从第 i 个节点到第 i+1 个节点之间的那一段是否取 done 色。
+   *  规则:该段的**下一节点**已到达时取 done —— 与 Tracker 列表 stepper 同一判定。 */
+  trackSegmentDone(i: number): boolean {
+    const rs = this.rounds();
+    const next = rs[i + 1];
+    if (!next) return false;
+    return this.roundNodeState(next) === 'reached';
+  }
+
+  /** 某轮的材料数(与轮次工作卡的口径一致:按 roundId 归属)。 */
+  roundAssetsCount(r: InterviewRound): number {
+    return (this.entry()?.assets ?? []).filter(a => a.roundId === r.id).length;
+  }
+
+  /** 结果文案(与轮次工作卡同一套取值)。 */
+  outcomeLabel(o: string): string {
+    switch (o) {
+      case 'Pending': return this.t('pb.v2.r.ocPending');
+      case 'Passed': return this.t('outcome.Passed');
+      case 'Failed': return this.t('outcome.Failed');
+      case 'Cancelled': return this.t('pb.v2.r.ocCancelled');
+      default: return o;
+    }
+  }
+
+  /** 面试形式文案(共用 v2.helpers 的 formatLabel)。 */
+  formatLabel(v: string | null | undefined): string {
+    return formatLabel(this.t, v);
+  }
+
+  /**
+   * 轨道上「已完成」那一段的填充高度(px)。
+   * 轨道从第一个节点延伸到最后一个节点,已完成段到当前节点为止。
+   * 节点纵向步长 76px(见 .rnode 的 padding)—— 与样式里的常量一致。
+   */
+  readonly trackFillHeight = computed(() => {
+    const rs = this.rounds();
+    if (!rs.length) return 0;
+    const curIdx = rs.findIndex(r => r.id === this.currentRoundId());
+    if (curIdx <= 0) return 0;
+    return curIdx * TRACK_NODE_STEP;
+  });
+
   // 票80:头部徽章与分组共用同一事实源 —— 只经 e.outcome 取键
   // (entryStatusBadgeKey → entryResultOutcome),不再判读 result 原文、
   // 分析状态(Analyzed)或默认 Completed 兜底。
@@ -654,6 +747,13 @@ function nameMatches(a: string, b: string): boolean {
 const LEVEL_WORDS = new Set([
   'senior', 'sr', 'lead', 'principal', 'staff', 'junior', 'jr', 'intermediate', 'associate'
 ]);
+
+/**
+ * 票123 R-9:Rounds Track 的节点纵向步长(px)。
+ * 与 playbook-detail.component.scss 里 `.rnode` 的上下 padding 之和一致 ——
+ * 轨道填充高度按「节点数 × 步长」算,加一轮轨道就跟着长一节。
+ */
+const TRACK_NODE_STEP = 76;
 
 /**
  * 岗位归一化:在 wordsNorm 基础上再剥三类噪音 ——

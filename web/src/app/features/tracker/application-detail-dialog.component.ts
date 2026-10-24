@@ -716,23 +716,27 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       font-size: 14px; color: #1f2430; background: #ffffff;
       margin-bottom: 20px; cursor: pointer;
     }
-    .timeline { position: relative; padding-left: 28px; }
+    /* 票123 R-9:抽屉时间轴迁移到共享几何源(styles/_track-geometry.scss)——
+       节点 20px → 16px、轨道 #E3E6EA → 共享待决轨道色、
+       done 字形(品牌描边 + 8px 中心点)→ 共享「已到达」处理(品牌实心 + 光晕)。
+       迁移后它与 Tracker 列表 stepper / Dashboard 带 / Playbook 轮次轨道是同一套语言。 */
+    .timeline { position: relative; padding-left: 24px; }
     .timeline::before {
-      content: ''; position: absolute; left: 9px; top: 8px; bottom: 8px;
-      width: 2px; background: #e1e4ec;
+      content: ''; position: absolute; left: 7px; top: 8px; bottom: 8px;
+      width: var(--track-rail-width); background: var(--track-rail-pending);
     }
     .tl-item { position: relative; padding: 0 0 20px; }
     .tl-item:last-child { padding-bottom: 0; }
     .tl-dot {
-      position: absolute; left: -28px; top: 2px;
-      width: 20px; height: 20px; border-radius: 50%;
-      border: 2px solid #c6cdea; background: #ffffff;
+      position: absolute; left: -24px; top: 2px;
+      width: var(--track-node-size); height: var(--track-node-size); border-radius: 50%;
+      border: var(--track-node-border) solid var(--track-node-future-border);
+      background: var(--track-node-future-fill);
     }
-    .tl-item.done .tl-dot { border-color: var(--brand); }
-    .tl-item.done .tl-dot::after {
-      content: ''; position: absolute; left: 50%; top: 50%;
-      width: 8px; height: 8px; border-radius: 50%; background: var(--brand);
-      transform: translate(-50%, -50%);
+    .tl-item.done .tl-dot {
+      border-color: var(--track-node-reached-border);
+      background: var(--track-node-reached-fill);
+      box-shadow: var(--track-node-reached-halo);
     }
     .tl-name { font-size: 14px; font-weight: 600; color: #1f2430; }
     .tl-item:not(.done) .tl-name { font-weight: 500; color: #5b6270; }

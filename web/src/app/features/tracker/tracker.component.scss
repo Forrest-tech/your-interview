@@ -284,36 +284,39 @@ mat-form-field { width: 100%; }
   width: 100%;
 }
 .sp-stage:last-child .sp-track { width: auto; }
+/* 票123 R-9:几何值改读共享样式源(styles/_track-geometry.scss)——
+   节点 16px / 描边 2px / 轨道 2px,以及三种节点状态与两种轨道颜色。
+   本文件不再自带一套字面量,四个消费者共用同一份声明。 */
 .sp-dot {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
+  width: var(--track-node-size);
+  height: var(--track-node-size);
   border-radius: 50%;
-  border: 2px solid #c3c9d4;
-  background: #ffffff;
+  border: var(--track-node-border) solid var(--track-node-future-border);
+  background: var(--track-node-future-fill);
 }
 /* 票 118:当前阶段(终态行)—— 圆点回到空心、描边与标签取裁决色;
    进行中行的当前点保持 signal 实心(与全站「前进」同义)。 */
-.term-offer .sp-stage.current .sp-dot { border-color: var(--go); background: #ffffff; box-shadow: 0 0 0 4px rgba(27, 127, 75, 0.15); }
+.term-offer .sp-stage.current .sp-dot { border-color: var(--track-node-go-border); background: var(--track-node-go-fill); box-shadow: var(--track-node-go-halo); }
 .term-offer .sp-stage.current .sp-label { color: var(--go); }
-.term-rejected .sp-stage.current .sp-dot { border-color: var(--stop); background: #ffffff; box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.13); }
+.term-rejected .sp-stage.current .sp-dot { border-color: var(--track-node-stop-border); background: var(--track-node-stop-fill); box-shadow: var(--track-node-stop-halo); }
 .term-rejected .sp-stage.current .sp-label { color: var(--stop); }
-.term-ghosted .sp-stage.current .sp-dot { border-color: var(--attention); background: #ffffff; box-shadow: 0 0 0 4px rgba(176, 106, 0, 0.15); }
+.term-ghosted .sp-stage.current .sp-dot { border-color: var(--track-node-attention-border); background: var(--track-node-attention-fill); box-shadow: var(--track-node-attention-halo); }
 .term-ghosted .sp-stage.current .sp-label { color: var(--attention); }
-.term-withdrawn .sp-stage.current .sp-dot { border-color: var(--parked); background: #ffffff; box-shadow: none; }
+.term-withdrawn .sp-stage.current .sp-dot { border-color: var(--track-node-parked-border); background: var(--track-node-parked-fill); box-shadow: var(--track-node-parked-halo); }
 .term-withdrawn .sp-stage.current .sp-label { color: var(--parked); }
 .sp-stage.done .sp-dot {
-  border-color: var(--brand);
-  background: var(--brand);
-  box-shadow: 0 0 0 4px rgba(46, 58, 140, 0.14);
+  border-color: var(--track-node-reached-border);
+  background: var(--track-node-reached-fill);
+  box-shadow: var(--track-node-reached-halo);
 }
 .sp-line {
   flex: 1 1 auto;
-  height: 2px;
-  background: rgba(31, 36, 48, 0.12);
+  height: var(--track-rail-width);
+  background: var(--track-rail-pending);
   min-width: 10px;
 }
-.sp-line.done { background: rgba(46, 58, 140, 0.45); }
+.sp-line.done { background: var(--track-rail-done); }
 .sp-date {
   font-size: 11px;
   color: var(--ink-2);

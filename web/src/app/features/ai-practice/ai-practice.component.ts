@@ -964,14 +964,6 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   hasWordScore(w: { accuracy?: number; errorType?: string }): boolean { return this.grading.hasWordScore(w); }
   fmtDuration(sec: number): string { return this.grading.fmtDuration(sec); }
   fmtTime(ts: number): string { return this.grading.fmtTime(ts); }
-  toggleReport(): void {
-    // ★ 票121:唯一 TS 补丁(焦点归位) —— 报告头部 toggle 收起了报告:
-    // 销毁前记下该条行自身的 View Report/Collapse 按钮,销毁后 focus 回去,不许落回 body。
-    const btn = this.collapseFocusTarget();
-    const wasOpen = this.reportOpen();
-    this.grading.toggleReport();
-    if (wasOpen && !this.reportOpen() && btn) this.refocusAfterCollapse(btn);
-  }
   selectTake(id: string): void {
     const prev = this.activeTakeId();
     this.grading.selectTake(id);
@@ -1000,16 +992,29 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     if (now && now !== prevId) this.grading.focusTake(now);
   }
   /**
-   * ★ 票121:收起动作执行"前"记录目标按钮 —— 行内 Collapse 钮即当前焦点;
-   * 报告头部 toggle 则从其所在 section 起向前找相邻 .hist-item 内的 .hi-view。
+   * ★ 票121:收起动作执行"前"记录目标按钮 —— 行内 Collapse 钮即当前焦点。
+   * 票125:报告头部 toggle 钮随 .rep-title 整块删除,其专属的 section 分支成死代码,已清;
+   * .hi-view 分支与 refocusAfterCollapse() 逐字保全。
    * 只做焦点归位,不做任何程序化滚动,不碰状态机语义。
    */
   private collapseFocusTarget(): HTMLButtonElement | null {
     const anchor = document.activeElement as HTMLElement | null;
     if (!anchor) return null;
     if (anchor.classList.contains('hi-view')) return anchor as HTMLButtonElement;
-    const sec = anchor.closest('section.report-section');
-    return sec?.previousElementSibling?.querySelector<HTMLButtonElement>('.hi-view') ?? null;
+    return null;
+  }
+  /**
+   * ★ 票125:行聚焦时 Space 与 Enter 同效（行点击 ≡ hi-view 钮语义）。
+   * 焦点在行内元素上时不干预其自身按键行为（避免 Space 在按钮上双触发）；
+   * keydown 阶段 preventDefault，防页面滚动。
+   * 注：模板 (keydown.space) 的事件在 Angular 类型检查里是 Event（非 KeyboardEvent），
+   * 故此处收 Event、内部收窄为 KeyboardEvent 再取 target/currentTarget。
+   */
+  onRowSpaceKey(ev: Event, id: string): void {
+    const ke = ev as KeyboardEvent;
+    if (ke.target !== ke.currentTarget) return;
+    ke.preventDefault();
+    this.toggleTakeReport(id);
   }
   /** ★ 票121:报告子树销毁"后"把焦点送回目标按钮(setTimeout 等 Angular 本轮变更检测完成)。 */
   private refocusAfterCollapse(btn: HTMLButtonElement): void {

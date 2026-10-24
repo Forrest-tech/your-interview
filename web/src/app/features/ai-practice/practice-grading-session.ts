@@ -243,9 +243,9 @@ export class PracticeGradingSession {
     const wpm = Math.round(wordCount / minutes);
     let verdict: string;
     let level: 'slow' | 'good' | 'fast';
-    if (wpm < 110) { verdict = '偏慢'; level = 'slow'; }
-    else if (wpm <= 160) { verdict = '适中'; level = 'good'; }
-    else { verdict = '偏快'; level = 'fast'; }
+    if (wpm < 110) { verdict = this.host.t('practice.paceSlow'); level = 'slow'; }
+    else if (wpm <= 160) { verdict = this.host.t('practice.paceGood'); level = 'good'; }
+    else { verdict = this.host.t('practice.paceFast'); level = 'fast'; }
     return { wpm, verdict, level, wordCount };
   });
 
@@ -335,30 +335,32 @@ export class PracticeGradingSession {
     if (fs && fs.perMinute > 3) {
       return {
         icon: 'graphic_eq',
-        title: '减少填充词',
-        detail: `检测到 ${fs.count} 个填充词 (${fs.perMinute}/分钟)。下次在想词时停顿 1 秒,而不是说 "um"。点击橙色词回放。`
+        title: this.host.t('practice.oneFixFillersTitle'),
+        detail: this.host.t('practice.oneFixFillersDetail')
+          .replace('{count}', `${fs.count}`).replace('{per}', `${fs.perMinute}`),
       };
     }
     const dims = [
-      { key: 'fluencyScore', label: '流利度', val: sc.fluencyScore },
-      { key: 'accuracyScore', label: '准确度', val: sc.accuracyScore },
-      { key: 'pronScore', label: '发音', val: sc.pronScore },
-      { key: 'completenessScore', label: '完整度', val: sc.completenessScore },
+      { key: 'fluencyScore', label: this.host.t('dim.fluency'), val: sc.fluencyScore },
+      { key: 'accuracyScore', label: this.host.t('dim.accuracy'), val: sc.accuracyScore },
+      { key: 'pronScore', label: this.host.t('dim.pronunciation'), val: sc.pronScore },
+      { key: 'completenessScore', label: this.host.t('dim.completeness'), val: sc.completenessScore },
     ].filter(d => d.val != null) as { key: string; label: string; val: number }[];
     if (!dims.length) return null;
     dims.sort((a, b) => a.val - b.val);
     const weakest = dims[0];
     if (weakest.val >= 85) return null; // 都不错,不打扰
     const fixes: Record<string, string> = {
-      fluencyScore: '语速不均。试着用 2 倍速听一遍自己的录音,标记卡顿处,重录时在这些地方刻意放慢。',
-      accuracyScore: '个别词发音不准。点击下方红色波浪线词,看音标,跟读 3 遍。',
-      pronScore: '整体发音需加强。每天跟读 5 分钟,重点模仿语调起伏。',
-      completenessScore: '内容不完整。有漏读的词,对照原文检查。',
+      fluencyScore: this.host.t('practice.oneFixFluency'),
+      accuracyScore: this.host.t('practice.oneFixAccuracy'),
+      pronScore: this.host.t('practice.oneFixPron'),
+      completenessScore: this.host.t('practice.oneFixCompleteness'),
     };
     return {
       icon: 'tips_and_updates',
-      title: `优先改进:${weakest.label} (${weakest.val.toFixed(0)}分)`,
-      detail: fixes[weakest.key] ?? '继续练习。'
+      title: this.host.t('practice.oneFixPriority')
+        .replace('{label}', weakest.label).replace('{score}', weakest.val.toFixed(0)),
+      detail: fixes[weakest.key] ?? this.host.t('practice.oneFixFallback'),
     };
   });
 
@@ -372,28 +374,29 @@ export class PracticeGradingSession {
     const question = this.host.customQuestion() || this.host.currentText();
     if (!question.trim()) return;
     const take = this.activeTake();
-    const transcript = (take as any)?.transcript ?? '';
+    const transcript = take?.score?.recognized ?? '';
+    if (!transcript.trim()) { this.host.toast(this.host.t('practice.noRecognizedText')); return; }
     try {
       await this.host.knowledgeApi.createItem({
         title: question.slice(0, 60),
         question: question,
         myAnswer: transcript.slice(0, 1000),
         topic: 'AI Practice',
-        category: '口语练习',
+        category: this.host.t('practice.reviewCategory'),
         mastery: 'ToDo'
       }).toPromise();
-      this.host.toast('已加入 Tech Stack 复习');
+      this.host.toast(this.host.t('practice.addedToReview'));
     } catch {
-      this.host.toast('加入失败,请重试');
+      this.host.toast(this.host.t('practice.addToReviewFailed'));
     }
   }
 
   async generateFollowUp(): Promise<void> {
     const take = this.activeTake();
     if (!take || this.followUpLoading()) return;
-    const transcript = (take as any)?.transcript ?? (take as any)?.text ?? '';
+    const transcript = take?.score?.recognized ?? '';
     const question = this.host.currentText();
-    if (!transcript.trim()) return;
+    if (!transcript.trim()) { this.host.toast(this.host.t('practice.noRecognizedText')); return; }
 
     this.followUpLoading.set(true);
     this.followUpQuestion.set(null);
@@ -407,10 +410,10 @@ export class PracticeGradingSession {
       }).toPromise();
       const q = res?.text ?? res?.content ?? '';
       this.followUpQuestion.set(q.trim() || null);
-      if (!q.trim()) this.host.toast('AI 追问失败,请检查 AI 配置');
+      if (!q.trim()) this.host.toast(this.host.t('practice.followUpFailed'));
     } catch {
       this.followUpQuestion.set(null);
-      this.host.toast('AI 追问失败,请检查 AI 配置');
+      this.host.toast(this.host.t('practice.followUpFailed'));
     } finally {
       this.followUpLoading.set(false);
     }
@@ -772,11 +775,6 @@ export class PracticeGradingSession {
   /** 逐词明细展开状态(按录音 id)。 */
   /** 评分报告面板是否展开(任务书第三节:可随时收起/展开)。默认展开。 */
   readonly reportOpen = signal(true);
-
-  /** 切换报告面板收起/展开。 */
-  toggleReport(): void {
-    this.reportOpen.set(!this.reportOpen());
-  }
 
   /**
    * 把某条录音设为"当前作品"。

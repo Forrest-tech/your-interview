@@ -186,6 +186,25 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     return d !== null && d >= 14;
   }
 
+  /** 终态:已有明确结果,不再需要跟进。票123 R-4:看板卡片的「结果 chip」只在此态出现。 */
+  readonly terminalStatuses: ApplicationStatus[] = ['Offer', 'Accepted', 'Rejected', 'Withdrawn', 'Ghosted'];
+
+  /** 是否终态投递。 */
+  isTerminal(app: Application): boolean {
+    return this.terminalStatuses.includes(app.status);
+  }
+
+  /** 终态对应的 chip 语义类(与全局 .chip 变体同名)。 */
+  terminalChipClass(app: Application): string {
+    switch (app.status) {
+      case 'Offer': case 'Accepted': return 'offer';
+      case 'Rejected': return 'rejected';
+      case 'Ghosted': return 'ghosted';
+      case 'Withdrawn': return 'withdrawn';
+      default: return '';
+    }
+  }
+
   /**
    * 卡片/列表行上的快速改状态(Simplify 模式):乐观更新本地,失败回滚。
    * 后端 PUT 要求全量 payload,这里用当前对象的值拼。

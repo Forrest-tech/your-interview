@@ -36,11 +36,13 @@
                    (keyup.enter)="confirmRename(c)" (keyup.escape)="cancelRename()" #renameInput>
           </mat-form-field>
           <button mat-icon-button (click)="confirmRename(c)" [disabled]="busy() || editDraftTooLong()"
-                  [matTooltip]="editDraftTooLong() ? tooLongText() : t('ts.cat.save')">
+                  [matTooltip]="editDraftTooLong() ? tooLongText() : t('ts.cat.save')"
+          [attr.aria-label]="editDraftTooLong() ? tooLongText() : t('ts.cat.save')">
             <mat-icon>check</mat-icon>
           </button>
           <button mat-icon-button (click)="cancelRename()" [disabled]="busy()"
-                  [matTooltip]="t('common.cancel')">
+                  [matTooltip]="t('common.cancel')"
+          [attr.aria-label]="t('common.cancel')">
             <mat-icon>close</mat-icon>
           </button>
         } @else {
@@ -50,7 +52,8 @@
           <span class="cat-count">{{ c.count }}</span>
           <span class="spacer"></span>
           <button mat-icon-button class="del-btn" (click)="deleteCategory(c)" [disabled]="busy()"
-                  [matTooltip]="t('ts.cat.delete')">
+                  [matTooltip]="t('ts.cat.delete')"
+          [attr.aria-label]="t('ts.cat.delete')">
             <mat-icon>delete_outline</mat-icon>
           </button>
         }

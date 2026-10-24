@@ -18,11 +18,13 @@
         {{ t(editing() ? 'common.done' : 'common.edit') }}
       </button>
       <button mat-icon-button (click)="openCategoryManager()"
-              [matTooltip]="t('ts.cat.manage')">
+              [matTooltip]="t('ts.cat.manage')"
+      [attr.aria-label]="t('ts.cat.manage')">
         <mat-icon>category</mat-icon>
       </button>
       <button mat-icon-button (click)="openTrash()"
-              [matTooltip]="t('ts.trash.title')">
+              [matTooltip]="t('ts.trash.title')"
+      [attr.aria-label]="t('ts.trash.title')">
         <mat-icon>delete_outline</mat-icon>
       </button>
       @if (duplicateGroups().length > 0) {
@@ -39,7 +41,8 @@
           <span class="review-badge">{{ buckets()?.dueToday }}</span>
         </button>
       }
-      <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
+      <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')"
+      [attr.aria-label]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
       <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('techstack.newEntry')">
@@ -179,7 +182,8 @@
           <mat-icon matPrefix>search</mat-icon>
           @if (search()) {
             <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
-                    [matTooltip]="t('common.clearFilter')">
+                    [matTooltip]="t('common.clearFilter')"
+            [attr.aria-label]="t('common.clearFilter')">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -301,7 +305,8 @@
       @if (totalPages() > 1) {
         <div class="list-pager">
           <button mat-icon-button [disabled]="page() <= 1" (click)="goPage(page() - 1)"
-                  [matTooltip]="t('common.prevPage')">
+                  [matTooltip]="t('common.prevPage')"
+          [attr.aria-label]="t('common.prevPage')">
             <mat-icon>chevron_left</mat-icon>
           </button>
           <span>{{ page() }} / {{ totalPages() }}</span>
@@ -444,7 +449,8 @@
                 @if (!detailEditing() && blockText(it, b.key)) {
                   <button mat-icon-button class="flashcard-btn"
                           [matTooltip]="t('ts.detail.toFlashcard')"
-                          (click)="makeFlashcard(b.key)">
+                          (click)="makeFlashcard(b.key)"
+                  [attr.aria-label]="t('ts.detail.toFlashcard')">
                     <mat-icon>style</mat-icon>
                   </button>
                 }

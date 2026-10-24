@@ -789,6 +789,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.funnel': { zh: '转化漏斗', en: 'Conversion funnel', fr: 'Entonnoir' },
   'tracker.exportEmpty': { zh: '没有可导出的数据', en: 'Nothing to export', fr: 'Rien à exporter' },
   'tracker.followupHint': { zh: '需要跟进:已到跟进时间,或早期阶段投递超过14天无进展', en: 'Follow up needed', fr: 'Suivi nécessaire' },
+  /* 票123 R-4:看板卡片的「需跟进」chip 文案(与列表行的 ! 徽标同一语义)。 */
+  'tracker.followup': { zh: '待跟进', en: 'Follow up', fr: 'À relancer' },
   'tracker.prepareInterview': { zh: '备战:创建面试准备条目', en: 'Prepare: create interview prep entry', fr: 'Préparer' },
   'tracker.prepShort': { zh: '备战', en: 'Prep', fr: 'Préparer' },
   'tracker.prepCreated': { zh: '已创建备战条目,正在跳转', en: 'Prep entry created, navigating', fr: 'Créé' },

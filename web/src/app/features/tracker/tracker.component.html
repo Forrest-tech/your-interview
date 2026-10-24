@@ -17,12 +17,14 @@
       <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.dlgNew')">
         <mat-icon>add</mat-icon>
       </button>
-      <button mat-icon-button [matMenuTriggerFor]="moreMenu" [matTooltip]="t('tracker.moreActions')">
+      <button mat-icon-button [matMenuTriggerFor]="moreMenu" [matTooltip]="t('tracker.moreActions')"
+[attr.aria-label]="t('tracker.moreActions')">
         <mat-icon>more_vert</mat-icon>
       </button>
       <button mat-icon-button (click)="favOnly.set(!favOnly())"
               [color]="favOnly() ? 'warn' : undefined"
-              [matTooltip]="t('tracker.favOnly')">
+              [matTooltip]="t('tracker.favOnly')"
+[attr.aria-label]="t('tracker.favOnly')">
         <mat-icon>{{ favOnly() ? 'favorite' : 'favorite_border' }}</mat-icon>
       </button>
       <mat-menu #moreMenu="matMenu">
@@ -111,7 +113,8 @@
           <mat-icon matPrefix>search</mat-icon>
           @if (search()) {
             <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
-                    [matTooltip]="t('common.clearFilter')">
+                    [matTooltip]="t('common.clearFilter')"
+[attr.aria-label]="t('common.clearFilter')">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -258,7 +261,8 @@
       <mat-icon>inbox</mat-icon>
       <p>{{ t('tracker.empty') }}</p>
       @if (search() || statusFilter()) {
-        <button mat-icon-button (click)="clearFilters()" [matTooltip]="t('common.clearFilter')">
+        <button mat-icon-button (click)="clearFilters()" [matTooltip]="t('common.clearFilter')"
+[attr.aria-label]="t('common.clearFilter')">
           <mat-icon>filter_alt_off</mat-icon>
         </button>
       } @else {
@@ -324,17 +328,36 @@
                     <mat-icon>history</mat-icon>{{ t('tracker.stale') }}
                   </span>
                 }
+                <!-- 票123 R-4:看板卡片补上列表行已有的「等待天数」与 chip 行 ——
+                     卡片信息集 = 列表行信息 − 步进器。 -->
+                @if (daysWaiting(a); as dw) {
+                  <div class="card-wait">{{ tf('tracker.daysInLoop', { n: dw }) }}</div>
+                }
+                @if (isTerminal(a) || needsFollowUp(a)) {
+                  <div class="card-chips">
+                    @if (isTerminal(a)) {
+                      <span class="chip {{ terminalChipClass(a) }}">{{ t('status.' + a.status) }}</span>
+                    }
+                    @if (needsFollowUp(a)) {
+                      <span class="chip attention" [matTooltip]="t('tracker.followupHint')">{{ t('tracker.followup') }}</span>
+                    }
+                  </div>
+                }
               </div>
               <button mat-icon-button class="fav-btn" (click)="toggleFavorite(a.id); $event.stopPropagation()"
-                      [color]="isFavorite(a.id) ? 'warn' : undefined">
+                      [color]="isFavorite(a.id) ? 'warn' : undefined"
+                      [matTooltip]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')"
+                      [attr.aria-label]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')">
                 <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
               </button>
               @if (!showArchived()) {
-                <button mat-icon-button (click)="archive(a, $event)" matTooltip="{{ t('tracker.archive') }}">
+                <button mat-icon-button (click)="archive(a, $event)" [matTooltip]="t('tracker.archive')"
+                        [attr.aria-label]="t('tracker.archive')">
                   <mat-icon>archive</mat-icon>
                 </button>
               } @else {
-                <button mat-icon-button (click)="unarchive(a, $event)" matTooltip="{{ t('tracker.unarchive') }}">
+                <button mat-icon-button (click)="unarchive(a, $event)" [matTooltip]="t('tracker.unarchive')"
+                        [attr.aria-label]="t('tracker.unarchive')">
                   <mat-icon>unarchive</mat-icon>
                 </button>
               }
@@ -423,7 +446,9 @@
         </div>
         <div class="lr-side" (click)="$event.stopPropagation()">
           <button mat-icon-button class="fav-btn" (click)="toggleFavorite(a.id); $event.stopPropagation()"
-                  [color]="isFavorite(a.id) ? 'warn' : undefined">
+                  [color]="isFavorite(a.id) ? 'warn' : undefined"
+                  [matTooltip]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')"
+                  [attr.aria-label]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')">
             <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
           </button>
           <button mat-stroked-button (click)="prepareInterview(a, $event)"
@@ -528,7 +553,9 @@
             <span class="fs-spacer"></span>
             <span class="fs-stage">{{ t('status.' + a.status) }}</span>
             <button mat-icon-button class="fav-btn" (click)="toggleFavorite(a.id); $event.stopPropagation()"
-                    [color]="isFavorite(a.id) ? 'warn' : undefined">
+                    [color]="isFavorite(a.id) ? 'warn' : undefined"
+                    [matTooltip]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')"
+                    [attr.aria-label]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')">
               <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
             </button>
           </div>
@@ -546,7 +573,8 @@
   @if (totalPages() > 1) {
     <div class="pager">
       <button mat-icon-button [disabled]="page() <= 1" (click)="goPage(page() - 1)"
-              [matTooltip]="t('common.prevPage')">
+              [matTooltip]="t('common.prevPage')"
+[attr.aria-label]="t('common.prevPage')">
         <mat-icon>chevron_left</mat-icon>
       </button>
       <span class="pager-info">

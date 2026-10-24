@@ -100,11 +100,13 @@ interface DialogData {
                 </button>
               }
               @if ((data.pick && manage()) || !data.pick) {
-                <button mat-icon-button [matTooltip]="t('common.edit')" (click)="startEdit(item)">
+                <button mat-icon-button [matTooltip]="t('common.edit')" (click)="startEdit(item)"
+                [attr.aria-label]="t('common.edit')">
                   <mat-icon>edit</mat-icon>
                 </button>
                 <button mat-icon-button class="danger" [matTooltip]="t('common.delete')"
-                        (click)="remove(item)">
+                        (click)="remove(item)"
+                [attr.aria-label]="t('common.delete')">
                   <mat-icon>delete_outline</mat-icon>
                 </button>
               }

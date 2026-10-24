@@ -456,6 +456,19 @@ mat-form-field { width: 100%; }
 }
 .company mat-icon { font-size: 14px; width: 14px; height: 14px; flex: 0 0 auto; opacity: 0.7; }
 
+/* ---------- 票123 R-4:看板卡片底部行(等待天数 + chip 行) ---------- */
+.card-wait {
+  font-size: 12px;
+  color: rgba(31, 36, 48, 0.55);
+  margin-top: 4px;
+}
+.card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 /* 列背景:Simplify 风浅灰 */
 .column {
   background: rgba(31, 36, 48, 0.03);

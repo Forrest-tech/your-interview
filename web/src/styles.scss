@@ -241,6 +241,8 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 .chip.rejected  { background: var(--stop-tint); color: var(--stop); }
 .chip.paused    { background: var(--parked-fill); color: var(--parked); }
 .chip.withdrawn { background: var(--parked-fill); color: var(--parked); }
+/* 票123 R-4:看板卡片的「待跟进」chip(与 .chip.ghosted 同为琥珀语义色系)。 */
+.chip.attention { background: var(--attention-tint); color: var(--attention); }
 
 /* ---------------- 空态 ---------------- */
 

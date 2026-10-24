@@ -105,7 +105,8 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       <!-- ★ Simplify 真站:Job Posting 区块 -->
       <div class="sec-head">
         <span>{{ t('tracker.dJobPosting') }}</span>
-        <button mat-icon-button class="edit-btn" (click)="startEditPosting()" [matTooltip]="t('common.edit')">
+        <button mat-icon-button class="edit-btn" (click)="startEditPosting()" [matTooltip]="t('common.edit')"
+        [attr.aria-label]="t('common.edit')">
           <mat-icon>edit</mat-icon>
         </button>
       </div>
@@ -135,11 +136,13 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       <section class="about-job">
         <div class="about-job-edit">
           <button mat-icon-button (click)="reparseJd()" [matTooltip]="t('tracker.dReparse')"
-                  class="edit-btn" [disabled]="reparsing()">
+                  class="edit-btn" [disabled]="reparsing()"
+          [attr.aria-label]="t('tracker.dReparse')">
             <mat-icon>{{ reparsing() ? 'hourglass_empty' : 'refresh' }}</mat-icon>
           </button>
           <button mat-icon-button (click)="jdSummaryEditing() ? cancelEditJdSummary() : startEditJdSummary()"
-                  [matTooltip]="t('common.edit')" class="edit-btn">
+                  [matTooltip]="t('common.edit')" class="edit-btn"
+          [attr.aria-label]="t('common.edit')">
             <mat-icon>{{ jdSummaryEditing() ? 'close' : 'edit' }}</mat-icon>
           </button>
         </div>
@@ -292,7 +295,8 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
           <h3 class="nc-head">
             <span>{{ t('tracker.dNotes') }}</span>
             <button mat-icon-button class="edit-btn" (click)="notesEditing() ? cancelEditNotes() : startEditNotes()"
-                    [matTooltip]="t('common.edit')">
+                    [matTooltip]="t('common.edit')"
+            [attr.aria-label]="t('common.edit')">
               <mat-icon>{{ notesEditing() ? 'close' : 'edit' }}</mat-icon>
             </button>
           </h3>
@@ -520,7 +524,8 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
                 <span class="q-num">{{ i + 1 }}</span>
                 <span class="q-text">{{ q.text }}</span>
                 <button mat-icon-button class="q-del" (click)="removeQuestion(q.id)"
-                        [matTooltip]="t('common.delete')">
+                        [matTooltip]="t('common.delete')"
+                [attr.aria-label]="t('common.delete')">
                   <mat-icon>delete_outline</mat-icon>
                 </button>
               </div>
@@ -642,11 +647,13 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
                   </div>
                 </div>
                 <div class="comm-actions">
-                  <button mat-icon-button [matTooltip]="t('common.edit')" (click)="startEditComm(c)">
+                  <button mat-icon-button [matTooltip]="t('common.edit')" (click)="startEditComm(c)"
+                  [attr.aria-label]="t('common.edit')">
                     <mat-icon>edit</mat-icon>
                   </button>
                   <button mat-icon-button class="danger" [matTooltip]="t('common.delete')"
-                          (click)="deleteComm(c)">
+                          (click)="deleteComm(c)"
+                  [attr.aria-label]="t('common.delete')">
                     <mat-icon>delete_outline</mat-icon>
                   </button>
                 </div>

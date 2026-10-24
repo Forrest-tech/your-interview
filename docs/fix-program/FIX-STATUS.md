@@ -58,7 +58,7 @@
 | **VERIFIED（主线独立复测 9.5 达线）** | 123 | 设计修复（票 118 后复测 8.3/10 未达 9.5 线催生）；定稿 `source/ticket123-REMEDIATION-PLAN.md` R4（评分存证 R4 10.00 PASS）；设计稿 `source/ticket123-mocks/` = 契约，逐项对照不得走样；范围 R-1…R-10 + §C 四项（G-items 为可选阶段，**不在本次范围**）；实现提交 `0c743b4`（+ 台账补正 `89c35ac` + 并入主线 `d139fc3`）；**偏差清单空**；证据 `docs/fix-program/evidence-123/`（11 份实施文档 + 12 份探针）；自验：tsc 0 · Jest 19 suites/476 tests · ng build 生产成功 · check-templates 23/23 · 三个活体探针全过（§C 四项 / R-9 四面几何逐字一致 / R-8 字体契约）；**不自评关单**（9.5 线由主线独立复测判） |
 | **PUSHED（本执行线 · WorkBuddy 实现 + 主线 05:06 接手登记并存 · 证据齐 · 待主线独立复测判 9.5 线）** | 124 | 回收站（仅 Assessment 练习素材）；定稿 `source/ticket124-SPEC.md` R2（评分存证 R2 9.99 PASS）；范围钉死：恢复单位 = 节点 + 全部已删后代、零迁移（删除时间取行 `UpdatedAt`）、恢复响应回整树包、入口镜像 Tech Stack 回收站 + 计数徽标、不含永久删除、不动保存熔断；实现首步折入微瑕 N1（规格第 6/337 行「V1–V29」→ V1–V30）；实现提交 `6cbdebd`；**偏差清单空**；证据 `docs/fix-program/evidence-124/IMPL.md`；自验：后端 T1–T14 **14/14** + 权限钉测、Jest **20 suites/514 tests**、tsc 0 错、check-templates 24/24、ng build 生产成功、活体 API 层 **36/36**（E1–E8）+ 浏览器 UI 层 **16/16**（U1–U7，截图 `/workspace/ticket124-recognition/`）；**执行权归并说明见第三节「票 124 执行权归并说明」条**（主线 tip `9da5ea7` 未落地任何票 124 实现代码 → 无重复实现，本提交为唯一实现）；**不自评关单**（9.5 线由主线独立复测判） |
 | **TODO（重构批）** | — | 51/52/53/54 已全部由并行线落地，本批清零 |
-| **TODO（平台/跟进）** | 67 | 71、72、74、75 已对账销号（见台账末对账条）；64/65/70/77/78/79 已落地；正单 88 已落地（`fe3a4fd`）；正单 89/90/93 与增补 series 撞号且未实现，待定号后入队（见第一节） |
+| **TODO（平台/跟进）** | 67 | 71、72、74、75 已对账销号（见台账末对账条）；64/65/70/77/78/79 已落地；正单 88 已落地（`fe3a4fd`）；正单 89/93 与增补 series 撞号且未实现，待定号后入队（见第一节）；正单 90 已落地（`ba3810b`）并转 VERIFIED（见台账末 90 条） |
 | **BLOCKED-DECISION** | 68, 73 | 需 Forrest 拍板，跳过不做 |
 | **BLOCKED-EXTERNAL** | 94 | 无票面文件（source/tickets/ 缺 94 规格），无法开工，已登记待补规格 |
 | **B 组锁定（增补 series 号）** | 90, 91, 92 | 指增补 series（four-unverified-chains / coverage-phase2 / ocr-golden-set，`tickets/` 票面），三票均无实现提交；锁定已由裁决 5A 解除（冻结票 90/96 解冻），本行原「锁定有效」为裁决后未更新的 stale 表述，现更正；与正单 series 同名号票无关，勿再混淆（见异议 2 回执） |
@@ -84,7 +84,7 @@
 |---|---|---|
 | 88 | 部分有分时未评分维度不进 Top 3（`fe3a4fd` 已落） | A1 CI 流水线（`c0a5010` 已落） |
 | 89 | 前端死 TestSpeech 方法删除（未见实现提交） | A2 E2E 接入 CI（`b95147b` 已落） |
-| 90 | 框架异常映射缺口（未见实现提交） | B1 四条未验链（B 组锁定，无提交） |
+| 90 | 框架异常映射缺口（`ba3810b` 已落，独立复测 VERIFIED，见台账末 90 条） | B1 四条未验链（B 组锁定，无提交） |
 | 91 | Knowledge 发布侧补事件（`15c6639` 已落） | B2 覆盖二阶段（B 组锁定，无提交） |
 | 92 | 分类 Add 双击竞态 500（`3c0f8f7` + `7254d20` 已落） | B3 OCR 金标准回归集（B 组锁定，无提交） |
 | 93 | 更多 Weakness 死代码（未见实现提交） | B4 一条命令起环境（`e99d971` 已落） |
@@ -489,3 +489,5 @@
  - **票 134 登记（先登记后开工，主线，2026-10-24）** — getMaterials 非包对象响应走错误态。来源：票 111 事故真因第 3 点（明确“可立后续票”）；现状：前端解包用 `?? []` 兜底把不兼容响应静默吞成空树；要求：getMaterials 对非包对象响应走 `treeLoadFailed` 错误态，401/500/502 仍走独立错误态、不可回退为空树；回归空态与错误态两路。状态：DOING（执行方：主线）。依据：`incident-practice-empty/ROOT-CAUSE.md` 第 24 行。
  - **B 待拍板项打包裁决（主线，2026-10-24，用户批最优包）** — getStats() 类型口径差异：登记为已知次要项，不立项（纯类型声明差异，运行时契约未变）；朗文 LDOCE 包接入：不入今晚 B，记收官后独立项（数据由用户自备，社区包商业录音分发边界另议）；KnowledgeApiService.merge()：无问题定义、无法立项，搁置（将来出现相关症状再立）；增补系列 90/91/92（B1 四条未验链 / B2 覆盖二阶段 / B3 OCR 金标准集）：不入今晚 B，收官后 B1 优先单独立项。B 剩余实活：21、94、87、90、96、134。
  - **票 87 确认 + D3 后续（主线，2026-10-24）** — D1（剔 UserResume 快照残留）/D2（补 HasMaxLength(20) 手工空迁移）已落地（提交 `03afc0c`，台账 `### 票 87` 行已登记，evidence-87 CLOSE-REPORT），无需重做；复验中发现新漂移 D3：票 108 的 xmin 并发令牌三处映射（mock_questions A09 / practice_recording_scores A10 / practice_storage_settings A13）进快照致 has-pending 恒红，scaffold 原稿 3 条 AddColumn xmin 在真实 PG 上永远无法 apply（PG 拒绝用户列与系统列同名）。D3 修复为空迁移 `20261024153241_AlignXminSnapshot`（Up/Down 空、Designer + ModelSnapshot 齐全、零 DDL），已推 `9cbaa81`。票 108“零迁移”口径补注：运行时无需 DDL，快照漂移由空迁移对齐。87 关闭以 D3 独立复测结论为准。
+
+ - **票 90（正单）转 VERIFIED（主线，2026-10-24）** — 实现 `ba3810b`（MapExceptionToStatusCode 增 DbUpdateException→409、OperationCanceledException→504）；独立复测 `~/workspace/ticket90/VERIFY-90.md`：diff 与票面对应（409 臂位于并发臂之后、子类优先顺序正确，分支顺序 Validation→并发→本票→超时→通用，detail 不含内部信息）；留现状项逐项抽查成立（唯一索引先查后写证实 DbUpdate 竞态真实可达、TaskCanceled 逃逸路径证实 504 可观测、其余清单项读码留现状）；BuildingBlocks.Tests 独立复跑 202/202（7 例新用例全过、time>0 真实执行）；ba3810b 自身 CI run 40108815307 全绿；不符清单空。注：复测基线 ba3810b，之后 tip 推进的 87 D3（9cbaa81）与台账（f55eef2）不触及 90 代码。

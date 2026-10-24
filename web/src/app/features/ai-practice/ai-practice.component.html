@@ -59,6 +59,8 @@
             [selectedId]="selectedId()"
             [editable]="treeEditing()"
             [canSave]="treeDirty()"
+            [canEdit]="canEditTree()"
+            [saveError]="treeSaveError()"
             [emptyHint]="t('practice.emptyHint')"
             [categories]="categories()"
             [categoryFilter]="categoryFilter()"

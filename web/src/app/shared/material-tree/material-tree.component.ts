@@ -93,6 +93,19 @@ export class MaterialTreeComponent {
    */
   @Input() canSave = true;
 
+  /**
+   * ★ ML-FIX-UI(W-UI-2):当前账号是否可编辑素材树(父级绑 auth.can('mock.manage'))。
+   * false 时新建/编辑入口全部禁用并显示只读说明 —— 缺 mock.manage 的默认 User
+   * 绝不能再拿到"看起来能存、实际 403"的完整创作入口。
+   */
+  @Input() canEdit = true;
+
+  /**
+   * ★ ML-FIX-UI(W-UI-1):最近一次保存失败的真实原因(父级绑 treeError())。
+   * 空 = 无失败。非空时模板渲染 role=alert 横幅 —— 失败绝不能只留在 signal 里。
+   */
+  @Input() saveError = '';
+
   // ★ 2026-09-23(Forrest):面板标题字段(materials)已删除 —— 头部只留工具按钮。
   @Input() emptyHint = '';
 

@@ -539,7 +539,7 @@ mat-form-field { width: 100%; }
 .st-offer { --st-color: #1b7f4b; }
 .st-accepted { --st-color: #1b7f4b; }
 .st-rejected { --st-color: #b3261e; }
-.st-ghosted { --st-color: #b06a00; }
+.st-ghosted { --st-color: var(--attention); }
 .st-paused { --st-color: #68707e; }
 .st-withdrawn { --st-color: #68707e; }
 

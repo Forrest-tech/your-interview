@@ -165,8 +165,22 @@ mat-form-field { margin-bottom: 2px; }
 .human-hint {
   margin: 8px 0 0;
   font-size: 12.5px;
-  color: #b06a00;
+  color: var(--attention);
   text-align: center;
+}
+
+/* ★ ML-FIX-UI(W-UI-5):注册入口行 —— 与注册页的回登录链接同口径。 */
+.switch-link {
+  margin: 16px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.switch-link a {
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .info, .err {

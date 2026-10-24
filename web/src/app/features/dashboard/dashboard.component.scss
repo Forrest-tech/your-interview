@@ -211,6 +211,24 @@
 
 /* 断口:阶段序列与终局裁决之间的一段虚线 */
 .band .bcell.verdict { flex: 0 0 132px; }
+
+/* ★ ML-FIX-UI(W-UI-3):窄屏下漏斗标签不再 nowrap 挤成一串 ——
+   标签允许换行(两行内可读)、裁决格与断口收窄、带内边距收紧。
+   360px 实测:内容宽约 340px,裁决格 84px + 断口 12px 之后,
+   每阶段格约 48px,"已投递/面试中"单行可容,英文长词折两行仍可读。 */
+@media (max-width: 600px) {
+  .band { padding: 16px 6px 12px; }
+  .band .blab {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+  .band .bcell.verdict { flex-basis: 84px; }
+  .band .bgap { flex-basis: 12px; }
+  .band .bgap::after { left: 2px; right: 2px; }
+}
 .band .bcell.verdict .seg { display: none; }
 .band .bgap {
   flex: 0 0 30px;

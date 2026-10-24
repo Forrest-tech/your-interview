@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
 import { RoundReminderDto } from '../../../../core/models/api.models';
 import {
+  dueBanners,
+  dueReminderIdsForRound,
   dueReminders,
   formatRemindAt,
   reminderStateForRound,
@@ -117,5 +119,39 @@ describe('formatRemindAt', () => {
 
   it('解析不了 → 原样回显', () => {
     expect(formatRemindAt('not-a-date')).toBe('not-a-date');
+  });
+});
+
+/* ★ ML-FIX-UI(W-UI-10):横幅按轮去重 —— 一轮两条提醒(DayBefore + HourBefore)
+   到期时横幅只留一条(最早到期),确认时取整轮 id 整轮 ack。 */
+describe('dueBanners', () => {
+  it('同轮两条到期提醒 → 只留最早到期的一条', () => {
+    const list = [
+      rem({ id: 'h', roundId: R1, kind: 'HourBefore', isDue: true, remindAt: '2026-10-30T13:30:00-04:00' }),
+      rem({ id: 'd', roundId: R1, kind: 'DayBefore', isDue: true, remindAt: '2026-10-29T14:30:00-04:00' })
+    ];
+    expect(dueBanners(list).map(r => r.id)).toEqual(['d']);
+  });
+
+  it('两轮各一条到期 → 两条横幅按触发时刻升序;未到期排除;入参顺序不动', () => {
+    const list = [
+      rem({ id: 'b', roundId: R2, isDue: true, remindAt: '2026-10-30T09:00:00-04:00' }),
+      rem({ id: 'a', roundId: R1, isDue: true, remindAt: '2026-10-29T14:30:00-04:00' }),
+      rem({ id: 'c', roundId: R2, isDue: false, remindAt: '2026-10-28T09:00:00-04:00' })
+    ];
+    expect(dueBanners(list).map(r => r.id)).toEqual(['a', 'b']);
+    expect(list.map(r => r.id)).toEqual(['b', 'a', 'c']);
+  });
+});
+
+describe('dueReminderIdsForRound', () => {
+  it('取某轮全部到期行 id(确认时整轮 ack 用);未到期不计', () => {
+    const list = [
+      rem({ id: 'd', roundId: R1, kind: 'DayBefore', isDue: true }),
+      rem({ id: 'h', roundId: R1, kind: 'HourBefore', isDue: true }),
+      rem({ id: 'x', roundId: R1, kind: 'DayBefore', isDue: false }),
+      rem({ id: 'y', roundId: R2, isDue: true })
+    ];
+    expect(dueReminderIdsForRound(list, R1)).toEqual(['d', 'h']);
   });
 });

@@ -261,6 +261,9 @@ export class PracticeMaterialTree {
       error: (e) => {
         // 绝不假装保存成功 —— 把后端给的真实原因显示出来
         this.treeError.set(this.errText(e));
+        // ★ ML-FIX-UI(W-UI-1):显式保存失败必须 toast 明示(横幅同时亮起);
+        //   静默自动保存(persistQuiet)只亮横幅,不刷屏。
+        this.host.toast(this.errText(e));
         this.treeDirty.set(true);
         // ★ 票111 段2:树摘要冲突(409)—— 提示已由 ApiClient 统一口径给出,
         //   再回读整树对齐最新状态(本地这份快照已过期,留着只会再撞一次)。
@@ -324,6 +327,8 @@ export class PracticeMaterialTree {
 
   /** 进入编辑模式:先拍快照,取消时可完整恢复。 */
   startTreeEdit(): void {
+    // ★ ML-FIX-UI(W-UI-2):代码层守门 —— 模板禁用可被绕过,无权限绝不进编辑态。
+    if (!this.host.canEditTree()) return;
     if (this.treeLoadFailed()) return;
     this.treeSnapshot = JSON.parse(JSON.stringify(this.nodes())) as MaterialNode[];
     this.treeDeletedSinceSave = false;

@@ -88,7 +88,7 @@ $display-font: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe
   --go-tint: #e2f1e8;
   --stop: #b3261e;
   --stop-tint: #f9e8e5;
-  --attention: #b06a00;
+  --attention: #8a5200;
   --attention-tint: #faf0d2;
   --parked: #68707e;
   --parked-fill: #edf0f4;
@@ -273,7 +273,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 .empty {
   padding: 26px 12px;
   text-align: center;
-  color: #8b8f96;
+  color: var(--ink-2);
   font-size: 13px;
   line-height: 1.7;
 }

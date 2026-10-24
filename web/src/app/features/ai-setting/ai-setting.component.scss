@@ -228,7 +228,7 @@
   border: 1px solid #faf0d2;
   font-size: 12.5px;
   line-height: 1.7;
-  color: #b06a00;
+  color: var(--attention);
 }
 .warn-note mat-icon {
   flex: 0 0 auto;
@@ -237,7 +237,7 @@
   height: 17px;
   margin-top: 1px;
 }
-.warn-note strong { color: #b06a00; }
+.warn-note strong { color: var(--attention); }
 
 /* ---------- 配置教程卡(2026-09-16 Forrest 本轮新增) ---------- */
 .tut-card .tut-intro {

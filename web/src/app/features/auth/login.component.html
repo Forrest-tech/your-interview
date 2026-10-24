@@ -99,6 +99,12 @@
         }
       </form>
 
+      <!-- ★ ML-FIX-UI(W-UI-5):注册入口 —— 此前登录页无任何注册链接。 -->
+      <p class="switch-link">
+        {{ t('auth.noAccount') }}
+        <a routerLink="/register">{{ t('auth.register') }}</a>
+      </p>
+
       @if (googleEnabled()) {
         <div class="divider"><span>{{ t('auth.or') }}</span></div>
 

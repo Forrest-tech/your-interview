@@ -9,6 +9,7 @@ import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { RoundRemindersService } from './redesign/round/round-reminders.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { weekDayHeaders } from '../../core/i18n/localized-messages.helpers';
+import { dueBanners, dueReminderIdsForRound } from './redesign/round/reminders.helpers';
 import { UpcomingRound } from '../../core/models/api.models';
 
 interface CalDay {
@@ -36,8 +37,10 @@ export class PlaybookCalendarComponent implements OnInit {
   private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
 
-  /** CONF-CAL-2:已到期未确认的提醒(横幅数据源,与轮次卡共用同一份状态)。 */
-  readonly dueList = this.remindersSvc.due;
+  /** CONF-CAL-2:已到期未确认的提醒(横幅数据源,与轮次卡共用同一份状态)。
+      ★ ML-FIX-UI(W-UI-10):横幅按轮去重(每轮一条,最早到期),不再出现
+      同一场面试两条完全相同的横幅。 */
+  readonly dueList = computed(() => dueBanners(this.remindersSvc.reminders()));
 
   readonly t = (key: string) => this.i18n.t(key);
 
@@ -104,9 +107,16 @@ export class PlaybookCalendarComponent implements OnInit {
     this.remindersSvc.ensureLoaded();
   }
 
-  /** CONF-CAL-2:确认一条到期提醒,横幅即时消失。 */
+  /** CONF-CAL-2:确认一条到期提醒,横幅即时消失。
+      ★ ML-FIX-UI(W-UI-10):横幅已按轮去重,确认时须 ack 该轮全部到期行,
+      否则被折叠的另一条(DayBefore/HourBefore 之另一)下次又冒出来。 */
   ackReminder(id: string): void {
-    this.remindersSvc.ack(id);
+    const row = this.dueList().find(r => r.id === id)
+      ?? this.remindersSvc.reminders().find(r => r.id === id);
+    if (!row) return;
+    for (const rid of dueReminderIdsForRound(this.remindersSvc.reminders(), row.roundId)) {
+      this.remindersSvc.ack(rid);
+    }
   }
 
   reload(): void {

@@ -180,12 +180,13 @@ export class MockComponent implements OnInit {
 
   // ---------------------------------------------------------------- 推荐(票95)
 
-  /** 拉 Suggest 推荐;失败静默(推荐是增益,不是主流程)。 */
+  /** 拉 Suggest 推荐;失败静默(推荐是增益,不是主流程)。
+      ★ ML-FIX-UI(W-UI-9):传当前界面语言,英文 UI 下推荐卡不再出中文文案。 */
   loadSuggestion(): void {
     this.mockApi.suggest<{
       title: string; mode: string; topic?: string;
       targetQuestionCount: number; rationale: string;
-    }>(5).subscribe({
+    }>(5, this.i18n.lang()).subscribe({
       next: (sug) => this.suggestion.set(sug),
       error: () => this.suggestion.set(null)
     });

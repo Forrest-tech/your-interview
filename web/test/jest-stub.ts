@@ -23,6 +23,14 @@ export function Output(): (target: unknown, key?: string) => void {
 export function Input(): (target: unknown, key?: string) => void {
   return () => undefined;
 }
+/* ★ ML-FIX-UI:PracticeMaterialTree 的导入链用到 @ViewChild/@HostListener
+   (material-transfer-dialog / material-tree),与既有 Input/Output 同款空实现。 */
+export function ViewChild(_selector?: unknown): (target: unknown, key?: string) => void {
+  return () => undefined;
+}
+export function HostListener(_event?: unknown): (target: unknown, key?: string, descriptor?: unknown) => unknown {
+  return (_t: unknown, _k?: string, d?: unknown) => d;
+}
 export class DestroyRef {}
 export class EventEmitter<T = unknown> {
   emit(_value?: T): void { /* stub */ }

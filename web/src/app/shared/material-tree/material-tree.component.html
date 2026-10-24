@@ -41,10 +41,10 @@
       </button>
     </div>
     <div class="th-row th-tools">
-      <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" (click)="addFolder(null)">
+      <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" [disabled]="!canEdit" (click)="addFolder(null)">
         <mat-icon>create_new_folder</mat-icon>
       </button>
-      <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFile')" (click)="addFile(null)">
+      <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFile')" [disabled]="!canEdit" (click)="addFile(null)">
         <mat-icon>note_add</mat-icon>
       </button>
       <!-- ★ 2026-09-23(Forrest 第十二轮):展开/收起改为行业通用的
@@ -77,7 +77,8 @@
       </button>
       <span class="spacer"></span>
       @if (!editable) {
-        <button class="head-act" [matTooltip]="t('practice.editTreeHint')" (click)="editRequest.emit()">
+        <button class="head-act" [matTooltip]="canEdit ? t('practice.editTreeHint') : t('practice.treeReadOnly')"
+                [disabled]="!canEdit" (click)="editRequest.emit()">
           <mat-icon>edit</mat-icon>
         </button>
       } @else {
@@ -92,6 +93,21 @@
       }
     </div>
   </header>
+
+  <!-- ★ ML-FIX-UI(W-UI-2):无编辑权限时的只读说明 —— 门禁必须带原因,
+       不能只把按钮置灰了事。 -->
+  @if (!canEdit) {
+    <p class="tree-readonly">{{ t('practice.treeReadOnly') }}</p>
+  }
+
+  <!-- ★ ML-FIX-UI(W-UI-1):保存失败横幅 —— 失败原因必须看得见,
+       且给重试(走显式保存确认路径)。成功时父级清掉 saveError,横幅自消失。 -->
+  @if (saveError) {
+    <div class="tree-save-error" role="alert">
+      <span class="tree-save-error-text">{{ saveError }}</span>
+      <button type="button" class="tree-save-error-retry" (click)="saveRequest.emit()">{{ t('common.retry') }}</button>
+    </div>
+  }
 
   <!-- 空白落点:拖到这里 = 移到最外层。
        ⚠️ 渲染走 visibleNodes(按类别过滤),数据仍是全量 this.nodes。 -->

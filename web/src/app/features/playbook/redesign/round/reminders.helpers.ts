@@ -19,6 +19,27 @@ export function dueReminders(all: RoundReminderDto[]): RoundReminderDto[] {
   return all.filter(r => r.isDue).sort(byRemindAt);
 }
 
+/**
+ * ★ ML-FIX-UI(W-UI-10):日历页横幅去重 —— 一轮合法产两条提醒
+ * (DayBefore + HourBefore),而横幅只显示公司/阶段/日期、不显示种类与触发时刻,
+ * 两条到期横幅看起来完全重复。口径与轮次卡 reminderStateForRound 一致:
+ * 每轮只留一条横幅(取最早到期的一行),按触发时刻升序;不改动入参数组。
+ */
+export function dueBanners(all: RoundReminderDto[]): RoundReminderDto[] {
+  const earliest = new Map<string, RoundReminderDto>();
+  for (const r of all) {
+    if (!r.isDue) continue;
+    const prev = earliest.get(r.roundId);
+    if (!prev || r.remindAt < prev.remindAt) earliest.set(r.roundId, r);
+  }
+  return [...earliest.values()].sort(byRemindAt);
+}
+
+/** 某轮次全部已到期未确认提醒的 id(横幅确认时整轮 ack,免得去重后另一条又冒出来)。 */
+export function dueReminderIdsForRound(all: RoundReminderDto[], roundId: string): string[] {
+  return all.filter(r => r.roundId === roundId && r.isDue).map(r => r.id);
+}
+
 /** 轮次卡日历条的真实提醒状态。 */
 export type RoundReminderState =
   | { kind: 'none' }

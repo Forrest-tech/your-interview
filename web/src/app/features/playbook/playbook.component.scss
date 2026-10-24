@@ -307,7 +307,7 @@
     &.ok { background: #e2f1e8; color: #1b7f4b; }
     &.bad { background: #f9e8e5; color: #b3261e; }
     &.busy { background: #e4e7f5; color: #2e3a8c; }
-    &.ready { background: #faf0d2; color: #b06a00; }
+    &.ready { background: #faf0d2; color: var(--attention); }
     &.idle { background: #f5f6f8; color: #5b6270; }
   }
 
@@ -475,7 +475,7 @@
 
 /* 分数色档 */
 .good { color: #1b7f4b; }
-.mid { color: #b06a00; }
+.mid { color: var(--attention); }
 .bad { color: #b3261e; }
 .none { color: #c6cdea; }
 

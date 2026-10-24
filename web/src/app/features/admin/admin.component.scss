@@ -168,7 +168,7 @@ mat-card { border-radius: 8px; }
 .act-danger { background: rgba(179, 38, 30, 0.12); color: #b3261e; }
 .act-create { background: rgba(27, 127, 75, 0.13); color: #1b7f4b; }
 .act-update { background: rgba(46, 58, 140, 0.12); color: #2e3a8c; }
-.act-auth { background: rgba(176, 106, 0, 0.2); color: #b06a00; }
+.act-auth { background: rgba(176, 106, 0, 0.2); color: var(--attention); }
 .act-other { background: rgba(31, 36, 48, 0.06); color: #5b6270; }
 
 /* 管理员特权动作单独一色 —— 审计时最该被先挑出来的就是这类 */
@@ -208,7 +208,7 @@ mat-card { border-radius: 8px; }
   font-weight: 600;
 }
 
-.flag-pill.warn { background: rgba(176, 106, 0, 0.2); color: #b06a00; }
+.flag-pill.warn { background: rgba(176, 106, 0, 0.2); color: var(--attention); }
 .flag-pill.danger { background: rgba(179, 38, 30, 0.14); color: #b3261e; }
 
 /* ---------- 角色卡 ---------- */

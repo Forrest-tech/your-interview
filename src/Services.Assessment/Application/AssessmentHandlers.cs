@@ -576,7 +576,9 @@ public sealed class DeleteSessionCommandHandler(AssessmentDbContext db)
 /// 从知识库薄弱点自动生成练习。
 /// 这是"技术栈 → 模拟练习"的联动入口:把不会的题直接变成要开口答的题。
 /// </summary>
-public sealed record SuggestSessionCommand(Guid UserId, int QuestionCount = 5)
+/// <summary>ML-FIX-UI(W-UI-9):Lang = 界面语言(zh/en/fr),推荐标题与文案按此渲染;
+/// 默认 zh,既有调用与单测行为不变;未知语言回落 zh。</summary>
+public sealed record SuggestSessionCommand(Guid UserId, int QuestionCount = 5, string Lang = "zh")
     : IRequest<Result<SuggestedSessionDto>>;
 
 public sealed record SuggestedSessionDto(string Title, SessionMode Mode, string? Topic,
@@ -598,13 +600,33 @@ public sealed class SuggestSessionCommandHandler(AssessmentDbContext db)
             .ToListAsync(ct);
 
         var top = issues.FirstOrDefault();
-        var topic = top?.Dimension ?? "综合";
+        // ★ ML-FIX-UI(W-UI-9):推荐文案此前硬编码中文,英文 UI 下推荐卡也出中文。
+        //   维度码本身是存储值(各语言共用),只本地化模板与无历史默认主题。
+        var lang = r.Lang switch { "en" => "en", "fr" => "fr", _ => "zh" };
+        var defaultTopic = lang switch { "en" => "General", "fr" => "Général", _ => "综合" };
+        var topic = top?.Dimension ?? defaultTopic;
+        var title = lang switch
+        {
+            "en" => $"Weakness focus · {topic}",
+            "fr" => $"Renforcement des faiblesses · {topic}",
+            _ => $"薄弱点强化 · {topic}"
+        };
         var rationale = top is null
-            ? "还没有历史练习记录,先从综合模拟起步建立基线分。"
-            : $"历史评分里 \"{top.Dimension}\" 这一维扣分最多(共 {top.Count} 条问题),优先强攻。";
+            ? lang switch
+            {
+                "en" => "No practice history yet — start with a general mock to build your baseline.",
+                "fr" => "Aucun historique de pratique pour l'instant — commencez par une simulation générale pour établir votre score de base.",
+                _ => "还没有历史练习记录,先从综合模拟起步建立基线分。"
+            }
+            : lang switch
+            {
+                "en" => $"\"{top.Dimension}\" lost the most points in past scores ({top.Count} issues) — focus here first.",
+                "fr" => $"« {top.Dimension} » a perdu le plus de points dans les scores passés ({top.Count} problèmes) — concentrez-vous d'abord ici.",
+                _ => $"历史评分里 \"{top.Dimension}\" 这一维扣分最多(共 {top.Count} 条问题),优先强攻。"
+            };
 
         return Result.Success(new SuggestedSessionDto(
-            $"薄弱点强化 · {topic}", SessionMode.WeaknessFocus, topic,
+            title, SessionMode.WeaknessFocus, topic,
             Math.Clamp(r.QuestionCount, 1, 20), rationale));
     }
 }

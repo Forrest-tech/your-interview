@@ -209,9 +209,9 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// <summary>根据历史短板推荐下一次该练什么。</summary>
     [HttpGet("suggest")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
-    public async Task<IResult> Suggest([FromQuery] int questionCount = 5, CancellationToken ct = default)
+    public async Task<IResult> Suggest([FromQuery] int questionCount = 5, [FromQuery] string? lang = null, CancellationToken ct = default)
     {
-        var r = await sender.Send(new SuggestSessionCommand(Me, questionCount), ct);
+        var r = await sender.Send(new SuggestSessionCommand(Me, questionCount, lang ?? "zh"), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 

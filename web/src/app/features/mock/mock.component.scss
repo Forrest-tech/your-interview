@@ -175,7 +175,7 @@
 
 /* 分数色档统一阈值 */
 .good { color: #1b7f4b; }
-.mid { color: #b06a00; }
+.mid { color: var(--attention); }
 .bad { color: #b3261e; }
 .none { color: #68707e; }
 

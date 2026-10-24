@@ -41,9 +41,10 @@ export class MockApiService {
       `${MockApiService.BASE}/${sessionId}/questions/${questionId}/score-ai`, {});
   }
 
-  /** 票95:Suggest 推荐(最弱维度) —— 列表页推荐卡数据源。 */
-  suggest<T>(questionCount = 5): Observable<T> {
-    return this.api.get<T>('/api/assessment/suggest', { questionCount });
+  /** 票95:Suggest 推荐(最弱维度) —— 列表页推荐卡数据源。
+      ★ ML-FIX-UI(W-UI-9):带界面语言,后端按 lang 渲染标题与文案(默认 zh)。 */
+  suggest<T>(questionCount = 5, lang?: string): Observable<T> {
+    return this.api.get<T>('/api/assessment/suggest', lang ? { questionCount, lang } : { questionCount });
   }
 
   completeSession<T>(sessionId: string, body: unknown): Observable<T> {

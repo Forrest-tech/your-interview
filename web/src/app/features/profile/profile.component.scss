@@ -211,7 +211,7 @@ mat-card { border-radius: 8px; }
   mat-icon { font-size: 18px; width: 18px; height: 18px; flex: 0 0 auto; }
 
   &.ok { color: #1b7f4b; }
-  &.warn { color: #b06a00; }
+  &.warn { color: var(--attention); }
   &.muted { opacity: 0.65; }
 }
 
@@ -294,7 +294,7 @@ mat-card { border-radius: 8px; }
   border-left: 3px solid #b06a00;
 }
 
-.warn-card mat-icon { color: #b06a00; flex: 0 0 auto; }
+.warn-card mat-icon { color: var(--attention); flex: 0 0 auto; }
 
 .warn-card p {
   margin: 4px 0 0;

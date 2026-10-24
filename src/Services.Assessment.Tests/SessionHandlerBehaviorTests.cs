@@ -420,6 +420,42 @@ public sealed class SessionHandlerBehaviorTests : IAsyncLifetime
         r.Value.Topic.Should().Be("Structure");
         r.Value.Rationale.Should().Contain("Structure");
     }
+
+    // ★ ML-FIX-UI(W-UI-9):推荐文案按 lang 渲染 —— 英文 UI 下推荐卡不再出中文。
+
+    [Theory]
+    [InlineData("en", "General", "Weakness focus", "No practice history")]
+    [InlineData("fr", "Général", "Renforcement des faiblesses", "Aucun historique")]
+    [InlineData("xx", "综合", "薄弱点强化", "还没有历史练习记录")]
+    public async Task SuggestSession_NoHistory_LocalizedByLang(string lang, string topic, string titlePart, string rationalePart)
+    {
+        if (!_available) return;
+        var user = NewUser();
+        await using var db = NewDb();
+        var r = await new SuggestSessionCommandHandler(db).Handle(new SuggestSessionCommand(user, 5, lang), default);
+        r.IsSuccess.Should().BeTrue();
+        r.Value.Topic.Should().Be(topic);
+        r.Value.Title.Should().Contain(titlePart);
+        r.Value.Rationale.Should().Contain(rationalePart);
+    }
+
+    [Fact]
+    public async Task SuggestSession_TopWeakness_LocalizedByLang()
+    {
+        if (!_available) return;
+        var user = NewUser();
+        var sid = await CreateSessionAsync(user);
+        var ids = await AddQuestionsAsync(user, sid, "q1", "q2");
+        await ScoreAsync(user, sid, ids[0], 50,
+            new IssueDraftIn("Structure", "a", null, null, null, 3),
+            new IssueDraftIn("Fluency", "b", null, null, null, 3));
+        await ScoreAsync(user, sid, ids[1], 50, new IssueDraftIn("Structure", "c", null, null, null, 3));
+        await using var db = NewDb();
+        var r = await new SuggestSessionCommandHandler(db).Handle(new SuggestSessionCommand(user, 5, "en"), default);
+        r.Value.Title.Should().Contain("Weakness focus");
+        r.Value.Rationale.Should().Contain("Structure");
+        r.Value.Rationale.Should().NotContain("历史评分");
+    }
 }
 
 /// <summary>

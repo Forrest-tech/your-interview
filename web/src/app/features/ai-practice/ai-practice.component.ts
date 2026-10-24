@@ -22,6 +22,7 @@ import { PracticeApi } from '../../core/api/practice-api.service';
 import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
 import { AiApiService } from '../../core/api/ai-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
 import { PracticeMaterialTree } from './practice-material-tree';
 import { PracticeTtsPlayer } from './practice-tts-player';
@@ -232,6 +233,10 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly trashCount = this.tree.trashCount;
   readonly treeLoading = this.tree.treeLoading;
   readonly treeLoadFailed = this.tree.treeLoadFailed;
+  /** ★ ML-FIX-UI(W-UI-1):保存失败原因直通树横幅(空 = 无失败)。 */
+  readonly treeSaveError = this.tree.treeError;
+  /** ★ ML-FIX-UI(W-UI-2):素材树编辑门禁 —— 与后端 SaveMaterials 的 mock.manage 同源。 */
+  readonly canEditTree = computed(() => this.auth.can('mock.manage'));
   readonly pickedWord = this.grading.pickedWord;
   readonly markColorOptions = this.tree.markColorOptions;
   readonly markColor = this.tree.markColor;
@@ -250,6 +255,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly waveBars = this.grading.waveBars;
 
   readonly i18n = inject(I18nService);
+  readonly auth = inject(AuthService);
   readonly recorder = inject(RecorderService);
   readonly router = inject(Router);
   readonly route = inject(ActivatedRoute);

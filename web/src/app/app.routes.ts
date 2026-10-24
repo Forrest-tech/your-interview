@@ -14,6 +14,13 @@ export const routes: Routes = [
       import('./features/auth/login.component').then((m) => m.LoginComponent)
   },
   {
+    // ★ ML-FIX-UI(W-UI-5):注册入口 —— 后端 /api/auth/register 早已开放,
+    // 前端此前无路由无链接,账号只能经 API/管理员创建。
+    path: 'register',
+    loadComponent: () =>
+      import('./features/auth/register.component').then((m) => m.RegisterComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
     canActivate: [authGuard],

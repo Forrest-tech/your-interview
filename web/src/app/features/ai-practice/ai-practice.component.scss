@@ -250,7 +250,7 @@
 
 .mode-chip.editing {
   background: rgba(176, 106, 0, 0.15);
-  color: #b06a00;
+  color: var(--attention);
 }
 
 /* ★ 2026-09-16 第二十轮:主体内容区滚动条规范(Forrest 指令)
@@ -956,7 +956,7 @@
 }
 .cost-chip.fresh {
   background: #faf0d2;
-  color: #b06a00;
+  color: var(--attention);
   border: 1px solid #faf0d2;
 }
 .cost-chip.local {
@@ -980,7 +980,7 @@
 }
 .res-total.s-good { color: #1b7f4b; }
 .res-total.s-mid  { color: #2e3a8c; }
-.res-total.s-warn { color: #b06a00; }
+.res-total.s-warn { color: var(--attention); }
 .res-total.s-bad  { color: #b3261e; }
 
 .res-dims {
@@ -1067,7 +1067,7 @@
 /* ★ #1:填充词高亮(Yoodli 模式) */
 .rw.is-filler {
   background: #faf0d2;
-  color: #b06a00;
+  color: var(--attention);
   border-bottom: 2px solid #b06a00;
   cursor: pointer;
 }
@@ -1141,7 +1141,7 @@
 }
 .verdict-banner.v-lean-no {
   background: #faf0d2;
-  border-color: #b06a00;
+  border-color: var(--attention);
 }
 .verdict-banner.v-no-hire {
   background: #f9e8e5;
@@ -1154,7 +1154,7 @@
 }
 .v-hire .verdict-label { color: #1b7f4b; }
 .v-lean-hire .verdict-label { color: #1b7f4b; }
-.v-lean-no .verdict-label { color: #b06a00; }
+.v-lean-no .verdict-label { color: var(--attention); }
 .v-no-hire .verdict-label { color: #b3261e; }
 .verdict-score {
   font-size: 14px;
@@ -1173,13 +1173,13 @@
   margin-left: 6px;
 }
 .filler-bar mat-icon {
-  color: #b06a00;
+  color: var(--attention);
   font-size: 18px;
   width: 18px;
   height: 18px;
 }
 .filler-bar b {
-  color: #b06a00;
+  color: var(--attention);
   font-size: 15px;
 }
 .filler-hint {
@@ -1192,8 +1192,8 @@
 .rw.e-na { color: #68707e; }
 .rw.e-mispron {
   background: #faf0d2;
-  color: #b06a00;
-  text-decoration: underline wavy #b06a00;
+  color: var(--attention);
+  text-decoration: underline wavy var(--attention);
 }
 .rw.e-omission {
   background: #e1e4ec;
@@ -1252,7 +1252,7 @@
 .wg-score.s-good { color: #1b7f4b; }
 .wg-score.na { color: #68707e; font-weight: 500; }
 .wg-score.s-mid  { color: #2e3a8c; }
-.wg-score.s-warn { color: #b06a00; }
+.wg-score.s-warn { color: var(--attention); }
 .wg-score.s-bad  { color: #b3261e; }
 
 /* ============================================================
@@ -1554,7 +1554,7 @@
 }
 .rl-badge.s-good { background: #e2f1e8; color: #1b7f4b; }
 .rl-badge.s-mid  { background: #e4e7f5; color: #2e3a8c; }
-.rl-badge.s-warn { background: #faf0d2; color: #b06a00; }
+.rl-badge.s-warn { background: #faf0d2; color: var(--attention); }
 .rl-badge.s-bad  { background: #f9e8e5; color: #b3261e; }
 
 .rl-del { color: #68707e !important; }
@@ -1743,7 +1743,7 @@
   line-height: 1.35;
   color: var(--ink-2);
 }
-.ec.e-mispron b { background: #faf0d2; color: #b06a00; } /* 票129 段二(票120 偏差1 A 案收口,2026-10-23 Forrest 裁 A):仅图例 chip 数字同色系加深 #b06a00→#b06a00,实测 4.28→4.73:1;正文 .rw.e-mispron 色值不动 */
+.ec.e-mispron b { background: #faf0d2; color: var(--attention); } /* 票129 段二(票120 偏差1 A 案收口,2026-10-23 Forrest 裁 A):仅图例 chip 数字同色系加深;正文 .rw.e-mispron 色值不动。ML-FIX-UI 后 token 加深至 #8a5200,本处对比度现为 6.39:1(原注 4.28→4.73:1 已过时)。 */
 .ec.e-omission b { background: #e1e4ec; color: #5b6270; } /* 遗漏数字:#68707e 压 #e1e4ec 仅约 2.3:1,原改用 parked #68707e 实测 4.49 仍差 4.5 一线;票129 段二(票120 偏差1 A 案)chip 作用域内改同色系加深 #5b6270(实测 4.98:1),chip 底色不变、全局 --parked 不动 */
 .ec.e-insertion b { background: #f9e8e5; color: #2e3a8c; }
 .ec.e-break b { background: #f9e8e5; color: #b3261e; }
@@ -1794,7 +1794,7 @@
 }
 .wp-score.s-good { color: #1b7f4b; }
 .wp-score.s-mid  { color: #2e3a8c; }
-.wp-score.s-warn { color: #b06a00; }
+.wp-score.s-warn { color: var(--attention); }
 .wp-score.s-bad  { color: #b3261e; }
 
 /* ---------- 结果区展开动画 ---------- */
@@ -2118,7 +2118,7 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   border: 1px solid #faf0d2;
   font-size: 12px;
   line-height: 1.65;
-  color: #b06a00;
+  color: var(--attention);
 }
 ::ng-deep .engine-menu .em-warn mat-icon {
   flex: 0 0 auto;
@@ -2169,7 +2169,7 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   border-radius: 10px;
   background: #faf0d2;
   border: 1px solid #faf0d2;
-  color: #b06a00;
+  color: var(--attention);
 }
 .key-warn > mat-icon {
   flex: 0 0 auto;
@@ -2177,7 +2177,7 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   width: 18px;
   height: 18px;
   margin-top: 1px;
-  color: #b06a00;
+  color: var(--attention);
 }
 .kw-text {
   display: flex;
@@ -2242,7 +2242,7 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   border-radius: 10px;
   background: #faf0d2;
   border: 1px solid #faf0d2;
-  color: #b06a00;
+  color: var(--attention);
   font-size: 13px;
   line-height: 1.55;
   box-shadow: 0 8px 22px -6px rgba(31, 36, 48, .18);
@@ -2253,7 +2253,7 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   font-size: 18px;
   width: 18px;
   height: 18px;
-  color: #b06a00;
+  color: var(--attention);
 }
 @keyframes apToastIn {
   from { opacity: 0; transform: translateY(-8px); }
@@ -2853,28 +2853,28 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   font-size: 18px;
   width: 18px;
   height: 18px;
-  color: #b06a00;
+  color: var(--attention);
 }
 .audio-stack .tts-alert .ta-msg {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 12.5px;
   line-height: 1.45;
-  color: #b06a00;
+  color: var(--attention);
 }
 .audio-stack .tts-alert .ta-act {
   flex: 0 0 auto;
   border: 0;
   padding: 4px 10px;
   border-radius: 9999px;
-  background: #b06a00;
+  background: var(--attention);
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
-.audio-stack .tts-alert .ta-act:hover { background: #b06a00; }
+.audio-stack .tts-alert .ta-act:hover { background: var(--attention); }
 /* 合成/加载失败用红色系,与"语言不一致"的琥珀色区分(语义配色) */
 .audio-stack .tts-alert.is-error { border-color: #f9e8e5; background: #f9e8e5; }
 .audio-stack .tts-alert.is-error mat-icon { color: #b3261e; }
@@ -3081,7 +3081,7 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
 .card-foot .btn-ghost {
   border: 1px solid #faf0d2;
   background: #ffffff;
-  color: #b06a00;
+  color: var(--attention);
 }
 .card-foot .btn-ghost:hover:not([disabled]) { background: #faf0d2; }
 .card-foot .btn-ghost[disabled] { border-color: #e1e4ec; color: #68707e; cursor: not-allowed; }
@@ -3128,7 +3128,7 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   border: 1px solid #faf0d2;
   border-radius: 10px;
   background: #faf0d2;
-  color: #b06a00;
+  color: var(--attention);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -3139,7 +3139,7 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   border: 0;
   background: transparent;
   padding: 0;
-  color: #b06a00;
+  color: var(--attention);
   font-size: 13px;
   font-weight: 600;
   text-decoration: underline;

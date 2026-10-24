@@ -60,7 +60,7 @@
 | **TODO（重构批）** | — | 51/52/53/54 已全部由并行线落地，本批清零 |
 | **TODO（平台/跟进）** | 67 | 71、72、74、75 已对账销号（见台账末对账条）；64/65/70/77/78/79 已落地；正单 88 已落地（`fe3a4fd`）；正单 89/93 与增补 series 撞号且未实现，待定号后入队（见第一节）；正单 90 已落地（`ba3810b`）并转 VERIFIED（见台账末 90 条） |
 | **BLOCKED-DECISION** | 68, 73 | 需 Forrest 拍板，跳过不做 |
-| **BLOCKED-EXTERNAL** | 94 | 无票面文件（source/tickets/ 缺 94 规格），无法开工，已登记待补规格 |
+| **PUSHED（聚合活体待 Mac/CI 验证）** | 94 | 票面在增补目录 `docs/fix-program/tickets/94-gateway-health-503-ocr-cluster.md`（原“无票面文件”为 stale 表述，现更正）；实现 `fb2e6a5` 已推（appsettings 补 7 业务集群 EnabledClusters、OCR 排除；hybrid 保留 4 集群覆盖；E2E 改回等 /health/live）；沙盒 other_tcp 策略拦截网关出站 HTTP，聚合活体（正向 200 + 反向 503）无法在沙盒完成，待 Mac/CI 验证，不算 VERIFIED（见台账末 94 条） |
 | **B 组锁定（增补 series 号）** | 90, 91, 92 | 指增补 series（four-unverified-chains / coverage-phase2 / ocr-golden-set，`tickets/` 票面），三票均无实现提交；锁定已由裁决 5A 解除（冻结票 90/96 解冻），本行原「锁定有效」为裁决后未更新的 stale 表述，现更正；与正单 series 同名号票无关，勿再混淆（见异议 2 回执） |
 | **异议区已登记（5A 闭案确认）** | 95, 98, 99, 100, 103 | 2026-10-24 Forrest 确认：五项即异议 1（95）、异议 3（98、99）、异议 4（100）、异议 5（103），均属裁决 5A 已判「登记滞后」就此结案之范围；本行原「待裁决」为裁决后未更新的 stale 行，现更正；五项冻结随 5A 闭案解除，后续跟进走正常先登记后开工 |
 
@@ -90,7 +90,7 @@
 | 93 | 更多 Weakness 死代码（未见实现提交） | B4 一条命令起环境（`e99d971` 已落） |
 
 - 台账既有「已落地」88/89/93 指增补 series；队列表「TODO 88」指正单 series —— 混用曾在异议 2 造成误判（并行线被误指违反 B 组锁，执行者回执见异议 2）。
-- 增补 94（网关健康 503 / OCR 集群）= BLOCKED-EXTERNAL，与正单无撞号。
+- 增补 94（网关健康 503 / OCR 集群）已推 `fb2e6a5`，聚合活体待 Mac/CI 验证（沙盒 other_tcp 策略阻断），与正单无撞号。
 - 待 Forrest/协调者定号规则（建议：增补 series 改领 94+ 段或加前缀）；定号前本台账以 * 标注正单 series 票。
 
 ---
@@ -111,10 +111,10 @@
 | 票号 | 状态 | 说明 |
 |---|---|---|
 | 票 16 | 已关（第二道复验通过） | 81–84 全部落定后 T2/T5/D4b 复验通过，见台账末“票 16 关闭”条 |
-| 票 21 | 欠独立真人化验收 | `b1a3d7a` 已实现，验收未完成 |
+| 票 21 | 已关（第二道复验通过） | 见台账末“票 21 关闭”条 |
 | 票 68 | **待 Forrest 拍板** | Jobs 删除权限口径选择，不许自行实现 |
 | 票 73 | **待 Forrest 拍板** | Tracker 收藏入口，属呈现新需求，需先出效果图 |
-| 票 94 | 排进主线队列待修 | 网关 /health/live 恒 503、OCR 集群无服务，挡着票 93 起后自检口径 |
+| 票 94 | 已推（聚合活体待 Mac/CI 验证） | 网关 /health/live 恒 503 已修（7 业务集群探活、OCR 排除）；原“OCR 集群无服务”为 stale 表述，现更正：OCR 服务存在（compose 有 ocr-service），是部分栈里 OCR 未起才拖垮旧探活；聚合活体待 Mac/CI 验证 |
 | 票 90/91/92 | **B 组暂停** | 剩余审查票清完前不开工 |
 
 **待 Forrest 裁决（本线登记，§7 格式）**：
@@ -496,3 +496,5 @@
  - **票 21 关闭（主线，2026-10-24）** — 第二道独立真人化验收 `~/workspace/ticket21/VERIFY-21-R2.md` 通过（复验方终报未送达，但报告草稿已完整落盘：逐项结果 + 不符清单 + 最终建议齐全，主线按断点续做规矩直接采纳，不重做）：A 成功路径（点击→勾选→API isDone 落库→刷新保持→勾回）✅；B 失败路径（拦截 PATCH→500：0.5s 内 snack「Failed to update to-do status」可见、checkbox 回退、刷新后仍未勾选、API 仍 False，补齐第一道唯一未勾销行）✅；tsc 0 ✅；回归邻居 ✅（PATCH 契约未动、随机未知 actionId 404；brief checklist / next-actions 已不存在于现行树，无邻居可回归；实现恰 2 文件）。不符清单空。注：复验基线 a217552a 与现 tip 间 21 代码（Interviews PATCH + playbook-detail）零改动，结论在现 tip 下依然适用。观察项（非偏差）：全零 GUID 哨兵误用已纠正；独立库 yourinterview_t21r2 探针残留由主线视情清理，不阻塞关票。
  - **票 134 关闭（主线，2026-10-24）** — 独立复测 `~/workspace/ticket134/VERIFY-134.md` 通过（基线 9e5d48f；其后 tip 推进仅台账文字提交，134 代码零改动，结论在现 tip 下依然适用）：形态门逻辑 ✅（先调 gate 再写 treeVersion，裸数组/null/缺失/非数组均抛错，垃圾响应不污染留存；error 分支置 treeLoadFailed → is-error + 重试链路完整；adoptTreePackage 未动）；401/500/502 不变性 ✅（catchError(rethrow) 在 map 前已抛错，错误态路径逐字一致）；Jest 22 套件 533/533 + tsc 0 ✅；两路活体回归 ✅（错误态 is-error=1 + 重试=1 + pageerrors 空；空态 is-error=0 + .tree-empty 阳性信号 PASS + 截图目视确认，实现方留下的空态截图缺口至此闭合）。不符清单空。
  - **票 96 关闭（主线，2026-10-24）** — 独立复测 `~/workspace/ticket96/VERIFY-96.md` 通过（基线 c1d3690；其后 tip 推进仅前端 134 与台账文字提交，Knowledge 代码零改动，结论在现 tip 下依然适用）：迁移三件套齐全（Up 删旧索引 + SQL 建 lower(Name) 函数唯一索引，Down 可逆；DbContext/Snapshot/Designer 无唯一索引残留）；独立 scratch 库全链 apply 验证（函数索引在位、旧索引消失；Down 回滚复位；Up 重入 history 顶复为 96 迁移）；Race 13/13 + LocalData 24/24 + Boundary 26/26 = 63/63（新变体屏障用例单验真实执行通过，非跳过）；应用层零改动（提交 6 文件无 Handler/Application 文件；票 92 回查环 + ToLower 口径在位；票 83/84/导入口径未动）。不符清单空。注：vstest 两次宿主握手超时 abort 属 harness 问题，xunit console 一次跑通；存量重复行处置裁决（A/B/C）仍待定，只影响 Mac 主库 apply 时刻，不阻塞关闭；scratch 库已 DROP、共享库全程未动。
+
+ - **票 94 已推、聚合活体待 Mac/CI 验证（主线，2026-10-24，用户已选此路径）** — 实现 `fb2e6a5`（rebase 自 `67e5e8a`）：网关 appsettings 补 `ReverseProxy.HealthChecks.EnabledClusters = identity,jobs,interviews,knowledge,assessment,analytics,aigateway`（OCR 排除；机制早已在 Program.cs:31-83，只差配开关）；docker-compose.hybrid.yml 保留 4 集群环境变量覆盖（hybrid 模式运行集就是 4 个，按模式分工、不打架；原“两个下游”笔误已更正）；web/e2e/health.setup.ts 改回先等 /health/live 200（登录检查保留作第二道 guard；OCR“不存在”旧前提已更正）。已证实：7 服务个体健康全 200、探活清单复现恰好 7 集群无 5300、Program.cs 过滤逻辑主线亲读无误。未在沙盒完成：聚合活体正向 200 + 反向 503——沙盒 other_tcp 策略拦截网关出站 HTTP（主线亲手复现：健康服务探活亦被策略消息拦；用户改 Ask 后重跑仍同症、无审批卡；前台直起 + 清 proxy 变量亦无效），故 94 状态为 PUSHED 待 Mac/CI 聚合验证，不算 VERIFIED；S0 环境外清单须含此项。收官后跟进项：① jobs 目的端口漂移（仓内网关 jobs 仍指 5263，沙盒实际 5125，影响 dotnet-run 下 /api/jobs/* 转发，需另立项）；② web/e2e/t81-ocr-entry-to-card.spec.ts:10 注释仍有 OCR“不存在”旧前提未改。

@@ -106,6 +106,23 @@ export function shadowErrorLabelKey(errorType: string): string {
   }
 }
 
+/**
+ * 评分 settle 后焦点接续的继任钮优先序(F-127-R1):被聚焦的评分钮在进入 scoring 的
+ * 瞬间被模板销毁,焦点回落 BODY,卡根 keydown 从此够不着(Esc 关卡失效)。
+ * settle 后按新相位把焦点接回区内继任钮:error 态优先同名评分钮(即重试评分),
+ * result 态优先「再练一次」。其余相位不接续(空表)。
+ */
+export function shadowSettleFocusSelectors(phase: DictShadowPhase): readonly string[] {
+  switch (phase) {
+    case 'error':
+      return ['[data-shadow-score]', '[data-shadow-rerecord]', '[data-shadow-retry]'];
+    case 'result':
+      return ['[data-shadow-again]', '[data-shadow-play-mine]', '[data-shadow-rerecord]'];
+    default:
+      return [];
+  }
+}
+
 /** 跟读区失败子型(规格 §10;resolveFailed 单列一相,因其恢复路径是重试解析)。 */
 export type DictShadowErrorKind =
   | 'micDenied' | 'scoringUnavailable' | 'scoringFailed' | 'notRecognized' | 'originalFailed';

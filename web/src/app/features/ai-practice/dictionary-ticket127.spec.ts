@@ -1,5 +1,5 @@
 /**
- * 票127 前端验收(TJ-1…TJ-7)。
+ * 票127 前端验收(TJ-1…TJ-8;TJ-8 为 F-127-R1 复测缺陷的焦点接续断言)。
  *
  * 基建口径(同 dictionary-ticket126.spec):本仓 Jest = node 环境 + @angular/* 替身,
  * 无 TestBed / DOM 渲染。被测面:
@@ -18,8 +18,8 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 import * as ngCore from '@angular/core';
 import type { DictCardData } from './dictionary.helpers';
 import {
-  DictionaryShadowSession, ShadowAudioPlayer, isShadowNotRecognized, pickShadowTarget,
-  shadowErrorLabelKey, shadowResultView,
+  DictionaryShadowSession, DictShadowPhase, ShadowAudioPlayer, isShadowNotRecognized,
+  pickShadowTarget, shadowErrorLabelKey, shadowResultView, shadowSettleFocusSelectors,
 } from './dictionary-shadow';
 import { RecorderService, ShadowAssessOutcome, ShadowRecordingTake } from '../../core/recorder/recorder.service';
 import type { DictionaryPronounceDto } from '../../core/api/practice-api.service';
@@ -682,5 +682,50 @@ describe('TJ-7(键盘/焦点/Esc 分层 —— 源码契约)', () => {
     for (const src of [card, dict, readFileSync(join(__dirname, 'dictionary-shadow.ts'), 'utf8')]) {
       expect(src).not.toContain('speechSynthesis');
     }
+  });
+});
+
+// ---------- TJ-8 F-127-R1 评分 settle 焦点接续(纯函数 + 源码契约;真实键盘行为由活体兜底) ----------
+
+describe('TJ-8(F-127-R1 评分 settle 焦点接续)', () => {
+  const card = readFileSync(join(__dirname, 'dictionary-card.component.ts'), 'utf8');
+
+  it('失败路径(F-S2/F-S3):error 态继任钮优先序 = 评分重试钮 → 重录 → 解析重试', () => {
+    expect(shadowSettleFocusSelectors('error')).toEqual([
+      '[data-shadow-score]', '[data-shadow-rerecord]', '[data-shadow-retry]',
+    ]);
+  });
+
+  it('成功路径(result):继任钮优先序 = 再练一次 → 我的录音 → 重录', () => {
+    expect(shadowSettleFocusSelectors('result')).toEqual([
+      '[data-shadow-again]', '[data-shadow-play-mine]', '[data-shadow-rerecord]',
+    ]);
+  });
+
+  it('其余相位不接续(空表):接续只发生在评分 settle 这一跳', () => {
+    const others: DictShadowPhase[] = [
+      'idle', 'playing', 'recording', 'recorded', 'scoring', 'resolveFailed',
+    ];
+    for (const p of others) expect(shadowSettleFocusSelectors(p)).toEqual([]);
+  });
+
+  it('源码契约:进入 scoring 时捕获「焦点在卡内」,settle 到 error/result 才接续', () => {
+    const hoc = card.slice(card.indexOf("if (changes['shadow'])"), card.indexOf('private maybeFocusFirst'));
+    expect(hoc).toContain("cur?.phase === 'scoring' && prev?.phase !== 'scoring'");
+    expect(hoc).toContain('this.shadowFocusAfterScore = !!root && root.contains(document.activeElement)');
+    expect(hoc).toContain("prev?.phase === 'scoring' && cur?.phase !== 'scoring'");
+    expect(hoc).toContain("cur?.phase === 'error' || cur?.phase === 'result'");
+    expect(hoc).toContain('shadowSettleFocusSelectors(phase)');
+  });
+
+  it('源码契约:settle 接续不抢焦点——焦点已在卡内时直接返回', () => {
+    const hoc = card.slice(card.indexOf('prev?.phase === \'scoring\''), card.indexOf('private maybeFocusFirst'));
+    expect(hoc).toContain('if (active && active !== document.body && root.contains(active)) return;');
+  });
+
+  it('源码契约:result 态「再练一次」钮带 data-shadow-again(接续首选锚点)', () => {
+    const iResult = card.indexOf("@case ('result')");
+    const resultCase = card.slice(iResult, card.indexOf("@case ('error')", iResult));
+    expect(resultCase).toContain('data-shadow-again');
   });
 });

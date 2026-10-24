@@ -10,7 +10,7 @@ import {
   lemmaRoleLabels, loadDictAccent, saveDictAccent,
 } from './dictionary.helpers';
 import {
-  DictShadowAction, DictShadowView, shadowErrorLabelKey,
+  DictShadowAction, DictShadowView, shadowErrorLabelKey, shadowSettleFocusSelectors,
 } from './dictionary-shadow';
 
 /** 卡内播放请求:宿主负责真正的取流播放,卡只表达意图(票126 后不再有设备朗读请求)。 */
@@ -227,7 +227,7 @@ export type DictPlayRequest =
                               (click)="shadowAction.emit({ type: \'playMine\' })">
                         {{ t('dict.shadow.myRecording') }}
                       </button>
-                      <button type="button" class="dict-shadow-btn"
+                      <button type="button" class="dict-shadow-btn" data-shadow-again
                               (click)="shadowAction.emit({ type: 'again' })">
                         {{ t('dict.shadow.again') }}
                       </button>
@@ -481,6 +481,8 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
   private readonly expandedBlocks = signal<ReadonlySet<number>>(new Set());
   /** 换词待聚焦标记:新词卡落定(ok/notfound/error)后把焦点移入一次。 */
   private pendingFocus = false;
+  /** F-127-R1:进入 scoring 时焦点在卡内 → settle 后须把焦点接回跟读区(评分钮已销毁)。 */
+  private shadowFocusAfterScore = false;
 
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number): string => this.i18n.tn(key, n);
@@ -567,6 +569,31 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
     if (changes['shadow']) {
       const prev = changes['shadow'].previousValue as DictShadowView | null | undefined;
       const cur = this.shadow;
+      // F-127-R1 评分 settle 焦点接续:被聚焦的评分钮在进入 scoring 的瞬间即被模板销毁,
+      // 焦点当场回落 BODY——故须在进入时先记下「焦点本在卡内」,settle 那一刻焦点已不在
+      // 卡内、不能再用 contains 判断。settle(error/result)后按 shadowSettleFocusSelectors
+      // 接回区内继任钮;届时焦点若已在卡内(评分期间用户自行移走)则不抢,只接掉到 BODY 的。
+      if (cur?.phase === 'scoring' && prev?.phase !== 'scoring') {
+        const root = this.cardRoot?.nativeElement;
+        this.shadowFocusAfterScore = !!root && root.contains(document.activeElement);
+      } else if (prev?.phase === 'scoring' && cur?.phase !== 'scoring') {
+        const pending = this.shadowFocusAfterScore;
+        this.shadowFocusAfterScore = false;
+        if (pending && (cur?.phase === 'error' || cur?.phase === 'result')) {
+          const phase = cur.phase;
+          queueMicrotask(() => {
+            const root = this.cardRoot?.nativeElement;
+            if (!root) return;
+            const active = document.activeElement;
+            if (active && active !== document.body && root.contains(active)) return;
+            for (const sel of shadowSettleFocusSelectors(phase)) {
+              const el = root.querySelector<HTMLElement>(sel);
+              if (el) { el.focus(); return; }
+            }
+            root.querySelector<HTMLElement>('[data-dict-shadow] button:not([disabled])')?.focus();
+          });
+        }
+      }
       if (prev?.phase !== cur?.phase || prev?.targetText !== cur?.targetText) {
         // 跟读区高度变化 → 宿主按真实高度重选浮层位序(§9.5:不撑破上限、不传导页面位移)
         this.layoutChanged.emit();

@@ -34,6 +34,21 @@ namespace YourInterview.Services.Assessment.Tests;
 /// 原 OutOfScopeEndpoints_LockedAtMockRead 锁定据此移除,两端点移入
 /// 下方目标断言(票 55 先例:改挂时同步改断言并注明依据)。
 ///
+/// 票 F-XT-R2-1(WB R1-C1 回执新发现 S2):默认 User 空态无 CTA ——
+/// 空态文案承诺“开一场主题专项”,但建会话按钮被 mock.manage 门控,
+/// User 无 MockManage 故按钮不渲染;后端 POST sessions 亦挂 MockManage。
+/// 修复口径:User 练习旅程 7 端点(创建 Create、生成 Generate、作答
+/// Answer、跳过 Skip、AI 评分 ScoreAi、完成 Complete、放弃 Abandon)
+/// 改挂 MockAnswer —— 旅程全程按 UserId 隔离,放行只影响本人会话;
+/// 角色集不动(User 仍无 MockManage,关键否决断言原样保留)。
+/// 不改挂:手动 Score(人工评分,策展/管理类)、AddQuestions(人工加题)、
+/// Delete(删会话)、materials/categories/speech 全族 —— 下方以
+/// JourneyExcluded_StillRequireMockManage 钉住,防改挂扩散。
+/// Create 自邻居回归理论移入下方目标断言(票 55 先例:改挂时同步改
+/// 断言并注明依据,不得只改实现不改断言、不得删断言蒙混)。
+/// Skip/Abandon 现行前端无调用方(仅状态文案),仍按旅程枚举改挂,
+/// 使旅程权限模型不分裂(User 能答却不能跳过/放弃本人会话)。
+///
 /// 本组为纯反射/纯数据断言,不连 DB:
 ///  · 目标端点 policy == perm:mock.answer(COD-15 本体);
 ///  · 邻居特征锁定(总纲第八节回归验邻居):读端点仍 MockRead、管理写仍
@@ -117,8 +132,31 @@ public sealed class AssessmentEndpointPermissionsTests
         => PolicyOf(nameof(AssessmentController.SaveRecording))
             .Should().Be(PermissionPolicy.Prefix + Permissions.MockAnswer);
 
-    [Theory] // 邻居回归:管理级写仍 MockManage(User 本就不可达,非本票造成)
+    // ---------- 票 F-XT-R2-1 本体:旅程 7 端点改挂 MockAnswer ----------
+
+    [Theory] // 本体:User 练习旅程(创建→生成→作答→跳过→AI 评分→完成→放弃)改挂 MockAnswer;
+    // 依据:User 持 MockAnswer 且旅程按 UserId 隔离,放行只影响本人会话;
+    // Create 自邻居回归理论移入此处(票 55 先例);手动 Score 不在此列(见下方锁定)
     [InlineData(nameof(AssessmentController.Create))]
+    [InlineData(nameof(AssessmentController.Generate))]
+    [InlineData(nameof(AssessmentController.Answer))]
+    [InlineData(nameof(AssessmentController.Skip))]
+    [InlineData(nameof(AssessmentController.ScoreAi))]
+    [InlineData(nameof(AssessmentController.Complete))]
+    [InlineData(nameof(AssessmentController.Abandon))]
+    public void PracticeJourney_RequiresMockAnswer(string methodName)
+        => PolicyOf(methodName)
+            .Should().Be(PermissionPolicy.Prefix + Permissions.MockAnswer);
+
+    [Theory] // 本体边界锁定:旅程外三端点继续 MockManage,防改挂扩散
+    [InlineData(nameof(AssessmentController.AddQuestions))] // 人工加题:策展类,非旅程参与
+    [InlineData(nameof(AssessmentController.Delete))] // 删会话:管理级写
+    [InlineData(nameof(AssessmentController.Score))] // 手动评分:人工评分,非旅程 AI 评分
+    public void JourneyExcluded_StillRequireMockManage(string methodName)
+        => PolicyOf(methodName)
+            .Should().Be(PermissionPolicy.Prefix + Permissions.MockManage);
+
+    [Theory] // 邻居回归:管理级写仍 MockManage(User 本就不可达,非本票造成)
     [InlineData(nameof(AssessmentController.SaveMaterials))]
     [InlineData(nameof(AssessmentController.DeleteRecording))]
     [InlineData(nameof(AssessmentController.TestSpeechCredential))] // 票86 定责同族锚点:候选凭据测试本就 MockManage

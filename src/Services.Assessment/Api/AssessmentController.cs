@@ -48,7 +48,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     }
 
     [HttpPost("sessions")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Create([FromBody] CreateSessionBody body, CancellationToken ct)
     {
         // 票 63:mode 必须是 SessionMode 的合法枚举名(解析口径见 SessionModeParsing,
@@ -82,7 +82,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
     /// <summary>结束练习并生成总评。</summary>
     [HttpPost("sessions/{id:guid}/complete")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Complete(Guid id, [FromBody] CompleteBody body, CancellationToken ct)
     {
         var r = await sender.Send(new CompleteSessionCommand(id, Me, body.OverallSummary,
@@ -91,7 +91,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     }
 
     [HttpPost("sessions/{id:guid}/abandon")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Abandon(Guid id, CancellationToken ct)
     {
         var r = await sender.Send(new AbandonSessionCommand(id, Me), ct);
@@ -111,7 +111,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
     /// <summary>票95:后端编排 AI 出题(幂等补差额;失败会话留 Draft 可重试)。</summary>
     [HttpPost("sessions/{id:guid}/generate")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Generate(Guid id, CancellationToken ct)
     {
         try
@@ -127,7 +127,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
     /// <summary>票95:后端编排 AI 评分(答后调用;失败题停 Answered 可重试;已评分幂等)。</summary>
     [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/score-ai")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> ScoreAi(Guid id, Guid questionId, CancellationToken ct)
     {
         try
@@ -156,7 +156,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
     /// <summary>作答:提交文本或音频。</summary>
     [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/answer")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Answer(Guid id, Guid questionId, [FromBody] AnswerBody body,
         CancellationToken ct)
     {
@@ -179,7 +179,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     }
 
     [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/skip")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Skip(Guid id, Guid questionId, [FromBody] SkipBody? body,
         CancellationToken ct)
     {

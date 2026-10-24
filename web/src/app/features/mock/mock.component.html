@@ -95,7 +95,7 @@
         <mat-icon>record_voice_over</mat-icon>
         <h3>{{ t('mock.noRecords') }}</h3>
         <p>{{ t('mock.noRecordsHint') }}</p>
-        @if (auth.can('mock.manage')) {
+        @if (auth.can('mock.answer')) {
           <button mat-flat-button color="primary" (click)="openDialog()">
             <mat-icon>play_circle</mat-icon> {{ t('mock.startFirst') }}
           </button>

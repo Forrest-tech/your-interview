@@ -140,16 +140,21 @@ public sealed class KnowledgeDbContext(
             e.HasIndex(x => x.ReviewedAt);
         });
 
-        // COD-10c/票16:自定义空分类(用户级占位行)。(UserId, Name) 唯一 —— 同一用户
-        // 同名分类最多一行,导入/重复 PUT 靠它在库层兜底幂等;大小写不敏感查重在
-        // Handler 层(存首现原文)。软删后重加走 Restore,不新建第二行。
+        // COD-10c/票16:自定义空分类(用户级占位行)。同一用户同名分类最多一行,
+        // 导入/重复 PUT 靠库层兜底幂等;大小写不敏感查重在 Handler 层(存首现原文)。
+        // 软删后重加走 Restore,不新建第二行。
+        //
+        // 票96:唯一语义必须是大小写不敏感 —— 原 (UserId, Name) 唯一索引在
+        // Postgres 默认排序下大小写敏感,"React"/"react" 并发同发可双双落库(票92
+        // 观察项)。模型层不再声明该大小写敏感唯一索引;真正的约束是迁移里
+        // 的 lower(Name) 函数唯一索引(见 CaseInsensitiveCategoryNameUniqueIndex
+        // 迁移 Up/Down),与 Handler 层 ToLower 回查同口径。
         b.Entity<TechStackCategory>(e =>
         {
             e.ToTable("tech_stack_categories");
             e.HasKey(x => x.Id);
             e.Property(x => x.UserId).IsRequired();
             e.Property(x => x.Name).HasMaxLength(100).IsRequired();
-            e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();
             e.HasIndex(x => x.UserId);
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);

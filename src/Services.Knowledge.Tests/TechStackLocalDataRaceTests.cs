@@ -153,6 +153,34 @@ public sealed class TechStackLocalDataRaceTests : IAsyncLifetime
         rows.Should().ContainSingle();
     }
 
+    [Fact] // boundary: 大小写变体(并发)—— 票96 §7:四 Context 屏障同发,两发 "RaceCase"、两发 "RACECASE":都成功(204 语义),终态恰 1 行
+    public async Task Add_ConcurrentCaseVariant_Barrier_ExactlyOneRow()
+    {
+        if (!_available) return;
+        var contexts = new[] { _db, NewDb(_user), NewDb(_user), NewDb(_user) };
+        var names = new[] { "RaceCase", "RaceCase", "RACECASE", "RACECASE" };
+        try
+        {
+            var gate = new TaskCompletionSource();
+            var tasks = contexts.Select((db, i) => Task.Run(async () =>
+            {
+                await gate.Task;
+                return await new AddCustomCategoryCommandHandler(db)
+                    .Handle(new AddCustomCategoryCommand(_user, names[i]), default);
+            })).ToArray();
+            gate.SetResult();
+            var results = await Task.WhenAll(tasks);
+            results.Should().OnlyContain(r => r.IsSuccess);
+            var rows = await _db.CustomCategories.IgnoreQueryFilters()
+                .Where(c => c.UserId == _user && c.Name.ToLower() == "racecase").ToListAsync();
+            rows.Should().ContainSingle().Which.IsDeleted.Should().BeFalse();
+        }
+        finally
+        {
+            foreach (var c in contexts.Skip(1)) await c.DisposeAsync();
+        }
+    }
+
     [Fact] // boundary: 软删后并发重加 —— 恢复同一行(不建第二行),两方都成功
     public async Task Add_ConcurrentAfterSoftDelete_RestoresSingleRow()
     {

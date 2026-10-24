@@ -322,9 +322,6 @@ namespace YourInterview.Services.Knowledge.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "Name")
-                        .IsUnique();
-
                     b.ToTable("tech_stack_categories", "knowledge");
                 });
 

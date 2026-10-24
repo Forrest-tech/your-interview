@@ -182,7 +182,7 @@ describe('TJ-5(S-2②:无录音词条 → 无播放钮 + 「暂无发音」)', (
 
   it('卡契约:两口音皆不可用时渲染 dict.noAudio 文案行', () => {
     const card = readSrc('dictionary-card.component.ts');
-    expect(card).toContain("@if (!anyAccent(c))");
+    expect(card).toContain('@if (!cardHasAnyAudio(c))');
     expect(card).toContain("t('dict.noAudio')");
   });
 });
@@ -299,7 +299,7 @@ describe('TJ-7/M-3(F-4:口音记忆 + UK 无录音 tab 禁用标注)', () => {
 
   it('M-3:无录音口音的 tab 带 [disabled] 与 noAudioLabel 标注(title + aria-label)', () => {
     const card = readSrc('dictionary-card.component.ts');
-    expect(card).toContain('[disabled]="!accentVisible(c, acc)"');
+    expect(card).toContain('[disabled]="!tabEnabled(c, acc)"');
     expect(card).toContain('noAudioLabel(acc)');
   });
 });

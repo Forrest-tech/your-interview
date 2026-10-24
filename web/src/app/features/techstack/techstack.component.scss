@@ -1,5 +1,8 @@
 .page {
-  max-width: 1500px;
+  /* 票123 R-7.3:内容度量统一到全站共享的 1240px —— 让本页「按声明」满足不变量,
+     而不是在审计视口下碰巧量到 1240(左侧 200px 是全站壳层侧边栏,属壳层 chrome,
+     不是本页的库栏;本页自己的库栏是度量内部的栅格切分)。 */
+  max-width: 1240px;
   margin: 0 auto;
   height: 100%;
   box-sizing: border-box;
@@ -61,7 +64,9 @@
   margin-bottom: 14px;
 }
 
-.page-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+/* 票123 R-7.4:页标题统一 24px / Space Grotesk 600(全局 .page-head h2 已是该口径,
+   这里显式声明字体族,避免依赖全局规则与组件样式的层叠顺序)。 */
+.page-head h2 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
 .page-head .sub { margin: 4px 0 0; font-size: 13px; opacity: 0.6; }
 .head-actions { display: flex; gap: 8px; flex: 0 0 auto; }
 

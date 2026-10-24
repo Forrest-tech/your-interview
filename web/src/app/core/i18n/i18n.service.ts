@@ -170,6 +170,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'ts.heatmap.count': { zh: '{date}: {n} 条', en: '{date}: {n} entries', fr: '{date} : {n} entrées' },
   'ts.heatmap.less': { zh: '少', en: 'Less', fr: 'Moins' },
   'ts.heatmap.more': { zh: '多', en: 'More', fr: 'Plus' },
+  /* 票123 R-10:热力图零活动的邀请行 —— 一句话 + 一个进入既有复习流程的行动。 */
+  'ts.heatmap.empty': { zh: '还没有复习记录。完成第一次复习,这张图就会开始填起来。', en: 'No reviews yet. Finish a first review and this map starts filling in.', fr: 'Aucune révision pour le moment. Terminez une première révision et cette carte commencera à se remplir.' },
+  'ts.heatmap.startReview': { zh: '开始复习', en: 'Start a review', fr: 'Commencer une révision' },
   'ts.detail.speakingPractice': { zh: '口语练习', en: 'Speaking practice', fr: 'Pratique orale' },
   'ts.detail.toFlashcard': { zh: '转为闪卡 (加入复习队列)', en: 'Make flashcard (add to review queue)', fr: 'Créer une flashcard (file de révision)' },
   'ts.detail.blockEmpty': { zh: '该块无内容', en: 'This block has no content', fr: 'Ce bloc est vide' },

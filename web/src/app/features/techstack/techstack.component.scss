@@ -228,6 +228,27 @@ mat-card { border-radius: 8px; }
   width: 10px;
   height: 10px;
 }
+/* 票123 R-10:热力图零活动的邀请行 —— 图例下面一句话 + 一个既有行动。
+   不引入新的颜色或版式系统:文字用既有的次级墨色,按钮交给 Material 的
+   text button 令牌(--mdc-text-button-container-shape: 8px)。 */
+.heatmap-invite {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+.heatmap-invite p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.heatmap-invite button {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
 /* ★ #5:重做模式 */
 .resole-toggle {
   display: flex;

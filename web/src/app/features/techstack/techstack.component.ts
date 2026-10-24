@@ -1432,6 +1432,22 @@ export class TechStackComponent implements OnInit, OnDestroy {
     return weeks;
   });
 
+  /**
+   * ★ 票123 R-10:热力图窗口内的复习总数 —— 窗口内过去的日子 count 之和。
+   *
+   * 未来日子 count 为 -1(不是 0),不参与求和。
+   * 为 0 时热力图是一片灰格,没有一句话也没有一个行动 —— 面板要改成一次邀请。
+   */
+  readonly heatmapTotalCount = computed(() => {
+    let total = 0;
+    for (const week of this.heatmapWeeks()) {
+      for (const day of week) {
+        if (day.count > 0) total += day.count;
+      }
+    }
+    return total;
+  });
+
   /** ★ #9:当前连击 (连续复习天数)。(票16:数据源改后端信号;算法逐字不变) */
   readonly reviewStreak = computed(() => {
     const data: Record<string, number> = this.tsLocal.reviewActivity();

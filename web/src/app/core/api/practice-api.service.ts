@@ -49,6 +49,39 @@ export interface MaterialNodeIn {
   children: MaterialNodeIn[];
 }
 
+/** ★ 票124:回收站清单项(顶层已删节点) —— 与后端 C# DeletedMaterialDto 逐字段对齐。 */
+export interface DeletedMaterialDto {
+  id: string;
+  name: string;
+  folder: boolean;
+  parentId: string | null;
+  /** 祖先名链(不含自身,根项为 null);分隔符 " / "。 */
+  path: string | null;
+  /** 该项所属根的类别(自身是根则取自身)。 */
+  categoryId: string | null;
+  categoryName: string | null;
+  markColor: string | null;
+  /** 删除时刻代理 = 行 UpdatedAt(零迁移)。 */
+  deletedAt: string;
+  /** 全部后代数(删/未删都算)。 */
+  descendantTotal: number;
+  /** 其中已删数。 */
+  descendantDeleted: number;
+  /** 子树内文件所挂未删录音数。 */
+  recordingCount: number;
+}
+
+/**
+ * ★ 票124:恢复响应 —— 必含**完整树包**(规格 §6 契约 C1)。
+ * 只回计数会让「版本已对齐、payload 缺恢复项」的下一次整树保存再删掉它。
+ */
+export interface MaterialRestoreResult {
+  /** 本次实际翻转的行数(含祖先与后代)。 */
+  restored: number;
+  treeVersion: string;
+  nodes: MaterialNodeDto[];
+}
+
 // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
 
 export interface PracticeCategoryDto {
@@ -285,6 +318,49 @@ export class PracticeApi {
           throw e;
         })
       );
+  }
+
+  // ---------- 素材回收站(★ 票124) ----------
+
+  /**
+   * 我的回收站清单(顶层已删节点)。
+   *
+   * 事故背景:整树覆盖保存会把未提交的存量节点一律软删,而应用内原本没有
+   * 任何列出/恢复已删素材的入口(用户只能求助并靠一条经批准的 UPDATE 才恢复)。
+   */
+  getMaterialTrash(): Observable<DeletedMaterialDto[]> {
+    return this.api.get<DeletedMaterialDto[]>(`${PracticeApi.BASE}/materials/trash`);
+  }
+
+  /**
+   * 恢复某个已删素材(含已删祖先链 + 全部已删后代)。
+   *
+   * ★ 规格 §6 契约 C1:**在 service 层即完成整树包采纳** —— 响应里的
+   *   treeVersion 写回本服务的留存摘要,nodes 经与 getMaterials 同一 map 路径
+   *   返回给调用方。任何调用方都不可能「只拿计数、忘了树」——
+   *   只采纳版本号不采纳节点,会让「版本已对齐、payload 缺恢复项」的
+   *   下一次整树保存畅通无阻地把它再删掉(碎纸机)。
+   */
+  restoreMaterial(id: string): Observable<MaterialRestoreResult> {
+    return this.api.post<{ restored: number; treeVersion: string; nodes: MaterialNodeDto[] }>(
+      `${PracticeApi.BASE}/materials/${id}/restore`, {})
+      .pipe(map((r) => this.adoptTreePackage(r)));
+  }
+
+  /**
+   * 恢复我的全部已删素材(整树误删事故的一键兜底)。
+   * 无已删行时 restored=0 且照常回当前树包(幂等,不报错)。
+   */
+  restoreAllMaterials(): Observable<MaterialRestoreResult> {
+    return this.api.post<{ restored: number; treeVersion: string; nodes: MaterialNodeDto[] }>(
+      `${PracticeApi.BASE}/materials/trash/restore-all`, {})
+      .pipe(map((r) => this.adoptTreePackage(r)));
+  }
+
+  /** 采纳恢复响应的整树包(契约 C1):版本写回留存,nodes 走与 getMaterials 同一路径。 */
+  private adoptTreePackage(r: { restored: number; treeVersion: string; nodes: MaterialNodeDto[] }): MaterialRestoreResult {
+    this.treeVersion = r.treeVersion ?? null;
+    return { restored: r.restored ?? 0, treeVersion: this.treeVersion ?? '', nodes: r.nodes ?? [] };
   }
 
   // ---------- 练习类别(★ 2026-09-25 Forrest) ----------

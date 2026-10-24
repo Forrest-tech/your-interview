@@ -3,7 +3,9 @@ import { firstValueFrom } from 'rxjs';
 import { MaterialNode } from '../../shared/material-tree/material-tree.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MaterialTransferDialogComponent } from './material-transfer-dialog.component';
-import { MaterialNodeDto, MaterialNodeIn, PracticeCategoryDto } from '../../core/api/practice-api.service';
+import { MaterialTrashDialogComponent } from './material-trash-dialog.component';
+import { DeletedMaterialDto, MaterialNodeDto, MaterialNodeIn, PracticeCategoryDto } from '../../core/api/practice-api.service';
+import { TrashLoadState } from './material-trash.helpers';
 import { serverFieldErrorSummary } from '../../core/api/validation-errors.helpers';
 import { KnowledgeItem, KnowledgeTopic } from '../../core/models/api.models';
 import type { AiPracticeComponent } from './ai-practice.component';
@@ -248,6 +250,8 @@ export class PracticeMaterialTree {
         //   录音**静默不上传** → 只存内存 → 刷新即丢(Forrest 报的数据丢失)。
         //   修法:保存成功后立刻回读后端树,用真实 GUID 替换本地节点。
         this.refreshTreeFromServer();
+        // ★ 票124 §8.1:保存可能新增已删行(删除即软删)→ 回收站计数要跟着刷新。
+        this.loadTrash();
         // 保存成功 = 退出编辑模式,回到只读
         this.treeEditing.set(false);
         this.treeSnapshot = null;
@@ -493,6 +497,7 @@ export class PracticeMaterialTree {
   restoreTree(): void {
     this.treeLoading.set(true);
     this.loadCategories();   // ★ 2026-09-25:类别与树并行加载;类别失败不阻塞树
+    this.loadTrash();        // ★ 票124 §8.1:回收站计数与树并行加载;失败不阻塞树(徽标保持旧值/0)
     this.host.practiceApi.getMaterials().subscribe({
       next: (dtos) => {
         this.nodes.set(PracticeMaterialTree.fromDto(dtos ?? []));
@@ -514,6 +519,150 @@ export class PracticeMaterialTree {
         this.afterTreeReady();
       }
     });
+  }
+
+  // ---------- 素材回收站(★ 票124) ----------
+
+  /**
+   * 回收站清单(顶层已删节点)。
+   * 数据源 = GET /materials/trash;长度即入口徽标的计数(规格 §8.1)。
+   */
+  readonly trashItems = signal<DeletedMaterialDto[]>([]);
+
+  /** 回收站清单的加载态:loading / loaded / failed。 */
+  readonly trashState = signal<TrashLoadState>('loading');
+
+  /** 回收站对话框是否打开(契约 C2:开闭与数据都在本状态域)。 */
+  readonly trashOpen = signal(false);
+
+  /** 正在恢复中的素材 id(null = 无进行中的恢复)。 */
+  readonly trashRestoringId = signal<string | null>(null);
+
+  /** 回收站入口徽标的计数(顶层项数,不是行数总数)。 */
+  readonly trashCount = computed(() => this.trashItems().length);
+
+  /**
+   * 打开回收站:开对话框 + 拉清单。
+   *
+   * ★ 契约 C2:恢复动作只经 PracticeMaterialTree / PracticeApi 的既有通道 ——
+   *   对话框是纯展示 + 抛事件的受控组件,自己不另起一套树状态,
+   *   也不裸调 ApiClient;清单数据与开闭状态都在本状态域。
+   */
+  openTrash(): void {
+    this.trashOpen.set(true);
+    this.loadTrash();
+    const ref = this.host.dialog.open(MaterialTrashDialogComponent, {
+      width: '560px',
+      height: 'min(70vh, 560px)',
+      maxWidth: '94vw',
+      maxHeight: '94vh',
+      panelClass: 'app-trash',
+      data: {
+        items: this.trashItems,
+        state: this.trashState,
+        restoringId: this.trashRestoringId,
+        onRestore: (id: string) => this.restoreTrashItem(id),
+        onRestoreAll: () => this.restoreAllTrash(),
+        onRetry: () => this.loadTrash()
+      }
+    });
+    ref.afterClosed().subscribe(() => {
+      this.trashOpen.set(false);
+      // 关闭后重拉一次:对话框里可能恢复过,清单计数要最新。
+      this.loadTrash();
+    });
+  }
+
+  /** 关闭回收站对话框(清单保留,下次打开会重拉)。 */
+  closeTrash(): void {
+    this.trashOpen.set(false);
+  }
+
+  /**
+   * 拉取回收站清单。
+   *
+   * 纪律:加载失败**不冒充空态**(规格 §8.2)—— trashState 置 'failed',
+   * 界面显示 loadFailed + 重试,清单保持原值(不假装"回收站是空的")。
+   */
+  loadTrash(): void {
+    this.trashState.set('loading');
+    this.host.practiceApi.getMaterialTrash().subscribe({
+      next: (list) => {
+        this.trashItems.set(list ?? []);
+        this.trashState.set('loaded');
+      },
+      error: () => {
+        // 不清空清单、不改 loaded —— 只如实标失败。
+        this.trashState.set('failed');
+      }
+    });
+  }
+
+  /**
+   * 恢复单个已删素材(规格 §8.2 交互)。
+   *
+   * 成功后:toast → 清单移除该项 → 树按契约 C1 采纳 → 徽标更新。
+   * 失败:toast 报错,**清单不假装变化**(绝不乐观删除)。
+   */
+  restoreTrashItem(id: string): void {
+    if (this.trashRestoringId()) return;   // 防双击
+    this.trashRestoringId.set(id);
+    this.host.practiceApi.restoreMaterial(id).subscribe({
+      next: (r) => {
+        this.trashRestoringId.set(null);
+        this.host.toast(this.host.t('practice.trash.restored'));
+        // 契约 C1:以响应里的 nodes 重置本地树 + 采纳版本号(PracticeApi 已在 service 层写回)。
+        this.adoptRestoredTree(r.nodes);
+        // 清单即时移除该项(服务端已恢复它)—— 徽标随之更新。
+        this.trashItems.update((list) => list.filter(x => x.id !== id));
+      },
+      error: (e) => {
+        this.trashRestoringId.set(null);
+        this.host.toast(this.errText(e));
+        // 清单不假装变化 —— 失败就是失败,行还留在回收站里。
+      }
+    });
+  }
+
+  /**
+   * 全部恢复(规格 §8.2 / 事故形态的一键兜底)。
+   * 成功后:toast → 清单转空态 → 树按契约 C1 采纳。
+   */
+  restoreAllTrash(): void {
+    if (this.trashRestoringId()) return;
+    this.trashRestoringId.set('__all__');
+    this.host.practiceApi.restoreAllMaterials().subscribe({
+      next: (r) => {
+        this.trashRestoringId.set(null);
+        this.host.toast(this.host.t('practice.trash.restoredAll'));
+        this.adoptRestoredTree(r.nodes);
+        this.trashItems.set([]);
+        this.trashState.set('loaded');
+      },
+      error: (e) => {
+        this.trashRestoringId.set(null);
+        this.host.toast(this.errText(e));
+        // 不假装变化:清单保持原样。
+      }
+    });
+  }
+
+  /**
+   * 契约 C1 + C3:采纳恢复响应里的整树包,并复位"待保存"状态。
+   *
+   * C1:以 nodes 走既有 fromDto 重置本地树 —— 若只采纳版本号不采纳节点,
+   *     下一次整树保存会把恢复项当"未提交的存量节点"再软删一次(碎纸机)。
+   * C3:恢复不是删除 —— treeDirty 与 treeDeletedSinceSave 都必须复位,
+   *     绝不允许恢复把下一次保存的 force 打开(force 是绕过熔断的通道)。
+   */
+  private adoptRestoredTree(nodes: MaterialNodeDto[]): void {
+    const fresh = PracticeMaterialTree.fromDto(nodes ?? []);
+    this.nodes.set(fresh);
+    this.cacheNames(fresh);
+    this.restoreExpandedState();
+    this.treeEmpty.set(fresh.length === 0);
+    this.treeDirty.set(false);
+    this.treeDeletedSinceSave = false;
   }
 
   // ★★ 第四十一轮:LEGACY_TREE_KEY / readLegacyTree / importSeed 已**全部删除**。

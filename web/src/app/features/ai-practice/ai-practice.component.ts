@@ -228,6 +228,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly mismatchLangLabel = this.tts.mismatchLangLabel;
   readonly treeDirty = this.tree.treeDirty;
   readonly treeEditing = this.tree.treeEditing;
+  /** ★ 票124:回收站顶层项数(入口徽标的计数)。 */
+  readonly trashCount = this.tree.trashCount;
   readonly treeLoading = this.tree.treeLoading;
   readonly treeLoadFailed = this.tree.treeLoadFailed;
   readonly pickedWord = this.grading.pickedWord;
@@ -887,6 +889,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   cancelTreeEdit(): void { return this.tree.cancelTreeEdit(); }
   onCategoryFilterChange(value: string): void { return this.tree.onCategoryFilterChange(value); }
   openManage(tab: 'categories' | 'export' = 'export'): void { return this.tree.openManage(tab); }
+  /** ★ 票124:打开素材回收站(入口按钮 / 空态指针行都走这条通道)。 */
+  openTrash(): void { return this.tree.openTrash(); }
   reloadTree(): void { return this.tree.reloadTree(); }
   phonetic(_word: string): string | null { return this.grading.phonetic(_word); }
   markDot(): string { return this.tree.markDot(); }

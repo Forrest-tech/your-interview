@@ -384,6 +384,77 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
                                 : result.ToProblemDetails();
     }
 
+    // ---------- 素材回收站(★ 票124) ----------
+    // 事故背景:整树覆盖保存会把「未出现在提交树里的存量节点」一律软删,
+    // 而应用内没有任何列出/恢复已删素材的入口 —— 用户只能求助并靠一条
+    // 经批准的 UPDATE 才恢复(135 条素材)。本组端点补这个缺口。
+    //
+    // 路由不冲突性:materials/{materialId:guid} 系列带 guid 约束,
+    // 字面量 trash 不会被 guid 路由吞掉;trash/restore-all 与
+    // {materialId:guid}/restore 形状不同,无歧义。
+
+    /// <summary>
+    /// 我的回收站清单(顶层已删节点)。
+    /// </summary>
+    /// <remarks>
+    /// 裸数组返回(同 GET categories/recordings 的风格)。
+    /// 清单单位 = 顶层已删节点;已删文件夹内部的已删子项不单独列。
+    /// </remarks>
+    [HttpGet("materials/trash")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    public async Task<IResult> GetMaterialTrash(CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var items = await sender.Send(new GetMaterialTrashQuery(userId), ct);
+        return Results.Ok(items);
+    }
+
+    /// <summary>
+    /// 恢复某个已删素材(含已删祖先链 + 全部已删后代)。
+    /// </summary>
+    /// <remarks>
+    /// 响应回**整树包** { restored, treeVersion, nodes } —— 不只回版本号。
+    /// 理由(规格 §6 契约 C1):只回版本号不回节点,会让「版本已对齐、payload
+    /// 缺恢复项」的下一次整树保存畅通无阻地把它再删掉(碎纸机)。
+    /// </remarks>
+    [HttpPost("materials/{materialId:guid}/restore")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> RestoreMaterial(Guid materialId, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new RestoreMaterialCommand(userId, materialId), ct);
+        return result.IsSuccess
+            ? Results.Ok(new
+            {
+                restored = result.Value.Restored,
+                treeVersion = result.Value.TreeVersion,
+                nodes = result.Value.Nodes
+            })
+            : result.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 恢复我的全部已删素材(应对整树误删事故的一键兜底)。
+    /// </summary>
+    /// <remarks>
+    /// 无已删行时 restored=0 且照常回当前树包(幂等,不报错)。
+    /// </remarks>
+    [HttpPost("materials/trash/restore-all")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> RestoreAllMaterials(CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new RestoreAllMaterialsCommand(userId), ct);
+        return result.IsSuccess
+            ? Results.Ok(new
+            {
+                restored = result.Value.Restored,
+                treeVersion = result.Value.TreeVersion,
+                nodes = result.Value.Nodes
+            })
+            : result.ToProblemDetails();
+    }
+
     // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
     // 素材树上方的「练习类别」下拉 + 配置弹窗的数据源。
     // GET 用 MockRead(与读树同权),写操作用 MockManage(与改树同权)。

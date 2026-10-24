@@ -17,7 +17,12 @@ module.exports = {
   moduleNameMapper: {
     '^@angular/(.*)$': '<rootDir>/test/jest-stub.ts',
     'playbook-v2\\.api$': '<rootDir>/test/jest-stub.ts',
-    'practice-api\\.service$': '<rootDir>/test/jest-stub.ts',
+    // ★ 票124:practice-api.service 的替身**只对 intake-panel 一处生效**。
+    //   原因:票124 的 F1 要测**真实** PracticeApi(URL/方法逐字、treeVersion 采纳、
+    //   错误原样上抛),若全局映射到替身就测不到真身。
+    //   键按**请求串**匹配 —— 这里只命中 intake-panel.component.ts 的那一条相对路径,
+    //   其余引用(含 F1 spec 自己的)仍解析到真实源文件。
+    '^\\.\\./\\.\\./\\.\\./\\.\\./core/api/practice-api\\.service$': '<rootDir>/test/jest-stub.ts',
     'ocr-api\\.service$': '<rootDir>/test/jest-stub.ts',
     'i18n\\.service$': '<rootDir>/test/jest-stub.ts',
   },

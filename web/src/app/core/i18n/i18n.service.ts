@@ -1208,6 +1208,24 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.markRed': { zh: '红色', en: 'Red', fr: 'Rouge' },
   'practice.markGreen': { zh: '绿色', en: 'Green', fr: 'Vert' },
   'practice.recordingHistoryCount': { zh: '录音记录', en: 'Recordings', fr: 'Enregistrements' },
+
+  // ---------- ★ 票124:AI Practice 素材回收站 ----------
+  // 事故背景:整树覆盖保存把用户素材整树软删,应用内却没有任何自助恢复入口 ——
+  //   用户只能求助并靠一条经批准的 UPDATE 才恢复。本组词条是那个缺口的补丁。
+  // 文案镜像 Tech Stack 已上线的回收站(ts.trash.*,规格 §8.5 要求 title/empty/
+  //   restore/restored 四键与 ts.trash.* 逐字同文)。
+  'practice.trash.title': { zh: '回收站', en: 'Trash', fr: 'Corbeille' },
+  'practice.trash.empty': { zh: '回收站是空的', en: 'Trash is empty', fr: 'La corbeille est vide' },
+  'practice.trash.restore': { zh: '恢复', en: 'Restore', fr: 'Restaurer' },
+  'practice.trash.restored': { zh: '已恢复', en: 'Restored', fr: 'Restauré' },
+  'practice.trash.restoreAll': { zh: '全部恢复', en: 'Restore all', fr: 'Tout restaurer' },
+  'practice.trash.restoredAll': { zh: '全部已恢复', en: 'All restored', fr: 'Tout a été restauré' },
+  'practice.trash.containsItems': { zh: '含子项 {count} 个', en: 'Contains {count} item(s)', fr: 'Contient {count} élément(s)' },
+  'practice.trash.containsRecordings': { zh: '含录音 {count} 条', en: 'Contains {count} recording(s)', fr: 'Contient {count} enregistrement(s)' },
+  'practice.trash.deletedAt': { zh: '删除于', en: 'Deleted', fr: 'Supprimé le' },
+  'practice.trash.loadFailed': { zh: '回收站加载失败', en: 'Failed to load trash', fr: 'Échec du chargement de la corbeille' },
+  'practice.trash.actionFailed': { zh: '操作失败，请重试', en: 'Action failed, please retry', fr: "Échec de l'action, veuillez réessayer" },
+  'practice.trash.hintInEmpty': { zh: '回收站里有 {count} 个已删除的素材，可恢复', en: '{count} deleted material(s) in Trash can be restored', fr: '{count} élément(s) supprimé(s) dans la corbeille peuvent être restaurés' },
   'practice.saveFailed': { zh: '保存失败,请检查浏览器存储权限', en: 'Save failed — check browser storage permissions', fr: 'Échec de l enregistrement' },
   'practice.sampleReading': { zh: '示范朗读', en: 'Sample Reading', fr: 'Lecture exemple' },
   // ★ 第五十一轮:practice.runScoring(胶囊 Run AI Scoring)、practice.reset

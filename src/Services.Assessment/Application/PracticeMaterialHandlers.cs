@@ -61,16 +61,8 @@ public sealed class GetMaterialTreeQueryHandler(AssessmentDbContext db)
             .ToListAsync(ct);
 
         var treeVersion = await MaterialTreeVersion.ComputeForUserAsync(db, r.UserId, ct);
-        return new MaterialTreeDto(treeVersion, Build(all, null));
+        return new MaterialTreeDto(treeVersion, MaterialTreeBuilder.Build(all, null));
     }
-
-    /// <summary>内存里拼树 —— 素材木只有几十个节点,一次查完比递归 SQL 更清晰也更快。</summary>
-    private static List<MaterialNodeDto> Build(List<PracticeMaterial> all, Guid? parentId) =>
-        all.Where(x => x.ParentId == parentId)
-            .Select(x => new MaterialNodeDto(
-                x.Id, x.Name, x.Kind == MaterialKind.Folder, x.SortOrder, x.IsExpanded,
-                x.Content, Build(all, x.Id), x.MarkColor, x.CategoryId))
-            .ToList();
 }
 
 /// <summary>整树覆盖写。</summary>

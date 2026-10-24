@@ -104,7 +104,12 @@ public sealed class OpenLayerStore
                 Collins = Field(line, cols[5]),
                 Oxford = Field(line, cols[6]),
                 Tag = Field(line, cols[7]),
-                ExchangePairs = exchange.Length == 0 ? [] : new LazyExchangePairs(exchange),
+                // 空集合分支显式转型：三元里的 `[]` 空集合表达式在 C# 12 下会
+                // 干扰另一分支主构造器的重载解析（编译器找不到 exchange 实参）。
+                // 行为不变 —— 空 exchange 本就共享空列表。
+                ExchangePairs = exchange.Length == 0
+                    ? (IReadOnlyList<(string Code, string Target)>)[]
+                    : new LazyExchangePairs(exchange),
             };
             ecdict[entry.Word] = entry;
             // 载入期只需要 0: 链接（归一表）：span 扫描单段，避免全量解析（冷启动预算）。

@@ -44,7 +44,28 @@ export function computed<T>(fn: () => T): () => T {
   return () => fn();
 }
 export function effect(_fn: () => void): void { /* stub:不执行 */ }
+
+/**
+ * ★ 票124:inject 的**可安装钩子**。
+ *
+ * 背景:票124 的 F1 要测**真实** PracticeApi(真实源文件,不走替身),
+ * 而真实 ApiClient 在构造期调 inject(HttpClient) 取真实 HttpClient。
+ * 替身环境里没有 DI 容器 —— 于是给 inject 一个可注入的钩子:
+ *   spec 调 setInjectProvider(() => fakeHttpClient) 后,
+ *   真实源文件里的 inject(HttpClient) 就会拿到假 HttpClient。
+ *
+ * 口径(与 ticket126 的做法同源):**只换注入值,不改产品代码**。
+ * 未安装钩子时 inject 照旧抛错 —— 保持"替身环境不许随便实例化"的原纪律。
+ */
+let injectProvider: ((token?: unknown) => unknown) | null = null;
+
+/** 安装 inject 的取值源(返回 null = 撤销安装)。 */
+export function setInjectProvider(fn: ((token?: unknown) => unknown) | null): void {
+  injectProvider = fn;
+}
+
 export function inject<T>(_token?: unknown): T {
+  if (injectProvider) return injectProvider(_token) as T;
   throw new Error('jest-stub: inject() called outside a stubbed component test scope');
 }
 export function input<T>(_initial?: T): () => T | undefined {

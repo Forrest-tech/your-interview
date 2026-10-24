@@ -140,6 +140,60 @@
   background: #e4e7f5;
 }
 
+/* ---------- 回收站入口(★ 票124) ----------
+   按钮本体沿用 .head-tool;徽标绝对定位在右上角,
+   >99 时显示 99+(文案由 trashBadgeLabel 给出)。 */
+.head-trash {
+  position: relative;
+}
+
+.trash-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #b3261e;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ---------- 树空时的回收站指针行(★ 票124 §8.4) ----------
+   追加在既有 .tree-empty 下方,是一行可点击的出路提示。 */
+.tree-trash-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 16px 18px;
+  padding: 6px 8px;
+  border: 1px solid #e1e4ec;
+  border-radius: 8px;
+  background: #f7f8fb;
+  color: #2e3a8c;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-trash-hint:hover {
+  background: #e4e7f5;
+}
+
+.tree-trash-hint mat-icon {
+  flex: none;
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #2e3a8c;
+}
+
 /* ---------- 展开/收起双箭头(2026-09-23 第十二轮) ----------
    内联 SVG,不依赖图标字体;描边风格与 mat-icon 线性图标一致。
    默认(全部展开)两枚箭头朝上 = "收起全部";

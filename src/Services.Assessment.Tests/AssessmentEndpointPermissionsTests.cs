@@ -91,9 +91,24 @@ public sealed class AssessmentEndpointPermissionsTests
     [InlineData(nameof(AssessmentController.List))]
     [InlineData(nameof(AssessmentController.GetMaterials))]
     [InlineData(nameof(AssessmentController.GetRecordingScore))]
+    [InlineData(nameof(AssessmentController.GetMaterialTrash))] // 票124:回收站清单是读端点
     public void ReadEndpoints_StillRequireMockRead(string methodName)
         => PolicyOf(methodName)
             .Should().Be(PermissionPolicy.Prefix + Permissions.MockRead);
+
+    // ---------- 票124:回收站三端点的策略钉测 ----------
+
+    [Fact] // 票124:GET materials/trash 是读端点 → MockRead
+    public void TrashList_RequiresMockRead()
+        => PolicyOf(nameof(AssessmentController.GetMaterialTrash))
+            .Should().Be(PermissionPolicy.Prefix + Permissions.MockRead);
+
+    [Theory] // 票124:两个恢复端点是管理级写 → MockManage
+    [InlineData(nameof(AssessmentController.RestoreMaterial))]
+    [InlineData(nameof(AssessmentController.RestoreAllMaterials))]
+    public void TrashRestore_RequiresMockManage(string methodName)
+        => PolicyOf(methodName)
+            .Should().Be(PermissionPolicy.Prefix + Permissions.MockManage);
 
     // ---------- 邻居特征锁定:既有写口径不变 ----------
 

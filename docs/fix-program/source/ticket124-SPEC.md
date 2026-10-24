@@ -3,7 +3,7 @@
 - **票号**：124（本文件为规格稿，待独立评分 ≥9.9 过门后才许登记实现）
 - **版本**：R2（R1 独立评分 9.87/10 FAIL，报告 `SCORE-R1.md`；本版仅按扣分项 K1–K4 做定点文字修订，设计决策 D1–D8、范围与验收意图一字未动；修订映射见文末附录「评分史」）
 - **需求原文**（用户，2026-10-23）：「加回收站」
-- **事实基线**：远端 `develop-new-features` tip `2b4112dc8c3544046ff36088d19e30c517752811`（新鲜 ls-remote 核实）。本规格全部代码断言均在该 tip 上逐条实查，验证命令与观察值见 `evidence/usage-traces.md`（附录 V1–V29，下文引用写作 V#）。
+- **事实基线**：远端 `develop-new-features` tip `2b4112dc8c3544046ff36088d19e30c517752811`（新鲜 ls-remote 核实）。本规格全部代码断言均在该 tip 上逐条实查，验证命令与观察值见 `evidence/usage-traces.md`（附录 V1–V30，下文引用写作 V#）。
 - **事故依据**：`~/workspace/incident-practice-empty/REPORT.md`——整树覆盖保存把用户 135 条素材行全部软删，界面显示「数据库里还没有素材」，应用内无任何自助恢复入口，用户只能求助并最终靠一条经批准的 UPDATE 才恢复。本票即补这个缺口。
 - **本文件地位**：实现唯一事实源。实现与本规格不一致 = 实现错；实现中撞到本规格未覆盖的真实冲突，停工上报，不许现场即兴改稿。
 
@@ -334,6 +334,6 @@ public sealed record DeletedMaterialDto(
 
 ## 附录
 
-- 验证附录（可复跑）: `evidence/usage-traces.md`(V1–V29）——本规格每条承重断言的命令与观察值，评分者重跑即可复核。
+- 验证附录（可复跑）: `evidence/usage-traces.md`(V1–V30）——本规格每条承重断言的命令与观察值，评分者重跑即可复核。
 - 事故报告：`~/workspace/incident-practice-empty/REPORT.md`。
 - 评分史：R1 独立评分 **9.87/10 FAIL**（`SCORE-R1.md`；扣分 K1–K4 均为定点文字瑕疵，设计决策 D1–D8 未被触动）。**R2 修订映射**（本版，仅文字、设计未动）：K1 → §3 普查表 Knowledge 行补全三个软删实体（KnowledgeItem/TechStackCategory/ReviewActivityDay）及各自处置；K2 → §5.3 Restore 第 2 步改述为全链断裂点重根、§11.1 T13 补造数方法（`session_replication_role` 绕 Cascade FK，新增附录 V30）并新增 T14 钉多级断裂后置条件；K3 → §8.3 两处签名改为完整树包响应形；K4 → §5.3 List 第 3 步 Path 括注改述为全量图（含已删祖先）口径。

@@ -62,6 +62,20 @@
         </svg>
       </button>
       <span class="spacer"></span>
+      <!-- ★ 票124:回收站入口 —— 工具行末尾的图标按钮。
+           计数徽标在 trashCount>0 时显示(>99 显示 99+):
+           事故里用户对"135 条已删素材躺在库里"毫无感知,
+           入口必须在有内容时自己说话。 -->
+      <button mat-icon-button class="head-tool head-trash"
+              [matTooltip]="t('practice.trash.title')"
+              [attr.aria-label]="t('practice.trash.title')"
+              (click)="trashOpen.emit()">
+        <mat-icon>restore_from_trash</mat-icon>
+        @if (trashBadge) {
+          <span class="trash-badge">{{ trashBadge }}</span>
+        }
+      </button>
+      <span class="spacer"></span>
       @if (!editable) {
         <button class="head-act" [matTooltip]="t('practice.editTreeHint')" (click)="editRequest.emit()">
           <mat-icon>edit</mat-icon>
@@ -87,6 +101,16 @@
        [class.root-drop]="dropMode() === 'root'">
     @if (visibleNodes.length === 0) {
       <p class="tree-empty">{{ emptyHint || t('tree.emptyHint') }}</p>
+      <!-- ★ 票124 §8.4:树空且回收站非空时的回收站指针行。
+           追加在既有 emptyHint **下方**,不改既有 hint 的文本与显示条件;
+           trashCount=0 时本行不渲染,空态与现行完全一致(不变项 #7)。
+           这行是事故的直接修复点:整树被误删后,用户至少还有一条出路。 -->
+      @if (showTrashHint) {
+        <button type="button" class="tree-trash-hint" (click)="trashOpen.emit()">
+          <mat-icon>restore_from_trash</mat-icon>
+          <span>{{ trashHintText }}</span>
+        </button>
+      }
     }
     <ng-container
       [ngTemplateOutlet]="level"

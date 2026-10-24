@@ -502,7 +502,10 @@ public sealed class DictionaryService
     {
         var output = new List<ZhSegment>();
         if (string.IsNullOrWhiteSpace(translation)) return output;
-        foreach (var rawSeg in translation.Split(['\n', '；', ';'], StringSplitOptions.RemoveEmptyEntries))
+        // 显式 char[]：集合表达式 `['\n','；',';']` 在 .NET 8 下同时匹配
+        // Split(char[], StringSplitOptions) 与 Split(string[], StringSplitOptions)
+        // 两个重载 → 编译歧义 CS0121。显式转型为 char[] 消歧,行为不变。
+        foreach (var rawSeg in translation.Split(new[] { '\n', '；', ';' }, StringSplitOptions.RemoveEmptyEntries))
         {
             var seg = rawSeg.Trim();
             if (seg.Length == 0) continue;

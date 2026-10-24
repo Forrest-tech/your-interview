@@ -486,8 +486,10 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
             ? e.Questions.Select(q => new PrepQuestionInput(q.QuestionText, q.Category,
                 q.GotStuck, q.StuckReason, q.RecommendedAnswer, q.Sequence)).ToList()
             : new List<PrepQuestionInput>();
-        var weaknesses = e.Weaknesses.Select(w => new PrepWeaknessInput(
-            w.Category, w.Title, w.Detail, w.Suggestion, w.Severity)).ToList();
+        var weaknesses = ctx.QuestionBankEnabled
+            ? e.Weaknesses.Select(w => new PrepWeaknessInput(
+                w.Category, w.Title, w.Detail, w.Suggestion, w.Severity)).ToList()
+            : new List<PrepWeaknessInput>();
         var fetched = new List<(string Title, string Url)>();
         foreach (var s in new[] { ctx.Web, ctx.Glassdoor })
         {

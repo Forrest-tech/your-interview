@@ -211,6 +211,30 @@ public sealed class PrepReportTicket133Tests
     }
 
     [Fact]
+    public void Normalize_BankOff_CannedWeaknessPlan_StrippedToEmptyState()
+    {
+        // F-133-R1：AI 路题库关时，模型输出的弱点块须剥离为空态（规格 §6.1）。
+        var data = Sample(bank: false);
+        var cls = PrepReportClassifier.Classify("SystemDesign");
+        var t = PrepReportLocalTexts.For("en");
+        var root = CannedRoot(
+            ("round-brief", []), ("greeting", []), ("intro-listen", []), ("self-intro", []),
+            ("deep-dive", []), ("tech-qa", []), ("design-round", []), ("behavioral", []),
+            ("weakness-plan", []), ("ask-back", []), ("comp-process", []), ("closing", []));
+        var plan = Section(root, "weakness-plan");
+        plan["blocks"] = new JsonArray(new JsonObject
+        {
+            ["type"] = "points", ["title"] = "Hash map internals",
+            ["items"] = new JsonArray("Review the internals once.")
+        });
+        var normalized = PrepReportNormalizer.Normalize(root, data, "en", t, cls);
+        QuestionTexts(normalized, "weakness-plan").Should().BeEmpty();
+        var texts = BlockTexts(normalized, "weakness-plan");
+        texts.Should().Contain("No identified weaknesses or stuck questions yet");
+        texts.Should().NotContain("Hash map internals").And.NotContain("Review the internals once.");
+    }
+
+    [Fact]
     public void Normalize_ShuffledAndUnknown_ReorderedAndDropped()
     {
         var data = Sample();
@@ -484,6 +508,23 @@ public sealed class PrepReportTicket133LocalTests
                 .Should().Equal("General");
         PrepReportTicket133Tests.QuestionTexts(root, "behavioral").Should().BeEmpty();
         PrepReportTicket133Tests.QuestionTexts(root, "weakness-plan").Should().BeEmpty();
+        // F-133-R1 缺口补断言：题库关 + 默认弱点存在时，弱点节只呈现空态。
+        PrepReportTicket133Tests.BlockTexts(root, "weakness-plan").Should()
+            .Contain("No identified weaknesses or stuck questions yet");
+        PrepReportTicket133Tests.BlockTexts(root, "weakness-plan").Should()
+            .NotContain("Hash map internals").And.NotContain("Answer structure");
+    }
+
+    [Fact]
+    public void Local_BankOff_WithWeaknesses_WeaknessPlanEmptyState()
+    {
+        // F-133-R1：题库关时弱点一律不进报告（规格 §6.1），弱点节呈现空态（5.10）。
+        var root = Local(PrepReportTicket133Tests.Sample(bank: false));
+        PrepReportTicket133Tests.QuestionTexts(root, "weakness-plan").Should().BeEmpty();
+        var texts = PrepReportTicket133Tests.BlockTexts(root, "weakness-plan");
+        texts.Should().Contain("No identified weaknesses or stuck questions yet");
+        texts.Should().NotContain("Hash map internals").And.NotContain("Answer structure")
+            .And.NotContain("Cannot explain collision handling").And.NotContain("Jumps to conclusions");
     }
 
     [Fact]

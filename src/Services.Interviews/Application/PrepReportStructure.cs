@@ -688,6 +688,9 @@ public static class PrepReportBuilders
         PrepReportSourceData d, string lang, PrepReportLocalTexts t,
         RoundClassification cls, RoutedPrepQuestions routed, JsonObject sources)
     {
+        // F-133-R1（规格 §6.1）：题库关时弱点一律不进报告——入口即门控，后续建节共用同一口径。
+        if (!d.QuestionBankEnabled)
+            d = d with { Weaknesses = [] };
         var sections = new JsonArray();
         foreach (var id in PrepReportSections.ExpectedSectionIds(cls))
             sections.Add(BuildSection(d, t, cls, routed, id));
@@ -848,6 +851,10 @@ public static class PrepReportNormalizer
         JsonObject modelRoot, PrepReportSourceData d, string lang,
         PrepReportLocalTexts t, RoundClassification cls)
     {
+        // F-133-R1（规格 §6.1）：题库关时弱点一律不进报告——入口即门控，
+        // N-2/N-3 脚手架与 N-5 重建共用同一口径；模型自带弱点块由终步 bank-off 分支重置。
+        if (!d.QuestionBankEnabled)
+            d = d with { Weaknesses = [] };
         var filled = new List<string>();
         var inputSections = SectionsOf(modelRoot);
         var kept = new List<JsonObject>();
@@ -964,6 +971,11 @@ public static class PrepReportNormalizer
         {
             foreach (var section in sections.OfType<JsonObject>())
                 QuestionsOf(section).Clear();
+            // F-133-R1：题库关时模型自带的弱点块亦须剥离，弱点节重置为空态脚手架。
+            var plan = FindSection(sections, "weakness-plan");
+            if (plan is not null)
+                plan["blocks"] = PrepReportBuilders.BuildSection(d, t, cls,
+                    new RoutedPrepQuestions([], [], [], [], []), "weakness-plan")["blocks"]!.DeepClone();
         }
         // ---- tech-qa 默认题:校验后仍为空则补默认列表(§6.1 默认列表规则) ----
         var techQaFinal = FindSection(sections, "tech-qa");

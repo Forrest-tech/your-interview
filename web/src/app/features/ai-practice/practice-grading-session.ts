@@ -249,16 +249,82 @@ export class PracticeGradingSession {
     return { wpm, verdict, level, wordCount };
   });
 
+  /** 票132 R-F6:远端取源的在途序号——每次发起 +1,迟到结果按序号作废。 */
+  private replayFetchSeq = 0;
+
   /** ★ #1:点击填充词 → 从该时间戳回放音频。 */
   replayAt(offsetMs: number): void {
     const rec = this.activeTake();
-    const blob = (rec as any)?.blob;
-    if (!blob) { this.host.toast(this.host.t('rec.noAudio')); return; }
-    const url = URL.createObjectURL(blob);
+    const blob = (rec as any)?.blob as Blob | undefined;
+    // 票132 R-F1/D3:本地有源判据与全仓统一为 size > 0(grade/togglePlay/
+    // waveAudioSource 三处先例同此判据)。旧实现以 truthiness 为闸门——重载
+    // take 经 fromDto 拿到的是 0 字节占位 blob(truthy),被当真源对空源
+    // play() 必败(MEDIA_ERR_SRC_NOT_SUPPORTED),且只弹笼统 retryLater、
+    // 全程不发请求(票122 已知发现)。
+    if (blob && blob.size > 0) {
+      this.playReplayBlob(blob, offsetMs);
+      return;
+    }
+    // R-F2:本地无真源 → 仅当该条是已上传录音(id 为 GUID)才走远端支路;
+    // 未上传临时条又恰无 blob 的异常态不发请求,沿现行无源文案收尾。
+    if (!rec || !RecorderService.isGuid(rec.id)) {
+      this.host.toast(this.host.t('rec.noAudio'));
+      return;
+    }
+    // R-F3:点播当刻经既有鉴权通道懒拉取(fetchRecordingAudio,与
+    // togglePlay 同口),不做加载时回填、不回写不缓存(D1/D5)。
+    const takeId = rec.id;
+    const seq = ++this.replayFetchSeq;
+    this.host.practiceApi.fetchRecordingAudio(takeId).subscribe({
+      next: (fetched) => {
+        if (fetched && fetched.size > 0) {
+          const url = URL.createObjectURL(fetched);
+          // R-F6:在途期间用户切了 take 或连点新词 → 本次结果作废,
+          // revoke 未播的 URL,不播不弹。
+          if (!this.isReplayFetchCurrent(takeId, seq)) { URL.revokeObjectURL(url); return; }
+          this.playReplayUrl(url, offsetMs);
+        } else if (this.isReplayFetchCurrent(takeId, seq)) {
+          // 服务端回空体按取流失败处理(R-F3),走 R-F5 其余失败支。
+          this.host.toast(this.replayLoadFailText(''));
+        }
+      },
+      error: (e) => {
+        // R-F6:迟到的旧失败与用户已无关,静默作废。
+        if (!this.isReplayFetchCurrent(takeId, seq)) return;
+        // R-F5:失败分级照 togglePlay——404 = 音频文件已不存在,明示之;
+        // 其余取流失败走 recLoadFail 组文。不许笼统弹 retryLater 冒充原因。
+        const status = (e as { status?: number } | null)?.status;
+        if (status === 404) {
+          this.host.toast(this.host.t('practice.recGone'));
+        } else {
+          const raw = String((e as { message?: string } | null)?.message ?? e ?? '');
+          this.host.toast(this.replayLoadFailText(raw));
+        }
+      },
+    });
+  }
+
+  /** R-F6 守卫:发起后 activeTake 仍是同一条、且没有更新一次 replay 发起。 */
+  private isReplayFetchCurrent(takeId: string, seq: number): boolean {
+    return seq === this.replayFetchSeq && this.activeTake()?.id === takeId;
+  }
+
+  /** 以本地真源 blob 起播(票132 前 replayAt 的现行五步,逐字守恒)。 */
+  private playReplayBlob(blob: Blob, offsetMs: number): void {
+    this.playReplayUrl(URL.createObjectURL(blob), offsetMs);
+  }
+
+  /** 票132 本地/远端两支路共用的同一套播法:同 seek 公式、同失败文案。 */
+  private playReplayUrl(url: string, offsetMs: number): void {
     const audio = new Audio(url);
     audio.currentTime = Math.max(0, offsetMs / 1000 - 0.5); // 提前 0.5s
     audio.play().catch(() => this.host.toast(this.host.t('practice.retryLater')));
     audio.onended = () => URL.revokeObjectURL(url);
+  }
+
+  /** 取流失败(非 404)的组文,与 togglePlay 的 recLoadFail 口径逐字一致。 */
+  private replayLoadFailText(raw: string): string {
+    return this.host.t('practice.recLoadFail') + (raw || this.host.t('practice.retryLater'));
   }
 
   /** ★ #3:Orai 模式 — 一次只给一个最关键的改进点。 */

@@ -189,6 +189,21 @@ export function anyAccentAvailable(
   return accentButtonVisible(audio, 'us') || accentButtonVisible(audio, 'uk');
 }
 
+/**
+ * 词形播放钮渲染判据(票128 §6 R-F1/R-F6,纯函数):钮渲染 ⟺ form.audio 存在
+ * 且当前口音值严格为布尔 true。audio 缺失(旧后端混搭)/null/口音值非布尔
+ * 一律无钮——诚实默认「不确定就不给假钮」,逐词形隔离,不牵连其他词形与整卡。
+ * 可用性只读 DTO,本函数与渲染路径都不发任何探测请求(R-F3)。
+ */
+export function formPlayable(
+  form: { audio?: { us: boolean; uk: boolean } | null },
+  accent: DictAccent,
+): boolean {
+  const audio = form?.audio;
+  if (audio === null || typeof audio !== 'object') return false;
+  return (audio as Record<string, unknown>)[accent] === true;
+}
+
 /** popup 与锚点间距(票126 §6.2:首选位/翻转位均为 8px)。 */
 export const DICT_POPUP_GAP_PX = 8;
 
@@ -285,7 +300,8 @@ export interface DictCardData {
     foldedCount: number;
     zhLines: string[];
   }[];
-  forms: { label: string; text: string }[];
+  /** 票128 §5.3:audio 刻意可选——旧后端响应里不存在,渲染判据必须显式处理缺失(§6 R-F1)。 */
+  forms: { label: string; text: string; audio?: { us: boolean; uk: boolean } }[];
   audio: Record<DictAccent, DictAudioOption>;
   attribution: { source: string; audioSource?: string | null };
 }

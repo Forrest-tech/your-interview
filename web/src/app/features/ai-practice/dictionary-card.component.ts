@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   DictAccent, DictCardState, accentButtonVisible, anyAccentAvailable, foldView,
-  lemmaRoleLabels, loadDictAccent, saveDictAccent,
+  formPlayable, lemmaRoleLabels, loadDictAccent, saveDictAccent,
 } from './dictionary.helpers';
 import {
   DictShadowAction, DictShadowView, shadowErrorLabelKey, shadowSettleFocusSelectors,
@@ -322,11 +322,13 @@ export type DictPlayRequest =
                   <span class="dict-form">
                     <span class="dict-form-label">{{ form.label }}</span>
                     <span class="dict-form-text">{{ form.text }}</span>
-                    <button type="button" class="dict-play-btn dict-play-sm"
-                            (click)="playRequested.emit({ target: 'form', text: form.text, accent: accent() })"
-                            [attr.aria-label]="tf('dict.playForm', { form: form.text })">
-                      <mat-icon>volume_up</mat-icon>
-                    </button>
+                    @if (formHasAudio(form)) {
+                      <button type="button" class="dict-play-btn dict-play-sm"
+                              (click)="playRequested.emit({ target: 'form', text: form.text, accent: accent() })"
+                              [attr.aria-label]="tf('dict.playForm', { form: form.text })">
+                        <mat-icon>volume_up</mat-icon>
+                      </button>
+                    }
                   </span>
                 }
               </div>
@@ -506,6 +508,15 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
 
   protected anyAccent(c: NonNullable<ReturnType<typeof this.card>>): boolean {
     return anyAccentAvailable(c.audio);
+  }
+
+  /**
+   * 票128 §6 R-F1:词形播放钮渲不渲染 = 纯函数 formPlayable(form, 当前口音)——
+   * 本形在当前口音下有真人录音才渲染;audio 缺失/异常按无钮(诚实默认)。
+   * 口音切换时模板随 accent() signal 即时重评,不发任何探测请求(R-F3)。
+   */
+  protected formHasAudio(form: { audio?: { us: boolean; uk: boolean } | null }): boolean {
+    return formPlayable(form, this.accent());
   }
 
   /** §8.4 禁用标注:「暂无发音 · UK」式(dict.noAudio + 口音名,不新造键)。 */

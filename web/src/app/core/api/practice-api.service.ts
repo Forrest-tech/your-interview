@@ -640,7 +640,8 @@ export interface DictionaryCardDto {
   tier: 'oxford' | 'open';
   phonetics: { uk?: string | null; us?: string | null };
   posBlocks: DictionaryPosBlockDto[];
-  forms: { label: string; text: string }[];
+  /** 票128:逐词形音频可用性(additive;旧后端无此字段,前端按缺失处理——无钮)。 */
+  forms: { label: string; text: string; audio?: { us: boolean; uk: boolean } }[];
   audio: { us: DictionaryAudioOptionDto; uk: DictionaryAudioOptionDto };
   attribution: { source: string; audioSource?: string | null };
 }

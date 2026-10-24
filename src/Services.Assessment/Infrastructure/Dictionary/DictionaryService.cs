@@ -72,7 +72,9 @@ public sealed class DictionaryService
         if (q.Length == 0) return Task.FromResult(new PronounceResponse { Available = false });
         accent = accent == "uk" ? "uk" : "us";
         var lemma = ResolveLemma(q)?.Lemma ?? q;
-        var option = ResolveAudio(lemma, q, accent);
+        // 票128 §7：pronounce 是「本形投影全程优先」模式的唯一开启方（且仅 q ≠ lemma 时生效，
+        // 开关内部再核一次）；主端点 audio map 走公开 ResolveAudio、永不开此模式（TB-5⑤）。
+        var option = ResolveAudio(lemma, q, accent, formProjectionFirst: true);
         return Task.FromResult(option is { Available: true, Key: not null }
             ? new PronounceResponse { Kind = option.Kind, Key = option.Key, Available = true }
             : new PronounceResponse { Available = false });
@@ -138,9 +140,12 @@ public sealed class DictionaryService
         if (resolved is null) return null;
         var (lemma, via) = resolved;
         var oxEntry = _oxford.GetEntry(lemma);
-        if (oxEntry is { SenseCount: > 0 })
-            return BuildOxfordResponse(q, lemma, via, oxEntry);
-        return BuildOpenResponse(q, lemma, via, oxEntry);
+        var response = oxEntry is { SenseCount: > 0 }
+            ? BuildOxfordResponse(q, lemma, via, oxEntry)
+            : BuildOpenResponse(q, lemma, via, oxEntry);
+        // 票128 §5.2：逐词形音频可用性的唯一挂接点（牛津路与开放路共用），返回前统一回填。
+        AttachFormAudio(response);
+        return response;
     }
 
     private DictionaryLookupResponse BuildOxfordResponse(string q, string lemma, string via, OxfordEntry entry)
@@ -342,8 +347,20 @@ public sealed class DictionaryService
         ["uk"] = ResolveAudio(lemma, queriedForm, "uk"),
     };
 
-    public AudioOptionDto ResolveAudio(string lemma, string queriedForm, string accent)
+    public AudioOptionDto ResolveAudio(string lemma, string queriedForm, string accent) =>
+        ResolveAudio(lemma, queriedForm, accent, formProjectionFirst: false);
+
+    private AudioOptionDto ResolveAudio(string lemma, string queriedForm, string accent, bool formProjectionFirst)
     {
+        // 票128 §7（D4 本形投影全程优先）：仅 pronounce 在 q ≠ lemma 时开启此模式——
+        // 先按 §4.1 判定链同序同条件把本形投影三层走完，任一层命中即返回本形录音；
+        // 本形全落空才进下方既有整链（词元回落保留，跟读票127 的回落语义靠它）。
+        // 主端点 BuildAudioMap 走公开重载（模式关），输出与基线逐字一致。
+        if (formProjectionFirst && queriedForm != lemma)
+        {
+            var projected = ResolveFormProjection(lemma, queriedForm, accent);
+            if (projected is not null) return projected;
+        }
         // 1) Tier 0 牛津录音（所点屈折形优先于词元）
         var entry = _oxford.GetEntry(lemma);
         if (entry is not null)
@@ -381,6 +398,75 @@ public sealed class DictionaryService
         return recs.Where(r => r.Accent == accent)
                    .OrderBy(r => r.File.StartsWith($"En-{accent}-", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
                    .FirstOrDefault();
+    }
+
+    // ---------- 票128 逐词形可用性判定（§4）与本形投影段（§7） ----------
+
+    /// <summary>
+    /// 本形投影段（§7 第 1 段 = §4.1 判定链本体）：专查词形 F 自己的真人录音，层序与条件与判定逐字同构——
+    /// ① Tier 0 本形音键在且文件实存（词元词头 entry.Audio 不在此段出现，不抢占）；
+    /// ② 核心包本形；③ audio-index 本形记录（懒层算命中，§4.2）。
+    /// 判定（FormAudioAvailable）与 pronounce 投影段共用此实现，保证「判定命中层 ≡ 投影命中层」（§4.3），
+    /// 不许平行再写一份。命中 → 该条录音的呈现；全落空 → null。
+    /// 全程只读内存结构与文件存在性，零网络（§4.4）。
+    /// </summary>
+    private AudioOptionDto? ResolveFormProjection(string lemma, string formText, string accent)
+    {
+        var entry = _oxford.GetEntry(lemma);
+        if (entry is not null)
+        {
+            var form = entry.Forms.FirstOrDefault(f => f.Text == formText);
+            if (form is not null && form.AudioKey.TryGetValue(accent, out var fk) && _oxford.AudioFileExists(fk))
+                return new AudioOptionDto { Kind = "oxford", Key = fk, Available = true };
+        }
+        var core = _audio.ResolveCore(formText, accent);
+        if (core is not null)
+            return new AudioOptionDto { Kind = "commons", Key = core.Value.Key, Available = true };
+        var rec = PickIndexRec(formText, accent);
+        if (rec is not null)
+            return new AudioOptionDto { Kind = "commons", Key = AudioResolver.Mp3FileName(rec), Available = true };
+        return null;
+    }
+
+    /// <summary>
+    /// TB-6 注入接缝（§4.5 最小接缝）：测试可对单个词形给出强制结论（返回 null = 走真判定）或抛异常；
+    /// 生产恒为 null。接缝只替换结论来源，异常隔离仍由 AttachFormAudio 的逐词形 try 承担。
+    /// </summary>
+    internal Func<string, string, string, bool?>? FormAudioAvailableOverrideForTests;
+
+    /// <summary>
+    /// 词形 F 在口音 A 下是否有它自己的真人录音（§4.1）：= 本形投影段是否命中。
+    /// 明示排除（D2）：不查词元的任何录音、不查 F 自身作为词头词条的录音、不查懒缓存落盘文件。
+    /// </summary>
+    public bool FormAudioAvailable(string lemma, string formText, string accent)
+    {
+        if (FormAudioAvailableOverrideForTests?.Invoke(lemma, formText, accent) is bool forced)
+            return forced;
+        return ResolveFormProjection(lemma, formText, accent) is not null;
+    }
+
+    /// <summary>
+    /// §5.2 唯一挂接点：对响应每个词形以 (Lemma, form.Text) 判定并回填 Audio。
+    /// 逐词形异常隔离（§4.5）：单个词形判定抛错 → 该形 false/false，其余词形与 Lookup 整体不受影响。
+    /// </summary>
+    private void AttachFormAudio(DictionaryLookupResponse response)
+    {
+        foreach (var form in response.Forms)
+        {
+            try
+            {
+                form.Audio = new FormAudioDto
+                {
+                    Us = FormAudioAvailable(response.Lemma, form.Text, "us"),
+                    Uk = FormAudioAvailable(response.Lemma, form.Text, "uk"),
+                };
+            }
+            catch (Exception)
+            {
+                // 判定只读内存结构本不应抛错；万一抛错按「无录音」诚实降级该词形（F-S2），不放大到整卡。
+                form.Audio = new FormAudioDto { Us = false, Uk = false };
+            }
+        }
     }
 
     private static string? AudioSourceNote(Dictionary<string, AudioOptionDto> audio, string selfKind)

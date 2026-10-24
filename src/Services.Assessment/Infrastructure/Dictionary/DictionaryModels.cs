@@ -49,6 +49,19 @@ public sealed class FormDto
 {
     public required string Label { get; init; }
     public required string Text { get; init; }
+    /// <summary>
+    /// 票128：逐词形真人录音可用性（SPEC §5.1，additive，旧前端忽略即可）。
+    /// 组装期（MergeForms）为诚实默认 false/false，唯一挂接点在 LookupCore 返回前统一回填（§5.2）；
+    /// 设为可写属性正是为该回填留的形态（规格 §5.2 许实现自定回填形态，只钉挂接点唯一、两路共用）。
+    /// </summary>
+    public FormAudioDto Audio { get; set; } = new() { Us = false, Uk = false };
+}
+
+/// <summary>票128：逐词形 × 逐口音可用性（§4 判定）；两布尔恒输出，不带 key/kind（D5）。</summary>
+public sealed class FormAudioDto
+{
+    public required bool Us { get; init; }
+    public required bool Uk { get; init; }
 }
 
 public sealed class AudioOptionDto

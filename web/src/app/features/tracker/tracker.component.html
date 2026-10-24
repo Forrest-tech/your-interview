@@ -266,7 +266,11 @@
           <mat-icon>filter_alt_off</mat-icon>
         </button>
       } @else {
-        <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.firstApp')">
+        <!-- 票123 R-6.2:看板空态卡的图标按钮补可访问名 —— 它已有 tooltip
+             (tracker.firstApp),但 Material 的 tooltip 是 aria-describedby,不是名字。
+             不改视觉、不改行为,纯加法。 -->
+        <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.firstApp')"
+[attr.aria-label]="t('tracker.firstApp')">
           <mat-icon>add</mat-icon>
         </button>
       }
@@ -473,7 +477,15 @@
           <p>{{ t('tracker.noSearchResults') }}</p>
           <button mat-stroked-button (click)="clearFilters()">{{ t('common.clearFilter') }}</button>
         } @else {
-          {{ t('tracker.noResults') }}
+          <!-- 票123 R-6.1:列表视图零态不再是那行裸字 —— 改成看板卡自己的形态:
+               图标 + 标题 + 正文 + 一个能真正打开新建对话框的主行动。
+               CTA 绑 tracker.dlgNew(对话框标题键),文案与标题同源,不可能漂移。 -->
+          <mat-card class="empty-card list-empty-card">
+            <mat-icon>inbox</mat-icon>
+            <p class="empty-title">{{ t('tracker.empty') }}</p>
+            <p class="empty-body">{{ t('tracker.emptyBody') }}</p>
+            <button mat-flat-button color="primary" (click)="openCreate()">{{ t('tracker.dlgNew') }}</button>
+          </mat-card>
         }
       </div>
     }

@@ -845,6 +845,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.searchPlaceholder': { zh: '例如 Shopify', en: 'e.g. Shopify', fr: 'p. ex. Shopify' },
   'tracker.sortLabel': { zh: '排序', en: 'Sort', fr: 'Trier' },
   'tracker.empty': { zh: '还没有投递记录。', en: 'No applications yet.', fr: 'Aucune candidature pour le moment.' },
+  /* 票123 R-6.1:列表视图零态卡的正文 —— 「还没有投递记录」是标题,这句话告诉用户下一步做什么。 */
+  'tracker.emptyBody': { zh: '添加第一个投递,开始按阶段跟踪它。', en: 'Add your first application to start tracking it by stage.', fr: 'Ajoutez votre première candidature pour commencer à la suivre par étape.' },
   'tracker.needsConnect': { zh: '需先 Connect', en: 'Connect first', fr: 'Connecter d’abord' },
   'tracker.matchScore': { zh: '匹配 {n}', en: 'Match {n}', fr: 'Score {n}' },
   'tracker.pager': { zh: '第{p} / {tp} 页 · 共 {t} 条', en: 'Page {p} of {tp} · {t} total', fr: 'Page {p} sur {tp} · {t} au total' },

@@ -338,6 +338,44 @@ mat-form-field { width: 100%; }
   font-size: 14px;
 }
 
+/* 票123 R-6.1:列表视图零态卡 —— 沿用看板空态卡的形态(图标/标题/正文/行动),
+   但在列表容器里不撑满宽、不居中留白成一大块。 */
+.list-empty-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 28px;
+  margin: 0 auto;
+  text-align: center;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.list-empty-card mat-icon.mat-icon {
+  font-size: 36px;
+  width: 36px;
+  height: 36px;
+  opacity: 0.28;
+}
+
+/* 标题是标题,正文是正文 —— 两者不能同色同重,否则层次塌成一句话。 */
+.list-empty-card p.empty-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  opacity: 1;
+}
+
+.list-empty-card p.empty-body {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+  opacity: 1;
+}
+
 /* 窄屏:pipe 隐藏,只留信息 + 状态 */
 @media (max-width: 820px) {
   .lr-pipe { display: none; }

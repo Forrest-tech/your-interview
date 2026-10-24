@@ -56,10 +56,13 @@
   color: #ffffff;
 }
 
+/* 票123 R-8.1:登录页 H1「Your Interview」—— 产品名要出现在产品自己的展示字体里。
+   Inter → Space Grotesk 600,字号不变(32px)。 */
 .brand-content h1 {
   margin: 0 0 8px;
+  font-family: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', sans-serif;
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.3px;
 }
 .tagline {

@@ -20,6 +20,12 @@ namespace YourInterview.BuildingBlocks.Tests;
 /// 票76 追加:BadHttpRequestException(Kestrel 请求体超上限时抛,框架 StatusCode=413)
 /// 必须透传其框架 StatusCode(超限即 413)而非默认 500;票24 在此处的
 /// 「仍落 500」不变项锁定随本票翻转。真实端点超限实测见 evidence-76。
+/// 票90 追加:DbUpdateException(DB 层约束冲突,唯一索引竞态真实可达)必须映射 409
+/// 而非默认 500,口径与票 07 的 xmin 并发 409 分界(应用层去重→400、xmin 并发→409、
+/// DB 约束冲突→409);OperationCanceledException(上游超时以 TaskCanceledException
+/// 逃逸的可观测情形)必须映射 504 而非默认 500。其余清单项(HttpRequestException、
+/// TimeoutException、Format/Overflow、FileNotFound、NotImplementedException)经读码
+/// 定性为无可达路径或二义,留现状,论证见票 90 报告。
 /// </summary>
 public class ExceptionStatusMappingTests
 {
@@ -193,6 +199,61 @@ public class ExceptionStatusMappingTests
             .Should().Be(StatusCodes.Status400BadRequest);
     }
 
+    // ---- 票90:DbUpdateException → 409 / OperationCanceledException → 504 ----
+
+    [Fact] // 核心:DB 层约束冲突(Assessment practice_categories (UserId, Name) 唯一索引竞态:
+           // Create/Rename 先查后写,两路同名并发时一方 SaveChanges 撞约束逃逸)此前冒 500,今为 409
+    public void DbUpdateException_MapsTo409Conflict()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new DbUpdateException("unique constraint"))
+            .Should().Be(StatusCodes.Status409Conflict);
+    }
+
+    [Fact] // boundary-臂顺序:DbUpdateConcurrencyException 是 DbUpdateException 的子类,
+           // 并发臂必须在前——本条锁并发冲突仍走票 07 的 409(与本票同码但分支文案/code 不同)
+    public void ConcurrencyException_StillTakesPrecedenceOverDbUpdateArm()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new DbUpdateConcurrencyException())
+            .Should().Be(StatusCodes.Status409Conflict);
+    }
+
+    [Fact] // boundary-口径分界:应用层去重检查命中走 Validation→400(既有口径),不因本票改道 409
+    public void BusinessDuplicateCheck_StillMapsTo400Not409()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new ValidationException("category.duplicate"))
+            .Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    [Fact] // 核心:上游超时以 TaskCanceledException 逃逸(HttpClient 超时即此形态,如 Analytics
+           // 真源调用未捕获 TaskCanceled),此前冒 500,今为 504;纯断连无可交付响应,本臂无害
+    public void TaskCanceledException_MapsTo504GatewayTimeout()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new TaskCanceledException("upstream timed out"))
+            .Should().Be(StatusCodes.Status504GatewayTimeout);
+    }
+
+    [Fact] // 核心:OperationCanceledException 本体(非 Task 形态,如 EF 查询被取消)同样 504
+    public void OperationCanceledException_MapsTo504GatewayTimeout()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new OperationCanceledException())
+            .Should().Be(StatusCodes.Status504GatewayTimeout);
+    }
+
+    [Fact] // boundary:继承 —— OperationCanceledException 派生类同样命中 504(switch 类型模式语义)
+    public void DerivedOperationCanceledException_MapsTo504()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new DerivedOperationCanceledException())
+            .Should().Be(StatusCodes.Status504GatewayTimeout);
+    }
+
+    [Fact] // boundary-不扩围:InvalidOperationException 保持 500(既定口径,evidence-76 备注),
+           // 如发音评估重试耗尽后的 InvalidOperationException 不得因本票改道
+    public void InvalidOperationException_StillMapsTo500()
+    {
+        ServiceDefaults.MapExceptionToStatusCode(new InvalidOperationException("retry exhausted"))
+            .Should().Be(StatusCodes.Status500InternalServerError);
+    }
+
     private static JsonException CaptureJsonException(Action act)
     {
         try
@@ -216,5 +277,9 @@ public class ExceptionStatusMappingTests
             : base("Request body too large.", StatusCodes.Status413PayloadTooLarge)
         {
         }
+    }
+
+    private sealed class DerivedOperationCanceledException : OperationCanceledException
+    {
     }
 }

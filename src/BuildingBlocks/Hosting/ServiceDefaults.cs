@@ -299,6 +299,17 @@ public static class ServiceDefaults
     /// 超过上限(MaxRequestBodySizeBytes)时抛此异常且 StatusCode 本即 413 Payload Too Large,
     /// 此前它落到默认分支冒 500;透传而非硬编码 413,是因为框架的其他细分(请求头过大 431、
     /// 读体超时 408、默认 400)同样应按框架原值返回。Kestrel.Core 的实现为其子类,类型模式一并命中。
+    /// 票90:<see cref="DbUpdateException"/> 必须映射 409 Conflict —— 唯一约束竞态是真实可达路径
+    /// (Assessment practice_categories (UserId, Name) 唯一索引;Create/Rename 先查后写,两路同名
+    /// 并发时一方 SaveChanges 撞约束逃逸,此前冒 500)。口径边界:应用层去重检查命中走
+    /// Validation→400(既有口径);xmin 乐观并发走 <see cref="DbUpdateConcurrencyException"/>→409
+    /// (票07,子类臂必须在前);其余 DB 层约束冲突归本票。不按 Pg 错误码细分:BuildingBlocks
+    /// 无 Npgsql 引用,无法干净辨别 23505 与其他 DB 故障;DB 宕机时同臂亦 409 属可接受误报
+    /// (重试建议本身合理),不为此引入反射取 SqlState 的脆弱实现。
+    /// 票90:<see cref="OperationCanceledException"/> 必须映射 504 Gateway Timeout —— 唯一可观测
+    /// 情形是上游超时以 <see cref="TaskCanceledException"/> 逃逸(HttpClient 超时即此形态,如
+    /// Analytics 真源调用未捕获 TaskCanceled);纯客户端断连(RequestAborted)无可交付响应,
+    /// 本臂对其无害。TaskCanceledException 是其子类,类型模式一并命中。
     /// </summary>
     public static int MapExceptionToStatusCode(Exception? ex) => ex switch
     {
@@ -306,6 +317,8 @@ public static class ServiceDefaults
         UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
         KeyNotFoundException => StatusCodes.Status404NotFound,
         DbUpdateConcurrencyException => StatusCodes.Status409Conflict,
+        DbUpdateException => StatusCodes.Status409Conflict,
+        OperationCanceledException => StatusCodes.Status504GatewayTimeout,
         JsonException => StatusCodes.Status400BadRequest,
         BadHttpRequestException badHttp => badHttp.StatusCode,
         ArgumentException => StatusCodes.Status400BadRequest,
@@ -359,6 +372,38 @@ public static class ServiceDefaults
                              "Your changes were not saved — refresh and try again.",
                     Type = "https://tools.ietf.org/html/rfc9110#section-15.5.10",
                     Extensions = { ["traceId"] = ctx.TraceIdentifier, ["code"] = "concurrency_conflict" }
+                });
+                return;
+            }
+
+            if (ex is DbUpdateException)
+            {
+                // 票90:DB 层约束冲突(唯一索引竞态等)。与并发臂的区别:这里不是版本过期,
+                // 而是写入内容与库内现状冲突(典型如两路同名分类并发创建)。detail 同样只给
+                // 用户可执行提示,不含任何内部细节;code=data_conflict 供前端区分于并发冲突。
+                await ctx.Response.WriteAsJsonAsync(new ProblemDetails
+                {
+                    Status = status,
+                    Title = "Data conflict",
+                    Detail = "The data conflicts with the current state — it may already exist " +
+                             "or have been changed by someone else. Refresh and try again.",
+                    Type = "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+                    Extensions = { ["traceId"] = ctx.TraceIdentifier, ["code"] = "data_conflict" }
+                });
+                return;
+            }
+
+            if (ex is OperationCanceledException)
+            {
+                // 票90:上游超时(TaskCanceledException 是其子类)。纯客户端断连无可交付响应,
+                // 本分支只在响应可交付时生效,即上游未按时响应。detail 不含内部细节。
+                await ctx.Response.WriteAsJsonAsync(new ProblemDetails
+                {
+                    Status = status,
+                    Title = "Gateway Timeout",
+                    Detail = "The upstream service did not respond in time. Please try again later.",
+                    Type = "https://tools.ietf.org/html/rfc9110#section-15.6.5",
+                    Extensions = { ["traceId"] = ctx.TraceIdentifier, ["code"] = "upstream_timeout" }
                 });
                 return;
             }

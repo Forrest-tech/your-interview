@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Mock — Dashboard with Pipeline Band — 票123 remediation (structural signature)</title>
+<style>
+@font-face{font-family:'Space Grotesk';src:url('fonts/space-grotesk-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Space Grotesk';src:url('fonts/space-grotesk-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Space Grotesk';src:url('fonts/space-grotesk-700.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Inter';src:url('fonts/inter-400.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Inter';src:url('fonts/inter-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Inter';src:url('fonts/inter-600.woff2') format('woff2');font-weight:600}
+:root{
+  --midnight:#1B2350; --brand:#2E3A8C; --signal-tint:#E4E7F5; --signal-soft:#C6CDEA;
+  --go:#1B7F4B; --go-tint:#E2F1E8; --stop:#B3261E; --stop-tint:#F9E8E5; --attention:#B06A00; --attention-tint:#FAF0D2;
+  --parked:#68707E; --parked-fill:#EDF0F4; --paper:#F5F6F8; --surface:#fff; --hairline:#E1E4EC;
+  --ink:#1F2430; --ink2:#5B6270; --track:#E2E5EC;
+  --sg:'Space Grotesk',sans-serif; --inter:'Inter',-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--inter);font-size:14px;color:var(--ink);background:var(--paper)}
+.topbar{height:60px;background:var(--midnight);color:#fff;display:flex;align-items:center;padding:0 16px;gap:6px;border-bottom:1px solid #12183A}
+.brand{display:flex;align-items:center;gap:9px;margin-right:14px}
+.brand .mark{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-family:var(--sg);font-weight:700;font-size:13px}
+.brand .name{font-family:var(--sg);font-size:16.5px;font-weight:600;letter-spacing:.1px}
+.nav{display:flex;gap:2px;align-items:center}
+.nav a{color:#D8DCF2;text-decoration:none;font-size:13.5px;padding:7px 12px;border-radius:999px}
+.nav a.active{background:rgba(255,255,255,.16);color:#fff;font-weight:500}
+.topbar .sp{flex:1}
+.avatar{width:30px;height:30px;border-radius:50%;background:#7986CB;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+.page{max-width:1240px;margin:0 auto;padding:22px 24px 34px}
+.page-head{display:flex;justify-content:space-between;align-items:flex-start}
+h1{font-family:var(--sg);font-size:24px;font-weight:600;letter-spacing:-.01em}
+.sub{margin-top:5px;color:var(--ink2);font-size:13px;display:flex;gap:8px;align-items:center}
+.chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:500;background:var(--signal-tint);color:var(--brand)}
+.iconbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--hairline);background:var(--surface);color:var(--ink2);font-size:16px;cursor:pointer}
+h3.sec{font-family:var(--sg);font-size:15px;font-weight:600;margin:22px 0 10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{background:var(--surface);border:1px solid var(--hairline);border-radius:10px;padding:16px 18px}
+.card .chead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.card .ctitle{font-family:var(--sg);font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.count{font-family:var(--sg);background:var(--brand);color:#fff;font-size:12px;font-weight:600;border-radius:999px;padding:1px 8px}
+.urow{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--hairline)}
+.urow:first-of-type{border-top:none}
+.ava{width:38px;height:38px;border-radius:10px;color:#fff;font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;font-family:var(--sg)}
+.urow .who{flex:1}
+.urow .who b{font-size:13.5px}
+.urow .meta{color:var(--ink2);font-size:12.5px;margin-top:2px}
+.stagechip{background:var(--signal-tint);color:var(--brand);border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:600}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:8px;border:1px solid var(--hairline);background:var(--surface);color:var(--brand);font-family:var(--inter);font-weight:500;font-size:13px;padding:7px 14px;cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:16px}
+.stat{background:var(--surface);border:1px solid var(--hairline);border-radius:10px;padding:16px 18px;text-align:left}
+.stat .num{font-family:var(--sg);font-size:30px;font-weight:600}
+.stat .lab{color:var(--ink2);font-size:12.5px;margin-top:2px}
+.stat.won{background:var(--go-tint);border-color:#CBE5D4}
+.stat.won .num{color:var(--go)}
+.empty-note{color:var(--ink2);font-size:13px;padding:10px 2px;line-height:1.55}
+.next{display:flex;flex-direction:column}
+.next a{display:flex;align-items:center;gap:12px;padding:11px 4px;border-top:1px solid var(--hairline);text-decoration:none;color:var(--ink);font-size:13.5px;font-weight:500}
+.next a:first-of-type{border-top:none}
+.next .ic{width:32px;height:32px;border-radius:8px;background:var(--signal-tint);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:15px}
+.next .hint{margin-left:auto;color:var(--ink2);font-size:12px;font-weight:400}
+
+/* ===== THE PIPELINE BAND — the stepper grammar at page scale =====
+   The Tracker stepper's shipped geometry, verbatim (tracker.component.scss
+   .sp-dot/.sp-line): 16px nodes with a 2px border, 2px rail; reached = brand
+   fill + 4px brand halo; future = hollow (#C3C9D4 border); rail done =
+   rgba(46,58,140,.45), pending = rgba(0,0,0,.12). Terminal verdicts take the
+   stepper's terminal treatments verbatim (white fill + verdict border + halo). No gradient scale —
+   none exists in the product. */
+.band{margin-top:20px;padding:16px 10px 12px;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
+.band .brow{display:flex}
+.band .bcell{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;text-decoration:none;color:inherit}
+.band .bnum{font-family:var(--sg);font-size:22px;font-weight:600;line-height:1.1;height:26px}
+.band .bnum.zero{color:var(--ink2)}
+.band .btrack{height:19px;width:100%;position:relative;display:flex;align-items:center;justify-content:center}
+.band .seg{position:absolute;top:50%;transform:translateY(-50%);height:2px;left:0;right:0;background:rgba(0,0,0,.12)}
+.band .seg.done{background:rgba(46,58,140,.45)}
+.band .bcell:first-child .seg{left:50%}
+.band .bcell.laststage .seg{right:50%}
+.band .bdot{width:16px;height:16px;border-radius:50%;position:relative;z-index:1;flex:0 0 auto}
+.band .bdot.reached{background:var(--brand);border:2px solid var(--brand);box-shadow:0 0 0 4px rgba(46,58,140,.14)}
+.band .bdot.hollow{background:#fff;border:2px solid #C3C9D4}
+.band .bdot.offer{background:#fff;border:2px solid var(--go);box-shadow:0 0 0 4px rgba(27,127,75,.15)}
+.band .bdot.stopd{background:#fff;border:2px solid var(--stop);box-shadow:0 0 0 4px rgba(179,38,30,.13)}
+.band .blab{font-size:12.5px;color:var(--ink2);font-weight:500;margin-top:1px}
+.band .bcell.verdict{flex:0 0 132px}
+.band .bcell.verdict .seg{display:none}
+.band .bgap{flex:0 0 30px;position:relative}
+.band .bgap::after{content:'';position:absolute;top:50%;left:6px;right:6px;border-top:2px dotted #C3C9D4}
+.band-cap{display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding:0 2px}
+.band-cap .note{color:var(--ink2);font-size:13px}
+.band-cap .note b{color:var(--ink);font-weight:600}
+.band-cap a{color:var(--brand);font-size:13px;font-weight:500;text-decoration:none}
+</style></head>
+<body>
+<header class="topbar">
+  <div class="brand"><div class="mark">Yi</div><div class="name">Your Interview</div></div>
+  <nav class="nav">
+    <a class="active" href="#">Dashboard</a><a href="#">Tracker</a><a href="#">Playbook</a>
+    <a href="#">Tech Stack</a><a href="#">AI Practice</a><a href="#">AI Mock</a><a href="#">Analytics</a><a href="#">Resume</a>
+  </nav>
+  <div class="sp"></div><div class="avatar">S</div>
+</header>
+<main class="page">
+  <div class="page-head">
+    <div>
+      <h1>Dashboard</h1>
+      <div class="sub">Welcome back, System Administrator <span class="chip">No practice data yet</span></div>
+    </div>
+    <button class="iconbtn" title="Refresh">↻</button>
+  </div>
+
+  <!-- Pipeline Band: replaces the Pipeline chips card. Nodes = the canonical
+       stage list (pipelineStages) with counts merged from ActionCenter
+       byStatus (absent = 0); Rejected is the terminal verdict node. Every
+       node is a link into Tracker filtered to that stage. -->
+  <section class="band" aria-label="Pipeline by stage">
+    <div class="brow">
+      <a class="bcell" href="#">
+        <div class="bnum zero">0</div>
+        <div class="btrack"><span class="seg done"></span><span class="bdot hollow"></span></div>
+        <div class="blab">Saved</div>
+      </a>
+      <a class="bcell" href="#">
+        <div class="bnum">1</div>
+        <div class="btrack"><span class="seg done"></span><span class="bdot reached"></span></div>
+        <div class="blab">Applied</div>
+      </a>
+      <a class="bcell" href="#">
+        <div class="bnum">1</div>
+        <div class="btrack"><span class="seg done"></span><span class="bdot reached"></span></div>
+        <div class="blab">Screen</div>
+      </a>
+      <a class="bcell" href="#">
+        <div class="bnum">1</div>
+        <div class="btrack"><span class="seg done"></span><span class="bdot reached"></span></div>
+        <div class="blab">Interview</div>
+      </a>
+      <a class="bcell laststage" href="#">
+        <div class="bnum">1</div>
+        <div class="btrack"><span class="seg done"></span><span class="bdot offer"></span></div>
+        <div class="blab">Offer</div>
+      </a>
+      <div class="bgap" style="align-self:center;height:19px"></div>
+      <a class="bcell verdict" href="#">
+        <div class="bnum">1</div>
+        <div class="btrack"><span class="bdot stopd"></span></div>
+        <div class="blab">Rejected</div>
+      </a>
+    </div>
+    <div class="band-cap">
+      <div class="note"><b>4 applications are still moving.</b></div>
+      <a href="#">View applications</a>
+    </div>
+  </section>
+
+  <h3 class="sec">Action center</h3>
+  <div class="grid2">
+    <section class="card">
+      <div class="chead"><div class="ctitle">Upcoming interviews</div><span class="count">2</span></div>
+      <div class="urow">
+        <div class="ava" style="background:#AD1457">CO</div>
+        <div class="who"><b>Corpay</b><div class="meta">Senior Software Developer</div></div>
+        <span class="stagechip">Round 1</span>
+        <span class="stagechip">Technical</span>
+        <div style="text-align:right;color:var(--ink2);font-size:12.5px;line-height:1.5">2026-10-25<br>Video</div>
+      </div>
+      <div class="urow">
+        <div class="ava" style="background:#7CB342">MM</div>
+        <div class="who"><b>Mohawk Medbuy</b><div class="meta">.NET Developer</div></div>
+        <span class="stagechip">Round 1</span>
+        <span class="stagechip">Technical</span>
+        <div style="text-align:right;color:var(--ink2);font-size:12.5px;line-height:1.5">2026-10-28<br>Onsite</div>
+      </div>
+      <div style="margin-top:12px"><button class="btn">Prepare</button></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><div class="ctitle">Weak areas</div></div>
+      <div class="empty-note">No data yet. Weak areas appear once interview analyses exist.</div>
+      <div class="next">
+        <a href="#"><span class="ic">▤</span>Add materials in Playbook</a>
+        <a href="#"><span class="ic">✦</span>Run an AI analysis</a>
+      </div>
+    </section>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="num">5</div><div class="lab">Total applications</div></div>
+    <div class="stat"><div class="num">4</div><div class="lab">In progress</div></div>
+    <div class="stat"><div class="num">2</div><div class="lab">Interviews</div></div>
+    <div class="stat won"><div class="num">1</div><div class="lab">Offers</div></div>
+  </div>
+
+  <div class="grid2" style="margin-top:16px">
+    <section class="card">
+      <div class="chead"><div class="ctitle">Competency radar</div></div>
+      <div class="empty-note" style="text-align:center;padding:26px 10px">No interview analysis yet. Import an interview recording in Playbook to get started.</div>
+    </section>
+    <section class="card">
+      <div class="chead"><div class="ctitle">Next steps</div></div>
+      <div class="next">
+        <a href="#"><span class="ic">⇪</span>Import an interview recording<span class="hint">Playbook</span></a>
+        <a href="#"><span class="ic">✎</span>Practise with an AI mock interview<span class="hint">AI Mock</span></a>
+        <a href="#"><span class="ic">▦</span>Review tech stack topics<span class="hint">Tech Stack</span></a>
+        <a href="#"><span class="ic">＋</span>Log a new application<span class="hint">Tracker</span></a>
+      </div>
+    </section>
+  </div>
+</main>
+</body></html>

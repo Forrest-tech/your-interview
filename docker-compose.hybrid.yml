@@ -68,11 +68,13 @@ services:
     environment:
       <<: *hybrid-env
       ASPNETCORE_URLS: "http://+:8080"
-      # 🔑 只探实际在跑的两个下游 —— 否则未启动的 jobs/interviews/knowledge/analytics
+      # 🔑 只探 hybrid 模式实际在跑的 4 个下游 —— 否则未启动的 jobs/analytics/aigateway
       #    会让 /health/live 恒返 503(gateway 明明健康却被判"没起来")。
       # 逗号分隔单键 —— 不走数组索引,零歧义
-      # 只探实际在跑的下游。jobs/analytics 未起时不列进来,
-      # 否则网关会因下游不健康而把自身判为 503。
+      # 注意:这是 hybrid 模式的有意覆盖 —— 环境变量优先于 appsettings.json,
+      #   仅在 hybrid 模式下生效,覆盖 appsettings 的 7 业务集群默认清单;
+      #   hybrid 运行集就是这 4 个(jobs/analytics/aigateway 不在 hybrid 运行集内,故不列入)。
+      #   两份清单按模式分工、不打架,理由见 docs/fix-program/evidence-94/DECISION-94.md。
       ReverseProxy__HealthChecks__EnabledClusters: "identity,assessment,interviews,knowledge"
       # gateway 在容器里,下游地址要重写:
       #   identity  → 容器间走 Docker DNS(服务名)

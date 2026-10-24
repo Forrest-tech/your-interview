@@ -85,6 +85,13 @@
     line-height: 1.1;
   }
 
+  /* 票123 R-5.2:「暂无分析」是一句话,不是数字 —— 用小号弱化字排。 */
+  .metric-val-none {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--mat-sys-on-surface-variant, #5b6270);
+  }
+
   .metric-label {
     margin-top: 4px;
     font-size: 12px;
@@ -348,6 +355,15 @@
       font-size: 30px;
       font-weight: 750;
       line-height: 1;
+    }
+
+    /* 票123 R-5.3:「暂无分析」不是数字 —— 用小号弱化字,不再占大号数字的位置。 */
+    .overall-none {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #5b6270;
+      line-height: 1.35;
+      text-align: center;
     }
 
     .overall-lbl {

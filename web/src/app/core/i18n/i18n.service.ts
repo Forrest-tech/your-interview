@@ -1696,6 +1696,10 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.stat.analyzed': { zh: '已分析', en: 'Analyzed', fr: 'Analysés' },
   'pb.stat.pending': { zh: '待分析', en: 'Pending', fr: 'En attente' },
   'pb.stat.avgScore': { zh: '平均总分', en: 'Average score', fr: 'Note moyenne' },
+  /* 票123 R-5.2:「还没有分析」这一个概念在应用里只有一个字符串。
+     审计的 ranked item 5 逐字规定了这个替换串;R-5.2 引入本键,
+     并让 G-3 的整块塌陷态共用它 —— 概念只有一处措辞。 */
+  'pb.noAnalysisYet': { zh: '暂无分析', en: 'No analysis yet', fr: 'Aucune analyse pour le moment' },
   'pb.filter.company': { zh: '公司', en: 'Company', fr: 'Entreprise' },
   'pb.filter.allCompanies': { zh: '全部公司', en: 'All companies', fr: 'Toutes les entreprises' },
   'pb.filter.companyCount': { zh: '{n} 场', en: '{n} interviews', fr: '{n} entretiens' },

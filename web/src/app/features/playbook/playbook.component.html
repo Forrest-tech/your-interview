@@ -152,7 +152,7 @@
         <div class="metric-label">{{ t('pb.stat.pending') }}</div>
       </mat-card>
       <mat-card class="metric">
-        <div class="metric-val">{{ s.averageOverallScore ?? '—' }}</div>
+        <div class="metric-val metric-val-none">{{ s.averageOverallScore ?? t('pb.noAnalysisYet') }}</div>
         <div class="metric-label">{{ t('pb.stat.avgScore') }}</div>
       </mat-card>
     </section>
@@ -314,7 +314,13 @@
         <!-- 分数区:总分 + 六维可视化条 -->
         <div class="scores">
           <div class="overall">
-            <span class="overall-val" [class]="scoreClass(e.overallScore)">{{ e.overallScore ?? '–' }}</span>
+            @if (e.overallScore != null) {
+              <span class="overall-val" [class]="scoreClass(e.overallScore)">{{ e.overallScore }}</span>
+            } @else {
+              <!-- 票123 R-5.3:裸破折号不再是字段值 —— 没有分析时说出「还没有分析」,
+                   与统计卡的平均分共用同一个键(pb.noAnalysisYet)。 -->
+              <span class="overall-val overall-none">{{ t('pb.noAnalysisYet') }}</span>
+            }
             <span class="overall-lbl">{{ t('dim.overall') }}</span>
           </div>
           <div class="bars">

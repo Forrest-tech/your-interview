@@ -129,6 +129,12 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SessionId", "Sequence");
@@ -412,6 +418,12 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.Property<string>("WordsJson")
                         .HasColumnType("jsonb");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("RecordingId");
 
                     b.ToTable("practice_recording_scores", "assessment");
@@ -513,6 +525,12 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("UserId");
 

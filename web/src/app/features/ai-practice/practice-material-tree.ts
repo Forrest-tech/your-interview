@@ -618,7 +618,9 @@ export class PracticeMaterialTree {
       },
       error: (e) => {
         this.trashRestoringId.set(null);
-        this.host.toast(this.errText(e));
+        // R0-C1 · WB-FIX-124:恢复失败文案用定稿键 practice.trash.actionFailed
+        //   (不再裸抛 errText)—— 行内/对话框级统一口径;清单不假装变化。
+        this.host.toast(this.host.t('practice.trash.actionFailed'));
         // 清单不假装变化 —— 失败就是失败,行还留在回收站里。
       }
     });
@@ -641,7 +643,8 @@ export class PracticeMaterialTree {
       },
       error: (e) => {
         this.trashRestoringId.set(null);
-        this.host.toast(this.errText(e));
+        // R0-C1 · WB-FIX-124:同上,失败文案统一 actionFailed;清单保持原样。
+        this.host.toast(this.host.t('practice.trash.actionFailed'));
         // 不假装变化:清单保持原样。
       }
     });

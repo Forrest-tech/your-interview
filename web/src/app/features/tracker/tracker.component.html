@@ -1,4 +1,4 @@
-<div class="page">
+<div class="page content-in">
   <header class="page-head">
     <div>
       <h2>{{ t('nav.tracker') }}</h2>
@@ -511,10 +511,19 @@
                   fill="none" stroke="#C6CDEA"
                   [attr.stroke-width]="e.width" opacity="0.6"/>
           }
-          <!-- 节点(票73:点击选中阶段 → 下方条带展开该阶段;右上角红徽标 = 该阶段已收藏数) -->
+          <!-- 节点(票73:点击选中阶段 → 下方条带展开该阶段;右上角红徽标 = 该阶段已收藏数)
+
+               ★ 票123 C-2.3:Sankey 节点组原先只可点,键盘完全够不到 ——
+               整个票 73 的功能(选阶段驱动收藏条带)对键盘用户不存在。
+               现在补 tabindex/role/aria-label,并让 Enter/Space 触发同一个
+               selectFlowStage()——沿用本模板既有的 tabindex 模式(:93 / :297)。 -->
           @for (n of flowChart().nodes; track n.status) {
             <g [attr.transform]="'translate(' + n.x + ', 0)'" class="sankey-node-g"
-               (click)="selectFlowStage(n.status)">
+               tabindex="0" role="button"
+               [attr.aria-label]="n.label + ' ' + n.count"
+               (click)="selectFlowStage(n.status)"
+               (keydown.enter)="selectFlowStage(n.status)"
+               (keydown.space)="selectFlowStage(n.status); $event.preventDefault()">
               <rect x="0" y="60" width="100" [attr.height]="n.height"
                     rx="8" class="sankey-node" [class.empty]="n.count === 0"
                     [class.selected]="flowStage() === n.status"/>

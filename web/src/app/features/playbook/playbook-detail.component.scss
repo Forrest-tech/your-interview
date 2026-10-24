@@ -67,7 +67,11 @@
   width: 100%; box-sizing: border-box; text-align: left;
   padding: 10px 12px; border: 1px solid #e1e4ec; border-radius: 10px;
   background: #ffffff; color: inherit; cursor: pointer; font-family: inherit;
-  &:hover { border-color: #c6cdea; background: #e4e7f5; }
+  /* ★ 票123 C-3.2:可点项取统一洗色(原为 `#e4e7f5`);它原有的
+     `border-color: #c6cdea` 线索保留 —— 那是「有边框的面板」自己的形状提示,
+     不是悬停洗色。 */
+  &:hover { border-color: #c6cdea; background: var(--hover-wash); }
+  &:active { background: var(--press-wash); }
   &.on {
     border-color: var(--yi-accent, #2e3a8c);
     background: color-mix(in srgb, var(--yi-accent, #2e3a8c) 8%, #ffffff);
@@ -207,7 +211,9 @@
   background: transparent; color: inherit; text-align: left; cursor: pointer;
   padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; min-height: 86px;
   &:last-child { border-right: none; }
-  &:hover { background: color-mix(in srgb, var(--yi-text, #1f2430) 4%, transparent); }
+  /* ★ 票123 C-3.2:可点项取统一洗色(原为 `color-mix(... 4%, transparent)`)。 */
+  &:hover { background: var(--hover-wash); }
+  &:active { background: var(--press-wash); }
 }
 .cell-label { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #5b6270); }
 .cell-body { font-size: 14px; line-height: 1.5; flex: 1;
@@ -276,14 +282,24 @@
   width: var(--track-rail-width);
   background: var(--track-rail-pending);
 }
+/* ★ 票123 C-4.3:R-9 轮次轨道的填充段用 var(--dur)/var(--ease) 动 ——
+   动效在回应用户的动作(加一轮 / 数据到位),这是「有意义的动效」。
+   不是入场装饰:它只在轨道长度真的变化时播。 */
 .rtrack .rail.fill {
   background: var(--track-rail-done);
   bottom: auto;
+  transition: height var(--dur) var(--ease);
 }
 
 .rnode {
   position: relative;
   padding: 12px 0 16px 36px;
+}
+
+/* ★ 票123 C-4.3:当前轮展开的内容用 var(--dur)/var(--ease) 淡入一次。
+   轨道长度变化由 .rail.fill 的 height 过渡承担,这里是内容侧的一次展开。 */
+.rexpand {
+  animation: contentIn var(--dur) var(--ease);
 }
 
 /* 节点:16px 圆点 —— 与 Tracker stepper 逐字一致 */

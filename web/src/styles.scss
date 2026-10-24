@@ -104,6 +104,26 @@ $display-font: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe
   --mdc-text-button-container-shape: 8px;
   --mdc-outlined-text-field-container-shape: 6px;
   --mdc-dialog-container-shape: 14px;
+
+  /* ★ 票123 C-1:动效令牌 —— 全站 transition 的唯一时长/缓动来源。
+     定稿:「`--dur-fast: 120ms` · `--dur: 160ms` · `--dur-slow: 400ms` ·
+     `--ease: cubic-bezier(0.2, 0, 0, 1)`(the Material emphasized easing — this
+     is a Material app; the values consolidate the census clusters rather than
+     importing a foreign feel)」。
+     值域合并自 Phase 0 的普查簇(110/120/130/150/160/180/200/220/400ms),
+     不是新造的一套数值。 */
+  --dur-fast: 120ms;
+  --dur: 160ms;
+  --dur-slow: 400ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ★ 票123 C-3:悬停/按压洗色 —— 受审面两种合法悬停形态共用这两个值。
+     品牌色 alpha 派生(R-2 白名单规则下的 alpha 衍生,不是新颜色)。 */
+  --hover-wash: rgba(46, 58, 140, 0.06);
+  --press-wash: rgba(46, 58, 140, 0.12);
+  /* 顶栏导航在 midnight 深底上:品牌 alpha 看不见,沿用它**既有的**悬停值
+     (shell.component.scss 的 .nav-item:hover),tokenized unchanged。 */
+  --hover-wash-dark: rgba(255, 255, 255, 0.14);
 }
 
 @include mat.core();
@@ -461,17 +481,23 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 
 /* ---------------- 全站键盘可访问性:可见焦点环 (2026-10-07) ----------------
    Material 的默认焦点样式很淡,键盘用户 Tab 到卡片/按钮时看不清位置。
-   只在键盘导航时显示(:focus-visible),鼠标点击不打扰。 */
+   只在键盘导航时显示(:focus-visible),鼠标点击不打扰。
+
+   ★ 票123 C-2.1:去掉强制 `border-radius`。
+   定稿:「Remove the forced `border-radius: 4px` from the global `:focus-visible`
+   rule and the `8px` from its `.app-card` / `.entry` variant —— the outline
+   follows each element's own radius in every browser the app targets; offsets
+   stay exactly as they are.」
+   之前这两行会在聚焦瞬间把药丸与 10px 卡片的圆角**重新掰成 4px/8px** ——
+   一次可见的形状跳变。轮廓跟随元素自身圆角是浏览器的默认行为,不需要我们插手。 */
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 /* 卡片是 div,给它一个合适的焦点环形状 */
 .app-card:focus-visible,
 .entry:focus-visible {
   outline-offset: -2px;
-  border-radius: 8px;
 }
 /* 让可点击卡片能被 Tab 到(配合 tabindex="0") */
 .app-card[tabindex],
@@ -514,6 +540,33 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   to { transform: translateX(0); }
 }
 
+/* ---------------- 票123 C-4:全站唯一的一次编排入场 ----------------
+   定稿原文:
+     One shared keyframe in `styles.scss` — `@keyframes contentIn { from {
+     opacity: 0; transform: translateY(4px); } to { opacity: 1; transform:
+     none; } }` — and a utility class `.content-in { animation: contentIn
+     var(--dur) var(--ease); }`, applied **once** to the primary content
+     container of Dashboard / Tracker / Playbook list / Playbook detail /
+     Tech Stack / Calendar, bound to the first data render.
+
+   审计量到的旧状态:「progress bar, then a hard swap」—— 内容与空态
+   瞬间弹出,没有任何过渡。这个 keyframe 把那一次硬切换变成一次编排。
+
+   显式拒绝(定稿点名):per-section staggers、fade-up-on-scroll、
+   对话框上超出 Material 自带范围的入场动效 —— 分散的入场正是
+   「通用感」的标志。
+
+   绑定语义:容器本来就渲染在 `loading()` 清除之后,挂载语义天然给出
+   「每次挂载只播一次」;页内重复交互不重播。 */
+@keyframes contentIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.content-in {
+  animation: contentIn var(--dur) var(--ease);
+}
+
 /* ---------------- 票126 词典卡 popup 浮层(§6.3:宽 = min(400px, 视口宽 − 16px)) ---------------- */
 .dict-popup-panel {
   width: min(400px, calc(100vw - 16px));
@@ -523,4 +576,30 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   /* 移动 sheet:宿主 global 以 left 8px 定锚,本宽保证右侧同为 8px
      (CDK global 同时给 left+right 只落一边 margin,E7 活体实测) */
   .dict-popup-panel { width: calc(100vw - 16px); }
+}
+
+/* ---------------- 票123 C-1.2:尊重系统的「减少动效」偏好 ----------------
+   定稿原文:
+     @media (prefers-reduced-motion: reduce) {
+       *, *::before, *::after {
+         transition-duration: 0.01ms !important;
+         animation-duration: 0.01ms !important;
+         animation-iteration-count: 1 !important;
+         scroll-behavior: auto !important;
+       }
+     }
+
+   App-wide by nature(它是全局块,故而也一并压住 AI Practice 的录音脉冲
+   与 Tracker 抽屉的 `drawerSlideIn` 入场动画 —— 两者都压得住,而且这里
+   写明是**决定**而非意外)。
+
+   放在文件末尾:这条规则要压得住前面所有声明,靠 `!important` 兜底,
+   但位置靠后更利于后来的维护者一眼看到「全局动效开关在这里」。 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -30,7 +30,9 @@
   padding: 8px 10px;
   border-radius: 8px;
 }
-.cat-row:hover { background: rgba(46, 58, 140, 0.05); }
+/* ★ 票123 C-3.2:可点项取统一洗色(原为 `rgba(46, 58, 140, 0.05)`)。 */
+.cat-row:hover { background: var(--hover-wash); }
+.cat-row:active { background: var(--press-wash); }
 
 .cat-name {
   border: none;
@@ -42,7 +44,9 @@
   border-radius: 6px;
   text-align: left;
 }
-.cat-name:hover { background: rgba(46, 58, 140, 0.1); color: #2e3a8c; }
+/* ★ 票123 C-3.2:可点项取统一洗色(原为 `rgba(46, 58, 140, 0.1)`)。 */
+.cat-name:hover { background: var(--hover-wash); color: #2e3a8c; }
+.cat-name:active { background: var(--press-wash); }
 
 .cat-count {
   font-size: 12px;

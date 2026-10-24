@@ -129,7 +129,7 @@ mat-card { border-radius: 8px; }
   height: 100%;
   border-radius: 6px;
   background: var(--m-color, #2e3a8c);
-  transition: width 220ms ease;
+  transition: width var(--dur) var(--ease);
 }
 
 .bucket-pct { font-size: 11px; opacity: 0.45; margin-top: 3px; }
@@ -338,7 +338,9 @@ mat-card { border-radius: 8px; }
   width: 32px;
   height: 32px;
 }
-.manage-btn:hover { color: #2e3a8c; background: rgba(46, 58, 140, 0.08); }
+/* ★ 票123 C-3.2:可点项取统一洗色(原为 `rgba(46, 58, 140, 0.08)`)。 */
+.manage-btn:hover { color: #2e3a8c; background: var(--hover-wash); }
+.manage-btn:active { background: var(--press-wash); }
 .manage-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
 /* 筛选区底部:Clear filters 右对齐 */
@@ -413,7 +415,7 @@ mat-form-field { width: 100%; }
   width: 3px;
   border-radius: 6px;
   background: transparent;
-  transition: background 0.15s;
+  transition: background var(--dur);
   margin: 8px 0;
 }
 .split-handle:hover::after { background: rgba(46, 58, 140, 0.35); }
@@ -447,10 +449,12 @@ mat-form-field { width: 100%; }
   cursor: pointer;
   font: inherit;
   color: inherit;
-  transition: background 110ms ease;
+  transition: background var(--dur-fast) var(--ease);
 }
 
-.list-item:hover { background: rgba(31, 36, 48, 0.045); }
+/* ★ 票123 C-3.2:行取统一洗色(原为 `rgba(31, 36, 48, 0.045)` 黑 alpha)。 */
+.list-item:hover { background: var(--hover-wash); }
+.list-item:active { background: var(--press-wash); }
 
 .list-item.active {
   background: rgba(46, 58, 140, 0.1);
@@ -645,7 +649,10 @@ mat-form-field { width: 100%; }
   border-radius: 8px;
   resize: vertical;
 }
-.blk-editor:focus { outline: none; border-color: #2e3a8c; }
+/* 票123 C-2.2:原来 `outline: none`,键盘用户看不到焦点在哪。
+   保留既有的 border-color 线索,并在 :focus-visible 上补回全站共享焦点环。 */
+.blk-editor:focus { border-color: #2e3a8c; }
+.blk-editor:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .block-empty-hint {
   margin: 0;
   font-size: 12.5px;

@@ -686,7 +686,9 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       font-size: 14px; color: #1f2430; cursor: pointer;
     }
     .hdr-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #5b6270; }
-    .hdr-btn:hover { background: #f5f6f8; }
+    /* ★ 票123 C-3.2:可点项取统一洗色(原为 "#f5f6f8")。 */
+    .hdr-btn:hover { background: var(--hover-wash); }
+    .hdr-btn:active { background: var(--press-wash); }
     .hdr-btn.danger { border-color: #b3261e; color: #b3261e; }
     .hdr-btn.danger mat-icon { color: #b3261e; }
     .hdr-close {
@@ -694,7 +696,9 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       width: 38px; height: 38px; border: none; background: none; cursor: pointer;
       color: #1f2430; border-radius: 8px;
     }
-    .hdr-close:hover { background: #f5f6f8; }
+    /* ★ 票123 C-3.2:可点项取统一洗色(原为 "#f5f6f8")。 */
+    .hdr-close:hover { background: var(--hover-wash); }
+    .hdr-close:active { background: var(--press-wash); }
     .detail-body { padding: 0 !important; flex: 1 1 auto !important; overflow-y: auto !important; min-height: 0 !important; }
     /* ★ Simplify 真站:双栏布局 */
     .two-col { display: flex; min-height: 100%; align-items: stretch; }
@@ -1003,7 +1007,10 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       border: 1px solid rgba(31, 36, 48, 0.2); border-radius: 8px; resize: vertical;
       background: #ffffff; color: inherit;
     }
-    .plain-area:focus { outline: none; border-color: var(--brand); }
+    /* 票123 C-2.2:原来 ":focus" 直接 "outline: none",键盘用户看不到焦点在哪。
+       现在保留既有的 border-color 线索,并在 :focus-visible 上补回全站共享焦点环。 */
+    .plain-area:focus { border-color: var(--brand); }
+    .plain-area:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
     .plain-area::placeholder { color: rgba(31, 36, 48, 0.35); }
     .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(31, 36, 48, 0.45); line-height: 1.5; }
     /* 票75:字段级校验提示(对齐票12 Knowledge 弹窗 .field-error 口径:红色 12px、贴字段下方) */

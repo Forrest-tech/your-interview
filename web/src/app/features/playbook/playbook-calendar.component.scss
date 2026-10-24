@@ -70,9 +70,11 @@
   background: var(--signal-tint); color: var(--brand);
   display: flex; flex-direction: column; gap: 1px;
   font-size: 11px; line-height: 1.3;
-  transition: background 0.15s;
+  transition: background var(--dur);
 }
-.cal-chip:hover { background: var(--signal-soft); }
+/* ★ 票123 C-3.2:可点项取统一洗色(原为 `var(--signal-soft)`)。 */
+.cal-chip:hover { background: var(--hover-wash); }
+.cal-chip:active { background: var(--press-wash); }
 
 .chip-co { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chip-stage { opacity: 0.75; }

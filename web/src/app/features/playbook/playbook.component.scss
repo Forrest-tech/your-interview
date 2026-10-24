@@ -223,7 +223,7 @@
   border-radius: 10px;
   border: 1px solid #edf0f4;
   box-shadow: 0 1px 2px rgba(31, 36, 48, 0.05);
-  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
   padding: 16px 18px;
   overflow: hidden;
 
@@ -407,7 +407,7 @@
   .bar-fill {
     height: 100%;
     border-radius: 999px;
-    transition: width 0.4s ease;
+    transition: width var(--dur-slow) var(--ease);
 
     &.good { background: linear-gradient(90deg, #1b7f4b, #1b7f4b); }
     &.mid { background: linear-gradient(90deg, #b06a00, #b06a00); }
@@ -459,14 +459,17 @@
     text-decoration: none;
     padding: 6px 10px;
     border-radius: 8px;
-    transition: background 0.15s ease, gap 0.15s ease;
+    transition: background var(--dur) var(--ease), gap var(--dur) var(--ease);
 
     mat-icon { font-size: 16px; width: 16px; height: 16px; }
 
+    /* ★ 票123 C-3.2:可点项取统一洗色(原为 `rgba(46, 58, 140, 0.08)`,
+       与 `--press-wash` 同值但写死 —— 现在两个档位各有各的令牌)。 */
     &:hover {
-      background: rgba(46, 58, 140, 0.08);
+      background: var(--hover-wash);
       gap: 7px;
     }
+    &:active { background: var(--press-wash); }
   }
 }
 
@@ -545,7 +548,10 @@
     border-bottom: 1px solid #edf0f4;
     cursor: pointer;
     border-radius: 10px;
-    &:hover { background: #e4e7f5; }
+    /* ★ 票123 C-3.2:行取统一洗色(原为 `#e4e7f5` —— 一个与品牌 alpha
+       不属同一语言的十六进制)。 */
+    &:hover { background: var(--hover-wash); }
+    &:active { background: var(--press-wash); }
     &:last-child { border-bottom: none; }
   }
   /* 票123 R-3.3:日期自成一行(12.5px ink-2);公司加粗、岗位压在其下;

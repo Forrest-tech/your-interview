@@ -84,12 +84,15 @@
   font-size: 14px;
   line-height: 1;
   opacity: 0.88;
-  transition: background 130ms ease, opacity 130ms ease;
+  transition: background var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
   white-space: nowrap;
 }
 
+/* ★ 票123 C-3.1:顶栏在 midnight 深底上 —— 品牌 alpha 的洗色在深底上
+   看不见,所以这里用深底专属的 `--hover-wash-dark`,值就是它原本的
+   `rgba(255,255,255,0.14)`(tokenized unchanged,不是新色)。 */
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--hover-wash-dark);
   opacity: 1;
 }
 
@@ -130,7 +133,7 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  transition: background 130ms ease;
+  transition: background var(--dur-fast) var(--ease);
 }
 
 .account-btn:hover .avatar {
@@ -207,7 +210,7 @@
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
-  transition: flex-basis 160ms ease, width 160ms ease;
+  transition: flex-basis var(--dur) var(--ease), width var(--dur) var(--ease);
   background: #ffffff;
 }
 
@@ -243,13 +246,16 @@
   color: #1f2430;
   font-size: 14px;
   line-height: 1.2;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
   white-space: nowrap;
   width: 100%;
   font-family: inherit;
 }
 
-.side-item:hover { background: rgba(31, 36, 48, 0.05); }
+/* ★ 票123 C-3.2:侧边栏是**白底**,所以取品牌 alpha 洗色即可。
+   (深色的是顶栏那条 midnight 横条,不是侧边栏 —— 定稿 R3 更正过这一点。) */
+.side-item:hover { background: var(--hover-wash); }
+.side-item:active { background: var(--press-wash); }
 
 .side-item.active {
   background: rgba(46, 58, 140, 0.12);
@@ -355,7 +361,7 @@
 .f-links a {
   color: #e1e4ec;
   text-decoration: none;
-  transition: color .15s ease;
+  transition: color var(--dur) var(--ease);
 }
 .f-links a:hover { color: #ffffff; }
 .f-dot { color: #1f2430; }
@@ -374,7 +380,7 @@
   gap: 5px;
   color: #e1e4ec;
   text-decoration: none;
-  transition: color .15s ease;
+  transition: color var(--dur) var(--ease);
 }
 .f-contact:hover { color: #ffffff; }
 .f-contact mat-icon,

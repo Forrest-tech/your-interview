@@ -349,9 +349,12 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
        而是直接粘在框里 —— 缩略图条出现在框内底部。 */
     .paste-box { border: 1px solid var(--yi-border, #e1e4ec); border-radius: 10px; margin-top: 8px; overflow: hidden; }
     .paste-box:focus-within { border-color: var(--yi-accent, #2e3a8c); }
+    /* 票123 C-2.2:原来 "outline: none",键盘用户看不到焦点在哪。
+       外框 .paste-box:focus-within 已有 accent 边框线索,这里补回共享焦点环。 */
     .paste { width: 100%; border: none; border-radius: 0; padding: 10px 12px;
              font-size: 14px; line-height: 1.5; background: transparent; color: inherit;
-             box-sizing: border-box; resize: vertical; display: block; outline: none; }
+             box-sizing: border-box; resize: vertical; display: block; }
+    .paste:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
     .paste-box .shot-strip { display: flex; border: none; border-top: 1px solid var(--yi-border, #e1e4ec);
                              border-radius: 0; margin-top: 0; padding: 6px 8px; }
     .row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }

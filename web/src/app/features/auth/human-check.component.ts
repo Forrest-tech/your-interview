@@ -52,7 +52,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
       cursor: pointer;
       user-select: none;
       max-width: 300px;
-      transition: border-color 150ms ease, box-shadow 150ms ease;
+      transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
     }
     .hc:hover { border-color: rgba(31, 36, 48, 0.32); }
     .hc:focus-visible {

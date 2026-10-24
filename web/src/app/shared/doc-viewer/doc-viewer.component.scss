@@ -108,7 +108,11 @@
   border-radius: 8px;
   resize: vertical;
 }
-.doc-editor:focus { outline: none; border-color: #2e3a8c; }
+/* 票123 C-2.2:共享 doc-viewer 只在 Tech Stack 里被实例化(受审面),
+   所以这条规则一并转换 —— 原来 `outline: none`,键盘用户看不到焦点在哪。
+   保留既有的 border-color 线索,并在 :focus-visible 上补回全站共享焦点环。 */
+.doc-editor:focus { border-color: #2e3a8c; }
+.doc-editor:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 .doc-edit-actions {
   display: flex;

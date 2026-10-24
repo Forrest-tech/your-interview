@@ -1,4 +1,4 @@
-<div class="page">
+<div class="page content-in">
   <!-- 左侧条目导航(定稿第八节):分组口径与列表页同一套 helper;点击只切路由不整页刷新 -->
   <aside class="entry-nav" data-testid="entry-nav">
     <div class="nav-group">
@@ -250,11 +250,15 @@
                   }
                 </div>
 
-                <!-- 当前节点默认展开,内容就是原来那张轮次工作卡 -->
+                <!-- 当前节点默认展开,内容就是原来那张轮次工作卡。
+                     ★ 票123 C-4.3:展开用 var(--dur)/var(--ease) 动一次 ——
+                     动效回应用户的动作(展开/收起),不是入场装饰。 -->
                 @if (r.id === currentRoundId()) {
-                  <app-round-card [entry]="e" [round]="r" [displayNo]="roundNo(r)"
-                                  (changed)="onChildChanged()"
-                                  (addMaterialHere)="openIntake('email', $event)" />
+                  <div class="rexpand">
+                    <app-round-card [entry]="e" [round]="r" [displayNo]="roundNo(r)"
+                                    (changed)="onChildChanged()"
+                                    (addMaterialHere)="openIntake('email', $event)" />
+                  </div>
                 }
               </div>
             }

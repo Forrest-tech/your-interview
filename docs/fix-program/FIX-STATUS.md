@@ -11,6 +11,38 @@
 > - **注记**：本票方案诚实投影全量 **9.48**（区间 9.3–9.65，点估计不到 9.5）——本线只负责逐条实现 + 自验，完成后置 PUSHED 并留全证据，**不自评关单**；9.5 线由主线按同 rubric 独立复测判。
 > - **基线纪律**：定稿写于审计 tip `f2b989d0`，当前树已推进至 `86a538f`；Phase 0 先逐条复核 Appendix B 各 pin 与当前树是否一致，漂移处按 PROTOCOL §1「定稿 > 票面 > 现有代码」处理：漂移若迫使实现偏离定稿，登记待确认区等裁决，不擅自改定稿。
 
+> **本票实施进度（WorkBuddy · 逐票独立提交 · 推 develop-new-features）**
+>
+> | 项 | 提交 | 证据 | 偏差清单 |
+> |---|---|---|---|
+> | Phase 0 | `a7f2241` 前的审计 | `evidence-123/PHASE0-AUDIT.md` | — |
+> | R-1 令牌残留扫掠 + R-2 调色板全量清扫 | `1c5c404` | `evidence-123/R1-R2-IMPL.md` | 空 |
+> | R-7 内容度量与页标题统一到全站口径 | `d7a8186` | `evidence-123/R3-IMPL.md` 附 | 空 |
+> | R-3 文案清扫与中点清除 | `a7f2241` | `evidence-123/R3-IMPL.md` | 空 |
+> | R-4 看板收尾（等待行/chip 行/可访问名） | `735d95b` | `evidence-123/R4-IMPL.md` | 空 |
+> | R-5 标注空值 | `a13eb5f` | `evidence-123/R5-IMPL.md` | 空 |
+> | R-6 Tracker 零态卡 | `b68d25d` | `evidence-123/R6-IMPL.md` | 空 |
+> | R-10 热力图邀请行 | `a0e4733` | `evidence-123/R10-IMPL.md` | 空 |
+> | R-8 字标用产品自己的字体 | `e238691` | `evidence-123/R8-IMPL.md` | 空 |
+> | **R-9 The Track（共享几何源 → Dashboard Band → Playbook 轨道 → 抽屉时间轴迁移）** | **`6a349db`** | **`evidence-123/R9-IMPL.md`** | **空** |
+> | §C 四项（C-1 令牌+reduced motion → C-2 焦点补全 → C-3 hover/press → C-4 contentIn+展开动效） | `ae5dc25` | `evidence-123/C-IMPL.md` | 空 |
+>
+> - **R-9 实施注记（2026-10-24）**：
+>   - 落地六件事 —— ①共享几何样式源 `web/src/styles/_track-geometry.scss`（`:root` 自定义属性；选它而非 SCSS mixin 的理由：四个消费者跨四个文件、其中一个是组件内联样式表，且几何值须能被运行时探针从 computed style 读到）；②共享阶段常量 `core/models/pipeline-stages.ts`（Tracker 与 Dashboard 读同一份，**搬家不是复制**）；③Dashboard Pipeline Band（取代 Pipeline chips 卡；节点=规范阶段序列+断口后 Rejected 裁决节点；状态与 Tracker stepper 逐字一致；caption 只用 payload 能算的字段；CTA 用既有 `dash.viewTracker` 且无文字箭头）；④band→Tracker 的 `route.queryParamMap` 交接（缺席/非法值一律不改状态）；⑤Playbook Rounds Track（竖向轨道取代 chip 选择器；填充规则照定稿：done=有结果或日期已过、current=最早的「未来且无结果」；节点字形只有 reached/hollow，裁决色只在事实行的 Outcome 值）；⑥抽屉时间轴迁移（dot 20px→16px、轨道 `#E3E6EA`→共享待决色、done 的「品牌描边+8px 中心点」字形→共享 reached 处理）。
+>   - **几何合并门通过**：探针 `web/tools/census-track-geometry-r9.mjs`（Node+Playwright，读 computed style）在四个面量到**逐字相同**的值 —— 节点 16px×16px、描边 2px、轨道粗细 2px、reached/future/go/stop 描边色同档、待决轨道色 `rgba(0,0,0,0.12)`；状态覆盖 Tracker future×40/reached×33/go×2、Dashboard reached×4/go×1/stop×1、Playbook reached×4/future×1、抽屉 reached×1/future×4。
+>   - **探针自身的三处度量缺陷已修正并记入证据文档**（都是探针问题，不是实现问题）：只量首节点（改为量全部节点、按祖先链状态类归类）/ 把轨道**长度**当契约值（改为量**粗细** `min(w,h)`，长度另打印备查）/ Playbook 用了列表页 `/playbook`（改为登录后取条目 id 进 `/playbook/:id`）。
+>   - **活体环境三个坑（记入证据文档，供后续复测复用）**：Gateway 期望 Jobs=5263 / Interviews=5264（`Services.Gateway/appsettings.json` 的 `ReverseProxy.Clusters`），`dotnet run` 会被 launchSettings 的 `applicationUrl` 覆盖，须用 `--urls` 指定；Interviews 的连接串键是 `ConnectionStrings__InterviewsDb`（**不是** `__Interviews`）；Postgres 密码须从 `docker exec postgres env | grep POSTGRES_PASSWORD` 读（`Tencent2025`，与 `sandbox-start.sh` 里写的 `postgres123` 不一致）；沙盒 cgroup 上限 8GB，四个 .NET 服务常驻时 `ng build` 会被 OOM kill，须先停服务再构建、构建完再起。
+>   - **自验**：tsc 无错误 · Jest **15 suites / 399 tests 全过** · `ng build --configuration production` 成功（bundle 预算警告为既有项：基线 611.10 kB → 本次 612.27 kB，Δ1.17 kB）· `check-templates` 23 个模板通过 · 几何探针 0 项未达标。
+- **§C 实施注记（2026-10-24）**：
+  - **C-1 令牌 + reduced motion** —— `styles.scss` `:root` 落四个动效令牌（`--dur-fast: 120ms` / `--dur: 160ms` / `--dur-slow: 400ms` / `--ease: cubic-bezier(0.2, 0, 0, 1)`，与定稿逐字一致）；受审面 **17 条** `transition:` 全部 token 化（tracker 3 / playbook 3 / calendar 1 / techstack 3 / auth 1 / layout 6 = 17），映射按定稿「≤130ms→fast、150–220ms→dur、单条 400ms→slow、bare ease→var(--ease)」；末尾落定稿原文的全局 `prefers-reduced-motion` 块（逐字照抄，app-wide 压住 AI Practice 录音脉冲与抽屉 `drawerSlideIn`，是决定非意外）。
+  - **C-2 焦点补全** —— 去掉全局 `:focus-visible` 的强制 `border-radius: 4px` 与 `.app-card`/`.entry` inset 变体的 `8px`（offset 不动）；四个点名站点按名转换（`.plain-area` / `.paste` / `.blk-editor` / `.doc-editor`），各自保留既有 border-color 线索并补共享焦点环；Sankey 节点组加 `tabindex="0"` + `role="button"` + `aria-label`（标签+计数），Enter/Space 调同一个 `selectFlowStage()`，焦点由**既有** `.selected` 描边（`stroke: var(--brand)` / 3.5px）表达。**剩余 `outline: none` 全仓 11 处（AI Practice 9 + `app/shared/material-tree` 2）全部落在定稿点名的 out-of-scope 集**，无一处进豁免表。
+  - **C-3 hover/press 统一** —— 落三个令牌（`--hover-wash: rgba(46,58,140,0.06)` / `--press-wash: rgba(46,58,140,0.12)` / `--hover-wash-dark: rgba(255,255,255,0.14)`，逐字一致）；两种合法形态守住：**wash** 用于 clickable rows/items（白底侧栏 `.side-item` 也取 wash，midnight 顶栏 `.nav-item` 取 `--hover-wash-dark`），**lift** 仅 Playbook `.entry` 卡片按原样保留（shadow + `translateY(-2px)`，transition 由 C-1 token 化）；删掉 Tracker `.list-row:hover` 的扁平体系违规 `box-shadow`；取洗色的元素补 `:active` 按压洗色。破坏性按钮/链接/纯显隐/滚动条/拖拽 handle 保持原样（不属「clickable rows and items」）。
+  - **C-4 状态编舞** —— 唯一新 keyframe `@keyframes contentIn` + 工具类 `.content-in`（定稿原文逐字）；六个面各挂**一次**：Dashboard / Tracker / Playbook list / Playbook detail / Tech Stack（`.page content-in`）+ Calendar（`.cal-page content-in`）；R-9 轨道填充 `transition: height var(--dur) var(--ease)`、当前轮卡片 `.rexpand` 用 `contentIn`；**明令拒绝的三项一条未做**（逐区块 stagger / 滚动淡入 / 对话框额外出场）。全仓 `@keyframes` 普查：本次新增**恰好一个** `contentIn`。
+  - **两处需判断、已按「不改行为」处理并记入证据文档（非偏差）**：①`playbook-calendar.component.scss:73` 与 `techstack.component.scss:418` 原本是 `background 0.15s`（**无** easing 关键字，走 CSS 默认 ease），故只 token 化时长、保留默认缓动语义，不强加 `var(--ease)`（Material emphasized 曲线会改手感，超出定稿授权）；②`.sankey-node-g:focus-visible { outline: none; }` 是定稿 C-2 明写的焦点表达方式（焦点由 SVG stroke 承担），不属于违规的「剩余 outline:none」。
+  - **探针自身的六处度量缺陷已修正并记入证据文档**（六次红全是探针问题、无一次是实现偏差，未出现「改实现迁就探针」）：`ROOT` 少拼 `web/` / `:focus` 分支吃掉相邻 `:focus-visible` 块 / 多值 `transition-duration` 整串比对误判 / 视图切换按钮只有图标无文字（改按 `.view-btn` 图标找）/ `.paste` 线索在父容器 `.paste-box:focus-within` / `:active` 用 class 模拟测不到（改 `mouse.down()` 真按压）。
+  - **自验**：tsc 无错误 · Jest **15 suites / 399 tests 全过** · `ng build --configuration production` 成功 · `check-templates` 23 个模板通过 · **三个活体探针全过**（`census-craft-r9c.mjs` §C 四项全达标 / `census-track-geometry-r9.mjs` R-9 四面几何逐字一致 / `census-wordmark-font-r8.mjs` R-8 字体契约达标 —— §C 改动未破坏 R-8/R-9）。
+
+
 ---
 
 ## 队列速览（状态机：PROTOCOL §2）

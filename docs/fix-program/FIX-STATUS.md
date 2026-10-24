@@ -25,7 +25,7 @@
 > | R-10 热力图邀请行 | `a0e4733` | `evidence-123/R10-IMPL.md` | 空 |
 > | R-8 字标用产品自己的字体 | `e238691` | `evidence-123/R8-IMPL.md` | 空 |
 > | **R-9 The Track（共享几何源 → Dashboard Band → Playbook 轨道 → 抽屉时间轴迁移）** | **`6a349db`** | **`evidence-123/R9-IMPL.md`** | **空** |
-> | §C 四项（C-1 令牌+reduced motion → C-2 焦点补全 → C-3 hover/press → C-4 contentIn+展开动效） | `ae5dc25` | `evidence-123/C-IMPL.md` | 空 |
+> | §C 四项（C-1 令牌+reduced motion → C-2 焦点补全 → C-3 hover/press → C-4 contentIn+展开动效） | `0c743b4` | `evidence-123/C-IMPL.md` | 空 |
 >
 > - **R-9 实施注记（2026-10-24）**：
 >   - 落地六件事 —— ①共享几何样式源 `web/src/styles/_track-geometry.scss`（`:root` 自定义属性；选它而非 SCSS mixin 的理由：四个消费者跨四个文件、其中一个是组件内联样式表，且几何值须能被运行时探针从 computed style 读到）；②共享阶段常量 `core/models/pipeline-stages.ts`（Tracker 与 Dashboard 读同一份，**搬家不是复制**）；③Dashboard Pipeline Band（取代 Pipeline chips 卡；节点=规范阶段序列+断口后 Rejected 裁决节点；状态与 Tracker stepper 逐字一致；caption 只用 payload 能算的字段；CTA 用既有 `dash.viewTracker` 且无文字箭头）；④band→Tracker 的 `route.queryParamMap` 交接（缺席/非法值一律不改状态）；⑤Playbook Rounds Track（竖向轨道取代 chip 选择器；填充规则照定稿：done=有结果或日期已过、current=最早的「未来且无结果」；节点字形只有 reached/hollow，裁决色只在事实行的 Outcome 值）；⑥抽屉时间轴迁移（dot 20px→16px、轨道 `#E3E6EA`→共享待决色、done 的「品牌描边+8px 中心点」字形→共享 reached 处理）。

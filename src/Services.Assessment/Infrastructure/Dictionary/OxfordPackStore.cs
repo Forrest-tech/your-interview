@@ -31,6 +31,9 @@ public sealed class OxfordPackStore
     public bool IsPresent => _state.Value is not null;
     public bool AudioArchivePresent => _state.Value?.AudioArchivePresent ?? false;
 
+    /// <summary>牛津状态是否已被求值（票130 预热 W2 完成标志：求值过一次即定格，缺席也是完成）。</summary>
+    internal bool StateEvaluated => _state.IsValueCreated;
+
     private sealed class PackState
     {
         public required Dictionary<string, long[]> Index { get; init; }

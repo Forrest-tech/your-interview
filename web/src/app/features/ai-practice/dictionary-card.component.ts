@@ -351,8 +351,12 @@ export type DictPlayRequest =
     </section>
   `,
   styles: [`
+    /* 票130 H1 定宽:宿主在浮层内撑满面板宽,卡随之为面板宽(全状态恒等,§5.1)——
+       骨架条的百分比宽据此解析出真实宽度,不再塌成 0(白条根因)。 */
+    :host { display: block; width: 100%; }
     .dict-card {
       position: relative;
+      width: 100%; box-sizing: border-box;
       padding: 14px 16px;
       background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
       color: var(--ink);

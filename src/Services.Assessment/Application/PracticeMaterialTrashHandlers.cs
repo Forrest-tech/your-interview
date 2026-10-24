@@ -144,7 +144,11 @@ public sealed class GetMaterialTrashQueryHandler(AssessmentDbContext db)
                 DeletedAt: top.UpdatedAt,
                 DescendantTotal: subtreeIds.Count,
                 DescendantDeleted: subtreeIds.Count(id => byId[id].IsDeleted),
-                RecordingCount: subtreeIds.Sum(id => recordingCounts.GetValueOrDefault(id))));
+                // ★ D-124-1 复测修复:规格 §5.3 写「子树内**全部**节点」—— 含顶层项自身。
+                //   CollectSubtreeIds 只收后代(祖先名链/后代计数语义如此),
+                //   录音数若只对它求和会漏掉顶层文件自己挂的录音(复测活体两次复现)。
+                RecordingCount: subtreeIds.Sum(id => recordingCounts.GetValueOrDefault(id))
+                    + recordingCounts.GetValueOrDefault(top.Id)));
         }
 
         // 排序:DeletedAt 降序,同值以 CreatedAt 降序、再以 Id 升序定序(确定性,便于测试钉住)。

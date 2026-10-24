@@ -226,7 +226,11 @@ public sealed class PracticeMaterialTrashHandlerTests : IAsyncLifetime
         var beforeFile = before.Single(n => n.Id == file.Id);
 
         await SoftDeleteAsync(user, file.Id);
-        (await ListTrashAsync(user)).Should().HaveCount(1);
+        // ★ D-124-1 断言:录音数含顶层项自身(规格 §5.3「子树内全部节点」)——
+        //   修复前 List 求和只算后代,挂录音的文件被删后 RecordingCount 错回 0。
+        var trashItem = (await ListTrashAsync(user)).Should().ContainSingle().Subject;
+        trashItem.RecordingCount.Should().Be(1,
+            "顶层文件自己挂的录音必须计入(规格 §5.3 子树含自身)");
 
         var restored = await RestoreAsync(user, file.Id);
         restored.IsSuccess.Should().BeTrue(restored.Error.Description);
@@ -362,7 +366,9 @@ public sealed class PracticeMaterialTrashHandlerTests : IAsyncLifetime
 
         var all = await RestoreAllAsync(user);
         all.IsSuccess.Should().BeTrue(all.Error.Description);
-        all.Value.Restored.Should().Be(2, "顶层已删节点数(A 的子树折叠计数内)");
+        // ★ D-124-2 复测修正:规格 §5.3「restored = 本次实际翻转的行数」= 3(F/c/r),
+        //   非「顶层项数」2;与 T5 的 Be(3) 同口径(实现回 3 是对的,原断言错)。
+        all.Value.Restored.Should().Be(3, "实际翻转行数 = F + c + r(规格 §5.3,与 T5 同口径)");
 
         (await ListTrashAsync(user)).Should().BeEmpty();
 
@@ -585,9 +591,20 @@ public sealed class PracticeMaterialTrashHandlerTests : IAsyncLifetime
     private async Task RemoveRowPhysicallyAsync(Guid user, Guid id)
     {
         await using var db = NewDb();
-        await db.Database.ExecuteSqlRawAsync("SET session_replication_role = 'replica'");
-        await db.Database.ExecuteSqlRawAsync(
-            "DELETE FROM practice_materials WHERE id = {0} AND user_id = {1}", id, user);
-        await db.Database.ExecuteSqlRawAsync("SET session_replication_role = 'origin'");
+        // ★ D-124-3 复测修正:SET/DELETE 必须同会话 —— EF 不显式开连接时,每条 raw SQL
+        //   各自从连接池取连接,SET 'replica' 落在 A 会话,DELETE 落在 B 会话(origin)
+        //   → FK ON DELETE CASCADE 把子行一并级联删除,T13/T14 前置状态被毁。
+        await db.Database.OpenConnectionAsync();
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("SET session_replication_role = 'replica'");
+            // ★ D-124-3 复测修正:测试连接串无 Search Path,裸表名落在 public 而非
+            //   assessment schema → 恒报 42P01。补 schema 前缀(与实体模型所在 schema 一致)。
+            //   列名按库内实际(带引号的 PascalCase)。
+            await db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM assessment.practice_materials WHERE \"Id\" = {0} AND \"UserId\" = {1}", id, user);
+            await db.Database.ExecuteSqlRawAsync("SET session_replication_role = 'origin'");
+        }
+        finally { await db.Database.CloseConnectionAsync(); }
     }
 }

@@ -12,7 +12,8 @@ import {
  *
  * 轮次经 API 预置(轮次的 UI 入口是"贴邮件→建轮次"的 intake 流,属于更重的
  * 独立路径);本用例聚焦 UI 侧的两件用户必做事:
- *   1. 轮次建好后详情页要真的显示出来(R1 步骤卡);
+ *   1. 轮次建好后详情页要真的显示出来(第 1 轮轨道节点;票123 R-9 已把旧轮次 chip
+ *      选择器换成轨道,旧 `.step` 定位不再存在,此处钉新契约);
  *   2. 待办的「添加 → 勾选 → 刷新后仍是勾选状态」——勾选走 PATCH,
  *      票21 曾在这里修过吞错假成功,所以持久化必须用刷新后的服务端真值断言。
  */
@@ -35,10 +36,16 @@ test.describe('票89 E2E-3 · Playbook 轮次与待办', () => {
       await seedAuth(page, auth);
       await page.goto(`/playbook/${entryId}`);
 
-      // ---- 轮次在 UI 可见:R1 步骤卡 ----
+      // ---- 轮次在 UI 可见:第 1 轮轨道节点(票123 R-9 新契约) ----
+      // 旧 `.step` + 'R1' 定位已被 R-9 轨道取代:节点为 [data-testid="round-track"] .rnode,
+      // 文案为 i18n roundLabel(第 {n} 轮 / Round {n} / Tour {n});不恢复 .step 钩子。
       await expect(
-        page.locator('.step', { hasText: 'R1' }).first(),
-        '加轮次后详情页应出现 R1 步骤卡'
+        page
+          .locator('[data-testid="round-track"] .rnode', {
+            hasText: /第 1 轮|Round 1|Tour 1/,
+          })
+          .first(),
+        '加轮次后详情页应出现第 1 轮轨道节点'
       ).toBeVisible({ timeout: 20_000 });
 
       // ---- 待办:添加 ----

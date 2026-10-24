@@ -49,7 +49,7 @@ public class DictionaryDataTests
     }
 
     [Fact]
-    public void StartupBudget_LoadUnder2s_MemoryUnder250MB()
+    public void StartupBudget_LoadUnder2s_MemoryUnder320MB()
     {
         GC.Collect();
         var before = GC.GetTotalMemory(forceFullCollection: true);
@@ -60,7 +60,9 @@ public class DictionaryDataTests
         Assert.True(sw.ElapsedMilliseconds < 2_000,
             $"开放层载入耗时 {sw.ElapsedMilliseconds} ms,超 §9 预算 2000 ms");
         var deltaMb = (after - before) / 1024.0 / 1024.0;
-        Assert.True(deltaMb < 250, $"词典模块常驻增量 {deltaMb:F1} MB,超 §9 预算 250 MB");
+        // 内存预算 2026-10-23 经 Forrest 裁定由 250 MB 调整为 320 MB(票 129 段一):
+        // CI 实测噪声带 263–300 MB 与词典数据量无关,属环境敏感测量(票 119 偏差 D-9)。
+        Assert.True(deltaMb < 320, $"词典模块常驻增量 {deltaMb:F1} MB,超 §9 预算 320 MB");
         Assert.True(store.Ecdict.Count > 0);
     }
 

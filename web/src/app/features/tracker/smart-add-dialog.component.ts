@@ -59,7 +59,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
   template: `
     <h2 mat-dialog-title>
       <mat-icon>auto_awesome</mat-icon>
-      {{ t('tracker.smartPasteJob') }}
+      {{ t('tracker.smartAdd') }}
     </h2>
 
     <mat-dialog-content class="sad-body">
@@ -242,7 +242,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
               <mat-select name="invApp" [(ngModel)]="inviteApplicationId">
                 <mat-option [value]="null">{{ t('tracker.saSelectApp') }}</mat-option>
                 @for (a of applications; track a.id) {
-                  <mat-option [value]="a.id">{{ a.companyName }} · {{ a.role }}</mat-option>
+                  <mat-option [value]="a.id">{{ a.companyName }} — {{ a.role }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
@@ -569,7 +569,7 @@ export class SmartAddDialogComponent {
     }).subscribe({
       next: (r) => {
         this.busy.set(false);
-        this.dialogRef.close({ ok: true, message: this.tf('tracker.saCreated', { a: `${r.companyName} · ${this.jd.role}` }) });
+        this.dialogRef.close({ ok: true, message: this.tf('tracker.saCreated', { a: `${r.companyName} — ${this.jd.role}` }) });
       },
       error: (e: Error) => { this.busy.set(false); this.status.set('Failed'); this.msg.set(e.message); }
     });

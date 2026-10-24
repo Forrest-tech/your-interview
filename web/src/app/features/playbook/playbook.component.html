@@ -19,8 +19,8 @@
           </button>
         }
         <button mat-stroked-button (click)="toggleEdit()" [color]="editing() ? 'primary' : undefined">
-          <mat-icon>{{ editing() ? 'done' : 'edit' }}</mat-icon>
-          {{ t(editing() ? 'common.done' : 'common.edit') }}
+          <mat-icon>{{ editing() ? 'done' : 'select_all' }}</mat-icon>
+          {{ t(editing() ? 'pb.selectDone' : 'pb.select') }}
         </button>
       }
       @if (auth.can('interviews.write')) {
@@ -112,7 +112,14 @@
           <div class="upcoming-row" (click)="goToRound(r)">
             <mat-icon>event</mat-icon>
             <span class="up-when">{{ r.scheduledDate }}{{ r.scheduledTime ? ' ' + r.scheduledTime : '' }}</span>
-            <span class="up-name">{{ r.companyName }} · {{ r.role }} · {{ tn('pb.round', r.order) }} {{ r.stage }}</span>
+            <span class="up-name">
+              <b>{{ r.companyName }}</b>
+              <span class="up-role">{{ r.role }}</span>
+            </span>
+            <span class="up-stage">
+              <span class="chip applied">{{ tn('pb.round', r.order) }}</span>
+              <span class="chip applied">{{ r.stage }}</span>
+            </span>
             @if (r.interviewers) {
               <span class="up-meta">{{ r.interviewers }}</span>
             }
@@ -174,7 +181,7 @@
               <div class="cov-row">
                 <span class="cov-cat">{{ c.category }}</span>
                 <span class="cov-asked">{{ fmt('pb.br.cov.askedTimes', { n: c.askedCount }) }}</span>
-                <div class="cov-bar" [title]="t('pb.br.cov.mastered') + ' ' + c.masteredCount + ' · ' + t('pb.br.cov.stuck') + ' ' + c.stuckCount">
+                <div class="cov-bar" [title]="t('pb.br.cov.mastered') + ' ' + c.masteredCount + ' / ' + t('pb.br.cov.stuck') + ' ' + c.stuckCount">
                   <span class="cov-mastered" [style.width.%]="covBar(c).masteredPct"></span>
                   <span class="cov-stuck" [style.width.%]="covBar(c).stuckPct"></span>
                 </div>

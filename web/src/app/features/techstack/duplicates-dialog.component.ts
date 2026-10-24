@@ -55,8 +55,9 @@ export interface DuplicatesDialogData {
               <div class="row-main">
                 <span class="r-title">{{ it.title }}</span>
                 <span class="r-meta">
-                  {{ tn('ts.reviewCount', it.reviewCount) }} · {{ t('ts.mastery.' + it.mastery) }}
-                  @if (it.sourceCompanyName) { · {{ it.sourceCompanyName }} }
+                  <span class="r-meta-part">{{ tn('ts.reviewCount', it.reviewCount) }}</span>
+                  <span class="r-meta-part">{{ t('ts.mastery.' + it.mastery) }}</span>
+                  @if (it.sourceCompanyName) { <span class="r-meta-part">{{ it.sourceCompanyName }}</span> }
                 </span>
                 @if (it.conceptExplanation) {
                   <span class="r-has" [matTooltip]="t('ts.dup.hasExplanation')">
@@ -101,6 +102,9 @@ export interface DuplicatesDialogData {
     .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .r-title { font-size: 13.5px; }
     .r-meta { font-size: 12px; opacity: .6; }
+    /* 票123 R-3:复习数 / 掌握度 / 来源公司分列(中点清扫)。 */
+    .r-meta-part { display: inline-block; margin-right: 8px; }
+    .r-meta-part:last-child { margin-right: 0; }
     .r-has {
       display: inline-flex; align-items: center; gap: 4px;
       font-size: 11.5px; padding: 1px 6px; border-radius: 999px;

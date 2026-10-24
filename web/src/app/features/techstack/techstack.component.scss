@@ -22,6 +22,13 @@
 .source-text { font-size: 13px; color: #5b6270; }
 .source-text.link { color: #2e3a8c; text-decoration: underline; cursor: pointer; }
 .source-text.link:hover { color: #2e3a8c; }
+/* 票123 R-3:来源条目(公司 / Round N / 日期)改为分段并排,不再用中点串成一行正文。 */
+.source-entry { display: inline-flex; gap: 8px; align-items: baseline; }
+.source-part { white-space: nowrap; }
+.source-part + .source-part { color: #7d8797; }
+/* 轮次下拉选项的分段(编号 / 阶段 / 日期)。 */
+.round-option-part { display: inline-block; margin-right: 8px; }
+.round-option-part:last-child { margin-right: 0; }
 .source-edit-list {
   display: flex;
   flex-wrap: wrap;

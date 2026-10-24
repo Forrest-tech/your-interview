@@ -51,7 +51,7 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
     MatInputModule, MatSelectModule, MatButtonModule, MatIconModule
   ],
   template: `
-    <h2 mat-dialog-title>{{ t('ts.dialog.title') }}</h2>
+    <h2 mat-dialog-title>{{ t('techstack.newEntry') }}</h2>
 
     <mat-dialog-content class="dlg">
       <mat-form-field appearance="outline" class="full">

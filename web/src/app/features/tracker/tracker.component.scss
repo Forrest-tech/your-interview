@@ -534,6 +534,9 @@ mat-form-field { width: 100%; }
 }
 
 .pager-info { font-size: 12.5px; opacity: 0.6; }
+/* 票123 R-3:页码与总数分列(中点清扫)。 */
+.pager-info span { display: inline-block; margin-right: 8px; }
+.pager-info span:last-child { margin-right: 0; }
 
 /* 拖拽看板(Simplify 模式):CDK DragDrop 视觉反馈 */
 .app-card.cdk-drag-preview {
@@ -755,6 +758,10 @@ mat-form-field { width: 100%; }
 .ghosting-item + .ghosting-item::before {
   content: "、";
 }
+/* 票123 R-3:公司与岗位各自成元素(不再用中点串成一行正文)。 */
+.ghosting-item { display: inline-flex; gap: 5px; align-items: baseline; }
+.ghosting-company { font-weight: 600; }
+.ghosting-role { color: rgba(31, 36, 48, 0.72); }
 
 /* ★ F-11:手机宽(≤640px)页头 —— 旧布局把标题和一整排操作按钮挤在一行,
    标题被压成逐字竖排、"+" 按钮被推出屏幕。改为纵向堆叠 + 操作区换行。 */

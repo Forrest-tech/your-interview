@@ -1262,7 +1262,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   /** 删除必须二次确认 —— 误删一条投递记录要重新回忆时间线,代价不对称。 */
   remove(app: Application, ev?: Event): void {
     ev?.stopPropagation();
-    void this.confirmDelete(this.tf('tracker.confirmDelete', { a: `${app.companyName} · ${app.role}` })).then((ok) => {
+    void this.confirmDelete(this.tf('tracker.confirmDelete', { a: this.tf('tracker.confirmDeleteApp', { company: app.companyName, role: app.role }) })).then((ok) => {
       if (!ok) return;
       this.jobsApi.deleteApplication(app.id, app.version ?? null).subscribe({
         next: () => {

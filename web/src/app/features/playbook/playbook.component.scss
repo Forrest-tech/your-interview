@@ -532,8 +532,13 @@
     &:hover { background: #e4e7f5; }
     &:last-child { border-bottom: none; }
   }
-  .up-when { font-weight: 600; white-space: nowrap; }
-  .up-name { font-weight: 500; flex: 1; }
+  /* 票123 R-3.3:日期自成一行(12.5px ink-2);公司加粗、岗位压在其下;
+     阶段拆成两个药丸标签;面试官留在行尾。 */
+  .up-when { color: #5b6270; font-size: 12.5px; line-height: 1.5; white-space: nowrap; }
+  .up-name { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .up-name b { font-size: 13.5px; font-weight: 600; }
+  .up-role { color: #5b6270; font-size: 12.5px; }
+  .up-stage { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
   .up-meta { color: #5b6270; font-size: 13px; }
 }
 

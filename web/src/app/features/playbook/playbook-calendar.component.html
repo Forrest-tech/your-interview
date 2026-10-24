@@ -17,7 +17,11 @@
     <div class="cal-due-banner" data-testid="reminder-due-banner">
       <mat-icon>notifications_active</mat-icon>
       <span class="due-title">{{ t('pb.cal.reminderTitle') }}</span>
-      <span class="due-body">{{ r.companyName }} · {{ r.stage }} · {{ r.scheduledDate }} {{ r.scheduledTime }}</span>
+      <span class="due-body due-parts">
+        <span class="due-part">{{ r.companyName }}</span>
+        <span class="due-part">{{ r.stage }}</span>
+        <span class="due-part">{{ r.scheduledDate }} {{ r.scheduledTime }}</span>
+      </span>
       <span class="due-spacer"></span>
       <button mat-button (click)="ackReminder(r.id)">{{ t('pb.cal.reminderAck') }}</button>
     </div>
@@ -39,7 +43,7 @@
               <span class="cal-date">{{ day.date.getDate() }}</span>
               @for (r of day.rounds; track r.roundId) {
                 <button class="cal-chip" (click)="goRound(r)"
-                        [matTooltip]="r.role + ' · ' + r.stage">
+                        [matTooltip]="r.role + ' — ' + r.stage">
                   <span class="chip-co">{{ r.companyName }}</span>
                   <span class="chip-stage">{{ r.stage }}</span>
                 </button>

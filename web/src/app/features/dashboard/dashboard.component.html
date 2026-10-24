@@ -78,11 +78,14 @@
                         <span class="ac-item-title">{{ r.companyName }}</span>
                         <span class="ac-item-role">{{ r.role }}</span>
                         <span class="ac-item-sub">
-                          <span class="chip interview">{{ roundLabel(r.order) }} · {{ stageText(r.stage) }}</span>
+                          <span class="ac-stage">
+                            <span class="chip applied">{{ roundLabel(r.order) }}</span>
+                            <span class="chip applied">{{ stageText(r.stage) }}</span>
+                          </span>
                           <span class="ac-when">
-                            @if (r.scheduledDate) { {{ r.scheduledDate }} }
-                            @if (r.scheduledTime) { {{ r.scheduledTime }} }
-                            @if (r.format) { · {{ formatText(r.format) }} }
+                            @if (r.scheduledDate) { <span class="ac-when-line">{{ r.scheduledDate }}</span> }
+                            @if (r.scheduledTime) { <span class="ac-when-line">{{ r.scheduledTime }}</span> }
+                            @if (r.format) { <span class="ac-when-line">{{ formatText(r.format) }}</span> }
                           </span>
                         </span>
                       </span>

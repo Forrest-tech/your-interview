@@ -20,7 +20,7 @@ import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
-  entryEndKey, entryResultOutcome, entryStatusBadgeKey, htmlToPlainText, makeV2Fmt, makeV2T,
+  entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatLabel, htmlToPlainText, makeV2Fmt, makeV2T,
   resolveActionDoneState, roundDisplayNo, sortRoundsByDate
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
@@ -252,32 +252,38 @@ export class PlaybookDetailComponent implements OnDestroy {
     return Math.min(100, s);
   });
 
-  /** 下一步建议:按"最该做的一件事"排序,避免把待办一股脑堆给用户。 */
+  /** 下一步建议:按"最该做的一件事"排序,避免把待办一股脑堆给用户。
+   *  票123 R-3:返回结构化 { title, lines[] } —— 标题是主句,其余事实各占一行弱化文字,
+   *  不再把标签与值串在中点上(原 nextPrep 的「备考 Round {n} · {stage}(日期)」写法)。 */
   readonly nextStep = computed(() => {
     const e = this.entry();
     if (!e) return null;
     if (this.pendingComm() > 0) {
-      return { text: this.fmt('pb.v2.d.nextPendingComm', { n: this.pendingComm() }) };
+      return { title: this.fmt('pb.v2.d.nextPendingComm', { n: this.pendingComm() }), lines: [] as string[] };
     }
     const today = new Date().toISOString().slice(0, 10);
     const upcoming = this.rounds().find(r =>
       r.outcome === 'Pending' && (!r.scheduledDate || r.scheduledDate >= today));
     if (upcoming) {
-      return {
-        text: this.fmt('pb.v2.d.nextPrep', { n: this.roundNo(upcoming), stage: upcoming.stage }) +
-          (upcoming.scheduledDate ? `(${upcoming.scheduledDate}${upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''})` : '')
-      };
+      const lines: string[] = [
+        this.fmt('pb.v2.d.nextPrepStage', { stage: upcoming.stage })
+      ];
+      if (upcoming.scheduledDate) {
+        lines.push(upcoming.scheduledDate + (upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''));
+      }
+      if (upcoming.format) lines.push(formatLabel(this.t, upcoming.format));
+      return { title: this.fmt('pb.v2.d.nextPrepTitle', { n: this.roundNo(upcoming) }), lines };
     }
     const unreviewed = [...this.rounds()].reverse()
       .find(r => r.outcome !== 'Pending' && !r.reviewJson);
     if (unreviewed) {
-      return { text: this.fmt('pb.v2.d.nextReview', { n: this.roundNo(unreviewed) }) };
+      return { title: this.fmt('pb.v2.d.nextReview', { n: this.roundNo(unreviewed) }), lines: [] as string[] };
     }
     const app = this.application();
     if (app?.nextFollowUpAt && app.nextFollowUpAt.slice(0, 10) <= today) {
-      return { text: this.t('pb.v2.d.nextFollow') };
+      return { title: this.t('pb.v2.d.nextFollow'), lines: [] as string[] };
     }
-    return { text: this.t('pb.v2.d.nextIdle') };
+    return { title: this.t('pb.v2.d.nextIdle'), lines: [] as string[] };
   });
 
   constructor() {

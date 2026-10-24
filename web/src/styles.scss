@@ -221,7 +221,8 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   display: inline-flex;
   align-items: center;
   padding: 2px 9px;
-  border-radius: 11px;
+  /* 票123 R-1.4:药丸/徽标角色 → 999px(原 11px 不在 §0.3 角色集合内)。 */
+  border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1.7;

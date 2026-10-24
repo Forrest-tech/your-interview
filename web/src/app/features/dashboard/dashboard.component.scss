@@ -248,7 +248,10 @@
 }
 
 .ac-item-sub .chip { margin-right: 7px; }
-.ac-item-sub .ac-when { display: block; margin-top: 3px; }
+/* 票123 R-3.3:阶段拆成两个药丸标签;日期/时间/形式各自成行(不再串在中点上)。 */
+.ac-stage { display: inline-flex; align-items: center; gap: 6px; }
+.ac-when { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; margin-top: 3px; }
+.ac-when-line { display: block; }
 
 .ac-pri {
   margin-left: auto;

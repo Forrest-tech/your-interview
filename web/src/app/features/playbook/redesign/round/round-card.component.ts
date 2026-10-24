@@ -44,11 +44,12 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   template: `
     <section class="card" data-testid="round-card">
       <div class="rc-head">
-        <h3>Round {{ displayNo() ?? round().order }} · {{ round().stage }}</h3>
+        <h3>{{ fmt('pb.v2.r.roundLabel', { n: displayNo() ?? round().order }) }}</h3>
+        <span class="chip applied">{{ round().stage }}</span>
         <span class="rc-meta">
-          {{ round().scheduledDate ?? t('pb.v2.d.dateTbd') }}{{ round().scheduledTime ? ' ' + round().scheduledTime : '' }}
-          @if (round().interviewers) { · {{ round().interviewers }} }
-          @if (round().format) { · {{ formatLabel(t, round().format) }} }
+          <span class="rc-meta-line">{{ round().scheduledDate ?? t('pb.v2.d.dateTbd') }}{{ round().scheduledTime ? ' ' + round().scheduledTime : '' }}</span>
+          @if (round().interviewers) { <span class="rc-meta-line">{{ round().interviewers }}</span> }
+          @if (round().format) { <span class="rc-meta-line">{{ formatLabel(t, round().format) }}</span> }
         </span>
         <span class="spacer"></span>
         @if (tab() === 'record') {
@@ -57,12 +58,23 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         <button type="button" class="mini-btn" (click)="toggleEdit()">{{ editing() ? t('pb.v2.d.collapse') : t('pb.v2.r.editRound') }}</button>
       </div>
       <div class="rc-outcome">
-        {{ t('pb.v2.r.outcome') }}<b>{{ outcomeLabel(round().outcome) }}</b>
-        @if (roundScore() != null) { · {{ t('pb.v2.r.overall') }} <b>{{ roundScore() }}</b> }
-        @if (questionCount()) { · {{ fmt('pb.v2.r.questionsCount', { n: questionCount() }) }} }
-        · {{ fmt('pb.v2.r.assetsCount', { n: roundAssets().length }) }}
-        @if (round().meetingLink) { · <a [href]="round().meetingLink" target="_blank" rel="noopener">{{ t('pb.v2.r.meetingLink') }}</a> }
-        @if (round().location) { · {{ round().location }} }
+        <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.outcomeLabel') }}</span><b>{{ outcomeLabel(round().outcome) }}</b></span>
+        @if (roundScore() != null) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.overall') }}</span><b>{{ roundScore() }}</b></span>
+        }
+        @if (questionCount()) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.questionsCountLabel') }}</span><b>{{ questionCount() }}</b></span>
+        }
+        <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.assetsCountLabel') }}</span><b>{{ roundAssets().length }}</b></span>
+        @if (round().interviewers) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.interviewersLabel') }}</span><b>{{ round().interviewers }}</b></span>
+        }
+        @if (round().meetingLink) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.meetingLink') }}</span><a [href]="round().meetingLink" target="_blank" rel="noopener">{{ t('pb.v2.r.openLink') }}</a></span>
+        }
+        @if (round().location) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.location') }}</span><b>{{ round().location }}</b></span>
+        }
       </div>
 
       @if (round().scheduledDate) {
@@ -154,9 +166,17 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
     .card { padding: 2px 2px 0; margin-top: 14px; }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .rc-head h3 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; }
-    .rc-meta { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
+    /* 票123 R-3:日期/时间/形式改为堆叠小字行(§9 mock 的 .rwhen),不再串在中点上。 */
+    .rc-meta { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px;
+               color: var(--yi-text-muted, #5b6270); }
+    .rc-meta-line { display: block; line-height: 1.5; }
     .spacer { flex: 1; }
-    .rc-outcome { font-size: 14px; color: var(--yi-text-muted, #5b6270); margin-top: 5px; }
+    /* 票123 R-3:结果行改为「标签 + 值」成对事实(§9 mock 的 .facts/.fact/.k/.v)。 */
+    .rc-outcome { display: flex; gap: 26px; flex-wrap: wrap; align-items: baseline;
+                  font-size: 13px; color: var(--yi-text, #1f2430); margin-top: 7px; }
+    .rc-fact { display: inline-flex; align-items: baseline; gap: 7px; }
+    .rc-fact-label { font-size: 12px; font-weight: 500; color: var(--yi-text-muted, #5b6270); }
+    .rc-fact b { font-size: 13px; font-weight: 500; }
     .cal-bar { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 14px;
                border: 1px dashed var(--yi-border, #e1e4ec); border-radius: 10px; padding: 7px 12px; }
     .cal-bar mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--yi-accent, #2e3a8c); }
@@ -411,7 +431,7 @@ export class RoundCardComponent implements OnInit {
     const date = new Date().toISOString().slice(0, 10);
     const data: ExportDialogData = {
       title: this.t('pb.v2.r.exportTitle'),
-      subtitle: `${e.companyName} · Round ${r.order} ${r.stage}`,
+      subtitle: `${e.companyName} — Round ${r.order} ${r.stage}`,
       fileBase: `${e.companyName}-Round${r.order}-${this.t('pb.v2.r.fileSuffix')}-${date}`,
       storageKey: 'record',
       toggles: [

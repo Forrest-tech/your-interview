@@ -14,7 +14,7 @@
       <button mat-flat-button color="primary" class="smart-btn" (click)="openSmartAdd()">
         <mat-icon>auto_awesome</mat-icon>{{ t('tracker.smartAdd') }}
       </button>
-      <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.newApp')">
+      <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.dlgNew')">
         <mat-icon>add</mat-icon>
       </button>
       <button mat-icon-button [matMenuTriggerFor]="moreMenu" [matTooltip]="t('tracker.moreActions')">
@@ -58,7 +58,10 @@
         <b>{{ tn('tracker.ghostingTitle', ghostingApps().length) }}</b>
         <span class="ghosting-list">
           @for (a of ghostingApps().slice(0, 5); track a.id) {
-            <span class="ghosting-item">{{ a.companyName }} · {{ a.role }}</span>
+            <span class="ghosting-item">
+              <span class="ghosting-company">{{ a.companyName }}</span>
+              <span class="ghosting-role">{{ a.role }}</span>
+            </span>
           }
           @if (ghostingApps().length > 5) {
             <span>{{ tn('tracker.ghostingMore', ghostingApps().length - 5) }}</span>
@@ -546,7 +549,10 @@
               [matTooltip]="t('common.prevPage')">
         <mat-icon>chevron_left</mat-icon>
       </button>
-      <span class="pager-info">{{ tf('tracker.pager', { p: page(), tp: totalPages(), t: total() }) }}</span>
+      <span class="pager-info">
+        <span>{{ tf('tracker.pagerPage', { p: page(), tp: totalPages() }) }}</span>
+        <span>{{ tf('tracker.pagerTotal', { t: total() }) }}</span>
+      </span>
       <button mat-icon-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)"
               [matTooltip]="t('common.nextPage')">
         <mat-icon>chevron_right</mat-icon>

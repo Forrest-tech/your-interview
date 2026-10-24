@@ -626,7 +626,7 @@ export class PrepReportComponent {
     const date = new Date().toISOString().slice(0, 10);
     const data: ExportDialogData = {
       title: this.t('pb.v2.p.exportPrep'),
-      subtitle: `${e.companyName} · Round ${r.order} ${r.stage}`,
+      subtitle: `${e.companyName} — Round ${r.order} ${r.stage}`,
       fileBase: `${e.companyName}-Round${r.order}-${this.t('pb.v2.p.fileSuffix')}-${date}`,
       storageKey: 'prep',
       toggles: [

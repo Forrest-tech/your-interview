@@ -219,7 +219,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       @if (company()?.profile) {
         <mat-divider></mat-divider>
         <section>
-          <div class="sec-head"><span>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</span></div>
+          <div class="sec-head"><span class="sec-title">{{ t('tracker.dCompanyIntel') }}</span><span class="sec-sub">{{ company()?.name }}</span></div>
           <p class="pre">{{ company()?.profile }}</p>
           @if (company()?.website) {
             <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
@@ -770,6 +770,8 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
       color: #1f2430; letter-spacing: 0;
     }
     .sec-head .edit-btn { margin-left: auto; }
+    /* 票123 R-3:公司情报的标题与公司名分列(中点清扫)。 */
+    .sec-head .sec-sub { font-size: 14px; font-weight: 500; color: #5b6270; }
     /* ---- 2026-10-19:Simplify 像素级 Resume Score ---- */
     .score-tab { padding: 24px 28px; }
     .score-cols { display: flex; gap: 24px; align-items: flex-start; }

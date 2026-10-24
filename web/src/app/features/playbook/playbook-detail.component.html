@@ -110,7 +110,12 @@
         @if (nextStep(); as ns) {
           <aside class="next-card" data-testid="next-step-card">
             <div class="nc-label">{{ t('pb.v2.d.nextLabel') }}</div>
-            <div class="nc-text">{{ ns.text }}</div>
+            <div class="nc-text">{{ ns.title }}</div>
+            @if (ns.lines.length) {
+              <div class="nc-lines">
+                @for (ln of ns.lines; track $index) { <div class="nc-line">{{ ln }}</div> }
+              </div>
+            }
           </aside>
         }
       </header>
@@ -220,7 +225,7 @@
                 </span>
                 <span class="step-sub">
                   {{ r.scheduledDate ?? t('pb.v2.d.dateTbd') }}
-                  @if (roundScore(r) != null) { · {{ fmt('pb.v2.d.scorePts', { n: roundScore(r)! }) }} }
+                  @if (roundScore(r) != null) { <span class="step-score">{{ fmt('pb.v2.d.scorePts', { n: roundScore(r)! }) }}</span> }
                 </span>
               </button>
             }

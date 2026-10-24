@@ -750,6 +750,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'techstack.reviewNoDue': { zh: '暂时没有到期的知识点', en: 'No items are due right now', fr: 'Aucune notion n’est due pour l’instant' },
   'techstack.reviewTruncated': { zh: '到期 {n} 张,本次只复习前 200 张', en: '{n} due, reviewing first 200', fr: '{n} dues, révision des 200 premiers' },
   'tracker.newApp': { zh: '新建投递', en: 'New application', fr: 'Nouvelle candidature' },
+  /* 票123 R-3.4:新建投递按钮与新建投递对话框共用同一个键(不允许两个字符串各写一遍)。
+     按钮读 tracker.dlgNew,对话框标题也读 tracker.dlgNew —— 键相同,字符串必然相同。 */
   'tracker.scrollLeft': { zh: '向左滚动', en: 'Scroll left', fr: 'Défiler vers la gauche' },
   'tracker.scrollRight': { zh: '向右滚动', en: 'Scroll right', fr: 'Défiler vers la droite' },
   'tracker.viewMode': { zh: '视图模式', en: 'View mode', fr: "Mode d'affichage" },
@@ -833,7 +835,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.commsUnknown': { zh: '其他', en: 'Other', fr: 'Autre' },
 
   // ---------- 投递跟踪 · 主页面(2026-10-07 i18n 补齐) ----------
-  'tracker.subtitle': { zh: '按状态分列看清整个漏斗,卡住在哪一步一目了然', en: 'See the whole funnel by status — spot where you are stuck at a glance', fr: 'Visualisez l’entonnoir par statut — repérez d’un coup d’œil où vous bloquez' },
+  'tracker.subtitle': { zh: '全部投递按阶段排列,哪一条需要你接下来处理,一目了然', en: 'Every application by stage, so you can see what needs you next.', fr: 'Toutes vos candidatures par étape, pour voir laquelle a besoin de vous ensuite.' },
   'tracker.smartAdd': { zh: '智能粘贴', en: 'Smart paste', fr: 'Collage intelligent' },
   'tracker.smartPasteJob': { zh: '智能粘贴建档', en: 'Smart paste job', fr: 'Collage intelligent d’offre' },
   'tracker.total': { zh: '总投递', en: 'Total', fr: 'Total' },
@@ -844,6 +846,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.needsConnect': { zh: '需先 Connect', en: 'Connect first', fr: 'Connecter d’abord' },
   'tracker.matchScore': { zh: '匹配 {n}', en: 'Match {n}', fr: 'Score {n}' },
   'tracker.pager': { zh: '第{p} / {tp} 页 · 共 {t} 条', en: 'Page {p} of {tp} · {t} total', fr: 'Page {p} sur {tp} · {t} au total' },
+  /* 票123 R-3:分页信息拆成两段(中点清扫)。 */
+  'tracker.pagerPage': { zh: '第 {p} / {tp} 页', en: 'Page {p} of {tp}', fr: 'Page {p} sur {tp}' },
+  'tracker.pagerTotal': { zh: '共 {t} 条', en: '{t} total', fr: '{t} au total' },
 
   // ---------- 投递跟踪 · 新建/编辑弹窗 ----------
   'tracker.dlgEdit': { zh: '编辑投递', en: 'Edit application', fr: 'Modifier la candidature' },
@@ -864,6 +869,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.fConnectFirst': { zh: '需要先建立人脉(如先 Connect 再内推)', en: 'Need to network first (e.g. connect before referral)', fr: 'Réseauter d’abord (p. ex. se connecter avant une recommandation)' },
   'tracker.required': { zh: '公司名称与职位为必填项', en: 'Company and role are required', fr: 'L’entreprise et le poste sont requis' },
   'tracker.confirmDelete': { zh: '确认删除「{a}」这条投递记录?此操作不可撤销。', en: 'Delete the application “{a}”? This cannot be undone.', fr: 'Supprimer la candidature « {a} » ? Irréversible.' },
+  /* 票123 R-3:删除确认里的「公司 · 岗位」改为「公司 — 岗位」(中点清扫)。 */
+  'tracker.confirmDeleteApp': { zh: '{company} — {role}', en: '{company} — {role}', fr: '{company} — {role}' },
   'tracker.confirmBulkDelete': { zh: '确认删除选中的 {n} 条投递记录?此操作不可撤销。', en: 'Delete {n} selected applications? This cannot be undone.', fr: 'Supprimer {n} candidatures sélectionnées ? Irréversible.' },
   'tracker.bulkDone': { zh: '已处理 {n} 条', en: '{n} processed', fr: '{n} traitées' },
   'tracker.bulkPartial': { zh: '成功 {done} 条,失败 {failed} 条', en: '{done} succeeded, {failed} failed', fr: '{done} réussies, {failed} échouées' },
@@ -1694,6 +1701,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.filter.allStatuses': { zh: '全部状态', en: 'All statuses', fr: 'Tous les statuts' },
   'pb.empty.title': { zh: '还没有机经记录', en: 'No interview records yet', fr: 'Aucun dossier d’entretien' },
   'pb.section.active': { zh: '进行中', en: 'In Progress', fr: 'En cours' },
+  'pb.select': { zh: '选择', en: 'Select', fr: 'Sélectionner' },
+  'pb.selectDone': { zh: '完成', en: 'Done', fr: 'Terminé' },
   'pb.section.completed': { zh: '已结束', en: 'Completed', fr: 'Terminé' },
   'pb.empty.msg': { zh: '面试完趁记忆还热,先把这一场建下来,再补录音或转写文本。', en: 'Right after an interview, log it while it’s fresh — then add the recording or transcript.', fr: 'Juste après un entretien, créez le dossier tant que c’est frais — ajoutez ensuite l’audio ou la transcription.' },
   'pb.empty.create': { zh: '新建第一条', en: 'Create the first one', fr: 'Créer le premier' },
@@ -2191,6 +2200,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'auth.googleSignIn': { zh: '使用 Google 登录', en: 'Sign in with Google', fr: 'Se connecter avec Google' },
   'auth.googleEstablishing': { zh: '正在建立会话…', en: 'Establishing session…', fr: 'Établissement de la session…' },
   'auth.foot': { zh: '个人使用 · 数据仅存本地', en: 'Personal use · data stays local', fr: 'Usage personnel · données locales uniquement' },
+  /* 票123 R-3:登录页页脚的两个事实拆成两段(中点清扫)—— 页脚是登录面唯一的正文串。 */
+  'auth.footPersonal': { zh: '个人使用', en: 'Personal use', fr: 'Usage personnel' },
+  'auth.footLocal': { zh: '数据仅存本地', en: 'Data stays local', fr: 'Données locales uniquement' },
   'auth.welcomeBack': { zh: '欢迎回来', en: 'Welcome back', fr: 'Bon retour' },
   'auth.signInHint': { zh: '登录以继续你的求职之旅', en: 'Sign in to continue your job search', fr: 'Connectez-vous pour continuer' },
   'auth.togglePassword': { zh: '显示/隐藏密码', en: 'Show/hide password', fr: 'Afficher/masquer le mot de passe' },
@@ -2587,6 +2599,11 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.v2.d.nextLabel': { zh: '下一步', en: 'Next step', fr: 'Prochaine étape' },
   'pb.v2.d.nextPendingComm': { zh: '处理沟通记录里的 {n} 条新安排', en: '{n} new arrangement(s) waiting in Communications', fr: '{n} nouvel(s) arrangement(s) en attente dans les communications' },
   'pb.v2.d.nextPrep': { zh: '备考 Round {n} · {stage}', en: 'Prepare for Round {n} · {stage}', fr: 'Préparer le tour {n} · {stage}' },
+  /* 票123 R-3:下一步盒改为「标题 + 堆叠弱化行」(§9 mock 的 .v / .d)。
+     标题只说第几轮,阶段/日期/形式各自成行 —— 原 nextPrep 把阶段串在中点上,
+     且把日期直接塞进括号(无空格),两处都由本组新键取代。 */
+  'pb.v2.d.nextPrepTitle': { zh: '备考 Round {n}', en: 'Prepare for Round {n}', fr: 'Préparer le tour {n}' },
+  'pb.v2.d.nextPrepStage': { zh: '{stage} 轮', en: '{stage} round', fr: 'Tour {stage}' },
   'pb.v2.d.nextReview': { zh: 'Round {n} 已结束,还没生成复盘分析', en: 'Round {n} is done — no review analysis yet', fr: 'Le tour {n} est terminé, sans analyse de bilan' },
   'pb.v2.d.nextFollow': { zh: '到了跟进时间,给 Recruiter 发一封简短跟进邮件', en: 'Time to follow up — send the recruiter a short email', fr: 'Il est temps de relancer le recruteur par un court e-mail' },
   'pb.v2.d.nextIdle': { zh: '暂时没有待办,等对方回复;超过一周没消息可主动跟进一次', en: 'Nothing to do for now — waiting on their reply; follow up once if there is no news for a week', fr: 'Rien à faire pour le moment — en attente de leur réponse ; relancez après une semaine sans nouvelles' },
@@ -2634,6 +2651,15 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.v2.r.exportRecord': { zh: '导出实录', en: 'Export record', fr: 'Exporter le compte rendu' },
   'pb.v2.r.editRound': { zh: '编辑本轮', en: 'Edit round', fr: 'Modifier le tour' },
   'pb.v2.r.outcome': { zh: '结果:', en: 'Outcome: ', fr: 'Résultat : ' },
+  /* 票123 R-3:结果行改为「标签 + 值」的成对事实(见 §9 mock 的 .facts/.fact/.k)。
+     标签形态不带尾冒号 —— 冒号属于「标签:值」连写的旧结构,现在标签与值是两个元素。 */
+  'pb.v2.r.outcomeLabel': { zh: '结果', en: 'Outcome', fr: 'Résultat' },
+  'pb.v2.r.roundLabel': { zh: '第 {n} 轮', en: 'Round {n}', fr: 'Tour {n}' },
+  'pb.v2.r.questionsCountLabel': { zh: '题目', en: 'Questions', fr: 'Questions' },
+  'pb.v2.r.assetsCountLabel': { zh: '材料', en: 'Materials', fr: 'Documents' },
+  'pb.v2.r.interviewersLabel': { zh: '面试官', en: 'Interviewers', fr: 'Intervieweurs' },
+  'pb.v2.r.openLink': { zh: '打开', en: 'Open', fr: 'Ouvrir' },
+  'pb.v2.r.location': { zh: '地点', en: 'Location', fr: 'Lieu' },
   'pb.v2.r.ocPending': { zh: '待进行', en: 'Upcoming', fr: 'À venir' },
   'pb.v2.r.ocCancelled': { zh: '已取消', en: 'Cancelled', fr: 'Annulé' },
   'pb.v2.r.overall': { zh: '综合分', en: 'Overall score', fr: 'Note globale' },

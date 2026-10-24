@@ -474,7 +474,9 @@
                 <div class="source-edit-list">
                   @for (s of detailDraft.sources; track $index) {
                     <mat-chip class="source-chip">
-                      {{ sourceEntryLabel(s) }}
+                      <span class="source-entry">
+                        @for (p of sourceEntryParts(s); track $index) { <span class="source-part">{{ p }}</span> }
+                      </span>
                       <button matChipRemove (click)="removeDetailSource($index)">
                         <mat-icon>cancel</mat-icon>
                       </button>
@@ -505,7 +507,9 @@
                     <mat-label>{{ t('ts.source.round') }}</mat-label>
                     <mat-select [disabled]="!selectedCompanyId()" [value]="selectedRoundId()" (selectionChange)="onRoundSelected($event.value)">
                       @for (r of companyRounds(); track r.roundId) {
-                        <mat-option [value]="r.roundId">{{ roundOptionLabel(r) }}</mat-option>
+                        <mat-option [value]="r.roundId">
+                          @for (p of roundOptionParts(r); track $index) { <span class="round-option-part">{{ p }}</span> }
+                        </mat-option>
                       } @empty {
                         <mat-option disabled>{{ t('ts.source.roundEmpty') }}</mat-option>
                       }
@@ -520,10 +524,14 @@
                 <div class="source-text-list">
                   @for (s of parseSources(it); track $index) {
                     @if (s.interviewEntryId) {
-                      <a class="source-text link" [routerLink]="['/playbook', s.interviewEntryId]"
-                         [queryParams]="{ tab: 'rounds' }">{{ sourceEntryLabel(s) }}</a>
+                      <a class="source-text link source-entry" [routerLink]="['/playbook', s.interviewEntryId]"
+                         [queryParams]="{ tab: 'rounds' }">
+                        @for (p of sourceEntryParts(s); track $index) { <span class="source-part">{{ p }}</span> }
+                      </a>
                     } @else {
-                      <span class="source-text">{{ sourceEntryLabel(s) }}</span>
+                      <span class="source-text source-entry">
+                        @for (p of sourceEntryParts(s); track $index) { <span class="source-part">{{ p }}</span> }
+                      </span>
                     }
                   }
                 </div>

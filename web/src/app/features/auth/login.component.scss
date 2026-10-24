@@ -108,6 +108,11 @@
   margin: 0;
   font-size: 12px;
   opacity: 0.5;
+  /* 票123 R-3:两个事实分列两行(不再用中点串成一句)。 */
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.5;
 }
 
 /* ---------- 右侧表单区 ---------- */

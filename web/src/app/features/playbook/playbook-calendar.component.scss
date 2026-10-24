@@ -24,6 +24,9 @@
   mat-icon { color: var(--attention); }
   .due-title { font-weight: 600; }
   .due-body { opacity: 0.85; }
+  /* 票123 R-3:公司 / 阶段 / 时间分列(中点清扫)。 */
+  .due-parts { display: inline-flex; gap: 8px; align-items: baseline; }
+  .due-part { white-space: nowrap; }
   .due-spacer { flex: 1; }
 }
 

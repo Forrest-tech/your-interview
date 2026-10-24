@@ -836,7 +836,8 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const names = this.parseSources(item)
       .map((s) => s.companyName?.trim())
       .filter((n): n is string => !!n);
-    if (names.length > 0) return names.join(' · ');
+    // 票123 R-3:多来源公司名之间用「、」分隔(不是中点)——中点只留给人名/角色那类标签串。
+    if (names.length > 0) return names.join('、');
     return this.i18n.t('nav.playbook');
   }
 
@@ -970,12 +971,17 @@ export class TechStackComponent implements OnInit, OnDestroy {
     this.newDetailSourceDate = r.scheduledDate ?? '';
   }
 
-  /** 轮次下拉显示:Round 1 · Technical · 2026-10-07 */
+  /** 轮次下拉显示:轮次编号 / 阶段 / 日期 三行(票123 R-3:不再用中点串成一行)。 */
   roundOptionLabel(r: PlaybookCompanyRound): string {
-    const parts = [`Round ${r.order}`];
+    return this.roundOptionParts(r).join(' / ');
+  }
+
+  /** 轮次下拉的各段:编号、阶段、日期 —— 供模板分行渲染。 */
+  roundOptionParts(r: PlaybookCompanyRound): string[] {
+    const parts: string[] = [`Round ${r.order}`];
     if (r.stage) parts.push(r.stage);
     parts.push(r.scheduledDate ?? this.t('ts.source.noDate'));
-    return parts.join(' · ');
+    return parts;
   }
 
   /** 展开来源表单时重置搜索框并加载公司库。 */
@@ -1011,14 +1017,19 @@ export class TechStackComponent implements OnInit, OnDestroy {
     return [];
   }
 
-  /** 多来源显示文案:公司 · Round N · 日期。 */
+  /** 多来源显示文案:公司 / Round N / 日期 —— 票123 R-3:改为分段结构,不再用中点串成一行。 */
   sourceEntryLabel(s: KnowledgeSourceEntry): string {
+    return this.sourceEntryParts(s).join(' / ');
+  }
+
+  /** 多来源的各段:公司、轮次、日期 —— 供模板分行渲染。 */
+  sourceEntryParts(s: KnowledgeSourceEntry): string[] {
     const parts: string[] = [];
     if (s.companyName) parts.push(s.companyName);
     if (s.roundNo) parts.push(`Round ${s.roundNo}`);
     else if (s.roundStage) parts.push(s.roundStage);
     if (s.date) parts.push(s.date);
-    return parts.join(' · ') || this.t('ts.source.unknown');
+    return parts.length ? parts : [this.t('ts.source.unknown')];
   }
 
   /** 进入详情编辑:把当前值全部填进草稿。 */

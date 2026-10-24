@@ -18,6 +18,9 @@ import { serverFieldErrorSummary } from '../../../../core/api/validation-errors.
 import {
   PrepBlock, PrepQuestionItem, PrepReport, PrepSection, prepStdText, safeJson
 } from '../v2.models';
+import {
+  classifyPrepStage, prepFrameworkSectionIds, prepQuestionExportBlocks
+} from './prep-report.helpers';
 import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { makeV2Fmt, makeV2T } from '../v2.helpers';
@@ -135,6 +138,9 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                       @if (q.weaknessRelated) { <span class="weak-pin">{{ t('pb.v2.p.weakPin') }}</span> }
                       <span class="pq-text qa-text">{{ q.question }}</span>
                     </div>
+                    @if (q.note) {
+                      <div class="pq-note">{{ q.note }}</div>
+                    }
                     @if (q.sourceTags?.length) {
                       <div class="tags">@for (tg of q.sourceTags!; track $index) { <span class="tag">{{ tg }}</span> }</div>
                     }
@@ -259,6 +265,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .pq { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 9px 0; }
     .pq.weak { border-color: #e57373; background: color-mix(in srgb, #e57373 5%, transparent); }
     .pq-head { display: flex; gap: 8px; align-items: flex-start; }
+    .pq-note { font-size: 12px; color: #666; margin-top: 2px; }
     .weak-pin { font-size: 12px; font-weight: 700; color: #c62828; white-space: nowrap; margin-top: 3px; }
     .pq-text { font-weight: 600; }
     .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
@@ -314,14 +321,15 @@ export class PrepReportComponent {
   readonly report = computed(() => safeJson<PrepReport>(this.round().prepReportJson));
 
   /**
-   * 展示用报告:已生成 → 用生成的;未生成 → 默认框架(2026-10-21 定稿 4.1)。
-   * 框架是确定性模板:与生成报告同构(八段 + 左目录 + 滚动高亮),文案全走
-   * 核心字典 pb.v2 三语键(票43 并入),不调 AI、不落库;生成入口(gen-box)保留在框架上方。
+   * 展示用报告:已生成 → 用生成的;未生成 → 默认框架(票133 定稿 §4.1/§10.1)。
+   * 框架与生成报告同构(13 节位顺序 + 左目录 + 滚动高亮),分类走 §4.2 镜像表;
+   * 文案全走核心字典 pb.v2 三语键,不调 AI、不落库;生成入口(gen-box)保留在框架上方。
    */
   readonly displayReport = computed<PrepReport | null>(
     () => this.report() ?? this.frameworkReport());
 
   private frameworkReport(): PrepReport {
+    const cls = classifyPrepStage(this.round().stage);
     const pts = (keys: string[]): PrepBlock[] =>
       [{ type: 'points', items: keys.map(k => this.t(k)) }];
     const sec = (id: string, name: string, keys: string[]): PrepSection => ({
@@ -329,41 +337,30 @@ export class PrepReportComponent {
     });
     const p = (name: string, n: number): string[] =>
       Array.from({ length: n }, (_, i) => `pb.v2.p.fw.${name}.p${i + 1}`);
-    const tech: PrepSection = {
-      id: 'tech-qa',
-      title: this.t('pb.v2.p.fw.techQa.title'),
-      blocks: [
-        ...pts(p('techQa', 3)),
-        {
-          type: 'points', title: this.t('pb.v2.p.fw.focusTitle'),
-          items: [1, 2, 3].map(i => this.t(`pb.v2.p.fw.focus.${this.stageFocusCat()}.p${i}`))
+    const group: Record<string, string> = {
+      'round-brief': 'roundBrief', greeting: 'greeting', 'intro-listen': 'introListen',
+      'self-intro': 'selfIntro', 'deep-dive': 'deepDive', 'coding-round': 'codingRound',
+      'design-round': 'designRound', behavioral: 'behavioral', 'weakness-plan': 'weaknessPlan',
+      'ask-back': 'askBack', 'comp-process': 'compProcess', closing: 'closing'
+    };
+    const sections: PrepSection[] = [];
+    for (const id of prepFrameworkSectionIds(cls)) {
+      if (id === 'tech-qa') {
+        const blocks = [...pts(p('techQa', 3))];
+        if (!cls.isDesign) {
+          blocks.push({
+            type: 'points', title: this.t('pb.v2.p.fw.designCard.title'),
+            items: p('designCard', 3).map(k => this.t(k))
+          });
         }
-      ],
-      questions: []
-    };
-    return {
-      sections: [
-        sec('greeting', 'greeting', p('greeting', 4)),
-        sec('intro-listen', 'introListen', p('introListen', 4)),
-        sec('self-intro', 'selfIntro', p('selfIntro', 4)),
-        sec('deep-dive', 'deepDive', p('deepDive', 4)),
-        tech,
-        sec('behavioral', 'behavioral', p('behavioral', 4)),
-        sec('ask-back', 'askBack', p('askBack', 4)),
-        sec('closing', 'closing', p('closing', 4))
-      ]
-    };
-  }
-
-  /** 技术问答段的 stage 适配:按轮次 stage 关键词归类重点。 */
-  private stageFocusCat(): 'screen' | 'technical' | 'design' | 'behavioral' | 'final' | 'default' {
-    const st = (this.round().stage ?? '').toLowerCase();
-    if (/screen|phone|recruit|hr/.test(st)) return 'screen';
-    if (/design|architect|system/.test(st)) return 'design';
-    if (/behav|culture|fit/.test(st)) return 'behavioral';
-    if (/final|hiring|manager|onsite|panel/.test(st)) return 'final';
-    if (/tech|cod|engineer|deep/.test(st)) return 'technical';
-    return 'default';
+        sections.push({
+          id, title: this.t('pb.v2.p.fw.techQa.title'), blocks, questions: []
+        });
+      } else {
+        sections.push(sec(id, group[id], p(group[id], 4)));
+      }
+    }
+    return { sections };
   }
 
   /** Sources 明细行的标签(后端 details.key → 文案键)。 */
@@ -658,13 +655,12 @@ export class PrepReportComponent {
         } else if (b.text) blocks.push({ kind: 'para', text: b.text });
       }
       for (const q of s.questions ?? []) {
-        blocks.push({ kind: 'subheading', text: q.question });
-        const sp = prepStdText(q.stdSpoken);
-        const te = prepStdText(q.stdTechnical);
-        const linked = q.knowledgeId ? this.knowledgeAnswer(q.knowledgeId) : '';
-        if (linked) blocks.push({ kind: 'std', label: this.t('pb.v2.p.docStdStack'), text: linked });
-        if (sp.text) blocks.push({ kind: 'std', label: this.t('pb.v2.p.spoken'), text: sp.text });
-        if (te.text) blocks.push({ kind: 'std', label: this.t('pb.v2.p.technical'), text: te.text });
+        blocks.push(...prepQuestionExportBlocks(q, {
+          linked: q.knowledgeId ? this.knowledgeAnswer(q.knowledgeId) : '',
+          stackLabel: this.t('pb.v2.p.docStdStack'),
+          spokenLabel: this.t('pb.v2.p.spoken'),
+          technicalLabel: this.t('pb.v2.p.technical')
+        }));
       }
     }
     return {

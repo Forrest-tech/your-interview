@@ -343,10 +343,14 @@ export class PrepReportComponent {
       'design-round': 'designRound', behavioral: 'behavioral', 'weakness-plan': 'weaknessPlan',
       'ask-back': 'askBack', 'comp-process': 'compProcess', closing: 'closing'
     };
+    /** ML-FIX-PREP:各节要点数(默认 4;新增段落的节在此登记,缺省仍为 4)。 */
+    const FW_POINTS: Record<string, number> = {
+      greeting: 5, 'design-round': 7, 'weakness-plan': 5, closing: 7,
+    };
     const sections: PrepSection[] = [];
     for (const id of prepFrameworkSectionIds(cls)) {
       if (id === 'tech-qa') {
-        const blocks = [...pts(p('techQa', 3))];
+        const blocks = [...pts(p('techQa', 4))];
         if (!cls.isDesign) {
           blocks.push({
             type: 'points', title: this.t('pb.v2.p.fw.designCard.title'),
@@ -357,7 +361,7 @@ export class PrepReportComponent {
           id, title: this.t('pb.v2.p.fw.techQa.title'), blocks, questions: []
         });
       } else {
-        sections.push(sec(id, group[id], p(group[id], 4)));
+        sections.push(sec(id, group[id], p(group[id], FW_POINTS[id] ?? 4)));
       }
     }
     return { sections };

@@ -50,10 +50,13 @@
             @if (storyTitleErrorText(); as titleErr) {
               <div class="field-error" role="alert">{{ titleErr }}</div>
             }
-            <mat-form-field><mat-label>Situation 背景</mat-label><textarea matInput rows="2" [(ngModel)]="s.situation"></textarea></mat-form-field>
-            <mat-form-field><mat-label>Task 任务</mat-label><textarea matInput rows="2" [(ngModel)]="s.task"></textarea></mat-form-field>
-            <mat-form-field><mat-label>Action 行动</mat-label><textarea matInput rows="3" [(ngModel)]="s.action"></textarea></mat-form-field>
-            <mat-form-field><mat-label>Result 结果</mat-label><textarea matInput rows="2" [(ngModel)]="s.result"></textarea></mat-form-field>
+            <mat-form-field><mat-label>Situation 背景 *</mat-label><textarea matInput rows="2" [(ngModel)]="s.situation" (ngModelChange)="clearStoryBodyError()"></textarea></mat-form-field>
+            <mat-form-field><mat-label>Task 任务 *</mat-label><textarea matInput rows="2" [(ngModel)]="s.task" (ngModelChange)="clearStoryBodyError()"></textarea></mat-form-field>
+            <mat-form-field><mat-label>Action 行动 *</mat-label><textarea matInput rows="3" [(ngModel)]="s.action" (ngModelChange)="clearStoryBodyError()"></textarea></mat-form-field>
+            <mat-form-field><mat-label>Result 结果 *</mat-label><textarea matInput rows="2" [(ngModel)]="s.result" (ngModelChange)="clearStoryBodyError()"></textarea></mat-form-field>
+            @if (storyBodyErrorText(); as bodyErr) {
+              <div class="field-error" role="alert">{{ bodyErr }}</div>
+            }
             <mat-form-field><mat-label>标签 (逗号分隔,用于 JD 匹配)</mat-label><input matInput [(ngModel)]="s.tags" placeholder="leadership, conflict, 微服务" /></mat-form-field>
             <div class="star-edit-actions">
               <button mat-raised-button color="primary" (click)="saveStory(s)" [disabled]="storySaving()">保存</button>

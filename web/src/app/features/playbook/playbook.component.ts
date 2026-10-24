@@ -17,8 +17,8 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, forkJoin, of } from 'rxjs';
 import { PlaybookLocalService } from '../../core/api/playbook-local.service';
 import {
-  STAR_STORY_TITLE_MAX, shouldStartStorySave, starStoryTitleError,
-  type StarStoryTitleError
+  STAR_STORY_TITLE_MAX, shouldStartStorySave, starStoryBodyError, starStoryTitleError,
+  type StarStoryBodyError, type StarStoryTitleError
 } from '../../core/api/playbook-local.helpers';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
@@ -544,23 +544,43 @@ export class PlaybookComponent implements OnInit {
     if (e === 'tooLong') return this.fmt('pb.star.titleTooLong', { max: STAR_STORY_TITLE_MAX });
     return null;
   });
+  /**
+   * ML-FIX-PREP(R-27):STAR 正文级错误(口径同标题字段级呈现)——
+   * 点保存时由纯函数 starStoryBodyError 判定,错误文案挂在表单下方;
+   * 用户补填正文(ngModelChange)即清除;开新表单/编辑/取消时一并清空。
+   */
+  readonly storyBodyError = signal<StarStoryBodyError>(null);
+  readonly storyBodyErrorText = computed(() => {
+    const e = this.storyBodyError();
+    if (!e) return null;
+    if (e.kind === 'required') return this.fmt('pb.star.bodyRequired', { field: e.field });
+    if (e.kind === 'resultNeedsNumber') return this.t('pb.star.resultNeedsNumber');
+    return this.t('pb.star.actionTooVague');
+  });
   newStory(): void {
     this.storyTitleError.set(null);
+    this.storyBodyError.set(null);
     this.editingStory.set({
       id: 's' + Date.now(), title: '', situation: '', task: '', action: '', result: '', tags: ''
     });
   }
   editStory(s: StarStory): void {
     this.storyTitleError.set(null);
+    this.storyBodyError.set(null);
     this.editingStory.set({ ...s });
   }
   cancelStoryEdit(): void {
     this.storyTitleError.set(null);
+    this.storyBodyError.set(null);
     this.editingStory.set(null);
   }
   /** 票79:用户开始补填标题时先撤掉标题的旧错误(票12 clearFieldError 同口径)。 */
   clearStoryTitleError(): void {
     if (this.storyTitleError()) this.storyTitleError.set(null);
+  }
+  /** ML-FIX-PREP(R-27):用户开始补填正文时先撤掉正文的旧错误。 */
+  clearStoryBodyError(): void {
+    if (this.storyBodyError()) this.storyBodyError.set(null);
   }
   /** 票78:STAR 保存在飞守卫(口径同本组件 save() 的 saving 与票92)。 */
   readonly storySaving = signal(false);
@@ -573,12 +593,14 @@ export class PlaybookComponent implements OnInit {
       return;
     }
     this.storyTitleError.set(null);
-    // 空故事没有意义:标题之外 S/T/A/R 至少填一项,否则就是一张废卡
-    const filled = [s.situation, s.task, s.action, s.result].filter(v => v && v.trim()).length;
-    if (filled === 0) {
-      this.snack.open('故事内容是空的:请至少填写 S/T/A/R 中的一项', '关闭', { duration: 3500 });
+    // ML-FIX-PREP(R-27):正文收紧 —— S/T/A/R 四项均必填、Result 须带数字、
+    // Action 空泛拦截;取代此前“至少填一项”的 snack 口径(空泛叙述不再放行)。
+    const bodyError = starStoryBodyError(s);
+    if (bodyError) {
+      this.storyBodyError.set(bodyError);
       return;
     }
+    this.storyBodyError.set(null);
     this.storySaving.set(true);
     const settle = () => {
       this.storySaving.set(false);

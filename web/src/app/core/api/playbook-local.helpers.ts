@@ -123,6 +123,46 @@ export function starStoryTitleError(title: string | null | undefined): StarStory
   return null;
 }
 
+/**
+ * ML-FIX-PREP(R-27):STAR 故事正文校验 —— 纯判定,供组件在保存入口调用。
+ * 口径取自 Prep「行为题 STAR」behavioral.p2 既有要求,不新编标准:
+ * ① S/T/A/R 四项均必填(此前仅标题必填,正文可空泛存入);
+ * ② Result 须带数字(半角/全角数字均认);
+ * ③ Action 空泛拦截:机械语义检测不可靠,此处以 trim 后长度作代理
+ *    (STAR_ACTION_MIN_CHARS),错误文案仍引用 p2 原文口径,语义复核留给填写者自查。
+ * 判定顺序:S→T→A→R 必填,随后 Result 数字、最后 Action 长度;首个失败即返回。
+ */
+export type StarStoryBodyError =
+  | { field: 'S' | 'T' | 'A' | 'R'; kind: 'required' | 'resultNeedsNumber' | 'actionTooVague' }
+  | null;
+
+/** Action 长度代理阈值(见上:仅为“具体复数动作”的机械代理,非语义标准)。 */
+export const STAR_ACTION_MIN_CHARS = 20;
+
+export function starStoryBodyError(s: {
+  situation: string | null | undefined;
+  task: string | null | undefined;
+  action: string | null | undefined;
+  result: string | null | undefined;
+}): StarStoryBodyError {
+  const fields = [
+    ['S', s.situation],
+    ['T', s.task],
+    ['A', s.action],
+    ['R', s.result],
+  ] as const;
+  for (const [field, value] of fields) {
+    if (value === null || value === undefined || value.trim().length === 0) {
+      return { field, kind: 'required' };
+    }
+  }
+  if (!/[0-9０-９]/.test(s.result as string)) return { field: 'R', kind: 'resultNeedsNumber' };
+  if ((s.action as string).trim().length < STAR_ACTION_MIN_CHARS) {
+    return { field: 'A', kind: 'actionTooVague' };
+  }
+  return null;
+}
+
 /** 票78:某 clientId 是否已有保存在飞 —— 服务级按故事守卫的纯判定。 */
 export function shouldStartStorySaveFor(
   inFlightClientIds: ReadonlySet<string>, clientId: string

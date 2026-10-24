@@ -50,7 +50,7 @@
         <button mat-stroked-button (click)="refresh()" [disabled]="busy() !== null">
           <mat-icon>refresh</mat-icon> {{ t('common.refresh') }}
         </button>
-        @if (auth.can('mock.manage') && !isCompleted()) {
+        @if (auth.can('mock.answer') && !isCompleted()) {
           <button mat-flat-button color="primary" (click)="complete()"
                   [disabled]="busy() !== null">
             <mat-icon>flag</mat-icon>
@@ -117,7 +117,7 @@
           </button>
         } @else {
           <p>{{ t('mock.noQuestionsHint') }}</p>
-          @if (auth.can('mock.manage')) {
+          @if (auth.can('mock.answer')) {
             <button mat-flat-button color="primary" (click)="generateQuestions()">
               <mat-icon>auto_awesome</mat-icon> {{ t('mock.generateQuestions') }}
             </button>

@@ -10,7 +10,7 @@
       <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
-      @if (auth.can('mock.manage')) {
+      @if (auth.can('mock.answer')) {
         <button mat-mini-fab color="primary" (click)="openDialog()" [matTooltip]="t('mock.newSession')">
           <mat-icon>play_circle</mat-icon>
         </button>
@@ -41,7 +41,7 @@
         <strong>{{ t('mock.suggestTitle') }}:{{ sug.title }}</strong>
         <p>{{ sug.rationale }}</p>
       </div>
-      @if (auth.can('mock.manage')) {
+      @if (auth.can('mock.answer')) {
         <button mat-flat-button color="primary" (click)="applySuggestion()">
           <mat-icon>play_circle</mat-icon> {{ t('mock.suggestApply') }}
         </button>

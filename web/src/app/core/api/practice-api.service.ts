@@ -291,9 +291,26 @@ export class PracticeApi {
   getMaterials(): Observable<MaterialNodeDto[]> {
     return this.api.get<{ treeVersion: string; nodes: MaterialNodeDto[] }>(`${PracticeApi.BASE}/materials`)
       .pipe(map((r) => {
+        const nodes = PracticeApi.treePackageNodes(r);
         this.treeVersion = r.treeVersion ?? null;
-        return r.nodes ?? [];
+        return nodes;
       }));
+  }
+
+  /**
+   * ★ 票134:整树包形态门 —— 响应必须是包对象 { treeVersion, nodes[] }。
+   *   旧后端返裸数组时 r.nodes 为 undefined，旧代码 `?? []` 把它静默吞成空树
+   *   （票111 事故：200 空树与真空态无法区分，空态提示与错误态混为一谈）。
+   *   形态不符必须抛错，让调用方的 error 路径置 treeLoadFailed（错误态 + 重试），
+   *   而不是空态。401/500/502 不走这里（ApiClient 在 map 之前已抛错，错误态路径本来独立）。
+   *   注意：treeVersion 留存只在形态通过后写回，垃圾响应不污染留存摘要。
+   */
+  static treePackageNodes(r: unknown): MaterialNodeDto[] {
+    const nodes = (r as { nodes?: unknown } | null | undefined)?.nodes;
+    if (!Array.isArray(nodes)) {
+      throw new Error('getMaterials: unexpected response shape (expected { treeVersion, nodes[] })');
+    }
+    return nodes as MaterialNodeDto[];
   }
 
   /**

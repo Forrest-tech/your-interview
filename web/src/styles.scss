@@ -232,7 +232,7 @@ mat-card-subtitle { font-size: 12.5px !important; }
 /* ---------------- 分数色档(全站统一语义) ---------------- */
 
 .good { color: #1b7f4b; }
-.mid  { color: #b06a00; }
+.mid  { color: var(--attention); }
 .bad  { color: #b3261e; }
 
 mat-progress-bar.good .mdc-linear-progress__bar-inner { border-color: #1b7f4b !important; }

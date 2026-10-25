@@ -1322,6 +1322,39 @@ export function extractInterviewWhen(text: string): string | null {
     const p = (n: number) => String(n).padStart(2, '0');
     return `${en[3]}-${p(mon)}-${p(Number(en[2]))} ${p(hh)}:${en[5]}`;
   }
+  // 票158:英文 day-month-year 顺序 + 无时间回落。既有带时间三路在先(行为一字
+  // 不动),新增路只在三路全 miss 时求值;日历合法性校验与票104 同构(命中非
+  // 法日期即 null,不续试后续路)。无时间回落产出日期-only "YYYY-MM-DD":
+  // 调用方已有 slice(0,10) 取 datePart、slice(11,16) 取时间(空 → undefined),
+  // 无需改调用方。注意:CN/ISO 日期-only 不在此列(既有 "date without time
+  // returns null" 用例仍锁定 ISO 日期-only 为 null,本票不扩范围)。
+  // day-first 带时间:"26 oct 2026 at 11:00 AM" / "26th October 2026 14:30"
+  const enDayFirst = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*,?\s+(20\d{2})[^0-9]{0,12}?(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (enDayFirst) {
+    if (!isValidCalendarDate(+enDayFirst[3], months[enDayFirst[2].slice(0, 3).toLowerCase()], +enDayFirst[1])) return null;
+    const mon = months[enDayFirst[2].slice(0, 3).toLowerCase()];
+    let hh = Number(enDayFirst[4]);
+    if (enDayFirst[6]?.toUpperCase() === 'PM' && hh < 12) hh += 12;
+    if (enDayFirst[6]?.toUpperCase() === 'AM' && hh === 12) hh = 0;
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${enDayFirst[3]}-${p(mon)}-${p(Number(enDayFirst[1]))} ${p(hh)}:${enDayFirst[5]}`;
+  }
+  // day-first 无时间:"26 oct 2026" / "26th Oct, 2026"
+  const enDayFirstDate = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*,?\s+(20\d{2})\b/i);
+  if (enDayFirstDate) {
+    if (!isValidCalendarDate(+enDayFirstDate[3], months[enDayFirstDate[2].slice(0, 3).toLowerCase()], +enDayFirstDate[1])) return null;
+    const mon = months[enDayFirstDate[2].slice(0, 3).toLowerCase()];
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${enDayFirstDate[3]}-${p(mon)}-${p(Number(enDayFirstDate[1]))}`;
+  }
+  // month-first 无时间:"Oct 26, 2026" / "October 26th, 2026"
+  const enDate = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b/i);
+  if (enDate) {
+    if (!isValidCalendarDate(+enDate[3], months[enDate[1].slice(0, 3).toLowerCase()], +enDate[2])) return null;
+    const mon = months[enDate[1].slice(0, 3).toLowerCase()];
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${enDate[3]}-${p(mon)}-${p(Number(enDate[2]))}`;
+  }
   return null;
 }
 

@@ -10,7 +10,7 @@
  * 与其真实同文件/跨文件依赖(brief.helpers)保持真实加载,不走 TestBed。
  */
 import { describe, expect, it } from '@jest/globals';
-import { adaptLocalOcrEmailText, extractInterviewWhen } from './intake-panel.component';
+import { adaptLocalOcrEmailText, classifyEmail, extractInterviewWhen } from './intake-panel.component';
 import { parsePastedEmail } from '../../components/brief/brief.helpers';
 
 /** 票59 服务对真实图的实际输出(evidence-59/sync-result.json 的 .text,逐字内嵌)。 */
@@ -206,6 +206,57 @@ describe('extractInterviewWhen(票104 日历合法性 boundary)', () => {
   // [合法守恒/en] 4/30 + PM 换算逐字守恒
   it('en Apr 30 PM extracts', () => {
     expect(extractInterviewWhen('April 30, 2026 at 2:30 PM')).toBe('2026-04-30 14:30');
+  });
+});
+
+describe('extractInterviewWhen(票158 day-first + 无时间回落)', () => {
+  // 票158 用户原句:day-first 且只有日期没有时间,旧三路全 miss 致 fWhen 为空、
+  // Belongs to 回落 Communications;修后当抽日期-only,分类仍为 invitation
+  // (format 由未导出的 extractFormat 映射,/teams/i → '线上视频',本票不改其
+  // 声明,故此处不断言,见实装报告源码确认)
+  it('user sentence day-first date-only extracts date and invitation', () => {
+    const s = 'I recived a email that I will take part in the screening interview via teams on 26 oct 2026';
+    expect(extractInterviewWhen(s)).toBe('2026-10-26');
+    expect(classifyEmail('', s)).toBe('invitation');
+  });
+  // [旧行为守恒] month-first 带时间仍走旧 en 路,值一字不动
+  it('month-first with time unchanged', () => {
+    expect(extractInterviewWhen('scheduled for Oct 26, 2026 at 11:00 AM')).toBe('2026-10-26 11:00');
+  });
+  // [变体] day-first 裸日期
+  it('day-first bare date', () => {
+    expect(extractInterviewWhen('interview on 26 Oct 2026, see you then')).toBe('2026-10-26');
+  });
+  // [变体] day-first 序数词 + 逗号、月份全大写
+  it('day-first ordinal comma and uppercase month', () => {
+    expect(extractInterviewWhen('on 26th Oct, 2026 please join')).toBe('2026-10-26');
+    expect(extractInterviewWhen('on 26 OCT 2026 please join')).toBe('2026-10-26');
+  });
+  // [变体] month-first 无时间(序数词 + 逗号 + 全写月份)
+  it('month-first date-only with ordinal and full month', () => {
+    expect(extractInterviewWhen('scheduled October 26th, 2026, details to follow')).toBe('2026-10-26');
+  });
+  // [变体] day-first 带时间(含 PM 换算与全写月份无 AM/PM)
+  it('day-first with time keeps time and converts PM', () => {
+    expect(extractInterviewWhen('interview on 26 oct 2026 at 11:00 AM')).toBe('2026-10-26 11:00');
+    expect(extractInterviewWhen('interview on 26 oct 2026 at 2:30 PM')).toBe('2026-10-26 14:30');
+    expect(extractInterviewWhen('interview 26th October 2026 14:30')).toBe('2026-10-26 14:30');
+  });
+  // [优先级] 既有带时间路在先:全文先出现 month-first 带时间时,后出的
+  // day-first 裸日期不抢
+  it('existing timed route wins over new date-only route', () => {
+    expect(extractInterviewWhen('Oct 30, 2026 at 10:00 AM, also mentioned 26 oct 2026'))
+      .toBe('2026-10-30 10:00');
+  });
+  // [非法守恒] 新增路同样过日历合法性校验,非法即 null
+  it('new routes reject invalid calendar dates', () => {
+    expect(extractInterviewWhen('interview on 29 Feb 2026')).toBeNull();
+    expect(extractInterviewWhen('scheduled Feb 29, 2026, to be confirmed')).toBeNull();
+    expect(extractInterviewWhen('interview on 31 Apr 2026')).toBeNull();
+  });
+  // [范围边界] ISO 日期-only 仍为 null(既有用例锁定,本票不扩 CN/ISO 日期-only)
+  it('ISO date-only still returns null', () => {
+    expect(extractInterviewWhen('面试时间 2026-10-13,请留意后续通知')).toBeNull();
   });
 });
 

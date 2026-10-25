@@ -265,48 +265,64 @@
   border-radius: 10px; padding: 10px 14px; font-size: 14px;
 }
 
-/* ---------- ④ Rounds Track(票123 R-9:取代轮次 chip 选择器)---------- */
+/* ---------- ④ Rounds Track(票135:横向;票123 R-9 的几何令牌与语义不变)---------- */
 /* 几何值读共享样式源(styles/_track-geometry.scss):16px 节点 / 2px 描边 / 2px 轨道。
    与 Tracker 列表 stepper、Dashboard Pipeline Band、抽屉时间轴同源。 */
 .rtrack {
   position: relative;
   margin-top: 8px;
+  min-width: 0;
 }
 
-/* 轨道:待决色。已完成的一段由 .fill 覆盖成 done 色。 */
+/* 横向滚动容器:内容超宽时横向滚动,未超宽不出现滚动条;线与点在行内一起滚。 */
+.rtrack-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+}
+
+/* 轨道行:节点列左 → 右一排,列不挤压、不换行;行宽 = 内容自然宽度。 */
+.rtrack-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+  width: max-content;
+}
+
+/* 轨道:待决色。已完成的一段由 .fill 覆盖成 done 色。
+   起止圆心运行时测量(滚动内容坐标),left/top/width 由模板绑定。 */
 .rtrack .rail {
   position: absolute;
-  left: 7px;
-  top: 37px;
-  bottom: 26px;
-  width: var(--track-rail-width);
+  height: var(--track-rail-width);
   background: var(--track-rail-pending);
 }
-/* ★ 票123 C-4.3:R-9 轮次轨道的填充段用 var(--dur)/var(--ease) 动 ——
+/* ★ 票123 C-4.3:填充段用 var(--dur)/var(--ease) 动 ——
    动效在回应用户的动作(加一轮 / 数据到位),这是「有意义的动效」。
-   不是入场装饰:它只在轨道长度真的变化时播。 */
+   不是入场装饰:它只在填充范围真的变化时播。 */
 .rtrack .rail.fill {
   background: var(--track-rail-done);
-  bottom: auto;
-  transition: height var(--dur) var(--ease);
+  transition: width var(--dur) var(--ease);
 }
 
+/* 节点列:圆点行(16px) → 头部 → 事实行;列不挤压。 */
 .rnode {
-  position: relative;
-  padding: 12px 0 16px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 0 auto;
 }
 
-/* ★ 票123 C-4.3:当前轮展开的内容用 var(--dur)/var(--ease) 淡入一次。
-   轨道长度变化由 .rail.fill 的 height 过渡承担,这里是内容侧的一次展开。 */
+/* ★ 票123 C-4.3:当前轮详情卡用 var(--dur)/var(--ease) 淡入一次。
+   填充范围变化由 .rail.fill 的 width 过渡承担,这里是内容侧的一次展开。 */
 .rexpand {
+  margin-top: 16px;
   animation: contentIn var(--dur) var(--ease);
 }
 
-/* 节点:16px 圆点 —— 与 Tracker stepper 逐字一致 */
+/* 节点:16px 圆点 —— 与 Tracker stepper 逐字一致;入流,位于列顶。 */
 .rnode .dot {
-  position: absolute;
-  left: 0;
-  top: 17px;
+  flex: 0 0 auto;
   width: var(--track-node-size);
   height: var(--track-node-size);
   border-radius: 50%;
@@ -340,6 +356,13 @@
   font-weight: 600;
   color: var(--ink);
 }
+/* 票135 D-2:当前节点头部高亮 —— 圆点字形仍只 reached/hollow,高亮只在标签上:
+   品牌色 + 2px 品牌色下划线;其余节点标签保持 var(--ink)、无下划线。 */
+.rnode.current .rhead h3 {
+  color: var(--brand);
+  border-bottom: 2px solid var(--brand);
+  padding-bottom: 2px;
+}
 .stagechip {
   background: var(--signal-tint);
   color: var(--brand);
@@ -369,12 +392,12 @@
 .rfact .v.go { color: var(--go); }
 .rfact .v.stop { color: var(--stop); }
 
-/* 加一轮的终点卡 */
+/* 加一轮的终点卡(横向:宽度取内容自然宽度) */
 .rnode.add .addcard {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  width: 100%;
+  width: max-content;
   text-align: left;
   border: var(--track-node-border) dashed var(--track-node-future-border);
   border-radius: 10px;

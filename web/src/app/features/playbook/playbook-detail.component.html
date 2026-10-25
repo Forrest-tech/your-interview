@@ -212,65 +212,72 @@
           </button>
         }
 
-        <!-- ④ 轮次轨道(票123 R-9:取代原来的轮次 chip 选择器) -->
+        <!-- ④ 轮次轨道(票135:横向;票123 R-9 的语义、数据、内容一字不动) -->
         @if (rounds().length) {
           <div class="rtrack" data-testid="round-track">
-            <!-- 轨道:2px 竖线。已完成的一段取 done 色,其余取待决色。
-                 填充高度按节点数算,加轮次时轨道跟着长。 -->
-            <span class="rail" aria-hidden="true"></span>
-            @if (trackFillHeight() > 0) {
-              <span class="rail fill" [style.height.px]="trackFillHeight()" aria-hidden="true"></span>
-            }
+            <div class="rtrack-scroll" #trackScroll>
+              <div class="rtrack-row">
+                <!-- 轨道:水平 2px 线。已完成的一段取 done 色,其余取待决色。
+                     起止圆心运行时测量(滚动内容坐标),加轮次时滚动宽度跟着长、高度不动。 -->
+                @if (trackMetrics(); as tm) {
+                  <span class="rail" aria-hidden="true"
+                        [style.left.px]="tm.railLeft" [style.top.px]="tm.railTop"
+                        [style.width.px]="tm.railWidth"></span>
+                  <span class="rail fill" aria-hidden="true"
+                        [style.left.px]="tm.railLeft" [style.top.px]="tm.railTop"
+                        [style.width.px]="tm.fillWidth"></span>
+                }
 
-            @for (r of rounds(); track r.id; let i = $index) {
-              <div class="rnode" [class.current]="r.id === currentRoundId()">
-                <span class="dot" [class]="roundNodeState(r)" aria-hidden="true"></span>
-                <div class="rhead">
-                  <h3>{{ fmt('pb.v2.r.roundLabel', { n: roundNo(r) }) }}</h3>
-                  <span class="stagechip">{{ r.stage }}</span>
-                  <span class="rwhen">
-                    <span>{{ r.scheduledDate ?? t('pb.v2.d.dateTbd') }}</span>
-                    @if (r.format) { <span>{{ formatLabel(r.format) }}</span> }
-                  </span>
-                </div>
-                <div class="rfacts">
-                  <span class="rfact">
-                    <span class="k">{{ t('pb.v2.r.outcomeLabel') }}</span>
-                    <span class="v" [class.go]="r.outcome === 'Passed'" [class.stop]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
-                  </span>
-                  <span class="rfact">
-                    <span class="k">{{ t('pb.v2.r.assetsCountLabel') }}</span>
-                    <span class="v">{{ roundAssetsCount(r) }}</span>
-                  </span>
-                  @if (r.interviewers) {
-                    <span class="rfact">
-                      <span class="k">{{ t('pb.v2.r.interviewersLabel') }}</span>
-                      <span class="v">{{ r.interviewers }}</span>
-                    </span>
-                  }
-                </div>
-
-                <!-- 当前节点默认展开,内容就是原来那张轮次工作卡。
-                     ★ 票123 C-4.3:展开用 var(--dur)/var(--ease) 动一次 ——
-                     动效回应用户的动作(展开/收起),不是入场装饰。 -->
-                @if (r.id === currentRoundId()) {
-                  <div class="rexpand">
-                    <app-round-card [entry]="e" [round]="r" [displayNo]="roundNo(r)"
-                                    (changed)="onChildChanged()"
-                                    (addMaterialHere)="openIntake('email', $event)" />
+                @for (r of rounds(); track r.id) {
+                  <div class="rnode" [class.current]="r.id === currentRoundId()">
+                    <span class="dot" [class]="roundNodeState(r)" aria-hidden="true"></span>
+                    <div class="rhead">
+                      <h3>{{ fmt('pb.v2.r.roundLabel', { n: roundNo(r) }) }}</h3>
+                      <span class="stagechip">{{ r.stage }}</span>
+                      <span class="rwhen">
+                        <span>{{ r.scheduledDate ?? t('pb.v2.d.dateTbd') }}</span>
+                        @if (r.format) { <span>{{ formatLabel(r.format) }}</span> }
+                      </span>
+                    </div>
+                    <div class="rfacts">
+                      <span class="rfact">
+                        <span class="k">{{ t('pb.v2.r.outcomeLabel') }}</span>
+                        <span class="v" [class.go]="r.outcome === 'Passed'" [class.stop]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
+                      </span>
+                      <span class="rfact">
+                        <span class="k">{{ t('pb.v2.r.assetsCountLabel') }}</span>
+                        <span class="v">{{ roundAssetsCount(r) }}</span>
+                      </span>
+                      @if (r.interviewers) {
+                        <span class="rfact">
+                          <span class="k">{{ t('pb.v2.r.interviewersLabel') }}</span>
+                          <span class="v">{{ r.interviewers }}</span>
+                        </span>
+                      }
+                    </div>
                   </div>
                 }
+
+                <!-- 「加一轮」仍是轨道的终点节点:虚线空心圆 + 虚线卡 -->
+                <div class="rnode add">
+                  <span class="dot" aria-hidden="true"></span>
+                  <button type="button" class="addcard" (click)="openIntake('email')">
+                    <span class="t">{{ t('pb.v2.d.addRound') }}</span>
+                    <span class="d">{{ t('pb.v2.d.addRoundSub') }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 当前轮详情卡:从节点内移到轨道下方,全宽展开,绑定一字不变。
+                 ★ 票123 C-4.3:展开用 var(--dur)/var(--ease) 淡入一次。 -->
+            @if (currentRound(); as cr) {
+              <div class="rexpand">
+                <app-round-card [entry]="e" [round]="cr" [displayNo]="roundNo(cr)"
+                                (changed)="onChildChanged()"
+                                (addMaterialHere)="openIntake('email', $event)" />
               </div>
             }
-
-            <!-- 「加一轮」变成轨道的终点节点:虚线空心圆 + 虚线卡 -->
-            <div class="rnode add">
-              <span class="dot" aria-hidden="true"></span>
-              <button type="button" class="addcard" (click)="openIntake('email')">
-                <span class="t">{{ t('pb.v2.d.addRound') }}</span>
-                <span class="d">{{ t('pb.v2.d.addRoundSub') }}</span>
-              </button>
-            </div>
           </div>
         } @else {
           <p class="state">{{ t('pb.v2.d.noRounds') }}</p>

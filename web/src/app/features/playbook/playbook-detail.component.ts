@@ -223,7 +223,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     return rs.find(r => r.id === this.selectedRoundId()) ?? rs[rs.length - 1];
   });
 
-  // ── 票123 R-9:Rounds Track(垂直轨道)────────────────────────────────────
+  // ── 票123 R-9 + 票135:Rounds Track(横向轨道)────────────────────────────
   // 定稿的填充规则(逐字):「a round counts as "done" for fill purposes **iff** it
   // has a recorded outcome **or** its date is past; "current" = the earliest round
   // with a future date and no outcome. Node glyphs on the track are only
@@ -303,18 +303,88 @@ export class PlaybookDetailComponent implements OnDestroy {
     return formatLabel(this.t, v);
   }
 
-  /**
-   * 轨道上「已完成」那一段的填充高度(px)。
-   * 轨道从第一个节点延伸到最后一个节点,已完成段到当前节点为止。
-   * 节点纵向步长 76px(见 .rnode 的 padding)—— 与样式里的常量一致。
-   */
-  readonly trackFillHeight = computed(() => {
-    const rs = this.rounds();
-    if (!rs.length) return 0;
-    const curIdx = rs.findIndex(r => r.id === this.currentRoundId());
-    if (curIdx <= 0) return 0;
-    return curIdx * TRACK_NODE_STEP;
+  /** 当前轮对象(详情卡移至轨道下方全宽后,卡片绑定由此取轮)。 */
+  readonly currentRound = computed(() => {
+    const cur = this.currentRoundId();
+    return this.rounds().find(r => r.id === cur) ?? null;
   });
+
+  /**
+   * 票135:横向轨道几何(运行时测量,滚动内容坐标系;null = 尚未量取)。
+   * 填充段仍为单段模型:从第一个节点圆心到当前节点圆心;当前轮为首轮时
+   * fillWidth = 0(与旧 trackFillHeight() > 0 条件同一语义)。待决线从首节点
+   * 圆心延伸到加轮节点圆心。量取手段:offset 读数(行是 offsetParent)。
+   */
+  readonly trackMetrics = signal<{
+    railLeft: number; railTop: number; railWidth: number; fillWidth: number;
+  } | null>(null);
+
+  /** 横向滚动容器(模板 #trackScroll)。 */
+  private readonly trackScroll = viewChild<ElementRef<HTMLElement>>('trackScroll');
+  private trackRaf = 0;
+  private trackObserver: ResizeObserver | null = null;
+  private trackMeasuredOnce = false;
+  private trackAutoScrolledFor: string | null = null;
+
+  /** 合并多次量取请求为一帧(数据变化与尺寸变化可能连发)。 */
+  private scheduleTrackMeasure(): void {
+    if (this.trackRaf) cancelAnimationFrame(this.trackRaf);
+    this.trackRaf = requestAnimationFrame(() => {
+      this.trackRaf = 0;
+      this.measureTrack();
+    });
+  }
+
+  /**
+   * 票135 D-1:量取轨道几何并写 trackMetrics。
+   * 圆心取滚动内容坐标(offsetLeft,行是 offsetParent),滚动后不错位;
+   * 自动滚动仅首测与当前轮变化时触发(nearest 语义,纯横向,不碰页面滚动)。
+   */
+  private measureTrack(): void {
+    const scrollEl = this.trackScroll()?.nativeElement;
+    if (!scrollEl) return;
+    const row = scrollEl.querySelector('.rtrack-row');
+    if (!row) return;
+    const dots = row.querySelectorAll('.rnode .dot');
+    const rs = this.rounds();
+    if (!dots.length || !rs.length) return;
+    const center = (el: Element): number => {
+      const h = el as HTMLElement;
+      return h.offsetLeft + h.offsetWidth / 2;
+    };
+    const first = dots[0] as HTMLElement;
+    const addDot = dots[dots.length - 1] as HTMLElement | undefined;
+    if (!addDot) return;
+    const firstCenter = center(first);
+    const curId = this.currentRoundId();
+    const curIdx = rs.findIndex(r => r.id === curId);
+    const curDot = curIdx > 0 ? (dots[curIdx] as HTMLElement | undefined) : undefined;
+    const fillWidth = curDot ? center(curDot) - firstCenter : 0;
+    this.trackMetrics.set({
+      railLeft: firstCenter,
+      railTop: first.offsetTop + first.offsetHeight / 2 - 1,
+      railWidth: Math.max(0, center(addDot) - firstCenter),
+      fillWidth,
+    });
+    if (curId && (!this.trackMeasuredOnce || this.trackAutoScrolledFor !== curId)) {
+      const nodeDot = curIdx >= 0 ? (dots[curIdx] as HTMLElement | undefined) : undefined;
+      const node = (nodeDot ?? first).closest('.rnode') as HTMLElement | null;
+      if (node) {
+        const c = scrollEl.getBoundingClientRect();
+        const n = node.getBoundingClientRect();
+        if (n.left < c.left) scrollEl.scrollLeft -= (c.left - n.left);
+        else if (n.right > c.right) scrollEl.scrollLeft += (n.right - c.right);
+      }
+      this.trackAutoScrolledFor = curId;
+    }
+    this.trackMeasuredOnce = true;
+  }
+
+  private disconnectTrackObserver(): void {
+    this.trackObserver?.disconnect();
+    this.trackObserver = null;
+    if (this.trackRaf) { cancelAnimationFrame(this.trackRaf); this.trackRaf = 0; }
+  }
 
   // 票80:头部徽章与分组共用同一事实源 —— 只经 e.outcome 取键
   // (entryStatusBadgeKey → entryResultOutcome),不再判读 result 原文、
@@ -397,6 +467,31 @@ export class PlaybookDetailComponent implements OnDestroy {
         this.selectedRoundId.set((pending ?? rs[rs.length - 1]).id);
       }
     }, { allowSignalWrites: true });
+    // 票135:横向轨道 —— 挂载时量取 + 监听行宽变化;卸载时拆监听并复位首测标记
+    // (复位使页签切回重挂时仍算首渲染,自动滚动重新触发)。
+    effect((onCleanup) => {
+      const scrollEl = this.trackScroll()?.nativeElement;
+      if (!scrollEl) return;
+      const row = scrollEl.querySelector('.rtrack-row');
+      if (row) {
+        const ro = new ResizeObserver(() => this.scheduleTrackMeasure());
+        ro.observe(row);
+        this.trackObserver = ro;
+      }
+      this.scheduleTrackMeasure();
+      onCleanup(() => {
+        this.disconnectTrackObserver();
+        this.trackMeasuredOnce = false;
+        this.trackAutoScrolledFor = null;
+      });
+    });
+    // 票135:数据或页签变化后重测(仅量取;自动滚动仍只由首测与当前轮变化触发)。
+    effect(() => {
+      void this.rounds();
+      void this.currentRoundId();
+      void this.pageTab();
+      this.scheduleTrackMeasure();
+    });
   }
 
   async load(): Promise<void> {
@@ -484,6 +579,7 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.setResumePdfUrl(null);
+    this.disconnectTrackObserver();
   }
 
   /**
@@ -747,13 +843,6 @@ function nameMatches(a: string, b: string): boolean {
 const LEVEL_WORDS = new Set([
   'senior', 'sr', 'lead', 'principal', 'staff', 'junior', 'jr', 'intermediate', 'associate'
 ]);
-
-/**
- * 票123 R-9:Rounds Track 的节点纵向步长(px)。
- * 与 playbook-detail.component.scss 里 `.rnode` 的上下 padding 之和一致 ——
- * 轨道填充高度按「节点数 × 步长」算,加一轮轨道就跟着长一节。
- */
-const TRACK_NODE_STEP = 76;
 
 /**
  * 岗位归一化:在 wordsNorm 基础上再剥三类噪音 ——

@@ -3049,6 +3049,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.v2.m.kindNotes': { zh: '备注', en: 'Note', fr: 'Note' },
   'pb.v2.m.kindText': { zh: '文本', en: 'Text', fr: 'Texte' },
   'pb.v2.m.kindGuidance': { zh: '指导材料', en: 'Guidance', fr: 'Guidage' },
+  'pb.v2.m.meetingCard': { zh: '会议卡', en: 'Meeting card', fr: 'Carte de réunion' },
   'pb.v2.m.noBody': { zh: '(无原文)', en: '(No content)', fr: '(Aucun contenu)' },
   'pb.v2.m.bodyFailed': { zh: '(原文读取失败)', en: '(Failed to read content)', fr: '(Échec de lecture du contenu)' },
   'pb.v2.m.fileLoadFailed': { zh: '文件加载失败(可能已丢失)', en: 'Failed to load file (may be lost)', fr: 'Échec du chargement (fichier peut-être perdu)' },

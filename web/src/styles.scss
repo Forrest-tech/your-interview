@@ -103,7 +103,9 @@ $display-font: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe
   --parked: #64748b;
   --parked-deep: #334155;
   --parked-fill: #f1f5f9;
-  --paper: #f6f8fb;
+  /* 票 162:画布底色改纯白(原配色方案 A #f6f8fb);卡片面仍走 --surface 白底,
+     卡片与画布区分靠既有边框/阴影,非 token 色差。 */
+  --paper: #ffffff;
   --surface: #ffffff;
   --hairline: #e2e8f0;
   --ink: #0f172a;

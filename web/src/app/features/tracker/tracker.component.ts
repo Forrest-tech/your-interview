@@ -760,13 +760,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.reload();
   }
 
-  setSort(s: string): void {
-    this.sort.set(s);
-    try { localStorage.setItem('yi-tracker-sort', s); } catch { /* 忽略 */ }
-    this.page.set(1);
-    this.reload();
-  }
-
   readonly stats = signal<TrackerStats | null>(null);
 
   /** 看板列:按固定状态顺序分组,空组仍保留占位符,好让用户看到"这一列现在是空的"。 */
@@ -1119,10 +1112,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleStatusFilter(s: ApplicationStatus): void {
     this.setStatusFilter(this.statusFilter() === s ? null : s);
-  }
-
-  onSortChange(v: string): void {
-    this.setSort(v);
   }
 
   /** 当前是否有搜索/筛选生效（空态文案区分"真没数据"与"被筛掉了"）。 */

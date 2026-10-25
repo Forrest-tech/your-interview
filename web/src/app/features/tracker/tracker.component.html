@@ -14,7 +14,8 @@
       <button mat-flat-button color="primary" class="smart-btn" (click)="openSmartAdd()">
         <mat-icon>auto_awesome</mat-icon>{{ t('tracker.smartAdd') }}
       </button>
-      <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.dlgNew')">
+      <!-- 票 143：+ 钮由 40px mini-fab 改为与 Smart paste 同高 36px 的扁平圆钮（同高、同色、无阴影），与工具栏其余按钮协调。 -->
+      <button mat-mini-fab color="primary" class="add-btn" (click)="openCreate()" [matTooltip]="t('tracker.dlgNew')">
         <mat-icon>add</mat-icon>
       </button>
       <button mat-icon-button [matMenuTriggerFor]="moreMenu" [matTooltip]="t('tracker.moreActions')"
@@ -120,16 +121,7 @@
           }
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="sort">
-          <mat-label>{{ t('tracker.sortLabel') }}</mat-label>
-          <mat-select [ngModel]="sort()" (ngModelChange)="onSortChange($event)" name="sort">
-            <mat-option value="updated">{{ t('tracker.sortUpdated') }}</mat-option>
-            <mat-option value="applied">{{ t('tracker.sortAppliedDesc') }}</mat-option>
-            <mat-option value="appliedAsc">{{ t('tracker.sortAppliedAsc') }}</mat-option>
-            <mat-option value="company">{{ t('tracker.sortCompany') }}</mat-option>
-          </mat-select>
-        </mat-form-field>
-
+        <!-- 票 144：Sort 下拉已移除（用户令：不需要）——排序锁定为当前 sort 信号值（默认 Recently updated），后端 sortBy 参数不变。 -->
         <!-- 视图切换:看板 / 列表(Simplify 模式) -->
         <div class="view-toggle" role="group" [attr.aria-label]="t('tracker.viewMode')">
           <button mat-button type="button" class="view-btn"

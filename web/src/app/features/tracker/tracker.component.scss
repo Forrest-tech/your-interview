@@ -29,6 +29,8 @@
 
 /* 智能粘贴是这一页最该被看见的入口 —— 给足视觉权重,别让它淹没在一排图标按钮里 */
 .smart-btn mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; }
+/* 票 143：+ 钮与 Smart paste 同高 36px、同色扁平（去 FAB 阴影），工具栏高度统一。 */
+.add-btn { width: 36px; height: 36px; box-shadow: none; }
 
 
 /* ---------- 指标 ---------- */
@@ -81,7 +83,7 @@
 }
 
 .search { flex: 1 1 auto; }
-.sort { flex: 0 0 200px; }
+/* 票 144：.sort 规则随 Sort 下拉一并移除。 */
 
 mat-form-field { width: 100%; }
 

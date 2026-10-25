@@ -3108,6 +3108,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.v2.i.removeCard': { zh: '移除这封', en: 'Remove this email', fr: 'Retirer cet e-mail' },
   'pb.v2.i.dupSuspect': { zh: '疑似与已有沟通重复,请确认后再保存(不会自动丢弃)。', en: 'Possible duplicate of an existing message — please check before saving (it is never dropped automatically).', fr: 'Doublon possible avec un message existant — vérifiez avant d’enregistrer (jamais supprimé automatiquement).' },
   'pb.v2.i.nothingToSave': { zh: '没有可保存的邮件:全部截图识别失败。请重试或移除失败的卡片。', en: 'Nothing to save: every screenshot failed recognition. Retry or remove the failed cards.', fr: 'Rien à enregistrer : toutes les captures ont échoué. Réessayez ou retirez les cartes en échec.' },
+  'pb.v2.i.nothingToSaveSingle': { zh: '没有可保存的邮件信息:主题、发件人、发信日期全为空。请在上方补填至少一项后再保存。', en: 'Nothing to save: subject, sender and email date are all empty. Fill in at least one above before saving.', fr: 'Rien à enregistrer : l’objet, l’expéditeur et la date sont tous vides. Renseignez au moins un champ ci-dessus avant d’enregistrer.' },
   'pb.v2.c.threadCount': { zh: '{n} 封往来', en: '{n} in thread', fr: '{n} dans le fil' },
   'pb.v2.i.clipName': { zh: '剪贴板图片', en: 'clipboard-image', fr: 'image-presse-papiers' },
   'pb.v2.i.attachAudio': { zh: '上传录音文件', en: 'Upload a recording', fr: 'Importer un enregistrement' },

@@ -287,20 +287,18 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
 
             <div class="sec">{{ t('pb.v2.i.assignTitle') }}</div>
             <div class="targets">
-              @for (r of rounds(); track r.id) {
-                <label class="tgt">
-                  <input type="radio" name="tgt" [checked]="isTargetRound(r.id)" (change)="target.set({kind:'round', roundId: r.id})">
-                  Round {{ roundNo(r) }} · {{ r.stage }}{{ r.scheduledDate ? ' · ' + r.scheduledDate : '' }}
-                </label>
-              }
-              <label class="tgt">
-                <input type="radio" name="tgt" [checked]="target().kind === 'comm'" (change)="target.set({kind:'comm'})">
-                {{ t('pb.v2.i.targetComm') }}
-              </label>
-              <label class="tgt">
-                <input type="radio" name="tgt" [checked]="target().kind === 'new'" (change)="target.set({kind:'new'})">
-                {{ t('pb.v2.i.targetNew') }}
-              </label>
+              <!-- 票161:归属由单选组改下拉列表(单封与批量共用同一区,两处一并改)。
+                   选项文本与旧单选一字不差;target() 仍是唯一事实源,建议默认/
+                   预设轮次/新建展开逻辑一字不动。 -->
+              <select class="fld" data-testid="intake-target-select"
+                      [attr.aria-label]="t('pb.v2.i.assignTitle')"
+                      [ngModel]="targetSelectValue()" (ngModelChange)="applyTargetValue($event)">
+                @for (r of rounds(); track r.id) {
+                  <option [value]="'round:' + r.id">Round {{ roundNo(r) }} · {{ r.stage }}{{ r.scheduledDate ? ' · ' + r.scheduledDate : '' }}</option>
+                }
+                <option value="comm">{{ t('pb.v2.i.targetComm') }}</option>
+                <option value="new">{{ t('pb.v2.i.targetNew') }}</option>
+              </select>
             </div>
             @if (target().kind === 'new') {
               <div class="pv-grid">
@@ -375,7 +373,6 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
     .pv-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--yi-text-muted, #475569); }
     .sec { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #475569); margin: 14px 0 6px; }
     .targets { display: flex; flex-direction: column; gap: 6px; }
-    .tgt { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
     .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 8px 0; cursor: pointer; }
     .warn { background: #fffbeb; border: 1px solid #fffbeb; color: #b06a00; border-radius: 8px;
             padding: 8px 12px; font-size: 13px; line-height: 1.5; }
@@ -530,9 +527,15 @@ export class IntakePanelComponent {
     return joinNames(this.i18n, [...new Set(this.segments().map(s => s.speaker))]);
   }
 
-  isTargetRound(id: string): boolean {
-    const t = this.target();
-    return t.kind === 'round' && t.roundId === id;
+  /** 票161:归属下拉的当前值(纯函数 targetSelectValueOf 的组件侧委托)。 */
+  targetSelectValue(): string {
+    return targetSelectValueOf(this.target());
+  }
+
+  /** 票161:归属下拉变更回写 target();非法值忽略,保持当前归属不动。 */
+  applyTargetValue(v: string): void {
+    const t = targetFromSelectValue(v);
+    if (t) this.target.set(t);
   }
 
   /** 父组件调用:打开面板,可预置类型与目标轮次。 */
@@ -1022,6 +1025,14 @@ export class IntakePanelComponent {
     }
     if (Object.keys(stageErrs).length > 0) { this.stageErrors.set(stageErrs); return; }
     this.stageErrors.set({});
+    // 票161:单封邮件主题/发件人/发信日期全空 = 无可识别的邮件信息,留在预览
+    // 报错、不假装已保存(与批量全失败同口径);且须在建轮之前拦截,否则一次
+    // 被拦的保存会先留下一个空轮次。转写/备注无此三字段,不受影响。
+    if (this.type() === 'email' && !this.batch()
+        && isEmptyEmailHeaders(this.fSubject(), this.fFrom(), this.fDate())) {
+      this.errorMsg.set(this.t('pb.v2.i.nothingToSaveSingle'));
+      return;
+    }
     this.busy.set(true);
     this.errorMsg.set(null);
     try {
@@ -1288,6 +1299,31 @@ function dedupeKey(from: string, date: string, subject: string): string {
   return `${from.trim().toLowerCase()}|${date.trim()}|${subject.trim().toLowerCase()}`;
 }
 
+/**
+ * 票161:归属下拉值 ↔ Target 的纯映射(模板委托,单测无需 TestBed 即可覆盖)。
+ * 值域:轮次 'round:<id>'、沟通 'comm'、新建 'new';非法值解析为 null,
+ * 调用方忽略(保持当前归属不动),绝不把非法值写进 target()。
+ */
+export function targetSelectValueOf(t: Target): string {
+  return t.kind === 'round' ? `round:${t.roundId}` : t.kind;
+}
+
+export function targetFromSelectValue(v: string): Target | null {
+  if (v === 'comm') return { kind: 'comm' };
+  if (v === 'new') return { kind: 'new' };
+  const m = v.match(/^round:(.+)$/);
+  return m ? { kind: 'round', roundId: m[1] } : null;
+}
+
+/**
+ * 票161:单封邮件是否无可识别的头信息——主题/发件人/发信日期全空(仅空白亦算空)。
+ * 命中时保存须拦下并明示(与批量全失败的 nothingToSave 同口径:不假装已保存),
+ * 而不是静默建一个无主题、无发件人、无日期、dedupeKey 全空的资产。
+ */
+export function isEmptyEmailHeaders(subject: string, from: string, date: string): boolean {
+  return ![subject, from, date].some(s => (s ?? '').trim());
+}
+
 export function classifyEmail(subject: string, body: string): string {
   const s = `${subject}\n${body}`.toLowerCase();
   if (/reschedule|postpone|改期|重新安排|another time/.test(s)) return 'reschedule';
@@ -1437,7 +1473,8 @@ export function adaptLocalOcrEmailText(raw: string): string | null {
   return null;
 }
 
-function extractFormat(text: string): string {
+/** 票161:导出供 spec 覆盖(与 extractInterviewWhen / classifyEmail 同例)。 */
+export function extractFormat(text: string): string {
   if (/jdoodle/i.test(text)) return '线上做题平台';
   if (/teams|zoom|google meet|video call/i.test(text)) return '线上视频';
   if (/phone call|电话沟通/i.test(text)) return '电话';
@@ -1445,7 +1482,8 @@ function extractFormat(text: string): string {
   return '';
 }
 
-function extractInterviewerNames(text: string): string[] {
+/** 票161:导出供 spec 覆盖(与 extractInterviewWhen / classifyEmail 同例)。 */
+export function extractInterviewerNames(text: string): string[] {
   // 保守提取:只认 "with X Y" / "面试官:X" 这类明确句式,认不到就留空让用户补。
   const out = new Set<string>();
   for (const m of text.matchAll(/(?:面试官|interviewer)[:：]\s*([A-Za-z][A-Za-z .'-]{1,40})/gi)) {

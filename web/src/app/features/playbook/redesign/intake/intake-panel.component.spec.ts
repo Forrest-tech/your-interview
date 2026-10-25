@@ -10,7 +10,7 @@
  * 与其真实同文件/跨文件依赖(brief.helpers)保持真实加载,不走 TestBed。
  */
 import { describe, expect, it } from '@jest/globals';
-import { adaptLocalOcrEmailText, classifyEmail, extractInterviewWhen } from './intake-panel.component';
+import { adaptLocalOcrEmailText, classifyEmail, extractFormat, extractInterviewWhen, extractInterviewerNames, isEmptyEmailHeaders, targetFromSelectValue, targetSelectValueOf } from './intake-panel.component';
 import { parsePastedEmail } from '../../components/brief/brief.helpers';
 
 /** 票59 服务对真实图的实际输出(evidence-59/sync-result.json 的 .text,逐字内嵌)。 */
@@ -471,5 +471,82 @@ describe('票160 管线口径(视觉纯转写同样过适配,门与 cardFromText
     expect(p.from).toBe('');
     expect(p.date).toBe('');
     expect(p.subject).toBe('');
+  });
+});
+describe('票161 正文-only 粘贴 + 会议卡单数字日期 + 归属下拉 + 空头保存守卫', () => {
+  // 合成正文(零真实凭据):邮箱客户端复制正文时头行本来就不在复制内容里,
+  // 与用户 12:17 截图的粘贴形态一致——无头行、无日期时间、无面试官姓名。
+  const BODY_ONLY = [
+    'Hi Forrest,',
+    'We would like to invite you to interview for our Full Stack Developer role.',
+    'Technical Screening / Live Coding Session',
+    'During the technical interview, you will work through live coding questions in the programming language of your choice.',
+    'Could you please create an account on JDoodle ahead of time, as there will be live coding questions during the interview.',
+    'Backup IDE (Recommended)',
+    'Please review our website to learn more about our business and our services.',
+    'Kindly confirm receipt of this email.',
+    'Best of luck!',
+    'Alex',
+  ].join('\n');
+
+  // [头行缺失不编造] 正文-only 经 parsePastedEmail 后三件套全空、全文作 body;
+  // 输入里有的才提出来:分类 invitation、形式线上做题平台;面试官留空
+  // (落款名不是面试官信号,保守抽取不认,用户在预览里手动补)。
+  it('body-only paste yields empty headers but invitation and platform', () => {
+    const p = parsePastedEmail(BODY_ONLY);
+    expect(p.from).toBe('');
+    expect(p.date).toBe('');
+    expect(p.subject).toBe('');
+    expect(p.body).toBe(BODY_ONLY);
+    expect(classifyEmail(p.subject, p.body)).toBe('invitation');
+    expect(extractFormat(p.body)).toBe('线上做题平台');
+    expect(extractInterviewerNames(p.body)).toEqual([]);
+  });
+
+  // [正文无时间不编造] 正文-only 里没有任何日期时间,when 必须为 null
+  // (客户端会议卡的日期时间不在复制文本里,不能凭空补)。
+  it('body-only paste without any datetime yields null when', () => {
+    const p = parsePastedEmail(BODY_ONLY);
+    expect(extractInterviewWhen(p.body)).toBeNull();
+  });
+
+  // [会议卡单数字日期] ISO 路已覆盖:单数字月/日 + 星期 + ～ 时段,只取起始时间。
+  it('meeting-card single-digit date with weekday and range extracts start', () => {
+    expect(extractInterviewWhen('会议邀请\n2026-10-1 周四 13:00～14:00\nMicrosoft Teams Meeting'))
+      .toBe('2026-10-01 13:00');
+    expect(extractInterviewWhen('2026-10-1 13:00 开始')).toBe('2026-10-01 13:00');
+  });
+
+  // [会议卡年月日版] CN 路已覆盖:单数字月/日 + 星期 + ～ 时段。
+  it('meeting-card Chinese single-digit date extracts start', () => {
+    expect(extractInterviewWhen('2026年10月1日 周四 13:00～14:00')).toBe('2026-10-01 13:00');
+  });
+
+  // [范围边界] 无年份的会议卡不识别——年份不能凭空按当年补。
+  it('year-less meeting card stays null', () => {
+    expect(extractInterviewWhen('10月1日 周四 13:00～14:00')).toBeNull();
+  });
+
+  // [空头保存守卫] 三件套全空(仅空白亦算空)才拦;任一有值即放行。
+  it('empty email headers gate blocks only all-empty', () => {
+    expect(isEmptyEmailHeaders('', '', '')).toBe(true);
+    expect(isEmptyEmailHeaders('  ', '', '')).toBe(true);
+    expect(isEmptyEmailHeaders('Interview', '', '')).toBe(false);
+    expect(isEmptyEmailHeaders('', 'Alex', '')).toBe(false);
+    expect(isEmptyEmailHeaders('', '', '2026-10-01')).toBe(false);
+  });
+
+  // [归属下拉映射] 值与单选旧文本对应:轮次 round:<id>、沟通 comm、新建 new;
+  // 往返一致;非法值解析 null(调用方忽略,保持当前归属不动)。
+  it('target select value round-trips', () => {
+    expect(targetSelectValueOf({ kind: 'round', roundId: 'r1' })).toBe('round:r1');
+    expect(targetSelectValueOf({ kind: 'comm' })).toBe('comm');
+    expect(targetSelectValueOf({ kind: 'new' })).toBe('new');
+    expect(targetFromSelectValue('round:r1')).toEqual({ kind: 'round', roundId: 'r1' });
+    expect(targetFromSelectValue('comm')).toEqual({ kind: 'comm' });
+    expect(targetFromSelectValue('new')).toEqual({ kind: 'new' });
+    expect(targetFromSelectValue('round:')).toBeNull();
+    expect(targetFromSelectValue('bogus')).toBeNull();
+    expect(targetFromSelectValue('')).toBeNull();
   });
 });

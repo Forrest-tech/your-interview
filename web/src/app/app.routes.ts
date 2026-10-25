@@ -83,21 +83,31 @@ export const routes: Routes = [
           import('./features/admin/admin.component').then((m) => m.AdminComponent)
       },
       {
-        path: 'profile',
+        // 票 146：GitHub 式设置中心 —— /settings 父路由 + 两节子路由。
+        // 旧 URL（/profile、/account/ai-setting）全部重定向到新 URL，任何旧入口不 404。
+        path: 'settings',
         loadComponent: () =>
-          import('./features/profile/profile.component').then((m) => m.ProfileComponent)
+          import('./features/settings/settings-hub.component').then((m) => m.SettingsHubComponent),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'profile' },
+          {
+            path: 'profile',
+            loadComponent: () =>
+              import('./features/profile/profile.component').then((m) => m.ProfileComponent)
+          },
+          {
+            path: 'ai',
+            loadComponent: () =>
+              import('./features/ai-setting/ai-setting.component').then((m) => m.AiSettingComponent)
+          }
+        ]
       },
+      { path: 'profile', redirectTo: 'settings/profile' },
+      { path: 'account/ai-setting', redirectTo: 'settings/ai' },
       {
         path: 'resume',
         loadComponent: () =>
           import('./features/resume/resume.component').then((m) => m.ResumeComponent)
-      },
-      {
-        // AI / Azure 语音设置 —— /practice 的「TTS 引擎 → 前往配置 ↗」落点。
-        // 2026-09-15 第六轮新增:此前该路由不存在,点过去会 404。
-        path: 'account/ai-setting',
-        loadComponent: () =>
-          import('./features/ai-setting/ai-setting.component').then((m) => m.AiSettingComponent)
       },
       {
         // 条款 / 隐私 / 版权 —— 页脚三个链接的落点。

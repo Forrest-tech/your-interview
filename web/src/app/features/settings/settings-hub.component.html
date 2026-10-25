@@ -1,0 +1,17 @@
+<!-- 票 146：GitHub 式设置中心 —— 左导航 + 子路由出口；本壳不设大标题页头（左导航即是标识）。 -->
+<div class="settings-hub">
+  <nav class="settings-nav">
+    @for (item of navItems; track item.path) {
+      <a class="settings-nav-item"
+         [routerLink]="item.path"
+         routerLinkActive="active"
+         [routerLinkActiveOptions]="{ exact: true }">
+        <mat-icon>{{ item.icon }}</mat-icon>
+        <span>{{ t(item.labelKey) }}</span>
+      </a>
+    }
+  </nav>
+  <div class="settings-main">
+    <router-outlet></router-outlet>
+  </div>
+</div>

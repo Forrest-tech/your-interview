@@ -132,7 +132,11 @@ export class ShellComponent {
   }
 
   goProfile(): void {
-    this.router.navigate(['/profile']);
+    this.router.navigate(['/settings/profile']);
+  }
+
+  goSettings(): void {
+    this.router.navigate(['/settings']);
   }
 
   goAdmin(): void {

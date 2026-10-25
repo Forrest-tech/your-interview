@@ -1,7 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 
 import { PracticeApi, AiProviderPresetDto, PrepSourceSettingsDto } from '../../core/api/practice-api.service';
 import { serverFieldErrorSummary } from '../../core/api/validation-errors.helpers';
@@ -42,7 +41,7 @@ const REGION_KEY = 'practice.azureRegion';
   selector: 'app-ai-setting',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, RouterLink,
+    CommonModule, FormsModule,
     MatIconModule, MatButtonModule,
     MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatTooltipModule
   ],

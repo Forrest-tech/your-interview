@@ -1526,7 +1526,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'lang.en': { zh: 'English', en: 'English', fr: 'English' },
   'lang.fr': { zh: 'Français', en: 'Français', fr: 'Français' },
 
-  // ---------- AI 语音设置页(/account/ai-setting) ----------
+  // ---------- AI 语音设置页(/settings/ai，票 146 前为 /account/ai-setting) ----------
   // 2026-09-16(Forrest 第 6 条):该页原写死中文,与网站语言脱节。
   // 现全部接入 i18n,顶栏切语言时本页同步变化。
   // ---------- LLM 设置(面试前准备包,2026-09-18) ----------
@@ -1626,6 +1626,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   },
   'setting.back': { zh: '返回 AI 面试练习', en: 'Back to AI Practice', fr: 'Retour à la pratique IA' },
   'setting.title': { zh: 'AI 语音设置', en: 'AI Voice Settings', fr: 'Paramètres vocaux IA' },
+  // 票 146：头像菜单 Settings 项 + 设置中心页签标题（三语键）。
+  'settings.title': { zh: '设置', en: 'Settings', fr: 'Paramètres' },
   // 2026-09-16(Forrest 本轮第 6 条):设置页不再负责"选朗读引擎" ——
   // 引擎选择已归到练习页的 TTS 弹窗,本页只管 Azure 凭据。
   'setting.subtitle': {

@@ -75,6 +75,10 @@
     <button mat-menu-item (click)="goProfile()">
       <mat-icon>person</mat-icon><span>{{ t('account.profile') }}</span>
     </button>
+    <!-- 票 146：头像菜单新增 Settings 项（My Account 之后、Admin 之前）。 -->
+    <button mat-menu-item (click)="goSettings()">
+      <mat-icon>settings</mat-icon><span>{{ t('settings.title') }}</span>
+    </button>
     @if (auth.can('admin.users.read')) {
       <button mat-menu-item (click)="goAdmin()">
         <mat-icon>admin_panel_settings</mat-icon><span>{{ t('nav.admin') }}</span>

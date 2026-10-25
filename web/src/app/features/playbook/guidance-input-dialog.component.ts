@@ -49,7 +49,7 @@ export interface GuidanceInputData {
         @if (!data.resumeText.trim()) {
           <mat-hint>
             {{ t('pb.guidance.noResume') }}
-            <a routerLink="/profile" (click)="close()">{{ t('pb.guidance.goProfile') }}</a>
+            <a routerLink="/settings/profile" (click)="close()">{{ t('pb.guidance.goProfile') }}</a>
           </mat-hint>
         } @else {
           <mat-hint>{{ t('pb.guidance.resumeFromProfile') }}</mat-hint>

@@ -462,7 +462,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
 
   /** 前往 AI / Azure 设置页(任务书第三节指定的跳转链路)。 */
   goAiSetting(): void {
-    this.router.navigateByUrl('/account/ai-setting');
+    this.router.navigateByUrl('/settings/ai');
   }
 
   // ⚠️ 2026-09-16(Forrest 第 4 条):底部"提交 AI 评分"按钮已删除 ——

@@ -699,7 +699,10 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     /* ★ 票123 C-3.2:可点项取统一洗色(原为 "#f5f6f8")。 */
     .hdr-close:hover { background: var(--hover-wash); }
     .hdr-close:active { background: var(--press-wash); }
-    .detail-body { padding: 0 !important; flex: 1 1 auto !important; overflow-y: auto !important; min-height: 0 !important; }
+    /* 票 141:Material 默认 .mat-mdc-dialog-content { max-height: 65vh } 未被覆盖，
+       抽屉 100vh 时滚动区只有 65vh、底部留约 35vh 死区、滚动条到不了抽屉底。
+       抽屉本身就是全高，滚动区应占满标题下方全部剩余高度，故取消该上限。 */
+    .detail-body { padding: 0 !important; flex: 1 1 auto !important; overflow-y: auto !important; min-height: 0 !important; max-height: none !important; }
     /* ★ Simplify 真站:双栏布局 */
     .two-col { display: flex; min-height: 100%; align-items: stretch; }
     .main-col { flex: 1; min-width: 0; padding: 24px 32px; }

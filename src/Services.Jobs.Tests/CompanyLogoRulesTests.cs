@@ -50,7 +50,10 @@ public sealed class CompanyLogoRulesTests
         Assert.Equal("https://www.google.com/s2/favicons?sz=128&domain=acme.com",
             CompanyLogoRules.ResolveNewCompanyLogo(null, "acme.com"));
         Assert.Null(CompanyLogoRules.ResolveNewCompanyLogo(null, null));
-        Assert.Null(CompanyLogoRules.ResolveNewCompanyLogo("   ", "acme.com"));
+        // 票 163：空白显式等同未提供（与 ShouldFillExistingLogo 的 (null, "   ", false)
+        // 同口径），故其次 Website 派生；旧断言期望 null 与定稿 §2.6 不一致，错在测试。
+        Assert.Equal("https://www.google.com/s2/favicons?sz=128&domain=acme.com",
+            CompanyLogoRules.ResolveNewCompanyLogo("   ", "acme.com"));
     }
 
     [Theory]

@@ -16,7 +16,10 @@ public sealed record CompanyDto(Guid Id, string Name, string? Website, string? I
     string? Profile, string? ProfileSourcesJson,
     DateTimeOffset CreatedAt,
     // 票101:读时 xmin 乐观并发版本(更新回传钉版;0 = 未填充)。
-    uint Version = 0);
+    uint Version = 0,
+    // 票 150:员工规模 —— 手动补 logo 经 UpdateCompany 全量回传时须原值带回,
+    // 否则一次 logo 保存会把已填的规模清成 null。
+    int? EmployeeCount = null);
 
 /// <summary>票142 R-142-11:抓取取数结果。CandidateText 为 null 时 NotFound=true,Tried 列出实际尝试过的腿。</summary>
 public sealed record FetchCompanyProfileResult(string? CandidateText, string? SourceUrl, bool NotFound, IReadOnlyList<string> Tried);

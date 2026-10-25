@@ -129,6 +129,8 @@ export class TrackerApi {
     source?: string | null; status?: string | null; deadline?: string | null;
     companyDescription?: string | null; workAuthorization?: string | null;
     requirements?: string | null; benefits?: string | null;
+    // 票 150:解析到的真实 logo(li-logo),后端 SmartAdd 全链路透传落库。
+    logoUrl?: string | null;
   }): Observable<SmartAddResult> {
     return this.api.post<SmartAddResult>(`${TrackerApi.BASE}/applications/smart-add`, body);
   }

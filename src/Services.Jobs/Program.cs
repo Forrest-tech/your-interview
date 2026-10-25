@@ -58,6 +58,17 @@ builder.AddServiceDefaults(ServiceName, services =>
     // 2026-10-19:LinkedIn 职位页抓取(Playwright，带用户登录态)
     services.AddSingleton<YourInterview.Services.Jobs.Application.LinkedInFetcher>();
 
+    // 票 150:公司 logo 取数 —— 禁自动重定向(3xx 即失败,防重定向绕过 SSRF 校验),
+    // 超时 20 秒与 JobPageFetcher 同口径;取数失败一律返回 null 不抛异常。
+    services.AddHttpClient(YourInterview.Services.Jobs.Infrastructure.Services.CompanyLogoFetcherOptions.ClientName, http =>
+    {
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        http.Timeout = TimeSpan.FromSeconds(20);
+    }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+    services.AddScoped<YourInterview.Services.Jobs.Infrastructure.Services.ICompanyLogoFetcher,
+        YourInterview.Services.Jobs.Infrastructure.Services.CompanyLogoFetcher>();
+
     services.AddSingleton(TimeProvider.System);
     services.AddHealthChecks().AddDbContextCheck<JobsDbContext>("postgres");
 

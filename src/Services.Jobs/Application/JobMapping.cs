@@ -30,6 +30,7 @@ internal static class JobsMapping
 
     public static CompanyDto ToDto(this Company c, int applicationCount, uint version = 0) => new(
         c.Id, c.Name, c.Website, c.Industry, c.Location, c.LogoUrl, c.Notes, c.IsBlacklisted,
-        c.CompanyType, applicationCount, c.Profile, c.ProfileSourcesJson, c.CreatedAt, version);
+        c.CompanyType, applicationCount, c.Profile, c.ProfileSourcesJson, c.CreatedAt, version,
+        EmployeeCount: c.EmployeeCount);
 }
 

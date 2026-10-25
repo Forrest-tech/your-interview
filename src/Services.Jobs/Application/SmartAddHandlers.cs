@@ -211,7 +211,10 @@ public sealed record SmartAddApplicationCommand(
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
     string? CompanyDescription = null, string? WorkAuthorization = null,
-    string? Requirements = null, string? Benefits = null)
+    string? Requirements = null, string? Benefits = null,
+    // 票 150:解析到的真实 logo(li-logo)经此透传落库;此前 Body/Command 无此字段,
+    // 真实 logo 在 Smart-add 边界静默丢失,新公司只剩 favicon 派生。
+    string? LogoUrl = null)
     : IRequest<Result<SmartAddResultDto>>;
 
 public sealed record SmartAddResultDto(
@@ -231,6 +234,8 @@ public sealed class SmartAddApplicationCommandValidator
         RuleFor(x => x.Requirements).MaximumLength(JdTextLimits.MaxLength);
         RuleFor(x => x.Benefits).MaximumLength(JdTextLimits.MaxLength);
         RuleFor(x => x.CompanyDescription).MaximumLength(JdTextLimits.MaxLength);
+        // 票 150:LogoUrl 列上限 1024(JobsDbContext),超限在落库前给 400 提示。
+        RuleFor(x => x.LogoUrl).MaximumLength(1024);
     }
 }
 
@@ -263,12 +268,19 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
             // 只在链接指向公司自有站点时才把它当官网 —— LinkedIn/Indeed 这类聚合站的域名
             // 不是公司官网,存进去会让"公司官网"字段变成噪音(Logo 也会取成招聘站的图标)。
             var website = JdPasteParser.IsAggregator(request.Link) ? null : JdPasteParser.HostOf(request.Link);
+            // 票 150:新建优先用解析到的显式 logo(li-logo),其次 Website 派生。
             existing = new Company(companyName,
                 website: website,
-                logoUrl: Company.LogoUrlFromWebsite(website),
+                logoUrl: CompanyLogoRules.ResolveNewCompanyLogo(request.LogoUrl, website),
                 userId: request.UserId);
             db.Companies.Add(existing);
             created = true;
+        }
+        // 票 150:已存在公司且存量 logo 为空时,用这次解析到的显式 logo 补上;
+        // 已有值绝不覆盖(ShouldFillExistingLogo 把关)。
+        else if (CompanyLogoRules.ShouldFillExistingLogo(existing.LogoUrl, request.LogoUrl))
+        {
+            existing.SetLogoUrl(request.LogoUrl!.Trim());
         }
 
         var app = new JobApplication(existing.Id, role,

@@ -151,34 +151,11 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     return Math.max(0, Math.floor(ms / 86400000));
   }
 
-  /** 公司 Logo:优先用后端解析的,fallback 用 Clearbit 按域名猜,再失败显示首字母。 */
+  /** 公司 Logo:后端 Company.LogoUrl 透传,为空或加载失败时显示首字母色块。 */
   logoUrl(app: Application): string | null {
-    // 2026-10-19:去掉 clearbit 外部 logo，直接用首字母头像（避免控制台报错）
+    // 票 150:Clearbit 回退已于 2026-10-19 去掉(用户否决,DNS 失败刷控制台);
+    // 本方法只透传后端值,不再按域名猜任何外部 logo 地址。
     return app.companyLogoUrl || null;
-  }
-
-  /** 常见公司名 → 域名(猜错也没关系,加载失败会自动 fallback 到首字母)。 */
-  private guessDomain(name: string): string | null {
-    const n = (name || '').toLowerCase().trim();
-    const map: Record<string, string> = {
-      'td bank': 'td.com',
-      'td securities': 'td.com',
-      'thoughtstorm': 'thoughtstorm.ca',
-      'descartes': 'descartes.com',
-      'questrade': 'questrade.com',
-      'corpay': 'corpay.com',
-      'mohawk medbuy': 'mohawkmedbuy.ca',
-      'rbc': 'rbc.com',
-      'cibc': 'cibc.com',
-      'scotiabank': 'scotiabank.com',
-      'bmo': 'bmo.com',
-    };
-    for (const [k, v] of Object.entries(map)) {
-      if (n.includes(k)) return v;
-    }
-    // 通用猜测:去掉空格+特殊字符+.com
-    const clean = n.replace(/[^a-z0-9]/g, '');
-    return clean.length >= 3 ? `${clean}.com` : null;
   }
 
   /** 是否需要跟进:到了 nextFollowUpAt,或早期阶段投递超过 14 天无进展。 */

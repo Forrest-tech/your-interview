@@ -13,6 +13,22 @@ export interface InterviewStats {
   averageOverallScore?: number;
 }
 
+/** 票 150:单家 logo 刷新结果(Status ∈ Updated / Cleaned / Unchanged / NoLogoFound)。 */
+export interface RefreshLogoResult {
+  companyId: string;
+  status: string;
+  logoUrl?: string | null;
+}
+
+/** 票 150:批量回填结果(成功 / 跳过 / 失败三数 + 清洗数 + 失败公司名清单)。 */
+export interface BackfillLogosResult {
+  success: number;
+  skipped: number;
+  failed: number;
+  cleaned: number;
+  failedCompanies: string[];
+}
+
 /** 后端 CompanySummaryDto。 */
 export interface CompanySummary {
   companyId: string;
@@ -160,6 +176,21 @@ export class JobsApiService {
     return this.api.post<{
       candidateText?: string | null; sourceUrl?: string | null; notFound?: boolean; tried?: string[];
     }>(`${JobsApiService.BASE}/companies/${id}/fetch-profile`, {});
+  }
+
+  /** 票 150:更新公司基本资料(手动补 Logo URL 走此端点,无需新端点)。 */
+  updateCompany(id: string, body: unknown): Observable<void> {
+    return this.api.put(`${JobsApiService.BASE}/companies/${id}`, body);
+  }
+
+  /** 票 150:按公司显式触发 logo 刷新(LinkedIn 重提 → Website 派生)。 */
+  refreshLogo(companyId: string): Observable<RefreshLogoResult> {
+    return this.api.post<RefreshLogoResult>(`${JobsApiService.BASE}/companies/${companyId}/refresh-logo`, {});
+  }
+
+  /** 票 150:批量回填全部空 logo 公司(管理员权限;执行规模待 U-150-5 盘点后确认)。 */
+  backfillLogos(): Observable<BackfillLogosResult> {
+    return this.api.post<BackfillLogosResult>(`${JobsApiService.BASE}/companies/backfill-logos`, {});
   }
 
   // ---------- 求职信 ----------

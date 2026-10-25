@@ -565,7 +565,10 @@ export class SmartAddDialogComponent {
       companyDescription: this.jd.companyDescription || null,
       workAuthorization: this.jd.workAuthorization || null,
       requirements: this.jd.requirements || null,
-      benefits: this.jd.benefits || null
+      benefits: this.jd.benefits || null,
+      // 票 150:解析到的真实 logo(li-logo)随 Smart-add 落库;此前草稿带 logoUrl
+      // 但提交体没传,后端 Body/Command 无此字段,真实 logo 在边界静默丢失。
+      logoUrl: this.jd.logoUrl || null
     }).subscribe({
       next: (r) => {
         this.busy.set(false);

@@ -28,7 +28,8 @@ public sealed class ListCompaniesQueryHandler(JobsDbContext db)
             .Select(c => new CompanyDto(c.Id, c.Name, c.Website, c.Industry, c.Location, c.LogoUrl,
                 c.Notes, c.IsBlacklisted, c.CompanyType,
                 db.Applications.Count(a => a.CompanyId == c.Id),
-                c.Profile, c.ProfileSourcesJson, c.CreatedAt, EF.Property<uint>(c, "xmin")))
+                c.Profile, c.ProfileSourcesJson, c.CreatedAt, EF.Property<uint>(c, "xmin"),
+                c.EmployeeCount))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<CompanyDto>>(items);

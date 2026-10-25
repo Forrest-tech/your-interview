@@ -76,6 +76,12 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
           <mat-icon>archive</mat-icon>
           <span>{{ t('tracker.archive') }}</span>
         </button>
+        @if ((!app.companyLogoUrl || logoBroken()) && app.companyId) {
+          <button class="hdr-btn" (click)="refreshLogo()" [disabled]="refreshingLogo()" [matTooltip]="t('tracker.logoRefresh')">
+            <mat-icon>image_search</mat-icon>
+            <span>{{ t('tracker.logoRefresh') }}</span>
+          </button>
+        }
         <button class="hdr-btn danger" (click)="doDelete()" [matTooltip]="t('common.delete')">
           <mat-icon>delete</mat-icon>
           <span>{{ t('common.delete') }}</span>
@@ -322,6 +328,20 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
           }
         }
       </section>
+
+      <!-- 票 150:手动补 Logo URL(走现有 UpdateCompany 端点,零新端点) -->
+      @if (company()) {
+        <mat-divider></mat-divider>
+        <section>
+          <div class="sec-head"><span class="sec-title">{{ t('tracker.logoUrl') }}</span><span class="sec-sub">{{ company()?.name }}</span></div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <mat-form-field appearance="outline" style="flex:1;">
+              <input matInput [(ngModel)]="logoUrlInput" [placeholder]="t('tracker.logoUrlPh')">
+            </mat-form-field>
+            <button mat-stroked-button (click)="saveLogoUrl()" [disabled]="savingLogoUrl()">{{ t('tracker.logoSave') }}</button>
+          </div>
+        </section>
+      }
 
 
       @if ((detail.rounds?.length ?? 0) > 0) {
@@ -1309,6 +1329,11 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
   /** 公司情报(懒加载 —— 详情弹窗打开后才查一次)。 */
   readonly company = signal<Company | null>(null);
 
+  /** 票 150:单家 logo 刷新 / 手动 URL 保存的进行态与输入值。 */
+  readonly refreshingLogo = signal(false);
+  readonly savingLogoUrl = signal(false);
+  logoUrlInput = '';
+
   /** JD 全文是否展开(默认折叠:40000 字符铺开会淹没弹窗)。 */
   readonly jdExpanded = signal(false);
 
@@ -1448,7 +1473,7 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
     // 公司情报:Application 只带 companyId,要单独查
     if (this.app.companyId) {
       this.jobsApi.getCompany(this.app.companyId).subscribe({
-        next: (c) => this.company.set(c),
+        next: (c) => { this.company.set(c); this.logoUrlInput = c.logoUrl ?? ''; },
         error: () => { /* 拿不到公司情报不阻断详情展示 */ }
       });
     }
@@ -1833,6 +1858,61 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
   /** 票45 REQ-14:错误提示替代原生 alert —— 走本类既有 snack 通道,文案逐字不变。 */
   private alertError(msg: string): void {
     this.snack.open(msg, this.t('common.close'), { duration: 3000 });
+  }
+
+  /** 票 150:单家触发 logo 刷新(LinkedIn 重提 → Website 派生)。
+   *  成功取到新值时更新头部 logo 与公司记录;无来源时保持色块并提示一句,
+   *  失败时同样只提示、不刷控制台、不改现有显示。 */
+  refreshLogo(): void {
+    if (!this.app.companyId || this.refreshingLogo()) return;
+    this.refreshingLogo.set(true);
+    this.jobsApi.refreshLogo(this.app.companyId).subscribe({
+      next: (r) => {
+        this.refreshingLogo.set(false);
+        if (r.status === 'Updated' && r.logoUrl) {
+          this.app.companyLogoUrl = r.logoUrl;
+          this.logoBroken.set(false);
+          const c = this.company();
+          if (c) { this.company.set({ ...c, logoUrl: r.logoUrl }); this.logoUrlInput = r.logoUrl; }
+          this.snack.open(this.t('tracker.logoRefreshed'), this.t('common.close'), { duration: 2500 });
+        } else if (r.status === 'Cleaned') {
+          this.app.companyLogoUrl = null;
+          this.snack.open(this.t('tracker.logoCleaned'), this.t('common.close'), { duration: 2500 });
+        } else {
+          this.snack.open(this.t('tracker.logoNoSource'), this.t('common.close'), { duration: 3000 });
+        }
+      },
+      error: (err) => {
+        this.refreshingLogo.set(false);
+        this.alertError(this.readError(err));
+      },
+    });
+  }
+
+  /** 票 150:手动保存 Logo URL(走现有 UpdateCompany 端点,只换 logoUrl 其余原值回传)。 */
+  saveLogoUrl(): void {
+    const c = this.company();
+    if (!c || this.savingLogoUrl()) return;
+    const url = this.logoUrlInput.trim();
+    this.savingLogoUrl.set(true);
+    this.jobsApi.updateCompany(c.id, {
+      name: c.name, website: c.website ?? null, industry: c.industry ?? null,
+      location: c.location ?? null, logoUrl: url ? url : null, notes: c.notes ?? null,
+      companyType: c.companyType, employeeCount: c.employeeCount ?? null, isBlacklisted: c.isBlacklisted,
+      version: c.version ?? null,
+    }).subscribe({
+      next: () => {
+        this.savingLogoUrl.set(false);
+        this.app.companyLogoUrl = url ? url : null;
+        this.logoBroken.set(false);
+        this.company.set({ ...c, logoUrl: url ? url : null });
+        this.snack.open(this.t('tracker.logoSaved'), this.t('common.close'), { duration: 2500 });
+      },
+      error: (err) => {
+        this.savingLogoUrl.set(false);
+        this.alertError(this.readError(err));
+      },
+    });
   }
 
   /** 收藏与列表共用同一路径(TrackerPreferencesService)—— 不再各读各的 localStorage。 */

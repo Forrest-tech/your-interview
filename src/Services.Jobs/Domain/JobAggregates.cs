@@ -82,6 +82,16 @@ public sealed class Company : AuditableAggregateRoot
     }
 
     /// <summary>
+    /// 票 150:只改 logo 地址(回填/单家刷新/SmartAdd 补填共用)。
+    /// 与 Update 分开:回填不该要求把公司基本资料全量重传。
+    /// </summary>
+    public void SetLogoUrl(string? logoUrl)
+    {
+        LogoUrl = logoUrl;
+        Touch();
+    }
+
+    /// <summary>
     /// 按公司官网解析一个 Logo 地址(确定性,不做网络请求)。
     /// 用 Google 的 favicon 服务:输入一个能解析出 host 的网址即返回该 host 的图标,
     /// 浏览器侧再叠加"加载失败则降级为首字母头像"的兜底。

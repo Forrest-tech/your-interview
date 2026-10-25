@@ -131,9 +131,12 @@ export interface Company {
   website?: string;
   industry?: string;
   location?: string;
-  logoUrl?: string;
+  // 票 150:后端 LogoUrl 可空,详情弹窗清 logo 时会写 null,故放宽为 string | null。
+  logoUrl?: string | null;
   notes?: string;
   isBlacklisted: boolean;
+  /** 票 150:员工规模(UpdateCompany 全量回传时原值带回,防 logo 保存清掉它)。 */
+  employeeCount?: number | null;
   companyType: string;
   applicationCount: number;
   /** 公司情况长文本(规模/主营业务/技术栈/面试风格/文化/近期动态)。 */

@@ -81,6 +81,35 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 票 150:批量回填公司 logo(§2.3 甲 + §8 U-150-1 组合)。
+    /// 幂等,只处理 LogoUrl 为空的公司;先清洗存量 s2 默认图标,再按 §2.2 顺序回填。
+    /// 批量写全库公司数据,超出单家编辑的写语义,故要求 AdminSystemWrite。
+    /// 本端点不接受任何 id/URL 入参,天然免疫任意 URL 注入(A-150-10 注记)。
+    /// 执行规模待 U-150-5 的 Mac 只读盘点三数报回后确认,代码先行落地。
+    /// </summary>
+    [HttpPost("companies/backfill-logos")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminSystemWrite)]
+    public async Task<IResult> BackfillLogos(CancellationToken ct)
+    {
+        var r = await sender.Send(new BackfillLogosCommand(Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 票 150:按公司显式触发 logo 刷新(§2.3 乙)。
+    /// 路由 {id:guid} 约束:把任意 URL 当 id 传时路由即不匹配(404)、不发生任何
+    /// 站外抓取,满足 A-150-10 的“任意 URL 拒绝”口径(批量端点无入参,天然免疫)。
+    /// 权限与公司编辑同口径(JobsWrite)。
+    /// </summary>
+    [HttpPost("companies/{id:guid}/refresh-logo")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> RefreshLogo(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new RefreshLogoCommand(Me, id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     // 票68(用户裁决 B,2026-10-23):本控制器全部 DELETE 端点统一 JobsWrite 口径。
     // 默认 User 角色没有 JobsDelete(只有 PowerUser/Admin),删自己的数据是普通用户
     // 日常操作,原 JobsDelete 口径下恒 403。归属隔离由各 Handler 按 UserId 校验
@@ -388,7 +417,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         var r = await sender.Send(new SmartAddApplicationCommand(Me, body.Company, body.Role, body.Location,
             body.Salary, body.WorkMode, body.JobType, body.JdSummary, body.MatchKeywords, body.Priority,
             body.Link, body.JdText, body.Source, body.Status, body.Deadline,
-            body.CompanyDescription, body.WorkAuthorization, body.Requirements, body.Benefits), ct);
+            body.CompanyDescription, body.WorkAuthorization, body.Requirements, body.Benefits, body.LogoUrl), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(r.Value)
             : r.ToProblemDetails();
@@ -450,7 +479,9 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
         string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
         string? CompanyDescription = null, string? WorkAuthorization = null,
-        string? Requirements = null, string? Benefits = null);
+        string? Requirements = null, string? Benefits = null,
+        // 票 150:解析到的真实 logo(li-logo),落库前曾在此边界丢失。
+        string? LogoUrl = null);
 
     public sealed record LinkInviteBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
         string? Format, string? Notes);

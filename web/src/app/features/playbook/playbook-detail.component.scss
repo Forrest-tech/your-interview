@@ -265,82 +265,61 @@
   border-radius: 10px; padding: 10px 14px; font-size: 14px;
 }
 
-/* ---------- ④ Rounds Track(票135:横向;票123 R-9 的几何令牌与语义不变)---------- */
-/* 几何值读共享样式源(styles/_track-geometry.scss):16px 节点 / 2px 描边 / 2px 轨道。
-   与 Tracker 列表 stepper、Dashboard Pipeline Band、抽屉时间轴同源。 */
+/* ---------- ④ 轮次选择(票164:紧凑可选单元横向排列;点选即切换下方详情卡) ---------- */
 .rtrack {
   position: relative;
   margin-top: 8px;
   min-width: 0;
 }
 
-/* 横向滚动容器:内容超宽时横向滚动,未超宽不出现滚动条;线与点在行内一起滚。 */
+/* 横向滚动容器:内容超宽时横向滚动,未超宽不出现滚动条。 */
 .rtrack-scroll {
   overflow-x: auto;
   overflow-y: hidden;
   min-width: 0;
 }
 
-/* 轨道行:节点列左 → 右一排,列不挤压、不换行;行宽 = 内容自然宽度。 */
+/* 选择行:单元左 → 右一排,列不挤压、不换行;行宽 = 内容自然宽度。 */
 .rtrack-row {
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 40px;
+  gap: 12px;
   width: max-content;
 }
 
-/* 轨道:待决色。已完成的一段由 .fill 覆盖成 done 色。
-   起止圆心运行时测量(滚动内容坐标),left/top/width 由模板绑定。 */
-.rtrack .rail {
-  position: absolute;
-  height: var(--track-rail-width);
-  background: var(--track-rail-pending);
-}
-/* ★ 票123 C-4.3:填充段用 var(--dur)/var(--ease) 动 ——
-   动效在回应用户的动作(加一轮 / 数据到位),这是「有意义的动效」。
-   不是入场装饰:它只在填充范围真的变化时播。 */
-.rtrack .rail.fill {
-  background: var(--track-rail-done);
-  transition: width var(--dur) var(--ease);
-}
-
-/* 节点列:圆点行(16px) → 头部 → 事实行;列不挤压。 */
+/* 轮次单元:原生 button(键盘可达,焦点环走全局 :focus-visible)。
+   UA 默认按钮面(底色/边框/内边距/字形)在此全部复位,改走卡片口径。 */
 .rnode {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   flex: 0 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--yi-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rnode:hover {
+  border-color: var(--brand);
+}
+/* 选中态:品牌边框 + 品牌淡底 + 品牌色标签,与非选中项肉眼可辨。 */
+.rnode.selected {
+  border-color: var(--brand);
+  background: var(--signal-tint);
+}
+.rnode.selected .rlabel {
+  color: var(--brand);
 }
 
-/* ★ 票123 C-4.3:当前轮详情卡用 var(--dur)/var(--ease) 淡入一次。
-   填充范围变化由 .rail.fill 的 width 过渡承担,这里是内容侧的一次展开。 */
+/* ★ 票123 C-4.3:选中轮详情卡用 var(--dur)/var(--ease) 淡入一次。 */
 .rexpand {
   margin-top: 16px;
   animation: contentIn var(--dur) var(--ease);
-}
-
-/* 节点:16px 圆点 —— 与 Tracker stepper 逐字一致;入流,位于列顶。 */
-.rnode .dot {
-  flex: 0 0 auto;
-  width: var(--track-node-size);
-  height: var(--track-node-size);
-  border-radius: 50%;
-}
-.rnode .dot.reached {
-  background: var(--track-node-reached-fill);
-  border: var(--track-node-border) solid var(--track-node-reached-border);
-  box-shadow: var(--track-node-reached-halo);
-}
-.rnode .dot.hollow {
-  background: var(--track-node-future-fill);
-  border: var(--track-node-border) solid var(--track-node-future-border);
-}
-/* 「加一轮」是轨道的终点节点:虚线空心 */
-.rnode.add .dot {
-  background: var(--track-node-future-fill);
-  border: var(--track-node-border) dashed var(--track-node-future-border);
-  box-shadow: none;
 }
 
 .rhead {
@@ -349,19 +328,11 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-.rhead h3 {
-  margin: 0;
+.rlabel {
   font-family: 'Space Grotesk', Inter, sans-serif;
   font-size: 15px;
   font-weight: 600;
   color: var(--ink);
-}
-/* 票135 D-2:当前节点头部高亮 —— 圆点字形仍只 reached/hollow,高亮只在标签上:
-   品牌色 + 2px 品牌色下划线;其余节点标签保持 var(--ink)、无下划线。 */
-.rnode.current .rhead h3 {
-  color: var(--brand);
-  border-bottom: 2px solid var(--brand);
-  padding-bottom: 2px;
 }
 .stagechip {
   background: var(--signal-tint);
@@ -378,12 +349,12 @@
   color: var(--ink-2);
 }
 
-/* 事实行:Outcome / Materials / Interviewers —— 与轮次工作卡的标签/值口径一致 */
+/* 事实行:Outcome / Materials —— 与轮次工作卡的标签/值口径一致 */
 .rfacts {
   display: flex;
   align-items: center;
-  gap: 26px;
-  margin-top: 8px;
+  gap: 16px;
+  margin-top: 6px;
   flex-wrap: wrap;
 }
 .rfact { display: flex; align-items: baseline; gap: 6px; }
@@ -392,22 +363,24 @@
 .rfact .v.go { color: var(--go); }
 .rfact .v.stop { color: var(--stop); }
 
-/* 加一轮的终点卡(横向:宽度取内容自然宽度) */
-.rnode.add .addcard {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: max-content;
-  text-align: left;
-  border: var(--track-node-border) dashed var(--track-node-future-border);
+/* 「加一轮」收为行末紧凑按钮:行为与旧宽卡一致(开 intake 面板),只留主文案。 */
+.radd {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  border: 1px dashed var(--yi-border);
   border-radius: 10px;
   background: transparent;
-  color: inherit;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 11px 13px;
+  padding: 10px 12px;
 }
-.rnode.add .addcard .t { font-size: 14px; font-weight: 700; }
-.rnode.add .addcard .d { font-size: 13px; color: var(--ink-2); }
+.radd:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
 
 /* ---------- ⑤ 复盘与待办(与 Round 同属下区,仅内部分隔线,不再自起外框) ---------- */
 .tail-card {

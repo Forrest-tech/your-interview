@@ -153,7 +153,7 @@
    四格条与按钮行已移出左列,作 .zone-entry 内 .ehead 之后的通栏行:
    定稿顺序 头行 → 四格条(整行通栏) → 按钮行(上区最后一行)。 */
 .ehead-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.ehead-titles { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ehead-titles { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .ehead-titles h1 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600; line-height: 1.25; margin: 0; letter-spacing: -0.01em; }
 .ehead-company { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
 .status-badge {

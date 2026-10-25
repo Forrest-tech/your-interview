@@ -61,11 +61,12 @@
         <div class="ehead-left">
         <div class="ehead-main">
           <div class="ehead-titles">
+            <!-- 票 171：状态胶囊移到职位标题上方（原在标题/公司名之后），胶囊自身样式一字不动 -->
+            <span class="status-badge">{{ statusText() }}</span>
             <div class="ehead-name">
               <h1>{{ e.role }}</h1>
               <div class="ehead-company">{{ e.companyName }}</div>
             </div>
-            <span class="status-badge">{{ statusText() }}</span>
           </div>
           <!-- 元信息五项常驻(2026-10-21 定稿第一节,覆盖 X1 的"无值隐藏"):
                投递日期 / 来源 / 准备度 / Recruiter / 最近联系永远渲染带标签,不再分关联/未关联两套。

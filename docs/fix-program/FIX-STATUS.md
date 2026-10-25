@@ -606,3 +606,5 @@
 - **主线裁决（2026-10-25）：§9 观察项不阻塞合并** — PR 测试报告 §9 提请主线定夺：135/136/137 定稿未见独立 9.9 评分存证（台账内仅见票 124 的 9.99）。裁决：不阻塞。理由：既定分工（本夜工作规则）为功能票关闭走逐条对定稿 + 测试全绿 + 独立复测，不走打分；9.9 门辖的是研究型方案与决策建议；三票定稿→实装→独立复验均零不符通过，门要保证的验证实质已由另一机制覆盖。如用户醒后有异议，合 main 前仍可另派独立评分（评分方不得是定稿/实装方），由用户定。
 - **CI 全绿门状态（2026-10-25）** — f8342f1 的 run 以 StarStoryUpsertRace（既有竞态、非 137 回归）败北，门在该 tip 上未满足；本条台账推送移动 tip（代码与 f8342f1 逐字相同，仅文档行），新 tip 的自动 run 为下一次门机会；若新 run 亦抖动败北，醒后由用户在 Actions 页手动重跑一次。合并仍须：最终 tip 一次后端全绿 + 用户本人操作合并（硬门不变）。
 - **醒后待用户做的事（仅两件）** — ①一键建出 develop→main PR（PAT 无建 PR 权限，compare 链接与 body 已备好）；②绿 run 到位后由用户本人合 main。
+
+- **票 138 已登记 + 实装（用户令，2026-10-25 Mac 测试中）** — Tech Stack 复习热力图先隐藏（用户原话“先隐藏，不需要”）。实装：仅 2 文件 5+/1-（techstack.component.ts 加 `showReviewHeatmap = false` 开关 + 注释；techstack.component.html 把整个 heatmap-panel 包进 `@if (showReviewHeatmap)`）。隐藏而非删除：面板代码、heatmapWeeks/reviewStreak 计算、recordReview 数据记录、i18n ts.heatmap.* 键一字未动，改 true 即恢复；成熟度分布、Review due、Duplicates、筛选区均未碰。验证：tsc 0、ng build development exit 0、check-templates 25/25、Jest 24 suites / 591/591（与基线一致，无新增单测——面板无既有单测覆盖，改动为模板可见性门）。沙盒活体 DOM 核对未做（模板门 + 构建校验已覆盖，Mac 实测为终验）。本提交推后 PR #2 head 前移，合并须等新 head CI 全绿。

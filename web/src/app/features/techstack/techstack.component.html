@@ -102,7 +102,8 @@
           </div>
 
           <!-- ★ #4:FSRS 期望留存率 + 面试日复习量预测 -->
-          <!-- ★ #9:复习热力图 + 连击 -->
+          <!-- ★ #9:复习热力图 + 连击（票 138：先隐藏，showReviewHeatmap 改 true 即恢复） -->
+          @if (showReviewHeatmap) {
           <div class="heatmap-panel">
             <div class="heatmap-head">
               <span class="heatmap-title">{{ t('ts.heatmap.title') }}</span>
@@ -140,6 +141,7 @@
               </div>
             }
           </div>
+          }
         </div>
       }
       <div class="filter-header">

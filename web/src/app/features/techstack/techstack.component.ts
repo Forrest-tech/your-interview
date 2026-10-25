@@ -145,6 +145,8 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 是否进入"今日复习"专注模式:进入后隐藏列表/筛选,改走闪卡队列。 */
   readonly reviewMode = signal(false);
+  /** 票 138:复习热力图先隐藏（用户 2026-10-25 令）——面板代码保留，改 true 即恢复；数据记录（recordReview）不受影响。 */
+  readonly showReviewHeatmap = false;
   /** ★ 回收站模式:显示已删除的卡片,可恢复。 */
   readonly trashMode = signal(false);
   readonly trashItems = signal<KnowledgeItem[]>([]);

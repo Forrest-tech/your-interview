@@ -377,3 +377,99 @@ describe('票60 管线口径(适配门复刻,与 harness-60 cardFromText 同口�
     expect(extractInterviewWhen(raw)).toBe('2026-10-13 10:00');
   });
 });
+
+describe('adaptLocalOcrEmailText(票160 发件人行在先版式,全合成文本)', () => {
+  // [版式-发件人行在先] 用户报障版式:首行即发件人行(姓名 + 日期时间同行),
+  // 其后收件人行、中文主题行、Teams 会议卡行、英文正文。旧口径下主题会被
+  // 取成发件人行、之后 6 行内再无发件人行 → null;新口径须出 From/Date/Subject。
+  const SENDER_FIRST = [
+    'Alex Morgan 2026-09-15 10:20',
+    '发至 Sam Lee、Jamie Chen',
+    '会议邀请',
+    '2026-10-06 周二 15:00～16:00',
+    'Microsoft Teams Meeting',
+    'Hi Jamie,',
+    'We would like to invite you to interview for our Full Stack Developer role.',
+    'Best Regards,',
+    'Alex'
+  ].join('\n');
+  const SENDER_FIRST_ADAPTED = [
+    'Subject: 会议邀请',
+    'From: Alex Morgan',
+    'Sent: 2026-09-15 10:20',
+    '',
+    '2026-10-06 周二 15:00～16:00',
+    'Microsoft Teams Meeting',
+    'Hi Jamie,',
+    'We would like to invite you to interview for our Full Stack Developer role.',
+    'Best Regards,',
+    'Alex'
+  ].join('\n');
+  it('sender-first layout adapts with recipient line skipped', () => {
+    expect(adaptLocalOcrEmailText(SENDER_FIRST)).toBe(SENDER_FIRST_ADAPTED);
+  });
+  // [版式-发件人行星期夹] 发件人行日期与时间之间夹星期,同样切开
+  it('sender line with weekday between date and time adapts', () => {
+    const raw = 'Alex Morgan 2026-09-15 周二 10:20\n发至 Sam Lee\n会议邀请\nHi Jamie,';
+    expect(adaptLocalOcrEmailText(raw))
+      .toBe('Subject: 会议邀请\nFrom: Alex Morgan\nSent: 2026-09-15 10:20\n\nHi Jamie,');
+  });
+  // [版式-发件人行粘连] 发件人行姓名与日期时间粘连,同票60 样本2 口径
+  it('sender-first glued sender line splits identically', () => {
+    const raw = 'Alex Morgan2026-09-1510:20\n发至 Sam Lee\n会议邀请\nHi Jamie,';
+    expect(adaptLocalOcrEmailText(raw))
+      .toBe('Subject: 会议邀请\nFrom: Alex Morgan\nSent: 2026-09-15 10:20\n\nHi Jamie,');
+  });
+  // [版式-不硬造头] 发件人行在先但其后只有收件人/会议卡/平台行、无主题行 → null
+  it('sender-first without subject candidate returns null', () => {
+    const raw = [
+      'Alex Morgan 2026-09-15 10:20',
+      '发至 Sam Lee',
+      '2026-10-06 周二 15:00～16:00',
+      'Microsoft Teams Meeting'
+    ].join('\n');
+    expect(adaptLocalOcrEmailText(raw)).toBeNull();
+  });
+  // [版式-旧口径守恒] 票60 样本1(主题行在先)仍逐字同前,新路只在首行即发件人行时触发
+  it('subject-first sample1 still adapts identically', () => {
+    expect(adaptLocalOcrEmailText(SVC_TEXT)).toBe(SVC_ADAPTED);
+  });
+});
+
+describe('票160 管线口径(视觉纯转写同样过适配,门与 cardFromText 同口径)', () => {
+  // 票160 起 cardFromText 的适配门不再分来源:viaGate 本就无来源条件,
+  // 此处锁定门行为——视觉纯转写(无 Key:value 头)经门后同样出三件套。
+  // cardFromText 为组件私有方法,门逻辑由 viaGate 复刻锁定(与票60 同做法)。
+  function viaGate160(raw: string): ReturnType<typeof parsePastedEmail> {
+    let p = parsePastedEmail(raw);
+    if (!p.from && !p.date && !p.subject) {
+      const adapted = adaptLocalOcrEmailText(raw);
+      if (adapted) p = parsePastedEmail(adapted);
+    }
+    return p;
+  }
+  const VISION_TEXT = [
+    'Alex Morgan 2026-09-15 10:20',
+    '发至 Sam Lee、Jamie Chen',
+    '会议邀请',
+    '2026-10-06 周二 15:00～16:00',
+    'Microsoft Teams Meeting',
+    'Hi Jamie,',
+    'We would like to invite you to interview for our Full Stack Developer role.'
+  ].join('\n');
+  it('vision transcription without headers yields header fields and meeting when', () => {
+    const p = viaGate160(VISION_TEXT);
+    expect(p.subject).toBe('会议邀请');
+    expect(p.from).toBe('Alex Morgan');
+    expect(p.date).toBe('2026-09-15');
+    // 会议卡落在 body 内,when 抽会议卡时间而非发信时间(ISO + 星期 + 时段口径已在票57 锁定)
+    expect(extractInterviewWhen(p.body)).toBe('2026-10-06 15:00');
+  });
+  // [管线-不硬造头] 散文本经门后仍全空(失败卡 + ocrNoEmail 口径,非成卡)
+  it('prose through gate stays empty', () => {
+    const p = viaGate160('周末去公园走了走\n天气不错，拍了几张照片\n回来路上买了点水果\n明天记得带伞');
+    expect(p.from).toBe('');
+    expect(p.date).toBe('');
+    expect(p.subject).toBe('');
+  });
+});

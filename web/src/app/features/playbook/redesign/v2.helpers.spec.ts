@@ -9,7 +9,7 @@
  * 特征测试锁现状,不改被测函数行为。
  */
 import { describe, expect, it } from '@jest/globals';
-import { entryResultOutcome, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState } from './v2.helpers';
+import { entryResultOutcome, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveScoreJd, scoreTierKey } from './v2.helpers';
 
 describe('entryResultOutcome(枚举全值,源码 switch 逐值)', () => {
   // [枚举-终局] Rejected -> rejected
@@ -159,5 +159,51 @@ describe('票159 latestPrepInputAsset(最新一份为准)', () => {
   it('空/缺失输入 -> null', () => {
     expect(latestPrepInputAsset([], 'r1', PREP_INPUT_EXPERIENCES)).toBeNull();
     expect(latestPrepInputAsset(null, 'r1', PREP_INPUT_EXPERIENCES)).toBeNull();
+  });
+});
+
+/**
+ * 票 173 —— resolveScoreJd 回落链 + scoreTierKey 阈值。
+ * 回落链:投递 jdText → 投递 jdSummary → 条目 jdText → 条目 jdSummary;
+ * 前两项与 Tracker recomputeMatch 逐字一致,后两项是本票新增的回落。
+ * 档位阈值与 Tracker matchTierLabel 逐字一致:>=70 强,>=50 一般,否则弱。
+ */
+describe('resolveScoreJd(票 173 回落链)', () => {
+  it('投递 jdText 优先(即使条目 JD 也存在)', () => {
+    expect(resolveScoreJd({ jdText: 'app full', jdSummary: 'app sum' }, { jdText: 'entry full', jdSummary: 'entry sum' })).toBe('app full');
+  });
+  it('投递 jdText 为空时回落投递 jdSummary', () => {
+    expect(resolveScoreJd({ jdText: '  ', jdSummary: 'app sum' }, { jdText: 'entry full' })).toBe('app sum');
+  });
+  it('投递 JD 全空时回落条目 jdText', () => {
+    expect(resolveScoreJd({ jdText: null, jdSummary: '' }, { jdText: 'entry full', jdSummary: 'entry sum' })).toBe('entry full');
+  });
+  it('条目 jdText 为空时回落条目 jdSummary', () => {
+    expect(resolveScoreJd(null, { jdText: '', jdSummary: 'entry sum' })).toBe('entry sum');
+  });
+  it('投递未关联(application null)时条目 JD 仍可用', () => {
+    expect(resolveScoreJd(null, { jdText: 'entry full' })).toBe('entry full');
+  });
+  it('条目 JD 含 HTML 时按展示口径剥离', () => {
+    expect(resolveScoreJd(null, { jdText: '<p>entry full</p>' })).toBe('entry full');
+  });
+  it('两侧全空 -> 空串(调用方按无分处理,不编造)', () => {
+    expect(resolveScoreJd(null, null)).toBe('');
+    expect(resolveScoreJd({ jdText: '', jdSummary: '' }, { jdText: '', jdSummary: '' })).toBe('');
+  });
+});
+
+describe('scoreTierKey(票 173 档位阈值)', () => {
+  it('>=70 强匹配', () => {
+    expect(scoreTierKey(100)).toBe('tracker.dStrongMatch');
+    expect(scoreTierKey(70)).toBe('tracker.dStrongMatch');
+  });
+  it('50-69 一般匹配', () => {
+    expect(scoreTierKey(69)).toBe('tracker.dMedMatch');
+    expect(scoreTierKey(50)).toBe('tracker.dMedMatch');
+  });
+  it('<50 弱匹配', () => {
+    expect(scoreTierKey(49)).toBe('tracker.dWeakMatch');
+    expect(scoreTierKey(0)).toBe('tracker.dWeakMatch');
   });
 });

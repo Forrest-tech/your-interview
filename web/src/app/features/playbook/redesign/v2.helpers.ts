@@ -108,6 +108,36 @@ function decodeEntities(s: string): string {
 }
 
 /**
+ * 票 173:四格条 Resume Score 的 JD 输入口径 —— 与 Tracker Score 页同源同值,
+ * 但比旧实现多一层回落。旧实现只读投递记录(application)的 jdText/jdSummary:
+ * 当投递记录未关联、关联失效或其 JD 字段为空时,四格条明明展示着条目 JD
+ * (条目优先)却算不出分,显示 Not scored yet,与 Score 页的已算分数对不上。
+ * 回落链(前两项与 Tracker recomputeMatch 逐字一致,故关联正常时分值一字不动):
+ * 投递 jdText → 投递 jdSummary → 条目 jdText → 条目 jdSummary。
+ * 条目字段走与展示同一口径的 htmlToPlainText;投递字段保持 Tracker 原样不剥离。
+ * 返回 '' = 两侧 JD 全空,调用方按无分处理,绝不编造。
+ */
+export function resolveScoreJd(
+  app: { jdText?: string | null; jdSummary?: string | null } | null | undefined,
+  entry: { jdText?: string | null; jdSummary?: string | null } | null | undefined
+): string {
+  return (app?.jdText ?? '').trim()
+    || (app?.jdSummary ?? '').trim()
+    || htmlToPlainText(entry?.jdText)
+    || htmlToPlainText(entry?.jdSummary);
+}
+
+/**
+ * 票 173:分数档位标签键 —— 与 Tracker 对话框 matchTierLabel 阈值逐字一致
+ * (>=70 强匹配,>=50 一般匹配,否则弱匹配),四格条与 Score 页圆环标签同值。
+ */
+export function scoreTierKey(score: number): 'tracker.dStrongMatch' | 'tracker.dMedMatch' | 'tracker.dWeakMatch' {
+  if (score >= 70) return 'tracker.dStrongMatch';
+  if (score >= 50) return 'tracker.dMedMatch';
+  return 'tracker.dWeakMatch';
+}
+
+/**
  * 文件资产里区分真录音与截图:两者共用同一条文件管线落库(kind 都是 Audio),
  * 判别靠 contentType 优先、扩展名兜底 —— 否则截图会被当成录音塞进播放器
  * (2026-10-21 审计实测:同轮先落截图再传录音时,实录播放条指向了 PNG)。

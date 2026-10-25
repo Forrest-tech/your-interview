@@ -21,7 +21,7 @@ import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
   entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatLabel, htmlToPlainText, latestPrepInputAsset, makeV2Fmt, makeV2T,
-  PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, roundDisplayNo, sortRoundsByDate
+  PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, resolveScoreJd, roundDisplayNo, scoreTierKey, sortRoundsByDate
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
@@ -209,18 +209,26 @@ export class PlaybookDetailComponent implements OnDestroy {
    * Tracker 的分数不是落库字段 resumeScore,而是详情打开时用「有效简历文本
    * (投递版优先)+ JD(全文优先、回落摘要)」喂共享 computeMatch 现算的;
    * 这里用完全相同的输入与同一函数(core/match/resume-match),所以同值。
-   * 输入缺任一(JD 或简历文本)→ 与 Tracker 一样不出分,显示 “—”。
+   * 输入缺任一(JD 或简历文本)→ 与 Tracker 一样不出分,显示 Not scored yet。
+   * 票 173: JD 输入走 resolveScoreJd —— 前两项与 Tracker 逐字一致(关联正常时
+   * 分值一字不动),后两项回落条目 JD:旧实现只读投递 JD,投递未关联/关联失效/
+   * JD 字段为空时,四格条明明展示着条目 JD 却算不出分,与 Score 页对不上。
+   * 简历输入不动(有效简历文本 → 基础简历文本,与 Tracker 同口径)。
    */
   readonly resumeMatch = computed<MatchResult | null>(() => {
-    const app = this.application();
-    if (!app) return null;
-    const jd = (app.jdText ?? '').trim() || (app.jdSummary ?? '').trim();
+    const jd = resolveScoreJd(this.application(), this.entry());
     const resume = this.resumeFile()?.textContent ?? this.baseResumeText();
     if (!jd || !resume) return null;
     return computeMatch(resume, jd);
   });
 
   readonly resumeScore = computed(() => this.resumeMatch()?.score ?? null);
+
+  /** 票 173:分数档位标签键(与 Tracker 圆环标签同阈值同文案),无分时为 null。 */
+  readonly resumeTier = computed(() => {
+    const s = this.resumeScore();
+    return s == null ? null : scoreTierKey(s);
+  });
 
   /**
    * 票164:详情卡绑定的选中轮。

@@ -80,24 +80,35 @@ $display-font: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe
    grey = 停放。任何组件不得在令牌之外另起强调色。
    ---------------------------------------------------------------------------- */
 :root {
-  --midnight: #1b2350;
-  --brand: #2e3a8c;
-  --signal-tint: #e4e7f5;
-  --signal-soft: #c6cdea;
-  --go: #1b7f4b;
-  --go-tint: #e2f1e8;
-  --stop: #b3261e;
-  --stop-tint: #f9e8e5;
-  --attention: #8a5200;
-  --attention-tint: #faf0d2;
-  --parked: #68707e;
-  --parked-fill: #edf0f4;
-  --paper: #f5f6f8;
+  /* 配色方案 A“亮蓝轻氧”:顶栏改白色后 --midnight 壳色退役(仅顶栏用过它),
+     深色面改用 blue-900 #1e3a8a 直写;--hover-wash-dark 随深底顶栏一并退役。 */
+  --brand: #2563eb;
+  --brand-deep: #1d4ed8;
+  --signal-tint: #eff6ff;
+  --signal-soft: #dbeafe;
+  --go: #16a34a;
+  --go-deep: #15803d;
+  --go-tint: #f0fdf4;
+  --stop: #dc2626;
+  --stop-deep: #b91c1c;
+  --stop-tint: #fef2f2;
+  /* 注意:--attention 本身在全站约 30 处作正文色(含 G-DES 对比度守门单测,
+     要求 --attention 作正文 on 白/淡底/白字 on 它均 ≥4.5:1)。
+     提案表列警告主色 #d97706(amber-600),但它作正文仅 3.19:1,过不了守门;
+     故 --attention 取提案 §2.5.2 的深档 #92400e(6.84:1),与芯片文字同一值,
+     图形元素(边框/底色)随 token 同为深琥珀,色相不变。 */
+  --attention: #92400e;
+  --attention-deep: #92400e;
+  --attention-tint: #fffbeb;
+  --parked: #64748b;
+  --parked-deep: #334155;
+  --parked-fill: #f1f5f9;
+  --paper: #f6f8fb;
   --surface: #ffffff;
-  --hairline: #e1e4ec;
-  --ink: #1f2430;
-  --ink-2: #5b6270;
-  --track: #e2e5ec;
+  --hairline: #e2e8f0;
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --track: #e2e8f0;
   /* MDC 形状令牌:按钮 8 · 输入框 6 · 弹窗 14(圆角阶梯 6/10/14/999) */
   --mdc-filled-button-container-shape: 8px;
   --mdc-outlined-button-container-shape: 8px;
@@ -119,11 +130,10 @@ $display-font: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe
 
   /* ★ 票123 C-3:悬停/按压洗色 —— 受审面两种合法悬停形态共用这两个值。
      品牌色 alpha 派生(R-2 白名单规则下的 alpha 衍生,不是新颜色)。 */
-  --hover-wash: rgba(46, 58, 140, 0.06);
-  --press-wash: rgba(46, 58, 140, 0.12);
-  /* 顶栏导航在 midnight 深底上:品牌 alpha 看不见,沿用它**既有的**悬停值
-     (shell.component.scss 的 .nav-item:hover),tokenized unchanged。 */
-  --hover-wash-dark: rgba(255, 255, 255, 0.14);
+  --hover-wash: rgba(37, 99, 235, 0.06);
+  --press-wash: rgba(37, 99, 235, 0.12);
+  /* 配色方案 A:顶栏改白色后,导航悬停/激活直接用浅底规则
+     (shell.component.scss 的 .nav-item:hover/.active),不再需要深底洗色。 */
 }
 
 @include mat.core();
@@ -137,12 +147,13 @@ $display-font: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe
    Latin 走 Inter/Segoe,CJK 恒定走 苹方/思源/雅黑,与语言无关。 */
 $app-font: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', Roboto, Helvetica, Arial, sans-serif;
 
-/* 主题:票 118 —— 深靛蓝主色(自登录页品牌板生长,比 stock #3F51B5 更深一号,
-   900 即壳色 midnight)+ 琥珀强调(仅语义「需注意」场合在组件层使用)。 */
+/* 主题:配色方案 A“亮蓝轻氧” —— Tailwind blue 全档重建品牌色阶
+   (原票 118 深靛蓝 scale 已退役;600 即品牌主色 #2563eb)。
+   对比映射沿用旧表结构:50–300 深字,400–900 白字。 */
 $brand-palette: (
-  50: #eef0f9, 100: #d9ddf2, 200: #b6bee6, 300: #8e9ad6, 400: #6673c2,
-  500: #3e4da3, 600: #2e3a8c, 700: #27316f, 800: #212a5c, 900: #1b2350,
-  A100: #d9dfff, A200: #a6b4ff, A400: #7387ff, A700: #5b74ff,
+  50: #eff6ff, 100: #dbeafe, 200: #bfdbfe, 300: #93c5fd, 400: #60a5fa,
+  500: #3b82f6, 600: #2563eb, 700: #1d4ed8, 800: #1e40af, 900: #1e3a8a,
+  A100: #dbeafe, A200: #bfdbfe, A400: #60a5fa, A700: #1d4ed8,
   contrast: (
     50: rgba(0, 0, 0, 0.87), 100: rgba(0, 0, 0, 0.87), 200: rgba(0, 0, 0, 0.87),
     300: rgba(0, 0, 0, 0.87), 400: #fff, 500: #fff, 600: #fff, 700: #fff,
@@ -231,11 +242,11 @@ mat-card-subtitle { font-size: 12.5px !important; }
 
 /* ---------------- 分数色档(全站统一语义) ---------------- */
 
-.good { color: #1b7f4b; }
+.good { color: #16a34a; }
 .mid  { color: var(--attention); }
-.bad  { color: #b3261e; }
+.bad  { color: #dc2626; }
 
-mat-progress-bar.good .mdc-linear-progress__bar-inner { border-color: #1b7f4b !important; }
+mat-progress-bar.good .mdc-linear-progress__bar-inner { border-color: #16a34a !important; }
 mat-progress-bar.mid  .mdc-linear-progress__bar-inner { border-color: #e0a030 !important; }
 mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !important; }
 
@@ -253,20 +264,22 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   white-space: nowrap;
 }
 
-/* 票 118 语义色:进行中阶段一律 signal(applied/screen/interview 同一靛蓝),
-   offer = 已赢绿,rejected = 已输红,paused/withdrawn/saved = 停放灰。 */
-.chip.saved     { background: var(--parked-fill); color: var(--parked); }
-.chip.applied   { background: var(--signal-tint); color: var(--brand); }
-.chip.screen    { background: var(--signal-tint); color: var(--brand); }
-.chip.interview { background: var(--signal-tint); color: var(--brand); }
-.chip.offer     { background: var(--go-tint); color: var(--go); }
-.chip.accepted  { background: var(--go-tint); color: var(--go); }
-.chip.ghosted   { background: var(--attention-tint); color: var(--attention); }
-.chip.rejected  { background: var(--stop-tint); color: var(--stop); }
-.chip.paused    { background: var(--parked-fill); color: var(--parked); }
-.chip.withdrawn { background: var(--parked-fill); color: var(--parked); }
+/* 票 118 语义色:进行中阶段一律 signal(applied/screen/interview 同一品牌蓝),
+   offer = 已赢绿,rejected = 已输红,paused/withdrawn/saved = 停放灰。
+   配色方案 A §2.5.2:芯片一律淡底 + 深档字(不用语义主色直接作字,
+   旧彩色字 + 淡底实测 3.07–4.41:1 均未达 4.5:1)。 */
+.chip.saved     { background: var(--parked-fill); color: var(--parked-deep); }
+.chip.applied   { background: var(--signal-tint); color: var(--brand-deep); }
+.chip.screen    { background: var(--signal-tint); color: var(--brand-deep); }
+.chip.interview { background: var(--signal-tint); color: var(--brand-deep); }
+.chip.offer     { background: var(--go-tint); color: var(--go-deep); }
+.chip.accepted  { background: var(--go-tint); color: var(--go-deep); }
+.chip.ghosted   { background: var(--attention-tint); color: var(--attention-deep); }
+.chip.rejected  { background: var(--stop-tint); color: var(--stop-deep); }
+.chip.paused    { background: var(--parked-fill); color: var(--parked-deep); }
+.chip.withdrawn { background: var(--parked-fill); color: var(--parked-deep); }
 /* 票123 R-4:看板卡片的「待跟进」chip(与 .chip.ghosted 同为琥珀语义色系)。 */
-.chip.attention { background: var(--attention-tint); color: var(--attention); }
+.chip.attention { background: var(--attention-tint); color: var(--attention-deep); }
 
 /* ---------------- 空态 ---------------- */
 
@@ -284,11 +297,11 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   gap: 12px;
   padding: 14px 16px;
   margin-bottom: 16px;
-  border-left: 3px solid #b3261e !important;
+  border-left: 3px solid #dc2626 !important;
 
-  mat-icon { color: #b3261e; }
+  mat-icon { color: #dc2626; }
   strong { font-size: 14px; }
-  p { margin: 3px 0 0; font-size: 13px; color: #6b6f76; }
+  p { margin: 3px 0 0; font-size: 13px; color: #475569; }
 }
 
 /* ---------------- 表单通用 ---------------- */
@@ -323,7 +336,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 .text-block.mine { background: #f7f9fd; }
 .text-block.recommended {
   background: #f4fbf6;
-  border-color: rgba(27, 127, 75, 0.2);
+  border-color: rgba(22, 163, 74, 0.2);
 }
 
 /* ---------------- 滚动条(内容区深色细条,不抢视觉) ---------------- */
@@ -505,8 +518,11 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
    stay exactly as they are.」
    之前这两行会在聚焦瞬间把药丸与 10px 卡片的圆角**重新掰成 4px/8px** ——
    一次可见的形状跳变。轮廓跟随元素自身圆角是浏览器的默认行为,不需要我们插手。 */
+/* 配色方案 A §2.5.4:焦点环统一为品牌深档 2px 实线 + 2px 间隙
+   (蓝 700 白底 6.70:1、页面底 6.30:1,过 3:1 焦点指示线);
+   选中态 = 淡底填充 + 深档字(无环),两者叠加时共存。 */
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--brand-deep);
   outline-offset: 2px;
 }
 /* 卡片是 div,给它一个合适的焦点环形状 */

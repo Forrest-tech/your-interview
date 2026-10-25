@@ -1093,10 +1093,10 @@ export class PracticeMaterialTree {
   //   树上显示彩色圆点,之后可以直接按颜色筛选(如"把红色标的都列出来")。
   /** 颜色选项:圆点用 Notion 浅色模式图标色。 */
   readonly markColorOptions: { key: MarkColor; label: string; dot: string }[] = [
-    { key: 'none', label: 'practice.markNone', dot: '#e1e4ec' },
+    { key: 'none', label: 'practice.markNone', dot: '#e2e8f0' },
     { key: 'orange', label: 'practice.markOrange', dot: '#b06a00' },
-    { key: 'red', label: 'practice.markRed', dot: '#b3261e' },
-    { key: 'green', label: 'practice.markGreen', dot: '#2e3a8c' },
+    { key: 'red', label: 'practice.markRed', dot: '#dc2626' },
+    { key: 'green', label: 'practice.markGreen', dot: '#2563eb' },
   ];
 
   /**
@@ -1116,7 +1116,7 @@ export class PracticeMaterialTree {
 
   /** 当前颜色对应的圆点色(给 Mark 按钮的旗子图标着色)。 */
   markDot(): string {
-    return this.markColorOptions.find((c) => c.key === this.markColor())?.dot ?? '#e1e4ec';
+    return this.markColorOptions.find((c) => c.key === this.markColor())?.dot ?? '#e2e8f0';
   }
 
   /**

@@ -163,7 +163,7 @@ describe('G-DES:正文对比度 AA', () => {
     expect(m).not.toBeNull();
     const att = m![1];
     expect(ratio(att, '#ffffff')).toBeGreaterThanOrEqual(4.5);
-    expect(ratio(att, '#faf0d2')).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(att, '#fffbeb')).toBeGreaterThanOrEqual(4.5);
     expect(ratio('#ffffff', att)).toBeGreaterThanOrEqual(4.5);
   });
 

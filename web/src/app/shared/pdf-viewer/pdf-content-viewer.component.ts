@@ -61,13 +61,13 @@ import { I18nService } from '../../core/i18n/i18n.service';
     /* 滚动条:2026-10-21 设计稿确认参数,纯 webkit —— 不要加 scrollbar-width/scrollbar-color,
        Chrome 会因此忽略 ::-webkit-scrollbar 样式。 */
     .pdfv-pages::-webkit-scrollbar { width: 10px; }
-    .pdfv-pages::-webkit-scrollbar-track { background: #e1e4ec; border-radius: 5px; }
+    .pdfv-pages::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 5px; }
     .pdfv-pages::-webkit-scrollbar-thumb { background: #7d8797; border-radius: 5px; }
-    .pdfv-pages::-webkit-scrollbar-thumb:hover { background: #2e3a8c; }
-    .pdfv-page { width: 100%; background: #ffffff; flex: none;
+    .pdfv-pages::-webkit-scrollbar-thumb:hover { background: #2563eb; }
+    .pdfv-page { width: 100%; max-width: 800px; background: #ffffff; flex: none;
                  scroll-snap-align: start;
-                 box-shadow: 0 1px 4px rgba(31, 36, 48, .12); border-radius: 4px; }
-    .pdfv-loading, .pdfv-error { text-align: center; padding: 24px; color: #5b6270; }
+                 box-shadow: 0 1px 4px rgba(15, 23, 42, .12); border-radius: 4px; }
+    .pdfv-loading, .pdfv-error { text-align: center; padding: 24px; color: #475569; }
   `]
 })
 export class PdfContentViewerComponent implements OnChanges, OnDestroy {

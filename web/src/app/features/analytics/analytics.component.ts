@@ -19,7 +19,7 @@ import { hasScoredRadarData, weakestRadarPoints } from '../../core/models/radar.
 import { dimensionLabel, localizeInsight } from '../../core/i18n/localized-messages.helpers';
 
 /** 漏斗阶段的颜色档:越靠后越"贵",用同一色系由浅到深表示推进。 */
-const FUNNEL_COLORS = ['#b6bee6', '#8e9ad6', '#6673c2', '#2e3a8c', '#2e3a8c'];
+const FUNNEL_COLORS = ['#bfdbfe', '#60a5fa', '#60a5fa', '#2563eb', '#2563eb'];
 
 /**
  * 数据分析页。
@@ -228,7 +228,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
         bottom: 0,
         itemWidth: 10,
         itemHeight: 10,
-        textStyle: { fontSize: 12, color: '#5b6270' },
+        textStyle: { fontSize: 12, color: '#475569' },
         data: [curName, bestName]
       },
       radar: {
@@ -236,10 +236,10 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
         radius: '62%',
         center: ['50%', '46%'],
         splitNumber: 4,
-        axisName: { color: '#5b6270', fontSize: 12 },
-        splitLine: { lineStyle: { color: 'rgba(31, 36, 48, 0.09)' } },
-        splitArea: { areaStyle: { color: ['rgba(46, 58, 140, 0.02)', 'rgba(46, 58, 140, 0.05)'] } },
-        axisLine: { lineStyle: { color: 'rgba(31, 36, 48, 0.12)' } }
+        axisName: { color: '#475569', fontSize: 12 },
+        splitLine: { lineStyle: { color: 'rgba(15, 23, 42, 0.09)' } },
+        splitArea: { areaStyle: { color: ['rgba(37, 99, 235, 0.02)', 'rgba(37, 99, 235, 0.05)'] } },
+        axisLine: { lineStyle: { color: 'rgba(15, 23, 42, 0.12)' } }
       },
       series: [
         {
@@ -249,16 +249,16 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
             {
               value: points.map((p) => p.current),
               name: curName,
-              lineStyle: { width: 2, color: '#2e3a8c' },
-              itemStyle: { color: '#2e3a8c' },
-              areaStyle: { color: 'rgba(46, 58, 140, 0.22)' }
+              lineStyle: { width: 2, color: '#2563eb' },
+              itemStyle: { color: '#2563eb' },
+              areaStyle: { color: 'rgba(37, 99, 235, 0.22)' }
             },
             {
               value: points.map((p) => p.best),
               name: bestName,
-              lineStyle: { width: 1.5, type: 'dashed', color: '#1b7f4b' },
-              itemStyle: { color: '#1b7f4b' },
-              areaStyle: { color: 'rgba(27, 127, 75, 0.1)' }
+              lineStyle: { width: 1.5, type: 'dashed', color: '#16a34a' },
+              itemStyle: { color: '#16a34a' },
+              areaStyle: { color: 'rgba(22, 163, 74, 0.1)' }
             }
           ]
         }

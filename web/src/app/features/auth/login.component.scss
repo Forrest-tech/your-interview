@@ -7,7 +7,7 @@
 
 /* ---------- 左侧品牌区 ---------- */
 .brand-panel {
-  background: linear-gradient(160deg, #1b2350 0%, #1b2350 45%, #2e3a8c 100%);
+  background: linear-gradient(160deg, #1e3a8a 0%, #1e3a8a 45%, #2563eb 100%);
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -124,7 +124,7 @@
   align-items: center;
   justify-content: center;
   padding: 40px 24px;
-  background: #f5f6f8;
+  background: #f6f8fb;
 }
 
 .form-inner {
@@ -138,12 +138,12 @@
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.2px;
-  color: #1f2430;
+  color: #0f172a;
 }
 .form-head p {
   margin: 0;
   font-size: 14px;
-  color: rgba(31, 36, 48, 0.55);
+  color: rgba(15, 23, 42, 0.55);
 }
 
 .top-bar {
@@ -200,8 +200,8 @@ mat-form-field { margin-bottom: 2px; }
   flex: 0 0 18px;
   margin-top: 1px;
 }
-.info { background: #e2f1e8; color: #1b7f4b; }
-.err { background: #f9e8e5; color: #b3261e; }
+.info { background: #f0fdf4; color: #16a34a; }
+.err { background: #fef2f2; color: #dc2626; }
 
 .submit {
   height: 46px;
@@ -211,8 +211,8 @@ mat-form-field { margin-bottom: 2px; }
   border-radius: 8px;
 }
 .submit:disabled {
-  background: rgba(31, 36, 48, 0.08);
-  color: rgba(31, 36, 48, 0.35);
+  background: rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.35);
 }
 
 .divider {
@@ -220,7 +220,7 @@ mat-form-field { margin-bottom: 2px; }
   align-items: center;
   gap: 12px;
   margin: 22px 0 14px;
-  color: rgba(31, 36, 48, 0.45);
+  color: rgba(15, 23, 42, 0.45);
   font-size: 12.5px;
 }
 .divider::before,
@@ -228,14 +228,14 @@ mat-form-field { margin-bottom: 2px; }
   content: '';
   flex: 1;
   height: 1px;
-  background: rgba(31, 36, 48, 0.12);
+  background: rgba(15, 23, 42, 0.12);
 }
 
 .google-btn {
   height: 44px;
   font-size: 14.5px;
   border-radius: 8px;
-  border-color: rgba(31, 36, 48, 0.18);
+  border-color: rgba(15, 23, 42, 0.18);
   background: #ffffff;
 }
 .g-mark {

@@ -15,8 +15,8 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
  * 关闭值:true = 用户点了确认;其他(取消/Esc/点遮罩)一律视为不确认。
  *
  * 风格基准(与站点一致):
- *   白卡片 · 圆角 12 · 标题 15px/600 #1f2430 · 正文 13px #5b6270 ·
- *   取消=描边按钮 · 确认=实心蓝 #2e3a8c(危险操作为红 #b3261e)。
+ *   白卡片 · 圆角 12 · 标题 15px/600 #0f172a · 正文 13px #475569 ·
+ *   取消=描边按钮 · 确认=实心蓝 #2563eb(危险操作为红 #dc2626)。
  */
 export interface ConfirmDialogData {
   title: string;
@@ -77,12 +77,12 @@ export interface ConfirmDialogData {
   styles: [`
     .cf-wrap { padding: 22px 22px 18px; }
     .cf-head { display: flex; align-items: center; gap: 10px; }
-    .cf-icon { font-size: 22px; width: 22px; height: 22px; color: #2e3a8c; }
-    .cf-icon.is-danger { color: #b3261e; }
-    .cf-title { font-size: 15px; font-weight: 600; color: #1f2430; line-height: 1.4; }
+    .cf-icon { font-size: 22px; width: 22px; height: 22px; color: #2563eb; }
+    .cf-icon.is-danger { color: #dc2626; }
+    .cf-title { font-size: 15px; font-weight: 600; color: #0f172a; line-height: 1.4; }
     .cf-body {
       margin: 10px 0 0 32px;
-      font-size: 13px; line-height: 1.65; color: #5b6270;
+      font-size: 13px; line-height: 1.65; color: #475569;
     }
     /* 按钮文字永不折行 —— 放不下时整颗按钮换到下一行,
        而不是把「Discard & reload」挤成两行高的怪按钮(2026-09-25 实测翻车)。 */
@@ -102,23 +102,23 @@ export interface ConfirmDialogData {
     .cf-three .cf-cancel { order: 2; }
     .cf-three .cf-discard { order: 3; margin-top: 2px; }
     .cf-discard {
-      --mdc-text-button-label-text-color: #5b6270;
+      --mdc-text-button-label-text-color: #475569;
       border-radius: 8px;
     }
     .cf-discard.is-danger {
-      --mdc-text-button-label-text-color: #b3261e;
+      --mdc-text-button-label-text-color: #dc2626;
     }
     .cf-cancel {
-      --mdc-outlined-button-label-text-color: #5b6270;
-      --mdc-outlined-button-outline-color: #e1e4ec;
+      --mdc-outlined-button-label-text-color: #475569;
+      --mdc-outlined-button-outline-color: #e2e8f0;
       border-radius: 8px;
     }
     .cf-ok {
-      --mdc-filled-button-container-color: #2e3a8c;
+      --mdc-filled-button-container-color: #2563eb;
       border-radius: 8px;
     }
     .cf-ok.is-danger {
-      --mdc-filled-button-container-color: #b3261e;
+      --mdc-filled-button-container-color: #dc2626;
     }
   `]
 })

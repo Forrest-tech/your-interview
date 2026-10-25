@@ -119,11 +119,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     .err {
       display: flex; align-items: center; gap: 6px;
       margin-top: 8px; padding: 8px 12px; border-radius: 6px;
-      background: #f9e8e5; color: #b3261e; font-size: 13px;
+      background: #fef2f2; color: #dc2626; font-size: 13px;
     }
     .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
     /* 票106(C5):字段级校验提示(对齐票12/75 .field-error 口径) */
-    .field-error { color: #b3261e; font-size: 12px; margin: -14px 0 10px 2px; }
+    .field-error { color: #dc2626; font-size: 12px; margin: -14px 0 10px 2px; }
   `]
 })
 export class AdminUserDialogComponent {

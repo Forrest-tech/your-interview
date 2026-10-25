@@ -149,20 +149,20 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
     </div>
   `,
   styles: [`
-    .cat-hint { margin: 0 0 12px; font-size: 12.5px; color: #68707e; }
+    .cat-hint { margin: 0 0 12px; font-size: 12.5px; color: #64748b; }
 
     .cat-list { display: flex; flex-direction: column; gap: 4px; }
     .cat-row {
       display: flex; align-items: center; gap: 4px;
       padding: 4px 6px;
       background: #ffffff;
-      border: 1px solid #e1e4ec;
+      border: 1px solid #e2e8f0;
       border-radius: 8px;
     }
-    .cat-row.confirming { border-color: #f9e8e5; background: #f9e8e5; }
+    .cat-row.confirming { border-color: #fef2f2; background: #fef2f2; }
 
     .drag-handle {
-      cursor: grab; color: #e1e4ec;
+      cursor: grab; color: #e2e8f0;
       font-size: 18px; width: 18px; height: 18px;
     }
     .drag-handle:active { cursor: grabbing; }
@@ -171,36 +171,36 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
     .cat-name {
       flex: 1; min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-size: 13.5px; color: #1f2430;
+      font-size: 13.5px; color: #0f172a;
       cursor: default;
     }
     .cat-edit {
       flex: 1; min-width: 0;
       height: 28px; padding: 0 8px;
       font-size: 13px;
-      border: 1px solid #2e3a8c; border-radius: 6px;
+      border: 1px solid #2563eb; border-radius: 6px;
       outline: none;
     }
 
     .spacer { flex: 1; }
 
-    .confirm-text { font-size: 12px; color: #b3261e; white-space: nowrap; }
-    .del-yes { color: #b3261e !important; }
+    .confirm-text { font-size: 12px; color: #dc2626; white-space: nowrap; }
+    .del-yes { color: #dc2626 !important; }
 
-    .cat-empty { margin: 4px 0 10px; font-size: 13px; color: #68707e; }
+    .cat-empty { margin: 4px 0 10px; font-size: 13px; color: #64748b; }
 
     /* ★ 未分类系统行:锁图标 + 灰调,不可拖/不可删 */
-    .cat-row.cat-system { margin-top: 8px; background: #e4e7f5; border-style: dashed; }
-    .sys-lock { color: #e1e4ec; font-size: 18px; width: 18px; height: 18px; }
-    .sys-note { font-size: 11.5px; color: #68707e; white-space: nowrap; }
+    .cat-row.cat-system { margin-top: 8px; background: #eff6ff; border-style: dashed; }
+    .sys-lock { color: #e2e8f0; font-size: 18px; width: 18px; height: 18px; }
+    .sys-note { font-size: 11.5px; color: #64748b; white-space: nowrap; }
 
     /* ★ 导入模板区 */
     .cat-import {
       margin-top: 12px; padding-top: 12px;
-      border-top: 1px solid #edf0f4;
+      border-top: 1px solid #f1f5f9;
     }
     .cat-import-title {
-      font-size: 12.5px; font-weight: 600; color: #5b6270;
+      font-size: 12.5px; font-weight: 600; color: #475569;
       margin-bottom: 8px;
     }
     .cat-import-row { display: flex; align-items: center; gap: 8px; }
@@ -208,30 +208,30 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
       flex: 1; min-width: 0;
       height: 32px; padding: 0 8px;
       font-size: 13px; font-family: inherit;
-      border: 1px solid #e1e4ec; border-radius: 6px;
-      outline: none; background: #ffffff; color: #1f2430;
+      border: 1px solid #e2e8f0; border-radius: 6px;
+      outline: none; background: #ffffff; color: #0f172a;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .cat-tpl-select:focus { border-color: #2e3a8c; box-shadow: 0 0 0 2px rgba(46, 58, 140, .14); }
-    .cat-tpl-desc { margin: 6px 2px 0; font-size: 12px; color: #68707e; }
+    .cat-tpl-select:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, .14); }
+    .cat-tpl-desc { margin: 6px 2px 0; font-size: 12px; color: #64748b; }
 
     .cat-add {
       display: flex; align-items: center; gap: 8px;
       margin-top: 14px; padding-top: 12px;
-      border-top: 1px solid #edf0f4;
+      border-top: 1px solid #f1f5f9;
     }
     .cat-new {
       flex: 1; min-width: 0;
       height: 32px; padding: 0 10px;
       font-size: 13px;
-      border: 1px solid #e1e4ec; border-radius: 6px;
+      border: 1px solid #e2e8f0; border-radius: 6px;
       outline: none;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .cat-new:focus { border-color: #2e3a8c; box-shadow: 0 0 0 2px rgba(46, 58, 140, .14); }
+    .cat-new:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, .14); }
 
     .cdk-drag-preview {
-      box-shadow: 0 4px 14px rgba(31, 36, 48, .16);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, .16);
       border-radius: 8px;
     }
     .cdk-drag-placeholder { opacity: .35; }

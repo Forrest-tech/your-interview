@@ -55,7 +55,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
     .err {
       display: flex; align-items: center; gap: 6px;
       margin-top: 4px; padding: 8px 12px; border-radius: 6px;
-      background: #f9e8e5; color: #b3261e; font-size: 13px;
+      background: #fef2f2; color: #dc2626; font-size: 13px;
     }
     .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
   `]

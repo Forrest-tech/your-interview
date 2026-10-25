@@ -275,11 +275,11 @@ describe('票137 状态机与模板三态（源码对照，活体作主证）', 
     }
   });
 
-  it('scss：未播放柱色不再等于条带底色 #e2f1e8（第二成因已修）', () => {
+  it('scss：未播放柱色不再等于条带底色 #f0fdf4（第二成因已修）', () => {
     const scss = fs.readFileSync(path.join(__dirname, 'ai-practice.component.scss'), 'utf8');
     const barBlock = scss.slice(scss.indexOf('.ws-bar {'));
     const bgLine = barBlock.split('\n').find((l) => l.includes('background:'));
     expect(bgLine).toBeDefined();
-    expect(bgLine).not.toContain('#e2f1e8');
+    expect(bgLine).not.toContain('#f0fdf4');
   });
 });

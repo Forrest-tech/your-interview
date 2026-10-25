@@ -186,7 +186,7 @@ import { textLengthError } from '../../core/api/validation-errors.helpers';
     .qa-row {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       padding: 10px 12px; margin-bottom: 4px; border-radius: 8px;
-      background: rgba(46, 58, 140, 0.06); border: 1px solid rgba(46, 58, 140, 0.16);
+      background: rgba(37, 99, 235, 0.06); border: 1px solid rgba(37, 99, 235, 0.16);
     }
     .qa-row .qa-hint { font-size: 12.5px; opacity: 0.7; }
     .qa-row mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; vertical-align: middle; }

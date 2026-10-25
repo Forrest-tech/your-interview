@@ -588,8 +588,8 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
           <div class="score-side">
             <div class="gauge-wrap">
               <svg class="gauge" viewBox="0 0 190 190" width="190" height="190">
-                <circle cx="95" cy="95" r="80" fill="none" stroke="#e1e4ec" stroke-width="16"/>
-                <circle cx="95" cy="95" r="80" fill="none" stroke="#2e3a8c" stroke-width="16"
+                <circle cx="95" cy="95" r="80" fill="none" stroke="#e2e8f0" stroke-width="16"/>
+                <circle cx="95" cy="95" r="80" fill="none" stroke="#2563eb" stroke-width="16"
                         stroke-linecap="round" [attr.stroke-dasharray]="gaugeArc(m.score)"
                         transform="rotate(-90 95 95)"/>
               </svg>
@@ -797,7 +797,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .drawer-resize-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
       z-index: 10; cursor: ew-resize; outline: none; }
     .drawer-resize-handle::before { content: ''; position: absolute; left: 2px; top: 0; bottom: 0;
-      width: 2px; background: var(--brand, #2e3a8c); opacity: 0; transition: opacity .15s; }
+      width: 2px; background: var(--brand, #2563eb); opacity: 0; transition: opacity .15s; }
     .drawer-resize-handle:hover::before, .drawer-resize-handle:focus-visible::before,
     .drawer-resize-handle.dragging::before { opacity: 1; }
     /* ★ Simplify 对齐:头部标题堆叠 */
@@ -805,11 +805,11 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     h2[mat-dialog-title].detail-header {
       display: flex; align-items: flex-start; gap: 16px;
       margin: 0; padding: 24px 32px 20px;
-      border-bottom: 1px solid #e1e4ec;
+      border-bottom: 1px solid #e2e8f0;
     }
     h2 .title-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-    h2 .main-title { font-size: 20px; font-weight: 700; line-height: 1.3; color: #1f2430; }
-    h2 .sub-title { font-size: 15px; font-weight: 400; color: #5b6270; }
+    h2 .main-title { font-size: 20px; font-weight: 700; line-height: 1.3; color: #0f172a; }
+    h2 .sub-title { font-size: 15px; font-weight: 400; color: #475569; }
     .detail-header .logo-wrap { flex: 0 0 62px; width: 62px; height: 62px; }
     .detail-header .logo-avatar { width: 62px; height: 62px; border-radius: 10px; font-size: 22px; }
     .detail-header .logo { width: 62px; height: 62px; border-radius: 10px; }
@@ -817,21 +817,21 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .hdr-btn {
       display: inline-flex; align-items: center; gap: 8px;
       height: 38px; padding: 0 16px;
-      background: #ffffff; border: 1px solid #e1e4ec; border-radius: 8px;
-      font-size: 14px; color: #1f2430; cursor: pointer;
+      background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;
+      font-size: 14px; color: #0f172a; cursor: pointer;
     }
-    .hdr-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #5b6270; }
-    /* ★ 票123 C-3.2:可点项取统一洗色(原为 "#f5f6f8")。 */
+    .hdr-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #475569; }
+    /* ★ 票123 C-3.2:可点项取统一洗色(原为 "#f6f8fb")。 */
     .hdr-btn:hover { background: var(--hover-wash); }
     .hdr-btn:active { background: var(--press-wash); }
-    .hdr-btn.danger { border-color: #b3261e; color: #b3261e; }
-    .hdr-btn.danger mat-icon { color: #b3261e; }
+    .hdr-btn.danger { border-color: #dc2626; color: #dc2626; }
+    .hdr-btn.danger mat-icon { color: #dc2626; }
     .hdr-close {
       display: inline-flex; align-items: center; justify-content: center;
       width: 38px; height: 38px; border: none; background: none; cursor: pointer;
-      color: #1f2430; border-radius: 8px;
+      color: #0f172a; border-radius: 8px;
     }
-    /* ★ 票123 C-3.2:可点项取统一洗色(原为 "#f5f6f8")。 */
+    /* ★ 票123 C-3.2:可点项取统一洗色(原为 "#f6f8fb")。 */
     .hdr-close:hover { background: var(--hover-wash); }
     .hdr-close:active { background: var(--press-wash); }
     /* 票 141:Material 默认 .mat-mdc-dialog-content { max-height: 65vh } 未被覆盖，
@@ -844,18 +844,18 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .side-col {
       flex: 0 0 360px; width: 360px;
       padding: 24px 32px 24px 0;
-      border-left: 1px solid #e1e4ec;
+      border-left: 1px solid #e2e8f0;
       margin-left: 32px; padding-left: 32px;
     }
     .status-card {
-      background: #ffffff; border: 1px solid #e1e4ec; border-radius: 10px;
+      background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;
       padding: 24px; margin-bottom: 24px;
     }
-    .status-card h3 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; color: #1f2430; margin: 0 0 16px; }
+    .status-card h3 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; color: #0f172a; margin: 0 0 16px; }
     .status-select {
       width: 100%; height: 40px; padding: 0 16px;
-      border: 1px solid #e1e4ec; border-radius: 8px;
-      font-size: 14px; color: #1f2430; background: #ffffff;
+      border: 1px solid #e2e8f0; border-radius: 8px;
+      font-size: 14px; color: #0f172a; background: #ffffff;
       margin-bottom: 20px; cursor: pointer;
     }
     /* 票123 R-9:抽屉时间轴迁移到共享几何源(styles/_track-geometry.scss)——
@@ -880,67 +880,67 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
       background: var(--track-node-reached-fill);
       box-shadow: var(--track-node-reached-halo);
     }
-    .tl-name { font-size: 14px; font-weight: 600; color: #1f2430; }
-    .tl-item:not(.done) .tl-name { font-weight: 500; color: #5b6270; }
-    .tl-date { font-size: 13px; color: #68707e; margin-left: 8px; }
+    .tl-name { font-size: 14px; font-weight: 600; color: #0f172a; }
+    .tl-item:not(.done) .tl-name { font-weight: 500; color: #475569; }
+    .tl-date { font-size: 13px; color: #64748b; margin-left: 8px; }
     .tl-edit { margin-left: 8px; color: var(--brand); cursor: pointer; font-size: 14px; }
     .notes-card {
-      background: #ffffff; border: 1px solid #e1e4ec; border-radius: 10px;
+      background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;
       padding: 24px;
     }
-    .notes-card h3 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; color: #1f2430; margin: 0 0 16px; }
+    .notes-card h3 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; color: #0f172a; margin: 0 0 16px; }
     .notes-card .nc-head { display: flex; align-items: center; justify-content: space-between; }
     .tab-body { padding: 24px 32px; box-sizing: border-box; }
     .tab-body > section:first-child { margin-top: 0; }
     .top { margin-bottom: 14px; }
     .chip { font-size: 12px; }
-    .rejection { margin: 6px 0 0; font-size: 13px; color: #b3261e; }
+    .rejection { margin: 6px 0 0; font-size: 13px; color: #dc2626; }
     /* ★ Simplify 对齐:状态 pill (灰色圆角) */
     .status-pill {
       display: inline-block; padding: 6px 16px; border-radius: 999px;
-      background: rgba(31, 36, 48, 0.06); font-size: 13px; font-weight: 500;
+      background: rgba(15, 23, 42, 0.06); font-size: 13px; font-weight: 500;
       margin-right: 8px; margin-bottom: 4px;
     }
-    .status-pill.warn { background: #faf0d2; color: #b06a00; }
+    .status-pill.warn { background: #fffbeb; color: #b06a00; }
     /* ★ Simplify 对齐:字段两列,标签小灰字在上 */
     .fields {
       display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px;
       margin: 0 0 24px;
     }
     .field { display: flex; flex-direction: column; gap: 4px; }
-    .flabel { font-size: 12px; color: rgba(31, 36, 48, 0.45); letter-spacing: 0.2px; }
+    .flabel { font-size: 12px; color: rgba(15, 23, 42, 0.45); letter-spacing: 0.2px; }
     .fvalue { font-size: 14px; line-height: 1.5; }
     .fvalue.missing, .pre.missing { color: var(--ink-2); }
     .kw-gap { margin: 0 0 20px; }
     .kw-gap .flabel { display: block; margin-bottom: 8px; }
     /* ---- Simplify 视觉:section 统一 ---- */
     section { margin: 0; padding: 18px 0; }
-    section + section, mat-divider + section { border-top: 1px solid rgba(31, 36, 48, 0.08); }
+    section + section, mat-divider + section { border-top: 1px solid rgba(15, 23, 42, 0.08); }
     mat-divider { display: none; }
     .sec-head {
       display: flex; align-items: center; gap: 6px;
       margin: 0 0 16px; font-size: 17px; font-weight: 700;
-      color: #1f2430; letter-spacing: 0;
+      color: #0f172a; letter-spacing: 0;
     }
     .sec-head .edit-btn { margin-left: auto; }
     /* 票123 R-3:公司情报的标题与公司名分列(中点清扫)。 */
-    .sec-head .sec-sub { font-size: 14px; font-weight: 500; color: #5b6270; }
+    .sec-head .sec-sub { font-size: 14px; font-weight: 500; color: #475569; }
     /* ---- 2026-10-19:Simplify 像素级 Resume Score ---- */
     .score-tab { padding: 24px 28px; }
     .score-cols { display: flex; gap: 24px; align-items: flex-start; }
     .score-jd-card {
       flex: 1.2; min-width: 0;
-      border: 1px solid #e1e4ec; border-radius: 10px; overflow: hidden;
+      border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;
       background: #ffffff;
     }
     .score-jd-head {
       display: flex; align-items: center; gap: 8px;
-      padding: 14px 20px; background: #f5f6f8;
-      border-bottom: 1px solid #e1e4ec;
-      font-size: 15px; font-weight: 700; color: #1f2430;
+      padding: 14px 20px; background: #f6f8fb;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 15px; font-weight: 700; color: #0f172a;
     }
-    .score-jd-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: #68707e; }
-    .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #1f2430; max-height: 560px; overflow-y: auto; }
+    .score-jd-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: #64748b; }
+    .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #0f172a; max-height: 560px; overflow-y: auto; }
     .score-jd-body p { margin: 0 0 12px; }
     /* 票 139：Score 卡片内复用 Overview 的节结构——.jd-subhead/.jd-list 原只在
        .about-job 下有样式，卡片内须另给同值规则；字号沿卡片 13.5px 继承。 */
@@ -948,9 +948,9 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .score-jd-body .jd-subhead:first-child { margin-top: 0; }
     .score-jd-body .jd-list { margin: 0 0 16px; padding-left: 20px; }
     .score-jd-body .jd-list li { margin: 0 0 8px; line-height: 1.6; }
-    .score-jd-body .dim { color: #68707e; }
+    .score-jd-body .dim { color: #475569; }
     .hl-kw {
-      color: #2e3a8c; background: #e4e7f5; border-radius: 999px;
+      color: #2563eb; background: #eff6ff; border-radius: 999px;
       padding: 1px 6px; font-weight: 600; white-space: nowrap;
     }
     .score-side { flex: 1; min-width: 0; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -960,43 +960,43 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
       position: absolute; inset: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
     }
-    .gauge-num { font-size: 52px; font-weight: 800; color: #1f2430; line-height: 1; }
+    .gauge-num { font-size: 52px; font-weight: 800; color: #0f172a; line-height: 1; }
     .gauge-pill {
       font-size: 12px; font-weight: 700; border-radius: 999px; padding: 4px 12px;
     }
-    .gauge-pill.good { background: #e2f1e8; color: #1b7f4b; }
-    .gauge-pill.fair { background: #faf0d2; color: #b06a00; }
-    .gauge-pill.poor { background: #f9e8e5; color: #b3261e; }
+    .gauge-pill.good { background: #f0fdf4; color: #16a34a; }
+    .gauge-pill.fair { background: #fffbeb; color: #b06a00; }
+    .gauge-pill.poor { background: #fef2f2; color: #dc2626; }
     .score-banner {
       display: flex; align-items: center; gap: 10px;
       width: 100%; border-radius: 10px; padding: 14px 18px;
-      font-size: 14px; color: #1f2430;
+      font-size: 14px; color: #0f172a;
     }
-    .score-banner.ok { background: #e2f1e8; }
-    .score-banner.warn { background: #faf0d2; }
+    .score-banner.ok { background: #f0fdf4; }
+    .score-banner.warn { background: #fffbeb; }
     .score-banner mat-icon { font-size: 24px; width: 24px; height: 24px; flex-shrink: 0; }
-    .score-banner.ok mat-icon { color: #1b7f4b; }
+    .score-banner.ok mat-icon { color: #16a34a; }
     .score-banner.warn mat-icon { color: #b06a00; }
     .kw-card {
-      width: 100%; border: 1px solid #e1e4ec; border-radius: 10px;
+      width: 100%; border: 1px solid #e2e8f0; border-radius: 10px;
       padding: 20px; background: #ffffff;
     }
-    .kw-card-title { font-size: 15px; font-weight: 700; color: #1f2430; margin: 0 0 16px; }
+    .kw-card-title { font-size: 15px; font-weight: 700; color: #0f172a; margin: 0 0 16px; }
     .kw-pills { display: flex; flex-wrap: wrap; gap: 8px; }
     .kw-pill {
       font-size: 13px; font-weight: 500; border-radius: 999px; padding: 6px 14px;
     }
-    .kw-pill.miss { background: #f9e8e5; color: #b3261e; }
-    .kw-pill.hit { background: #e2f1e8; color: #1b7f4b; }
+    .kw-pill.miss { background: #fef2f2; color: #dc2626; }
+    .kw-pill.hit { background: #f0fdf4; color: #16a34a; }
     .about-job-edit { display: flex; justify-content: flex-end; margin: 0 0 8px; }
     .about-job-edit .edit-btn { margin: 0; }
     .about-job .jd-subhead {
       margin: 22px 0 10px; font-size: 14px; font-weight: 700;
-      color: #1f2430;
+      color: #0f172a;
     }
-    .about-job p { margin: 0 0 16px; line-height: 1.7; font-size: 14px; color: #1f2430; }
+    .about-job p { margin: 0 0 16px; line-height: 1.7; font-size: 14px; color: #0f172a; }
     .about-job .jd-list { margin: 0 0 16px; padding-left: 20px; }
-    .about-job .jd-list li { margin: 0 0 8px; line-height: 1.6; font-size: 14px; color: #1f2430; }
+    .about-job .jd-list li { margin: 0 0 8px; line-height: 1.6; font-size: 14px; color: #0f172a; }
     /* LinkedIn 风格:长描述默认折叠 */
     .about-job-body.collapsed { max-height: 320px; overflow: hidden; position: relative; }
     .about-job-body.collapsed::after {
@@ -1007,41 +1007,41 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .doc-filename {
       display: flex; align-items: center; gap: 8px;
       font-weight: 600; font-size: 14px; margin: 12px 0;
-      color: #1f2430;
+      color: #0f172a;
     }
-    .doc-filename mat-icon { color: #b3261e; }
+    .doc-filename mat-icon { color: #dc2626; }
     .resume-text-view {
       white-space: pre-wrap; word-break: break-word;
       /* 票123 R-1.6:<pre> 的 UA 默认 font-family 是 monospace,
          这会让简历正文读数成等宽(与全站正文声音不符)。显式 inherit 回正文栈。 */
       font-family: inherit;
-      font-size: 13px; line-height: 1.6; color: #1f2430;
-      background: #f5f6f8; border: 1px solid #e1e4ec; border-radius: 8px;
+      font-size: 13px; line-height: 1.6; color: #0f172a;
+      background: #f6f8fb; border: 1px solid #e2e8f0; border-radius: 8px;
       padding: 12px 14px; margin: 12px 0; max-height: 480px; overflow: auto;
     }
     .doc-pdf-viewer {
-      width: 100%; height: 700px; border: 1px solid #e1e4ec;
-      border-radius: 8px; background: #f5f6f8;
+      width: 100%; height: 700px; border: 1px solid #e2e8f0;
+      border-radius: 8px; background: #f6f8fb;
     }
     .more-link {
       background: none; border: none; padding: 4px 0; cursor: pointer;
-      color: #5b6270; font-size: 14px; font-weight: 500;
+      color: #475569; font-size: 14px; font-weight: 500;
     }
-    .more-link:hover { color: #2e3a8c; text-decoration: underline; }
+    .more-link:hover { color: #2563eb; text-decoration: underline; }
     .teal-link {
-      color: #2e3a8c; font-weight: 500; text-decoration: none;
+      color: #2563eb; font-weight: 500; text-decoration: none;
       display: inline-flex; align-items: center; gap: 6px;
     }
     .teal-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
     .teal-link:hover { text-decoration: underline; }
     .import-jd-btn {
-      margin-left: 8px; font-size: 13px; color: #2e3a8c;
+      margin-left: 8px; font-size: 13px; color: #2563eb;
       padding: 2px 8px; min-width: 0; line-height: 1.5;
     }
     .import-jd-btn mat-icon { font-size: 14px; width: 14px; height: 14px; margin-right: 4px; }
     .jd-body { margin-top: 24px; }
-    .jd-body p { font-size: 14px; color: #1f2430; line-height: 1.57; margin: 0 0 14px; }
-    .jd-body .dim { color: #68707e; }
+    .jd-body p { font-size: 14px; color: #0f172a; line-height: 1.57; margin: 0 0 14px; }
+    .jd-body .dim { color: #64748b; }
     section h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.3px; opacity: 0.7; }
     .pre { margin: 0; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
     .history { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.9; }
@@ -1054,11 +1054,11 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .rounds { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.8; }
     .tag {
       display: inline-block; margin-left: 6px; padding: 1px 7px;
-      border-radius: 10px; background: rgba(31, 36, 48, 0.06); font-size: 11.5px;
+      border-radius: 10px; background: rgba(15, 23, 42, 0.06); font-size: 11.5px;
     }
-    .tag.outcome-pass { background: #e2f1e8; color: #1b7f4b; }
-    .tag.outcome-fail { background: #f9e8e5; color: #b3261e; }
-    .link { font-size: 13px; word-break: break-all; color: #2e3a8c; }
+    .tag.outcome-pass { background: #f0fdf4; color: #16a34a; }
+    .tag.outcome-fail { background: #fef2f2; color: #dc2626; }
+    .link { font-size: 13px; word-break: break-all; color: #2563eb; }
     /* ---- 匹配分析 ---- */
     .match-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
     .score {
@@ -1067,13 +1067,13 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     }
     .score-num { font-size: 26px; line-height: 1; }
     .score-unit { font-size: 12px; }
-    .score.good { background: #e2f1e8; color: #1b7f4b; }
-    .score.fair { background: #faf0d2; color: #b06a00; }
-    .score.poor { background: #f9e8e5; color: #b3261e; }
+    .score.good { background: #f0fdf4; color: #16a34a; }
+    .score.fair { background: #fffbeb; color: #b06a00; }
+    .score.poor { background: #fef2f2; color: #dc2626; }
     .score-note { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
-    .score-note strong.good { color: #1b7f4b; }
+    .score-note strong.good { color: #16a34a; }
     .score-note strong.fair { color: #b06a00; }
-    .score-note strong.poor { color: #b3261e; }
+    .score-note strong.poor { color: #dc2626; }
     .score-note span { opacity: 0.6; }
     .kw-group { margin-bottom: 12px; }
     .kw-title { display: block; font-size: 11.5px; opacity: 0.55; margin-bottom: 6px; }
@@ -1082,14 +1082,14 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
       padding: 2px 9px; border-radius: 999px; font-size: 12px;
       border: 1px solid transparent;
     }
-    .kw.miss { background: #f9e8e5; color: #b3261e; border-color: #f9e8e5; }
-    .kw.ok { background: #e2f1e8; color: #1b7f4b; border-color: #e2f1e8; }
+    .kw.miss { background: #fef2f2; color: #dc2626; border-color: #fef2f2; }
+    .kw.ok { background: #f0fdf4; color: #16a34a; border-color: #f0fdf4; }
     .soft-note { margin: 8px 0 0; font-size: 12px; opacity: 0.55; line-height: 1.6; }
     /* ---- JD 全文折叠 ---- */
     .fold-head { cursor: default; }
     .fold-head > span:first-child { display: flex; align-items: center; gap: 6px; }
     .fold-head:hover { opacity: 1; }
-    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(31, 36, 48, 0.45); }
+    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(15, 23, 42, 0.45); }
     .fold-len { font-size: 11.5px; opacity: 0.45; font-weight: 400; }
     /* Documents tab 简历区:右侧操作按钮 */
     .doc-actions { margin-left: auto; display: flex; gap: 4px; align-items: center; }
@@ -1101,7 +1101,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .jd-peek { opacity: 0.65; }
     .src-link {
       display: inline-flex; align-items: center; gap: 4px;
-      font-size: 12.5px; color: #2e3a8c; margin-bottom: 8px;
+      font-size: 12.5px; color: #2563eb; margin-bottom: 8px;
     }
     .src-link mat-icon { font-size: 15px; width: 15px; height: 15px; }
     /* ---- 求职信 ---- */
@@ -1109,15 +1109,15 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
       margin-left: 6px; padding: 1px 8px; border-radius: 10px;
       font-size: 11px; font-weight: 500;
     }
-    .cl-status.cl-draft { background: rgba(31, 36, 48, 0.07); }
-    .cl-status.cl-generated { background: #e4e7f5; color: #2e3a8c; }
-    .cl-status.cl-final { background: #e2f1e8; color: #1b7f4b; }
+    .cl-status.cl-draft { background: rgba(15, 23, 42, 0.07); }
+    .cl-status.cl-generated { background: #eff6ff; color: #2563eb; }
+    .cl-status.cl-final { background: #f0fdf4; color: #16a34a; }
     .cl-hint {
       display: flex; align-items: flex-start; gap: 6px;
       margin: 0 0 10px; padding: 9px 11px; border-radius: 8px;
-      background: #faf0d2; font-size: 12.5px; line-height: 1.6;
+      background: #fffbeb; font-size: 12.5px; line-height: 1.6;
     }
-    .cl-hint.stale { background: #e4e7f5; }
+    .cl-hint.stale { background: #eff6ff; }
     .cl-hint mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
     .cl-extra { width: 100%; margin-bottom: 4px; }
     .cl-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
@@ -1127,12 +1127,12 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .cl-editor {
       width: 100%; margin-top: 10px; padding: 12px;
       font-family: inherit; font-size: 13.5px; line-height: 1.7;
-      border: 1px solid rgba(31, 36, 48, 0.18); border-radius: 8px;
+      border: 1px solid rgba(15, 23, 42, 0.18); border-radius: 8px;
       resize: vertical; box-sizing: border-box;
     }
     .cl-preview {
       margin-top: 10px; padding: 14px 16px; border-radius: 8px;
-      background: rgba(31, 36, 48, 0.028); font-size: 13.5px; line-height: 1.75;
+      background: rgba(15, 23, 42, 0.028); font-size: 13.5px; line-height: 1.75;
       white-space: pre-wrap; word-break: break-word;
       max-height: 420px; overflow-y: auto;
     }
@@ -1141,7 +1141,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .warn-banner {
       display: flex; align-items: flex-start; gap: 8px;
       margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
-      background: #faf0d2; border: 1px solid #faf0d2;
+      background: #fffbeb; border: 1px solid #fffbeb;
       font-size: 12.5px; line-height: 1.6; color: #b06a00;
     }
     .warn-banner mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
@@ -1149,18 +1149,18 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .plain-area {
       width: 100%; box-sizing: border-box;
       padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.6;
-      border: 1px solid rgba(31, 36, 48, 0.2); border-radius: 8px; resize: vertical;
+      border: 1px solid rgba(15, 23, 42, 0.2); border-radius: 8px; resize: vertical;
       background: #ffffff; color: inherit;
     }
     /* 票123 C-2.2:原来 ":focus" 直接 "outline: none",键盘用户看不到焦点在哪。
        现在保留既有的 border-color 线索,并在 :focus-visible 上补回全站共享焦点环。 */
     .plain-area:focus { border-color: var(--brand); }
     .plain-area:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-    .plain-area::placeholder { color: rgba(31, 36, 48, 0.35); }
-    .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(31, 36, 48, 0.45); line-height: 1.5; }
+    .plain-area::placeholder { color: rgba(15, 23, 42, 0.35); }
+    .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(15, 23, 42, 0.45); line-height: 1.5; }
     /* 票75:字段级校验提示(对齐票12 Knowledge 弹窗 .field-error 口径:红色 12px、贴字段下方) */
-    .field-error { color: #b3261e; font-size: 12px; margin: -14px 0 10px 2px; }
-    .field-error-plain { color: #b3261e; font-size: 12px; margin: 4px 0 8px 2px; }
+    .field-error { color: #dc2626; font-size: 12px; margin: -14px 0 10px 2px; }
+    .field-error-plain { color: #dc2626; font-size: 12px; margin: 4px 0 8px 2px; }
     .gen-btn { margin: 2px 0 4px; }
     .gen-btn[disabled] { opacity: 0.5; }
 
@@ -1183,20 +1183,20 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     /* ★ Simplify 真站:5 tab */
     .tabs {
       display: flex; gap: 30px; margin: 0; padding: 0 32px;
-      border-bottom: 1px solid #e1e4ec;
+      border-bottom: 1px solid #e2e8f0;
     }
     .tab {
       appearance: none; background: none; border: none; cursor: pointer;
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 14px 2px; font-size: 14px; color: #68707e;
+      padding: 14px 2px; font-size: 14px; color: #64748b;
       border-bottom: 3px solid transparent; margin-bottom: -1px;
     }
     .tab mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .tab:hover { color: #1f2430; }
-    .tab.active { color: #1f2430; font-weight: 600; border-bottom-color: #1f2430; }
+    .tab:hover { color: #0f172a; }
+    .tab.active { color: #0f172a; font-weight: 600; border-bottom-color: #0f172a; }
     .tab-placeholder {
       display: flex; flex-direction: column; align-items: center; gap: 12px;
-      padding: 60px 32px; color: #68707e;
+      padding: 60px 32px; color: #64748b;
     }
     .tab-placeholder mat-icon { font-size: 48px; width: 48px; height: 48px; opacity: 0.4; }
     .tab-placeholder p { font-size: 16px; margin: 0; }
@@ -1206,7 +1206,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .comms-empty { font-size: 13px; opacity: 0.55; margin: 4px 0 0; }
     .comm-form {
       padding: 12px; margin-bottom: 14px; border-radius: 10px;
-      background: rgba(31, 36, 48, 0.025); border: 1px solid rgba(31, 36, 48, 0.08);
+      background: rgba(15, 23, 42, 0.025); border: 1px solid rgba(15, 23, 42, 0.08);
     }
     .comm-form mat-form-field { width: 100%; }
     .comm-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -1215,23 +1215,23 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .comm-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
     .comm-item {
       display: flex; gap: 10px; align-items: flex-start;
-      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(31, 36, 48, 0.08);
+      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(15, 23, 42, 0.08);
     }
     .comm-type {
       flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px;
-      background: rgba(31, 36, 48, 0.06);
+      background: rgba(15, 23, 42, 0.06);
     }
-    .comm-type.ct-email { background: #e4e7f5; color: #2e3a8c; }
-    .comm-type.ct-call { background: #e2f1e8; color: #1b7f4b; }
-    .comm-type.ct-interview { background: #faf0d2; color: #b06a00; }
-    .comm-type.ct-message { background: #e4e7f5; color: #2e3a8c; }
-    .comm-type.ct-note { background: #e1e4ec; color: #5b6270; }
+    .comm-type.ct-email { background: #eff6ff; color: #2563eb; }
+    .comm-type.ct-call { background: #f0fdf4; color: #16a34a; }
+    .comm-type.ct-interview { background: #fffbeb; color: #b06a00; }
+    .comm-type.ct-message { background: #eff6ff; color: #2563eb; }
+    .comm-type.ct-note { background: #e2e8f0; color: #475569; }
     .comm-body { flex: 1; min-width: 0; }
     .comm-subject { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
     .comm-content { margin: 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
     .comm-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 11.5px; opacity: 0.6; }
     .comm-actions { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
-    .comm-actions .danger { color: #b3261e; }
+    .comm-actions .danger { color: #dc2626; }
 
     /* ---- 自备问题 (Questions, G-07) ---- */
     /* ★ 票74:q-* 原在 tracker.component.scss,票52 拆分抽屉时漏迁 —— 封装作用域
@@ -1240,13 +1240,13 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
        .q-text 另加换行约束(min-width:0 + overflow-wrap:anywhere +
        word-break:break-word,与本文件 .comm-content/.pre 口径一致)。 */
     .q-empty {
-      text-align: center; padding: 32px 16px; color: rgba(31, 36, 48, 0.45);
+      text-align: center; padding: 32px 16px; color: rgba(15, 23, 42, 0.45);
     }
     .q-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.4; }
     .q-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
     .q-item {
       display: flex; align-items: flex-start; gap: 12px;
-      padding: 12px 14px; border: 1px solid rgba(31, 36, 48, 0.08);
+      padding: 12px 14px; border: 1px solid rgba(15, 23, 42, 0.08);
       border-radius: 8px; background: #ffffff;
     }
     .q-num {
@@ -1259,7 +1259,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
       overflow-wrap: anywhere; word-break: break-word;
     }
     .q-del { flex: 0 0 auto; opacity: 0.5; }
-    .q-del:hover { opacity: 1; color: #b3261e; }
+    .q-del:hover { opacity: 1; color: #dc2626; }
     .q-add-form { margin-bottom: 16px; }
     .q-add-form .full { width: 100%; }
     .q-add-actions { display: flex; gap: 8px; margin-top: 8px; }
@@ -1643,7 +1643,7 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
       out += esc(text.slice(last, m.index));
-      out += `<span class="hl-kw" style="color:#2e3a8c;background:#e4e7f5;border-radius:999px;padding:1px 6px;font-weight:600;white-space:nowrap">${esc(m[0])}</span>`;
+      out += `<span class="hl-kw" style="color:#1d4ed8;background:#eff6ff;border-radius:999px;padding:1px 6px;font-weight:600;white-space:nowrap">${esc(m[0])}</span>`;
       last = m.index + m[0].length;
     }
     out += esc(text.slice(last));

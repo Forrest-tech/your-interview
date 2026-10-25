@@ -24,10 +24,10 @@
   height: 60px;
   padding: 0 16px;
   gap: 6px;
-  /* 票 118:壳色 = midnight —— 登录页品牌板的深靛蓝进壳,比主色再深一号;
-     底边以一道更深的墨线收口,不用投影「浮」在纸面上。 */
-  background: var(--midnight) !important;
-  border-bottom: 1px solid #1b2350;
+  /* 配色方案 A:顶栏改白色 + 发丝底边,导航字走墨色,当前项用品牌淡色 pill;
+     旧 midnight 深底规则(深底洗色/白字反白)一并退役。 */
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--hairline);
   box-shadow: none;
   z-index: 10;
 }
@@ -55,6 +55,11 @@
   font-weight: 600;
   letter-spacing: 0;
 }
+
+/* 配色方案 A 辨识点:品牌字标双色 —— “Your”墨色 + “Interview”品牌蓝分段,
+   零 token 成本,不改任何组件配色,不为独特加第二种彩色。 */
+.brand-your { color: var(--ink); }
+.brand-interview { color: var(--brand); }
 
 /* 横向主导航:模块全在顶部 */
 .mainnav {
@@ -88,16 +93,16 @@
   white-space: nowrap;
 }
 
-/* ★ 票123 C-3.1:顶栏在 midnight 深底上 —— 品牌 alpha 的洗色在深底上
-   看不见,所以这里用深底专属的 `--hover-wash-dark`,值就是它原本的
-   `rgba(255,255,255,0.14)`(tokenized unchanged,不是新色)。 */
+/* 配色方案 A:顶栏改浅底后,导航悬停用品牌 alpha 洗色,当前项用品牌淡色 pill
+   (淡底填充 + 深档字,无环;与 §2.5.4 选中态规则一致)。 */
 .nav-item:hover {
-  background: var(--hover-wash-dark);
+  background: var(--hover-wash);
   opacity: 1;
 }
 
 .nav-item.active {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--signal-tint);
+  color: var(--brand-deep);
   opacity: 1;
   font-weight: 600;
 }
@@ -122,6 +127,8 @@
   overflow: visible;
 }
 
+/* 配色方案 A:顶栏改浅底后,头像圆标由白透底改品牌淡蓝底(墨字),
+   否则白透底在白顶栏上不可见;悬停加深一档。 */
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -129,7 +136,8 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
+  background: #dbeafe;
+  color: var(--brand-deep);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.3px;
@@ -137,7 +145,7 @@
 }
 
 .account-btn:hover .avatar {
-  background: rgba(255, 255, 255, 0.45);
+  background: #bfdbfe;
 }
 
 /* 头像图片(M2.2):Google 登录用户顶栏直接显示其头像。
@@ -148,7 +156,7 @@
   border-radius: 50%;
   object-fit: cover;
   display: block;
-  background: rgba(255, 255, 255, 0.28);
+  background: #dbeafe;
 }
 
 .menu-avatar-img {
@@ -158,7 +166,7 @@
   border-radius: 50%;
   object-fit: cover;
   display: block;
-  background: rgba(46, 58, 140, 0.12);
+  background: rgba(37, 99, 235, 0.12);
 }
 
 /* 菜单头部:头像 + 姓名 + 角色(角色文字只在菜单里出现) */
@@ -178,8 +186,8 @@
   height: 34px;
   flex: 0 0 34px;
   border-radius: 50%;
-  background: rgba(46, 58, 140, 0.12);
-  color: #2e3a8c;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
   font-size: 14px;
   font-weight: 700;
 }
@@ -204,7 +212,7 @@
 .sidebar {
   flex: 0 0 200px;
   width: 200px;
-  border-right: 1px solid rgba(31, 36, 48, 0.09);
+  border-right: 1px solid rgba(15, 23, 42, 0.09);
   padding: 10px 8px;
   display: flex;
   flex-direction: column;
@@ -224,14 +232,14 @@
   border: 0;
   background: transparent;
   cursor: pointer;
-  color: #68707e;
+  color: #64748b;
   border-radius: 6px;
   padding: 4px;
   margin-bottom: 6px;
   display: inline-flex;
 }
 
-.side-toggle:hover { background: rgba(31, 36, 48, 0.06); }
+.side-toggle:hover { background: rgba(15, 23, 42, 0.06); }
 
 .side-item {
   display: flex;
@@ -243,7 +251,7 @@
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
-  color: #1f2430;
+  color: #0f172a;
   font-size: 14px;
   line-height: 1.2;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
@@ -253,13 +261,13 @@
 }
 
 /* ★ 票123 C-3.2:侧边栏是**白底**,所以取品牌 alpha 洗色即可。
-   (深色的是顶栏那条 midnight 横条,不是侧边栏 —— 定稿 R3 更正过这一点。) */
+   (配色方案 A:顶栏亦改浅底,深底横条已不存在。) */
 .side-item:hover { background: var(--hover-wash); }
 .side-item:active { background: var(--press-wash); }
 
 .side-item.active {
-  background: rgba(46, 58, 140, 0.12);
-  color: #2e3a8c;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
   font-weight: 600;
 }
 
@@ -314,8 +322,8 @@
    ============================================================ */
 .app-footer {
   flex: 0 0 auto;
-  background-color: #1f2430;
-  color: #68707e;
+  background-color: #0f172a;
+  color: #64748b;
   /* Forrest 第十一轮:还是太高 → 再压。ynwac 实测约 90-110px 总高。 */
   padding: 20px 24px;
   font-size: 13px;
@@ -339,7 +347,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  color: #f5f6f8;
+  color: #f6f8fb;
   font-size: 14px;
   font-weight: 700;
 }
@@ -347,7 +355,7 @@
   font-size: 18px;
   width: 18px;
   height: 18px;
-  color: #68707e;
+  color: #64748b;
 }
 
 /* 链接组 */
@@ -359,12 +367,12 @@
   flex-wrap: wrap;
 }
 .f-links a {
-  color: #e1e4ec;
+  color: #e2e8f0;
   text-decoration: none;
   transition: color var(--dur) var(--ease);
 }
 .f-links a:hover { color: #ffffff; }
-.f-dot { color: #1f2430; }
+.f-dot { color: #0f172a; }
 
 /* 联系 + 地址:同一行居中的两个小块 */
 .f-meta {
@@ -378,7 +386,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #e1e4ec;
+  color: #e2e8f0;
   text-decoration: none;
   transition: color var(--dur) var(--ease);
 }
@@ -388,7 +396,7 @@
   font-size: 15px;
   width: 15px;
   height: 15px;
-  color: #68707e;
+  color: #64748b;
   flex: 0 0 auto;
 }
 .f-addr {
@@ -412,13 +420,13 @@
 }
 .f-legal {
   margin: 0;
-  color: #68707e;
+  color: #64748b;
   font-size: 12px;
   max-width: 760px;
 }
 .f-copy {
   margin: 0;
-  color: #68707e;
+  color: #64748b;
   font-size: 12px;
   white-space: nowrap;
 }

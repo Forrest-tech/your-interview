@@ -178,14 +178,14 @@ const ROUND_STAGES = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Fina
     h2[mat-dialog-title] { display: flex; align-items: center; gap: 6px; }
     .src-box {
       margin: 6px 0 4px; padding: 10px 12px; border-radius: 8px;
-      background: rgba(46, 58, 140, 0.05); border: 1px solid rgba(46, 58, 140, 0.16);
+      background: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.16);
     }
-    .src-box .src-title { display: block; font-size: 12.5px; font-weight: 600; color: #2e3a8c; }
+    .src-box .src-title { display: block; font-size: 12.5px; font-weight: 600; color: #2563eb; }
     .src-box .src-hint { display: block; font-size: 11.5px; opacity: .65; margin: 2px 0 8px; }
-    .field-error { color: #b3261e; font-size: 12px; margin: -14px 0 10px 2px; }
+    .field-error { color: #dc2626; font-size: 12px; margin: -14px 0 10px 2px; }
     .save-error {
-      color: #b3261e; font-size: 12.5px; margin-top: 8px;
-      padding: 8px 10px; border-radius: 6px; background: rgba(179, 38, 30, 0.06);
+      color: #dc2626; font-size: 12.5px; margin-top: 8px;
+      padding: 8px 10px; border-radius: 6px; background: rgba(220, 38, 38, 0.06);
     }
   `]
 })

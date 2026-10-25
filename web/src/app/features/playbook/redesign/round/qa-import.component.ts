@@ -85,23 +85,23 @@ const BEHAVIORAL_HINTS = [
     .qa-import { padding: 4px 2px; }
     .qi-head { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
     .qi-title { font-size: 16px; font-weight: 600; }
-    .qi-sub { font-size: 13px; color: var(--yi-text-muted, #5b6270); margin: 3px 0 0; max-width: 560px; }
+    .qi-sub { font-size: 13px; color: var(--yi-text-muted, #475569); margin: 3px 0 0; max-width: 560px; }
     .spacer { flex: 1; }
-    .notice { font-size: 13px; color: var(--yi-text-muted, #5b6270); }
-    .empty { font-size: 14px; color: var(--yi-text-muted, #5b6270); padding: 12px 0; }
-    .cand { display: flex; gap: 6px; border: 1px solid var(--yi-border, #e1e4ec);
+    .notice { font-size: 13px; color: var(--yi-text-muted, #475569); }
+    .empty { font-size: 14px; color: var(--yi-text-muted, #475569); padding: 12px 0; }
+    .cand { display: flex; gap: 6px; border: 1px solid var(--yi-border, #e2e8f0);
             border-radius: 10px; padding: 10px 12px; margin: 9px 0; }
     .cand-main { flex: 1; }
     .cand-q { font-size: 14px; font-weight: 600; }
-    .cand-score { font-size: 12px; font-weight: 700; color: var(--yi-accent, #2e3a8c); margin-left: 8px; }
-    .in-tag { font-size: 12px; font-weight: 700; color: #1b7f4b; border: 1px solid #e2f1e8;
+    .cand-score { font-size: 12px; font-weight: 700; color: var(--yi-accent, #2563eb); margin-left: 8px; }
+    .in-tag { font-size: 12px; font-weight: 700; color: #16a34a; border: 1px solid #f0fdf4;
               border-radius: 999px; padding: 1px 7px; margin-left: 8px; }
-    .cand-by { font-size: 13px; color: var(--yi-text-muted, #5b6270); margin-top: 2px; }
-    .cand-a { font-size: 14px; line-height: 1.55; color: var(--yi-text-muted, #5b6270); margin-top: 4px;
+    .cand-by { font-size: 13px; color: var(--yi-text-muted, #475569); margin-top: 2px; }
+    .cand-a { font-size: 14px; line-height: 1.55; color: var(--yi-text-muted, #475569); margin-top: 4px;
               display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .cand-cat { display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
-                color: var(--yi-text-muted, #5b6270); margin-top: 7px; }
-    .fld.sm { border: 1px solid var(--yi-border, #e1e4ec); border-radius: 6px; padding: 4px 8px;
+                color: var(--yi-text-muted, #475569); margin-top: 7px; }
+    .fld.sm { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 6px; padding: 4px 8px;
               font-size: 14px; background: transparent; color: inherit; }
   `]
 })

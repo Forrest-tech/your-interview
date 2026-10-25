@@ -1,5 +1,5 @@
 /* ★ 票124:素材回收站对话框样式。
-   与全站同一套设计令牌:白卡片、细边框 #e1e4ec、中性灰阶、主蓝 #2e3a8c
+   与全站同一套设计令牌:白卡片、细边框 #e2e8f0、中性灰阶、主蓝 #2563eb
    (与 material-transfer-dialog 同源)。不引入新设计语言、不引入新颜色。 */
 
 /* ---------- 根容器:撑满弹窗表面 ---------- */
@@ -17,7 +17,7 @@
   gap: 10px;
   margin: 0;
   padding: 14px 16px 12px 18px;
-  border-bottom: 1px solid #edf0f4;
+  border-bottom: 1px solid #f1f5f9;
   flex: 0 0 auto;
 }
 
@@ -25,13 +25,13 @@
   font-size: 20px;
   width: 20px;
   height: 20px;
-  color: #2e3a8c;
+  color: #2563eb;
 }
 
 .tr-head-title {
   font-size: 15px;
   font-weight: 600;
-  color: #1f2430;
+  color: #0f172a;
 }
 
 /* 标题行里的顶层项计数(与入口徽标同一口径:顶层项数,不是行数总数)。 */
@@ -44,7 +44,7 @@
   padding: 0 6px;
   border-radius: 10px;
   background: #f0f2f7;
-  color: #68707e;
+  color: #64748b;
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
@@ -55,7 +55,7 @@
 }
 
 .tr-close {
-  color: #68707e;
+  color: #64748b;
 }
 
 /* ---------- 内容区 ---------- */
@@ -85,7 +85,7 @@
 }
 
 .tr-error-ico {
-  color: #b3261e;
+  color: #dc2626;
   font-size: 22px;
   width: 22px;
   height: 22px;
@@ -93,7 +93,7 @@
 
 .tr-error-text {
   margin: 0;
-  color: #68707e;
+  color: #64748b;
   font-size: 13px;
 }
 
@@ -102,7 +102,7 @@
   margin: 0;
   padding: 32px 0;
   text-align: center;
-  color: #68707e;
+  color: #64748b;
   font-size: 13px;
 }
 
@@ -118,13 +118,13 @@
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #e1e4ec;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   background: #ffffff;
 }
 
 .tr-item-ico {
-  color: #68707e;
+  color: #64748b;
   font-size: 18px;
   width: 18px;
   height: 18px;
@@ -139,7 +139,7 @@
 .tr-item-name {
   font-size: 13px;
   font-weight: 600;
-  color: #1f2430;
+  color: #0f172a;
   /* 溢出省略(长名不撑破布局) */
   overflow: hidden;
   text-overflow: ellipsis;
@@ -153,7 +153,7 @@
   gap: 4px;
   margin-top: 3px;
   font-size: 12px;
-  color: #68707e;
+  color: #64748b;
 }
 
 .tr-meta-path {
@@ -179,7 +179,7 @@
   padding: 1px 7px;
   border-radius: 9px;
   background: #f0f2f7;
-  color: #68707e;
+  color: #64748b;
   font-size: 11px;
   line-height: 1.6;
 }

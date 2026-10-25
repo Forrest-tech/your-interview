@@ -39,7 +39,7 @@
   // 已到达(reached):品牌色实心 + 品牌色描边 + 4px 光晕
   --track-node-reached-fill: var(--brand);
   --track-node-reached-border: var(--brand);
-  --track-node-reached-halo: 0 0 0 4px rgba(46, 58, 140, 0.14);
+  --track-node-reached-halo: 0 0 0 4px rgba(37, 99, 235, 0.14);
 
   // 未到达(future):空心 + 未来描边色
   --track-node-future-fill: #ffffff;
@@ -48,11 +48,11 @@
   // 终局裁决(go / stop):空心 + 裁决色描边 + 裁决色光晕
   --track-node-go-fill: #ffffff;
   --track-node-go-border: var(--go);
-  --track-node-go-halo: 0 0 0 4px rgba(27, 127, 75, 0.15);
+  --track-node-go-halo: 0 0 0 4px rgba(22, 163, 74, 0.15);
 
   --track-node-stop-fill: #ffffff;
   --track-node-stop-border: var(--stop);
-  --track-node-stop-halo: 0 0 0 4px rgba(179, 38, 30, 0.13);
+  --track-node-stop-halo: 0 0 0 4px rgba(220, 38, 38, 0.13);
 
   --track-node-attention-fill: #ffffff;
   --track-node-attention-border: var(--attention);
@@ -64,7 +64,7 @@
 
   // ---- 轨道颜色 ----
   --track-rail-pending: rgba(0, 0, 0, 0.12);
-  --track-rail-done: rgba(46, 58, 140, 0.45);
+  --track-rail-done: rgba(37, 99, 235, 0.45);
 
   // ---- 断口(阶段序列与终局裁决之间)----
   --track-break-color: #c3c9d4;

@@ -33,7 +33,7 @@ mat-card { border-radius: 8px; }
   font-size: 24px;
   width: 24px;
   height: 24px;
-  color: #2e3a8c;
+  color: #2563eb;
   opacity: 0.75;
   flex: 0 0 auto;
 }
@@ -48,13 +48,13 @@ mat-card { border-radius: 8px; }
 ::ng-deep .tabs .mat-mdc-tab-header {
   border-radius: 8px 8px 0 0;
   background: #ffffff;
-  border: 1px solid rgba(31, 36, 48, 0.07);
+  border: 1px solid rgba(15, 23, 42, 0.07);
   border-bottom: none;
 }
 
 ::ng-deep .tabs .mat-mdc-tab-body-wrapper {
   background: #ffffff;
-  border: 1px solid rgba(31, 36, 48, 0.07);
+  border: 1px solid rgba(15, 23, 42, 0.07);
   border-top: none;
   border-radius: 0 0 8px 8px;
 }
@@ -115,7 +115,7 @@ mat-card { border-radius: 8px; }
 
 .data-table td.col-actions { padding-right: 4px; }
 
-.ok { color: #1b7f4b; }
+.ok { color: #16a34a; }
 
 .detail-cell {
   max-width: 320px;
@@ -125,7 +125,7 @@ mat-card { border-radius: 8px; }
   opacity: 0.7;
 }
 
-.danger { color: #b3261e; }
+.danger { color: #dc2626; }
 
 .muted { opacity: 0.42; }
 
@@ -139,8 +139,8 @@ mat-card { border-radius: 8px; }
   font-weight: 600;
 }
 
-.status-pill.on { background: rgba(27, 127, 75, 0.14); color: #1b7f4b; }
-.status-pill.off { background: rgba(31, 36, 48, 0.07); color: #5b6270; }
+.status-pill.on { background: rgba(22, 163, 74, 0.14); color: #16a34a; }
+.status-pill.off { background: rgba(15, 23, 42, 0.07); color: #475569; }
 
 .mini-chip {
   --mdc-chip-label-text-size: 11px;
@@ -161,18 +161,18 @@ mat-card { border-radius: 8px; }
   border-radius: 10px;
   font-size: 11.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: rgba(31, 36, 48, 0.06);
-  color: #5b6270;
+  background: rgba(15, 23, 42, 0.06);
+  color: #475569;
 }
 
-.act-danger { background: rgba(179, 38, 30, 0.12); color: #b3261e; }
-.act-create { background: rgba(27, 127, 75, 0.13); color: #1b7f4b; }
-.act-update { background: rgba(46, 58, 140, 0.12); color: #2e3a8c; }
+.act-danger { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+.act-create { background: rgba(22, 163, 74, 0.13); color: #16a34a; }
+.act-update { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
 .act-auth { background: rgba(176, 106, 0, 0.2); color: var(--attention); }
-.act-other { background: rgba(31, 36, 48, 0.06); color: #5b6270; }
+.act-other { background: rgba(15, 23, 42, 0.06); color: #475569; }
 
 /* 管理员特权动作单独一色 —— 审计时最该被先挑出来的就是这类 */
-.act-admin { background: rgba(46, 58, 140, 0.14); color: #2e3a8c; font-weight: 600; }
+.act-admin { background: rgba(37, 99, 235, 0.14); color: #2563eb; font-weight: 600; }
 
 /* 成功的绿点 / 失败的红点:比一列文字更快扫出异常 */
 .res-dot {
@@ -184,8 +184,8 @@ mat-card { border-radius: 8px; }
   vertical-align: middle;
 }
 
-.res-ok { background: #1b7f4b; }
-.res-fail { background: #b3261e; }
+.res-ok { background: #16a34a; }
+.res-fail { background: #dc2626; }
 
 /* ---------- 行内标记 ---------- */
 
@@ -195,8 +195,8 @@ mat-card { border-radius: 8px; }
   padding: 0 6px;
   border-radius: 8px;
   font-size: 10.5px;
-  background: rgba(46, 58, 140, 0.12);
-  color: #2e3a8c;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
 }
 
 .flag-pill {
@@ -209,7 +209,7 @@ mat-card { border-radius: 8px; }
 }
 
 .flag-pill.warn { background: rgba(176, 106, 0, 0.2); color: var(--attention); }
-.flag-pill.danger { background: rgba(179, 38, 30, 0.14); color: #b3261e; }
+.flag-pill.danger { background: rgba(220, 38, 38, 0.14); color: #dc2626; }
 
 /* ---------- 角色卡 ---------- */
 
@@ -224,7 +224,7 @@ mat-card { border-radius: 8px; }
   user-select: none;
 }
 
-.role-head:hover { background: rgba(31, 36, 48, 0.02); }
+.role-head:hover { background: rgba(15, 23, 42, 0.02); }
 
 .expand { font-size: 20px; width: 20px; height: 20px; opacity: 0.5; flex: 0 0 auto; }
 
@@ -253,8 +253,8 @@ mat-card { border-radius: 8px; }
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
-  background: rgba(31, 36, 48, 0.07);
-  color: #5b6270;
+  background: rgba(15, 23, 42, 0.07);
+  color: #475569;
   flex: 0 0 auto;
 }
 
@@ -270,7 +270,7 @@ mat-card { border-radius: 8px; }
 
 .role-perms {
   padding: 4px 16px 16px 46px;
-  border-top: 1px dashed rgba(31, 36, 48, 0.08);
+  border-top: 1px dashed rgba(15, 23, 42, 0.08);
   padding-top: 12px;
 }
 
@@ -289,10 +289,10 @@ mat-card { border-radius: 8px; }
   gap: 10px;
   margin: 12px 0;
   padding: 12px 16px;
-  border-left: 3px solid #b3261e;
+  border-left: 3px solid #dc2626;
 }
 
-.err-card mat-icon { color: #b3261e; }
+.err-card mat-icon { color: #dc2626; }
 .err-card p { margin: 4px 0 0; font-size: 13px; opacity: 0.75; }
 
 .pager {

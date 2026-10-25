@@ -293,9 +293,12 @@ public static class JdPasteParser
             }
         }
         if (companyDescription is not null) conf["companyDescription"] = 70;
-        var requirements = ExtractSection(lines, RequirementsHeaders);
+        // 票 154：任职要求 / 福利改为从通用小节列表投影（与今日语义逐字一致，
+        // 见 JdSectionProjection）；公司介绍提取逻辑不动（仅 About the company + LinkedIn 标记）。
+        var sections = ExtractSections(lines);
+        var requirements = JdSectionProjection.ProjectRequirements(sections);
         if (requirements is not null) conf["requirements"] = 70;
-        var benefits = ExtractSection(lines, BenefitsHeaders);
+        var benefits = JdSectionProjection.ProjectBenefits(sections);
         if (benefits is not null) conf["benefits"] = 70;
 
         // 工作身份要求:PR/公民/工签/是否担保 —— 求职者(尤其持工签者)的关键过滤项。
@@ -320,7 +323,7 @@ public static class JdPasteParser
             link, jdText, companyDescription, requirements, benefits,
             workAuthorization,
             deadline, detected ?? (isUrl ? "未知站点" : null),
-            conf, false, false, liLogo);
+            conf, false, false, liLogo, Sections: sections);
     }
 
     public static int CountFilled(ParsedJdDto d)
@@ -1222,5 +1225,123 @@ public static class JdPasteParser
         }
         return sb.ToString();
     }
+
+    // ================= 票 154：通用小节提取器 =================
+
+    /// <summary>
+    /// 票 154 R-154-1：通用小节提取。输入为已过 152 三层切除的文本行（切除在提取之前；
+    /// 本层仍以模块开始行为扫描上限，作第二道防线）。输出原文顺序的小节列表，
+    /// 每节含原标题（trim 后、去尾冒号、其余一字不动）与原文正文（行结构保留，不压平）。
+    /// 标题判定见 TryParseTitleLine（R-154-2）；正文收集到下一标题行 / 标签字段行 /
+    /// 页脚噪音行 / 模块开始行为止；空正文的节丢弃（标题下直接就是下一标题的碎片页）。
+    /// 注意：本函数不设 ≥10 字正文门槛（与旧 ExtractSection 不同）—— 小节列表是真相展示，
+    /// 过短的真实小节也应可见；≥10 字门槛只保留在 legacy 投影里（JdSectionProjection）。
+    /// </summary>
+    public static IReadOnlyList<JdSection> ExtractSections(IList<string> lines)
+    {
+        var moduleStart = RelatedModuleCut.FindModuleStart(lines);
+        var scanEnd = moduleStart >= 0 ? moduleStart : lines.Count;
+        var sections = new List<JdSection>();
+        var i = 0;
+        while (i < scanEnd)
+        {
+            var parsed = TryParseTitleLine(lines[i]);
+            if (parsed is null) { i++; continue; }
+            var (title, inline) = parsed.Value;
+            var body = new List<string>();
+            if (!string.IsNullOrWhiteSpace(inline)) body.Add(inline.Trim());
+            var j = i + 1;
+            for (; j < scanEnd; j++)
+            {
+                var l = lines[j].Trim();
+                if (TryParseTitleLine(l) is not null) break;
+                // 带字段标签的行是元数据、页脚噪音不是段落内容 —— 与 ExtractSection 同口径。
+                if (IsLabeledFieldLine(l)) break;
+                if (IsSectionFooterNoise(l)) break;
+                if (l.Length > 0) body.Add(l);
+            }
+            var bodyText = string.Join("\n", body).Trim();
+            if (bodyText.Length > 0)
+                sections.Add(new JdSection(title, JdSectionJson.NormalizeTitle(title), bodyText, "auto", false));
+            i = j;
+        }
+        return sections;
+    }
+
+    /// <summary>
+    /// 票 154 R-154-2：小节标题行判定。返回 (原标题, 内联首行正文?)，非标题行返回 null。
+    /// 1) 已知表命中（归一化比对：小写 + 空白折叠 + 弯引号转直引号 + 去尾冒号/句号）；
+    /// 2) 通用短行规则：trim 后 ≤60 字、≤8 词、不以句号结尾、不是 bullet 行、同行无句意正文，
+    ///    且满足任一：以冒号结尾；或 markdown 标题形态（# 前缀 / **加粗独占行**）；
+    /// 3) 内联形态：仅当冒号前头部归一化后命中已知表时成立（与旧 ExtractSection 内联同口径；
+    ///    未知头部 + 冒号 + 正文的行不是标题 —— 否则 POSTED: / SALARY: 等元数据行会误开节）。
+    /// 反误判护栏：bullet 行永不是标题；行内已有完整句子（句号后还有文字）不是标题；
+    /// 元数据行 / 标签字段行不是标题；孤立 Blog / Article / Video 行不满足上述任一条件，
+    /// 自然不开节（模块信号出现即停由 ExtractSections 的 scanEnd 保证）。
+    /// </summary>
+    private static (string Title, string? Inline)? TryParseTitleLine(string line)
+    {
+        var raw = line.Trim();
+        if (raw.Length == 0) return null;
+        if (IsLabeledFieldLine(raw) || IsMetadataLine(raw)) return null;
+        // bullet 行：• / - / * + 空白 / 数字. + 空白 开头。
+        if (Regex.IsMatch(raw, @"^(•|\*|[-–—]\s|\d+[.)]\s)")) return null;
+
+        // markdown 标题形态：# 前缀 / **加粗独占行**（剥标记后复用短行判定）。
+        var text = raw;
+        var headingMatch = Regex.Match(raw, @"^#{1,6}\s+(.+)$");
+        if (headingMatch.Success) text = headingMatch.Groups[1].Value.Trim();
+        else
+        {
+            var boldMatch = Regex.Match(raw, @"^\*\*(.+)\*\*$");
+            if (boldMatch.Success) text = boldMatch.Groups[1].Value.Trim();
+        }
+        var isMarkdown = !string.Equals(text, raw, StringComparison.Ordinal);
+
+        // 整行标题：trim 后 ≤60 字、≤8 词、不以句号结尾、同行无句意正文，
+        // 且已知表命中，或短行 + 冒号结尾，或 markdown 形态。
+        // （60 字上限只约束整行标题；内联形态整行可超 60 字，见下。）
+        var stripped = text.Trim().TrimEnd(':', '：');
+        var words = stripped.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var noSentence = !EndsWithSentence(stripped) && !HasSentenceInside(stripped);
+        if (text.Length <= 60 && words.Length is >= 1 and <= 8 && noSentence)
+        {
+            var normalized = JdSectionJson.NormalizeTitle(stripped);
+            var known = KnownSectionHeaders.Any(h =>
+                string.Equals(JdSectionJson.NormalizeTitle(h), normalized, StringComparison.Ordinal));
+            var colonEnded = text.TrimEnd().EndsWith(':') || text.TrimEnd().EndsWith('：');
+            if (known || colonEnded || isMarkdown)
+                return (stripped, null);
+        }
+
+        // 内联形态：冒号前头部归一化后命中已知表（旧 ExtractSection 内联同口径）。
+        var inlineMatch = Regex.Match(raw, @"^(.+?)\s*[:：]\s*(.+)$");
+        if (inlineMatch.Success)
+        {
+            var head = inlineMatch.Groups[1].Value.Trim();
+            var headWords = head.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (headWords.Length is >= 1 and <= 8)
+            {
+                var headNorm = JdSectionJson.NormalizeTitle(head);
+                var headKnown = KnownSectionHeaders.Any(h =>
+                    string.Equals(JdSectionJson.NormalizeTitle(h), headNorm, StringComparison.Ordinal));
+                if (headKnown) return (head, inlineMatch.Groups[2].Value.Trim());
+            }
+        }
+        return null;
+    }
+
+    /// <summary>行尾是否为句子结尾（句号 / 感叹 / 疑问，中英皆算）。</summary>
+    private static bool EndsWithSentence(string s)
+        => s.EndsWith('.') || s.EndsWith('。') || s.EndsWith('!') || s.EndsWith('！')
+            || s.EndsWith('?') || s.EndsWith('？');
+
+    /// <summary>
+    /// 行内是否已有完整句子：句中出现句号/感叹/疑问且其后还有文字
+    /// （如 "Hands on. You are …" —— bullet 内加粗短语 + 正文的典型形态）。
+    /// 缩写点（U.S.）同样被挡：宁可漏一节（legacy 回退），不可误开一节。
+    /// </summary>
+    private static bool HasSentenceInside(string s)
+        => Regex.IsMatch(s, @"[.。!！?？]\s+\S");
 }
 

@@ -220,6 +220,21 @@ public sealed class UpdateApplicationCommandHandler(JobsDbContext db)
         // 非 null 才按新值覆盖 (空串在 SetJdContent 内归一为清空)。
         if (request.JdText is not null)
             a.SetJdContent(request.JdText, a.JdSourceUrl);
+        // 票 154：小节列表同口径（null = 未提供，保持原值；非 null = 明确的新值，
+        // 多为重解析合并后的列表）。提供时后端重算 requirements / benefits 投影，
+        // 覆盖 UpdateDetails 刚写入的旧字段值 —— 投影与最终列表永远一致。
+        if (request.SectionsJson is not null)
+        {
+            if (!JdSectionJson.IsValid(request.SectionsJson))
+                return Result.Failure(Error.Validation("Update.SectionsInvalid", "小节列表格式无效"));
+            var canonical = JdSectionJson.Canonicalize(request.SectionsJson);
+            var sections = canonical is null
+                ? new List<JdSection>()
+                : JdSectionJson.Parse(canonical)!.ToList();
+            a.SetSections(canonical);
+            a.SetRequirements(JdSectionProjection.ProjectRequirements(sections));
+            a.SetBenefits(JdSectionProjection.ProjectBenefits(sections));
+        }
         a.SetDeadline(request.Deadline);
         if (request.AppliedDate.HasValue)
             a.SetAppliedDate(request.AppliedDate);

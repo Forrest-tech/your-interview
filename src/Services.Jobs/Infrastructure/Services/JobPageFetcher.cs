@@ -41,6 +41,15 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
     private static readonly Regex HtmlTag = new(
         @"<[^>]+>", RegexOptions.Compiled);
 
+    /// <summary>
+    /// 票 154 R-154-9：块级标签。抓取文本里小节标题能否成行，不应依赖源码换行 ——
+    /// 块级标签替换为换行（其余标签仍替换为空格），使标题行独立成行、
+    /// 152 的行级模块切除信号更可靠。只改换行产出，不改 RemoveNavLines 与 152 切除的判定口径。
+    /// </summary>
+    private static readonly Regex BlockTag = new(
+        @"</?(h[1-6]|p|div|li|tr|section|article)\b[^>]*>",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex MultiSpace = new(
         @"[ \t\xa0]{2,}", RegexOptions.Compiled);
 
@@ -115,7 +124,9 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
         var mm = MainContent.Match(noScript);
         var content = mm.Success && mm.Groups[2].Value.Length >= 300
             ? mm.Groups[2].Value : noScript;
-        var noTags = HtmlTag.Replace(content, " ");
+        // 票 154 R-154-9：块级标签先换行、其余标签再空格（顺序定死，否则块级也被空格吃掉）。
+        var blockBroken = BlockTag.Replace(content, "\n");
+        var noTags = HtmlTag.Replace(blockBroken, " ");
         var decoded = System.Net.WebUtility.HtmlDecode(noTags);
         var collapsed = MultiSpace.Replace(decoded, " ");
         // 票 152 R-152-1：提纯层切除相关文章/博客模块（标签剥离后、RemoveNavLines 之前，

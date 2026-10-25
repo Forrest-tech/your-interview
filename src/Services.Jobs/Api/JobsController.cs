@@ -162,7 +162,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         var r = await sender.Send(new UpdateApplicationCommand(Me, id, body.Role, body.Location, body.Link,
             body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline,
             body.AppliedDate, body.CompanyDescription, body.WorkAuthorization, null,
-            body.Requirements, body.Benefits, body.JdText, body.Version), ct);
+            body.Requirements, body.Benefits, body.JdText, body.Version, body.SectionsJson), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -417,7 +417,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         var r = await sender.Send(new SmartAddApplicationCommand(Me, body.Company, body.Role, body.Location,
             body.Salary, body.WorkMode, body.JobType, body.JdSummary, body.MatchKeywords, body.Priority,
             body.Link, body.JdText, body.Source, body.Status, body.Deadline,
-            body.CompanyDescription, body.WorkAuthorization, body.Requirements, body.Benefits, body.LogoUrl), ct);
+            body.CompanyDescription, body.WorkAuthorization, body.Requirements, body.Benefits, body.LogoUrl,
+            body.SectionsJson), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(r.Value)
             : r.ToProblemDetails();
@@ -453,7 +454,9 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         string? Requirements = null, string? Benefits = null,
         // FUN-02:编辑负载补齐 JD 全文。不带该字段 (null) 时后端保持原值,见 UpdateApplicationCommand。
         string? JdText = null,
-        uint? Version = null); // 票101:同 UpdateCompanyBody
+        uint? Version = null, // 票101:同 UpdateCompanyBody
+        // 票 154:小节列表 JSON。不带 (null) 时后端保持原值；非 null 时重算投影。
+        string? SectionsJson = null);
     public sealed record ChangeStatusBody(string Status, string? Note, string? RejectionReason);
     /// <summary>JD 全文提交。空串由领域方法归一为 null。</summary>
     public sealed record JdContentBody(string? JdText, string? JdSourceUrl, uint? Version = null); // 票101 Version:同上
@@ -481,7 +484,9 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         string? CompanyDescription = null, string? WorkAuthorization = null,
         string? Requirements = null, string? Benefits = null,
         // 票 150:解析到的真实 logo(li-logo),落库前曾在此边界丢失。
-        string? LogoUrl = null);
+        string? LogoUrl = null,
+        // 票 154:对话框确认后的小节列表 JSON（非 null 时后端重算投影）。
+        string? SectionsJson = null);
 
     public sealed record LinkInviteBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
         string? Format, string? Notes);

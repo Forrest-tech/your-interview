@@ -18,7 +18,7 @@ internal static class JobsMapping
         // 实测投递记录量级为个人求职(几十条),40000 字符全文带来的负载可接受;
         // 若未来记录上千,再拆出"不含全文"的精简映射给列表用。
         a.JdText, a.JdSourceUrl, a.CompanyDescription, a.WorkAuthorization, a.JobType,
-        a.Requirements, a.Benefits,
+        a.Requirements, a.Benefits, a.SectionsJson,
         a.Status.ToString(), a.Priority.ToString(), a.AppliedDate, a.Deadline, a.NextFollowUpAt,
         a.ResumeScore, a.PassRateEstimate, a.MatchKeywords, a.Notes, a.PosterName, a.NeedsConnectFirst,
         a.OutreachMessage, a.OutreachSentAt, a.RejectionReason,

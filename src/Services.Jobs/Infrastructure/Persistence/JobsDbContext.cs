@@ -130,6 +130,9 @@ public sealed class JobsDbContext(
             e.Property(x => x.Requirements).HasColumnType("text");
             // 福利待遇:text 列不限长 (票62,与 JdText 同口径,理由同 JdSummary)。
             e.Property(x => x.Benefits).HasColumnType("text");
+            // 票 154：JD 小节列表 JSON:text 列不限长，与 JdText 同口径；
+            // 长度口径改由应用层校验统一把关（JdTextLimits.MaxLength，超限 400 而非落库 500）。
+            e.Property(x => x.SectionsJson).HasColumnType("text");
             e.Property(x => x.PassRateEstimate).HasMaxLength(1000);
             e.Property(x => x.MatchKeywords).HasMaxLength(4000);
             e.Property(x => x.Notes).HasMaxLength(8000);

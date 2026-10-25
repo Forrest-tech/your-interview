@@ -214,7 +214,11 @@ public sealed record SmartAddApplicationCommand(
     string? Requirements = null, string? Benefits = null,
     // 票 150:解析到的真实 logo(li-logo)经此透传落库;此前 Body/Command 无此字段,
     // 真实 logo 在 Smart-add 边界静默丢失,新公司只剩 favicon 派生。
-    string? LogoUrl = null)
+    string? LogoUrl = null,
+    // 票 154:对话框确认后的小节列表 JSON（已过对话框编辑）。非 null 时后端据此重算
+    // requirements / benefits 投影（小节模式 wins，调用方传的旧字段被忽略）；
+    // null 时走 legacy（调用方传的 requirements / benefits 原样落库）。
+    string? SectionsJson = null)
     : IRequest<Result<SmartAddResultDto>>;
 
 public sealed record SmartAddResultDto(
@@ -236,6 +240,8 @@ public sealed class SmartAddApplicationCommandValidator
         RuleFor(x => x.CompanyDescription).MaximumLength(JdTextLimits.MaxLength);
         // 票 150:LogoUrl 列上限 1024(JobsDbContext),超限在落库前给 400 提示。
         RuleFor(x => x.LogoUrl).MaximumLength(1024);
+        // 票 154:小节列表 JSON 与四段长文本同闸门（JdTextLimits.MaxLength）。
+        RuleFor(x => x.SectionsJson).MaximumLength(JdTextLimits.MaxLength);
     }
 }
 
@@ -311,13 +317,32 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
         if (!string.IsNullOrWhiteSpace(request.JobType))
             app.SetJobType(request.JobType.Trim());
 
-        // 任职要求:Smart paste 从 Qualifications/Requirements 段提取,建档时一并存下。
-        if (!string.IsNullOrWhiteSpace(request.Requirements))
-            app.SetRequirements(request.Requirements.Trim());
+        // 票 154：小节模式（SectionsJson 非 null）时，requirements / benefits 由后端
+        // 从最终小节列表重算（投影），调用方传的旧字段被忽略 —— 对话框改了小节正文，
+        // 投影同步变，不出现“对话框改了 A、入库还是旧 B”的分裂；小节 JSON 先过
+        // Canonicalize（去空节、key 由最终标题重算），非法 JSON 整单 400。
+        if (request.SectionsJson is not null)
+        {
+            if (!JdSectionJson.IsValid(request.SectionsJson))
+                return Result.Failure<SmartAddResultDto>(Error.Validation("SmartAdd.SectionsInvalid", "小节列表格式无效"));
+            var canonical = JdSectionJson.Canonicalize(request.SectionsJson);
+            var sections = canonical is null
+                ? new List<JdSection>()
+                : JdSectionJson.Parse(canonical)!.ToList();
+            app.SetSections(canonical);
+            app.SetRequirements(JdSectionProjection.ProjectRequirements(sections));
+            app.SetBenefits(JdSectionProjection.ProjectBenefits(sections));
+        }
+        else
+        {
+            // 任职要求:Smart paste 从 Qualifications/Requirements 段提取,建档时一并存下。
+            if (!string.IsNullOrWhiteSpace(request.Requirements))
+                app.SetRequirements(request.Requirements.Trim());
 
-        // 福利待遇:Smart paste 从 Benefits/Advantages 段提取,建档时一并存下。
-        if (!string.IsNullOrWhiteSpace(request.Benefits))
-            app.SetBenefits(request.Benefits.Trim());
+            // 福利待遇:Smart paste 从 Benefits/Advantages 段提取,建档时一并存下。
+            if (!string.IsNullOrWhiteSpace(request.Benefits))
+                app.SetBenefits(request.Benefits.Trim());
+        }
 
         if (!string.IsNullOrWhiteSpace(request.MatchKeywords))
             app.SetAnalysis(null, null, request.MatchKeywords.Trim());
@@ -552,13 +577,25 @@ internal static class JdAiEnricher
         if (benefits is not null) conf["benefits"] = Math.Max(conf.GetValueOrDefault("benefits"), 85);
         if (workAuthorization is not null) conf["workAuthorization"] = Math.Max(conf.GetValueOrDefault("workAuthorization"), 85);
 
+        // 票 154 R-154-8：AI 补出的段落值物化为小节，使小节列表与固定字段永远一致。
+        // 只物化 Requirements / Benefits（companyDescription 有独立面板，不物化）；
+        // 规则已产出同字段值时 AI 值在上文已被丢弃（draft ?? AI），此处不追加重复节。
+        var sections = draft.Sections is not null ? draft.Sections.ToList() : new List<JdSection>();
+        if (draft.Requirements is null && requirements is not null)
+            sections.Add(new JdSection("Requirements", JdSectionJson.NormalizeTitle("Requirements"),
+                requirements, "auto", false));
+        if (draft.Benefits is null && benefits is not null)
+            sections.Add(new JdSection("Benefits", JdSectionJson.NormalizeTitle("Benefits"),
+                benefits, "auto", false));
+
         return draft with
         {
             Company = company, Role = role, Location = location, Salary = salary,
             WorkMode = workMode, JobType = jobType, JdSummary = jdSummary, MatchKeywords = keywords,
             Priority = priority, Deadline = deadline, Confidence = conf,
             CompanyDescription = companyDescription, Requirements = requirements, Benefits = benefits,
-            WorkAuthorization = workAuthorization
+            WorkAuthorization = workAuthorization,
+            Sections = sections.Count == 0 ? draft.Sections : sections
         };
     }
 

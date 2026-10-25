@@ -48,6 +48,9 @@ public sealed record ApplicationDto(
     string? Requirements,
     // 福利待遇(2026-10-19):完整存储。Smart paste 从 Benefits/Advantages 段提取。
     string? Benefits,
+    // 票 154：JD 小节列表 JSON（原文顺序）。null = 老记录，走 legacy 显示。
+    // 与 JdText 同口径走共享映射带出（个人量级可接受，见 JobMapping 注释）。
+    string? SectionsJson,
     string Status, string Priority, DateOnly? AppliedDate, DateOnly? Deadline,
     DateTimeOffset? NextFollowUpAt, int? ResumeScore, string? PassRateEstimate, string? MatchKeywords,
     string? Notes, string? PosterName, bool NeedsConnectFirst, string? OutreachMessage,

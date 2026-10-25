@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { ApiClient } from './api-client';
-import { AnswerTemplate, Communication, CommunicationType } from '../models/api.models';
+import { AnswerTemplate, Communication, CommunicationType, JdSection } from '../models/api.models';
 
 /** 后端 ParsedJdDto。Status: Ok / Partial / Failed。 */
 export interface ParsedJd {
@@ -24,6 +24,8 @@ export interface ParsedJd {
   companyDescription: string | null;
   requirements: string | null;
   benefits: string | null;
+  /** 票 154：解析出的动态小节（原标题原顺序；LinkedIn 抓取路径不返回，走 legacy）。 */
+  sections?: JdSection[] | null;
   workAuthorization: string | null;
   deadline: string | null;
   detectedSource: string | null;
@@ -131,6 +133,8 @@ export class TrackerApi {
     requirements?: string | null; benefits?: string | null;
     // 票 150:解析到的真实 logo(li-logo),后端 SmartAdd 全链路透传落库。
     logoUrl?: string | null;
+    // 票 154：对话框编辑后的小节 JSON（非 null 时后端以此为准并重算投影）。
+    sectionsJson?: string | null;
   }): Observable<SmartAddResult> {
     return this.api.post<SmartAddResult>(`${TrackerApi.BASE}/applications/smart-add`, body);
   }

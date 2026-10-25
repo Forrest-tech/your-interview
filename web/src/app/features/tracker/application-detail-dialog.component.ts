@@ -25,6 +25,8 @@ import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-v
 import { extractPdfText } from '../../core/utils/pdf-text';
 import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 import { commFormMode, commSaveChannel } from './comm-form.helpers';
+import { mergeSectionsForReparse, parseSectionsJson, visibleDetailSections } from './jd-sections.helpers';
+import { JdSection } from '../../core/models/api.models';
 import { computeMatch, type MatchResult } from '../../core/match/resume-match';
 import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWidth, saveDrawerWidth } from './detail-drawer-width';
 
@@ -195,25 +197,40 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
           } @else {
             <p class="dim">{{ t('tracker.dNoJd') }}</p>
           }
-          <!-- Qualifications -->
-          @if (detail.requirements) {
-            <div class="jd-subhead">{{ t('tracker.dQualifications') }}</div>
-            @for (b of richBlocks(detail.requirements); track $index) {
-              @if (b.kind === 'ul') {
-                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
-              } @else {
-                <p>{{ b.items[0] }}</p>
+          <!-- 票 154 R-154-6：有小节渲染原标题小节（公司介绍重复节已去重），
+               否则一字不差走今日 legacy 两块。 -->
+          @if (visibleSections.length > 0) {
+            @for (s of visibleSections; track $index) {
+              <div class="jd-subhead">{{ s.title }}</div>
+              @for (b of richBlocks(s.body); track $index) {
+                @if (b.kind === 'ul') {
+                  <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
+                } @else {
+                  <p>{{ b.items[0] }}</p>
+                }
               }
             }
-          }
-          <!-- Additional Information -->
-          @if (detail.benefits) {
-            <div class="jd-subhead">{{ t('tracker.dAdditionalInfo') }}</div>
-            @for (b of richBlocks(detail.benefits); track $index) {
-              @if (b.kind === 'ul') {
-                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
-              } @else {
-                <p>{{ b.items[0] }}</p>
+          } @else {
+            <!-- Qualifications -->
+            @if (detail.requirements) {
+              <div class="jd-subhead">{{ t('tracker.dQualifications') }}</div>
+              @for (b of richBlocks(detail.requirements); track $index) {
+                @if (b.kind === 'ul') {
+                  <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
+                } @else {
+                  <p>{{ b.items[0] }}</p>
+                }
+              }
+            }
+            <!-- Additional Information -->
+            @if (detail.benefits) {
+              <div class="jd-subhead">{{ t('tracker.dAdditionalInfo') }}</div>
+              @for (b of richBlocks(detail.benefits); track $index) {
+                @if (b.kind === 'ul') {
+                  <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
+                } @else {
+                  <p>{{ b.items[0] }}</p>
+                }
               }
             }
           }
@@ -568,23 +585,37 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
               } @else {
                 <p class="dim">{{ t('tracker.dNoJd') }}</p>
               }
-              @if (detail.requirements) {
-                <div class="jd-subhead">{{ t('tracker.dQualifications') }}</div>
-                @for (b of richBlocks(detail.requirements); track $index) {
-                  @if (b.kind === 'ul') {
-                    <ul class="jd-list">@for (li of b.items; track $index) { <li [innerHTML]="highlightHtml(li, m.hit)"></li> }</ul>
-                  } @else {
-                    <p [innerHTML]="highlightHtml(b.items[0], m.hit)"></p>
+              <!-- 票 154 R-154-6：Score 页与 Overview 同规则（小节 + 命中词高亮，否则 legacy）。 -->
+              @if (visibleSections.length > 0) {
+                @for (s of visibleSections; track $index) {
+                  <div class="jd-subhead">{{ s.title }}</div>
+                  @for (b of richBlocks(s.body); track $index) {
+                    @if (b.kind === 'ul') {
+                      <ul class="jd-list">@for (li of b.items; track $index) { <li [innerHTML]="highlightHtml(li, m.hit)"></li> }</ul>
+                    } @else {
+                      <p [innerHTML]="highlightHtml(b.items[0], m.hit)"></p>
+                    }
                   }
                 }
-              }
-              @if (detail.benefits) {
-                <div class="jd-subhead">{{ t('tracker.dAdditionalInfo') }}</div>
-                @for (b of richBlocks(detail.benefits); track $index) {
-                  @if (b.kind === 'ul') {
-                    <ul class="jd-list">@for (li of b.items; track $index) { <li [innerHTML]="highlightHtml(li, m.hit)"></li> }</ul>
-                  } @else {
-                    <p [innerHTML]="highlightHtml(b.items[0], m.hit)"></p>
+              } @else {
+                @if (detail.requirements) {
+                  <div class="jd-subhead">{{ t('tracker.dQualifications') }}</div>
+                  @for (b of richBlocks(detail.requirements); track $index) {
+                    @if (b.kind === 'ul') {
+                      <ul class="jd-list">@for (li of b.items; track $index) { <li [innerHTML]="highlightHtml(li, m.hit)"></li> }</ul>
+                    } @else {
+                      <p [innerHTML]="highlightHtml(b.items[0], m.hit)"></p>
+                    }
+                  }
+                }
+                @if (detail.benefits) {
+                  <div class="jd-subhead">{{ t('tracker.dAdditionalInfo') }}</div>
+                  @for (b of richBlocks(detail.benefits); track $index) {
+                    @if (b.kind === 'ul') {
+                      <ul class="jd-list">@for (li of b.items; track $index) { <li [innerHTML]="highlightHtml(li, m.hit)"></li> }</ul>
+                    } @else {
+                      <p [innerHTML]="highlightHtml(b.items[0], m.hit)"></p>
+                    }
                   }
                 }
               }
@@ -2151,6 +2182,14 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
   }
 
   /** 2026-10-19:用最新后端重新解析 JD，修复旧数据的噪音/去重问题。 */
+  /**
+   * 票 154：详情页可见小节。存量记录（sectionsJson null/非法）返回 []，模板回退 legacy；
+   * 公司介绍类小节与 companyDescription 逐字重复时去重（首步定法 ①，纯渲染规则）。
+   */
+  get visibleSections(): JdSection[] {
+    return visibleDetailSections(parseSectionsJson(this.detail.sectionsJson), this.detail.companyDescription);
+  }
+
   reparseJd(): void {
     const d = this.detail;
     const raw = d.jdText?.trim();
@@ -2170,8 +2209,15 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
         if (p.workMode) upd.workMode = p.workMode;
         if (p.jobType) upd.jobType = p.jobType;
         if (p.jdSummary) upd.jdSummary = p.jdSummary;
-        if (p.requirements) upd.requirements = p.requirements;
-        if (p.benefits) upd.benefits = p.benefits;
+        // 票 154 R-154-7：新解析带小节时只发合并后的 sectionsJson，不再发 requirements/benefits
+        // （后端改从合并列表投影，保证二者一致）；新解析无小节时走今日 legacy 路径。
+        if (p.sections && p.sections.length > 0) {
+          const stored = parseSectionsJson(this.detail.sectionsJson) ?? [];
+          upd.sectionsJson = JSON.stringify(mergeSectionsForReparse(stored, p.sections));
+        } else {
+          if (p.requirements) upd.requirements = p.requirements;
+          if (p.benefits) upd.benefits = p.benefits;
+        }
         if (p.companyDescription) upd.companyDescription = p.companyDescription;
         this.jobsApi.updateApplication(this.app.id, upd).subscribe({
           next: () => {

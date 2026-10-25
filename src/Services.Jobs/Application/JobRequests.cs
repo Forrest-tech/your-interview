@@ -86,7 +86,10 @@ public sealed record UpdateApplicationCommand(Guid UserId, Guid Id, string Role,
     // FUN-02:JD 全文纳入全量更新。语义: null = 调用方未提供该字段,保持原值
     // (详情页局部保存不带 jdText,不能误清); 非 null (含空串) = 明确的新值,空串归一为清空。
     string? JdText = null,
-    uint? Version = null) // 票101:读时 xmin 回传钉版,null=旧调用方不钉
+    uint? Version = null, // 票101:读时 xmin 回传钉版,null=旧调用方不钉
+    // 票 154:小节列表 JSON。语义与 JdText 同口径:null = 未提供,保持原值;
+    // 非 null = 明确的新值(重解析合并后的列表),后端据此重算 requirements / benefits 投影。
+    string? SectionsJson = null)
     : IRequest<Result>;
 
 public sealed record ChangeApplicationStatusCommand(Guid UserId, Guid Id, string Status, string? Note, string? RejectionReason)

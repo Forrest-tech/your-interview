@@ -544,6 +544,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("SectionsJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Source")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");

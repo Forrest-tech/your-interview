@@ -193,6 +193,13 @@ public sealed class JobApplication : AuditableAggregateRoot
     /// </summary>
     public string? Benefits { get; private set; }
 
+    /// <summary>
+    /// 票 154：JD 正文小节列表 JSON（[{title, key, body, origin, edited}]，原文顺序）。
+    /// 真相是 JdText + 本列表；requirements / benefits 是从本列表派生的兼容投影。
+    /// null = 老记录（未产出小节），显示走 legacy 路径；不批量回填。
+    /// </summary>
+    public string? SectionsJson { get; private set; }
+
     public ApplicationStatus Status { get; private set; }
     public Priority Priority { get; private set; }
     public DateOnly? AppliedDate { get; private set; }
@@ -410,6 +417,16 @@ public sealed class JobApplication : AuditableAggregateRoot
     public void SetBenefits(string? benefits)
     {
         Benefits = string.IsNullOrWhiteSpace(benefits) ? null : benefits;
+        Touch();
+    }
+
+    /// <summary>
+    /// 设置 JD 小节列表 JSON。空串归一为 null（语义 = 无小节，走 legacy 显示）。
+    /// 调用方负责先过 JdSectionJson.Canonicalize（去空节、key 重算），本方法只存。
+    /// </summary>
+    public void SetSections(string? sectionsJson)
+    {
+        SectionsJson = string.IsNullOrWhiteSpace(sectionsJson) ? null : sectionsJson;
         Touch();
     }
 

@@ -59,6 +59,18 @@ export interface AuthResult {
   tokens: Tokens;
 }
 
+/**
+ * 票 154：JD 动态小节（与后端 JdSection 对齐；key 由后端按标题重算，前端不维护）。
+ * origin: auto = 解析产出，manual = 用户手动添加；edited = 用户在对话框改过标题/正文。
+ */
+export interface JdSection {
+  title: string;
+  key: string;
+  body: string;
+  origin: 'auto' | 'manual';
+  edited: boolean;
+}
+
 // ============================ Tracker(投递跟踪) ============================
 
 export type ApplicationStatus =
@@ -106,6 +118,11 @@ export interface Application {
   requirements?: string;
   /** 福利待遇(2026-10-19):完整存储。Smart paste 从 Benefits/Advantages 段提取。 */
   benefits?: string;
+  /**
+   * 票 154：JD 动态小节 JSON（null = 存量记录，走 legacy 三字段；不批量回填）。
+   * requirements / benefits 继续填作兼容投影，与小节列表一致（后端保存时重算）。
+   */
+  sectionsJson?: string | null;
   resumeScore?: number;
   /** 预估通过率(后端存为字符串,如 "75%";展示时原样显示)。 */
   passRateEstimate?: string | null;

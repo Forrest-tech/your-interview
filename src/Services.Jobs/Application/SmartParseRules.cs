@@ -35,6 +35,13 @@ public static class PasteKind
     public const string Html = "Html";
 }
 
+/// <summary>
+/// 票 154：JD 正文小节（动态结构）。Title 原样显示（去尾冒号后的原文标题），
+/// Key 只内部用于投影匹配（归一化标题），Body 为原文正文（行结构保留），
+/// Origin: auto（解析产出）/ manual（用户手动增补），Edited: 用户是否改过标题或正文。
+/// </summary>
+public sealed record JdSection(string Title, string Key, string Body, string Origin, bool Edited);
+
 public sealed record ParsedJdDto(
     string SourceKind, string Status, IReadOnlyList<string> MessageCodes,
     string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
@@ -42,7 +49,9 @@ public sealed record ParsedJdDto(
     string? JdText, string? CompanyDescription, string? Requirements, string? Benefits,
     string? WorkAuthorization,
     DateOnly? Deadline, string? DetectedSource,
-    Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview, string? LogoUrl = null);
+    Dictionary<string, int> Confidence, bool UsedAi, bool NeedsManualReview, string? LogoUrl = null,
+    // 票 154：通用小节提取结果（原文顺序）。null = 未产出（URL 纯链接模式等）。
+    IReadOnlyList<JdSection>? Sections = null);
 
 // ============================ 邀请邮件解析(需求 6.2.3) ============================
 

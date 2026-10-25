@@ -77,6 +77,8 @@ public sealed class UpdateApplicationCommandValidator : AbstractValidator<Update
         RuleFor(x => x.Requirements).MaximumLength(JdTextLimits.MaxLength);
         RuleFor(x => x.Benefits).MaximumLength(JdTextLimits.MaxLength);
         RuleFor(x => x.CompanyDescription).MaximumLength(JdTextLimits.MaxLength);
+        // 票 154:小节列表 JSON 与四段长文本同闸门（null = 未提供，MaximumLength 放行）。
+        RuleFor(x => x.SectionsJson).MaximumLength(JdTextLimits.MaxLength);
     }
 }
 

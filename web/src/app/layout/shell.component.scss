@@ -27,6 +27,12 @@
   /* 配色方案 A:顶栏改白色 + 发丝底边,导航字走墨色,当前项用品牌淡色 pill;
      旧 midnight 深底规则(深底洗色/白字反白)一并退役。 */
   background: var(--surface) !important;
+  /* 票 153:color="primary" 的 Material 规则仍强制白字,配色 A 只改了底色
+     导致非当前导航项(.nav-item: color: inherit)与品牌 logo(currentColor)
+     白字 on 白底看不见;此处把顶栏文字色显式钉为墨色(与 background
+     同款 !important,盖过 Material 双类选择器),inherit 子项随之全部可见。
+     模板的 color="primary" 不动,current 项 pill 与双色字标各有显式色、不受影响。 */
+  color: var(--ink) !important;
   border-bottom: 1px solid var(--hairline);
   box-shadow: none;
   z-index: 10;

@@ -339,8 +339,7 @@ mat-form-field { width: 100%; }
 /* 右:状态下拉 */
 .lr-side { flex: 0 0 auto; margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .prep-btn { color: var(--brand); }
-.lr-status { width: 132px; }
-.lr-status .mat-mdc-form-field-subscript-wrapper { display: none; }
+/* 票 140：状态按钮与 Prep 同款 stroked 按钮，无需额外尺寸规则；旧 .lr-status 输入框规则随控件一并移除。 */
 .fav-btn.mat-warn { color: var(--stop); }
 
 

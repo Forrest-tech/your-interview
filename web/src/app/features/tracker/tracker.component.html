@@ -459,15 +459,19 @@
                   [matTooltip]="t('tracker.prepareInterview')" class="prep-btn">
             <mat-icon>school</mat-icon>{{ t('tracker.prepShort') }}
           </button>
-          <mat-form-field appearance="outline" class="lr-status" [ngClass]="'st-' + a.status.toLowerCase()">
-            <mat-select [ngModel]="a.status" (ngModelChange)="quickChangeStatus(a, $event)"
-                        [attr.aria-label]="t('tracker.changeStatus')"
-                        [placeholder]="t('tracker.status')">
-              @for (s of statusOptions; track s) {
-                <mat-option [value]="s">{{ t('status.' + s) }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
+          <!-- 票 140：状态控件由 56px outlined 输入框改为与 Prep 同款 stroked 按钮 + 菜单——
+               同组件即同高度/圆角/内边距，与左侧行高自然协调；行为不变（点选即 quickChangeStatus）。 -->
+          <button mat-stroked-button class="status-btn" [matMenuTriggerFor]="statusMenu"
+                  (click)="$event.stopPropagation()"
+                  [attr.aria-label]="t('tracker.changeStatus')">
+            {{ t('status.' + a.status) }}
+            <mat-icon>arrow_drop_down</mat-icon>
+          </button>
+          <mat-menu #statusMenu="matMenu">
+            @for (s of statusOptions; track s) {
+              <button mat-menu-item (click)="quickChangeStatus(a, s)">{{ t('status.' + s) }}</button>
+            }
+          </mat-menu>
         </div>
       </div>
     } @empty {

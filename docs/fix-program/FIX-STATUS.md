@@ -608,3 +608,5 @@
 - **醒后待用户做的事（仅两件）** — ①一键建出 develop→main PR（PAT 无建 PR 权限，compare 链接与 body 已备好）；②绿 run 到位后由用户本人合 main。
 
 - **票 138 已登记 + 实装（用户令，2026-10-25 Mac 测试中）** — Tech Stack 复习热力图先隐藏（用户原话“先隐藏，不需要”）。实装：仅 2 文件 5+/1-（techstack.component.ts 加 `showReviewHeatmap = false` 开关 + 注释；techstack.component.html 把整个 heatmap-panel 包进 `@if (showReviewHeatmap)`）。隐藏而非删除：面板代码、heatmapWeeks/reviewStreak 计算、recordReview 数据记录、i18n ts.heatmap.* 键一字未动，改 true 即恢复；成熟度分布、Review due、Duplicates、筛选区均未碰。验证：tsc 0、ng build development exit 0、check-templates 25/25、Jest 24 suites / 591/591（与基线一致，无新增单测——面板无既有单测覆盖，改动为模板可见性门）。沙盒活体 DOM 核对未做（模板门 + 构建校验已覆盖，Mac 实测为终验）。本提交推后 PR #2 head 前移，合并须等新 head CI 全绿。
+
+- **票 140 已登记 + 实装（用户令，2026-10-25 Mac 测试中）** — Tracker 列表行 Applied 按钮太大太高、与左侧不协调，重新设计。根因：状态控件是 Material outlined 输入框（默认 56px 高），而同行 Prep 是 36px stroked 按钮，两者量级不同。重设计：状态控件改为与 Prep 同款 mat-stroked-button + mat-menu（点选即 quickChangeStatus，行为、选项、aria-label 全不变）；同组件即同高度/圆角/内边距，协调由构造保证，不靠逐像素调。旧 .lr-status 输入框规则随控件一并移除；st-* 状态色在仓内无对应样式，替换无视觉损失。验证：tsc 0、ng build development exit 0、check-templates 25/25、Jest 24 suites / 591/591。沙盒活体视觉核对未做（Mac 实测为终验）。本提交推后 PR #2 head 再前移，合并须等新 head CI 全绿。

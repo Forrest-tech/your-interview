@@ -690,45 +690,11 @@ mat-form-field { width: 100%; }
   margin-right: 4px;
 }
 
-/* ★ 批量操作:REQ-11 一行紧凑工具条 —— 必须显式 flex-direction:row,
-   否则 mat-card 自带 column 会把子项纵向堆叠成大面板(改前实测 328px)。 */
-.bulk-bar {
-  display: flex; flex-direction: row; flex-wrap: nowrap;
-  align-items: center; gap: 8px;
-  padding: 6px 12px; margin-bottom: 14px; min-height: 48px;
-  box-sizing: border-box; overflow-x: auto;
-  background: var(--signal-tint); border: 1px solid var(--signal-soft);
-  position: sticky; top: 0; z-index: 10;
-}
-.bulk-bar > * { flex-shrink: 0; }
-.bulk-bar .spacer { flex: 1 1 auto; flex-shrink: 1; }
-.bulk-bar .mat-mdc-outlined-button, .bulk-bar .mat-mdc-button {
-  height: 36px; white-space: nowrap;
-}
-.bulk-count { font-weight: 600; font-size: 14px; white-space: nowrap; }
-.bulk-status {
-  width: 170px;
-  --mat-form-field-container-height: 40px;
-  --mat-form-field-container-vertical-padding: 8px;
-  font-size: 13px;
-}
-.bulk-status .mat-mdc-form-field-subscript-wrapper { display: none; }
-.bulk-bar .spacer { flex: 1; }
-.select-box { margin-right: 4px; }
-.app-card.selected, .list-row.selected {
-  outline: 2px solid var(--brand);
-  outline-offset: -2px;
-}
 .app-card { position: relative; }
 /* 票 118 / D-10:看板卡把收藏锚到右上角、归档锚到右下角 —— 卡片高度只由
    logo+标题决定,不再被两个全宽按钮行撑高(空洞感主因)。 */
 .app-card > .fav-btn { position: absolute; top: 4px; right: 4px; }
 .app-card > button.mat-mdc-icon-button:not(.fav-btn) { position: absolute; bottom: 4px; right: 4px; }
-.app-card .select-box {
-  position: absolute; top: 4px; left: 4px; z-index: 2;
-  background: rgba(255,255,255,0.9); border-radius: 6px;
-}
-.list-row .select-box { flex: 0 0 auto; }
 
 /* ★ Questions tab (G-07) */
 .questions-tab { padding: 8px 0; }

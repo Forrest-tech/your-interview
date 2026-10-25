@@ -7,7 +7,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -17,7 +16,6 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
 import { JobsApiService } from '../../core/api/jobs-api.service';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
@@ -58,7 +56,7 @@ import {
     CommonModule, FormsModule, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatDividerModule,
-    MatSelectModule, MatMenuModule, MatButtonToggleModule, MatCheckboxModule,
+    MatMenuModule, MatButtonToggleModule,
     DragDropModule
   ],
   templateUrl: './tracker.component.html',
@@ -578,80 +576,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.prefs.isFavorite(id);
   }
 
-  /** ★ 批量操作:选中的申请 id 集合。 */
-  readonly selected = signal<Set<string>>(new Set());
-  readonly selectedCount = computed(() => this.selected().size);
-
-  /** ★ 选择模式:默认关闭,卡片不显示勾选框;点工具栏"选择"进入。 */
-  readonly selectMode = signal(false);
-
-  toggleSelectMode(): void {
-    const next = !this.selectMode();
-    this.selectMode.set(next);
-    if (!next) this.clearSelection();
-  }
-
-  toggleSelect(id: string, ev?: Event | any): void {
-    // MatCheckboxChange 没有 stopPropagation,直接忽略
-    try { (ev as Event)?.stopPropagation?.(); } catch {}
-    const next = new Set(this.selected());
-    if (next.has(id)) next.delete(id); else next.add(id);
-    this.selected.set(next);
-  }
-
-  isSelected(id: string): boolean {
-    return this.selected().has(id);
-  }
-
-  clearSelection(): void {
-    this.selected.set(new Set());
-  }
-
-  /** 全选当前页。 */
-  selectAllVisible(): void {
-    const next = new Set(this.selected());
-    for (const a of this.displayItems()) next.add(a.id);
-    this.selected.set(next);
-  }
-
-  /** 批量改状态:逐个调 /status(走状态机校验),失败的单独 toast。 */
-  bulkSetStatus(status: ApplicationStatus): void {
-    const ids = [...this.selected()];
-    if (ids.length === 0) return;
-    let done = 0, failed = 0;
-    for (const id of ids) {
-      this.jobsApi.changeStatus(id, status).subscribe({
-        next: () => {
-          done++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'status');
-        },
-        error: () => {
-          failed++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'status');
-        }
-      });
-    }
-  }
-
-  /** 批量归档。 */
-  bulkArchive(): void {
-    const ids = [...this.selected()];
-    if (ids.length === 0) return;
-    let done = 0, failed = 0;
-    for (const id of ids) {
-      this.jobsApi.archive(id).subscribe({
-        next: () => {
-          done++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'archive');
-        },
-        error: () => {
-          failed++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'archive');
-        }
-      });
-    }
-  }
-
   /** ★ F-02:删除确认统一走全站确认弹窗 —— 原生 confirm 在无弹窗处理的环境
    *  (自动化测试/某些内嵌浏览器)会被静默 dismiss,删除看起来"点了没反应"。 */
   private confirmDelete(body: string): Promise<boolean> {
@@ -664,41 +588,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       } as ConfirmDialogData,
     });
     return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
-  }
-
-  /** 批量删除:二次确认。 */
-  bulkDelete(): void {
-    const n = this.selected().size;
-    if (n === 0) return;
-    void this.confirmDelete(this.tf('tracker.confirmBulkDelete', { n })).then((ok) => {
-      if (!ok) return;
-      const ids = [...this.selected()];
-      let done = 0, failed = 0;
-      for (const id of ids) {
-        this.jobsApi.deleteApplication(id,
-          this.items().find((a) => a.id === id)?.version ?? null).subscribe({
-          next: () => {
-            done++;
-            if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
-          },
-          error: () => {
-            failed++;
-            if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
-          }
-        });
-      }
-    });
-  }
-
-  private finishBulk(done: number, failed: number, _op: string): void {
-    this.clearSelection();
-    this.selectMode.set(false);
-    this.reload();
-    if (failed > 0) {
-      this.notify(this.tf('tracker.bulkPartial', { done, failed }), true);
-    } else {
-      this.notify(this.tn('tracker.bulkDone', done));
-    }
   }
 
   readonly total = signal(0);

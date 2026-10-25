@@ -32,6 +32,7 @@ namespace YourInterview.Services.Interviews.Tests;
 public sealed class RemindersApiTests : IAsyncLifetime
 {
     private const string Cs = "Host=localhost;Port=5432;Database=yourinterview;Username=postgres;Password=postgres";
+    // 票 168:必须与 StartTranscriptionApiTests 的 SigningKey 取同一值(见该文件注释)。
     private const string SigningKey = "cal2-host-test-signing-key-0123456789abcdef";
     private const string Issuer = "your-interview.identity";
     private const string Audience = "your-interview.api";
@@ -251,7 +252,11 @@ public sealed class RemindersApiTests : IAsyncLifetime
         if (!_available) return;
         var soon = DateTime.Now.AddMinutes(45);
         var (_, roundId) = await SeedRoundAtAsync(Owner, soon, Unique("Ack"));
-        var (_, dueBody) = await GetJsonAsync("/api/interviews/reminders/due", DefaultToken(Owner));
+        var (dueStatus, dueBody) = await GetJsonAsync("/api/interviews/reminders/due", DefaultToken(Owner));
+        // 票 168:先断状态再解析 —— 否则服务端/鉴权失败(401 空体、409/500 ProblemDetails 对象)
+        // 会在 ForRound EnumerateArray 处抛错,掩盖真实状态。
+        dueStatus.Should().Be(HttpStatusCode.OK, "due list must succeed, body: {0}",
+            dueBody.ValueKind == JsonValueKind.Undefined ? "<empty body>" : dueBody.ToString());
         var target = ForRound(dueBody, roundId).First().GetProperty("id").GetGuid();
 
         (await PostAckAsync(target, DefaultToken(Owner))).Should().Be(HttpStatusCode.NoContent);
@@ -268,7 +273,10 @@ public sealed class RemindersApiTests : IAsyncLifetime
         if (!_available) return;
         var soon = DateTime.Now.AddMinutes(45);
         var (_, roundId) = await SeedRoundAtAsync(Owner, soon, Unique("Iso"));
-        var (_, dueBody) = await GetJsonAsync("/api/interviews/reminders/due", DefaultToken(Owner));
+        var (dueStatus, dueBody) = await GetJsonAsync("/api/interviews/reminders/due", DefaultToken(Owner));
+        // 票 168:先断状态再解析(同上;本用例即 CI 两例的失败点)。
+        dueStatus.Should().Be(HttpStatusCode.OK, "due list must succeed, body: {0}",
+            dueBody.ValueKind == JsonValueKind.Undefined ? "<empty body>" : dueBody.ToString());
         var target = ForRound(dueBody, roundId).First().GetProperty("id").GetGuid();
 
         (await PostAckAsync(target, DefaultToken(Other))).Should().Be(HttpStatusCode.NotFound);

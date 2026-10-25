@@ -49,7 +49,12 @@ public sealed class StartTranscriptionApiTests : IAsyncLifetime
 {
     private const string Cs =
         "Host=localhost;Port=5432;Database=yourinterview;Username=postgres;Password=<redacted>";
-    private const string SigningKey = "t115-host-test-signing-key-0123456789abcdef";
+    // 票 168:必须与 RemindersApiTests 的 SigningKey 取同一值。两类同属
+    // Interviews.Tests 程序集、同进程,各自 Initialize/Dispose 都写/清进程级
+    // Jwt__SigningKey;WAF 在 CreateClient 建厂时急切快照环境变量,xUnit 跨类并行
+    // 下一方可能快照到另一方的值(或被清空),导致其全部请求 401(空体)/500,
+    // 在 Reminders 侧表现为 ForRound EnumerateArray 抛错。改任一处的值必须同步改另一处。
+    private const string SigningKey = "cal2-host-test-signing-key-0123456789abcdef";
     private const string Issuer = "your-interview.identity";
     private const string Audience = "your-interview.api";
 

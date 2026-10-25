@@ -973,9 +973,13 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .sec-head .sec-sub { font-size: 14px; font-weight: 500; color: #475569; }
     /* ---- 2026-10-19:Simplify 像素级 Resume Score ---- */
     .score-tab { padding: 24px 28px; }
-    .score-cols { display: flex; gap: 24px; align-items: flex-start; }
+    /* 票 167：卡片不再自带 560px 内滚动——正文完整展开、滚动只留在抽屉
+       (.detail-body) 一处；行交叉轴拉伸，JD 短于右侧列时卡片仍撑满行高、
+       与整个抽屉模块高度一致。 */
+    .score-cols { display: flex; gap: 24px; align-items: stretch; }
     .score-jd-card {
       flex: 1.2; min-width: 0;
+      display: flex; flex-direction: column;
       border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;
       background: #ffffff;
     }
@@ -986,7 +990,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
       font-size: 15px; font-weight: 700; color: #0f172a;
     }
     .score-jd-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: #64748b; }
-    .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #0f172a; max-height: 560px; overflow-y: auto; }
+    .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #0f172a; flex: 1 1 auto; }
     .score-jd-body p { margin: 0 0 12px; }
     /* 票 139：Score 卡片内复用 Overview 的节结构——.jd-subhead/.jd-list 原只在
        .about-job 下有样式，卡片内须另给同值规则；字号沿卡片 13.5px 继承。 */

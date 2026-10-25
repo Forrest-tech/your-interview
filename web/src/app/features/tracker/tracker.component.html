@@ -6,7 +6,8 @@
     </div>
     <div class="head-actions">
       <!-- ★ Active/Archived 标签页 (Simplify 对等) -->
-      <mat-button-toggle-group [value]="showArchived() ? 'archived' : 'active'"
+      <!-- 票 148：分段控件改 36px 外高（token 34px + 上下 1px 边框），与 Smart paste/+ 钮齐平。 -->
+      <mat-button-toggle-group class="status-tabs" [value]="showArchived() ? 'archived' : 'active'"
                                (change)="showArchived.set($event.value === 'archived'); page.set(1); reload()">
         <mat-button-toggle value="active">{{ t('tracker.active') }}</mat-button-toggle>
         <mat-button-toggle value="archived">{{ t('tracker.archivedTab') }}</mat-button-toggle>

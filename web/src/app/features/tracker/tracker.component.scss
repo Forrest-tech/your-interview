@@ -31,6 +31,10 @@
 .smart-btn mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; }
 /* 票 143：+ 钮与 Smart paste 同高 36px、同色扁平（去 FAB 阴影），工具栏高度统一。 */
 .add-btn { width: 36px; height: 36px; box-shadow: none; }
+/* 票 148：Active/Archived 分段控件外高 36px，与 Smart paste/+ 钮齐平。
+   Material 标准分段高度由 --mat-standard-button-toggle-height（label 行高）驱动，
+   组边框上下各 1px，故 token 取 34px，34 + 2 = 36 外高；字号/左右内边距/选中 ✓ 均不动。 */
+.status-tabs { --mat-standard-button-toggle-height: 34px; }
 
 
 /* ---------- 指标 ---------- */

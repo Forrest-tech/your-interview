@@ -366,8 +366,19 @@ export class PracticeGradingSession {
 
   /** ★ #10:Interviewing.io 模式 — Hire/No-Hire verdict + 2-3 个待加强点。 */
   /** ★ #14:AI 追问 (像真面试官一样,基于回答生成一层追问)。 */
-  readonly followUpQuestion = signal<string | null>(null);
-  readonly followUpLoading = signal(false);
+  /** 票136 R-136-1:追问按 take id 存（会话内，不进后端）；会话级信号改为按 activeTakeId 解析的计算值，模板与组件绑定保持原名。 */
+  readonly followUpsByTake = signal<Map<string, string>>(new Map());
+  readonly followUpQuestion = computed(() => {
+    const id = this.activeTakeId();
+    if (!id) return null;
+    return this.followUpsByTake().get(id) ?? null;
+  });
+  /** 票136 R-136-8:加载态跟生成 Take 走（生成中 take id 集合）；模板进度条仅在加载中 take 的报告展开时显示。 */
+  readonly followUpLoadingTakes = signal<Set<string>>(new Set());
+  readonly followUpLoading = computed(() => {
+    const id = this.activeTakeId();
+    return id !== null && this.followUpLoadingTakes().has(id);
+  });
 
   /** ★ 打通:AI Practice 低分 → 创建 Tech Stack 复习卡。 */
   async addToReview(): Promise<void> {
@@ -393,30 +404,43 @@ export class PracticeGradingSession {
 
   async generateFollowUp(): Promise<void> {
     const take = this.activeTake();
-    if (!take || this.followUpLoading()) return;
+    if (!take) return;
+    // 票136 R-136-7:生成绑生成时 Take（R-F6 同款守卫模式）：完成时写回捕获的 takeId，不是完成时的 activeTake。
+    const takeId = take.id;
+    if (this.followUpLoadingTakes().has(takeId)) return;
     const transcript = take?.score?.recognized ?? '';
     const question = this.host.currentText();
     if (!transcript.trim()) { this.host.toast(this.host.t('practice.noRecognizedText')); return; }
 
-    this.followUpLoading.set(true);
-    this.followUpQuestion.set(null);
+    this.followUpLoadingTakes.update(s => new Set(s).add(takeId));
+    // 现行行为守恒（按 take 作用域）：开始时清本条（旧 set(null)），失败/空结果时本条保持空态 + toast；绝不碰其他 take 的条目。
+    this.followUpsByTake.update(m => { const n = new Map(m); n.delete(takeId); return n; });
     try {
       const res = await this.host.aiApi.complete({
         purpose: 'ai-practice-followup',
-        systemPrompt: 'You are a senior technical interviewer. Based on the candidate\'s answer, ask ONE sharp follow-up question that digs deeper into a weak point, edge case, or design trade-off. Reply in the same language as the answer. Output only the question, no preamble.',
+        systemPrompt: this.followUpSystemPrompt(),
         prompt: `Original question: ${question}\n\nCandidate's answer:\n${transcript.slice(0, 2000)}`,
         maxTokens: 200,
         temperature: 0.7
       }).toPromise();
       const q = res?.text ?? res?.content ?? '';
-      this.followUpQuestion.set(q.trim() || null);
-      if (!q.trim()) this.host.toast(this.host.t('practice.followUpFailed'));
+      if (q.trim()) {
+        this.followUpsByTake.update(m => { const n = new Map(m); n.set(takeId, q.trim()); return n; });
+      } else {
+        this.host.toast(this.host.t('practice.followUpFailed'));
+      }
     } catch {
-      this.followUpQuestion.set(null);
       this.host.toast(this.host.t('practice.followUpFailed'));
     } finally {
-      this.followUpLoading.set(false);
+      this.followUpLoadingTakes.update(s => { const n = new Set(s); n.delete(takeId); return n; });
     }
+  }
+
+  /** 票136 R-136-10:语言钉死 practiceLang（前端一层，后端透传不动）；prompt 其余部分逐字保留。 */
+  private followUpSystemPrompt(): string {
+    const lang: Record<string, string> = { 'en-US': 'English', 'fr-FR': 'French', 'zh-CN': 'Chinese' };
+    const language = lang[this.host.practiceLang()] ?? 'English';
+    return `You are a senior technical interviewer. Based on the candidate's answer, ask ONE sharp follow-up question that digs deeper into a weak point, edge case, or design trade-off. Reply in ${language}. Output only the question, no preamble.`;
   }
 
   /** 在历史列表里点"查看报告"：把该条设为当前作品并弹到结果区。 */
@@ -591,6 +615,8 @@ export class PracticeGradingSession {
       if (!ok) return;
       this.host.recorder.remove(id);
       if (this.activeTakeId() === id) this.activeTakeId.set(null);
+      // 票136 R-136-5:删除连带清条目——追问不得比它的 Take 活得久。
+      this.followUpsByTake.update(m => { const n = new Map(m); n.delete(id); return n; });
     });
   }
 

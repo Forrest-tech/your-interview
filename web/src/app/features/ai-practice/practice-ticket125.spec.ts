@@ -12,7 +12,7 @@
  */
 import { describe, expect, it, beforeEach } from '@jest/globals';
 import { signal, type WritableSignal } from '@angular/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { PracticeGradingSession } from './practice-grading-session';
 import type { Recording, RecordingScore } from '../../core/recorder/recorder.service';
 import * as fs from 'fs';
@@ -60,6 +60,7 @@ interface Rig {
   aiCalls: unknown[];
   createCalls: unknown[];
   lang: WritableSignal<'en' | 'zh'>;
+  practiceLang: WritableSignal<'en-US' | 'fr-FR' | 'zh-CN'>;
   setAiImpl: (impl: (req: never) => unknown) => void;
   setCreateImpl: (impl: (item: never) => unknown) => void;
 }
@@ -84,25 +85,29 @@ function makeRig(takes: Recording[], activeId: string): Rig {
   const aiCalls: unknown[] = [];
   const createCalls: unknown[] = [];
   const lang: WritableSignal<'en' | 'zh'> = signal('en');
+  // 票136：真 host（组件）的 practiceLang 信号；测试桩默认 en-US，各语言测试自行 set。
+  const practiceLang: WritableSignal<'en-US' | 'fr-FR' | 'zh-CN'> = signal('en-US');
   let aiImpl: (req: never) => unknown = () => of({ text: 'FOLLOWUP-Q-125' });
   let createImpl: (item: never) => unknown = () => of({});
   const host = {
     selectedId: () => 'mat-1',
-    recorder: { forMaterial: () => takes },
+    recorder: { forMaterial: () => takes, remove: () => { /* stub */ } },
     practiceApi: {},
     aiApi: { complete: (req: never) => { aiCalls.push(req); return aiImpl(req); } },
     knowledgeApi: { createItem: (item: never) => { createCalls.push(item); return createImpl(item); } },
     customQuestion: () => '',
     currentText: () => 'QUESTION-125',
+    practiceLang,
     t: (key: string) => DICT[key]?.[lang()] ?? key,
     toast: (msg: string) => { toasts.push(msg); },
     cdr: { detectChanges: () => { /* stub */ } },
+    tree: { confirmDialog: () => Promise.resolve(true) },
     tts: {},
   };
   const session = new PracticeGradingSession(host as never);
   session.activeTakeId.set(activeId);
   return {
-    session, toasts, aiCalls, createCalls, lang,
+    session, toasts, aiCalls, createCalls, lang, practiceLang,
     setAiImpl: (impl) => { aiImpl = impl; },
     setCreateImpl: (impl) => { createImpl = impl; },
   };
@@ -110,8 +115,8 @@ function makeRig(takes: Recording[], activeId: string): Rig {
 
 const CJK = /[\u4e00-\u9fff]/;
 
-describe('票125 TJ-1 追问真出题', () => {
-  it('prompt 装的是 score.recognized 原文，结果置位', async () => {
+describe('票125 TJ-1 追问真出题（票136 同步改写：按 take 断言，原断言一个不删）', () => {
+  it('prompt 装的是 score.recognized 原文，结果置位到生成时 take 的条目', async () => {
     const take = makeTake('take-1', makeScore({ recognized: RECOG }));
     const rig = makeRig([take], 'take-1');
     await rig.session.generateFollowUp();
@@ -119,10 +124,11 @@ describe('票125 TJ-1 追问真出题', () => {
     const prompt = (rig.aiCalls[0] as { prompt: string }).prompt;
     expect(prompt).toContain(RECOG);
     expect(rig.session.followUpQuestion()).toBe('FOLLOWUP-Q-125');
+    expect(rig.session.followUpsByTake().get('take-1')).toBe('FOLLOWUP-Q-125');
   });
 });
 
-describe('票125 TJ-2 追问无文本必反馈', () => {
+describe('票125 TJ-2 追问无文本必反馈（票136 同步改写：按 take 断言，原断言一个不删）', () => {
   it('recognized 为空：零请求、toast 出 noRecognizedText、loading 全程 false', async () => {
     const take = makeTake('take-1', makeScore({ recognized: '' }));
     const rig = makeRig([take], 'take-1');
@@ -131,6 +137,7 @@ describe('票125 TJ-2 追问无文本必反馈', () => {
     expect(rig.toasts).toEqual(['No recognized speech yet — score a recording first.']);
     expect(rig.session.followUpLoading()).toBe(false);
     expect(rig.session.followUpQuestion()).toBe(null);
+    expect(rig.session.followUpsByTake().get('take-1')).toBeUndefined();
   });
 
   it('score 为 null 变体：同样零请求有反馈', async () => {
@@ -140,6 +147,106 @@ describe('票125 TJ-2 追问无文本必反馈', () => {
     expect(rig.aiCalls.length).toBe(0);
     expect(rig.toasts.length).toBe(1);
     expect(rig.session.followUpLoading()).toBe(false);
+    expect(rig.session.followUpsByTake().get('take-1')).toBeUndefined();
+  });
+});
+
+describe('票136 隔离：追问按 take 独立', () => {
+  it('A 生成后切到 B，B 为生成按钮态；B 生成后 A 的条目原样不变；切回 A 仍是 A 的追问', async () => {
+    const a = makeTake('take-A', makeScore({ recognized: 'ANSWER-A' }));
+    const b = makeTake('take-B', makeScore({ recognized: 'ANSWER-B' }));
+    const rig = makeRig([a, b], 'take-A');
+    await rig.session.generateFollowUp();
+    expect(rig.session.followUpQuestion()).toBe('FOLLOWUP-Q-125');
+    rig.session.activeTakeId.set('take-B');
+    expect(rig.session.followUpQuestion()).toBe(null);
+    expect(rig.session.followUpLoading()).toBe(false);
+    rig.setAiImpl(() => of({ text: 'FOLLOWUP-Q-B' }));
+    await rig.session.generateFollowUp();
+    expect(rig.session.followUpQuestion()).toBe('FOLLOWUP-Q-B');
+    expect(rig.session.followUpsByTake().get('take-A')).toBe('FOLLOWUP-Q-125');
+    rig.session.activeTakeId.set('take-A');
+    expect(rig.session.followUpQuestion()).toBe('FOLLOWUP-Q-125');
+  });
+
+  it('删 A 后 A 的条目消失', async () => {
+    const a = makeTake('take-A', makeScore({ recognized: 'ANSWER-A' }));
+    const b = makeTake('take-B', makeScore({ recognized: 'ANSWER-B' }));
+    const rig = makeRig([a, b], 'take-A');
+    await rig.session.generateFollowUp();
+    expect(rig.session.followUpsByTake().get('take-A')).toBe('FOLLOWUP-Q-125');
+    rig.session.removeRecording('take-A');
+    await Promise.resolve();
+    expect(rig.session.followUpsByTake().get('take-A')).toBeUndefined();
+  });
+
+  it('Another one 只换本条', async () => {
+    const a = makeTake('take-A', makeScore({ recognized: 'ANSWER-A' }));
+    const b = makeTake('take-B', makeScore({ recognized: 'ANSWER-B' }));
+    const rig = makeRig([a, b], 'take-A');
+    await rig.session.generateFollowUp();
+    rig.session.activeTakeId.set('take-B');
+    rig.setAiImpl(() => of({ text: 'FOLLOWUP-Q-B' }));
+    await rig.session.generateFollowUp();
+    rig.session.activeTakeId.set('take-A');
+    rig.setAiImpl(() => of({ text: 'FOLLOWUP-Q-A2' }));
+    await rig.session.generateFollowUp();
+    expect(rig.session.followUpsByTake().get('take-A')).toBe('FOLLOWUP-Q-A2');
+    expect(rig.session.followUpsByTake().get('take-B')).toBe('FOLLOWUP-Q-B');
+  });
+
+  it('生成中途切 Take：完成时写回生成时的 Take，不落到新 Take；加载指示不出现在新 Take 报告下', async () => {
+    const a = makeTake('take-A', makeScore({ recognized: 'ANSWER-A' }));
+    const b = makeTake('take-B', makeScore({ recognized: 'ANSWER-B' }));
+    const rig = makeRig([a, b], 'take-A');
+    const subj = new Subject<unknown>();
+    rig.setAiImpl(() => subj);
+    const flight = rig.session.generateFollowUp();
+    rig.session.activeTakeId.set('take-B');
+    expect(rig.session.followUpLoading()).toBe(false);
+    rig.session.activeTakeId.set('take-A');
+    expect(rig.session.followUpLoading()).toBe(true);
+    rig.session.activeTakeId.set('take-B');
+    subj.next({ text: 'FOLLOWUP-Q-A' });
+    subj.complete();
+    await flight;
+    expect(rig.session.followUpsByTake().get('take-A')).toBe('FOLLOWUP-Q-A');
+    expect(rig.session.followUpsByTake().get('take-B')).toBeUndefined();
+    expect(rig.session.followUpQuestion()).toBe(null);
+    expect(rig.session.followUpLoading()).toBe(false);
+  });
+});
+
+describe('票136 语言钉死 practiceLang', () => {
+  const expectedPrompt = (language: string) =>
+    `You are a senior technical interviewer. Based on the candidate's answer, ask ONE sharp follow-up question that digs deeper into a weak point, edge case, or design trade-off. Reply in ${language}. Output only the question, no preamble.`;
+
+  it('en-US/fr-FR/zh-CN 各自映射到 English/French/Chinese，prompt 其余逐字一致', async () => {
+    const cases = [['en-US', 'English'], ['fr-FR', 'French'], ['zh-CN', 'Chinese']] as const;
+    for (const [code, language] of cases) {
+      const take = makeTake('take-1', makeScore({ recognized: RECOG }));
+      const rig = makeRig([take], 'take-1');
+      rig.practiceLang.set(code);
+      await rig.session.generateFollowUp();
+      expect(rig.aiCalls.length).toBe(1);
+      const systemPrompt = (rig.aiCalls[0] as { systemPrompt: string }).systemPrompt;
+      expect(systemPrompt).toBe(expectedPrompt(language));
+      expect(systemPrompt).not.toContain('same language as the answer');
+    }
+  });
+
+  it('练习语言中途切换不改写已有条目，新生成用新语言', async () => {
+    const a = makeTake('take-A', makeScore({ recognized: 'ANSWER-A' }));
+    const b = makeTake('take-B', makeScore({ recognized: 'ANSWER-B' }));
+    const rig = makeRig([a, b], 'take-A');
+    await rig.session.generateFollowUp();
+    expect(rig.session.followUpsByTake().get('take-A')).toBe('FOLLOWUP-Q-125');
+    rig.practiceLang.set('fr-FR');
+    expect(rig.session.followUpsByTake().get('take-A')).toBe('FOLLOWUP-Q-125');
+    rig.session.activeTakeId.set('take-B');
+    await rig.session.generateFollowUp();
+    const systemPrompt = (rig.aiCalls[1] as { systemPrompt: string }).systemPrompt;
+    expect(systemPrompt).toBe(expectedPrompt('French'));
   });
 });
 

@@ -126,12 +126,12 @@
           <button type="button" class="cell" [class.on]="expandedCell() === 'jd'" [attr.aria-pressed]="expandedCell() === 'jd'" (click)="toggleCell('jd')">
             <span class="cell-label">{{ t('pb.v2.d.stripJd') }}</span>
             <span class="cell-body">{{ jdCellText() || t('pb.v2.d.stripJdEmpty') }}</span>
-            <span class="cell-more">{{ expandedCell() === 'jd' ? t('pb.v2.d.collapse') : t('pb.v2.d.expandFull') }}</span>
+            <span class="cell-more">{{ expandedCell() === 'jd' ? t('pb.v2.d.collapse') : t('pb.v2.d.view') }}</span>
           </button>
           <button type="button" class="cell" [class.on]="expandedCell() === 'company'" [attr.aria-pressed]="expandedCell() === 'company'" (click)="toggleCell('company')">
             <span class="cell-label">{{ t('pb.v2.d.stripCompany') }}</span>
             <span class="cell-body">{{ companyCellText() ? companyCellText().slice(0, 90) + (companyCellText().length > 90 ? '…' : '') : t('pb.v2.d.stripCompanyEmpty') }}</span>
-            <span class="cell-more">{{ expandedCell() === 'company' ? t('pb.v2.d.collapse') : t('pb.v2.d.expandFull') }}</span>
+            <span class="cell-more">{{ expandedCell() === 'company' ? t('pb.v2.d.collapse') : t('pb.v2.d.view') }}</span>
           </button>
           <button type="button" class="cell" [class.on]="expandedCell() === 'resume'" [attr.aria-pressed]="expandedCell() === 'resume'" (click)="toggleCell('resume')">
             <span class="cell-label">{{ t('pb.v2.d.stripResume') }}</span>
@@ -141,7 +141,7 @@
           <button type="button" class="cell" [class.on]="expandedCell() === 'score'" [attr.aria-pressed]="expandedCell() === 'score'" (click)="toggleCell('score')">
             <span class="cell-label">{{ t('pb.v2.d.stripScore') }}</span>
             <span class="cell-body" [class.big]="resumeScore() != null" [class.missing]="resumeScore() == null">{{ resumeScore() != null ? resumeScore() : t('pb.v2.d.emptyNotScored') }}</span>
-            <span class="cell-more">{{ expandedCell() === 'score' ? t('pb.v2.d.collapse') : t('pb.v2.d.howDerived') }}</span>
+            <span class="cell-more">{{ expandedCell() === 'score' ? t('pb.v2.d.collapse') : t('pb.v2.d.view') }}</span>
           </button>
         </section>
         @if (expandedCell(); as cell) {

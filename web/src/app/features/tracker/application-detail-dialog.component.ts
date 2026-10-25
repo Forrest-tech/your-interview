@@ -534,7 +534,42 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
               <mat-icon>work</mat-icon>
               <span>{{ t('tracker.dJobDescHeader') }}</span>
             </div>
-            <div class="score-jd-body" [innerHTML]="highlightedJd(m)"></div>
+            <!-- 票 139：Score 页 JD 与 Overview 逐节一致（摘要 richBlocks + Qualifications 节 + Additional Information 节），
+                 每节文本经 highlightHtml 标记命中词；卡片头已是 Job Description 标题，卡片内不再重复该小节标题；
+                 只读展示，不复制 Overview 的编辑/重解析工具条。 -->
+            <div class="score-jd-body">
+              @if (richBlocks(jdSummaryDisplay()).length > 0) {
+                @for (b of richBlocks(jdSummaryDisplay()); track $index) {
+                  @if (b.kind === 'ul') {
+                    <ul class="jd-list">@for (li of b.items; track $index) { <li [innerHTML]="highlightHtml(li, m.hit)"></li> }</ul>
+                  } @else {
+                    <p [innerHTML]="highlightHtml(b.items[0], m.hit)"></p>
+                  }
+                }
+              } @else {
+                <p class="dim">{{ t('tracker.dNoJd') }}</p>
+              }
+              @if (detail.requirements) {
+                <div class="jd-subhead">{{ t('tracker.dQualifications') }}</div>
+                @for (b of richBlocks(detail.requirements); track $index) {
+                  @if (b.kind === 'ul') {
+                    <ul class="jd-list">@for (li of b.items; track $index) { <li [innerHTML]="highlightHtml(li, m.hit)"></li> }</ul>
+                  } @else {
+                    <p [innerHTML]="highlightHtml(b.items[0], m.hit)"></p>
+                  }
+                }
+              }
+              @if (detail.benefits) {
+                <div class="jd-subhead">{{ t('tracker.dAdditionalInfo') }}</div>
+                @for (b of richBlocks(detail.benefits); track $index) {
+                  @if (b.kind === 'ul') {
+                    <ul class="jd-list">@for (li of b.items; track $index) { <li [innerHTML]="highlightHtml(li, m.hit)"></li> }</ul>
+                  } @else {
+                    <p [innerHTML]="highlightHtml(b.items[0], m.hit)"></p>
+                  }
+                }
+              }
+            </div>
           </div>
           <!-- 右:仪表盘 + 关键词 -->
           <div class="score-side">
@@ -885,6 +920,13 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .score-jd-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: #68707e; }
     .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #1f2430; max-height: 560px; overflow-y: auto; }
     .score-jd-body p { margin: 0 0 12px; }
+    /* 票 139：Score 卡片内复用 Overview 的节结构——.jd-subhead/.jd-list 原只在
+       .about-job 下有样式，卡片内须另给同值规则；字号沿卡片 13.5px 继承。 */
+    .score-jd-body .jd-subhead { margin: 22px 0 10px; font-size: 14px; font-weight: 700; color: #1f2430; }
+    .score-jd-body .jd-subhead:first-child { margin-top: 0; }
+    .score-jd-body .jd-list { margin: 0 0 16px; padding-left: 20px; }
+    .score-jd-body .jd-list li { margin: 0 0 8px; line-height: 1.6; }
+    .score-jd-body .dim { color: #68707e; }
     .hl-kw {
       color: #2e3a8c; background: #e4e7f5; border-radius: 999px;
       padding: 1px 6px; font-weight: 600; white-space: nowrap;
@@ -1554,21 +1596,36 @@ export class ApplicationDetailDialogComponent {
   }
 
   /** 2026-10-19:Resume Score 左侧 JD 卡片 —— 命中关键词高亮为 teal pill */
-  highlightedJd(m: { hit: string[] }): string {
-    const jd = this.detail?.jdSummary || this.detail?.jdText || '';
-    if (!jd) return '';
-    // 按长度降序,避免短词先替换破坏长词
-    const keys = [...m.hit].sort((a, b) => b.length - a.length);
-    let html = jd.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    for (const k of keys) {
-      if (k.length < 2) continue;
-      const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      html = html.replace(new RegExp(`(${esc})`, 'gi'),
-        '<span class="hl-kw">$1</span>');
+  /**
+   * 票 139：单段文本的命中标记（先转义、单次遍历标记，不嵌套）。
+   * 旧 highlightedJd 的两处缺陷一并修掉：(1) 逐词顺序替换会在已插入的
+   * span 内再匹配短词（如 .NET 嵌进 .NET Core 的 span）；(2) 组件默认
+   * Emulated 封装下 .hl-kw 规则不作用于 [innerHTML] 注入节点，标记不可见。
+   * 本函数单次左→右遍历、交替子串永不重叠，故无嵌套、无标签内匹配；
+   * span 同时带 class="hl-kw" 与 .hl-kw 同值内联样式——内联样式不受
+   * 封装影响，浏览器内必可见（Angular 默认消毒保留这些安全声明）。
+   * 标记口径：仅命中词的字面出现（大小写不敏感）；经别名才命中但显示
+   * 文本无字面出现时无标记（现状口径，见定稿 A-4，不得为此发明新规则）。
+   */
+  highlightHtml(text: string, hit: string[]): string {
+    const esc = (s: string): string =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // 按长度降序：同一位置长词优先（如 .NET Core 优先于 .NET），去重、跳过单字
+    const keys = [...new Set(hit)].filter(k => k.length >= 2)
+      .sort((a, b) => b.length - a.length);
+    if (keys.length === 0) return esc(text);
+    const pattern = keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const re = new RegExp(`(${pattern})`, 'gi');
+    let out = '';
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      out += esc(text.slice(last, m.index));
+      out += `<span class="hl-kw" style="color:#2e3a8c;background:#e4e7f5;border-radius:999px;padding:1px 6px;font-weight:600;white-space:nowrap">${esc(m[0])}</span>`;
+      last = m.index + m[0].length;
     }
-    // 换行转段落
-    html = html.split(/\n\s*\n/).map(p => `<p>${p.trim().replace(/\n/g, '<br>')}</p>`).join('');
-    return html;
+    out += esc(text.slice(last));
+    return out;
   }
 
   // ---------------------------- 公司 Logo / 页签 ----------------------------

@@ -146,6 +146,22 @@ export class JobsApiService {
     return this.api.get<Company>(`${JobsApiService.BASE}/companies/${id}`);
   }
 
+  /** 票142 R-142-3:写公司情报长文本(走现有 PUT companies/{id}/profile)。 */
+  setCompanyProfile<T = void>(id: string, body: {
+    profile: string | null; profileSourcesJson?: string | null; version?: number | null;
+  }): Observable<T> {
+    return this.api.put<T>(`${JobsApiService.BASE}/companies/${id}/profile`, body);
+  }
+
+  /** 票142 R-142-11:抓取公司简介(只取数、不写库)。 */
+  fetchCompanyProfile(id: string): Observable<{
+    candidateText?: string | null; sourceUrl?: string | null; notFound?: boolean; tried?: string[];
+  }> {
+    return this.api.post<{
+      candidateText?: string | null; sourceUrl?: string | null; notFound?: boolean; tried?: string[];
+    }>(`${JobsApiService.BASE}/companies/${id}/fetch-profile`, {});
+  }
+
   // ---------- 求职信 ----------
 
   getCoverLetter<T = unknown>(appId: string): Observable<T> {

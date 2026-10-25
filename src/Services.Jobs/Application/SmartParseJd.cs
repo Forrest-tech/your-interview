@@ -1144,7 +1144,10 @@ public static class JdPasteParser
                 if (l.Length > 0) sb.Add(l);
             }
             var v = string.Join("\n", sb).Trim();
-            if (v.Length >= 20) return v.Length <= 8000 ? v : v[..8000] + "…";
+            // 票142 R-142-9:完整显示 —— 删除 8000 字截断,返回整段正文。
+            // 存储列为 text(无界)、域与 API 均无长度校验,JD 全文已有 40000 字上限为界;
+            // ≥20 字提取门槛不动。
+            if (v.Length >= 20) return v;
             return null;
         }
         return null;

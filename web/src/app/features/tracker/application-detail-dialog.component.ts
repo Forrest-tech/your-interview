@@ -203,11 +203,33 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
         }
       </section>
 
-      <!-- 公司介绍:LinkedIn "About the company" 侧边栏 —— 独立成节 -->
-      @if (detail.companyDescription) {
-        <mat-divider></mat-divider>
-        <section class="about-job">
-          <div class="jd-subhead" style="margin-top:0">{{ t('tracker.companyDescription') }}</div>
+      <!-- 公司介绍:LinkedIn "About the company" 侧边栏 —— 独立成节(票142:空态也渲染) -->
+      <mat-divider></mat-divider>
+      <section class="about-job">
+        <div class="about-job-edit">
+          <button mat-icon-button (click)="companyDescEditing() ? cancelEditCompanyDesc() : startEditCompanyDesc()"
+                  [matTooltip]="t('common.edit')" class="edit-btn"
+          [attr.aria-label]="t('common.edit')">
+            <mat-icon>{{ companyDescEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </div>
+        <div class="jd-subhead" style="margin-top:0">{{ t('tracker.companyDescription') }}</div>
+        @if (companyDescEditing()) {
+          <textarea class="plain-area" rows="8" [(ngModel)]="companyDescDraft"
+                    (ngModelChange)="companyDescError.set(null)"
+                    [placeholder]="t('tracker.companyDescription')"></textarea>
+          @if (companyDescError()) {
+            <div class="field-error-plain" role="alert">{{ companyDescError() }}</div>
+          }
+          <div class="cl-actions save-row">
+            <button mat-flat-button color="primary" (click)="saveCompanyDesc()"
+                    [disabled]="companyDescSaving()">
+              @if (companyDescSaving()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
+              {{ t('common.save') }}
+            </button>
+            <button mat-button (click)="cancelEditCompanyDesc()">{{ t('common.cancel') }}</button>
+          </div>
+        } @else if (detail.companyDescription) {
           @for (b of richBlocks(detail.companyDescription); track $index) {
             @if (b.kind === 'ul') {
               <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
@@ -215,22 +237,78 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
               <p>{{ b.items[0] }}</p>
             }
           }
-        </section>
-      }
+        } @else {
+          <p class="dim">{{ t('tracker.dNoCompanyDesc') }}
+            <button mat-button (click)="startEditCompanyDesc()">{{ t('common.add') }}</button>
+          </p>
+        }
+      </section>
 
-      <!-- 公司情报 -->
-      @if (company()?.profile) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span class="sec-title">{{ t('tracker.dCompanyIntel') }}</span><span class="sec-sub">{{ company()?.name }}</span></div>
+      <!-- 公司情报(票142:空态也渲染,公司级共享) -->
+      <mat-divider></mat-divider>
+      <section>
+        <div class="sec-head"><span class="sec-title">{{ t('tracker.dCompanyIntel') }}</span><span class="sec-sub">{{ company()?.name }}</span>
+          <button mat-icon-button class="edit-btn" (click)="profileEditing() ? cancelEditProfile() : startEditProfile()"
+                  [matTooltip]="t('common.edit')" [attr.aria-label]="t('common.edit')" [disabled]="!company()">
+            <mat-icon>{{ profileEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </div>
+        <p class="dim">{{ t('tracker.dCompanyIntelShared') }}</p>
+        @if (profileEditing()) {
+          <textarea class="plain-area" rows="8" [(ngModel)]="profileDraft"
+                    (ngModelChange)="profileError.set(null)"
+                    [placeholder]="t('tracker.dCompanyIntel')"></textarea>
+          @if (fetchedProfileSource()) {
+            <a [href]="fetchedProfileSource()!" target="_blank" rel="noopener noreferrer" class="src-link">
+              <mat-icon>public</mat-icon>{{ fetchedProfileSource() }}
+            </a>
+          }
+          @if (profileFetchError()) {
+            <div class="field-error-plain" role="alert">{{ profileFetchError() }}</div>
+          }
+          @if (profileError()) {
+            <div class="field-error-plain" role="alert">{{ profileError() }}</div>
+          }
+          <div class="cl-actions save-row">
+            <button mat-flat-button color="primary" (click)="saveProfile()"
+                    [disabled]="profileSaving() || profileFetching()">
+              @if (profileSaving()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
+              {{ t('common.save') }}
+            </button>
+            <button mat-button (click)="cancelEditProfile()">{{ t('common.cancel') }}</button>
+            <button mat-button (click)="fetchCompanyProfile()" [disabled]="profileFetching()">
+              {{ profileFetching() ? t('tracker.dFetchingProfile') : t('tracker.dRefetchProfile') }}
+            </button>
+          </div>
+        } @else if (company()?.profile) {
           <p class="pre">{{ company()?.profile }}</p>
+          @for (src of profileSources(); track $index) {
+            <a [href]="src" target="_blank" rel="noopener noreferrer" class="src-link">
+              <mat-icon>public</mat-icon>{{ src }}
+            </a>
+          }
           @if (company()?.website) {
             <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
               <mat-icon>public</mat-icon>{{ company()!.website }}
             </a>
           }
-        </section>
-      }
+        } @else {
+          <p class="dim">{{ t('tracker.dNoCompanyIntel') }}
+            <button mat-button (click)="startEditProfile()" [disabled]="!company()">{{ t('common.add') }}</button>
+            <button mat-button (click)="fetchCompanyProfile()" [disabled]="!company() || profileFetching()">
+              {{ profileFetching() ? t('tracker.dFetchingProfile') : t('tracker.dFetchProfile') }}
+            </button>
+          </p>
+          @if (profileFetchError()) {
+            <div class="field-error-plain" role="alert">{{ profileFetchError() }}</div>
+          }
+          @if (company()?.website) {
+            <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
+              <mat-icon>public</mat-icon>{{ company()!.website }}
+            </a>
+          }
+        }
+      </section>
 
 
       @if ((detail.rounds?.length ?? 0) > 0) {
@@ -1668,6 +1746,22 @@ export class ApplicationDetailDialogComponent {
   jdSummaryDraft = '';
   readonly jdSummarySaving = signal(false);
 
+  /** 票142:公司介绍编辑态(沿用 JD 摘要编辑模式)。 */
+  readonly companyDescEditing = signal(false);
+  companyDescDraft = '';
+  readonly companyDescSaving = signal(false);
+  readonly companyDescError = signal<string | null>(null);
+
+  /** 票142:公司情报编辑态 + 抓取态。 */
+  readonly profileEditing = signal(false);
+  profileDraft = '';
+  readonly profileSaving = signal(false);
+  readonly profileError = signal<string | null>(null);
+  readonly profileFetching = signal(false);
+  readonly profileFetchError = signal<string | null>(null);
+  /** 本次编辑会话中抓取到的来源 URL(保存时记入 profileSourcesJson;手动编辑仍原值回传)。 */
+  readonly fetchedProfileSource = signal<string | null>(null);
+
   /** JD 全文编辑态(走独立的 /jd 端点,不碰其他字段)。 */
   readonly jdTextEditing = signal(false);
   jdTextDraft = '';
@@ -2006,6 +2100,152 @@ export class ApplicationDetailDialogComponent {
     this.jdTextEditing.set(true);
     // 编辑时自动展开全文
     this.jdExpanded.set(true);
+  }
+
+  // ---------------------------- 票142:公司两节编辑 + 抓取 ----------------------------
+
+  startEditCompanyDesc(): void {
+    this.companyDescDraft = this.detail.companyDescription ?? '';
+    this.companyDescError.set(null);
+    this.companyDescEditing.set(true);
+  }
+
+  cancelEditCompanyDesc(): void {
+    this.companyDescEditing.set(false);
+    this.companyDescError.set(null);
+  }
+
+  saveCompanyDesc(): void {
+    const d = this.detail;
+    // 票75 口径:超限先挡,字段下亮含上限提示,不走通用弹框
+    const sent = this.companyDescDraft.trim();
+    if (textLengthError(sent, this.JD_MAX)) {
+      this.companyDescError.set(this.tooLongText(this.JD_MAX));
+      return;
+    }
+    this.companyDescSaving.set(true);
+    // 注意:R-142-2“只传 companyDescription + version”字面不可行——PUT
+    // applications/{id} 的 Role 必填且其余字段无条件覆盖(见 JobAggregates
+    // .UpdateDetails;唯 companyDescription 等有 null-keep 语义)。故按本对话框
+    // 既有 saveJdSummary 模式回填现值,仅 companyDescription 变化,无其他字段被改写。
+    this.jobsApi.updateApplication(this.app.id, {
+      role: d.role, location: d.location, link: d.link, salary: d.salary,
+      // FUN-02 附带:同 saveNotes,回填表单外的 workMode/source 防全量 PUT 误清
+      workMode: d.workMode ?? null, source: d.source ?? null,
+      jdSummary: d.jdSummary, notes: d.notes,
+      priority: d.priority, deadline: d.deadline, appliedDate: d.appliedDate,
+      companyDescription: sent || null,
+      version: d.version ?? null,
+    }).subscribe({
+      next: () => {
+        this.companyDescSaving.set(false);
+        this.companyDescEditing.set(false);
+        this.reloadDetail();
+        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
+      },
+      error: (err) => {
+        this.companyDescSaving.set(false);
+        this.alertError(this.readError(err));
+      }
+    });
+  }
+
+  startEditProfile(): void {
+    const c = this.company();
+    if (!c) return;
+    this.profileDraft = c.profile ?? '';
+    this.fetchedProfileSource.set(null);
+    this.profileError.set(null);
+    this.profileFetchError.set(null);
+    this.profileEditing.set(true);
+  }
+
+  cancelEditProfile(): void {
+    this.profileEditing.set(false);
+    this.profileError.set(null);
+    this.profileFetchError.set(null);
+    this.fetchedProfileSource.set(null);
+  }
+
+  saveProfile(): void {
+    const c = this.company();
+    if (!c) return;
+    const sent = this.profileDraft.trim();
+    this.profileSaving.set(true);
+    // R-142-3:手动编辑原值回传;经抓取填入后保存记 [sourceUrl];清空文本时来源一并清空。
+    const sources = sent
+      ? (this.fetchedProfileSource() ? JSON.stringify([this.fetchedProfileSource()]) : (c.profileSourcesJson ?? null))
+      : null;
+    this.jobsApi.setCompanyProfile(c.id, {
+      profile: sent || null, profileSourcesJson: sources, version: c.version ?? null,
+    }).subscribe({
+      next: () => {
+        this.profileSaving.set(false);
+        this.profileEditing.set(false);
+        this.fetchedProfileSource.set(null);
+        this.reloadCompany();
+        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
+      },
+      error: (err) => {
+        this.profileSaving.set(false);
+        // A-5:失败时编辑态不关闭、草稿保留,走现有通用提示
+        this.alertError(this.readError(err));
+      }
+    });
+  }
+
+  /** 刷新公司信号(情报保存成功后;与 reloadDetail 的投递刷新并列)。 */
+  private reloadCompany(): void {
+    const id = this.app.companyId;
+    if (!id) return;
+    this.jobsApi.getCompany(id).subscribe({
+      next: (c) => this.company.set(c),
+      error: () => { /* 刷新失败不阻断展示,旧值仍在 */ }
+    });
+  }
+
+  /** 情报来源 URL 列表:profileSourcesJson 为 JSON 数组字符串;非 JSON 的单条 URL 容错为单元素。 */
+  profileSources(): string[] {
+    const raw = this.company()?.profileSourcesJson;
+    if (!raw) return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string' && !!x);
+      if (typeof parsed === 'string' && parsed) return [parsed];
+    } catch { /* 非 JSON 时走下方的 URL 容错 */ }
+    return raw.startsWith('http') ? [raw] : [];
+  }
+
+  /**
+   * 票142 R-142-11:抓取公司简介。
+   * 成功 → 候选文本进编辑草稿(附来源链接),进入编辑态;未保存前不写库,刷新仍为空态。
+   * 未找到 → 明确失败提示(写明试过哪几腿),字段保持空态、手动添加仍可用。
+   * 已有 profile 时重新抓取 → 结果只进草稿,已保存文本在确认前一字不动。
+   */
+  fetchCompanyProfile(): void {
+    const c = this.company();
+    if (!c || this.profileFetching()) return;
+    this.profileFetching.set(true);
+    this.profileFetchError.set(null);
+    this.jobsApi.fetchCompanyProfile(c.id).subscribe({
+      next: (r) => {
+        this.profileFetching.set(false);
+        if (r.candidateText) {
+          this.profileDraft = r.candidateText;
+          this.fetchedProfileSource.set(r.sourceUrl ?? null);
+          this.profileEditing.set(true);
+        } else {
+          const legs = (r.tried ?? []).map((leg) =>
+            leg === 'website' ? this.t('tracker.dFetchLegWebsite') : this.t('tracker.dFetchLegWikipedia'));
+          this.profileFetchError.set(
+            `${this.t('tracker.dFetchNotFound')}（${this.t('tracker.dFetchTried')}：${legs.join('、') || '—'}）`);
+        }
+      },
+      error: (err) => {
+        this.profileFetching.set(false);
+        this.profileFetchError.set(this.readError(err));
+      }
+    });
   }
 
   /** 1-click JD 导入:打开编辑 + 滚动到 Full JD 区域。 */

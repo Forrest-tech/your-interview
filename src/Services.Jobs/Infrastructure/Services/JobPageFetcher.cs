@@ -60,6 +60,13 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
     private static readonly Regex SeparatorsOnly = new(
         @"^[\s|·•\-–—/\\]+$", RegexOptions.Compiled);
 
+    /// <summary>票142:反爬站判定供公司简介抓取腿复用(同一口径,避免两份名单漂移)。</summary>
+    internal static bool IsBlockedHost(string host)
+    {
+        var h = host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;
+        return BlockedHosts.Any(b => h.EndsWith(b, StringComparison.OrdinalIgnoreCase));
+    }
+
     public async Task<string?> FetchPageTextAsync(string url, CancellationToken ct)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -67,9 +74,7 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
         if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
             return null;
 
-        var host = uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
-            ? uri.Host[4..] : uri.Host;
-        if (BlockedHosts.Any(b => host.EndsWith(b, StringComparison.OrdinalIgnoreCase)))
+        if (IsBlockedHost(uri.Host))
             return null;
 
         try

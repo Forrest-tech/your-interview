@@ -68,6 +68,19 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILo
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 票142 R-142-11:网上抓取公司简介(只取数、不写库)。
+    /// 取数端点只接受公司 id,不接受任意 URL 入参(防 SSRF);返回候选文本 + 来源 URL,
+    /// 或 notFound + 实际尝试过的腿。前端进编辑草稿,用户确认后走现有 PUT profile 保存。
+    /// </summary>
+    [HttpPost("companies/{id:guid}/fetch-profile")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> FetchCompanyProfile(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new FetchCompanyProfileQuery(Me, id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     // 票68(用户裁决 B,2026-10-23):本控制器全部 DELETE 端点统一 JobsWrite 口径。
     // 默认 User 角色没有 JobsDelete(只有 PowerUser/Admin),删自己的数据是普通用户
     // 日常操作,原 JobsDelete 口径下恒 403。归属隔离由各 Handler 按 UserId 校验

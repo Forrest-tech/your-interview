@@ -45,6 +45,16 @@ builder.AddServiceDefaults(ServiceName, services =>
     services.AddSingleton<YourInterview.Services.Jobs.Infrastructure.Services.IJobPageFetcher,
         YourInterview.Services.Jobs.Infrastructure.Services.JobPageFetcher>();
 
+    // 票142 R-142-11:公司简介抓取(Wikipedia + 官网 About)。
+    // 描述性 UA(Wikimedia 规范要求可识别的 UA,不冒充浏览器);单腿 15 秒由抓取器内 CTS 控制。
+    services.AddHttpClient(YourInterview.Services.Jobs.Infrastructure.Services.CompanyProfileFetcher.ClientName, http =>
+    {
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("your-interview/1.0 (company-profile-fetch)");
+        http.Timeout = TimeSpan.FromSeconds(20);
+    });
+    services.AddSingleton<YourInterview.Services.Jobs.Infrastructure.Services.ICompanyProfileFetcher,
+        YourInterview.Services.Jobs.Infrastructure.Services.CompanyProfileFetcher>();
+
     // 2026-10-19:LinkedIn 职位页抓取(Playwright，带用户登录态)
     services.AddSingleton<YourInterview.Services.Jobs.Application.LinkedInFetcher>();
 

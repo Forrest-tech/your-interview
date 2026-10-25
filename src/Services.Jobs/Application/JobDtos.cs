@@ -18,6 +18,9 @@ public sealed record CompanyDto(Guid Id, string Name, string? Website, string? I
     // 票101:读时 xmin 乐观并发版本(更新回传钉版;0 = 未填充)。
     uint Version = 0);
 
+/// <summary>票142 R-142-11:抓取取数结果。CandidateText 为 null 时 NotFound=true,Tried 列出实际尝试过的腿。</summary>
+public sealed record FetchCompanyProfileResult(string? CandidateText, string? SourceUrl, bool NotFound, IReadOnlyList<string> Tried);
+
 public sealed record StatusChangeDto(string Status, string? Note, DateTimeOffset ChangedAt);
 
 public sealed record InterviewRoundDto(Guid Id, int Order, string Stage, DateOnly? ScheduledDate,

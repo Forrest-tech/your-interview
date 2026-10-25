@@ -28,6 +28,12 @@ public sealed record SetCompanyProfileCommand(Guid UserId, Guid Id, string? Prof
 
 public sealed record GetCompanyQuery(Guid UserId, Guid Id) : IRequest<Result<CompanyDto>>;
 
+/// <summary>
+/// 票142 R-142-11:网上抓取公司简介(只取数、不写库)。
+/// 返回候选文本 + 来源 URL,或 notFound + 实际尝试过的腿;前端进编辑草稿,用户确认后走现有 PUT 保存。
+/// </summary>
+public sealed record FetchCompanyProfileQuery(Guid UserId, Guid Id) : IRequest<Result<FetchCompanyProfileResult>>;
+
 public sealed record ListApplicationsQuery(
     Guid UserId, string? Search, string? Status, string? Priority, Guid? CompanyId,
     string? SortBy = "updated", int Page = 1, int PageSize = 50,

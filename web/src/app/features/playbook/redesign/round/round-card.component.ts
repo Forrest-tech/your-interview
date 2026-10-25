@@ -43,11 +43,11 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   ],
   template: `
     <section class="card" data-testid="round-card">
+      <!-- 票169:详情头去重——轮次号/类型/日期/Outcome/Materials 数已在上方轨道节点(票164)显示,此处不再重复。
+           仅保留轨道上没有的信息:时间(仅当时段存在时,日期本身不重复显示)、面试官、形式。 -->
       <div class="rc-head">
-        <h3>{{ fmt('pb.v2.r.roundLabel', { n: displayNo() ?? round().order }) }}</h3>
-        <span class="chip applied">{{ round().stage }}</span>
         <span class="rc-meta">
-          <span class="rc-meta-line">{{ round().scheduledDate ?? t('pb.v2.d.dateTbd') }}{{ round().scheduledTime ? ' ' + round().scheduledTime : '' }}</span>
+          @if (round().scheduledTime) { <span class="rc-meta-line">{{ round().scheduledTime }}</span> }
           @if (round().interviewers) { <span class="rc-meta-line">{{ round().interviewers }}</span> }
           @if (round().format) { <span class="rc-meta-line">{{ formatLabel(t, round().format) }}</span> }
         </span>
@@ -55,26 +55,28 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         @if (tab() === 'record') {
           <button mat-stroked-button (click)="openRecordExport()">{{ t('pb.v2.r.exportRecord') }}</button>
         }
-        <button type="button" class="mini-btn" (click)="toggleEdit()">{{ editing() ? t('pb.v2.d.collapse') : t('pb.v2.r.editRound') }}</button>
       </div>
       <div class="rc-outcome">
-        <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.outcomeLabel') }}</span><b>{{ outcomeLabel(round().outcome) }}</b></span>
         @if (roundScore() != null) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.overall') }}</span><b>{{ roundScore() }}</b></span>
         }
         @if (questionCount()) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.questionsCountLabel') }}</span><b>{{ questionCount() }}</b></span>
         }
-        <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.assetsCountLabel') }}</span><b>{{ roundAssets().length }}</b></span>
         @if (round().interviewers) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.interviewersLabel') }}</span><b>{{ round().interviewers }}</b></span>
         }
         @if (round().meetingLink) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.meetingLink') }}</span><a [href]="round().meetingLink" target="_blank" rel="noopener">{{ t('pb.v2.r.openLink') }}</a></span>
         }
+      </div>
+      <!-- 票169:Location(轨道节点上没有)与 Edit round(功能入口)不删、只挪到此处一行,始终可见可用。 -->
+      <div class="rc-sub">
         @if (round().location) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.location') }}</span><b>{{ round().location }}</b></span>
         }
+        <span class="spacer"></span>
+        <button type="button" class="mini-btn" (click)="toggleEdit()">{{ editing() ? t('pb.v2.d.collapse') : t('pb.v2.r.editRound') }}</button>
       </div>
 
       @if (round().scheduledDate) {
@@ -169,7 +171,8 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   styles: [`
     .card { padding: 2px 2px 0; margin-top: 14px; }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .rc-head h3 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; }
+    /* 票169:Location 与 Edit round 的承接行(详情头去重后仅剩的头部外信息)。 */
+    .rc-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 7px; }
     /* 票123 R-3:日期/时间/形式改为堆叠小字行(§9 mock 的 .rwhen),不再串在中点上。 */
     .rc-meta { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px;
                color: var(--yi-text-muted, #475569); }
@@ -347,16 +350,6 @@ export class RoundCardComponent implements OnInit {
 
   /** 票159：转发给备考报告的生成 token（0 = 无请求）。 */
   readonly prepGenToken = signal(0);
-
-  outcomeLabel(o: string): string {
-    switch (o) {
-      case 'Pending': return this.t('pb.v2.r.ocPending');
-      case 'Passed': return this.t('outcome.Passed');
-      case 'Failed': return this.t('outcome.Failed');
-      case 'Cancelled': return this.t('pb.v2.r.ocCancelled');
-      default: return o;
-    }
-  }
 
   toggleEdit(): void {
     const r = this.round();

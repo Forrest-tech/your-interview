@@ -329,20 +329,6 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
         }
       </section>
 
-      <!-- 票 150:手动补 Logo URL(走现有 UpdateCompany 端点,零新端点) -->
-      @if (company()) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span class="sec-title">{{ t('tracker.logoUrl') }}</span><span class="sec-sub">{{ company()?.name }}</span></div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <mat-form-field appearance="outline" style="flex:1;">
-              <input matInput [(ngModel)]="logoUrlInput" [placeholder]="t('tracker.logoUrlPh')">
-            </mat-form-field>
-            <button mat-stroked-button (click)="saveLogoUrl()" [disabled]="savingLogoUrl()">{{ t('tracker.logoSave') }}</button>
-          </div>
-        </section>
-      }
-
 
       @if ((detail.rounds?.length ?? 0) > 0) {
         <mat-divider></mat-divider>
@@ -1338,10 +1324,8 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
   /** 公司情报(懒加载 —— 详情弹窗打开后才查一次)。 */
   readonly company = signal<Company | null>(null);
 
-  /** 票 150:单家 logo 刷新 / 手动 URL 保存的进行态与输入值。 */
+  /** 票 150:单家 logo 刷新进行态。 */
   readonly refreshingLogo = signal(false);
-  readonly savingLogoUrl = signal(false);
-  logoUrlInput = '';
 
   /** JD 全文是否展开(默认折叠:40000 字符铺开会淹没弹窗)。 */
   readonly jdExpanded = signal(false);
@@ -1482,7 +1466,7 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
     // 公司情报:Application 只带 companyId,要单独查
     if (this.app.companyId) {
       this.jobsApi.getCompany(this.app.companyId).subscribe({
-        next: (c) => { this.company.set(c); this.logoUrlInput = c.logoUrl ?? ''; },
+        next: (c) => { this.company.set(c); },
         error: () => { /* 拿不到公司情报不阻断详情展示 */ }
       });
     }
@@ -1882,7 +1866,7 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
           this.app.companyLogoUrl = r.logoUrl;
           this.logoBroken.set(false);
           const c = this.company();
-          if (c) { this.company.set({ ...c, logoUrl: r.logoUrl }); this.logoUrlInput = r.logoUrl; }
+          if (c) { this.company.set({ ...c, logoUrl: r.logoUrl }); }
           this.snack.open(this.t('tracker.logoRefreshed'), this.t('common.close'), { duration: 2500 });
         } else if (r.status === 'Cleaned') {
           this.app.companyLogoUrl = null;
@@ -1893,32 +1877,6 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.refreshingLogo.set(false);
-        this.alertError(this.readError(err));
-      },
-    });
-  }
-
-  /** 票 150:手动保存 Logo URL(走现有 UpdateCompany 端点,只换 logoUrl 其余原值回传)。 */
-  saveLogoUrl(): void {
-    const c = this.company();
-    if (!c || this.savingLogoUrl()) return;
-    const url = this.logoUrlInput.trim();
-    this.savingLogoUrl.set(true);
-    this.jobsApi.updateCompany(c.id, {
-      name: c.name, website: c.website ?? null, industry: c.industry ?? null,
-      location: c.location ?? null, logoUrl: url ? url : null, notes: c.notes ?? null,
-      companyType: c.companyType, employeeCount: c.employeeCount ?? null, isBlacklisted: c.isBlacklisted,
-      version: c.version ?? null,
-    }).subscribe({
-      next: () => {
-        this.savingLogoUrl.set(false);
-        this.app.companyLogoUrl = url ? url : null;
-        this.logoBroken.set(false);
-        this.company.set({ ...c, logoUrl: url ? url : null });
-        this.snack.open(this.t('tracker.logoSaved'), this.t('common.close'), { duration: 2500 });
-      },
-      error: (err) => {
-        this.savingLogoUrl.set(false);
         this.alertError(this.readError(err));
       },
     });

@@ -963,6 +963,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dResumeText': { zh: '文本简历(主简历,无文件)', en: 'Text resume (main resume, no file)', fr: 'CV texte (principal, sans fichier)' },
   'tracker.dResumeTailored': { zh: '投递版本', en: 'Tailored version', fr: 'Version adaptée' },
   'tracker.dResumeUploadTailored': { zh: '上传投递版本', en: 'Upload tailored version', fr: 'Téléverser la version adaptée' },
+  // ---------- 票 147:简历缩放 + 抽屉拖拽 ----------
+  'pdfv.zoomOut': { zh: '缩小', en: 'Zoom out', fr: 'Réduire' },
+  'pdfv.zoomIn': { zh: '放大', en: 'Zoom in', fr: 'Agrandir' },
+  'pdfv.fitWidth': { zh: '适应宽度', en: 'Fit width', fr: 'Ajuster à la largeur' },
+  'tracker.drawerResizeHint': { zh: '拖动调整抽屉宽度', en: 'Drag to resize the drawer', fr: 'Glisser pour redimensionner le tiroir' },
+  'tracker.drawerResizeAria': { zh: '调整详情抽屉宽度', en: 'Resize detail drawer width', fr: 'Redimensionner la largeur du tiroir de détails' },
   'tracker.dResumeRemoveTailored': { zh: '移除投递版本(回落到基础简历)', en: 'Remove tailored version (fall back to base)', fr: 'Retirer la version adaptée' },
   'tracker.dResumeUploadOk': { zh: '投递版本简历已上传', en: 'Tailored resume uploaded', fr: 'CV adapté téléversé' },
   'tracker.dResumeUploadFail': { zh: '上传失败,请重试', en: 'Upload failed, please retry', fr: 'Échec du téléversement' },

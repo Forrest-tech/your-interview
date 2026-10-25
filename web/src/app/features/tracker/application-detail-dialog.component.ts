@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -26,6 +26,7 @@ import { extractPdfText } from '../../core/utils/pdf-text';
 import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 import { commFormMode, commSaveChannel } from './comm-form.helpers';
 import { computeMatch, type MatchResult } from '../../core/match/resume-match';
+import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWidth, saveDrawerWidth } from './detail-drawer-width';
 
 /**
  * 详情抽屉(内联)。
@@ -43,6 +44,18 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     PdfContentViewerComponent
   ],
   template: `
+    <!-- 票 147:抽屉左边缘拖拽手柄(面板内侧 6px,不压遮罩层,故不误关)。
+         窄屏(<1024px)时不渲染,拖拽禁用。 -->
+    @if (!narrowDrawer()) {
+      <div class="drawer-resize-handle" tabindex="0" role="separator" aria-orientation="vertical"
+           [title]="t('tracker.drawerResizeHint')" [attr.aria-label]="t('tracker.drawerResizeAria')"
+           [class.dragging]="draggingDrawer()"
+           (pointerdown)="onDrawerResizeStart($event)"
+           (pointermove)="onDrawerResizeMove($event)"
+           (pointerup)="onDrawerResizeEnd($event)"
+           (pointercancel)="onDrawerResizeEnd($event)"
+           (keydown)="onDrawerResizeKey($event)"></div>
+    }
     <h2 mat-dialog-title class="detail-header">
       <span class="logo-wrap detail-logo">
         <span class="logo-avatar" [style.background]="avatarColor(app.companyName)">{{ companyInitials(app.companyName) }}</span>
@@ -429,7 +442,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
           </div>
           <!-- PDF 查看器:单页显示,滚动翻页 -->
           @if (resumePdfRawUrl()) {
-            <app-pdf-content-viewer [pdfUrl]="resumePdfRawUrl()"></app-pdf-content-viewer>
+            <app-pdf-content-viewer [pdfUrl]="resumePdfRawUrl()" [showZoomControls]="true"></app-pdf-content-viewer>
           }
         } @else if (appResumeKind() === 'text') {
           <!-- REQ-05:主简历只有文本版 —— 显示全文,不再误报「No resume yet」 -->
@@ -778,6 +791,15 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     </mat-dialog-content>
   `,
   styles: [`
+    /* 票 147:宿主作手柄定位锚点(面板 flex 子项,本身已撑满面板,不改布局)。 */
+    :host { position: relative; }
+    /* 票 147:抽屉左边缘内侧拖拽手柄(6px 全高,平时透明,悬停/聚焦/拖动时显品牌色竖线)。 */
+    .drawer-resize-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+      z-index: 10; cursor: ew-resize; outline: none; }
+    .drawer-resize-handle::before { content: ''; position: absolute; left: 2px; top: 0; bottom: 0;
+      width: 2px; background: var(--brand, #2e3a8c); opacity: 0; transition: opacity .15s; }
+    .drawer-resize-handle:hover::before, .drawer-resize-handle:focus-visible::before,
+    .drawer-resize-handle.dragging::before { opacity: 1; }
     /* ★ Simplify 对齐:头部标题堆叠 */
     /* ★ Simplify 真站:头部 */
     h2[mat-dialog-title].detail-header {
@@ -1244,7 +1266,7 @@ import { computeMatch, type MatchResult } from '../../core/match/resume-match';
     .q-add-btn { margin-top: 4px; }
   `]
 })
-export class ApplicationDetailDialogComponent {
+export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
   readonly app = inject<Application>(MAT_DIALOG_DATA);
   private readonly jobsApi = inject(JobsApiService);
   private readonly trackerApi = inject(TrackerApi);
@@ -1664,6 +1686,133 @@ export class ApplicationDetailDialogComponent {
 
   /* ★ Simplify 真站:头部操作按钮 */
   readonly dialogRef = inject(MatDialogRef<ApplicationDetailDialogComponent>);
+
+  /* 票 147:抽屉左边缘拖拽改宽 + 窄屏规则(宽度口径见 detail-drawer-width.ts)。
+     钳制只由拖拽逻辑执行:开启时即把 pane 的 min/maxWidth 内联约束清掉,
+     否则 open 配置的 1280/900 会悄悄钳制 updateSize(定稿 §2.2 陷阱 a)。 */
+  @ViewChild(PdfContentViewerComponent) private pdfViewer?: PdfContentViewerComponent;
+  private readonly hostEl = inject(ElementRef<HTMLElement>);
+  readonly narrowDrawer = signal(false);
+  readonly draggingDrawer = signal(false);
+  private drawerWidthPx: number | null = null;
+  private dragStartX = 0;
+  private dragStartWidth = 0;
+  private drawerWasNarrow: boolean | null = null;
+  private viewerRemeasureQueued = false;
+
+  ngOnInit(): void {
+    this.applyDrawerNarrowState();
+  }
+
+  ngOnDestroy(): void {
+    // 对话框在拖动中被关闭(Esc 等)时 pointerup 不会来,须在此复原文本选中,
+    // 否则 user-select: none 会残留到整个应用。
+    if (this.draggingDrawer()) {
+      this.draggingDrawer.set(false);
+      document.body.style.userSelect = '';
+    }
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.applyDrawerNarrowState();
+  }
+
+  private paneEl(): HTMLElement | null {
+    return this.hostEl.nativeElement.closest('.cdk-overlay-pane') as HTMLElement | null;
+  }
+
+  /** 窄屏(<1024px)取满宽并隐藏手柄;宽屏恢复记忆宽/66vw;跨阈值或宽屏内超范围时才改宽。 */
+  private applyDrawerNarrowState(): void {
+    const narrow = window.innerWidth < DRAWER_NARROW_BELOW;
+    this.narrowDrawer.set(narrow);
+    const crossed = this.drawerWasNarrow !== narrow;
+    this.drawerWasNarrow = narrow;
+    const pane = this.paneEl();
+    if (pane) { pane.style.maxWidth = 'none'; pane.style.minWidth = '0px'; }
+    if (narrow) {
+      if (this.draggingDrawer()) {
+        this.draggingDrawer.set(false);
+        document.body.style.userSelect = '';
+      }
+      if (crossed) { this.dialogRef.updateSize('100vw'); this.drawerWidthPx = window.innerWidth; }
+      return;
+    }
+    if (crossed) {
+      const w = initialDrawerWidth(window.innerWidth);
+      this.dialogRef.updateSize(w);
+      this.drawerWidthPx = parseInt(w, 10);
+      return;
+    }
+    // 宽屏内 resize:仅把当前宽钳制进新范围(不改记忆值,窗口恢复后仍可用原宽)。
+    const { min, max } = drawerWidthRange(window.innerWidth);
+    if (this.drawerWidthPx != null && (this.drawerWidthPx < min || this.drawerWidthPx > max)) {
+      const w = Math.min(Math.max(this.drawerWidthPx, min), max);
+      this.applyDrawerWidth(w);
+    }
+  }
+
+  onDrawerResizeStart(e: PointerEvent): void {
+    if (this.narrowDrawer()) return;
+    const pane = this.paneEl();
+    if (!pane) return;
+    pane.style.maxWidth = 'none';
+    pane.style.minWidth = '0px';
+    if (this.drawerWidthPx == null) this.drawerWidthPx = Math.round(pane.getBoundingClientRect().width);
+    this.dragStartX = e.clientX;
+    this.dragStartWidth = this.drawerWidthPx;
+    this.draggingDrawer.set(true);
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* 捕获失败仍可拖动 */ }
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  }
+
+  onDrawerResizeMove(e: PointerEvent): void {
+    if (!this.draggingDrawer()) return;
+    // 右贴边:左边缘左移(clientX 减小)=变宽。
+    const { min, max } = drawerWidthRange(window.innerWidth);
+    const w = Math.min(Math.max(this.dragStartWidth + (this.dragStartX - e.clientX), min), max);
+    this.applyDrawerWidth(w);
+    this.queueViewerRemeasure();
+  }
+
+  onDrawerResizeEnd(e: PointerEvent): void {
+    if (!this.draggingDrawer()) return;
+    this.draggingDrawer.set(false);
+    document.body.style.userSelect = '';
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* 已释放 */ }
+    if (this.drawerWidthPx != null) saveDrawerWidth(this.drawerWidthPx);
+    // 抽屉拖宽不触发 window resize,简历框高须显式重算(定稿 §2.2 陷阱 b)。
+    this.pdfViewer?.remeasure();
+  }
+
+  onDrawerResizeKey(e: KeyboardEvent): void {
+    if (this.narrowDrawer()) return;
+    let delta = 0;
+    if (e.key === 'ArrowLeft') delta = DRAWER_KEY_STEP;
+    else if (e.key === 'ArrowRight') delta = -DRAWER_KEY_STEP;
+    else return;
+    e.preventDefault();
+    const pane = this.paneEl();
+    if (!pane) return;
+    if (this.drawerWidthPx == null) this.drawerWidthPx = Math.round(pane.getBoundingClientRect().width);
+    const { min, max } = drawerWidthRange(window.innerWidth);
+    const w = Math.min(Math.max(this.drawerWidthPx + delta, min), max);
+    this.applyDrawerWidth(w);
+    saveDrawerWidth(w);
+    this.pdfViewer?.remeasure();
+  }
+
+  private applyDrawerWidth(w: number): void {
+    this.dialogRef.updateSize(Math.round(w) + 'px');
+    this.drawerWidthPx = Math.round(w);
+  }
+
+  private queueViewerRemeasure(): void {
+    if (this.viewerRemeasureQueued) return;
+    this.viewerRemeasureQueued = true;
+    requestAnimationFrame(() => { this.viewerRemeasureQueued = false; this.pdfViewer?.remeasure(); });
+  }
 
   /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
    *  true 才执行后续动作,取消/Esc/点遮罩一律不执行(与原生 confirm 的 false 同义)。 */

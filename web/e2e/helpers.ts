@@ -169,6 +169,44 @@ export async function deleteApplication(
   }
 }
 
+/** 票 147:经智能粘贴建一个投递记录(复用 t81 的 UI 路径,CI 已验证)。 */
+export async function createApplicationViaSmartAdd(
+  page: Page,
+  role: string,
+  jdText: string
+): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('yi-tracker-view', 'list');
+    } catch {
+      /* 忽略 */
+    }
+  });
+  await page.goto('/tracker');
+  await page.locator('.smart-btn').first().click();
+  const dialog = page.locator('mat-dialog-container');
+  await dialog.locator('.ai-toggle input[type="checkbox"]').uncheck().catch(() => undefined);
+  await dialog.locator('textarea[matInput]').first().fill(jdText);
+  await dialog
+    .locator('button', { hasText: /解析|Parse|Analyser/ })
+    .first()
+    .click();
+  await dialog.locator('input[name="jdRole"]').fill(role);
+  await dialog
+    .locator('button', { hasText: /保存为投递记录|Save as application|Enregistrer comme candidature/ })
+    .first()
+    .click();
+}
+
+/** 票 147:在列表视图点行打开详情抽屉,返回抽屉定位器。 */
+export async function openDetailDialog(page: Page, role: string) {
+  const row = page.locator('.list-row', { hasText: role }).first();
+  await row.click();
+  const dialog = page.locator('mat-dialog-container');
+  await dialog.locator('.detail-header').waitFor({ state: 'visible', timeout: 30_000 });
+  return dialog;
+}
+
 /** 给 Playbook 条目加一轮(Order 自动递增;stage 缺省 Technical)。 */
 export async function addRound(
   request: APIRequestContext,

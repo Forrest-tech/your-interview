@@ -36,6 +36,7 @@ import { SmartAddDialogComponent } from './smart-add-dialog.component';
 import { STATUS_ORDER, STATUS_PATH_FROM_SAVED, ApplicationForm } from './tracker-form.helpers';
 import { ApplicationDialogComponent } from './application-dialog.component';
 import { ApplicationDetailDialogComponent } from './application-detail-dialog.component';
+import { initialDrawerWidth } from './detail-drawer-width';
 import { PrepPlanDialogComponent } from './prep-plan-dialog.component';
 import {
   favCountsByStatus, favoriteItems, itemsAtStatus, nextFlowStageSelection
@@ -1329,13 +1330,14 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   openDetail(app: Application): void {
     // Simplify 模式:右侧抽屉(不是居中弹窗),看板在左侧保持可见。
-    // 宽度对齐 Simplify 真站: 66vw (max 1280px)
+    // 票 147:初始宽 = 记忆宽/66vw(钳制到拖拽范围)或窄屏 100vw,见 detail-drawer-width.ts;
+    // 钳制全由对话框拖拽逻辑执行,故开启时即把 pane 的 min/maxWidth 置空(定稿 §2.2 陷阱 a)。
     // 高度由 CSS .detail-drawer-panel 控制为 100vh
     const ref = this.dialog.open(ApplicationDetailDialogComponent, {
       data: app,
-      width: '66vw',
-      maxWidth: '1280px',
-      minWidth: '900px',
+      width: initialDrawerWidth(window.innerWidth),
+      maxWidth: 'none',
+      minWidth: '0',
       position: { right: '0', top: '0' },
       panelClass: 'detail-drawer-panel',
       autoFocus: false

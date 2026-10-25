@@ -961,6 +961,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'tracker.dMatchAnalysis': { zh: '简历匹配分析', en: 'Resume match analysis', fr: 'Analyse d’adéquation CV' },
   'tracker.dHitKw': { zh: '命中 {n} / {m} 个 JD 技术关键词', en: '{n} of {m} JD tech keywords matched', fr: '{n} mots-clés techniques sur {m} trouvés' },
   'tracker.dMissingKw': { zh: '缺少的关键词 ({n})', en: 'Missing keywords ({n})', fr: 'Mots-clés manquants ({n})' },
+  'tracker.dMatchedKw': { zh: '已命中的关键词 ({n})', en: 'Matched keywords ({n})', fr: 'Mots-clés trouvés ({n})' },
   'tracker.dHitKwTitle': { zh: '已命中 ({n})', en: 'Matched ({n})', fr: 'Trouvés ({n})' },
   'tracker.dSoftSkills': { zh: '另提及软素质要求(不计入分数):', en: 'Also mentioned soft skills (not scored):', fr: 'Compétences générales mentionnées (non notées) :' },
   'tracker.dCoverLetter': { zh: '求职信', en: 'Cover letter', fr: 'Lettre de motivation' },

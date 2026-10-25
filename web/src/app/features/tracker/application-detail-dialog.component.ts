@@ -629,17 +629,26 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
                 <span>{{ t('tracker.dScoreFair') }}</span>
               </div>
             }
-            <div class="kw-card">
-              <div class="kw-card-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</div>
-              <div class="kw-pills">
-                @for (k of m.missing; track k) {
-                  <span class="kw-pill miss">{{ k }}</span>
-                }
-                @for (k of m.hit; track k) {
-                  <span class="kw-pill hit">{{ k }}</span>
-                }
+            @if (m.missing.length > 0) {
+              <div class="kw-card">
+                <div class="kw-card-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</div>
+                <div class="kw-pills">
+                  @for (k of m.missing; track k) {
+                    <span class="kw-pill miss">{{ k }}</span>
+                  }
+                </div>
               </div>
-            </div>
+            }
+            @if (m.hit.length > 0) {
+              <div class="kw-card">
+                <div class="kw-card-title">{{ tn('tracker.dMatchedKw', m.hit.length) }}</div>
+                <div class="kw-pills">
+                  @for (k of m.hit; track k) {
+                    <span class="kw-pill hit">{{ k }}</span>
+                  }
+                </div>
+              </div>
+            }
           </div>
         </div>
       } @else {

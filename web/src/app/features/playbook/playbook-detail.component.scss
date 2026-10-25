@@ -214,6 +214,9 @@
   /* ★ 票123 C-3.2:可点项取统一洗色(原为 `color-mix(... 4%, transparent)`)。 */
   &:hover { background: var(--hover-wash); }
   &:active { background: var(--press-wash); }
+  /* 票170:展开中的格子常驻选中底色(与 hover/press 的瞬时洗色不同,鼠标移开仍在)。
+     放 hover/active 之后、同等优先级,选中态不被瞬时洗色盖掉。 */
+  &.on { background: var(--signal-tint); }
 }
 .cell-label { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #475569); }
 .cell-body { font-size: 14px; line-height: 1.5; flex: 1;
@@ -225,11 +228,14 @@
   /* 展开说明行是四格条容器内部的底部行,不再靠负 margin 贴在框外。 */
   border-top: 1px solid var(--yi-border);
   padding: 13px 16px;
+  /* 票170:展开区高度唯一出处。文本面板与简历 PDF 框共用此值(简历框经
+     frameHeightCap 传入同一变量,两区显示高度一致,不再各写一份)。 */
+  --strip-detail-max: min(420px, 45vh);
   /* 展开面板封顶 + 框内滚动(2026-10-21 设计稿确认参数):长 JD/公司介绍/简历与分数说明
      都在面板内部滚动,不再把整页撑长。滚动条纯 webkit 方案 —— 不要加
      scrollbar-width/scrollbar-color,Chrome 会因此忽略 ::-webkit-scrollbar 样式。 */
   .full-text, .full-note {
-    max-height: min(420px, 45vh);
+    max-height: var(--strip-detail-max);
     overflow-y: auto;
     overscroll-behavior: contain;
     &::-webkit-scrollbar { width: 10px; }

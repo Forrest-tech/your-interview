@@ -122,22 +122,22 @@
       <!-- 岗位四格条:上区通栏行(展开说明行收在四格条容器内部底部) -->
       <div class="strip-wrap">
         <section class="strip" data-testid="info-strip">
-          <button type="button" class="cell" (click)="toggleCell('jd')">
+          <button type="button" class="cell" [class.on]="expandedCell() === 'jd'" [attr.aria-pressed]="expandedCell() === 'jd'" (click)="toggleCell('jd')">
             <span class="cell-label">{{ t('pb.v2.d.stripJd') }}</span>
             <span class="cell-body">{{ jdCellText() || t('pb.v2.d.stripJdEmpty') }}</span>
             <span class="cell-more">{{ expandedCell() === 'jd' ? t('pb.v2.d.collapse') : t('pb.v2.d.expandFull') }}</span>
           </button>
-          <button type="button" class="cell" (click)="toggleCell('company')">
+          <button type="button" class="cell" [class.on]="expandedCell() === 'company'" [attr.aria-pressed]="expandedCell() === 'company'" (click)="toggleCell('company')">
             <span class="cell-label">{{ t('pb.v2.d.stripCompany') }}</span>
             <span class="cell-body">{{ companyCellText() ? companyCellText().slice(0, 90) + (companyCellText().length > 90 ? '…' : '') : t('pb.v2.d.stripCompanyEmpty') }}</span>
             <span class="cell-more">{{ expandedCell() === 'company' ? t('pb.v2.d.collapse') : t('pb.v2.d.expandFull') }}</span>
           </button>
-          <button type="button" class="cell" (click)="toggleCell('resume')">
+          <button type="button" class="cell" [class.on]="expandedCell() === 'resume'" [attr.aria-pressed]="expandedCell() === 'resume'" (click)="toggleCell('resume')">
             <span class="cell-label">{{ t('pb.v2.d.stripResume') }}</span>
             <span class="cell-body">{{ resumeFile()?.fileName || t('pb.v2.d.stripResumeEmpty') }}</span>
             <span class="cell-more">{{ expandedCell() === 'resume' ? t('pb.v2.d.collapse') : t('pb.v2.d.view') }}</span>
           </button>
-          <button type="button" class="cell" (click)="toggleCell('score')">
+          <button type="button" class="cell" [class.on]="expandedCell() === 'score'" [attr.aria-pressed]="expandedCell() === 'score'" (click)="toggleCell('score')">
             <span class="cell-label">{{ t('pb.v2.d.stripScore') }}</span>
             <span class="cell-body" [class.big]="resumeScore() != null" [class.missing]="resumeScore() == null">{{ resumeScore() != null ? resumeScore() : t('pb.v2.d.emptyNotScored') }}</span>
             <span class="cell-more">{{ expandedCell() === 'score' ? t('pb.v2.d.collapse') : t('pb.v2.d.howDerived') }}</span>
@@ -151,7 +151,7 @@
               @case ('resume') {
                 <p class="full-note resume-title">{{ resumeFile()?.fileName || t('pb.v2.d.resumeUnlinked') }}</p>
                 @if (resumePdfUrl()) {
-                  <app-pdf-content-viewer [pdfUrl]="resumePdfUrl()"></app-pdf-content-viewer>
+                  <app-pdf-content-viewer [pdfUrl]="resumePdfUrl()" frameHeightCap="var(--strip-detail-max)"></app-pdf-content-viewer>
                 } @else if (resumeFile()?.textContent || baseResumeText()) {
                   <pre class="full-text">{{ resumeFile()?.textContent || baseResumeText() }}</pre>
                 }

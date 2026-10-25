@@ -42,7 +42,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
     @if (error()) {
       <div class="pdfv-error">{{ error() }}</div>
     }
-    <div class="pdfv-pages" [style.height.px]="frameHeight()"
+    <div class="pdfv-pages" [style.height]="viewerHeight()"
          [style.align-items]="alignStart() ? 'flex-start' : 'center'">
       @for (url of pageUrls(); track $index) {
         <img class="pdfv-page" [src]="url" [alt]="'Page ' + ($index + 1)" (load)="onPageLoad()"
@@ -75,6 +75,13 @@ export class PdfContentViewerComponent implements OnChanges, OnDestroy {
   @Input() scale = 1.6;                     // 渲染清晰度
   /** 票 147:缩放工具栏开关,默认关闭;仅详情对话框开启。 */
   @Input() showZoomControls = false;
+  /**
+   * 票 170:框高上限(CSS 高度表达式,如 var(--strip-detail-max))。默认 null =
+   * 今天行为(框高 = 第一页显示高度)。设值时框高取该表达式(经 CSS 变量继承
+   * 解析),框内滚动仍由 .pdfv-pages 自己负责;详情对话框与 Resume 页不传,
+   * 两处行为一字不动。
+   */
+  @Input() frameHeightCap: string | null = null;
 
   private readonly sanitizer = inject(DomSanitizer);
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -99,6 +106,13 @@ export class PdfContentViewerComponent implements OnChanges, OnDestroy {
   private renderSeq = 0;
 
   t = (key: string): string => this.i18n.t(key);
+
+  /** 框高:设了 frameHeightCap 则取该表达式,否则今天行为(首页高度 px,量测前 null)。 */
+  viewerHeight(): string | null {
+    if (this.frameHeightCap) return this.frameHeightCap;
+    const h = this.frameHeight();
+    return h !== null ? h + 'px' : null;
+  }
 
   zoomPct(): string {
     return Math.round(this.zoom() * 100) + '%';

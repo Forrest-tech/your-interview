@@ -27,6 +27,20 @@ async function paneWidth(page: import('@playwright/test').Page): Promise<number>
 }
 
 async function dragHandleTo(page: import('@playwright/test').Page, targetX: number): Promise<void> {
+  // 票 156：抽屉有 0.25s 滑入动画（.detail-drawer-panel drawerSlideIn）；
+  // 滑入期间面板宽已是目标宽、但 x 还在移动，初始宽断言拦不住，
+  // 此时量手柄会量到半路位置、mouse.down 落到面板内容上、拖动无声无息失败（CI 首跑抖动）。
+  // 故先等面板 x 与宽连续两次读数一致（100ms 间隔）再动手柄；断言目标值本身不动。
+  await expect.poll(async () => {
+    const pane = page.locator('.detail-drawer-panel');
+    const b1 = await pane.boundingBox();
+    if (!b1) throw new Error('[e2e147] 找不到抽屉面板');
+    await page.waitForTimeout(100);
+    const b2 = await pane.boundingBox();
+    if (!b2) throw new Error('[e2e147] 找不到抽屉面板');
+    return Math.round(b1.x) === Math.round(b2.x) && Math.round(b1.width) === Math.round(b2.width)
+      ? 'stable' : 'moving';
+  }, { message: '拖动前抽屉位置应稳定（滑入动画结束）' }).toBe('stable');
   const handle = page.locator('.drawer-resize-handle');
   const hbox = await handle.boundingBox();
   if (!hbox) throw new Error('[e2e147] 找不到拖拽手柄');

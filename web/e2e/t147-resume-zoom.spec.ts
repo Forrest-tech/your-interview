@@ -41,6 +41,24 @@ async function setupAppWithPdf(
   return dialog;
 }
 
+/**
+ * 票 156：页在滚动框内的位置（不得用 offsetTop）。
+ * offsetTop 是相对最近定位祖先（详情对话框 :host position:relative）的，
+ * 不是相对滚动框；直接拿它当 scrollTop 会差出对话框顶到查看器顶的距离，
+ * CI 实测 327px，且与滚动恢复无关——147 的位置用例在缩放前就死在这里。
+ */
+async function pageTopWithin(
+  pages: import('@playwright/test').Locator,
+  index: number
+): Promise<number> {
+  return await pages.evaluate((el, i) => {
+    const img = el.querySelectorAll('.pdfv-page')[i] as HTMLElement;
+    const r = img.getBoundingClientRect();
+    const pr = el.getBoundingClientRect();
+    return r.top - pr.top + el.scrollTop;
+  }, index);
+}
+
 async function firstPageSize(page: import('@playwright/test').Page): Promise<{
   maxWidth: string;
   clientWidth: number;
@@ -133,8 +151,7 @@ test.describe('票147 · 简历缩放', () => {
       await setupAppWithPdf(page, role, TWO_PAGE);
 
       const pages = page.locator('.pdfv-pages');
-      const second = page.locator('.pdfv-page').nth(1);
-      const target = await second.evaluate((el) => (el as HTMLElement).offsetTop);
+      const target = await pageTopWithin(pages, 1);
       await pages.evaluate((el, t) => {
         el.scrollTop = t;
       }, target);
@@ -152,7 +169,7 @@ test.describe('票147 · 简历缩放', () => {
         .poll(
           async () => {
             const top = await pages.evaluate((el) => el.scrollTop);
-            const off = await second.evaluate((el) => (el as HTMLElement).offsetTop);
+            const off = await pageTopWithin(pages, 1);
             return Math.abs(top - off);
           },
           { timeout: 15_000 }

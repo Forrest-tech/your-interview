@@ -209,7 +209,7 @@ export class PdfContentViewerComponent implements OnChanges, OnDestroy {
       const top = pagesEl.scrollTop;
       for (let i = 0; i < imgs.length; i++) {
         const el = imgs[i] as HTMLElement;
-        if (el.offsetTop + el.clientHeight > top + 10) { idx = i; break; }
+        if (this.pageTopWithin(pagesEl, el) + el.clientHeight > top + 10) { idx = i; break; }
         idx = i;
       }
     }
@@ -218,6 +218,14 @@ export class PdfContentViewerComponent implements OnChanges, OnDestroy {
     await this.renderPdf(seq);
     if (seq !== this.renderSeq) return; // 已被更新的缩放超车,不恢复旧位置
     this.restoreScrollToPage(idx);
+  }
+
+  /** 页在滚动框内的位置：必须用 rect 差 + scrollTop 计算，不得用 offsetTop。
+   *  票 156：offsetTop 是相对最近定位祖先（详情对话框 :host position:relative）的，
+   *  不是相对滚动框；直接拿它当 scrollTop 会差出对话框顶到查看器顶的距离
+   *  （CI 实测 327px），且 idx 判定会系统性偏小（2 页场景恒取第 1 页）。 */
+  private pageTopWithin(pagesEl: HTMLElement, el: HTMLElement): number {
+    return el.getBoundingClientRect().top - pagesEl.getBoundingClientRect().top + pagesEl.scrollTop;
   }
 
   /** 等目标页图铺好后再滚到其页首(滚动吸附点就是页首,不会再弹走)。 */
@@ -229,7 +237,7 @@ export class PdfContentViewerComponent implements OnChanges, OnDestroy {
       const imgs = this.host.nativeElement.querySelectorAll('.pdfv-page');
       const el = imgs[idx] as HTMLElement | undefined;
       if (pagesEl && el && el.clientHeight > 0) {
-        pagesEl.scrollTop = el.offsetTop;
+        pagesEl.scrollTop = this.pageTopWithin(pagesEl, el);
         return;
       }
       if (frames < 60) requestAnimationFrame(tick);

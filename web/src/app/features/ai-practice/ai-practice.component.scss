@@ -3422,7 +3422,10 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
   min-width: 1px;
   max-width: 4px;
   border-radius: 2px;
-  background: #e2f1e8;      /* 未播放:浅绿 */
+  /* 票137 R-137-3：未播放必须与条带底色 #e2f1e8 可区分 ——
+     旧值与底色逐字相同，解出的柱子在视觉上同样是一条平绿条（第二成因）。
+     中绿 #7fbfa0：浅于已播放 #1b7f4b、深于条带底色，两态均可区分。 */
+  background: #7fbfa0;
   transition: background 120ms linear, height 120ms ease-out;
 }
 .result-wrap .res-block .wave-strip .ws-bar.played {
@@ -3432,6 +3435,25 @@ button.zoom-label:hover { background: #e4e7f5; color: #2e3a8c; }
 .result-wrap .res-block .wave-strip.wave-live {
   border-color: #e2f1e8;
   background: #e2f1e8;
+}
+
+/* ---------- 票137：波形指标行与失败文案 ---------- */
+.result-wrap .res-block .wave-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-2, #5a6472);
+}
+.result-wrap .res-block .wave-metrics .wave-metric-sep {
+  opacity: 0.6;
+}
+.result-wrap .res-block .wave-fail {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-2, #5a6472);
 }
 
 

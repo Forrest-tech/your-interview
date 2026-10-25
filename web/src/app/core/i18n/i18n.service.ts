@@ -1134,6 +1134,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.needRecording': { zh: '请先录一段音频，再提交评分。', en: 'Record an audio take first, then submit for scoring.', fr: "Enregistrez d'abord un audio, puis soumettez pour évaluation." },
   'practice.needScoreRetry': { zh: '该录音已评分，重新作答后可再次提交。', en: 'This take is already scored. Re-record to submit again.', fr: "Cet enregistrement est déjà évalué. Réenregistrez pour soumettre à nouveau." },
   'practice.audioWaveform': { zh: '音频波形', en: 'Audio Waveform', fr: 'Forme d onde audio' },
+  // 票137：波形失败分级（非 404）与平均频率指标行。
+  'practice.waveUnavailable': { zh: '音频不可用，波形无法显示', en: 'Audio unavailable — waveform cannot be shown', fr: 'Audio indisponible, la forme d’onde ne peut pas être affichée' },
+  'practice.avgFrequency': { zh: '平均频率 {hz} Hz', en: 'Average frequency {hz} Hz', fr: 'Fréquence moyenne {hz} Hz' },
 
   // ★ 第三十三轮(Forrest):额度消耗透明提示 —— 有消耗就报,没消耗就说清楚
   //   "这是本地存储的音频"。不猜、不含糊。

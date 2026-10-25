@@ -253,6 +253,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly reportOpen = this.grading.reportOpen;
   readonly showWaveform = this.grading.showWaveform;
   readonly waveBars = this.grading.waveBars;
+  readonly waveStatus = this.grading.waveStatus;
+  readonly waveFailReason = this.grading.waveFailReason;
+  readonly waveAvgHz = this.grading.waveAvgHz;
 
   readonly i18n = inject(I18nService);
   readonly auth = inject(AuthService);
@@ -863,27 +866,60 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // ★ 第三十轮:静态波形 —— 当前作品/待提交录音变化时重算波形柱高。
     //   同一段音频只解码一次(结果进 waveCache);
     //   异步完成后用 queueMicrotask 写信号,避开 effect 内写信号的 NG0600。
+    // ★ 票137 R-137-1/R-137-2：effect 同时驱动 waveStatus 状态机 ——
+    //   loading 只露节头 + 进度条（不渲染 .wave-strip，不闪空条）；
+    //   ready 写柱 + Hz；failed 写分级原因（404 → gone，其余 → unavailable）。
+    //   竞态守卫：异步完成时目标仍是这条才写入（含失败写入——迟到的旧失败
+    //   不许覆盖新目标的 loading 态）；waveBars/waveCache 语义一字不动。
     effect(() => {
       const id = this.grading.waveTargetId();
       const take = this.grading.activeTake() ?? this.recorder.pendingTake();
       if (!id || !take) {
-        queueMicrotask(() => this.grading.waveBars.set([]));
+        queueMicrotask(() => {
+          this.grading.waveBars.set([]);
+          this.grading.waveAvgHz.set(null);
+          this.grading.waveFailReason.set(null);
+          this.grading.waveStatus.set('idle');
+        });
         return;
       }
       const cached = this.grading.waveCache.get(id);
       if (cached) {
-        queueMicrotask(() => this.grading.waveBars.set(cached));
+        queueMicrotask(() => {
+          this.grading.waveBars.set(cached.bars);
+          this.grading.waveAvgHz.set(cached.avgHz);
+          this.grading.waveFailReason.set(null);
+          this.grading.waveStatus.set('ready');
+        });
         return;
       }
-      queueMicrotask(() => this.grading.waveBars.set([]));
+      queueMicrotask(() => {
+        this.grading.waveBars.set([]);
+        this.grading.waveAvgHz.set(null);
+        this.grading.waveFailReason.set(null);
+        this.grading.waveStatus.set('loading');
+      });
       void (async () => {
-        const src = await this.grading.waveAudioSource(take);
-        if (!src || src.size === 0) return;
-        const bars = await this.grading.computeWaveBars(src);
-        if (!bars) return;
-        this.grading.waveCache.set(id, bars);
+        const src = await this.grading.waveAudioSourceDetailed(take);
+        if (this.grading.waveTargetId() !== id) return;
+        if (src.kind !== 'blob' || src.blob.size === 0) {
+          this.grading.waveFailReason.set(src.kind === 'gone' ? 'gone' : 'unavailable');
+          this.grading.waveStatus.set('failed');
+          return;
+        }
+        const res = await this.grading.computeWaveBars(src.blob);
         // 只有当前目标仍是这条录音时才写入(避免异步竞态写错人的波形)
-        if (this.grading.waveTargetId() === id) this.grading.waveBars.set(bars);
+        if (this.grading.waveTargetId() !== id) return;
+        if (!res) {
+          this.grading.waveFailReason.set('unavailable');
+          this.grading.waveStatus.set('failed');
+          return;
+        }
+        this.grading.waveCache.set(id, res);
+        this.grading.waveBars.set(res.bars);
+        this.grading.waveAvgHz.set(res.avgHz);
+        this.grading.waveFailReason.set(null);
+        this.grading.waveStatus.set('ready');
       })();
     });
   }

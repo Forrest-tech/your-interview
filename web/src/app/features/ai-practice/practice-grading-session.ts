@@ -2,6 +2,7 @@ import { computed, effect, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
 import type { AiPracticeComponent } from './ai-practice.component';
+import { computeWaveBarsFromSamples, estimateAvgF0 } from './waveform.helpers';
 
 
 /**
@@ -233,18 +234,21 @@ export class PracticeGradingSession {
     };
   });
 
-  /** ★ #15:语速分析 (WPM + 评价)。 */
+  /** ★ #15:语速分析 (WPM + 评价)。票137：显示精度由整数改为一位小数
+   *   （与参考图二 144.7 WPM 的形态对齐）；verdict 带（110/160）作用于
+   *   一位小数后的值。wpm 为 toFixed(1) 字符串，模板直接填 {wpm} 占位。 */
   readonly speechPace = computed(() => {
     const sc = this.activeTake()?.score;
     if (!sc?.words?.length) return null;
     const wordCount = sc.words.length;
     const minutes = (sc.billedSeconds ?? 60) / 60;
     if (minutes <= 0) return null;
-    const wpm = Math.round(wordCount / minutes);
+    const wpm = (wordCount / minutes).toFixed(1);
+    const wpmNum = Number(wpm);
     let verdict: string;
     let level: 'slow' | 'good' | 'fast';
-    if (wpm < 110) { verdict = this.host.t('practice.paceSlow'); level = 'slow'; }
-    else if (wpm <= 160) { verdict = this.host.t('practice.paceGood'); level = 'good'; }
+    if (wpmNum < 110) { verdict = this.host.t('practice.paceSlow'); level = 'slow'; }
+    else if (wpmNum <= 160) { verdict = this.host.t('practice.paceGood'); level = 'good'; }
     else { verdict = this.host.t('practice.paceFast'); level = 'fast'; }
     return { wpm, verdict, level, wordCount };
   });
@@ -617,6 +621,8 @@ export class PracticeGradingSession {
       if (this.activeTakeId() === id) this.activeTakeId.set(null);
       // 票136 R-136-5:删除连带清条目——追问不得比它的 Take 活得久。
       this.followUpsByTake.update(m => { const n = new Map(m); n.delete(id); return n; });
+      // 票137 A-8：同理清波形缓存——删 Take 后其柱/Hz 不残留（新 Take 绝不会命中旧 id）。
+      this.waveCache.delete(id);
     });
   }
 
@@ -963,28 +969,66 @@ export class PracticeGradingSession {
   /** 静态波形的柱高数组(0~100,已按最大值归一化)。 */
   readonly waveBars = signal<number[]>([]);
 
-  /** 解码结果缓存:录音 id → 柱高数组。 */
-  readonly waveCache = new Map<string, number[]>();
+  /**
+   * 票137 R-137-1：波形状态机 —— 节渲染与柱数据脱钩的根治。
+   * idle = 无目标（防御分支，节隐藏）；loading = 解码中（只露节头 + 进度条）；
+   * ready = 柱 + 指标行；failed = 节头 + 分级诚实文案（原因见 waveFailReason）。
+   * 三种态下绝无裸绿条。由组件 effect 驱动；waveBars/waveCache/竞态守卫语义不动。
+   */
+  readonly waveStatus = signal<'idle' | 'loading' | 'ready' | 'failed'>('idle');
+
+  /** 票137 R-137-5：失败原因种 —— gone = 远端 404（复用 recGone），其余 = unavailable。 */
+  readonly waveFailReason = signal<'gone' | 'unavailable' | null>(null);
+
+  /**
+   * 票137 R-137-4：平均频率（整数 Hz）——与柱子同一次解码产出，见 computeWaveBars。
+   * null = 无足够浊音帧，模板直接省略该段，绝不写 0 Hz。
+   */
+  readonly waveAvgHz = signal<number | null>(null);
+
+  /** 解码结果缓存:录音 id → {柱高数组, 平均频率}（同一音频只解码一次）。 */
+  readonly waveCache = new Map<string, { bars: number[]; avgHz: number | null }>();
+
+  /**
+   * 音频源（带失败分级）：优先内存里的 blob(刚录完),否则走带鉴权接口把已上传录音取回。
+   * 与评分同一个取数策略(第二十九轮),避免「刷新后没有 blob」时波形画不出来。
+   * 分级（票137 R-137-5，复用票132 口径）：远端 404 → gone；空体/网络失败/非 GUID 无源 → unavailable。
+   * waveAudioSource 仍保留原 Blob|null 契约（委托本方法），供其它调用点沿用。
+   */
+  async waveAudioSourceDetailed(rec: Recording): Promise<
+    { kind: 'blob'; blob: Blob } | { kind: 'gone' } | { kind: 'unavailable' }
+  > {
+    const b = (rec as { blob?: Blob }).blob;
+    if (b && b.size > 0) return { kind: 'blob', blob: b };
+    if (RecorderService.isGuid(rec.id)) {
+      try {
+        const fetched = await firstValueFrom(this.host.practiceApi.fetchRecordingAudio(rec.id));
+        if (fetched && fetched.size > 0) return { kind: 'blob', blob: fetched };
+        return { kind: 'unavailable' };
+      } catch (e) {
+        const status = (e as { status?: number } | null)?.status;
+        return status === 404 ? { kind: 'gone' } : { kind: 'unavailable' };
+      }
+    }
+    return { kind: 'unavailable' };
+  }
 
   /**
    * 音频源:优先内存里的 blob(刚录完),否则走带鉴权接口把已上传录音取回。
    * 与评分同一个取数策略(第二十九轮),避免「刷新后没有 blob」时波形画不出来。
    */
   async waveAudioSource(rec: Recording): Promise<Blob | null> {
-    const b = (rec as { blob?: Blob }).blob;
-    if (b && b.size > 0) return b;
-    if (RecorderService.isGuid(rec.id)) {
-      try {
-        return await firstValueFrom(this.host.practiceApi.fetchRecordingAudio(rec.id));
-      } catch {
-        return null;
-      }
-    }
-    return null;
+    const r = await this.waveAudioSourceDetailed(rec);
+    return r.kind === 'blob' ? r.blob : null;
   }
 
-  /** 解码音频并算出波形柱高。 */
-  async computeWaveBars(blob: Blob, bars = 56): Promise<number[] | null> {
+  /**
+   * 解码音频并算出波形柱高 + 平均频率（同一次解码产出，绝不为 Hz 单独再解一次）。
+   * 柱形规则与此前逐字一致（56 根、峰值归一、下限 6，见 waveform.helpers）；
+   * Hz 口径：自相关基频估计（约 50ms 分帧、RMS 门限、50~500 Hz、浊音帧均值）。
+   * 无 AudioContext、解码失败、空声道、全零峰值 → null（与此前失败语义一致）。
+   */
+  async computeWaveBars(blob: Blob, bars = 56): Promise<{ bars: number[]; avgHz: number | null } | null> {
     const Ctor = window.AudioContext
       || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return null;
@@ -994,23 +1038,9 @@ export class PracticeGradingSession {
       const audio = await this.decodeCompat(ctx, buf);
       const data = audio.getChannelData(0);
       if (!data.length) return null;
-      const block = Math.max(1, Math.floor(data.length / bars));
-      const out: number[] = [];
-      let peak = 0;
-      for (let i = 0; i < bars; i++) {
-        let max = 0;
-        const start = i * block;
-        const end = Math.min(data.length, start + block);
-        for (let j = start; j < end; j++) {
-          const v = Math.abs(data[j]);
-          if (v > max) max = v;
-        }
-        out.push(max);
-        if (max > peak) peak = max;
-      }
-      // 归一化到 0~100:说话录音峰值通常远小于 1,必须归一化才看得出形状。
-      const norm = peak > 0 ? out.map((v) => Math.max(6, Math.round((v / peak) * 100))) : [];
-      return norm.length ? norm : null;
+      const barsOut = computeWaveBarsFromSamples(data, bars);
+      if (!barsOut) return null;
+      return { bars: barsOut, avgHz: estimateAvgF0(data, audio.sampleRate) };
     } catch {
       return null;
     } finally {

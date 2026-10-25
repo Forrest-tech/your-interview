@@ -134,6 +134,8 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly confirmDelete = signal(false);
   readonly newActionTitle = signal('');
   readonly debriefDraft = signal('');
+  // 票 166：Review & to-dos 区块暂隐藏（隐藏不是删除：数据模型、saveDebrief()、debriefJson、i18n 键一律保留；恢复时改回 false 即一处恢复）。
+  readonly hideReviewTodos = true;
 
   readonly intake = viewChild(IntakePanelComponent);
 

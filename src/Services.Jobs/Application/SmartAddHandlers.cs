@@ -439,28 +439,27 @@ internal static class JdAiEnricher
     public static async Task<ParsedJdDto?> EnrichAsync(IAiGatewayClient ai, string raw,
         ParsedJdDto draft, CancellationToken ct)
     {
-        var material = draft.JdText ?? raw;
-        if (material.Length > 12_000) material = material[..12_000];
+        // 票 152 R-152-3：AI 材料先过同一模块切除（链接路径材料已是提纯后文本仍要过一遍，
+        // 防提纯层遗漏；粘贴文本路径材料直接过切除），再 12,000 字截断。
+        var cutMaterial = RelatedModuleCut.Cut(draft.JdText ?? raw);
+        var material = cutMaterial.Length > 12_000 ? cutMaterial[..12_000] : cutMaterial;
 
         var prompt = $$"""
-            你是招聘信息结构化提取器。从下面的内容中提取字段,只输出一个 JSON 对象,不要任何解释文字。
+            你是招聘信息结构化提取器。只搬运原文：从下面的内容中提取字段,只输出一个 JSON 对象,不要任何解释文字。
 
             字段(缺失就给 null,不要编造):
             {
-              "company": "公司名称",
-              "role": "职位名称",
-              "location": "工作地点",
-              "salary": "薪资范围原文或规范化写法",
+              "company": "公司名称原文",
+              "role": "职位名称原文",
+              "location": "工作地点原文",
+              "salary": "薪资范围原文逐字摘录，不得换算、不得从百分比/年限等其他数字推导，找不到就 null",
               "workMode": "Remote | Hybrid | Onsite",
               "jobType": "Full-time | Part-time | Permanent | Contract | Temporary | Freelance | Internship 或 null",
-              "jdSummary": "80-150 字的中文摘要",
-              "companyDescription": "公司介绍段落原文(About the company 段)",
-              "requirements": "任职要求/资格段落原文",
-              "benefits": "福利待遇段落原文",
-              "workAuthorization": "工作身份要求原文或归一写法(如 Citizen or PR required / Open work permit accepted / Must be legally authorized to work in Canada / No sponsorship available)",
-              "matchKeywords": "与岗位强相关的技术关键词,中文逗号分隔,最多 12 个",
-              "priority": "Low | Medium | High | Critical",
-              "deadline": "YYYY-MM-DD 或 null"
+              "companyDescription": "公司介绍段落原文逐字摘录，不得改写、不得翻译、不得扩写、不得把相关文章/博客/推荐模块内容当成段落内容",
+              "requirements": "任职要求/资格段落原文逐字摘录，不得改写、不得翻译、不得扩写、不得把相关文章/博客/推荐模块内容当成段落内容",
+              "benefits": "福利待遇段落原文逐字摘录，不得改写、不得翻译、不得扩写、不得把相关文章/博客/推荐模块内容当成段落内容",
+              "workAuthorization": "工作身份要求原文逐字摘录，不得改写、不得翻译、不得扩写",
+              "matchKeywords": "与岗位强相关的技术关键词，中文逗号分隔，最多 12 个，每个关键词必须在材料原文中出现"
             }
 
             内容(三短横之间):
@@ -483,38 +482,71 @@ internal static class JdAiEnricher
             && !string.IsNullOrWhiteSpace(v.GetString())
                 ? v.GetString()!.Trim() : null;
 
-        var company = draft.Company ?? S("company");
-        var role = draft.Role ?? S("role");
-        var location = draft.Location ?? S("location");
-        var salary = draft.Salary ?? S("salary");
-        var workMode = draft.WorkMode ?? S("workMode");
-        var jobType = draft.JobType ?? S("jobType");
+        // 票 152 R-152-5：输出校验 —— AI 值必须为归一化材料的子串，否则静默置 null
+        // （不报错、不降级提示、不回退到旧 AI 值；对话框里用户可见空字段自填）。
+        // 归一化：小写 + 全部空白折叠为单空格 + trim；标点保留（从严：宁可误杀，不可放行编造）。
+        // 校验材料 = AI 看到的同一份（模块切除后、12,000 字截断后）。
+        static string Normalize(string s)
+            => Regex.Replace(s.ToLowerInvariant(), @"\s+", " ").Trim();
+        var normalizedMaterial = Normalize(material);
+        string? V(string name, Func<string, bool>? extra = null)
+        {
+            var v = S(name);
+            if (v is null) return null;
+            if (!normalizedMaterial.Contains(Normalize(v))) return null;
+            if (extra is not null && !extra(v)) return null;
+            return v;
+        }
+        static bool IsWorkMode(string v)
+            => string.Equals(v, "Remote", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(v, "Hybrid", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(v, "Onsite", StringComparison.OrdinalIgnoreCase);
+        static bool IsJobType(string v)
+            => new[] { "Full-time", "Part-time", "Permanent", "Contract", "Temporary", "Freelance", "Internship" }
+                .Any(x => string.Equals(x, v, StringComparison.OrdinalIgnoreCase));
 
-        // 摘要与关键词:AI 的理解力强于取前 N 字,所以 AI 结果优先
-        var jdSummary = S("jdSummary") ?? draft.JdSummary;
+        // 票 152 R-152-5 评分 −0.1 修正：location 同列校验（删除后剩余 AI 字段中
+        // 唯一既无逐字措辞又无校验覆盖的字段，与 company/role 同规则）。
+        var company = draft.Company ?? V("company");
+        var role = draft.Role ?? V("role");
+        var location = draft.Location ?? V("location");
+        var salary = draft.Salary ?? V("salary");
+        var workMode = draft.WorkMode ?? V("workMode", IsWorkMode);
+        var jobType = draft.JobType ?? V("jobType", IsJobType);
 
-        // 段落级字段:规则没解出来时用 AI 的
-        var companyDescription = draft.CompanyDescription ?? S("companyDescription");
-        var requirements = draft.Requirements ?? S("requirements");
-        var benefits = draft.Benefits ?? S("benefits");
-        var workAuthorization = draft.WorkAuthorization ?? S("workAuthorization");
+        // 票 152 R-152-4：摘要归规则摘录，AI 不再产摘要 —— draft 摘要即最终摘要。
+        var jdSummary = draft.JdSummary;
 
-        // 关键词取并集 —— 规则命中的偏"技术名词",模型给的偏"岗位要求",两者互补
-        var keywords = MergeKeywords(draft.MatchKeywords, S("matchKeywords"));
+        // 段落级字段:规则没解出来时用 AI 的（已校验）
+        var companyDescription = draft.CompanyDescription ?? V("companyDescription");
+        var requirements = draft.Requirements ?? V("requirements");
+        var benefits = draft.Benefits ?? V("benefits");
+        var workAuthorization = draft.WorkAuthorization ?? V("workAuthorization");
 
+        // 关键词取并集 —— 规则命中的偏"技术名词",模型给的偏"岗位要求",两者互补；
+        // AI 侧逐个校验，不通过的单个丢弃，不株连整组。
+        string? filteredAiKeywords = null;
+        var aiKeywords = S("matchKeywords");
+        if (!string.IsNullOrWhiteSpace(aiKeywords))
+        {
+            var kept = aiKeywords.Split([',', '、', ';'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim())
+                .Where(p => p.Length > 0 && normalizedMaterial.Contains(Normalize(p)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            filteredAiKeywords = kept.Count == 0 ? null : string.Join(", ", kept);
+        }
+        var keywords = MergeKeywords(draft.MatchKeywords, filteredAiKeywords);
+
+        // 票 152 R-152-4：priority / deadline 不再由 AI 定 —— priority 无原文依据，
+        // 回对话框默认值（调用方/对话框层处理），deadline 归规则 GuessDeadline。
         var priority = draft.Priority;
-        var p = S("priority");
-        if (Enum.TryParse<Priority>(p, true, out _)) priority = p;
-
         var deadline = draft.Deadline;
-        var d = S("deadline");
-        if (deadline is null && DateOnly.TryParse(d, CultureInfo.InvariantCulture, out var dd)) deadline = dd;
 
         var conf = new Dictionary<string, int>(draft.Confidence);
         if (company is not null) conf["company"] = Math.Max(conf.GetValueOrDefault("company"), 90);
         if (role is not null) conf["role"] = Math.Max(conf.GetValueOrDefault("role"), 90);
         if (jobType is not null) conf["jobType"] = Math.Max(conf.GetValueOrDefault("jobType"), 85);
-        if (jdSummary is not null) conf["jdSummary"] = 85;
         if (companyDescription is not null) conf["companyDescription"] = Math.Max(conf.GetValueOrDefault("companyDescription"), 85);
         if (requirements is not null) conf["requirements"] = Math.Max(conf.GetValueOrDefault("requirements"), 85);
         if (benefits is not null) conf["benefits"] = Math.Max(conf.GetValueOrDefault("benefits"), 85);

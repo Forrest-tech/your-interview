@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using YourInterview.Services.Jobs.Application;
 
 namespace YourInterview.Services.Jobs.Infrastructure.Services;
 
@@ -117,7 +118,10 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
         var noTags = HtmlTag.Replace(content, " ");
         var decoded = System.Net.WebUtility.HtmlDecode(noTags);
         var collapsed = MultiSpace.Replace(decoded, " ");
-        var deNav = RemoveNavLines(collapsed);
+        // 票 152 R-152-1：提纯层切除相关文章/博客模块（标签剥离后、RemoveNavLines 之前，
+        // 顺序定死）。信号定义见 RelatedModuleCut，三层共用同一处。
+        var cut = RelatedModuleCut.Cut(collapsed);
+        var deNav = RemoveNavLines(cut);
         var trimmed = MultiNewline.Replace(deNav, "\n\n");
         return trimmed.Trim();
     }

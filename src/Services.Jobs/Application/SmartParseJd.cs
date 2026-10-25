@@ -72,8 +72,11 @@ public static class JdPasteParser
     //    仍能命中,日期必须整体排除(连 "-" 前导的 "11-30" 段也要挡)。
     // ⚠️ 2026-10-19:金额后允许 "/yr|/year|per year|per hour" 等频率后缀,
     //    否则 "$90K/yr - $105K/yr"(LinkedIn 常见写法) 完全匹配不上。
+    // ⚠️ 票 152：区间后紧跟 % 的是百分比，不是薪资 —— "Roughly 70-85% hands-on coding"
+    //    曾被解成 "70k - 85k"（时间占比改成薪资、% 改 k、Roughly 丢弃）。
+    //    (?!\s*%) 挡掉百分比形态；无币种无 k 的裸区间（如 "120-160" 年薪）仍正常匹配。
     private static readonly Regex SalaryRange = new(
-        @"(?<![\d$€£\-–—])(?<cur>[$€£]|USD|CAD|US\$|C\$)?\s*(?<lo>\d{2,3})(?:[kK]|,?000)?(?<rate1>\s*(?:/|per\s+)(?:year|yr|annum|month|mo|week|wk|hour|hr))?\s*(?:-|–|—|to|~)\s*(?:(?:USD|CAD|AUD|GBP|EUR)\s*)?(?<cur2>[$€£]|USD|CAD|US\$|C\$)?\s*(?<hi>\d{2,3})(?:[kK]|,?000)?(?<rate2>\s*(?:/|per\s+)(?:year|yr|annum|month|mo|week|wk|hour|hr))?(?!\d)", Opts);
+        @"(?<![\d$€£\-–—])(?<cur>[$€£]|USD|CAD|US\$|C\$)?\s*(?<lo>\d{2,3})(?:[kK]|,?000)?(?<rate1>\s*(?:/|per\s+)(?:year|yr|annum|month|mo|week|wk|hour|hr))?\s*(?:-|–|—|to|~)\s*(?:(?:USD|CAD|AUD|GBP|EUR)\s*)?(?<cur2>[$€£]|USD|CAD|US\$|C\$)?\s*(?<hi>\d{2,3})(?:[kK]|,?000)?(?<rate2>\s*(?:/|per\s+)(?:year|yr|annum|month|mo|week|wk|hour|hr))?(?!\d)(?!\s*%)", Opts);
     private static readonly Regex SalarySingle = new(
         @"(?<![\d$€£\-–—])(?<cur>[$€£]|USD|CAD|US\$|C\$)\s*(?<lo>\d{2,3})\s*[kK](?<rate>\s*(?:/|per\s+)(?:year|yr|annum|month|mo|week|wk|hour|hr))?\b", Opts);
     // 时薪无 k 写法:"$45/hour"、"$55 per hr"
@@ -261,7 +264,9 @@ public static class JdPasteParser
 
         var deadline = GuessDeadline(text);
 
-        var keywords = MatchKeywords(text);
+        // 票 152 A-152-1：关键词不得来自博客模块 —— 模块里的 Go/Rust/SQL/REST/
+        // Machine Learning 等词在正文里没有，整段 text 扫会漏进来；只在切除后文本里扫。
+        var keywords = MatchKeywords(RelatedModuleCut.Cut(text));
         if (keywords is not null) conf["matchKeywords"] = 65;
 
         var priority = GuessPriority(text);
@@ -925,16 +930,38 @@ public static class JdPasteParser
         var cutAt = Array.FindIndex(bodyLines, IsFooterLine);
         if (cutAt >= 0)
             source = string.Join("\n", bodyLines.Take(cutAt));
+        // 票 152 R-152-2/R-152-6：摘要不得越过相关文章/博客模块边界（行级切除，
+        // 必须在压平成单行之前做；模块信号在压平后无法识别）。
+        var moduleLines = source.Split('\n');
+        var moduleStart = RelatedModuleCut.FindModuleStart(moduleLines);
+        if (moduleStart >= 0)
+            source = string.Join("\n", moduleLines.Take(moduleStart));
         var flat = Regex.Replace(source, @"\s+", " ").Trim();
         if (flat.Length == 0) return null;
-        // 2026-10-19:用户要求完整内容,不截断。
-        // 2026-10-19:摘要在 Qualifications / Additional Information / Benefits 等小节标题处停止,
+        // 票 152 R-152-6 取代 2026-10-19 的“摘要完整内容、不截断”：
+        // 摘要字段即日起为原文摘录（速览），详情全文仍经各节查看。
+        // 摘要在 Qualifications / Additional Information / Benefits 等小节标题处停止，
         // 避免与独立字段重复。
         var stopM = Regex.Match(flat,
             @"\b(qualifications|additional information|benefits|what we offer|what you'll bring|preferred qualifications|minimum qualifications)\b",
             RegexOptions.IgnoreCase);
         if (stopM.Success && stopM.Index > 100)
             flat = flat[..stopM.Index].Trim();
+        // 票 152 R-152-6（方案 A）：N=500 字上限且截在句末，宁可短也不截断成半句；
+        // 首句本身超 N 时保留整首句（完整句胜于任意截断）。
+        const int excerptLimit = 500;
+        if (flat.Length > excerptLimit)
+        {
+            var head = flat[..excerptLimit];
+            var lastEnd = head.LastIndexOfAny(['.', '!', '?', '。', '！', '？']);
+            if (lastEnd >= 0)
+                flat = head[..(lastEnd + 1)].Trim();
+            else
+            {
+                var firstEnd = flat.IndexOfAny(['.', '!', '?', '。', '！', '？']);
+                flat = firstEnd >= 0 ? flat[..(firstEnd + 1)].Trim() : head.Trim();
+            }
+        }
         return flat;
     }
 
@@ -1061,7 +1088,13 @@ public static class JdPasteParser
     /// </summary>
     private static string? ExtractSection(IList<string> lines, string[] headers)
     {
-        for (var i = 0; i < lines.Count; i++)
+        // 票 152 R-152-2：段落收集不得越过相关文章/博客模块边界。
+        // 标题检索与收集两处都以模块开始行为界 —— 否则模块里的 "Benefits"
+        // 卡片标题会被当成小节标题，整段博客就被收进 benefits（Intuit 实证）。
+        // 本层是粘贴文本路径与存量重解析路径的唯一防线，不得以“提纯层已切”省略。
+        var moduleStart = RelatedModuleCut.FindModuleStart(lines);
+        var searchEnd = moduleStart >= 0 ? moduleStart : lines.Count;
+        for (var i = 0; i < searchEnd; i++)
         {
             var t = lines[i].Trim().TrimEnd(':', '：');
             var hit = false;
@@ -1081,6 +1114,7 @@ public static class JdPasteParser
             if (!string.IsNullOrWhiteSpace(inline)) sb.Add(inline);
             for (var j = i + 1; j < lines.Count; j++)
             {
+                if (moduleStart >= 0 && j >= moduleStart) break;
                 var l = lines[j].Trim();
                 if (IsSectionHeader(l)) break;
                 // 带字段标签的行 (Apply by:/Salary:/Location:...) 是元数据,不是段落内容 ——
@@ -1127,7 +1161,10 @@ public static class JdPasteParser
     /// </summary>
     private static string? ExtractCompanyDescription(IList<string> lines, string? company)
     {
-        for (var i = 0; i < lines.Count; i++)
+        // 票 152 R-152-2：公司介绍同属段落字段，收集不得越过模块边界。
+        var moduleStart = RelatedModuleCut.FindModuleStart(lines);
+        var searchEnd = moduleStart >= 0 ? moduleStart : lines.Count;
+        for (var i = 0; i < searchEnd; i++)
         {
             if (!Regex.IsMatch(lines[i].Trim(), @"^about\s+the\s+company$", RegexOptions.IgnoreCase))
                 continue;
@@ -1139,6 +1176,7 @@ public static class JdPasteParser
             var sb = new List<string>();
             for (; j < lines.Count; j++)
             {
+                if (moduleStart >= 0 && j >= moduleStart) break;
                 var l = lines[j].Trim();
                 if (IsSectionHeader(l)) break;
                 if (l.Length > 0) sb.Add(l);

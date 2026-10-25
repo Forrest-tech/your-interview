@@ -1,5 +1,6 @@
 import { I18nService } from '../../../core/i18n/i18n.service';
 import { applyParams } from '../components/brief/brief.helpers';
+import { safeJson } from './v2.models';
 
 /**
  * v2 组件共用的 t():票43 ARC-13 起本地 V2_I18N 已全量并入核心
@@ -135,6 +136,39 @@ export function derivePhase(
     if (md > rd) return 'Post';
   }
   return isEmail ? 'Pre' : 'Post';
+}
+
+/**
+ * 票159 备考输入 purpose 标签（写进 AssetMeta.purpose，全仓唯一键名）。
+ * 面经 / 简历要点以 kind=Notes 的资产随轮次归档；Prep 页读回与生成取数
+ * 只认这两个值，其余 Notes 资产不受影响。
+ */
+export const PREP_INPUT_EXPERIENCES = 'prep-input-experiences';
+export const PREP_INPUT_RESUME = 'prep-input-resume';
+export type PrepInputPurpose = typeof PREP_INPUT_EXPERIENCES | typeof PREP_INPUT_RESUME;
+
+export function isPrepInputPurpose(p: string | null | undefined): p is PrepInputPurpose {
+  return p === PREP_INPUT_EXPERIENCES || p === PREP_INPUT_RESUME;
+}
+
+/** 备考输入类型 → purpose 标签。 */
+export function prepInputPurposeOf(type: 'experiences' | 'resume'): PrepInputPurpose {
+  return type === 'experiences' ? PREP_INPUT_EXPERIENCES : PREP_INPUT_RESUME;
+}
+
+/**
+ * 同轮同 purpose 的最新一份（uploadedAt 降序；uploadedAt 为 ISO 字符串，字典序即时间序）。
+ * 旧份保留可见、删除最新一份后次新一份自动晋升——最新一份为准是唯一规则，移动不设特例。
+ */
+export function latestPrepInputAsset<T extends { roundId?: string | null; uploadedAt?: string; metaJson?: string | null }>(
+  assets: readonly T[] | null | undefined, roundId: string, purpose: PrepInputPurpose): T | null {
+  let best: T | null = null;
+  for (const a of assets ?? []) {
+    if ((a.roundId ?? null) !== roundId) continue;
+    if (safeJson<{ purpose?: string }>(a.metaJson)?.purpose !== purpose) continue;
+    if (!best || (a.uploadedAt ?? '') > (best.uploadedAt ?? '')) best = a;
+  }
+  return best;
 }
 
 /**

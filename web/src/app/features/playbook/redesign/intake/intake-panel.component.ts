@@ -15,10 +15,10 @@ import { PracticeApi } from '../../../../core/api/practice-api.service';
 import { OcrApiService } from '../../../../core/api/ocr-api.service';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, sortRoundsByDate } from '../v2.helpers';
+import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, roundDisplayNo, sortRoundsByDate, type PrepInputPurpose } from '../v2.helpers';
 import { textLengthError } from '../../../../core/api/validation-errors.helpers';
 
-export type IntakeType = 'email' | 'transcript' | 'note';
+export type IntakeType = 'email' | 'transcript' | 'note' | 'experiences' | 'resume';
 /** 「录音·转写文本」类型内部的二选一模式:一次只呈现/保存一种来源。 */
 export type TranscriptMode = 'upload' | 'text';
 type Target = { kind: 'round'; roundId: string } | { kind: 'comm' } | { kind: 'new' };
@@ -100,6 +100,40 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
             </div>
           }
         </ng-template>
+        <!-- 票159：归属区（预览步与备考输入输入步共用同一模板）。 -->
+        <ng-template #targetsTpl>
+          <div class="sec">{{ t('pb.v2.i.assignTitle') }}</div>
+          <div class="targets">
+            <!-- 票161:归属由单选组改下拉列表(单封与批量共用同一区,两处一并改)。
+                 选项文本与旧单选一字不差;target() 仍是唯一事实源,建议默认/
+                 预设轮次/新建展开逻辑一字不动。
+                 票159:备考输入必须归属轮次，Communications 选项置灰不可选。 -->
+            <select class="fld" data-testid="intake-target-select"
+                    [attr.aria-label]="t('pb.v2.i.assignTitle')"
+                    [ngModel]="targetSelectValue()" (ngModelChange)="applyTargetValue($event)">
+              @for (r of rounds(); track r.id) {
+                <option [value]="'round:' + r.id">Round {{ roundNo(r) }} · {{ r.stage }}{{ r.scheduledDate ? ' · ' + r.scheduledDate : '' }}</option>
+              }
+              <option value="comm" [disabled]="isPrepInputType()">{{ t('pb.v2.i.targetComm') }}</option>
+              <option value="new">{{ t('pb.v2.i.targetNew') }}</option>
+            </select>
+          </div>
+          @if (isPrepInputType()) {
+            <p class="hint">{{ t('pb.v2.i.prepCommDisabled') }}</p>
+          }
+          @if (target().kind === 'new') {
+            <div class="pv-grid">
+              <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="nrDate()" (ngModelChange)="nrDate.set($event)"></label>
+              <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.nrTimePh')" [ngModel]="nrTime()" (ngModelChange)="nrTime.set($event)"></label>
+              <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.nrStagePh')" [ngModel]="nrStage()" (ngModelChange)="setNrStage($event)">
+                @if (stageErrors().nr) { <span class="field-error" role="alert">{{ stageErrors().nr }}</span> }</label>
+              <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="nrInterviewers()" (ngModelChange)="nrInterviewers.set($event)"></label>
+              <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [placeholder]="t('pb.v2.i.nrFormatPh')" [ngModel]="nrFormat()" (ngModelChange)="nrFormat.set($event)"></label>
+            </div>
+            <p class="hint">{{ t('pb.v2.i.newRoundHint') }}</p>
+            <p class="hint" data-testid="new-round-defaults-hint">{{ t('pb.v2.i.newRoundDefaultsHint') }}</p>
+          }
+        </ng-template>
         <div class="panel-head">
           <h3>{{ t('pb.v2.d.addMaterial') }}</h3>
           <button type="button" class="icon-btn" (click)="close()" [attr.aria-label]="t('common.close')">
@@ -119,6 +153,10 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
             <p class="hint">{{ t('pb.v2.i.hintEmail') }}</p>
           } @else if (type() === 'transcript') {
             <p class="hint">{{ transcriptMode() === 'upload' ? t('pb.v2.i.hintTranscriptUpload') : t('pb.v2.i.hintTranscriptText') }}</p>
+          } @else if (type() === 'experiences') {
+            <p class="hint">{{ t('pb.v2.i.hintExperiences') }}</p>
+          } @else if (type() === 'resume') {
+            <p class="hint">{{ t('pb.v2.i.hintResumePoints') }}</p>
           } @else {
             <p class="hint">{{ t('pb.v2.i.hintNote') }}</p>
           }
@@ -135,9 +173,12 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
           @if (type() !== 'transcript' || transcriptMode() === 'text') {
             <div class="paste-box">
               <textarea class="paste" rows="9"
-                        [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
+                        [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : type() === 'experiences' ? t('pb.v2.i.pasteExperiencesPh') : type() === 'resume' ? t('pb.v2.i.pasteResumePointsPh') : t('pb.v2.i.pasteNotePh')"
                         [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
-              <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
+              <!-- 票159：备考输入不接截图，截图条只在非备考输入类型下呈现。 -->
+              @if (!isPrepInputType()) {
+                <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
+              }
             </div>
           }
           @if (type() === 'transcript' && transcriptMode() === 'upload') {
@@ -155,6 +196,21 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
             </div>
             <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
           }
+          @if (isPrepInputType()) {
+            <!-- 票159：备考输入单步保存——归属 + 保存 / 保存并生成，无 Parse 预览。 -->
+            <ng-container [ngTemplateOutlet]="targetsTpl"></ng-container>
+            <div class="row">
+              <button mat-stroked-button (click)="close()">{{ t('common.cancel') }}</button>
+              <span class="spacer"></span>
+              <button mat-raised-button color="primary" [disabled]="busy() || !text().trim()" (click)="save()">
+                {{ busy() ? t('pb.v2.i.saving') : t('common.save') }}
+              </button>
+              <button mat-raised-button color="primary" [disabled]="busy() || !text().trim()" (click)="save(true)">
+                {{ t('pb.v2.i.saveAndGenerate') }}
+              </button>
+            </div>
+            @if (errorMsg()) { <p class="err">{{ errorMsg() }}</p> }
+          } @else {
           <div class="row">
             @if (ocrBusy()) { <span class="hint">{{ t('pb.v2.i.ocrRunning') }}</span> }
             <span class="spacer"></span>
@@ -162,6 +218,7 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
             <button mat-raised-button color="primary" [disabled]="!canParse() || busy() || ocrBusy()"
                     (click)="parse()">{{ t('pb.v2.i.parsePreview') }}</button>
           </div>
+          }
         } @else {
           <!-- 解析预览 -->
           <div class="preview" data-testid="intake-preview">
@@ -285,33 +342,7 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
             }
             }
 
-            <div class="sec">{{ t('pb.v2.i.assignTitle') }}</div>
-            <div class="targets">
-              <!-- 票161:归属由单选组改下拉列表(单封与批量共用同一区,两处一并改)。
-                   选项文本与旧单选一字不差;target() 仍是唯一事实源,建议默认/
-                   预设轮次/新建展开逻辑一字不动。 -->
-              <select class="fld" data-testid="intake-target-select"
-                      [attr.aria-label]="t('pb.v2.i.assignTitle')"
-                      [ngModel]="targetSelectValue()" (ngModelChange)="applyTargetValue($event)">
-                @for (r of rounds(); track r.id) {
-                  <option [value]="'round:' + r.id">Round {{ roundNo(r) }} · {{ r.stage }}{{ r.scheduledDate ? ' · ' + r.scheduledDate : '' }}</option>
-                }
-                <option value="comm">{{ t('pb.v2.i.targetComm') }}</option>
-                <option value="new">{{ t('pb.v2.i.targetNew') }}</option>
-              </select>
-            </div>
-            @if (target().kind === 'new') {
-              <div class="pv-grid">
-                <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="nrDate()" (ngModelChange)="nrDate.set($event)"></label>
-                <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.nrTimePh')" [ngModel]="nrTime()" (ngModelChange)="nrTime.set($event)"></label>
-                <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.nrStagePh')" [ngModel]="nrStage()" (ngModelChange)="setNrStage($event)">
-                  @if (stageErrors().nr) { <span class="field-error" role="alert">{{ stageErrors().nr }}</span> }</label>
-                <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="nrInterviewers()" (ngModelChange)="nrInterviewers.set($event)"></label>
-                <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [placeholder]="t('pb.v2.i.nrFormatPh')" [ngModel]="nrFormat()" (ngModelChange)="nrFormat.set($event)"></label>
-              </div>
-              <p class="hint">{{ t('pb.v2.i.newRoundHint') }}</p>
-              <p class="hint" data-testid="new-round-defaults-hint">{{ t('pb.v2.i.newRoundDefaultsHint') }}</p>
-            }
+            <ng-container [ngTemplateOutlet]="targetsTpl"></ng-container>
 
             <div class="row">
               <button mat-stroked-button (click)="step.set('input')">{{ t('pb.v2.i.backEdit') }}</button>
@@ -405,6 +436,8 @@ export const SHARED_OCR_TIMEOUT_MS = 180_000;
 export class IntakePanelComponent {
   readonly entry = input.required<InterviewDetail>();
   @Output() readonly saved = new EventEmitter<void>();
+  /** 票159「保存并生成备考报告」：资产已保存，父级据此跳转到该轮 Prep 页并触发一次生成。 */
+  @Output() readonly prepGenerate = new EventEmitter<{ roundId: string }>();
 
   private readonly api = inject(PlaybookV2Api);
   private readonly aiApi = inject(PracticeApi);
@@ -438,8 +471,18 @@ export class IntakePanelComponent {
   readonly typeTabs = computed<{ key: IntakeType; label: string }[]>(() => [
     { key: 'email', label: this.t('pb.v2.i.typeEmail') },
     { key: 'transcript', label: this.t('pb.v2.i.typeTranscript') },
-    { key: 'note', label: this.t('pb.v2.i.typeNote') }
+    { key: 'note', label: this.t('pb.v2.i.typeNote') },
+    { key: 'experiences', label: this.t('pb.v2.i.typeExperiences') },
+    { key: 'resume', label: this.t('pb.v2.i.typeResumePoints') }
   ]);
+
+  /** 票159：面经 / 简历要点是备考输入类型——只有大文本框，无 Parse 预览、无解析字段。 */
+  readonly isPrepInputType = computed(() => this.type() === 'experiences' || this.type() === 'resume');
+  readonly prepPurpose = computed<PrepInputPurpose | null>(() =>
+    this.type() === 'experiences' ? PREP_INPUT_EXPERIENCES
+    : this.type() === 'resume' ? PREP_INPUT_RESUME : null);
+  /** 票159 编辑态：Prep 页读回区“编辑输入”带入的旧资产 id；保存走替换语义（先建新份再删旧份）。 */
+  readonly editingAssetId = signal<string | null>(null);
 
   readonly open = signal(false);
   readonly step = signal<'input' | 'preview'>('input');
@@ -545,8 +588,34 @@ export class IntakePanelComponent {
     this.step.set('input');
     this.errorMsg.set(null);
     this.stageErrors.set({});
+    this.editingAssetId.set(null);
     this.presetRoundId.set(roundId ?? null);
-    this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
+    // 票159：备考输入无预置轮次时不回落 Communications——首个轮次或新建轮次区。
+    if (!roundId && (type === 'experiences' || type === 'resume')) {
+      const first = this.rounds()[0];
+      this.target.set(first ? { kind: 'round', roundId: first.id } : { kind: 'new' });
+    } else {
+      this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
+    }
+    this.open.set(true);
+    this.setDocPaste(true);
+  }
+
+  /**
+   * 票159：Prep 页读回区“编辑输入” / “添加输入”的专用入口（不走 openPanel 的通用语义）。
+   * 预填旧文本、预置目标轮次并记下旧资产 id；保存时走替换语义。
+   * 备考输入必须归属轮次：roundId 缺省时按无轮次默认展开新建轮次区。
+   */
+  openPrepInput(purpose: 'experiences' | 'resume', roundId: string | null, text: string, assetId?: string): void {
+    this.type.set(purpose);
+    this.transcriptMode.set('text');
+    this.step.set('input');
+    this.errorMsg.set(null);
+    this.stageErrors.set({});
+    this.text.set(text);
+    this.editingAssetId.set(assetId ?? null);
+    this.presetRoundId.set(roundId);
+    this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'new' });
     this.open.set(true);
     this.setDocPaste(true);
   }
@@ -554,11 +623,21 @@ export class IntakePanelComponent {
   close(): void {
     this.open.set(false);
     this.setDocPaste(false);
+    this.editingAssetId.set(null);
   }
 
   setType(t: IntakeType): void {
+    // 票159：编辑态只属于当前备考输入类型；切到其他类型即丢弃编辑态，
+    // 避免后续保存误删旧资产；同类型内重选保留编辑态。
+    if (this.editingAssetId() && t !== this.type()) this.editingAssetId.set(null);
     this.type.set(t);
     this.step.set('input');
+    // 票159：备考输入不能归属 Communications；切过来时若当前归属是
+    // Communications，改为首个轮次（无轮次时默认展开新建轮次区）。
+    if ((t === 'experiences' || t === 'resume') && this.target().kind === 'comm') {
+      const first = this.rounds()[0];
+      this.target.set(first ? { kind: 'round', roundId: first.id } : { kind: 'new' });
+    }
   }
 
   /**
@@ -601,6 +680,8 @@ export class IntakePanelComponent {
       this.maybeAutoSwitchTextPaste(ev);
       return;
     }
+    // 票159：备考输入只有大文本框，不接截图与录音文件（也不弹错类型提示）。
+    if (this.isPrepInputType()) return;
     const images = files.filter(f => f.type.startsWith('image/'));
     if (images.length) {
       ev.preventDefault();
@@ -712,6 +793,8 @@ export class IntakePanelComponent {
     this.errorMsg.set(null);
     this.duplicate.set(false);
     this.batch.set(null);
+    // 票159：备考输入没有 Parse 预览（防御性守门；界面上本就没有解析按钮）。
+    if (this.isPrepInputType()) return;
     if (this.isAudioMode()) {
       // 录音没有可解析的文本:预览只呈现文件信息 + 归属,不假装已解析出内容。
       this.segments.set([]);
@@ -1014,7 +1097,7 @@ export class IntakePanelComponent {
 
   // ---------------- 保存 ----------------
 
-  async save(): Promise<void> {
+  async save(generatePrep = false): Promise<void> {
     // 票106(C2):Stage 长度先挡(≤50),超限字段下亮含上限提示,不进保存流水线
     const stageErrs: Partial<Record<'nr' | 'arr', string>> = {};
     if (this.target().kind === 'new' && textLengthError(this.nrStage().trim(), this.STAGE_MAX)) {
@@ -1036,6 +1119,8 @@ export class IntakePanelComponent {
     this.busy.set(true);
     this.errorMsg.set(null);
     try {
+      // 票159：备考输入单步保存（无 Parse 预览、无截图/录音、无沟通镜像），走独立分支。
+      if (this.isPrepInputType()) { await this.savePrepInput(generatePrep); return; }
       const entry = this.entry();
       let roundId: string | null = null;
       const t = this.target();
@@ -1214,7 +1299,64 @@ export class IntakePanelComponent {
   }
 
   /** 保存成功后的统一收尾(文本/录音两条路径共用)。 */
-  private finishSave(): void {
+  /**
+   * 票159 备考输入保存：面经 / 简历要点原文逐字以 kind=Notes 资产随轮次归档。
+   * - phase 定死为 Notes 落值规则 derivePhase(false, 保存当日, 目标轮日期)；
+   * - Communications 置灰不可选（界面禁用），此处为防御性守门；
+   * - 编辑保存走替换语义：先 attachAsset 建新份，成功后 deleteAsset 删旧份，
+   *   建新失败则旧份完好（异常由 save() 的 catch 接住，面板保持打开可重试）；
+   *   删旧失败不阻塞——新份已是最新一份，提示旧份仍在即可；
+   * - generate=true 时不发 saved（避免父级重复刷新），只发 prepGenerate，
+   *   父级据此跳转并触发一次生成。
+   */
+  private async savePrepInput(generate: boolean): Promise<void> {
+    const purpose = this.prepPurpose();
+    if (!purpose) return;
+    const raw = this.text().trim();
+    if (!raw) return;
+    const t = this.target();
+    if (t.kind === 'comm') { this.errorMsg.set(this.t('pb.v2.i.prepCommDisabled')); return; }
+    const entry = this.entry();
+    let roundId: string | null = null;
+    if (t.kind === 'round') roundId = t.roundId;
+    if (t.kind === 'new') {
+      const created = await this.api.addRound(entry.id, {
+        stage: this.nrStage().trim() || guessStage(this.category(), entry),
+        scheduledDate: this.nrDate() || null,
+        scheduledTime: this.nrTime() || null,
+        interviewers: this.nrInterviewers() || null,
+        format: this.nrFormat() || null
+      }).toPromise();
+      roundId = created!.id;
+    }
+    if (!roundId) return;
+    const phase = derivePhase(false, todayStr(), this.roundDateOf(roundId, t));
+    const meta: AssetMeta = { channel: 'note', date: todayStr(), purpose };
+    await this.api.attachAsset(entry.id, {
+      kind: 'Notes',
+      fileName: firstLineSummary(raw)
+        || this.t(purpose === PREP_INPUT_EXPERIENCES ? 'pb.v2.i.typeExperiences' : 'pb.v2.i.typeResumePoints'),
+      transcriptText: raw,
+      transcriptSegmentsJson: null,
+      roundId,
+      phase,
+      metaJson: JSON.stringify(meta)
+    }).toPromise();
+    const oldId = this.editingAssetId();
+    if (oldId) {
+      await this.api.deleteAsset(entry.id, oldId).toPromise().catch(() => {
+        this.snack.open(this.t('pb.v2.i.prepOldKept'), this.t('common.close'), { duration: 4000 });
+      });
+    }
+    if (generate) {
+      this.finishSave(false);
+      this.prepGenerate.emit({ roundId });
+    } else {
+      this.finishSave();
+    }
+  }
+
+  private finishSave(emitSaved = true): void {
     this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2500 });
     this.text.set('');
     this.clearShots();
@@ -1223,7 +1365,8 @@ export class IntakePanelComponent {
     this.open.set(false);
     this.setDocPaste(false);
     this.step.set('input');
-    this.saved.emit();
+    this.editingAssetId.set(null);
+    if (emitSaved) this.saved.emit();
   }
 
   /**

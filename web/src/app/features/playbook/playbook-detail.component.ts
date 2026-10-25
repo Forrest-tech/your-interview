@@ -20,8 +20,8 @@ import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
-  entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatLabel, htmlToPlainText, makeV2Fmt, makeV2T,
-  resolveActionDoneState, roundDisplayNo, sortRoundsByDate
+  entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatLabel, htmlToPlainText, latestPrepInputAsset, makeV2Fmt, makeV2T,
+  PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, roundDisplayNo, sortRoundsByDate
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
@@ -125,6 +125,9 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   readonly pageTab = signal<'rounds' | 'comm'>('rounds');
   readonly selectedRoundId = signal<string | null>(null);
+  /** 票159：统一入口“保存并生成”的单次生成请求（透传给轮次卡，token 递增）。 */
+  readonly prepGenRequest = signal<{ roundId: string; token: number } | null>(null);
+  private prepGenToken = 0;
   readonly pendingComm = signal(0);
   readonly expandedCell = signal<'jd' | 'company' | 'resume' | 'score' | null>(null);
   readonly editingBasic = signal(false);
@@ -525,6 +528,53 @@ export class PlaybookDetailComponent implements OnDestroy {
   openIntake(type: IntakeType = 'email', roundId?: string): void {
     this.intake()?.openPanel(type, roundId);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /** 票159：Prep 页读回区“编辑输入” / “添加输入”——打开统一对话框并预填。 */
+  openPrepInput(roundId: string, purpose: 'experiences' | 'resume', assetId: string | null, text: string): void {
+    this.intake()?.openPrepInput(purpose, roundId, text, assetId ?? undefined);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /**
+   * 票159：统一入口“保存并生成”跳转。先刷新（新资产必须已在 entry 内），再分两路：
+   * - 目标轮就是当前详情卡展示的轮：切到轮次页签，把 token 透传给轮次卡 →
+   *   轮次卡切到 Prep 页签 → 备考报告触发一次生成（失败提示留在 Prep 页）；
+   * - 目标轮不是当前展示轮：直接以该轮当前归档原文调一次生成，
+   *   成功后刷新并提示，失败以 snackbar 提示（无 Prep 页可落失败提示）。
+   * 注意：详情卡绑定的是 selectedRound（票164 点选机制），故“当前展示轮”以
+   * selectedRound 为准；原 159 基线无点选时以 currentRound 为准，164 落地后收敛至此
+   * （currentRound 计算属性已随 164 的轨道拆除一并删除，本方法不再引用它）。
+   */
+  async onPrepGenerate(ev: { roundId: string }): Promise<void> {
+    await this.onChildChanged();
+    this.pageTab.set('rounds');
+    const entry = this.entry();
+    if (!entry) return;
+    if (this.selectedRound()?.id === ev.roundId) {
+      this.prepGenRequest.set({ roundId: ev.roundId, token: ++this.prepGenToken });
+      return;
+    }
+    const exp = latestPrepInputAsset(entry.assets ?? [], ev.roundId, PREP_INPUT_EXPERIENCES);
+    const res = latestPrepInputAsset(entry.assets ?? [], ev.roundId, PREP_INPUT_RESUME);
+    try {
+      const expText = exp
+        ? await this.v2.getTranscript(entry.id, exp.id).toPromise().then(t => t?.transcriptText ?? '').catch(() => '')
+        : '';
+      const resText = res
+        ? await this.v2.getTranscript(entry.id, res.id).toPromise().then(t => t?.transcriptText ?? '').catch(() => '')
+        : '';
+      await this.v2.generatePrepReport(entry.id, ev.roundId, {
+        jdText: entry.jdText ?? null,
+        resumeText: resText.trim() || null,
+        experiences: expText.trim() || null,
+        language: this.i18n.lang()
+      }).toPromise();
+      this.snack.open(this.t('pb.v2.p.generatedOk'), this.t('common.close'), { duration: 2500 });
+      await this.onChildChanged();
+    } catch (e) {
+      this.snack.open(this.fmt('pb.v2.p.generateFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.rec.unknownError') }), this.t('common.close'), { duration: 4000 });
+    }
   }
 
   goMock(): void {

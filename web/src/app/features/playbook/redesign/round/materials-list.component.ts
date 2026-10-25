@@ -12,7 +12,7 @@ import {
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, formatLabel, isAudioAsset, joinNames, makeV2T, roundDisplayNo } from '../v2.helpers';
+import { derivePhase, formatLabel, isAudioAsset, isPrepInputPurpose, joinNames, makeV2T, roundDisplayNo } from '../v2.helpers';
 
 /**
  * 材料列表(2026-10-20 定稿):本轮(或条目级)的全部原始件。
@@ -31,6 +31,8 @@ import { derivePhase, formatLabel, isAudioAsset, joinNames, makeV2T, roundDispla
       <article class="mat" data-testid="material-item">
         <div class="mat-head">
           <span class="kind-chip">{{ kindLabel(a) }}</span>
+          <!-- 票159：备考输入资产在材料列表中带标签，与 Prep 页读回区是同一资产。 -->
+          @if (isPrepInput(a)) { <span class="prep-tag">{{ t('pb.v2.p.prepInputTag') }}</span> }
           <span class="mat-name">{{ a.fileName }}</span>
           @if (phaseOf(a); as ph) { <span class="phase">{{ ph === 'Pre' ? t('pb.v2.m.phasePre') : t('pb.v2.m.phasePost') }}</span> }
           <span class="mat-date">{{ displayDate(a) }}</span>
@@ -104,6 +106,8 @@ import { derivePhase, formatLabel, isAudioAsset, joinNames, makeV2T, roundDispla
     .mat-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
     .kind-chip { font-size: 12px; font-weight: 700; border: 1px solid var(--yi-border, #e2e8f0);
                  border-radius: 999px; padding: 2px 9px; }
+    .prep-tag { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px;
+                background: var(--yi-accent-tint, #eff6ff); color: var(--yi-accent, #2563eb); }
     .mat-name { font-size: 14px; font-weight: 600; }
     .phase { font-size: 12px; color: var(--yi-text-muted, #475569); }
     .mat-date { font-size: 13px; color: var(--yi-text-muted, #475569); }
@@ -155,6 +159,11 @@ export class MaterialsListComponent {
 
   metaOf(a: InterviewAsset): AssetMeta | null {
     return safeJson<AssetMeta>(a.metaJson);
+  }
+
+  /** 票159：备考输入资产（kind 不限，只认 purpose 标签）。 */
+  isPrepInput(a: InterviewAsset): boolean {
+    return isPrepInputPurpose(this.metaOf(a)?.purpose);
   }
 
   /** 邮件类材料(与 kindLabel 同一判别口径,供 phase 推导回落规则用)。 */

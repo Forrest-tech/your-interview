@@ -57,6 +57,9 @@ export interface AssetMeta {
   communicationId?: string;
   /** 去重键:发件人+日期+主题。 */
   dedupeKey?: string;
+  /** 票159 备考输入 purpose 标签：'prep-input-experiences' 面经 / 'prep-input-resume' 简历要点。
+   *  仅 kind=Notes 的备考输入资产携带；值域见 redesign/v2.helpers.ts 的 PREP_INPUT_* 常量。 */
+  purpose?: string;
 }
 
 /** 逐题分析的单个维度。 */

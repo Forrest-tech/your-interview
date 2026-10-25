@@ -139,7 +139,11 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         @case ('prep') {
           <app-prep-report [entry]="entry()" [round]="round()"
                            [guidanceAssets]="guidanceAssets()"
-                           (changed)="changed.emit()" />
+                           [roundAssets]="roundAssets()"
+                           [generateRequest]="prepGenToken()"
+                           (changed)="changed.emit()"
+                           (editInput)="editPrepInput.emit({ roundId: round().id, purpose: $event.purpose, assetId: $event.assetId, text: $event.text })"
+                           (generateConsumed)="generateConsumed.emit()" />
         }
         @case ('record') {
           <app-round-record [entry]="entry()" [round]="round()" (changed)="changed.emit()" />
@@ -211,8 +215,14 @@ export class RoundCardComponent implements OnInit {
   readonly round = input.required<InterviewRound>();
   /** 票30(REQ-10):展示编号(日期序位置),由详情页传入;缺省回落存储 order(其他调用方零感知)。 */
   readonly displayNo = input<number | null>(null);
+  /** 票159：统一入口“保存并生成”的单次生成请求（详情页透传，token 递增）。 */
+  readonly prepGenRequest = input<{ roundId: string; token: number } | null>(null);
   @Output() readonly changed = new EventEmitter<void>();
   @Output() readonly addMaterialHere = new EventEmitter<string>();
+  /** 票159：读回区编辑 / 添加输入（透传自备考报告，详情页据此打开统一对话框）。 */
+  @Output() readonly editPrepInput = new EventEmitter<{ roundId: string; purpose: 'experiences' | 'resume'; assetId: string | null; text: string }>();
+  /** 票159：生成请求已被备考报告消费（透传，详情页据此清零）。 */
+  @Output() readonly generateConsumed = new EventEmitter<void>();
 
   private readonly api = inject(PlaybookV2Api);
   private readonly remindersSvc = inject(RoundRemindersService);
@@ -320,7 +330,23 @@ export class RoundCardComponent implements OnInit {
         this.editing.set(false);
       }
     }, { allowSignalWrites: true });
+
+    // 票159：“保存并生成”跳转到本轮时切到 Prep 页签；备考报告收到 token 后触发一次生成。
+    // 只响应与本轮匹配的请求；父级清零请求后转发 token 同步归零——否则切页签回来、
+    // 备考报告重建时旧 token 会被当成新请求再次触发生成。
+    effect(() => {
+      const req = this.prepGenRequest();
+      if (req && req.roundId === this.round().id) {
+        this.tab.set('prep');
+        this.prepGenToken.set(req.token);
+      } else {
+        this.prepGenToken.set(0);
+      }
+    }, { allowSignalWrites: true });
   }
+
+  /** 票159：转发给备考报告的生成 token（0 = 无请求）。 */
+  readonly prepGenToken = signal(0);
 
   outcomeLabel(o: string): string {
     switch (o) {

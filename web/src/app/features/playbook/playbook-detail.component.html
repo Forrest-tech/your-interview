@@ -187,7 +187,7 @@
     </section>
 
     <!-- ② 统一入口 -->
-    <app-intake-panel [entry]="e" (saved)="onChildChanged()" />
+    <app-intake-panel [entry]="e" (saved)="onChildChanged()" (prepGenerate)="onPrepGenerate($event)" />
 
     <!-- 下区:轮次工作区(页签 + stepper + Round + 复盘与待办,单一边框容器) -->
     <section class="zone zone-work">
@@ -252,8 +252,11 @@
             @if (selectedRound(); as sr) {
               <div class="rexpand">
                 <app-round-card [entry]="e" [round]="sr" [displayNo]="roundNo(sr)"
+                                [prepGenRequest]="prepGenRequest()"
                                 (changed)="onChildChanged()"
-                                (addMaterialHere)="openIntake('email', $event)" />
+                                (addMaterialHere)="openIntake('email', $event)"
+                                (editPrepInput)="openPrepInput($event.roundId, $event.purpose, $event.assetId, $event.text)"
+                                (generateConsumed)="prepGenRequest.set(null)" />
               </div>
             }
           </div>

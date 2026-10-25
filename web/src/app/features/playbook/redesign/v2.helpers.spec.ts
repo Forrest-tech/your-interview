@@ -9,7 +9,7 @@
  * 特征测试锁现状,不改被测函数行为。
  */
 import { describe, expect, it } from '@jest/globals';
-import { entryResultOutcome, resolveActionDoneState } from './v2.helpers';
+import { entryResultOutcome, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState } from './v2.helpers';
 
 describe('entryResultOutcome(枚举全值,源码 switch 逐值)', () => {
   // [枚举-终局] Rejected -> rejected
@@ -107,5 +107,57 @@ describe('resolveActionDoneState(票116 F-H1:toggle 失败后 checkbox 呈现值
     expect(resolveActionDoneState([], 'a1', true)).toBe(true);
     expect(resolveActionDoneState(null, 'a1', false)).toBe(false);
     expect(resolveActionDoneState(undefined, 'a1', true)).toBe(true);
+  });
+});
+
+/**
+ * 票159 备考输入 purpose 规则。
+ * 口径源:v2.helpers.ts 的 PREP_INPUT_* 常量与 latestPrepInputAsset —— 同轮同 purpose
+ * 取 uploadedAt 最新一份；不同轮、不同 purpose、非备考输入资产一律不入选；删除最新
+ * 一份后次新一份即晋升（本函数只取现存最新，晋升是同一规则的自然结果）。
+ */
+const asset = (id: string, roundId: string | null, uploadedAt: string, purpose?: string) => ({
+  id, roundId, uploadedAt, metaJson: purpose ? JSON.stringify({ purpose }) : null,
+});
+
+describe('票159 purpose 标签', () => {
+  it('类型 -> purpose 映射', () => {
+    expect(prepInputPurposeOf('experiences')).toBe(PREP_INPUT_EXPERIENCES);
+    expect(prepInputPurposeOf('resume')).toBe(PREP_INPUT_RESUME);
+  });
+  it('isPrepInputPurpose 只认两个值', () => {
+    expect(isPrepInputPurpose(PREP_INPUT_EXPERIENCES)).toBe(true);
+    expect(isPrepInputPurpose(PREP_INPUT_RESUME)).toBe(true);
+    expect(isPrepInputPurpose('note')).toBe(false);
+    expect(isPrepInputPurpose(null)).toBe(false);
+    expect(isPrepInputPurpose(undefined)).toBe(false);
+  });
+});
+
+describe('票159 latestPrepInputAsset(最新一份为准)', () => {
+  const a1 = asset('a1', 'r1', '2026-10-20T10:00:00', PREP_INPUT_EXPERIENCES);
+  const a2 = asset('a2', 'r1', '2026-10-24T09:00:00', PREP_INPUT_EXPERIENCES);
+  const a3 = asset('a3', 'r2', '2026-10-25T09:00:00', PREP_INPUT_EXPERIENCES);
+  const a4 = asset('a4', 'r1', '2026-10-25T09:00:00', PREP_INPUT_RESUME);
+  const a5 = asset('a5', 'r1', '2026-10-25T09:00:00');
+  it('同轮同 purpose 取最新一份', () => {
+    expect(latestPrepInputAsset([a1, a2], 'r1', PREP_INPUT_EXPERIENCES)?.id).toBe('a2');
+  });
+  it('不同轮不入选（即使更新）', () => {
+    expect(latestPrepInputAsset([a1, a2, a3], 'r1', PREP_INPUT_EXPERIENCES)?.id).toBe('a2');
+  });
+  it('不同 purpose 不入选', () => {
+    expect(latestPrepInputAsset([a1, a2, a4], 'r1', PREP_INPUT_RESUME)?.id).toBe('a4');
+    expect(latestPrepInputAsset([a4], 'r1', PREP_INPUT_EXPERIENCES)).toBeNull();
+  });
+  it('无 purpose 的 Notes 不入选', () => {
+    expect(latestPrepInputAsset([a5], 'r1', PREP_INPUT_EXPERIENCES)).toBeNull();
+  });
+  it('删除最新一份后次新一份晋升', () => {
+    expect(latestPrepInputAsset([a1], 'r1', PREP_INPUT_EXPERIENCES)?.id).toBe('a1');
+  });
+  it('空/缺失输入 -> null', () => {
+    expect(latestPrepInputAsset([], 'r1', PREP_INPUT_EXPERIENCES)).toBeNull();
+    expect(latestPrepInputAsset(null, 'r1', PREP_INPUT_EXPERIENCES)).toBeNull();
   });
 });

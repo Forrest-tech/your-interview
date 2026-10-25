@@ -651,7 +651,7 @@
               <!-- 二元评分: Pass/Fail -->
               @if (!resoleRevealed()) {
                 <p class="resole-hint">{{ t('ts.resole.hint') }}</p>
-                <button mat-flat-button color="primary"
+                <button mat-flat-button color="primary" class="resole-reveal"
                         (click)="resoleRevealed.set(true)">{{ t('ts.resole.reveal') }}</button>
               } @else {
                 <div class="binary-grade">

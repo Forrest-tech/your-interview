@@ -279,6 +279,15 @@ mat-card { border-radius: 8px; }
   display: flex;
   gap: 12px;
 }
+/* 票 149：重做模式子项占满整行——.rs-grade 是 4 列网格（为四档评分设计），
+   重做模式的子项若不跨列会被压进 1/4 列宽，二元按钮各剩约 70px，
+   文字换行后被 36px 固定高裁掉（截图现状）。开关/提示/揭示钮/二元评分一律跨满整行。 */
+.rs-grade .resole-toggle,
+.rs-grade .resole-hint,
+.rs-grade .resole-reveal,
+.rs-grade .binary-grade { grid-column: 1 / -1; }
+/* 窄屏兜底：二元按钮文字允许换行、高度自适应，不再裁字。 */
+.binary-grade button { white-space: normal; height: auto; min-height: 36px; line-height: 1.4; padding-top: 6px; padding-bottom: 6px; }
 .binary-grade .g-pass {
   background: var(--go);
   color: white;

@@ -78,6 +78,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
       <!-- 票159：Prep 两框删除，换为读回区——显示本轮当前备考输入资产原文；
            读回与材料列表是同一资产（编辑/删除都在统一入口与材料列表完成）。 -->
       <div class="readback">
+        @if (!hidePrepInputs) {
         <div class="rb-block">
           <div class="rb-head">
             <span class="rb-title">{{ t('pb.v2.p.inputExpTitle') }}</span>
@@ -108,6 +109,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
             <p class="rb-empty">{{ t('pb.v2.p.noInputResume') }}</p>
           }
         </div>
+        }
         <p class="hint">{{ t('pb.v2.p.genHint') }}</p>
       </div>
         <div class="prep-body">
@@ -325,6 +327,8 @@ export class PrepReportComponent {
   @Output() readonly editInput = new EventEmitter<{ purpose: 'experiences' | 'resume'; assetId: string | null; text: string }>();
   /** 票159：生成请求已被消费（父级据此清零，避免切页签回来时重复触发）。 */
   @Output() readonly generateConsumed = new EventEmitter<void>();
+  /** 票174：Prep 页两读回区块暂隐藏（隐藏不是删除：资产、生成取用逻辑、统一入口、i18n 键一律保留；恢复时改回 false 即一处恢复）。 */
+  readonly hidePrepInputs = true;
 
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);

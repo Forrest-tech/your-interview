@@ -148,7 +148,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
                            (generateConsumed)="generateConsumed.emit()" />
         }
         @case ('record') {
-          <!-- 票206：record 三功能行，与 Prep 页头（.prep-head/.ph-actions）同一落点：页签内容区顶部右上角，padding 照 .prep 同款 4px 2px（行顶距页签行底边与右偏移与 Prep 页头一字相同）、组内 gap 8px、行高由 36px 方框按钮定；Text size 用 compact 版（与 Prep 一致：无“字号”名、保留百分比数字），Export 与逐题分析复用 .rc-icon-btn（196 基准）；逐题分析仍是 analytics，不换成 Prep 的 auto_awesome（功能不同，只统一位置与样式）。 -->
+          <!-- 票206：record 三功能行，与 Prep 页头（.prep-head/.ph-actions）同一落点：页签内容区顶部右上角，padding 照 .prep 同款 4px 2px（行顶距页签行底边与右偏移与 Prep 页头一字相同）、组内 gap 8px、行高由 36px 方框按钮定；Text size 用 compact 版（与 Prep 一致：无“字号”名、保留百分比数字），Export 与逐题分析复用 .rc-icon-btn（196 基准）；票213：逐题分析图标换成 Prep 生成钮同款 auto_awesome（用户令：两边功能类似、要一样，206“功能不同不换图标”口径改口；功能、接线、文案一字不动，只换图标）。 -->
           <div class="rec-head">
             <span class="spacer"></span>
             <div class="rec-actions">
@@ -158,7 +158,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
               @if (recordComp(); as rc) {
                 <button type="button" class="rc-icon-btn" (click)="rc.generateReview()" [disabled]="rc.busy()"
                         [title]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"
-                        [attr.aria-label]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"><mat-icon>analytics</mat-icon></button>
+                        [attr.aria-label]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"><mat-icon>auto_awesome</mat-icon></button>
               }
             </div>
           </div>

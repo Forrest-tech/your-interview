@@ -55,10 +55,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         @if (tab() === 'record') {
           <button mat-stroked-button (click)="openRecordExport()">{{ t('pb.v2.r.exportRecord') }}</button>
         }
-        <!-- 票177:Edit round 改卡片右上角铅笔图标（与 AI practice 的 .ch-edit 看齐），取代下面单独成行的文本按钮；编辑态图标变关闭。 -->
-        <button type="button" class="rc-icon-btn" [attr.aria-label]="t('pb.v2.r.editRound')" (click)="toggleEdit()">
-          <mat-icon>{{ editing() ? 'close' : 'edit' }}</mat-icon>
-        </button>
+        <!-- 票188:铅笔按钮已上移至父级页签行最右侧（viewChild 接线），此处不再渲染，避免重复。 -->
       </div>
       <div class="rc-outcome">
         @if (roundScore() != null) {
@@ -74,7 +71,8 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.meetingLink') }}</span><a [href]="round().meetingLink" target="_blank" rel="noopener">{{ t('pb.v2.r.openLink') }}</a></span>
         }
         <!-- 票177:Location 移回此处信息行（169 之前的位置；轨道节点上没有，不算重复）。 -->
-        @if (round().location) {
+        <!-- 票188:Location 显示项暂隐藏（隐藏不是删除：location 数据、编辑表单 fLocation、保存逻辑、i18n 键一律保留；恢复时改回 false 即一处恢复）。 -->
+        @if (round().location && !hideLocation) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.location') }}</span><b>{{ round().location }}</b></span>
         }
       </div>
@@ -257,6 +255,8 @@ export class RoundCardComponent implements OnInit {
 
   readonly tab = signal<RoundTab>('prep');
   readonly editing = signal(false);
+  /** 票188：详情卡 Location 显示项暂隐藏（见模板处注释）。 */
+  readonly hideLocation = true;
   readonly eStage = signal('');
   readonly eDate = signal('');
   readonly eTime = signal('');

@@ -289,6 +289,13 @@
   display: inline-flex; align-items: center; gap: 7px;
   &.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; }
 }
+/* 票188:页签行最右侧铅笔按钮，视觉照详情卡 .rc-icon-btn（票177）原样；align-self 使其在页签行内垂直居中。 */
+.ptab-edit { flex: 0 0 auto; align-self: center; display: inline-flex; align-items: center; justify-content: center;
+             width: 36px; height: 36px; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px;
+             background: #ffffff; color: var(--yi-text-muted, #475569); cursor: pointer;
+             transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.ptab-edit:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
+.ptab-edit mat-icon { font-size: 19px; width: 19px; height: 19px; }
 .red-dot {
   background: #dc2626; color: #ffffff; font-size: 12px; font-weight: 800;
   border-radius: 999px; min-width: 20px; height: 20px; padding: 0 6px;

@@ -172,6 +172,9 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   readonly intake = viewChild(IntakePanelComponent);
 
+  /** 票188：详情卡铅笔按钮上移至页签行（viewChild 接线；卡片未渲染时为空，按钮侧以 @if (selectedRound()) 守门）。 */
+  readonly roundCard = viewChild(RoundCardComponent);
+
   // 基本信息编辑草稿
   readonly bCompany = signal('');
   readonly bRole = signal('');

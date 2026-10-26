@@ -232,6 +232,13 @@
             <span class="red-dot" data-testid="comm-red-dot">{{ pendingComm() }}</span>
           }
         </button>
+        @if (selectedRound()) {
+          <span class="spacer"></span>
+          <!-- 票188:详情卡铅笔按钮上移至此（原在详情卡 .rc-head；跨组件 viewChild 接线，功能与编辑态图标与今天一致）。 -->
+          <button type="button" class="ptab-edit" [attr.aria-label]="t('pb.v2.r.editRound')" (click)="roundCard()?.toggleEdit()">
+            <mat-icon>{{ roundCard()?.editing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        }
       </nav>
 
       @if (pageTab() === 'rounds') {

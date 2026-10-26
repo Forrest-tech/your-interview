@@ -171,6 +171,8 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly hideOpenJd = true;
   // 票 189：用户令去掉页脚 Delete entry（先隐藏不删除：deleteEntry() 两步确认逻辑、i18n 键一律保留；恢复时改回 false 即一处恢复）。
   readonly hideFootDelete = true;
+  // 票 193：卡片标题旁铅笔暂隐藏（隐藏不是删除：startEditBasic() 与基本信息编辑表单逻辑一律保留；恢复时改回 false 即一处恢复；188 的页签行铅笔 .ptab-edit 不动）。
+  readonly hideEditBasic = true;
 
   readonly intake = viewChild(IntakePanelComponent);
 

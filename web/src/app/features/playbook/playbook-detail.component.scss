@@ -183,6 +183,8 @@
 .strip-foot { border-top: 1px solid var(--yi-border); padding: 10px 16px 12px; }
 /* 票 185：触发行双按钮横排（窄屏自动换行不断溢出）。 */
 .intake-head { margin: 18px 0 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+/* 票 193：卡片右下角图标行（右对齐；三图标 + 间距约 130px，窄屏不溢出）。 */
+.zone-actions { display: flex; justify-content: flex-end; gap: 4px; margin-top: 12px; }
 .entry-foot { margin-top: 24px; border-top: 1px solid var(--yi-border); padding-top: 14px; }
 .foot-delete { color: #dc2626; }
 .status-badge {

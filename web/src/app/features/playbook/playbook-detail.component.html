@@ -89,8 +89,11 @@
             <div class="ehead-name">
               <div class="ehead-title-row">
                 <h1>{{ e.role }}</h1>
-                <button mat-icon-button class="edit-basic-btn" (click)="startEditBasic()"
-                        [attr.aria-label]="t('pb.v2.d.editBasic')"><mat-icon>edit</mat-icon></button>
+                <!-- 票 193：标题旁铅笔暂隐藏（隐藏不是删除，恢复只改 hideEditBasic 一处）。 -->
+                @if (!hideEditBasic) {
+                  <button mat-icon-button class="edit-basic-btn" (click)="startEditBasic()"
+                          [attr.aria-label]="t('pb.v2.d.editBasic')"><mat-icon>edit</mat-icon></button>
+                }
               </div>
               <div class="ehead-company">{{ e.companyName }}</div>
             </div>
@@ -120,9 +123,6 @@
               <span class="meta-k">{{ t('pb.v2.d.lastContact') }}</span>
               <span class="meta-v" [class.missing]="!lastContactDate()">{{ lastContactDate() || t('pb.v2.d.emptyNoContact') }}</span>
             </div>
-          </div>
-          <div class="ehead-mock">
-            <button mat-raised-button color="primary" (click)="goMock()">{{ t('pb.v2.d.mock') }}</button>
           </div>
           @if (editingBasic()) {
             <div class="basic-edit">
@@ -205,18 +205,15 @@
           </div>
         }
       </div>
+      <!-- 票 193：卡片右下角图标行（右对齐；顺序 AI mock → Add material → Add a round；接线与原按钮一字不动，原 .ehead-mock 与 .intake-head 两处不再留按钮）。 -->
+      <div class="zone-actions">
+        <button mat-icon-button [matTooltip]="t('pb.v2.d.mock')" [attr.aria-label]="t('pb.v2.d.mock')" (click)="goMock()"><mat-icon>mic</mat-icon></button>
+        <button mat-icon-button [matTooltip]="t('pb.v2.d.addMaterial')" [attr.aria-label]="t('pb.v2.d.addMaterial')" (click)="openIntake('email')"><mat-icon>note_add</mat-icon></button>
+        <button mat-icon-button [matTooltip]="t('pb.v2.d.addRound')" [attr.aria-label]="t('pb.v2.d.addRound')" (click)="openIntake('email', undefined, true)"><mat-icon>add_circle</mat-icon></button>
+      </div>
     </section>
 
     <!-- ② 统一入口 -->
-    <div class="intake-head">
-      <button mat-raised-button color="primary" (click)="openIntake('email')">
-        {{ t('pb.v2.d.addMaterial') }}
-      </button>
-      <!-- 票 185：触发行「加一轮」按钮——打开面板即预置新建轮次目标（文案复用 pb.v2.d.addRound，零新键）。 -->
-      <button type="button" mat-raised-button (click)="openIntake('email', undefined, true)">
-        {{ t('pb.v2.d.addRound') }}
-      </button>
-    </div>
     <app-intake-panel [entry]="e" (saved)="onChildChanged()" (prepGenerate)="onPrepGenerate($event)" />
 
     <!-- 下区:轮次工作区(页签 + stepper + Round + 复盘与待办,单一边框容器) -->

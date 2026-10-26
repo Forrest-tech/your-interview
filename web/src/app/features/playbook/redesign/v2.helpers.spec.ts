@@ -9,7 +9,7 @@
  * 特征测试锁现状,不改被测函数行为。
  */
 import { describe, expect, it } from '@jest/globals';
-import { entryResultOutcome, formatEnteredDate, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, scoreTierKey } from './v2.helpers';
+import { entryResultOutcome, formatEnteredDate, formatInterviewHeadTime, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, scoreTierKey, shortEmailTitle } from './v2.helpers';
 
 describe('entryResultOutcome(枚举全值,源码 switch 逐值)', () => {
   // [枚举-终局] Rejected -> rejected
@@ -284,5 +284,39 @@ describe('resolveRoundNodeStatus(票 183 六档状态映射)', () => {
   });
   it('空 outcome + 无日期 -> unscheduled', () => {
     expect(resolveRoundNodeStatus('', undefined, TODAY)).toBe('unscheduled');
+  });
+});
+
+describe('票210 shortEmailTitle(提炼短标题)', () => {
+  it('原主题全文 -> 提炼短标题', () => {
+    expect(shortEmailTitle('1st round of technical interview for Full Stack Developer position at Corpany. (2)'))
+      .toBe('Technical interview — Full Stack Developer at Corpany');
+  });
+  it('2nd round 前缀 + 计数后缀一并去掉', () => {
+    expect(shortEmailTitle('2nd round of interview for Designer at X (3)'))
+      .toBe('Interview — Designer at X');
+  });
+  it('无 for 结构 -> 只去后缀与首字母大写', () => {
+    expect(shortEmailTitle('Interview invitation')).toBe('Interview invitation');
+  });
+  it('空值 -> 空串', () => {
+    expect(shortEmailTitle('')).toBe('');
+    expect(shortEmailTitle(null)).toBe('');
+    expect(shortEmailTitle(undefined)).toBe('');
+  });
+});
+
+describe('票210 formatInterviewHeadTime(收起态右上时间)', () => {
+  it('yyyy-MM-dd HH:mm -> Oct 1 · 13:00', () => {
+    expect(formatInterviewHeadTime('2026-10-01 13:00')).toBe('Oct 1 · 13:00');
+  });
+  it('ISO 串同样解析', () => {
+    expect(formatInterviewHeadTime('2026-10-01T09:05:00')).toBe('Oct 1 · 09:05');
+  });
+  it('空值 -> 空串，非法值 -> 回落原文', () => {
+    expect(formatInterviewHeadTime('')).toBe('');
+    expect(formatInterviewHeadTime(null)).toBe('');
+    expect(formatInterviewHeadTime('garbage')).toBe('garbage');
+    expect(formatInterviewHeadTime('2026-13-01 13:00')).toBe('2026-13-01 13:00');
   });
 });

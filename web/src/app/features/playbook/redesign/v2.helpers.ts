@@ -359,3 +359,35 @@ export function formatEnteredDate(iso: string, timeZone: string, locale: string)
     return new Date(iso).toLocaleDateString(locale);
   }
 }
+
+const EMAIL_HEAD_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * 票210：邮件卡收起态右上时间 —— 面试时间 interviewAt（yyyy-MM-dd HH:mm 或 ISO）
+ * 格式化为 "Oct 1 · 13:00"；空值回落 ''，非法值回落原文，绝不抛错。
+ */
+export function formatInterviewHeadTime(v?: string | null): string {
+  if (!v) return '';
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (!m) return v;
+  const mon = EMAIL_HEAD_MONTHS[Number(m[2]) - 1];
+  if (!mon) return v;
+  return `${mon} ${Number(m[3])} · ${m[4]}:${m[5]}`;
+}
+
+/**
+ * 票210：邮件卡提炼短标题 —— 去 thread 计数后缀 " (N)"、去 "Nst/nd/rd/th round of "
+ * 前缀、去 " position"（仅 position at 前）、去末尾句点、首个 " for " 转 " — "、
+ * 首字母大写；不匹配时只做前几步回落，绝不编造。
+ */
+export function shortEmailTitle(subject?: string | null): string {
+  let s = (subject ?? '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/\s*\(\d+\)\s*$/, '');
+  s = s.replace(/^\d+(st|nd|rd|th)\s+round\s+of\s+/i, '');
+  s = s.replace(/\s+position(?=\s+at\s)/i, '');
+  s = s.replace(/[.。]\s*$/, '');
+  const m = s.match(/^(.*?)\s+for\s+(.+)$/i);
+  if (m) s = `${m[1]} — ${m[2]}`;
+  s = s.trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}

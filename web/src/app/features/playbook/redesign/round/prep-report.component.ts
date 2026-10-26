@@ -260,7 +260,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
       transition: background .15s ease, border-color .15s ease, color .15s ease; }
     .ph-actions button:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
     .ph-actions button mat-icon { font-size: 19px; width: 19px; height: 19px; }
-    .ph-title { font-size: 16px; font-weight: 600; }
+    .ph-title { font-size: 16px; font-weight: 600; align-self: flex-end; } /* 票208：标题盒底沿与行底沿齐平，标题文字到首节要点的间距只剩 margin-bottom 8px 与首块 margin-top 4px 折叠后的 8px，与 h4 一致。203 的 8px 只对齐了 margin，漏了行高项：行高由 48px 图标按钮定、标题顶对齐时行内多出约 28px 空隙，本行只改这一项，不凑数。 */
     /* 票207：脚手架/旧节标记与追加块标记（沿用 .tag pill 视觉，不引入新色板）。 */
     .sec-tag { font-size: 12px; font-weight: 500; border: 1px solid var(--yi-border, #e2e8f0);
                border-radius: 999px; padding: 1px 8px; color: var(--yi-text-muted, #475569);

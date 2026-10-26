@@ -167,6 +167,8 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly hideStatusBadge = true;
   // 票 185：轨道行末「加一轮」按钮暂隐藏（隐藏不是删除：按钮、openIntake handler、i18n 键一律保留；入口由触发行新按钮承接，恢复时改回 false 即一处恢复）。
   readonly hideTrackAddRound = true;
+  // 票 187：四格条下方 Open job posting 按钮暂隐藏（隐藏不是删除：按钮本身、openJd() handler、i18n 键 pb.v2.d.openJd、JD 面板与数据逻辑一律保留；恢复时改回 false 即一处恢复）。
+  readonly hideOpenJd = true;
 
   readonly intake = viewChild(IntakePanelComponent);
 

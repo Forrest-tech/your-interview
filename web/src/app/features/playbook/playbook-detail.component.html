@@ -199,9 +199,11 @@
             }
           </section>
         }
-        <div class="strip-foot">
-          <button mat-button (click)="openJd()">{{ t('pb.v2.d.openJd') }}</button>
-        </div>
+        @if (!hideOpenJd) {
+          <div class="strip-foot">
+            <button mat-button (click)="openJd()">{{ t('pb.v2.d.openJd') }}</button>
+          </div>
+        }
       </div>
     </section>
 

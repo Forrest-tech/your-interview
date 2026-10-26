@@ -292,14 +292,14 @@
    票192:行高下限 44px——行高须大于 36px 的铅笔按钮，按钮在行内才有上下留白、真正居中，
    而不是贴住底线；页签仍 stretch 撑满行高，下划线与容器底线重合关系一字不动。 */
 .page-tabs {
-  display: flex; gap: 4px; margin-top: 20px; min-height: 44px;
+  display: flex; gap: 8px; margin-top: 20px; min-height: 44px;
   border-bottom: 1.5px solid var(--yi-border, #e2e8f0);
 }
 .ptab {
-  border: none; background: transparent; color: inherit; cursor: pointer;
-  font-size: 14px; font-weight: 500; padding: 9px 15px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
+  border: none; background: transparent; color: var(--yi-text-muted, #475569); cursor: pointer;
+  font-size: 16px; font-weight: 600; padding: 9px 15px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
   display: inline-flex; align-items: center; gap: 7px;
-  &.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; }
+  &.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; color: var(--yi-text, #0f172a); }
 }
 /* 票188:页签行最右侧铅笔按钮，视觉照详情卡 .rc-icon-btn（票177）原样；
    票192:align-self: center + 行高下限 44px，按钮在行内上下居中、上下各约 3px 留白。 */

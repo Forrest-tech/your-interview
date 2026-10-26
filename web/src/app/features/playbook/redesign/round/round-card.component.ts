@@ -220,10 +220,10 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
            font-size: 14px; background: transparent; color: inherit; }
     .field-error { color: #dc2626; font-size: 12px; }
     .row { display: flex; gap: 8px; align-items: center; }
-    .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e2e8f0); margin: 8px 0 10px; flex-wrap: wrap; /* 票192:上边距 14px → 8px，下边距与页签内边距不动 */ }
-    .rtab { border: none; background: transparent; color: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
-            padding: 8px 13px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; }
-    .rtab.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; }
+    .rtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--yi-border, #e2e8f0); margin: 8px 0 10px; flex-wrap: wrap; /* 票192:上边距 14px → 8px，下边距与页签内边距不动；票200:容器线 1.5px → 1px，收敛为卡片内页签 */ }
+    .rtab { border: none; background: transparent; color: var(--yi-text-muted, #475569); font-size: 13px; font-weight: 500; cursor: pointer;
+            padding: 8px 13px; border-bottom: 1.5px solid transparent; margin-bottom: -1px; }
+    .rtab.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; color: var(--yi-text, #0f172a); }
     .cnt { font-size: 12px; font-weight: 700; background: color-mix(in srgb, var(--yi-text, #0f172a) 10%, transparent);
            border-radius: 999px; padding: 1px 7px; margin-left: 5px; }
     .mat-head-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

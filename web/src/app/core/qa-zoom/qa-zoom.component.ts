@@ -38,8 +38,11 @@ import { I18nService } from '../i18n/i18n.service';
   styles: [`
     .qa-zoom { display: inline-flex; align-items: center; gap: 5px; }
     .qa-zoom-label { font-size: 11px; color: var(--yi-text-muted, #475569); margin-right: 2px; }
-    .zbtn { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--yi-border, #e2e8f0);
-            background: transparent; color: inherit; font-size: 14px; line-height: 1; cursor: pointer; }
+    .zbtn { display: inline-flex; align-items: center; justify-content: center;
+            width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--yi-border, #e2e8f0);
+            background: #ffffff; color: var(--yi-text-muted, #475569); font-size: 19px; line-height: 1; cursor: pointer;
+            transition: background .15s ease, border-color .15s ease, color .15s ease; }
+    .zbtn:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
     .zbtn:disabled { opacity: .4; cursor: default; }
     .zpct { min-width: 52px; text-align: center; font-size: 12px; font-weight: 700;
             border: 1px solid var(--yi-border, #e2e8f0); border-radius: 7px; padding: 4px 4px;

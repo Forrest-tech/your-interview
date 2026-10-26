@@ -97,7 +97,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                 @if (report()) {
                   <button mat-icon-button (click)="openExport()" [matTooltip]="t('pb.v2.p.exportPrep')" [attr.aria-label]="t('pb.v2.p.exportPrep')"><mat-icon>download</mat-icon></button>
                 }
-                <button mat-icon-button color="primary" (click)="generate()" [disabled]="busy()"
+                <button mat-icon-button (click)="generate()" [disabled]="busy()"
                         [matTooltip]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')"
                         [attr.aria-label]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')">
                   <mat-icon>auto_awesome</mat-icon>
@@ -239,6 +239,14 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .prep-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; } /* 票203：标题行现为正文列首行，下边距取 h4 同款 8px，使首节要点与标题间距同其他小节一致。 */
     /* 票190：三个控件成组，窄屏整组落到标题下一行、不散不溢出。 */
     .ph-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    /* 票205:页头图标按钮统一成 196 三按钮基准（原 Material 默认 48px 圆钮 + 24px 图标 + 生成钮 primary 蓝，与顶部三按钮不一致）。
+       只统一样式：图标字形、顺序、tooltip、点击行为、busy disabled 一字不动；百分比数字 .zpct 不是图标、不动。 */
+    .ph-actions button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; padding: 0; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px;
+      background: #ffffff; color: var(--yi-text-muted, #475569); cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, color .15s ease; }
+    .ph-actions button:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
+    .ph-actions button mat-icon { font-size: 19px; width: 19px; height: 19px; }
     .ph-title { font-size: 16px; font-weight: 600; }
     .ph-sub { font-size: 13px; color: var(--yi-text-muted, #475569); margin-top: 2px; max-width: 560px; }
     .ph-sub.src-details { display: flex; gap: 2px 14px; flex-wrap: wrap; max-width: none; }

@@ -183,7 +183,13 @@
 /* 票176:上下文分散——页头唯一主按钮 / 标题行铅笔 / 四格条下文本链接 / 入口触发行 / 页脚危险操作。 */
 .ehead-mock { margin-top: 13px; }
 .ehead-title-row { display: flex; align-items: center; gap: 6px; }
-.edit-basic-btn { width: 32px; height: 32px; padding: 4px; color: var(--ink-2); }
+/* 票205:标题旁铅笔统一成 196 三按钮基准（原 32px 无边框无底色，与顶部三按钮不一致；现虽被 193 藏起，统一样式后恢复时仍一致）。 */
+.edit-basic-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px;
+  background: #ffffff; color: var(--yi-text-muted, #475569); cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.edit-basic-btn:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
+.edit-basic-btn mat-icon { font-size: 19px; width: 19px; height: 19px; }
 .strip-foot { border-top: 1px solid var(--yi-border); padding: 10px 16px 12px; }
 /* 票 185：触发行双按钮横排（窄屏自动换行不断溢出）。 */
 .intake-head { margin: 18px 0 10px; display: flex; flex-wrap: wrap; gap: 8px; }

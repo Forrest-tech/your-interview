@@ -60,9 +60,6 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         @if (roundScore() != null) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.overall') }}</span><b>{{ roundScore() }}</b></span>
         }
-        @if (questionCount()) {
-          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.questionsCountLabel') }}</span><b>{{ questionCount() }}</b></span>
-        }
         @if (round().interviewers) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.interviewersLabel') }}</span><b>{{ round().interviewers }}</b></span>
         }

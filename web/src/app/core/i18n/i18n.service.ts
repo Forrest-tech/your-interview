@@ -2759,7 +2759,6 @@ const DICT: Record<string, Record<Lang, string>> = {
      标签形态不带尾冒号 —— 冒号属于「标签:值」连写的旧结构,现在标签与值是两个元素。 */
   'pb.v2.r.outcomeLabel': { zh: '结果', en: 'Outcome', fr: 'Résultat' },
   'pb.v2.r.roundLabel': { zh: '第 {n} 轮', en: 'Round {n}', fr: 'Tour {n}' },
-  'pb.v2.r.questionsCountLabel': { zh: '题目', en: 'Questions', fr: 'Questions' },
   'pb.v2.r.assetsCountLabel': { zh: '材料', en: 'Materials', fr: 'Documents' },
   'pb.v2.r.interviewersLabel': { zh: '面试官', en: 'Interviewers', fr: 'Intervieweurs' },
   'pb.v2.r.openLink': { zh: '打开', en: 'Open', fr: 'Ouvrir' },

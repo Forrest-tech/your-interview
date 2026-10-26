@@ -269,8 +269,9 @@
   border-top: 1px solid var(--yi-border);
   padding: 13px 16px;
   /* 票170:展开区高度唯一出处。文本面板与简历 PDF 框共用此值(简历框经
-     frameHeightCap 传入同一变量,两区显示高度一致,不再各写一份)。 */
-  --strip-detail-max: min(420px, 45vh);
+     frameHeightCap 传入同一变量,两区显示高度一致,不再各写一份)。
+     票201:用户令展开区高度增加 40%——420px × 1.4 = 588px,45vh × 1.4 = 63vh。 */
+  --strip-detail-max: min(588px, 63vh);
   /* 展开面板封顶 + 框内滚动(2026-10-21 设计稿确认参数):长 JD/公司介绍/简历与分数说明
      都在面板内部滚动,不再把整页撑长。滚动条纯 webkit 方案 —— 不要加
      scrollbar-width/scrollbar-color,Chrome 会因此忽略 ::-webkit-scrollbar 样式。 */

@@ -76,6 +76,12 @@
 
     <!-- 上区:条目信息(头 + 四格条 + 按钮行,单一边框容器) -->
     <section class="zone zone-entry">
+      <!-- 票 196：卡片顶端图标行（右对齐；顺序 Add material → Add a round → AI mock interview；接线与 193 一字不动，Add a round tooltip 用独立键 addRoundTip）。 -->
+      <div class="zone-actions">
+        <button mat-icon-button [matTooltip]="t('pb.v2.d.addMaterial')" [attr.aria-label]="t('pb.v2.d.addMaterial')" (click)="openIntake('email')"><mat-icon>upload_file</mat-icon></button>
+        <button mat-icon-button [matTooltip]="t('pb.v2.d.addRoundTip')" [attr.aria-label]="t('pb.v2.d.addRoundTip')" (click)="openIntake('email', undefined, true)"><mat-icon>playlist_add</mat-icon></button>
+        <button mat-icon-button [matTooltip]="t('pb.v2.d.mock')" [attr.aria-label]="t('pb.v2.d.mock')" (click)="goMock()"><mat-icon>record_voice_over</mat-icon></button>
+      </div>
       <!-- ① 条目头 -->
       <header class="ehead" data-testid="entry-header">
         <div class="ehead-left">
@@ -204,12 +210,6 @@
             <button mat-button (click)="openJd()">{{ t('pb.v2.d.openJd') }}</button>
           </div>
         }
-      </div>
-      <!-- 票 193：卡片右下角图标行（右对齐；顺序 AI mock → Add material → Add a round；接线与原按钮一字不动，原 .ehead-mock 与 .intake-head 两处不再留按钮）。 -->
-      <div class="zone-actions">
-        <button mat-icon-button [matTooltip]="t('pb.v2.d.mock')" [attr.aria-label]="t('pb.v2.d.mock')" (click)="goMock()"><mat-icon>mic</mat-icon></button>
-        <button mat-icon-button [matTooltip]="t('pb.v2.d.addMaterial')" [attr.aria-label]="t('pb.v2.d.addMaterial')" (click)="openIntake('email')"><mat-icon>note_add</mat-icon></button>
-        <button mat-icon-button [matTooltip]="t('pb.v2.d.addRound')" [attr.aria-label]="t('pb.v2.d.addRound')" (click)="openIntake('email', undefined, true)"><mat-icon>add_circle</mat-icon></button>
       </div>
     </section>
 

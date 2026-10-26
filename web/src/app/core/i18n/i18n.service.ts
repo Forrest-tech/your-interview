@@ -2743,6 +2743,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.v2.d.dateTbd': { zh: '日期待定', en: 'Date TBD', fr: 'Date à confirmer' },
   'pb.v2.d.scorePts': { zh: '{n} 分', en: '{n} pts', fr: '{n} pts' },
   'pb.v2.d.addRound': { zh: '＋ 加一轮(粘贴邀约邮件)', en: '+ Add a round (paste invite email)', fr: '+ Ajouter un tour (coller l’e-mail d’invitation)' },
+  'pb.v2.d.addRoundTip': { zh: '加一轮', en: 'add a round', fr: 'Ajouter un tour' },
   'pb.v2.d.addRoundSub': { zh: '或在下方沟通里建轮次', en: 'or create one from Communications below', fr: 'ou créez-en un depuis les communications ci-dessous' },
   'pb.v2.d.noRounds': { zh: '还没有轮次。把第一封邀约邮件粘进来,系统会建议你建 Round 1。', en: 'No rounds yet. Paste the first invitation email and the system will suggest creating Round 1.', fr: 'Aucun tour pour l’instant. Collez le premier e-mail d’invitation : le système proposera de créer le tour 1.' },
   'pb.v2.d.tailTitle': { zh: '复盘与待办', en: 'Review & to-dos', fr: 'Bilan et tâches' },

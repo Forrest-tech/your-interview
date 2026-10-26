@@ -9,7 +9,7 @@
  * 特征测试锁现状,不改被测函数行为。
  */
 import { describe, expect, it } from '@jest/globals';
-import { entryResultOutcome, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveScoreJd, scoreTierKey } from './v2.helpers';
+import { entryResultOutcome, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, scoreTierKey } from './v2.helpers';
 
 describe('entryResultOutcome(枚举全值,源码 switch 逐值)', () => {
   // [枚举-终局] Rejected -> rejected
@@ -205,5 +205,67 @@ describe('scoreTierKey(票 173 档位阈值)', () => {
   it('<50 弱匹配', () => {
     expect(scoreTierKey(49)).toBe('tracker.dWeakMatch');
     expect(scoreTierKey(0)).toBe('tracker.dWeakMatch');
+  });
+});
+
+/**
+ * 票 183:resolveRoundNodeStatus 六档 + 四个边界(定稿 §4.2 映射表逐条)。
+ * today 固定 2026-10-26(本地日初);日期字串用本地午夜写法,避免
+ * 日期-only 字串按 UTC 解析在非 UTC 时区 偏移 一天的干扰,测的是日粒度规则本身。
+ */
+describe('resolveRoundNodeStatus(票 183 六档状态映射)', () => {
+  const TODAY = new Date(2026, 9, 26);
+  const PAST = '2020-01-01';
+  const FUTURE = '2099-01-01';
+  const TODAY_LOCAL = '2026-10-26T00:00:00';
+
+  // [终态优先] Passed / Failed / Cancelled 不受日期影响
+  it('Passed + 过去日期 -> passed(终态优先,不翻回 Completed)', () => {
+    expect(resolveRoundNodeStatus('Passed', PAST, TODAY)).toBe('passed');
+  });
+  it('Passed + 未来日期/无日期 -> passed', () => {
+    expect(resolveRoundNodeStatus('Passed', FUTURE, TODAY)).toBe('passed');
+    expect(resolveRoundNodeStatus('Passed', undefined, TODAY)).toBe('passed');
+  });
+  it('Failed + 未来日期 -> failed(终态优先)', () => {
+    expect(resolveRoundNodeStatus('Failed', FUTURE, TODAY)).toBe('failed');
+    expect(resolveRoundNodeStatus('Failed', undefined, TODAY)).toBe('failed');
+  });
+  it('Cancelled + 未来/过去日期 -> cancelled(终态优先)', () => {
+    expect(resolveRoundNodeStatus('Cancelled', FUTURE, TODAY)).toBe('cancelled');
+    expect(resolveRoundNodeStatus('Cancelled', PAST, TODAY)).toBe('cancelled');
+  });
+
+  // [非终态看日期] Pending + 未来/今天 -> scheduled,过去 -> completed
+  it('Pending + 未来日期 -> scheduled', () => {
+    expect(resolveRoundNodeStatus('Pending', FUTURE, TODAY)).toBe('scheduled');
+  });
+  it('Pending + 今天 -> scheduled(今天算未进行)', () => {
+    expect(resolveRoundNodeStatus('Pending', TODAY_LOCAL, TODAY)).toBe('scheduled');
+  });
+  it('Pending + 过去日期 -> completed', () => {
+    expect(resolveRoundNodeStatus('Pending', PAST, TODAY)).toBe('completed');
+  });
+
+  // [边界] 空 outcome / 未知 outcome 统一走日期分支,不单开分支
+  it('空 outcome -> 按日期走(未来 scheduled,过去 completed)', () => {
+    expect(resolveRoundNodeStatus('', FUTURE, TODAY)).toBe('scheduled');
+    expect(resolveRoundNodeStatus('', PAST, TODAY)).toBe('completed');
+  });
+  it('未知 outcome -> 按日期走(未来 scheduled,过去 completed)', () => {
+    expect(resolveRoundNodeStatus('WeirdValue', FUTURE, TODAY)).toBe('scheduled');
+    expect(resolveRoundNodeStatus('WeirdValue', PAST, TODAY)).toBe('completed');
+  });
+
+  // [边界] 无日期 / 不可解析日期 -> unscheduled(不抛错)
+  it('Pending + 无日期 -> unscheduled', () => {
+    expect(resolveRoundNodeStatus('Pending', undefined, TODAY)).toBe('unscheduled');
+  });
+  it('Pending + 不可解析日期 -> unscheduled', () => {
+    expect(resolveRoundNodeStatus('Pending', 'not-a-date', TODAY)).toBe('unscheduled');
+    expect(resolveRoundNodeStatus('Pending', '', TODAY)).toBe('unscheduled');
+  });
+  it('空 outcome + 无日期 -> unscheduled', () => {
+    expect(resolveRoundNodeStatus('', undefined, TODAY)).toBe('unscheduled');
   });
 });

@@ -21,7 +21,7 @@ import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
   entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatLabel, htmlToPlainText, latestPrepInputAsset, makeV2Fmt, makeV2T,
-  PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, resolveScoreJd, roundDisplayNo, scoreTierKey, sortRoundsByDate
+  PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, roundDisplayNo, scoreTierKey, sortRoundsByDate
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
@@ -306,19 +306,17 @@ export class PlaybookDetailComponent implements OnDestroy {
     return (future ?? rs[rs.length - 1]).id;
   });
 
-  /** 某轮的材料数(与轮次工作卡的口径一致:按 roundId 归属)。 */
-  roundAssetsCount(r: InterviewRound): number {
-    return (this.entry()?.assets ?? []).filter(a => a.roundId === r.id).length;
-  }
-
-  /** 结果文案(与轮次工作卡同一套取值)。 */
-  outcomeLabel(o: string): string {
-    switch (o) {
-      case 'Pending': return this.t('pb.v2.r.ocPending');
-      case 'Passed': return this.t('outcome.Passed');
-      case 'Failed': return this.t('outcome.Failed');
-      case 'Cancelled': return this.t('pb.v2.r.ocCancelled');
-      default: return o;
+  /** 票 183:轨道节点状态 → 文案键 + 颜色类(定稿 §4.2 映射表)。 */
+  roundNodeStatus(r: InterviewRound): { key: string; cls: string } {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    switch (resolveRoundNodeStatus(r.outcome, r.scheduledDate ?? undefined, today)) {
+      case 'passed': return { key: 'outcome.Passed', cls: 'go' };
+      case 'failed': return { key: 'outcome.Failed', cls: 'stop' };
+      case 'cancelled': return { key: 'pb.v2.r.ocCancelled', cls: 'cancelled' };
+      case 'unscheduled': return { key: 'pb.v2.r.stUnscheduled', cls: '' };
+      case 'scheduled': return { key: 'pb.v2.r.stScheduled', cls: '' };
+      case 'completed': return { key: 'pb.v2.r.stCompleted', cls: '' };
     }
   }
 

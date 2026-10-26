@@ -138,6 +138,31 @@ export function scoreTierKey(score: number): 'tracker.dStrongMatch' | 'tracker.d
 }
 
 /**
+ * 票 183:轮次轨道节点状态判定 —— 业内 ATS 的步骤状态与步骤结果分开:
+ * 终态 outcome(Passed / Failed / Cancelled)优先,不受日期影响;非终态
+ * (Pending、空串、未知遗留值)一律看日期,日粒度(今天算未进行);
+ * scheduledDate 为空或不可解析 → 未安排;不设 No-show 档(无字段支撑)。
+ * today 由调用方归零到日初传入,函数内再归零一次以保证日粒度。
+ */
+export function resolveRoundNodeStatus(
+  outcome: string,
+  scheduledDate: string | undefined,
+  today: Date
+): 'unscheduled' | 'scheduled' | 'completed' | 'passed' | 'failed' | 'cancelled' {
+  if (outcome === 'Passed') return 'passed';
+  if (outcome === 'Failed') return 'failed';
+  if (outcome === 'Cancelled') return 'cancelled';
+  if (!scheduledDate) return 'unscheduled';
+  const d = new Date(scheduledDate);
+  if (Number.isNaN(d.getTime())) return 'unscheduled';
+  const day = new Date(d);
+  day.setHours(0, 0, 0, 0);
+  const t = new Date(today);
+  t.setHours(0, 0, 0, 0);
+  return day.getTime() < t.getTime() ? 'completed' : 'scheduled';
+}
+
+/**
  * 文件资产里区分真录音与截图:两者共用同一条文件管线落库(kind 都是 Audio),
  * 判别靠 contentType 优先、扩展名兜底 —— 否则截图会被当成录音塞进播放器
  * (2026-10-21 审计实测:同轮先落截图再传录音时,实录播放条指向了 PNG)。

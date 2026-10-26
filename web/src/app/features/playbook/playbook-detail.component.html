@@ -248,15 +248,12 @@
                       <span class="stagechip">{{ r.stage }}</span>
                     </span>
                     <span class="rwhen">{{ r.scheduledDate ?? t('pb.v2.d.dateTbd') }}</span>
-                    <span class="rfacts">
-                      <span class="rfact">
-                        <span class="k">{{ t('pb.v2.r.outcomeLabel') }}</span>
-                        <span class="v" [class.go]="r.outcome === 'Passed'" [class.stop]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
-                      </span>
-                      <span class="rfact">
-                        <span class="k">{{ t('pb.v2.r.assetsCountLabel') }}</span>
-                        <span class="v">{{ roundAssetsCount(r) }}</span>
-                      </span>
+                    <span class="rstate">
+                      <span class="st" [ngClass]="roundNodeStatus(r).cls">{{ t(roundNodeStatus(r).key) }}</span>
+                      @if (roundScore(r) != null) {
+                        <span class="sk">{{ t('pb.v2.r.overall') }}</span>
+                        <span class="sv">{{ roundScore(r) }}</span>
+                      }
                     </span>
                   </button>
                 }

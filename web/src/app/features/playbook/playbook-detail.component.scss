@@ -380,19 +380,20 @@
   color: var(--ink-2);
 }
 
-/* 事实行:Outcome / Materials —— 与轮次工作卡的标签/值口径一致 */
-.rfacts {
+/* 状态行(票183):状态裸词 + 综合分(有值才显)—— 替换旧 .rfacts 两事实行 */
+.rstate {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  align-items: baseline;
+  gap: 12px;
   margin-top: 6px;
   flex-wrap: wrap;
 }
-.rfact { display: flex; align-items: baseline; gap: 6px; }
-.rfact .k { font-size: 12px; font-weight: 500; color: var(--ink-2); }
-.rfact .v { font-size: 13px; font-weight: 500; color: var(--ink); }
-.rfact .v.go { color: var(--go); }
-.rfact .v.stop { color: var(--stop); }
+.rstate .st { font-size: 13px; font-weight: 500; color: var(--ink); }
+.rstate .st.go { color: var(--go); }
+.rstate .st.stop { color: var(--stop); }
+.rstate .st.cancelled { color: var(--ink-2); }
+.rstate .sk { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.rstate .sv { font-size: 13px; font-weight: 500; color: var(--ink); }
 
 /* 「加一轮」收为行末紧凑按钮:行为与旧宽卡一致(开 intake 面板),只留主文案。 */
 .radd {

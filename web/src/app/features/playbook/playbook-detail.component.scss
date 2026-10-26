@@ -177,7 +177,8 @@
 .ehead-title-row { display: flex; align-items: center; gap: 6px; }
 .edit-basic-btn { width: 32px; height: 32px; padding: 4px; color: var(--ink-2); }
 .strip-foot { border-top: 1px solid var(--yi-border); padding: 10px 16px 12px; }
-.intake-head { margin: 18px 0 10px; }
+/* 票 185：触发行双按钮横排（窄屏自动换行不断溢出）。 */
+.intake-head { margin: 18px 0 10px; display: flex; flex-wrap: wrap; gap: 8px; }
 .entry-foot { margin-top: 24px; border-top: 1px solid var(--yi-border); padding-top: 14px; }
 .foot-delete { color: #dc2626; }
 .status-badge {

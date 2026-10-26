@@ -158,6 +158,8 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly hideReviewTodos = true;
   // 票 178：详情页头状态胶囊暂隐藏（隐藏不是删除：状态数据模型、statusText() 计算逻辑、i18n 键一律保留；恢复时改回 false 即一处恢复）。
   readonly hideStatusBadge = true;
+  // 票 185：轨道行末「加一轮」按钮暂隐藏（隐藏不是删除：按钮、openIntake handler、i18n 键一律保留；入口由触发行新按钮承接，恢复时改回 false 即一处恢复）。
+  readonly hideTrackAddRound = true;
 
   readonly intake = viewChild(IntakePanelComponent);
 
@@ -562,8 +564,9 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   // ---------------- 头部动作 ----------------
 
-  openIntake(type: IntakeType = 'email', roundId?: string): void {
-    this.intake()?.openPanel(type, roundId);
+  /** 票 185：presetNew 为真时面板打开即预置新建轮次目标（触发行「加一轮」按钮用）。 */
+  openIntake(type: IntakeType = 'email', roundId?: string, presetNew = false): void {
+    this.intake()?.openPanel(type, roundId, presetNew);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 

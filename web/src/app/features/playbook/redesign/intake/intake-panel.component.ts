@@ -581,8 +581,8 @@ export class IntakePanelComponent {
     if (t) this.target.set(t);
   }
 
-  /** 父组件调用:打开面板,可预置类型与目标轮次。 */
-  openPanel(type: IntakeType = 'email', roundId?: string): void {
+  /** 父组件调用:打开面板,可预置类型与目标轮次。票 185：presetNew 为真时打开即预置新建轮次目标。 */
+  openPanel(type: IntakeType = 'email', roundId?: string, presetNew = false): void {
     this.type.set(type);
     this.transcriptMode.set('text');
     this.step.set('input');
@@ -597,6 +597,8 @@ export class IntakePanelComponent {
     } else {
       this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
     }
+    // 票 185：触发行「加一轮」预置——打开即新建轮次区展开（后于上述分支，优先胜出；粘贴后的解析建议仍按既有逻辑走，不动）。
+    if (presetNew) this.target.set({ kind: 'new' });
     this.open.set(true);
     this.setDocPaste(true);
   }

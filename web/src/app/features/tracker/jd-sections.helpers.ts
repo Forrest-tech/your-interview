@@ -53,6 +53,73 @@ export function isCompanyIntroSection(section: JdSection): boolean {
 }
 
 /**
+ * 票 204：strip 公司格兜底派生标题集 = 现有公司介绍类标题 + "company overview"。
+ * 后端标题白名单位置：src/Services.Jobs/Application/SmartParseJd.cs
+ * （ExtractCompanyDescription 标题正则 + KnownSectionHeaders）；两套白名单须同步维护
+ * company overview 一项，任一处漏加都会重现“Company 格称无介绍、JD 展开区里躺着介绍”的矛盾。
+ */
+const COMPANY_DERIVED_TITLES = new Set([...COMPANY_INTRO_KEYS, 'company overview']);
+
+/**
+ * 票 204：派生收集的边界标题集 —— 后端 KnownSectionHeaders 的英文常用项 +
+ * 中文公司介绍项（近似复刻，非逐字同表；后端另有冒号/ markdown 通用分支与模块边界截断，
+ * 见 derivedCompanyFromJd 的差异说明）。
+ */
+const KNOWN_SECTION_KEYS = new Set([
+  ...COMPANY_DERIVED_TITLES,
+  'about the job', 'job description', 'job summary',
+  'about the role', 'the role', 'job overview', 'position overview', 'role overview',
+  'requirements', 'qualifications', 'preferred qualifications', 'minimum qualifications',
+  'what you\'ll need', 'what you bring', 'must have', 'nice to have', 'key skills', 'skills',
+  'responsibilities', 'what you\'ll do', 'key responsibilities', 'your responsibilities',
+  'your day to day', 'day to day',
+  'benefits', 'what we offer', 'perks', 'compensation and benefits', 'why join us',
+  'additional information', 'equal opportunity', 'how to apply',
+  'application process', 'disclosure',
+  '公司介绍', '关于我们',
+]);
+
+/** 票 204：派生收集的标题行判定（后端 IsSectionHeader 的近似实现）。 */
+function isDerivedSectionBoundary(line: string): boolean {
+  const t = line.trim();
+  if (t.length === 0 || t.length > 60) return false;
+  if (KNOWN_SECTION_KEYS.has(normalizeSectionKey(line))) return true;
+  if (/[:：]$/.test(t)) {
+    const words = normalizeSectionText(line).split(' ').filter(Boolean);
+    return words.length >= 1 && words.length <= 8;
+  }
+  return false;
+}
+
+/**
+ * 票 204：从 JD 全文派生公司介绍（strip 公司格第四层兜底，治存量即时性；治本在后端
+ * SmartParseJd.cs 的 ExtractCompanyDescription，新解析/逐条 Re-parse 落库字段值后本派生自动退位）。
+ * 标题归一化后命中 COMPANY_DERIVED_TITLES 即开节，收集至下一标题行止；≥20 字产出门槛与后端一致；
+ * 首个公司标题下内容不足 20 字时返回 null（与后端“首命中即定”行为一致，不继续找下一个标题）。
+ * 本函数是后端判定的近似实现、与后端口径不完全一致，不得声称同口径。差异点：
+ * ① 不跳 LinkedIn 元数据行（公司名 / follower / 员工数 / 行业行）；② 不做 RelatedModuleCut
+ * 模块边界截断；③ 边界标题集为近似复刻（见 KNOWN_SECTION_KEYS），中文标题仅覆盖公司介绍两项。
+ * 优先级（调用方 companyCellText）：前三层任一有值，派生即不可见。
+ */
+export function derivedCompanyFromJd(fullText: string | null | undefined): string | null {
+  if (!fullText) return null;
+  const lines = fullText.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    if (!COMPANY_DERIVED_TITLES.has(normalizeSectionKey(lines[i]))) continue;
+    const body: string[] = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      if (isDerivedSectionBoundary(lines[j])) break;
+      const l = lines[j].trim();
+      if (l.length > 0) body.push(l);
+    }
+    const v = body.join('\n').trim();
+    if (v.length >= 20) return v;
+    return null;
+  }
+  return null;
+}
+
+/**
  * 票 189：单句/短语行判定（JD 渲染列表恢复用）。
  * 原帖 <ul><li> 经纯文本粘贴后 bullet 字符常丢失（自定义 CSS marker 不进剪贴板），
  * 只剩换行分隔的短行；旧 richBlocks 把这些行当散文段落合并成一团。

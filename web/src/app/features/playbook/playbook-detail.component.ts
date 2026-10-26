@@ -28,6 +28,7 @@ import {
   entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatEnteredDate, formatLabel, htmlToPlainText, latestPrepInputAsset, makeV2Fmt, makeV2T,
   PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, roundDisplayNo, scoreTierKey, sortRoundsByDate
 } from './redesign/v2.helpers';
+import { derivedCompanyFromJd } from '../tracker/jd-sections.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
 
@@ -238,14 +239,23 @@ export class PlaybookDetailComponent implements OnDestroy {
     return full ? full.slice(0, 90) + '…' : '';
   });
   /**
-   * 四格条公司格:条目公司介绍 → 投递的公司介绍 → Jobs Company 情报(Profile)。
+   * 四格条公司格:条目公司介绍 → 投递的公司介绍 → Jobs Company 情报(Profile)
+   * → 票 204 第四层兜底派生 derivedCompanyFromJd(JD 全文)。
    * 第三层是 2026-10-21 补的同源:公司情报在 Tracker 里维护在 Company 记录上,
    * 此前详情页只看前两处,情报明明存在却显示「暂无公司介绍」。
+   * 第四层是存量即时兜底:前三层任一有值派生即不可见;逐条 Re-parse 填上字段值后
+   * 派生自动退位（派生是 jd-sections.helpers.ts 里后端判定的近似实现，非同口径）。
+   * 渲染与收起态 teaser 截断逻辑不动（两处都复用本 computed）。
    */
   readonly companyCellText = computed(() =>
     htmlToPlainText(this.entry()?.companyProfile)
     || htmlToPlainText(this.application()?.companyDescription)
-    || htmlToPlainText(this.companyProfileText()));
+    || htmlToPlainText(this.companyProfileText())
+    || derivedCompanyFromJd(this.jdFullText())
+    // 末尾 || ''：派生返回 null 时仍保持 computed 为 string（与改动前一致），
+    // 模板 169 行对 companyCellText() 的多次调用在严格模板检查下不做跨调用收窄，
+    // 若留 string | null 会报 NG1；'' 与 null 在两处模板分支里同为 falsy，行为一致。
+    || '');
 
   /**
    * Resume Score —— 与 Tracker 同源同值(2026-10-21):

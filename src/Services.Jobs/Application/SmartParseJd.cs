@@ -294,7 +294,7 @@ public static class JdPasteParser
         }
         if (companyDescription is not null) conf["companyDescription"] = 70;
         // 票 154：任职要求 / 福利改为从通用小节列表投影（与今日语义逐字一致，
-        // 见 JdSectionProjection）；公司介绍提取逻辑不动（仅 About the company + LinkedIn 标记）。
+        // 见 JdSectionProjection）；公司介绍提取逻辑（About the company + 票 204 新增 Company Overview + LinkedIn 标记）。
         var sections = ExtractSections(lines);
         var requirements = JdSectionProjection.ProjectRequirements(sections);
         if (requirements is not null) conf["requirements"] = 70;
@@ -1039,7 +1039,7 @@ public static class JdPasteParser
     /// </summary>
     private static readonly string[] KnownSectionHeaders =
     [
-        "about the company", "about the job", "job description", "job summary",
+        "about the company", "company overview", "about the job", "job description", "job summary",
         "about the role", "the role", "job overview", "position overview", "role overview",
         "requirements", "qualifications", "preferred qualifications", "minimum qualifications",
         "what you'll need", "what you bring", "must have", "nice to have", "key skills", "skills",
@@ -1157,7 +1157,14 @@ public static class JdPasteParser
     }
 
     /// <summary>
-    /// 公司介绍:取 "About the company" 标题之后、下一个段落标题之前的内容。
+    /// 公司介绍:取 "About the company" / "Company Overview" 标题之后、下一个段落标题之前的内容。
+    /// 票 204：招聘帖常用 "Company Overview" 作公司节标题（Intuit 实证），此前三处白名单
+    /// （本函数标题正则 / KnownSectionHeaders / 前端 COMPANY_INTRO_KEYS）均不认，导致
+    /// Company 格称无介绍而 JD 展开区里躺着完整介绍段落、同屏自相矛盾。本分支只认标题，
+    /// 收集逻辑、模块边界、IsCompanyMetaLine 跳过逻辑、≥20 字产出门槛一字不动；
+    /// 收集止于下一标题（"Job Overview" 已在 KnownSectionHeaders 内，天然截断）。
+    /// 前端近似实现见 web/src/app/features/tracker/jd-sections.helpers.ts 的 derivedCompanyFromJd
+    /// （存量即时兜底；字段值落库后派生自动退位）。
     /// LinkedIn 形态下标题和正文之间夹着公司名、follower 数、行业行等元数据 ——
     /// 先跳过这些(公司名用已解出的 company 比对,follower/员工数/行业分类行按模式跳过),
     /// 剩下的第一个"像正文"的段落才是介绍。
@@ -1169,7 +1176,7 @@ public static class JdPasteParser
         var searchEnd = moduleStart >= 0 ? moduleStart : lines.Count;
         for (var i = 0; i < searchEnd; i++)
         {
-            if (!Regex.IsMatch(lines[i].Trim(), @"^about\s+the\s+company$", RegexOptions.IgnoreCase))
+            if (!Regex.IsMatch(lines[i].Trim(), @"^about\s+the\s+company$|^company\s+overview:?$", RegexOptions.IgnoreCase))
                 continue;
 
             var j = i + 1;

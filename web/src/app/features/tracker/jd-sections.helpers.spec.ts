@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   dedupSectionsAgainstSummary,
+  derivedCompanyFromJd,
   isListPhraseLine,
   mergeSectionsForReparse,
   normalizeSectionKey,
@@ -126,5 +127,31 @@ describe('jd-sections.helpers（票 189）', () => {
     expect(isListPhraseLine('Pay offered is based on factors. To drive ongoing fair pay for employees, we compare.')).toBe(false);
     expect(isListPhraseLine('across multiple lines in the paste')).toBe(false);
     expect(isListPhraseLine('')).toBe(false);
+  });
+});
+
+describe('jd-sections.helpers（票 204：derivedCompanyFromJd 兜底派生）', () => {
+  const intro = 'Intuit is the global financial technology platform that powers prosperity for the people we serve.';
+  const job = 'Come join the Intuit Toronto site as a Senior Software Developer building partner platforms.';
+
+  it('Company Overview + 段落 + Job Overview：只取介绍段落，不含 Job Overview 内容', () => {
+    const text = `Senior Software Developer, Full-Stack\nCompany Overview\n${intro}\nJob Overview\n${job}`;
+    expect(derivedCompanyFromJd(text)).toBe(intro);
+  });
+
+  it('标题容忍尾冒号与大小写：Company Overview: / COMPANY OVERVIEW 均命中', () => {
+    expect(derivedCompanyFromJd(`Job Title\nCompany Overview:\n${intro}\nBenefits\nHealth.`)).toBe(intro);
+    expect(derivedCompanyFromJd(`Job Title\nCOMPANY OVERVIEW\n${intro}\nBenefits\nHealth.`)).toBe(intro);
+  });
+
+  it('现有公司介绍标题同样派生：About Us 段落 + 下一标题截断', () => {
+    expect(derivedCompanyFromJd(`Role\nAbout Us\n${intro}\nResponsibilities\nBuild things.`)).toBe(intro);
+  });
+
+  it('介绍不足 20 字返回 null；无公司标题返回 null；空输入返回 null', () => {
+    expect(derivedCompanyFromJd(`Role\nCompany Overview\nShort co.\nJob Overview\n${job}`)).toBeNull();
+    expect(derivedCompanyFromJd(`Role\nJob Overview\n${job}`)).toBeNull();
+    expect(derivedCompanyFromJd(null)).toBeNull();
+    expect(derivedCompanyFromJd('')).toBeNull();
   });
 });

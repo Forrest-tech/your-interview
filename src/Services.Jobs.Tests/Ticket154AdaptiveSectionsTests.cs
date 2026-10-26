@@ -88,8 +88,10 @@ Blog
         var titles = d.Sections!.Select(s => s.Title).ToArray();
         // 定稿 A-154-1 列三节；实测按 R-154-2 冒号规则另有 "Preferred Qualifications:"
         // 一节（原帖真实子标题，冒号结尾）—— 四节齐全，顺序与原文一致。
+        // 票 204：KnownSectionHeaders 增加 "company overview"，原帖 Company Overview
+        // 一节首次成为小节，排在首位（五节齐全，顺序与原文一致）。
         Assert.Equal(
-            new[] { "Job Overview", "Responsibilities", "Qualifications", "Preferred Qualifications" },
+            new[] { "Company Overview", "Job Overview", "Responsibilities", "Qualifications", "Preferred Qualifications" },
             titles);
         Assert.All(d.Sections, s => Assert.Equal("auto", s.Origin));
         Assert.All(d.Sections, s => Assert.False(s.Edited));
@@ -118,7 +120,9 @@ Blog
         Assert.NotNull(d.JdSummary);
         Assert.StartsWith("Come join the Intuit Toronto site", d.JdSummary);
         Assert.True(d.JdSummary.Length <= 500);
-        Assert.Contains("Come join the Intuit Toronto site", d.Sections![0].Body);
+        // 票 204：Sections[0] 已是 Company Overview 一节（见上），Job Overview 全文
+        // 改按标题寻址断言，意图不变（Job Overview 全文以小节呈现、不因摘要截断）。
+        Assert.Contains("Come join the Intuit Toronto site", d.Sections!.Single(s => s.Title == "Job Overview").Body);
         // 薪资：定稿 "薪资 null" 已被 152 实证推翻 —— 原帖确有补偿段，规则解出真实区间。
         Assert.Equal("$132k - $178k", d.Salary);
     }

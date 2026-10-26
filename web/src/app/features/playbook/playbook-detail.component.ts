@@ -690,6 +690,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   roundStateIcon(r: InterviewRound): string {
     if (r.outcome === 'Passed') return '✓';
     if (r.outcome === 'Failed') return '✗';
+    if (r.outcome === 'Rejected') return '✗'; // 票216:入库值 Rejected 即 Failed 别名
     if (r.outcome === 'Cancelled') return '—';
     return '·';
   }

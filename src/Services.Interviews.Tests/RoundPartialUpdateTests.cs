@@ -98,6 +98,27 @@ public sealed class RoundPartialUpdateTests : IAsyncLifetime
         stored.ChecklistJson.Should().Be(ChecklistJson);
     }
 
+    /// <summary>票216:下拉框发 'Failed'（枚举无此值），写路径归一化为 Rejected 别名后入库。</summary>
+    [Fact]
+    public async Task FailedOutcome_AliasToRejected_StoredAsRejected()
+    {
+        if (!_available) return; // 无沙盒 DB 的环境跳过
+        var e = new InterviewEntry(Guid.NewGuid(),
+            "T216-" + Guid.NewGuid().ToString("N")[..8], "Senior .NET Developer");
+        _db.Entries.Add(e);
+        await _db.SaveChangesAsync();
+        var r = e.AddRound("Technical");
+        await _db.SaveChangesAsync();
+
+        var cmd = new UpdateRoundCommand(Guid.Empty, e.Id, r.Id, "Technical",
+            new DateOnly(2026, 10, 20), "Alice", "Video", "Toronto", "Failed", null, null);
+        var res = await new UpdateRoundCommandHandler(_db).Handle(cmd, default);
+        res.IsSuccess.Should().BeTrue();
+
+        var stored = await ReloadRoundAsync(r.Id);
+        stored.Outcome.Should().Be(InterviewRoundOutcome.Rejected);
+    }
+
     [Fact]
     public async Task ClearSemantics_EmptyString_ClearsExtensionFields()
     {

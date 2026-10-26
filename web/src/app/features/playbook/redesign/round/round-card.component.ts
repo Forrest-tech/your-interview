@@ -393,7 +393,9 @@ export class RoundCardComponent implements OnInit {
     this.eFormat.set(r.format ?? '');
     this.eLocation.set(r.location ?? '');
     this.eLink.set(r.meetingLink ?? '');
-    this.eOutcome.set(r.outcome);
+    // 票216:回读的 Rejected 映射为下拉框的 Failed 值，只映射初始显示；
+    // 保存仍发 Failed，走后端别名入库 Rejected。
+    this.eOutcome.set(r.outcome === 'Rejected' ? 'Failed' : r.outcome);
     this.eFeedback.set(r.feedback ?? '');
     this.fieldErrors.set({});
     this.editing.set(!this.editing());

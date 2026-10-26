@@ -248,6 +248,10 @@ describe('resolveRoundNodeStatus(票 183 六档状态映射)', () => {
     expect(resolveRoundNodeStatus('Failed', FUTURE, TODAY)).toBe('failed');
     expect(resolveRoundNodeStatus('Failed', undefined, TODAY)).toBe('failed');
   });
+  it('Rejected + 未来日期/无日期 -> failed(票216:入库值 Rejected 即 Failed 别名)', () => {
+    expect(resolveRoundNodeStatus('Rejected', FUTURE, TODAY)).toBe('failed');
+    expect(resolveRoundNodeStatus('Rejected', undefined, TODAY)).toBe('failed');
+  });
   it('Cancelled + 未来/过去日期 -> cancelled(终态优先)', () => {
     expect(resolveRoundNodeStatus('Cancelled', FUTURE, TODAY)).toBe('cancelled');
     expect(resolveRoundNodeStatus('Cancelled', PAST, TODAY)).toBe('cancelled');

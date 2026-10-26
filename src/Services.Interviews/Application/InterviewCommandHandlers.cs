@@ -736,7 +736,13 @@ public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
         var e = await db.Entries.Include(x => x.Rounds).FirstOrDefaultAsync(x => x.Id == request.EntryId && x.UserId == request.UserId, ct);
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
 
-        if (!Enum.TryParse<InterviewRoundOutcome>(request.Outcome, true, out var outcome))
+        // 票216:下拉框发 'Failed'、枚举无此值——全词精确归一化为 Rejected 别名
+        // (Trim 后忽略大小写全等于 "Failed")，再走现有 TryParse；不认子串与自由文本，
+        // 不复用 DeriveOutcome 的关键词回落；校验器与枚举不动。
+        var outcomeText = string.Equals(request.Outcome?.Trim(), "Failed", StringComparison.OrdinalIgnoreCase)
+            ? "Rejected"
+            : request.Outcome;
+        if (!Enum.TryParse<InterviewRoundOutcome>(outcomeText, true, out var outcome))
             return Result.Failure(Error.Validation("Round.InvalidOutcome", "轮次结果无效"));
 
         // 票101:钉版对象是轮次行本身。

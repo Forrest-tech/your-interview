@@ -151,6 +151,9 @@ export function resolveRoundNodeStatus(
 ): 'unscheduled' | 'scheduled' | 'completed' | 'passed' | 'failed' | 'cancelled' {
   if (outcome === 'Passed') return 'passed';
   if (outcome === 'Failed') return 'failed';
+  // 票216:入库值是 Rejected（'Failed' 的后端别名），同样判 failed 档；
+  // 'Failed' 分支保留，防非入库文本。
+  if (outcome === 'Rejected') return 'failed';
   if (outcome === 'Cancelled') return 'cancelled';
   if (!scheduledDate) return 'unscheduled';
   const d = new Date(scheduledDate);

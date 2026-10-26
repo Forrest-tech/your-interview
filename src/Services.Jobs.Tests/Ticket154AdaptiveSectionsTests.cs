@@ -396,15 +396,17 @@ Once we synch up with you to discuss a job posting, we value connection above al
     public void Inceed_Sections_AndProjections()
     {
         // 原帖 https://jobs.inceed.com/job/33954-software-engineer-platform-houston-texas/
-        // （2026-10-25 抓取）。定稿 A-154-3 列 JD 五节；实测另有页脚 "About Us" 一节
+        // （2026-10-25 抓取）。定稿 A-154-3 列 JD 五节；票 223 之前实测另有页脚 "About Us" 一节
         // （已知表裸行，R-154-2 规则 1 下成节 —— 该站整页无 main/article，抓取回落整页，
-        // 页脚公司介绍块随正文流入；五节本身齐全、顺序与投影皆如定稿）。
+        // 页脚公司介绍块随正文流入）。票 223 之后：页脚 chrome 簇（#LI-Remote / To Apply /
+        // Share This Job / Apply Now / 表单标记行）之后的公司介绍类标题不再成节，
+        // 五节本身齐全、顺序与投影皆如定稿，正文一字不动。
         var d = JdPasteParser.Parse(InceedFixture, PasteKind.Text);
         Assert.Equal(
             new[]
             {
                 "Key Responsibilities & Duties", "Required Qualifications & Experience",
-                "Nice to Have Skills & Experience", "Perks & Benefits", "Other Information", "About Us"
+                "Nice to Have Skills & Experience", "Perks & Benefits", "Other Information"
             },
             d.Sections!.Select(s => s.Title).ToArray());
         // 投影：requirements = 文档顺序首个族内节（Required…，& 后缀剥离后匹配）；

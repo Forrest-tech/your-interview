@@ -1248,6 +1248,12 @@ public static class JdPasteParser
     {
         var moduleStart = RelatedModuleCut.FindModuleStart(lines);
         var scanEnd = moduleStart >= 0 ? moduleStart : lines.Count;
+        // 票 223：页脚区截断。无 main/article 的页面抓取回落整页时，页脚 chrome 随正文
+        // 流入，页脚裸行 About Us 被已知表命中而成节（154 A-154-3 Inceed 实证）。
+        // 页脚 chrome 簇首次出现之后，公司介绍类标题（about us / who we are / our company /
+        // about the company，与 154 展示去重同一 key 集）不再成节；其余标题仍成节，
+        // 已开小节的正文收集一字不动 —— 只拦新节开始，不提前截断正文，避免改动真实小节。
+        var footerStart = FindFooterZoneStart(lines, scanEnd);
         var sections = new List<JdSection>();
         var i = 0;
         while (i < scanEnd)
@@ -1268,11 +1274,53 @@ public static class JdPasteParser
                 if (l.Length > 0) body.Add(l);
             }
             var bodyText = string.Join("\n", body).Trim();
-            if (bodyText.Length > 0)
+            var inFooterIntro = i >= footerStart
+                && CompanyIntroKeys.Contains(JdSectionJson.NormalizeTitle(title));
+            if (bodyText.Length > 0 && !inFooterIntro)
                 sections.Add(new JdSection(title, JdSectionJson.NormalizeTitle(title), bodyText, "auto", false));
             i = j;
         }
         return sections;
+    }
+
+    /// <summary>
+    /// 票 223：公司介绍类标题 key 集（与 154 展示去重同一口径）。
+    /// </summary>
+    private static readonly string[] CompanyIntroKeys =
+        ["about the company", "about us", "who we are", "our company"];
+
+    /// <summary>
+    /// 票 223：页脚区起点。页脚 chrome 行：求职 CTA（To Apply / Apply Now）、分享
+    /// （Share This Job）、订阅（more jobs like this in my inbox）、标签独占行（#LI-Remote）、
+    /// 表单标记行（indicates required fields）。单行 chrome 可能是正文中的按钮残留，
+    /// 只有 10 行内出现第 2 行 chrome 才算簇、才定为页脚区起点；无簇则返回 scanEnd（不截断）。
+    /// 全行锚定为主，绝不以子串泛杀正文（如正文句含 apply/share 单词不受影响）。
+    /// </summary>
+    private static int FindFooterZoneStart(IList<string> lines, int scanEnd)
+    {
+        var isChrome = new bool[scanEnd];
+        for (var k = 0; k < scanEnd; k++)
+            isChrome[k] = IsFooterChromeLine(lines[k]);
+        for (var f = 0; f < scanEnd; f++)
+        {
+            if (!isChrome[f]) continue;
+            var windowEnd = Math.Min(f + 10, scanEnd - 1);
+            for (var k = f + 1; k <= windowEnd; k++)
+                if (isChrome[k]) return f;
+        }
+        return scanEnd;
+    }
+
+    private static bool IsFooterChromeLine(string rawLine)
+    {
+        var line = rawLine.Trim();
+        if (line.Length == 0) return false;
+        return Regex.IsMatch(line, @"^to apply for this job\b", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(line, @"^apply now$", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(line, @"^share this job$", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(line, @"more jobs like this in my inbox", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(line, @"^#\S+$")
+            || Regex.IsMatch(line, @"indicates required fields", RegexOptions.IgnoreCase);
     }
 
     /// <summary>

@@ -59,39 +59,39 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
            (keydown)="onDrawerResizeKey($event)"></div>
     }
     <h2 mat-dialog-title class="detail-header">
-      <span class="logo-wrap detail-logo">
-        <span class="logo-avatar" [style.background]="avatarColor(app.companyName)">{{ companyInitials(app.companyName) }}</span>
-        @if (app.companyLogoUrl && !logoBroken()) {
-          <img class="logo" [src]="app.companyLogoUrl" (error)="logoBroken.set(true)">
-        }
-      </span>
-      <span class="title-wrap">
-        <span class="main-title">{{ app.role }}</span>
-        <span class="sub-title">{{ app.companyName }}</span>
-      </span>
-      <span class="header-actions">
-        <button class="hdr-btn" (click)="toggleFav()" [matTooltip]="t('tracker.favorite')">
-          <mat-icon>{{ isFav() ? 'favorite' : 'favorite_border' }}</mat-icon>
-          <span>{{ t('tracker.favorite') }}</span>
-        </button>
-        <button class="hdr-btn" (click)="doArchive()" [matTooltip]="t('tracker.archive')">
-          <mat-icon>archive</mat-icon>
-          <span>{{ t('tracker.archive') }}</span>
-        </button>
-        @if ((!app.companyLogoUrl || logoBroken()) && app.companyId) {
-          <button class="hdr-btn" (click)="refreshLogo()" [disabled]="refreshingLogo()" [matTooltip]="t('tracker.logoRefresh')">
-            <mat-icon>image_search</mat-icon>
-            <span>{{ t('tracker.logoRefresh') }}</span>
+      <span class="header-top">
+        <span class="logo-wrap detail-logo">
+          <span class="logo-avatar" [style.background]="avatarColor(app.companyName)">{{ companyInitials(app.companyName) }}</span>
+          @if (app.companyLogoUrl && !logoBroken()) {
+            <img class="logo" [src]="app.companyLogoUrl" (error)="logoBroken.set(true)">
+          }
+        </span>
+        <span class="company-title">{{ app.companyName }}</span>
+        <span class="header-actions">
+          <button class="hdr-btn" (click)="toggleFav()" [matTooltip]="t('tracker.favorite')">
+            <mat-icon>{{ isFav() ? 'favorite' : 'favorite_border' }}</mat-icon>
+            <span>{{ t('tracker.favorite') }}</span>
           </button>
-        }
-        <button class="hdr-btn danger" (click)="doDelete()" [matTooltip]="t('common.delete')">
-          <mat-icon>delete</mat-icon>
-          <span>{{ t('common.delete') }}</span>
-        </button>
-        <button class="hdr-close" mat-dialog-close [matTooltip]="t('common.close')">
-          <mat-icon>close</mat-icon>
-        </button>
+          <button class="hdr-btn" (click)="doArchive()" [matTooltip]="t('tracker.archive')">
+            <mat-icon>archive</mat-icon>
+            <span>{{ t('tracker.archive') }}</span>
+          </button>
+          @if ((!app.companyLogoUrl || logoBroken()) && app.companyId) {
+            <button class="hdr-btn" (click)="refreshLogo()" [disabled]="refreshingLogo()" [matTooltip]="t('tracker.logoRefresh')">
+              <mat-icon>image_search</mat-icon>
+              <span>{{ t('tracker.logoRefresh') }}</span>
+            </button>
+          }
+          <button class="hdr-btn danger" (click)="doDelete()" [matTooltip]="t('common.delete')">
+            <mat-icon>delete</mat-icon>
+            <span>{{ t('common.delete') }}</span>
+          </button>
+          <button class="hdr-close" mat-dialog-close [matTooltip]="t('common.close')">
+            <mat-icon>close</mat-icon>
+          </button>
+        </span>
       </span>
+      <span class="role-title">{{ app.role }}</span>
     </h2>
 
     <mat-dialog-content class="detail-body">
@@ -857,16 +857,14 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     /* ★ Simplify 对齐:头部标题堆叠 */
     /* ★ Simplify 真站:头部 */
     h2[mat-dialog-title].detail-header {
-      display: flex; align-items: flex-start; gap: 16px;
+      display: flex; flex-direction: column; align-items: stretch; gap: 8px;
       margin: 0; padding: 24px 32px 20px;
       border-bottom: 1px solid #e2e8f0;
     }
-    h2 .title-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-    h2 .main-title { font-size: 20px; font-weight: 700; line-height: 1.3; color: #0f172a; }
-    h2 .sub-title { font-size: 15px; font-weight: 400; color: #475569; }
-    .detail-header .logo-wrap { flex: 0 0 62px; width: 62px; height: 62px; }
-    .detail-header .logo-avatar { width: 62px; height: 62px; border-radius: 10px; font-size: 22px; }
-    .detail-header .logo { width: 62px; height: 62px; border-radius: 10px; }
+    h2 .header-top { display: flex; align-items: center; gap: 12px; }
+    h2 .company-title { font-size: 21px; font-weight: 700; line-height: 1.3; color: #0f172a; flex: 1; min-width: 0; }
+    h2 .role-title { font-size: 23px; font-weight: 700; line-height: 1.3; color: #0f172a; }
+    /* 票 224:62px 页头 logo 覆盖已删,logo 回落到下方 40px 通用规则(首字母圆 + 真实 logo 绝对覆盖),判定链不动。 */
     .header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
     .hdr-btn {
       display: inline-flex; align-items: center; gap: 8px;

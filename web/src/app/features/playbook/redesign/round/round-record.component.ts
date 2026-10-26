@@ -343,10 +343,21 @@ export class RoundRecordComponent {
    * 反而留下旧转写；只在发起点 +1 与“旧轮次覆盖新轮次”的防护目标等价且无此副作用。
    */
   private loadGen = 0;
+  /** 票221：服务端转写轮询定时器（191 遗留③）。完成信号是录音资产本身的转写稿
+   * （Worker 经 CompleteTranscription 对录音资产 SetTranscript，getTranscript 可读），
+   * 无需新后端端点、不建 SSE/WebSocket。 */
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollInFlight = false;
+  /** 票221：轮询间隔 10s、总超时 10 分钟（60 次）。短录音 STT 通常 1–2 分钟内完成，
+   * 10s 一次小 GET 对服务端无压力；超时停并保留 transcribeSubmitted 提示（与今日行为一致）。 */
+  private readonly pollIntervalMs = 10000;
+  private readonly pollMaxAttempts = 60;
 
   constructor() {
     this.destroyRef.onDestroy(() => {
       this.destroyed = true;
+      // 票221：销毁必清轮询（与 195 销毁旗双重防护，迟到 tick 不写任何信号）。
+      this.stopPolling();
       // 票195：解绑 TTS 句高亮回调，销毁后不再写 activeSentence。
       this.tts.onSentence = null;
     });
@@ -370,9 +381,58 @@ export class RoundRecordComponent {
     }, { allowSignalWrites: true });
   }
 
+  /** 票221：停轮询（完成/超时/切轮/重发/销毁共用）。 */
+  private stopPolling(): void {
+    if (this.pollTimer !== null) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+    this.pollInFlight = false;
+  }
+
+  /**
+   * 票221：开始轮询指定录音资产的转写稿。只在用户发起转写成功后调用；未发起时绝不轮询。
+   * 每 tick 查一次该资产的 getTranscript：segmentsJson 非空或 transcriptText 非空即完成，
+   * 停轮询并走既有 loadTranscript（已纳入录音资产）刷新段落显示；单次失败不中断轮询。
+   * 切轮、销毁、超时均停；重发先停旧轮询再起新轮询。
+   */
+  private startPolling(entryId: string, roundId: string, audioId: string): void {
+    this.stopPolling();
+    let attempts = 0;
+    this.pollTimer = setInterval(() => {
+      // 票195 同款防护：已销毁或已切轮时停，不写任何信号。
+      if (this.destroyed || this.round().id !== roundId) {
+        this.stopPolling();
+        return;
+      }
+      if (this.pollInFlight) return;
+      if (++attempts > this.pollMaxAttempts) {
+        this.stopPolling();
+        return;
+      }
+      this.pollInFlight = true;
+      void this.api.getTranscript(entryId, audioId).toPromise()
+        .then(t => {
+          if (this.destroyed || this.round().id !== roundId) return;
+          const segs = safeJson<TranscriptSegment[]>(t?.segmentsJson ?? null);
+          if ((segs?.length ?? 0) > 0 || !!t?.transcriptText?.trim()) {
+            this.stopPolling();
+            void this.loadTranscript(++this.loadGen);
+          }
+        })
+        .catch(() => { /* 单次失败不中断轮询，下次 tick 再试 */ })
+        .finally(() => { this.pollInFlight = false; });
+    }, this.pollIntervalMs);
+  }
+
   private async loadTranscript(gen: number): Promise<void> {
+    // 票221：录音资产也纳入转写读取——服务端转写稿回写在录音资产本身
+    // （CompleteTranscription 对录音资产 SetTranscript），不纳入则转写完成也永不显示。
+    // 空/失败照既有规则跳过；fromTranscript 判定不动（仍只认 Transcript/Text），自动抽取逻辑一字不动。
+    const audioId = this.audioAsset()?.id;
     const candidates = this.roundAssets()
-      .filter(a => a.kind === 'Transcript' || a.kind === 'Text' || a.kind === 'Notes');
+      .filter(a => a.kind === 'Transcript' || a.kind === 'Text' || a.kind === 'Notes'
+        || (audioId !== undefined && a.id === audioId));
     const all: TranscriptSegment[] = [];
     for (const a of candidates) {
       try {
@@ -536,6 +596,9 @@ export class RoundRecordComponent {
     try {
       await this.api.startTranscription(this.entry().id, a.id).toPromise();
       this.notice.set(this.t('pb.v2.rec.transcribeSubmitted'));
+      // 票221：服务端转写是异步 STT，完成后页面内无感知是 191 遗留③——成功后开始轮询
+      // 录音资产转写稿，出现即停并刷新段落显示；超时停并保留本提示（用户可重载或切轮，与今日一致）。
+      this.startPolling(this.entry().id, this.round().id, a.id);
     } catch (e) {
       this.notice.set(this.fmt('pb.v2.rec.transcribeFailed', { msg: errText(e, this.t('pb.v2.rec.unknownError')) }));
     } finally {

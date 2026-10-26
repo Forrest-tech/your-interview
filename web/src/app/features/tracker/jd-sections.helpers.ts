@@ -223,3 +223,40 @@ export function mergeSectionsForReparse(
   }
   return out;
 }
+
+/**
+ * 票 226：详情对话框小节编辑保存准备（纯函数，与 SmartAdd saveJd 校验同规则）。
+ * 草稿的 snapTitle/snapBody 为开始编辑时存量小节的原值（存量值本身已是 trim 后形态）；
+ * edited = 自动节标题/正文改过快照，手动节恒为 false（origin 已区分）。
+ * 全空节静默丢弃；标题 >60 字或有正文无标题时返回对应错误、不产 JSON；
+ * 全部丢弃后返回 json null（调用方走 legacy 回退，与 SmartAdd 无小节传 null 一致）。
+ */
+export interface SectionEditDraft {
+  title: string;
+  body: string;
+  origin: 'auto' | 'manual';
+  snapTitle: string;
+  snapBody: string;
+}
+
+export function prepareSectionsSave(
+  drafts: SectionEditDraft[],
+): { error: 'tooLong' | 'titleRequired' | null; json: string | null } {
+  const kept = drafts.filter((s) => s.title.trim() || s.body.trim());
+  for (const s of kept) {
+    if (s.title.trim().length > 60) return { error: 'tooLong', json: null };
+    if (!s.title.trim() && s.body.trim()) return { error: 'titleRequired', json: null };
+  }
+  if (kept.length === 0) return { error: null, json: null };
+  return {
+    error: null,
+    json: JSON.stringify(kept.map((s) => ({
+      title: s.title.trim(),
+      key: normalizeSectionKey(s.title.trim()),
+      body: s.body.trim(),
+      origin: s.origin,
+      edited: s.origin === 'auto'
+        && (s.title.trim() !== s.snapTitle || s.body.trim() !== s.snapBody),
+    }))),
+  };
+}

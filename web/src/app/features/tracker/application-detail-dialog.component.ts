@@ -25,7 +25,7 @@ import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-v
 import { extractPdfText } from '../../core/utils/pdf-text';
 import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 import { commFormMode, commSaveChannel } from './comm-form.helpers';
-import { dedupSectionsAgainstSummary, isListPhraseLine, mergeSectionsForReparse, parseSectionsJson, visibleDetailSections } from './jd-sections.helpers';
+import { dedupSectionsAgainstSummary, isListPhraseLine, mergeSectionsForReparse, parseSectionsJson, prepareSectionsSave, visibleDetailSections, type SectionEditDraft } from './jd-sections.helpers';
 import { JdSection } from '../../core/models/api.models';
 import { computeMatch, type MatchResult } from '../../core/match/resume-match';
 import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWidth, saveDrawerWidth } from './detail-drawer-width';
@@ -169,6 +169,14 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
           </button>
         </div>
         }
+        <!-- 票 226：小节编辑入口（不在 hideJdTools 门内，226 已批准实施，与摘要编辑独立） -->
+        <div class="about-job-edit">
+          <button mat-icon-button (click)="sectionsEditing() ? cancelEditSections() : startEditSections()"
+                  [matTooltip]="t('common.edit')" class="edit-btn"
+          [attr.aria-label]="t('common.edit')">
+            <mat-icon>{{ sectionsEditing() ? 'close' : 'edit' }}</mat-icon>
+          </button>
+        </div>
         @if (jdSummaryEditing()) {
           <textarea class="plain-area" rows="8" [(ngModel)]="jdSummaryDraft"
                     (ngModelChange)="jdSummaryError.set(null)"
@@ -201,7 +209,37 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
           }
           <!-- 票 154 R-154-6：有小节渲染原标题小节（公司介绍重复节已去重），
                否则一字不差走今日 legacy 两块。 -->
-          @if (displaySections.length > 0) {
+          <!-- 票 226：编辑态替代渲染（草稿来自存量 sectionsJson 原值，不经过展示层去重，保存不丢数据） -->
+          @if (sectionsEditing()) {
+            <div class="sec-edit">
+              <div class="sa-sections-label">{{ t('tracker.saSections') }}</div>
+              @for (d of sectionDrafts; track d.id) {
+                <div class="sec-edit-item">
+                  <mat-form-field appearance="outline" class="sec-title-field">
+                    <mat-label>{{ t('tracker.saSectionTitle') }}</mat-label>
+                    <input matInput [(ngModel)]="d.title" (ngModelChange)="sectionsError.set(null)">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="sec-body-field">
+                    <mat-label>{{ t('tracker.saSectionBody') }}</mat-label>
+                    <textarea matInput rows="4" [(ngModel)]="d.body" (ngModelChange)="sectionsError.set(null)"></textarea>
+                  </mat-form-field>
+                  <button mat-button type="button" (click)="removeSectionDraft(d.id)">{{ t('tracker.saSectionDelete') }}</button>
+                </div>
+              }
+              <button mat-stroked-button type="button" (click)="addSectionDraft()">{{ t('tracker.saSectionAdd') }}</button>
+              @if (sectionsError()) {
+                <div class="field-error-plain" role="alert">{{ sectionsError() }}</div>
+              }
+              <div class="cl-actions save-row">
+                <button mat-flat-button color="primary" (click)="saveSections()"
+                        [disabled]="sectionsSaving()">
+                  @if (sectionsSaving()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
+                  {{ t('common.save') }}
+                </button>
+                <button mat-button (click)="cancelEditSections()">{{ t('common.cancel') }}</button>
+              </div>
+            </div>
+          } @else if (displaySections.length > 0) {
             @for (s of displaySections; track $index) {
               <div class="jd-subhead">{{ s.title }}</div>
               @for (b of richBlocks(s.body); track $index) {
@@ -1046,6 +1084,10 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
     .kw-pill.hit { background: #f0fdf4; color: #16a34a; }
     .about-job-edit { display: flex; justify-content: flex-end; margin: 0 0 8px; }
     .about-job-edit .edit-btn { margin: 0; }
+    /* 票 226：详情小节编辑（与 SmartAdd 编辑器同款全宽字段 + 标签样式）。 */
+    .sec-edit .sa-sections-label { font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
+    .sec-edit .sec-title-field, .sec-edit .sec-body-field { width: 100%; }
+    .sec-edit-item { margin-bottom: 8px; }
     .about-job .jd-subhead {
       margin: 22px 0 10px; font-size: 14px; font-weight: 700;
       color: #0f172a;
@@ -2430,6 +2472,82 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
         // 票75:errors{JdSummary} 落摘要框下方;其余失败回落原通用提示
         const fieldText = this.mapFieldError(err, 'JdSummary', sent.length, this.JD_MAX);
         if (fieldText) { this.jdSummaryError.set(fieldText); return; }
+        this.alertError(this.readError(err));
+      }
+    });
+  }
+
+  /** 票 226：详情小节编辑（与 SmartAdd 编辑器同规则，见 prepareSectionsSave）。 */
+  readonly sectionsEditing = signal(false);
+  readonly sectionsSaving = signal(false);
+  readonly sectionsError = signal<string | null>(null);
+  sectionDrafts: (SectionEditDraft & { id: number })[] = [];
+  private nextSectionDraftId = 1;
+
+  startEditSections(): void {
+    // 草稿必须来自存量 sectionsJson 原值：displaySections 经过摘要去重与公司介绍
+    // 去重，拿它当草稿保存会把展示层滤掉的节从库里删掉。
+    const stored = parseSectionsJson(this.detail.sectionsJson) ?? [];
+    this.nextSectionDraftId = 1;
+    this.sectionDrafts = stored.map((s) => ({
+      id: this.nextSectionDraftId++,
+      title: s.title, body: s.body, origin: s.origin,
+      snapTitle: s.title, snapBody: s.body,
+    }));
+    this.sectionsError.set(null);
+    this.sectionsEditing.set(true);
+  }
+
+  addSectionDraft(): void {
+    this.sectionDrafts.push({
+      id: this.nextSectionDraftId++,
+      title: '', body: '', origin: 'manual', snapTitle: '', snapBody: '',
+    });
+  }
+
+  removeSectionDraft(id: number): void {
+    this.sectionDrafts = this.sectionDrafts.filter((d) => d.id !== id);
+  }
+
+  cancelEditSections(): void {
+    this.sectionsEditing.set(false);
+    this.sectionsError.set(null);
+  }
+
+  saveSections(): void {
+    const r = prepareSectionsSave(this.sectionDrafts);
+    if (r.error === 'tooLong') {
+      this.sectionsError.set(this.t('tracker.saSectionTitleTooLong'));
+      return;
+    }
+    if (r.error === 'titleRequired') {
+      this.sectionsError.set(this.t('tracker.saSectionTitleRequired'));
+      return;
+    }
+    // 后端语义：SectionsJson null = 未提供、保持原值；非 null = 明确新值。
+    // 用户删空全部节时发 '[]'（后端 Canonicalize 空列表归一为 null = 清空 + 投影清零），
+    // 而非发 null（那会保持旧节，违背删空意图）；本来就无存量节时发 null（无-op）。
+    const hadStored = (parseSectionsJson(this.detail.sectionsJson) ?? []).length > 0;
+    const sectionsJson = r.json ?? (hadStored ? '[]' : null);
+    const d = this.detail;
+    this.sectionsSaving.set(true);
+    this.jobsApi.updateApplication(this.app.id, {
+      role: d.role, location: d.location, link: d.link, salary: d.salary,
+      // 全量 PUT 回填（同 saveJdSummary）：表单外字段不回填会被误清。
+      workMode: d.workMode ?? null, source: d.source ?? null,
+      jdSummary: d.jdSummary ?? null, notes: d.notes,
+      priority: d.priority, deadline: d.deadline, appliedDate: d.appliedDate,
+      version: d.version ?? null,
+      sectionsJson,
+    }).subscribe({
+      next: () => {
+        this.sectionsSaving.set(false);
+        this.sectionsEditing.set(false);
+        this.refreshDetail();
+        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
+      },
+      error: (err) => {
+        this.sectionsSaving.set(false);
         this.alertError(this.readError(err));
       }
     });

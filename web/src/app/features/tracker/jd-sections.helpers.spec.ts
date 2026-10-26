@@ -7,6 +7,8 @@ import {
   normalizeSectionKey,
   normalizeSectionText,
   parseSectionsJson,
+  prepareSectionsSave,
+  SectionEditDraft,
   visibleDetailSections,
 } from './jd-sections.helpers';
 import { JdSection } from '../../core/models/api.models';
@@ -153,5 +155,51 @@ describe('jd-sections.helpers（票 204：derivedCompanyFromJd 兜底派生）',
     expect(derivedCompanyFromJd(`Role\nJob Overview\n${job}`)).toBeNull();
     expect(derivedCompanyFromJd(null)).toBeNull();
     expect(derivedCompanyFromJd('')).toBeNull();
+  });
+});
+
+describe('jd-sections.helpers（票 226：prepareSectionsSave）', () => {
+  const auto = (over: Partial<SectionEditDraft> = {}): SectionEditDraft => ({
+    title: 'About Us', body: 'We build things.', origin: 'auto',
+    snapTitle: 'About Us', snapBody: 'We build things.', ...over,
+  });
+
+  it('全空节静默丢弃；全部丢弃后返回 json null、无错误', () => {
+    expect(prepareSectionsSave([
+      { title: '   ', body: '', origin: 'manual', snapTitle: '', snapBody: '' },
+      { title: '', body: '  ', origin: 'manual', snapTitle: '', snapBody: '' },
+    ])).toEqual({ error: null, json: null });
+    expect(prepareSectionsSave([])).toEqual({ error: null, json: null });
+  });
+
+  it('标题 >60 字阻断（60 字通过、61 字 tooLong），与 SmartAdd 同规则', () => {
+    expect(prepareSectionsSave([auto({ title: 'x'.repeat(60) })]).error).toBeNull();
+    expect(prepareSectionsSave([auto({ title: 'x'.repeat(61) })])).toEqual({ error: 'tooLong', json: null });
+  });
+
+  it('有正文无标题阻断 titleRequired', () => {
+    expect(prepareSectionsSave([auto({ title: '  ', body: 'Body' })])).toEqual({ error: 'titleRequired', json: null });
+  });
+
+  it('首个失败节决定错误（按顺序，不跳序）', () => {
+    const r = prepareSectionsSave([
+      auto({ title: '', body: 'Body' }),
+      auto({ title: 'y'.repeat(61) }),
+    ]);
+    expect(r.error).toBe('titleRequired');
+  });
+
+  it('edited：自动节改过快照为 true、未改为 false、手动节恒 false；标题/正文 trim、key 归一化', () => {
+    const r = prepareSectionsSave([
+      auto({ title: '  About Us  ', body: '  We build things. ', snapTitle: 'About Us', snapBody: 'Different.' }),
+      auto(),
+      { title: 'Perks', body: 'Free lunch.', origin: 'manual', snapTitle: 'Other', snapBody: 'Other body.' },
+    ]);
+    expect(r.error).toBeNull();
+    expect(JSON.parse(r.json!)).toEqual([
+      { title: 'About Us', key: 'about us', body: 'We build things.', origin: 'auto', edited: true },
+      { title: 'About Us', key: 'about us', body: 'We build things.', origin: 'auto', edited: false },
+      { title: 'Perks', key: 'perks', body: 'Free lunch.', origin: 'manual', edited: false },
+    ]);
   });
 });

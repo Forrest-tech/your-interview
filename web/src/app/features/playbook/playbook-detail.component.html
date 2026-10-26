@@ -62,9 +62,19 @@
   </aside>
 
   <div class="page-main">
+  <!-- 票 202：三按钮由卡片内顶端移至卡片顶边线上方、Back to list 行右侧（顺序/接线/tooltip/样式与 196 一字不动）。 -->
+  <div class="back-row">
   <a mat-button class="back" routerLink="/playbook">
     <mat-icon>arrow_back</mat-icon> {{ t('pb.v2.d.back') }}
   </a>
+  @if (entry()) {
+    <div class="zone-actions">
+      <button mat-icon-button [matTooltip]="t('pb.v2.d.addMaterial')" [attr.aria-label]="t('pb.v2.d.addMaterial')" (click)="openIntake('email')"><mat-icon>upload_file</mat-icon></button>
+      <button mat-icon-button [matTooltip]="t('pb.v2.d.addRoundTip')" [attr.aria-label]="t('pb.v2.d.addRoundTip')" (click)="openIntake('email', undefined, true)"><mat-icon>playlist_add</mat-icon></button>
+      <button mat-icon-button [matTooltip]="t('pb.v2.d.mock')" [attr.aria-label]="t('pb.v2.d.mock')" (click)="goMock()"><mat-icon>record_voice_over</mat-icon></button>
+    </div>
+  }
+  </div>
 
   @if (loading() && !entry()) {
     <p class="state">{{ t('pb.v2.d.loading') }}</p>
@@ -74,14 +84,8 @@
   }
   @if (entry(); as e) {
 
-    <!-- 上区:条目信息(头 + 四格条 + 按钮行,单一边框容器) -->
+    <!-- 上区:条目信息(头 + 四格条,单一边框容器；按钮行已于票 202 移至卡片线上 Back to list 行) -->
     <section class="zone zone-entry">
-      <!-- 票 196：卡片顶端图标行（右对齐；顺序 Add material → Add a round → AI mock interview；接线与 193 一字不动，Add a round tooltip 用独立键 addRoundTip）。 -->
-      <div class="zone-actions">
-        <button mat-icon-button [matTooltip]="t('pb.v2.d.addMaterial')" [attr.aria-label]="t('pb.v2.d.addMaterial')" (click)="openIntake('email')"><mat-icon>upload_file</mat-icon></button>
-        <button mat-icon-button [matTooltip]="t('pb.v2.d.addRoundTip')" [attr.aria-label]="t('pb.v2.d.addRoundTip')" (click)="openIntake('email', undefined, true)"><mat-icon>playlist_add</mat-icon></button>
-        <button mat-icon-button [matTooltip]="t('pb.v2.d.mock')" [attr.aria-label]="t('pb.v2.d.mock')" (click)="goMock()"><mat-icon>record_voice_over</mat-icon></button>
-      </div>
       <!-- ① 条目头 -->
       <header class="ehead" data-testid="entry-header">
         <div class="ehead-left">

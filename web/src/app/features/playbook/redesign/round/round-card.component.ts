@@ -55,6 +55,10 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         @if (tab() === 'record') {
           <button mat-stroked-button (click)="openRecordExport()">{{ t('pb.v2.r.exportRecord') }}</button>
         }
+        <!-- 票177:Edit round 改卡片右上角铅笔图标（与 AI practice 的 .ch-edit 看齐），取代下面单独成行的文本按钮；编辑态图标变关闭。 -->
+        <button type="button" class="rc-icon-btn" [attr.aria-label]="t('pb.v2.r.editRound')" (click)="toggleEdit()">
+          <mat-icon>{{ editing() ? 'close' : 'edit' }}</mat-icon>
+        </button>
       </div>
       <div class="rc-outcome">
         @if (roundScore() != null) {
@@ -69,15 +73,12 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         @if (round().meetingLink) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.meetingLink') }}</span><a [href]="round().meetingLink" target="_blank" rel="noopener">{{ t('pb.v2.r.openLink') }}</a></span>
         }
-      </div>
-      <!-- 票169:Location(轨道节点上没有)与 Edit round(功能入口)不删、只挪到此处一行,始终可见可用。 -->
-      <div class="rc-sub">
+        <!-- 票177:Location 移回此处信息行（169 之前的位置；轨道节点上没有，不算重复）。 -->
         @if (round().location) {
           <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.location') }}</span><b>{{ round().location }}</b></span>
         }
-        <span class="spacer"></span>
-        <button type="button" class="mini-btn" (click)="toggleEdit()">{{ editing() ? t('pb.v2.d.collapse') : t('pb.v2.r.editRound') }}</button>
       </div>
+      <!-- 票177:.rc-sub 行删除：Edit round 已改右上角铅笔图标，不再为单个按钮占一整行。 -->
 
       @if (round().scheduledDate) {
         <div class="cal-bar" data-testid="round-cal-bar">
@@ -172,8 +173,13 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   styles: [`
     .card { padding: 2px 2px 0; margin-top: 14px; }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    /* 票169:Location 与 Edit round 的承接行(详情头去重后仅剩的头部外信息)。 */
-    .rc-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 7px; }
+    /* 票177:右上角铅笔图标按钮，与 AI practice 的 .ch-edit 看齐（36px 白底细边框圆角方框）。 */
+    .rc-icon-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+                   width: 36px; height: 36px; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px;
+                   background: #ffffff; color: var(--yi-text-muted, #475569); cursor: pointer;
+                   transition: background .15s ease, border-color .15s ease, color .15s ease; }
+    .rc-icon-btn:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
+    .rc-icon-btn mat-icon { font-size: 19px; width: 19px; height: 19px; }
     /* 票123 R-3:日期/时间/形式改为堆叠小字行(§9 mock 的 .rwhen),不再串在中点上。 */
     .rc-meta { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px;
                color: var(--yi-text-muted, #475569); }

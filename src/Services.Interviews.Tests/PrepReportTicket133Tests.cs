@@ -590,7 +590,7 @@ public sealed class PrepReportTicket133LocalTests
     {
         var data = PrepReportTicket133Tests.Sample() with
         {
-            FetchedItems = [("MechanicsCo interview experience", "https://example.com/exp")]
+            FetchedItems = [("MechanicsCo interview experience", "https://example.com/exp", "Asked about caching layers")]
         };
         var cls = PrepReportClassifier.Classify("SystemDesign");
         var prompt = PrepReportPrompts.UserPrompt(data, "en", cls);
@@ -613,7 +613,7 @@ public static class PrepReportSampleExport
         string? Interviewers, string? Format, string? ScheduledDate,
         string? RequestJd, string? EntryJd, string? EntryJdSummary, string? ResumeText,
         string? Experiences, bool QuestionBankEnabled, bool CompanyBackgroundEnabled,
-        List<(string Title, string Url)> FetchedItems,
+        List<(string Title, string Url, string Snippet)> FetchedItems,
         List<PrepQuestionInput> Questions, List<PrepWeaknessInput> Weaknesses);
 
     public static Export? TryLoad()
@@ -637,9 +637,10 @@ public static class PrepReportSampleExport
                 Enum.Parse<WeaknessCategory>(w["category"]!.GetValue<string>()),
                 w["title"]!.GetValue<string>(), w["detail"]?.GetValue<string>(),
                 w["suggestion"]?.GetValue<string>(), w["severity"]?.GetValue<int>() ?? 0));
-        var fetched = new List<(string, string)>();
+        var fetched = new List<(string, string, string)>();
         foreach (var f in (root["fetchedItems"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
-            fetched.Add((f["title"]!.GetValue<string>(), f["url"]!.GetValue<string>()));
+            fetched.Add((f["title"]!.GetValue<string>(), f["url"]!.GetValue<string>(),
+                f["snippet"]?.GetValue<string>() ?? ""));
         return new Export(
             S("companyName") ?? "", S("role") ?? "", S("companyProfile"),
             root["roundOrder"]?.GetValue<int>() ?? 1, S("stage") ?? "",

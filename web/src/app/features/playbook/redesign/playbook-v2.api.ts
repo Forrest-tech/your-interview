@@ -128,9 +128,22 @@ export class PlaybookV2Api {
   generatePrepReport(entryId: string, roundId: string, body: {
     jdText?: string | null; resumeText?: string | null; experiences?: string | null;
     language?: string | null;
+    /** 票207：本条目沟通邮件结构化摘录（前端按 thread 分组摘录，原文截断）。 */
+    communications?: string | null;
+    /** 票207：沟通摘录读取状态 ok / failed / none（未关联投递）。 */
+    communicationsStatus?: string | null;
+    communicationsCount?: number | null;
+    /** 票207：沟通邮件接入开关（默认开；false = 不用沟通邮件生成）。 */
+    includeCommunications?: boolean | null;
   }): Observable<{ prepReportJson: string }> {
     return this.api.post<{ prepReportJson: string }>(
       `${this.base(entryId)}/rounds/${roundId}/prep-report/generate`, body);
+  }
+
+  /** 票207：恢复上一版（后端弹出最近一条 Generate 前快照）。 */
+  restorePrepReport(entryId: string, roundId: string): Observable<{ prepReportJson: string }> {
+    return this.api.post<{ prepReportJson: string }>(
+      `${this.base(entryId)}/rounds/${roundId}/prep-report/restore`, {});
   }
 
   renameSpeaker(entryId: string, roundId: string, from: string, to: string):

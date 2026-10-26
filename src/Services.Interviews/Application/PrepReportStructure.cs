@@ -398,9 +398,11 @@ public sealed record PrepReportSourceData(
     int RoundOrder, string Stage, string? Interviewers, string? Format, DateOnly? ScheduledDate,
     string? RequestJd, string? EntryJd, string? EntryJdSummary, string? ResumeText, string? Experiences,
     bool QuestionBankEnabled, bool CompanyBackgroundEnabled,
-    IReadOnlyList<(string Title, string Url)> FetchedItems,
+    IReadOnlyList<(string Title, string Url, string Snippet)> FetchedItems,
     IReadOnlyList<PrepQuestionInput> Questions,
-    IReadOnlyList<PrepWeaknessInput> Weaknesses)
+    IReadOnlyList<PrepWeaknessInput> Weaknesses,
+    // 票207：沟通邮件（前端按 thread 摘录的原文截断文本；开关默认开，false 时不传）。
+    string? CommunicationsText = null, string CommunicationsStatus = "none", int CommunicationsCount = 0)
 {
     public string? Jd => !string.IsNullOrWhiteSpace(RequestJd) ? RequestJd
         : !string.IsNullOrWhiteSpace(EntryJd) ? EntryJd : EntryJdSummary;
@@ -761,8 +763,20 @@ public static class PrepReportPrompts
             if (items.Count > 0)
             {
                 sb.AppendLine(heading);
-                foreach (var f in items.Take(5)) sb.AppendLine($"- {f.Title} — {f.Url}");
+                // 票207：机经段 = 标题 + Snippet + URL（只透传搜索摘要，绝不抓正文）。
+                foreach (var f in items.Take(5))
+                {
+                    sb.AppendLine($"- {f.Title} — {f.Url}");
+                    if (!string.IsNullOrWhiteSpace(f.Snippet))
+                        sb.AppendLine($"  Snippet: {PrepReportSections.Trunc(f.Snippet, 300)}");
+                }
             }
+        }
+        if (!string.IsNullOrWhiteSpace(d.CommunicationsText))
+        {
+            // 票207：沟通邮件摘录（前端按 thread 分组、原文截断；只限本条目）。
+            sb.AppendLine("## Communications with the recruiter/company (excerpts; ground only in these)");
+            sb.AppendLine(PrepReportSections.Trunc(d.CommunicationsText, 6000));
         }
         if (d.QuestionBankEnabled && d.Questions.Count > 0)
         {
@@ -800,6 +814,294 @@ public static class PrepReportPrompts
                 sb.AppendLine($"- {w.Title} [{w.Category} · severity {w.Severity}]: {PrepReportSections.Trunc(w.Suggestion ?? w.Detail ?? "", 150)}");
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 票207：增量 Generate 提示词。只输出增量 JSON，绝不改写已有内容：
+    /// {\"sections\":[{\"id\":...,\"title\":...（仅新建节用）,\"points\":[\"新增要点\"...],
+    /// \"questions\":[{\"question\":...,\"category\":...,\"stdSpoken\":...,\"stdTechnical\":...}]}]}。
+    /// 已有节只追加要点（与已有要点去重是服务端的合并职责，提示词要求只写新内容）；
+    /// 空节/脚手架节用 points 填充；Q&amp;A 节新增题目；其余节不出现在输出里。
+    /// </summary>
+    public static string IncrementalPrompt(
+        PrepReportSourceData d, string lang, RoundClassification cls, JsonObject existing)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"# Prep target: {d.CompanyName} — {d.Role} (Round {d.RoundOrder} / {d.Stage})");
+        sb.AppendLine($"Output language: {LanguageName(lang)}");
+        sb.AppendLine($"Round classification: coding={cls.IsCoding.ToString().ToLowerInvariant()}, design={cls.IsDesign.ToString().ToLowerInvariant()}, screen={cls.IsScreen.ToString().ToLowerInvariant()}, behavioral={cls.IsBehavioral.ToString().ToLowerInvariant()}, final={cls.IsFinal.ToString().ToLowerInvariant()}");
+        sb.AppendLine("INCREMENTAL UPDATE ONLY. The candidate already has a prep report below. "
+            + "Do NOT rewrite, rephrase, reorder or delete any existing section, point or question. "
+            + "Output exactly one JSON object with ONLY new content: "
+            + "{\"sections\":[{\"id\":\"existing-or-new section id\",\"title\":\"only for brand-new sections\","
+            + "\"points\":[\"new point\",...],\"questions\":[{\"question\":\"...\",\"category\":\"...\","
+            + "\"stdSpoken\":\"...\",\"stdTechnical\":\"...\"}]}]}. "
+            + "Rules: (1) points must be genuinely new — never restate an existing point in other words; "
+            + "(2) questions must not duplicate any existing question; "
+            + "(3) only include sections that actually gain points or questions; "
+            + "(4) empty or scaffold sections may be filled with points; "
+            + "(5) new questions go to the section they belong to (tech-qa / behavioral / comp-process / design-round); "
+            + "(6) ground everything ONLY in the new sources below, the JD, the resume and the communications excerpts. "
+            + "SPOKEN LINES STAY IN ENGLISH: every stdSpoken must be in English regardless of report language.");
+        sb.AppendLine("## Existing report (do not modify; new content must differ from all of this)");
+        var budget = 8000;
+        foreach (var n in (existing["sections"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+        {
+            if (budget <= 0) break;
+            var id = n["id"]?.GetValue<string>() ?? "";
+            var title = n["title"]?.GetValue<string>() ?? "";
+            var parts = new List<string>();
+            foreach (var b in (n["blocks"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+            {
+                foreach (var it in (b["items"] as JsonArray ?? new JsonArray()))
+                    parts.Add(it?.GetValue<string>() ?? "");
+                var tx = b["text"]?.GetValue<string>();
+                if (!string.IsNullOrWhiteSpace(tx)) parts.Add(tx!);
+            }
+            foreach (var q in (n["questions"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+                parts.Add("Q: " + (q["question"]?.GetValue<string>() ?? ""));
+            var joined = PrepReportSections.Trunc(string.Join(" | ", parts), budget);
+            budget -= joined.Length;
+            sb.AppendLine($"- [{id}] {title}: {joined}");
+        }
+        if (!string.IsNullOrWhiteSpace(d.Jd)) sb.AppendLine($"## JD\n{PrepReportSections.Trunc(d.Jd!, 6000)}");
+        if (d.CompanyBackgroundEnabled && !string.IsNullOrWhiteSpace(d.CompanyProfile))
+            sb.AppendLine($"## Company background\n{PrepReportSections.Trunc(d.CompanyProfile, 3000)}");
+        if (!string.IsNullOrWhiteSpace(d.ResumeText)) sb.AppendLine($"## Submitted resume\n{PrepReportSections.Trunc(d.ResumeText, 6000)}");
+        if (!string.IsNullOrWhiteSpace(d.Experiences)) sb.AppendLine($"## Interview experiences pasted by the user\n{PrepReportSections.Trunc(d.Experiences, 5000)}");
+        if (!string.IsNullOrWhiteSpace(d.CommunicationsText))
+        {
+            sb.AppendLine("## Communications with the recruiter/company (excerpts; ground only in these)");
+            sb.AppendLine(PrepReportSections.Trunc(d.CommunicationsText, 6000));
+        }
+        if (d.FetchedItems.Count > 0)
+        {
+            sb.AppendLine("## Fetched web interview experiences (search results; ground questions only in these)");
+            foreach (var f in d.FetchedItems.Take(5))
+            {
+                sb.AppendLine($"- {f.Title} — {f.Url}");
+                if (!string.IsNullOrWhiteSpace(f.Snippet))
+                    sb.AppendLine($"  Snippet: {PrepReportSections.Trunc(f.Snippet, 300)}");
+            }
+        }
+        return sb.ToString();
+    }
+}
+
+// ============================ 票207：增量合并 + 版本快照 ===========================
+// 增量合并：把增量 JSON 合进已存报告。已有节与已生成块一字不改；只追加新要点
+// （归一化文本去重）、新增题目（全报告范围题面去重）、新建缺失节。
+// 追加块打 provenance 标记 {at, source}；快照栈存在报告根部 history 键，无需迁移。
+
+/// <summary>增量合并结果（计数供 sources 备注与测试断言）。</summary>
+public sealed record PrepMergeResult(int PointsAdded, int QuestionsAdded, int SectionsCreated);
+
+public static class PrepReportIncremental
+{
+    private static JsonArray SectionsOf(JsonObject root)
+    {
+        if (root["sections"] is not JsonArray a) { a = new JsonArray(); root["sections"] = a; }
+        return a;
+    }
+
+    private static JsonArray BlocksOf(JsonObject section)
+    {
+        if (section["blocks"] is not JsonArray a) { a = new JsonArray(); section["blocks"] = a; }
+        return a;
+    }
+
+    private static JsonArray QuestionsOf(JsonObject section)
+    {
+        if (section["questions"] is not JsonArray a) { a = new JsonArray(); section["questions"] = a; }
+        return a;
+    }
+
+    private static JsonObject? FindSection(JsonArray sections, string id)
+    {
+        foreach (var n in sections)
+            if (n is JsonObject o && o["id"]?.GetValue<string>() == id) return o;
+        return null;
+    }
+
+    private static HashSet<string> ExistingPointTexts(JsonObject section)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var b in BlocksOf(section).OfType<JsonObject>())
+        {
+            foreach (var it in (b["items"] as JsonArray ?? new JsonArray()))
+            {
+                var s = it?.GetValue<string>();
+                if (!string.IsNullOrWhiteSpace(s)) set.Add(PrepReportRouting.NormalizeText(s));
+            }
+            var tx = b["text"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(tx)) set.Add(PrepReportRouting.NormalizeText(tx));
+            var ut = b["userText"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(ut)) set.Add(PrepReportRouting.NormalizeText(ut));
+        }
+        return set;
+    }
+
+    /// <summary>
+    /// 把增量 JSON 合进已存报告（原地改 stored，调用方须先 DeepClone）。
+    /// 增量形态：{sections:[{id, title?, points?: string[], questions?: [...]}]}，
+    /// 其余键一律忽略；questions 原样挂接（仅补 provenance，不改题面与答案）。
+    /// </summary>
+    public static PrepMergeResult Merge(JsonObject stored, JsonObject delta, string provenanceSource, string at)
+    {
+        var sections = SectionsOf(stored);
+        var seenQuestions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in sections.OfType<JsonObject>())
+            foreach (var q in QuestionsOf(s).OfType<JsonObject>())
+            {
+                var t = q["question"]?.GetValue<string>();
+                if (!string.IsNullOrWhiteSpace(t)) seenQuestions.Add(PrepReportRouting.NormalizeText(t));
+            }
+        var pointsAdded = 0;
+        var questionsAdded = 0;
+        var sectionsCreated = 0;
+        foreach (var n in (delta["sections"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+        {
+            var id = n["id"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(id)) continue;
+            var section = FindSection(sections, id);
+            if (section is null)
+            {
+                section = new JsonObject
+                {
+                    ["id"] = id,
+                    ["title"] = n["title"]?.GetValue<string>() is { } t && !string.IsNullOrWhiteSpace(t) ? t : id,
+                    ["blocks"] = new JsonArray(),
+                    ["questions"] = new JsonArray()
+                };
+                sections.Add(section);
+                sectionsCreated++;
+            }
+            var fresh = new List<string>();
+            var known = ExistingPointTexts(section);
+            foreach (var p in (n["points"] as JsonArray ?? new JsonArray()))
+            {
+                var s = p?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(s)) continue;
+                var norm = PrepReportRouting.NormalizeText(s);
+                if (known.Contains(norm)) continue; // 归一化去重，防重复追加
+                known.Add(norm);
+                fresh.Add(s.Trim());
+            }
+            if (fresh.Count > 0)
+            {
+                var items = new JsonArray();
+                foreach (var f in fresh) items.Add(f);
+                BlocksOf(section).Add(new JsonObject
+                {
+                    ["type"] = "points",
+                    ["items"] = items,
+                    ["provenance"] = new JsonObject { ["at"] = at, ["source"] = provenanceSource }
+                });
+                pointsAdded += fresh.Count;
+            }
+            foreach (var q in (n["questions"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+            {
+                var t = q["question"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(t)) continue;
+                if (seenQuestions.Contains(PrepReportRouting.NormalizeText(t))) continue;
+                seenQuestions.Add(PrepReportRouting.NormalizeText(t));
+                var clone = q.DeepClone().AsObject();
+                clone["provenance"] = new JsonObject { ["at"] = at, ["source"] = provenanceSource };
+                QuestionsOf(section).Add(clone);
+                questionsAdded++;
+            }
+        }
+        return new PrepMergeResult(pointsAdded, questionsAdded, sectionsCreated);
+    }
+
+    /// <summary>把本地全量报告转成增量形态（AI 失败时的本地兜底复用同一合并口径；
+    /// script 块不进追加——叙事段落不可拆成要点，题目与 points/list 要点才可追加）。</summary>
+    public static JsonObject ToDelta(JsonObject localReport)
+    {
+        var delta = new JsonObject { ["sections"] = new JsonArray() };
+        var arr = (JsonArray)delta["sections"]!;
+        foreach (var s in (localReport["sections"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+        {
+            var id = s["id"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(id)) continue;
+            var points = new JsonArray();
+            foreach (var b in (s["blocks"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+            {
+                if (b["type"]?.GetValue<string>() is not ("points" or "list")) continue;
+                foreach (var it in (b["items"] as JsonArray ?? new JsonArray()))
+                    points.Add(it?.GetValue<string>());
+            }
+            var questions = new JsonArray();
+            foreach (var q in (s["questions"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+                questions.Add(q.DeepClone());
+            arr.Add(new JsonObject
+            {
+                ["id"] = id,
+                ["title"] = s["title"]?.GetValue<string>(),
+                ["points"] = points,
+                ["questions"] = questions
+            });
+        }
+        return delta;
+    }
+}
+
+/// <summary>Generate 前快照栈（报告根部 history 键；快照存去掉 history 的旧根，防嵌套；上限 5 条）。</summary>
+public static class PrepReportHistory
+{
+    public const int MaxEntries = 5;
+
+    private static JsonObject? TryParse(string json)
+    {
+        try { return JsonNode.Parse(json) as JsonObject; }
+        catch { return null; }
+    }
+
+    /// <summary>新报告 JSON 包上快照：旧根非空即入栈。旧根不可解析时原样存串（恢复时原样写回）。</summary>
+    public static string WithHistory(string newJson, string? oldRawJson)
+    {
+        var root = TryParse(newJson);
+        if (root is null || string.IsNullOrWhiteSpace(oldRawJson)) return newJson;
+        var oldRoot = TryParse(oldRawJson);
+        var oldHistory = new JsonArray();
+        string snapshotJson;
+        if (oldRoot is not null)
+        {
+            if (oldRoot["history"] is JsonArray h)
+                foreach (var e in h) oldHistory.Add(e!.DeepClone());
+            oldRoot.Remove("history");
+            snapshotJson = oldRoot.ToJsonString();
+        }
+        else
+        {
+            snapshotJson = oldRawJson;
+        }
+        var entry = new JsonObject
+        {
+            ["at"] = DateTimeOffset.UtcNow.ToString("o"),
+            ["json"] = snapshotJson
+        };
+        oldHistory.Add(entry);
+        while (oldHistory.Count > MaxEntries) oldHistory.RemoveAt(0);
+        root["history"] = oldHistory;
+        return root.ToJsonString();
+    }
+
+    /// <summary>弹出最近一条快照：成功返回恢复后的完整报告 JSON（含剩余 history）；无快照返回 null。</summary>
+    public static string? RestoreLatest(string currentJson)
+    {
+        var root = TryParse(currentJson);
+        if (root is null) return null;
+        if (root["history"] is not JsonArray history || history.Count == 0) return null;
+        var last = history[^1] as JsonObject;
+        var snapshotJson = last?["json"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(snapshotJson)) return null;
+        history.RemoveAt(history.Count - 1);
+        var restored = TryParse(snapshotJson);
+        if (restored is null) return snapshotJson; // 旧根本身不可解析：原样写回即恢复
+        // history 仍挂在当前根下：克隆后挂接，避免 JsonNode 双父节点报错。
+        restored["history"] = history.DeepClone();
+        return restored.ToJsonString();
     }
 }
 

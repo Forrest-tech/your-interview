@@ -1,8 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
 import {
-  classifyPrepStage, prepFrameworkSectionIds, prepQuestionExportBlocks
+  classifyPrepStage, migrateLegacyPrepReport, prepFrameworkSectionIds, prepQuestionExportBlocks
 } from './prep-report.helpers';
 import { safeJson } from '../v2.models';
+import type { PrepReport, PrepSection } from '../v2.models';
 
 /** 票133:TJ-1 分类镜像 + 骨架同构;TJ-2 note 呈现与导出排除 + 旧报告兼容(数据层)。 */
 
@@ -85,6 +86,58 @@ describe('prepQuestionExportBlocks (note exclusion)', () => {
     expect(joined).toContain('spoken answer here');
     expect(joined).toContain('technical answer here');
     expect(joined).not.toContain('INTERNAL-DIAGNOSIS-ONLY');
+  });
+});
+
+describe('migrateLegacyPrepReport (票207 read-side migration)', () => {
+  const scaffold = (id: string): PrepSection => ({ id, title: 'fw:' + id, blocks: [], questions: [] });
+  const expected = prepFrameworkSectionIds(classifyPrepStage('Technical'));
+  const old8 = (): PrepReport => ({
+    generatedAt: '2026-10-01T00:00:00Z',
+    sections: [
+      { id: 'greeting', title: '1 · Warm-up', blocks: [{ type: 'points', items: ['a'] }], questions: [] },
+      { id: 'intro-listen', title: '2 · Hear their introduction', blocks: [], questions: [] },
+      { id: 'self-intro', title: '3 · Self-introduction', blocks: [], questions: [] },
+      { id: 'deep-dive', title: '4 · Project deep-dive', blocks: [], questions: [] },
+      { id: 'tech-qa', title: '5 · Technical Q&A', blocks: [], questions: [{ question: 'Q?' }] },
+      { id: 'behavioral', title: '6 · Behavioral (STAR)', blocks: [], questions: [] },
+      { id: 'ask-back', title: '7 · Questions to ask', blocks: [], questions: [] },
+      { id: 'closing', title: '8 · Wrap-up & reminders', blocks: [], questions: [] },
+    ]
+  });
+
+  it('old 8 sections → canonical order + 3 scaffolds + de-numbered titles', () => {
+    const out = migrateLegacyPrepReport(old8(), { expectedIds: expected, scaffoldSection: scaffold });
+    expect(out.sections.map(s => s.id)).toEqual([
+      'round-brief', 'greeting', 'intro-listen', 'self-intro', 'deep-dive', 'tech-qa',
+      'behavioral', 'weakness-plan', 'ask-back', 'comp-process', 'closing']);
+    expect(out.sections[0].scaffold).toBe(true);
+    expect(out.sections.find(s => s.id === 'weakness-plan')?.scaffold).toBe(true);
+    expect(out.sections.find(s => s.id === 'comp-process')?.scaffold).toBe(true);
+    expect(out.sections.find(s => s.id === 'greeting')?.title).toBe('Warm-up');
+    expect(out.sections.find(s => s.id === 'greeting')?.scaffold).toBeFalsy();
+    expect(out.sections.find(s => s.id === 'tech-qa')?.questions).toHaveLength(1);
+    expect(out.generatedAt).toBe('2026-10-01T00:00:00Z');
+  });
+
+  it('unknown sections are kept at the end marked unmapped, never silently dropped', () => {
+    const r = old8();
+    r.sections.push({ id: 'mystery', title: 'Something else', blocks: [], questions: [] });
+    const out = migrateLegacyPrepReport(r, { expectedIds: expected, scaffoldSection: scaffold });
+    const last = out.sections[out.sections.length - 1];
+    expect(last.id).toBe('mystery');
+    expect(last.unmapped).toBe(true);
+    expect(last.title).toBe('Something else');
+  });
+
+  it('duplicate canonical sections keep the first only; input is not mutated', () => {
+    const r = old8();
+    r.sections.push({ id: 'greeting', title: '9 · Warm-up again', blocks: [], questions: [] });
+    const before = JSON.stringify(r);
+    const out = migrateLegacyPrepReport(r, { expectedIds: expected, scaffoldSection: scaffold });
+    expect(out.sections.filter(s => s.id === 'greeting')).toHaveLength(1);
+    expect(out.sections.find(s => s.id === 'greeting')?.title).toBe('Warm-up');
+    expect(JSON.stringify(r)).toBe(before);
   });
 });
 

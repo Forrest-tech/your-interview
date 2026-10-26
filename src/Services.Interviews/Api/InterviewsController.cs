@@ -666,7 +666,18 @@ public sealed class InterviewsController(ISender sender, ICurrentUser currentUse
         [FromBody] GeneratePrepReportBody? body, CancellationToken ct)
     {
         var r = await sender.Send(new GeneratePrepReportCommand(Me, id, roundId,
-            body?.JdText, body?.ResumeText, body?.Experiences, body?.Language), ct);
+            body?.JdText, body?.ResumeText, body?.Experiences, body?.Language,
+            body?.Communications, body?.CommunicationsStatus, body?.CommunicationsCount ?? 0,
+            body?.IncludeCommunications ?? true), ct);
+        return r.IsSuccess ? Results.Ok(new { prepReportJson = r.Value }) : r.ToProblemDetails();
+    }
+
+    /// <summary>票207：恢复上一版（弹出最近一条 Generate 前快照）。</summary>
+    [HttpPost("{id:guid}/rounds/{roundId:guid}/prep-report/restore")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> RestorePrepReport(Guid id, Guid roundId, CancellationToken ct)
+    {
+        var r = await sender.Send(new RestorePrepReportCommand(Me, id, roundId), ct);
         return r.IsSuccess ? Results.Ok(new { prepReportJson = r.Value }) : r.ToProblemDetails();
     }
 
@@ -903,7 +914,10 @@ public sealed record PrepReportBody(string? PrepReportJson, uint? Version = null
 
 public sealed record GeneratePrepReportBody(
     string? JdText = null, string? ResumeText = null, string? Experiences = null,
-    string? Language = null);
+    string? Language = null,
+    // 票207：沟通邮件摘录 + 读取状态 + 数量 + 接入开关（默认开）。
+    string? Communications = null, string? CommunicationsStatus = null, int? CommunicationsCount = null,
+    bool? IncludeCommunications = null);
 
 public sealed record RenameSpeakerBody(string From, string To);
 

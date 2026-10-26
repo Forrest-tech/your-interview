@@ -134,6 +134,28 @@ public sealed class SetRoundReviewCommandHandler(InterviewsDbContext db)
     }
 }
 
+/// <summary>票207：恢复上一版——弹出最近一条 Generate 前快照（无快照则失败）。</summary>
+public sealed record RestorePrepReportCommand(Guid UserId, Guid EntryId, Guid RoundId)
+    : IRequest<Result<string>>;
+
+public sealed class RestorePrepReportCommandHandler(InterviewsDbContext db)
+    : IRequestHandler<RestorePrepReportCommand, Result<string>>
+{
+    public async Task<Result<string>> Handle(RestorePrepReportCommand request, CancellationToken ct)
+    {
+        var e = await ReassignAssetCommandHandler.LoadFull(db, request.EntryId, request.UserId, ct);
+        if (e is null) return Result.Failure<string>(Error.NotFound("面试条目"));
+        var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
+        if (round is null) return Result.Failure<string>(Error.NotFound("轮次"));
+        var restored = PrepReportHistory.RestoreLatest(round.PrepReportJson ?? "");
+        if (restored is null) return Result.Failure<string>(Error.Validation("PrepReport.History", "没有可恢复的上一版"));
+        try { e.SetRoundPrepReport(request.RoundId, restored); }
+        catch (InvalidOperationException ex) { return Result.Failure<string>(Error.Conflict("Round.PrepReport", ex.Message)); }
+        await db.SaveChangesAsync(ct);
+        return Result.Success(restored);
+    }
+}
+
 /// <summary>写入结构化备考报告 JSON(前端编辑 Tech Stack 关联后回存也走这里)。</summary>
 public sealed record SetRoundPrepReportCommand(Guid UserId, Guid EntryId, Guid RoundId, string? PrepReportJson,
     uint? Version = null) : IRequest<Result>; // 票101 Version:轮次行 xmin
@@ -416,7 +438,10 @@ public sealed class ExtractRoundQuestionsCommandHandler(InterviewsDbContext db, 
 /// 经网关检索后才进提示词,状态如实写进报告 sources.details,绝不编造面经。</summary>
 public sealed record GeneratePrepReportCommand(
     Guid UserId, Guid EntryId, Guid RoundId, string? JdText = null, string? ResumeText = null,
-    string? Experiences = null, string? Language = null) : IRequest<Result<string>>;
+    string? Experiences = null, string? Language = null,
+    // 票207：沟通邮件摘录（前端按 thread 分组、原文截断）+ 读取状态 + 开关（默认开）。
+    string? Communications = null, string? CommunicationsStatus = null, int CommunicationsCount = 0,
+    bool IncludeCommunications = true) : IRequest<Result<string>>;
 
 /// <summary>一次生成实际用到的数据源上下文(配置开关 + 外部检索结果)。</summary>
 internal sealed record PrepSourceContext(
@@ -436,39 +461,107 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
         var lang = NormalizeLanguage(request.Language);
         var ctx = await LoadSourceContext(e, round, ct);
         var sources = BuildSources(e, request, ctx);
+        var oldRaw = round.PrepReportJson;
+        var stored = TryStoredReport(oldRaw);
 
         string reportJson;
+        if (stored is null)
+        {
+            // 首轮 Generate = 创建（整份 AI 新写、结构规范；框架要点只作显示 fallback，
+            // 从不带入存储）——与旧行为一致。
+            try
+            {
+                var data = BuildSourceData(e, round, request, ctx);
+                var cls = PrepReportClassifier.Classify(round.Stage);
+                var t = PrepReportLocalTexts.For(lang);
+                var prompt = PrepReportPrompts.UserPrompt(data, lang, cls);
+                var completion = await ai.CompleteAsync("round-prep-report", prompt, PrepReportPrompts.SystemPrompt(lang), 0.5, 16000, ct);
+                var json = GenerateRoundReviewCommandHandler.ExtractJson(completion.Text);
+                if (json is null) throw new AiGatewayException("AI 返回内容无法解析为 JSON");
+                using var doc = JsonDocument.Parse(json); // 校验合法性
+                if (JsonNode.Parse(json) is not JsonObject root)
+                    throw new JsonException("AI 返回 JSON 不是对象");
+                root = PrepReportNormalizer.Normalize(root, data, lang, t, cls);
+                root["generatedAt"] = DateTimeOffset.UtcNow.ToString("o");
+                root["generatedBy"] = completion.Model;
+                root["sources"] = sources;
+                reportJson = root.ToJsonString();
+            }
+            catch (AiGatewayException)
+            {
+                // AI 未配置/失败:本地聚合兜底(JD/简历/历史原题/短板都是真实输入,只是不经 LLM 组织)
+                reportJson = BuildLocalReport(e, round, request, ctx, lang, sources);
+            }
+            catch (JsonException)
+            {
+                reportJson = BuildLocalReport(e, round, request, ctx, lang, sources);
+            }
+        }
+        else
+        {
+            // 票207：已有报告 → 真增量追加。已有节与已生成块一字不改；只填充空节、
+            // 向 Q&A 节新增题目、向已有节追加要点（归一化去重）；追加块打 provenance。
+            reportJson = await GenerateIncremental(e, round, request, ctx, lang, sources, stored, ct);
+        }
+
+        // 票207：落库前包上快照（旧根非空即入栈；首轮创建无旧根，不包）。
+        reportJson = PrepReportHistory.WithHistory(reportJson, oldRaw);
+        e.SetRoundPrepReport(round.Id, reportJson);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(reportJson);
+    }
+
+    /// <summary>已存报告判定：可解析为带 sections 数组的对象才算已存；框架轮次无存储，返回 null。</summary>
+    private static JsonObject? TryStoredReport(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
         try
         {
-            var data = BuildSourceData(e, round, request, ctx);
-            var cls = PrepReportClassifier.Classify(round.Stage);
-            var t = PrepReportLocalTexts.For(lang);
-            var prompt = PrepReportPrompts.UserPrompt(data, lang, cls);
+            if (JsonNode.Parse(raw) is JsonObject root && root["sections"] is JsonArray)
+                return root;
+        }
+        catch { /* 损坏的存量按未生成处理（快照仍会原样保存旧串，供恢复） */ }
+        return null;
+    }
+
+    /// <summary>票207：增量 Generate。AI 路输出增量 JSON 后合并；AI 失败/增量不可解析时
+    /// 本地全量报告转增量形态后合并（同一合并口径，绝不整份覆盖）。</summary>
+    private async Task<string> GenerateIncremental(InterviewEntry e, InterviewRound round,
+        GeneratePrepReportCommand request, PrepSourceContext ctx, string lang, JsonObject sources,
+        JsonObject stored, CancellationToken ct)
+    {
+        var data = BuildSourceData(e, round, request, ctx);
+        var cls = PrepReportClassifier.Classify(round.Stage);
+        var merged = stored.DeepClone().AsObject();
+        var at = DateTimeOffset.UtcNow.ToString("o");
+        JsonObject? delta = null;
+        string provenance = "generate";
+        try
+        {
+            var prompt = PrepReportPrompts.IncrementalPrompt(data, lang, cls, stored);
             var completion = await ai.CompleteAsync("round-prep-report", prompt, PrepReportPrompts.SystemPrompt(lang), 0.5, 16000, ct);
             var json = GenerateRoundReviewCommandHandler.ExtractJson(completion.Text);
             if (json is null) throw new AiGatewayException("AI 返回内容无法解析为 JSON");
             using var doc = JsonDocument.Parse(json); // 校验合法性
             if (JsonNode.Parse(json) is not JsonObject root)
-                throw new JsonException("AI 返回 JSON 不是对象");
-            root = PrepReportNormalizer.Normalize(root, data, lang, t, cls);
-            root["generatedAt"] = DateTimeOffset.UtcNow.ToString("o");
-            root["generatedBy"] = completion.Model;
-            root["sources"] = sources;
-            reportJson = root.ToJsonString();
+                throw new JsonException("AI 返回增量 JSON 不是对象");
+            delta = root;
+            merged["generatedBy"] = completion.Model;
         }
-        catch (AiGatewayException)
+        catch (Exception ex) when (ex is AiGatewayException or JsonException)
         {
-            // AI 未配置/失败:本地聚合兜底(JD/简历/历史原题/短板都是真实输入,只是不经 LLM 组织)
-            reportJson = BuildLocalReport(e, round, request, ctx, lang, sources);
+            // 本地兜底：全量本地报告转增量形态再合并（script 叙事块不进追加）。
+            var localJson = BuildLocalReport(e, round, request, ctx, lang, sources);
+            if (JsonNode.Parse(localJson) is JsonObject localRoot)
+                delta = PrepReportIncremental.ToDelta(localRoot);
+            provenance = "local";
+            merged["generatedBy"] = "local-aggregation";
         }
-        catch (JsonException)
-        {
-            reportJson = BuildLocalReport(e, round, request, ctx, lang, sources);
-        }
-
-        e.SetRoundPrepReport(round.Id, reportJson);
-        await db.SaveChangesAsync(ct);
-        return Result.Success(reportJson);
+        if (delta is not null)
+            PrepReportIncremental.Merge(merged, delta, provenance, at);
+        merged["generatedAt"] = at;
+        merged["sources"] = sources;
+        return merged.ToJsonString();
     }
 
     // ---------------- 语言 ----------------
@@ -490,18 +583,24 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
             ? e.Weaknesses.Select(w => new PrepWeaknessInput(
                 w.Category, w.Title, w.Detail, w.Suggestion, w.Severity)).ToList()
             : new List<PrepWeaknessInput>();
-        var fetched = new List<(string Title, string Url)>();
+        var fetched = new List<(string Title, string Url, string Snippet)>();
         foreach (var s in new[] { ctx.Web, ctx.Glassdoor })
         {
             if (s is null || s.Status != "fetched") continue;
-            foreach (var r in s.Results.Take(5)) fetched.Add((r.Title, r.Url));
+            // 票207：机经 Snippet 透传进提示词（只透传搜索摘要，绝不抓正文）。
+            foreach (var r in s.Results.Take(5)) fetched.Add((r.Title, r.Url, r.Snippet ?? ""));
         }
+        // 票207：沟通邮件只在开关开时进提示词（默认开）；关时按无沟通邮件处理。
+        var commText = req.IncludeCommunications ? req.Communications : null;
+        var commStatus = req.IncludeCommunications ? (req.CommunicationsStatus ?? "none") : "disabled";
+        var commCount = req.IncludeCommunications ? req.CommunicationsCount : 0;
         return new PrepReportSourceData(
             e.CompanyName, e.Role, e.CompanyProfile,
             round.Order, round.Stage, round.Interviewers, round.Format, round.ScheduledDate,
             req.JdText, e.JdText, e.JdSummary, req.ResumeText, req.Experiences,
             ctx.QuestionBankEnabled, ctx.CompanyBackgroundEnabled,
-            fetched, questions, weaknesses);
+            fetched, questions, weaknesses,
+            commText, commStatus, commCount);
     }
 
     // ---------------- 数据源上下文 ----------------
@@ -543,6 +642,16 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
     {
         var pastCount = ctx.QuestionBankEnabled ? e.Questions.Count : 0;
         var companyUsed = ctx.CompanyBackgroundEnabled && !string.IsNullOrWhiteSpace(e.CompanyProfile);
+        // 票207：沟通邮件明细（每源一条，失败/未关联如实标注，绝不静默缺失）。
+        var (commStatus, commNote) = !req.IncludeCommunications
+            ? ("disabled", "未启用")
+            : (req.CommunicationsStatus ?? "none") switch
+            {
+                "failed" => ("failed", "读取失败，已用其余来源继续"),
+                "none" => ("noData", "未关联投递"),
+                _ => (req.CommunicationsCount > 0 ? "fetched" : "noData",
+                    req.CommunicationsCount > 0 ? "仅本条目" : null),
+            };
         var details = new JsonArray
         {
             Detail("questionBank",
@@ -550,11 +659,13 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
             Detail("company",
                 !ctx.CompanyBackgroundEnabled ? "disabled" : companyUsed ? "fetched" : "noData", null),
             Detail("web", ctx.Web?.Status ?? "disabled", ctx.Web?.Results.Count,
-                ctx.Web?.Results.Select(r => r.Url)),
+                ctx.Web?.Results.Select(r => r.Url), ctx.Web?.Message),
             Detail("glassdoor", ctx.Glassdoor?.Status ?? "disabled", ctx.Glassdoor?.Results.Count,
-                ctx.Glassdoor?.Results.Select(r => r.Url)),
+                ctx.Glassdoor?.Results.Select(r => r.Url), ctx.Glassdoor?.Message),
             Detail("manualExperiences",
-                !string.IsNullOrWhiteSpace(req.Experiences) ? "fetched" : "noData", null)
+                !string.IsNullOrWhiteSpace(req.Experiences) ? "fetched" : "noData", null),
+            Detail("communications", commStatus,
+                req.IncludeCommunications ? req.CommunicationsCount : null, null, commNote)
         };
         return new JsonObject
         {
@@ -569,9 +680,10 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
         };
     }
 
-    private static JsonObject Detail(string key, string status, int? count, IEnumerable<string>? links = null)
+    /// <summary>票207：details 机制扩展——每源一条 {type, status, count, note}（type 与 key 同值）。</summary>
+    private static JsonObject Detail(string key, string status, int? count, IEnumerable<string>? links = null, string? note = null)
     {
-        var o = new JsonObject { ["key"] = key, ["status"] = status };
+        var o = new JsonObject { ["key"] = key, ["type"] = key, ["status"] = status };
         if (count is not null) o["count"] = count.Value;
         if (links is not null)
         {
@@ -579,6 +691,7 @@ public sealed class GeneratePrepReportCommandHandler(InterviewsDbContext db, IAi
             foreach (var l in links) arr.Add(l);
             o["links"] = arr;
         }
+        if (!string.IsNullOrWhiteSpace(note)) o["note"] = note;
         return o;
     }
 

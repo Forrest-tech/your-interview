@@ -20,11 +20,12 @@ import {
   PrepBlock, PrepQuestionItem, PrepReport, PrepSection, prepStdText, safeJson
 } from '../v2.models';
 import {
-  classifyPrepStage, prepFrameworkSectionIds, prepQuestionExportBlocks
+  classifyPrepStage, migrateLegacyPrepReport, prepFrameworkSectionIds, prepQuestionExportBlocks,
+  type PrepStageClass
 } from './prep-report.helpers';
 import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { latestPrepInputAsset, makeV2Fmt, makeV2T, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, type PrepInputPurpose } from '../v2.helpers';
+import { latestPrepInputAsset, makeV2Fmt, makeV2T, normalizeThreadSubject, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, type PrepInputPurpose } from '../v2.helpers';
 import { ExportBlock, ExportDoc } from '../export/export-doc';
 
 /**
@@ -84,18 +85,22 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
           <nav class="toc">
             @for (s of displayReport()!.sections; track s.id) {
               <button type="button" class="toc-item" [class.on]="activeSec() === s.id"
-                      (click)="jumpTo(s.id)">{{ s.title }}</button>
+                      (click)="jumpTo(s.id)">{{ s.title }}@if (s.scaffold) { <span class="sec-tag">{{ t('pb.v2.p.scaffoldTag') }}</span> }@if (s.unmapped) { <span class="sec-tag">{{ t('pb.v2.p.legacyTag') }}</span> }</button>
             }
           </nav>
           <div class="sections">
             <!-- 票203：标题行整体移入正文列顶部（不再横跨整宽压在菜单上方）——标题即正文列第一行，与下方 Warm-up 等小节 h4 同一竖列左沿对齐；菜单列与该行顶部齐平（同 grid 行起始）。正文首节 h4 仍不渲染，防重复；按钮一字不动。 -->
             <div class="prep-head">
-              <div class="ph-title">{{ firstSecTitle() }}</div>
+              <div class="ph-title">{{ firstSecTitle() }}@if (firstSecScaffold()) { <span class="sec-tag">{{ t('pb.v2.p.scaffoldTag') }}</span> }@if (firstSecUnmapped()) { <span class="sec-tag">{{ t('pb.v2.p.legacyTag') }}</span> }</div>
               <span class="spacer"></span>
               <div class="ph-actions">
                 <app-qa-zoom [compact]="true"></app-qa-zoom>
-                @if (report()) {
+                @if (displayReport()?.sections?.length) {
                   <button mat-icon-button (click)="openExport()" [matTooltip]="t('pb.v2.p.exportPrep')" [attr.aria-label]="t('pb.v2.p.exportPrep')"><mat-icon>download</mat-icon></button>
+                }
+                @if (hasHistory()) {
+                  <button mat-icon-button (click)="restorePrev()" [disabled]="busy()"
+                          [matTooltip]="t('pb.v2.p.restorePrev')" [attr.aria-label]="t('pb.v2.p.restorePrev')"><mat-icon>history</mat-icon></button>
                 }
                 <button mat-icon-button (click)="generate()" [disabled]="busy()"
                         [matTooltip]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')"
@@ -104,9 +109,16 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                 </button>
               </div>
             </div>
+            @if (displayReport()?.sources?.details?.length) {
+              <div class="src-row">
+                @for (d of displayReport()!.sources!.details!; track d.key) {
+                  <span class="src-detail">{{ sourceLabel(d.key) }} · {{ sourceStatusText(d.status) }}@if (d.count != null) { · {{ d.count }} }@if (d.note) { — {{ d.note }} }</span>
+                }
+              </div>
+            }
             @for (s of displayReport()!.sections; track s.id) {
               <section class="psec" [id]="'prep-sec-' + s.id" data-testid="prep-section">
-                @if (!$first) { <h4>{{ s.title }}</h4> }
+                @if (!$first) { <h4>{{ s.title }}@if (s.scaffold) { <span class="sec-tag">{{ t('pb.v2.p.scaffoldTag') }}</span> }@if (s.unmapped) { <span class="sec-tag">{{ t('pb.v2.p.legacyTag') }}</span> }</h4> }
                 @for (b of s.blocks ?? []; track $index) {
                   @if (b.type === 'script') {
                     <div class="script-box">
@@ -131,6 +143,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                     </div>
                   } @else if (b.type === 'points' || b.type === 'list') {
                     @if (b.title) { <div class="sb-title">{{ b.title }}</div> }
+                    @if (b.provenance) { <div class="prov-tag">{{ t('pb.v2.p.addedTag') }} · {{ provDate(b.provenance) }}</div> }
                     <ul class="pts pts-scale">
                       @for (it of b.items ?? []; track $index) { <li>{{ it }}</li> }
                     </ul>
@@ -248,6 +261,13 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .ph-actions button:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
     .ph-actions button mat-icon { font-size: 19px; width: 19px; height: 19px; }
     .ph-title { font-size: 16px; font-weight: 600; }
+    /* 票207：脚手架/旧节标记与追加块标记（沿用 .tag pill 视觉，不引入新色板）。 */
+    .sec-tag { font-size: 12px; font-weight: 500; border: 1px solid var(--yi-border, #e2e8f0);
+               border-radius: 999px; padding: 1px 8px; color: var(--yi-text-muted, #475569);
+               margin-left: 6px; white-space: nowrap; }
+    .prov-tag { font-size: 12px; color: var(--yi-text-muted, #475569); margin: 2px 0 4px; }
+    .src-row { display: flex; gap: 2px 14px; flex-wrap: wrap; margin: 0 0 12px; }
+    .src-row .src-detail { font-size: 12px; color: var(--yi-text-muted, #475569); white-space: nowrap; }
     .ph-sub { font-size: 13px; color: var(--yi-text-muted, #475569); margin-top: 2px; max-width: 560px; }
     .ph-sub.src-details { display: flex; gap: 2px 14px; flex-wrap: wrap; max-width: none; }
     .src-detail { white-space: nowrap; }
@@ -385,12 +405,20 @@ export class PrepReportComponent {
   }
 
   /**
-   * 展示用报告:已生成 → 用生成的;未生成 → 默认框架(票133 定稿 §4.1/§10.1)。
+   * 展示用报告:已生成 → 用生成的（票207：先过读侧迁移，旧版 8 节变规范结构，
+   * 存储一字不动）;未生成 → 默认框架(票133 定稿 §4.1/§10.1)。
    * 框架与生成报告同构(13 节位顺序 + 左目录 + 滚动高亮),分类走 §4.2 镜像表;
    * 文案全走核心字典 pb.v2 三语键,不调 AI、不落库;读回区(票159)保留在框架上方。
    */
-  readonly displayReport = computed<PrepReport | null>(
-    () => this.report() ?? this.frameworkReport());
+  readonly displayReport = computed<PrepReport | null>(() => {
+    const stored = this.report();
+    if (!stored) return this.frameworkReport();
+    const cls = classifyPrepStage(this.round().stage);
+    return migrateLegacyPrepReport(stored, {
+      expectedIds: prepFrameworkSectionIds(cls),
+      scaffoldSection: id => this.frameworkSection(id, cls),
+    });
+  });
 
   /** 票198：页头左标题 = 正文第一小节标题（正文首节 h4 不再渲染，防重复）；报告无小节时为空串。 */
   readonly firstSecTitle = computed(() => {
@@ -398,12 +426,24 @@ export class PrepReportComponent {
     return secs && secs.length > 0 ? secs[0].title : '';
   });
 
-  private frameworkReport(): PrepReport {
-    const cls = classifyPrepStage(this.round().stage);
+  /** 票207：首节为脚手架/旧节时，页头标题旁同样打标记（首节 h4 本就不渲染）。 */
+  readonly firstSecScaffold = computed(() => !!this.displayReport()?.sections?.[0]?.scaffold);
+  readonly firstSecUnmapped = computed(() => !!this.displayReport()?.sections?.[0]?.unmapped);
+
+  /** 票207：当前存量报告是否有 Generate 前快照（有才渲染“恢复上一版”）。 */
+  readonly hasHistory = computed(() => (this.report()?.history?.length ?? 0) > 0);
+
+  /** 票207：追加块标记的日期部分（ISO 取前 10 位）。 */
+  provDate(p: { at: string } | null | undefined): string {
+    return (p?.at ?? '').slice(0, 10);
+  }
+
+  /** 票207：单节框架内容（frameworkReport 与迁移脚手架共用同一组代码）。 */
+  private frameworkSection(id: string, cls: PrepStageClass): PrepSection | null {
     const pts = (keys: string[]): PrepBlock[] =>
       [{ type: 'points', items: keys.map(k => this.t(k)) }];
-    const sec = (id: string, name: string, keys: string[]): PrepSection => ({
-      id, title: this.t(`pb.v2.p.fw.${name}.title`), blocks: pts(keys), questions: []
+    const sec = (sid: string, name: string, keys: string[]): PrepSection => ({
+      id: sid, title: this.t(`pb.v2.p.fw.${name}.title`), blocks: pts(keys), questions: []
     });
     const p = (name: string, n: number): string[] =>
       Array.from({ length: n }, (_, i) => `pb.v2.p.fw.${name}.p${i + 1}`);
@@ -417,22 +457,27 @@ export class PrepReportComponent {
     const FW_POINTS: Record<string, number> = {
       greeting: 5, 'design-round': 7, 'weakness-plan': 5, closing: 7,
     };
+    if (id === 'tech-qa') {
+      const blocks = [...pts(p('techQa', 4))];
+      if (!cls.isDesign) {
+        blocks.push({
+          type: 'points', title: this.t('pb.v2.p.fw.designCard.title'),
+          items: p('designCard', 3).map(k => this.t(k))
+        });
+      }
+      return { id, title: this.t('pb.v2.p.fw.techQa.title'), blocks, questions: [] };
+    }
+    const name = group[id];
+    if (!name) return null;
+    return sec(id, name, p(name, FW_POINTS[id] ?? 4));
+  }
+
+  private frameworkReport(): PrepReport {
+    const cls = classifyPrepStage(this.round().stage);
     const sections: PrepSection[] = [];
     for (const id of prepFrameworkSectionIds(cls)) {
-      if (id === 'tech-qa') {
-        const blocks = [...pts(p('techQa', 4))];
-        if (!cls.isDesign) {
-          blocks.push({
-            type: 'points', title: this.t('pb.v2.p.fw.designCard.title'),
-            items: p('designCard', 3).map(k => this.t(k))
-          });
-        }
-        sections.push({
-          id, title: this.t('pb.v2.p.fw.techQa.title'), blocks, questions: []
-        });
-      } else {
-        sections.push(sec(id, group[id], p(group[id], FW_POINTS[id] ?? 4)));
-      }
+      const s = this.frameworkSection(id, cls);
+      if (s) sections.push(s);
     }
     return { sections };
   }
@@ -445,7 +490,37 @@ export class PrepReportComponent {
       case 'web': return this.t('pb.v2.p.srcWeb');
       case 'glassdoor': return this.t('pb.v2.p.srcGlassdoor');
       case 'manualExperiences': return this.t('pb.v2.p.srcManual');
+      case 'communications': return this.t('pb.v2.p.srcComm');
       default: return key;
+    }
+  }
+
+  /** 票207：Sources 明细行的状态词（后端旧口径 → 展示词）。 */
+  sourceStatusText(status: string): string {
+    switch (status) {
+      case 'fetched': return this.t('pb.v2.p.srcStIncluded');
+      case 'disabled': return this.t('pb.v2.p.srcStDisabled');
+      case 'notConfigured': return this.t('pb.v2.p.srcStNotConfigured');
+      case 'noData': return this.t('pb.v2.p.srcStNoData');
+      case 'failed': return this.t('pb.v2.p.srcStFailed');
+      default: return status;
+    }
+  }
+
+  /** 票207：恢复上一版（后端弹出最近一条 Generate 前快照；无快照时按钮不渲染）。 */
+  async restorePrev(): Promise<void> {
+    if (this.busy()) return;
+    this.busy.set(true);
+    this.notice.set(null);
+    this.noticeIsError.set(false);
+    try {
+      await this.api.restorePrepReport(this.entry().id, this.round().id).toPromise();
+      this.changed.emit();
+    } catch (e) {
+      this.notice.set(this.fmt('pb.v2.p.generateFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.rec.unknownError') }));
+      this.noticeIsError.set(true);
+    } finally {
+      this.busy.set(false);
     }
   }
 
@@ -557,6 +632,54 @@ export class PrepReportComponent {
 
   // ---------------- 生成 ----------------
 
+  /**
+   * 票207：本条目沟通邮件的结构化摘录（只限本条目 jobApplicationId，绝不取其他条目；
+   * 摘录式原文截断，不经模型改写）。按 thread 分组（与 comm-log 同口径：meta.threadKey
+   * 优先，存量无 threadKey 的按主题现场归一化兜底），组内按发生时间正序。
+   * 读取失败 → status failed（后端如实标注、其余来源继续，绝不静默缺失）；
+   * 未关联投递 → status none。
+   */
+  private async loadCommExcerpts(): Promise<{
+    text: string | null; status: 'ok' | 'failed' | 'none'; count: number;
+  }> {
+    const appId = this.entry().jobApplicationId;
+    if (!appId) return { text: null, status: 'none', count: 0 };
+    try {
+      const rows = await this.api.listCommunications(appId).toPromise();
+      const items = (rows ?? []).map(c => PlaybookV2Api.commFromJobs(c));
+      const groups = new Map<string, { subject: string; items: typeof items }>();
+      for (const it of items) {
+        const key = it.meta.threadKey
+          ? 'th:' + it.meta.threadKey
+          : it.subject
+            ? 'th:' + normalizeThreadSubject(it.subject).key
+            : 'solo:' + it.id;
+        const g = groups.get(key) ?? { subject: it.subject ?? '', items: [] };
+        g.items.push(it);
+        groups.set(key, g);
+      }
+      const trunc = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
+      const lines: string[] = [];
+      for (const g of groups.values()) {
+        const sorted = [...g.items].sort((a, b) => (a.occurredAt ?? '').localeCompare(b.occurredAt ?? ''));
+        if (g.subject) lines.push(`Thread: ${g.subject}`);
+        for (const it of sorted) {
+          const arr = it.meta.arrangement;
+          const arrText = arr
+            ? [arr.date, arr.time, arr.format, arr.interviewers].filter(Boolean).join(' ')
+            : '';
+          lines.push(`- [${it.type}] ${it.contactName ?? ''} @ ${it.occurredAt ?? ''}`
+            + (arrText ? ` | arrangement: ${arrText}` : '')
+            + (it.subject ? ` | subject: ${it.subject}` : '')
+            + ` | ${trunc((it.content ?? '').replace(/\s+/g, ' ').trim(), 500)}`);
+        }
+      }
+      return { text: lines.length ? lines.join('\n') : null, status: 'ok', count: items.length };
+    } catch {
+      return { text: null, status: 'failed', count: 0 };
+    }
+  }
+
   async generate(): Promise<void> {
     this.busy.set(true);
     this.notice.set(null);
@@ -566,12 +689,19 @@ export class PrepReportComponent {
       // 与旧两框行为一致）；loadPrepText 自保证新鲜，不读展示层可能滞后的缓存。
       const experiences = await this.loadPrepText(PREP_INPUT_EXPERIENCES);
       const resumeText = await this.loadPrepText(PREP_INPUT_RESUME);
+      // 票207：沟通邮件默认接入（开关默认开：请求级默认 true；读不到/未关联时
+      // 状态如实进 sources.details，绝不静默缺失）。
+      const comm = await this.loadCommExcerpts();
       const r = await this.api.generatePrepReport(this.entry().id, this.round().id, {
         jdText: this.entry().jdText ?? null,
         resumeText: resumeText.trim() || null,
         experiences: experiences.trim() || null,
         // 生成语言跟随系统语言(账号 preferredLanguage 决定界面语言,同一口径)
-        language: this.i18n.lang()
+        language: this.i18n.lang(),
+        communications: comm.text,
+        communicationsStatus: comm.status,
+        communicationsCount: comm.count,
+        includeCommunications: true
       }).toPromise();
       const parsed = safeJson<PrepReport>(r?.prepReportJson);
       this.notice.set(parsed?.generatedBy === 'local-aggregation'
@@ -740,13 +870,19 @@ export class PrepReportComponent {
   private buildExportDoc(sel: Set<string>): ExportDoc {
     const e = this.entry();
     const r = this.round();
-    const rep = this.report();
+    // 票207：导出取数由 report() 改为 displayReport()——读侧迁移后的规范结构、
+    // 从未生成的框架轮次也能导出；框架节标注“未生成框架”。
+    const rep = this.displayReport();
+    const isFramework = !this.report();
     const blocks: ExportBlock[] = [];
     for (const s of rep?.sections ?? []) {
       const isQaSection = (s.questions?.length ?? 0) > 0;
       if (isQaSection && !sel.has('qa')) continue;
       if (!isQaSection && !sel.has('flow')) continue;
-      blocks.push({ kind: 'heading', text: s.title });
+      blocks.push({
+        kind: 'heading',
+        text: s.title + (s.scaffold || isFramework ? this.t('pb.v2.p.exportFwSuffix') : '')
+      });
       for (const b of s.blocks ?? []) {
         if (b.type === 'script') {
           if (b.title) blocks.push({ kind: 'subheading', text: b.title });
@@ -764,6 +900,18 @@ export class PrepReportComponent {
           technicalLabel: this.t('pb.v2.p.technical')
         }));
       }
+    }
+    // 票207：导出含 sources.details 明细（每源一条：标签 + 状态 + 数量 + 备注）。
+    const details = rep?.sources?.details;
+    if (details?.length) {
+      blocks.push({ kind: 'heading', text: this.t('pb.v2.p.srcTitle') });
+      blocks.push({
+        kind: 'list',
+        items: details.map(d =>
+          `${this.sourceLabel(d.key)}：${this.sourceStatusText(d.status)}`
+          + (d.count != null ? `（${d.count}）` : '')
+          + (d.note ? ` — ${d.note}` : ''))
+      });
     }
     return {
       title: this.fmt('pb.v2.p.docTitle', { company: e.companyName, n: r.order, stage: r.stage }),

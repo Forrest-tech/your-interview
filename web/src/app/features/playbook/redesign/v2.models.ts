@@ -128,6 +128,12 @@ export interface RoundReview {
 
 // ---------------- 备考报告 ----------------
 
+/** 票207：增量 Generate 追加块的来源标记（追加时间 + 追加来源 generate/local）。 */
+export interface PrepProvenance {
+  at: string;
+  source: string;
+}
+
 export interface PrepBlock {
   type: 'script' | 'points' | 'list' | string;
   title?: string;
@@ -135,6 +141,8 @@ export interface PrepBlock {
   /** script 的用户编辑版(用户版优先,规则同标准答案)。 */
   userText?: string | null;
   items?: string[];
+  /** 票207：增量追加块才有；存量块与框架块无此字段。 */
+  provenance?: PrepProvenance | null;
 }
 
 export interface PrepQuestionItem {
@@ -157,20 +165,36 @@ export interface PrepSection {
   title: string;
   blocks?: PrepBlock[];
   questions?: PrepQuestionItem[];
+  /** 票207：读侧迁移补的框架脚手架节（显示标记“待生成”，导出标注“未生成框架”）。 */
+  scaffold?: boolean | null;
+  /** 票207：读侧迁移认不出的旧节（原样保留在末尾并标注，不静默丢弃）。 */
+  unmapped?: boolean | null;
 }
 
 /** 备考数据源逐项状态(2026-10-21:后端 sources.details,与 AiGateway 口径一致)。 */
 export interface PrepSourceDetail {
   key: 'questionBank' | 'company' | 'web' | 'glassdoor' | 'manualExperiences' | string;
+  /** 票207：与 key 同值（后端 details 机制扩展后的 type 字段）。 */
+  type?: string;
   /** fetched 已抓取 / disabled 未启用 / notConfigured 未配置 / noData 无数据 / failed 抓取失败 */
   status: 'fetched' | 'disabled' | 'notConfigured' | 'noData' | 'failed' | string;
   count?: number;
   links?: string[];
+  /** 票207：该源的补充说明（如“仅本条目”“读取失败，已用其余来源继续”）。 */
+  note?: string | null;
+}
+
+/** 票207：Generate 前快照记录（存于 PrepReportJson 根部，无需迁移；恢复 = 弹出最近一条）。 */
+export interface PrepReportSnapshot {
+  at: string;
+  json: string;
 }
 
 export interface PrepReport {
   generatedAt?: string;
   generatedBy?: string;
+  /** 票207：版本快照栈（最新在末尾）；前端编辑 clone 全量往返，天然保留。 */
+  history?: PrepReportSnapshot[] | null;
   sources?: {
     jd?: boolean;
     company?: boolean;

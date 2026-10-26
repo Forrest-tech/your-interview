@@ -77,6 +77,8 @@ export class PlaybookDetailComponent implements OnDestroy {
   // 导航只是切换路由(/playbook/:id),不整页刷新。
   readonly navEntries = signal<InterviewEntry[]>([]);
   readonly navCompletedOpen = signal(false);
+  // 票180：In Progress 组折叠与 Completed 组同一套机制，默认展开（现状）只多一个可点收起的按钮
+  readonly navActiveOpen = signal(true);
   readonly navActive = computed(() =>
     this.navEntries().filter(e => entryResultOutcome(e.outcome) === null));
   readonly navCompleted = computed(() =>

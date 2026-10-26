@@ -2,19 +2,24 @@
   <!-- 左侧条目导航(定稿第八节):分组口径与列表页同一套 helper;点击只切路由不整页刷新 -->
   <aside class="entry-nav" data-testid="entry-nav">
     <div class="nav-group">
-      <div class="nav-group-title">
+      <button type="button" class="nav-group-toggle" data-testid="nav-active-toggle"
+              [attr.aria-expanded]="navActiveOpen()"
+              (click)="navActiveOpen.set(!navActiveOpen())">
+        <mat-icon>{{ navActiveOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
         <span>{{ t('pb.section.active') }}</span>
         <span class="count-badge">{{ navActive().length }}</span>
-      </div>
-      <div class="nav-items">
-        @for (e of navActive(); track e.id) {
-          <button type="button" class="nav-item" [class.on]="e.id === id()"
-                  (click)="goEntry(e.id)">
-            <span class="nav-company">{{ e.companyName }}</span>
-            <span class="nav-role">{{ e.role }}</span>
-          </button>
-        }
-      </div>
+      </button>
+      @if (navActiveOpen()) {
+        <div class="nav-items">
+          @for (e of navActive(); track e.id) {
+            <button type="button" class="nav-item" [class.on]="e.id === id()"
+                    (click)="goEntry(e.id)">
+              <span class="nav-company">{{ e.companyName }}</span>
+              <span class="nav-role">{{ e.role }}</span>
+            </button>
+          }
+        </div>
+      }
     </div>
     <div class="nav-group">
       <button type="button" class="nav-group-toggle" data-testid="nav-completed-toggle"

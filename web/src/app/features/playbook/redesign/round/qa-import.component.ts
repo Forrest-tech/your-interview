@@ -42,10 +42,12 @@ const BEHAVIORAL_HINTS = [
       <div class="qi-head">
         <div>
           <div class="qi-title">{{ t('pb.v2.q.title') }}</div>
-          <p class="qi-sub">{{ t('pb.v2.q.sub') }}</p>
         </div>
         <span class="spacer"></span>
-        <button mat-stroked-button (click)="extract()" [disabled]="busy()">{{ t('pb.v2.rec.extractQa') }}</button>
+        <!-- 票191：Extract Q&A 直接去掉（先隐藏不删除：开关 + @if，extract() 与 i18n 键保留；解析完成自动进候选，不再需要手动按钮）。 -->
+        @if (!hideExtractQa) {
+          <button mat-stroked-button (click)="extract()" [disabled]="busy()">{{ t('pb.v2.rec.extractQa') }}</button>
+        }
         <button mat-raised-button color="primary" (click)="importSelected()"
                 [disabled]="busy() || !selectedCount()">
           {{ fmt('pb.v2.q.importSelected', { n: selectedCount() }) }}
@@ -85,7 +87,6 @@ const BEHAVIORAL_HINTS = [
     .qa-import { padding: 4px 2px; }
     .qi-head { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
     .qi-title { font-size: 16px; font-weight: 600; }
-    .qi-sub { font-size: 13px; color: var(--yi-text-muted, #475569); margin: 3px 0 0; max-width: 560px; }
     .spacer { flex: 1; }
     .notice { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .empty { font-size: 14px; color: var(--yi-text-muted, #475569); padding: 12px 0; }
@@ -117,6 +118,8 @@ export class QaImportComponent {
   readonly fmt = makeV2Fmt(this.i18n);
 
   readonly busy = signal(false);
+  /** 票191：Extract Q&A 按钮先隐藏不删除（恢复时改回 false 即一处恢复）。 */
+  readonly hideExtractQa = true;
   readonly notice = signal<string | null>(null);
   readonly knowledgeItems = signal<KnowledgeItem[]>([]);
 

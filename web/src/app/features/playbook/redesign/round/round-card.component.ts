@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, OnInit, Output, computed, effect, inject, input, signal
+  Component, EventEmitter, OnInit, Output, computed, effect, inject, input, signal, viewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -16,6 +16,7 @@ import { formatRemindAt, reminderStateForRound } from './reminders.helpers';
 import { TranscriptSegment, parseQuestionReview, safeJson } from '../v2.models';
 import { PrepReportComponent } from './prep-report.component';
 import { RoundRecordComponent } from './round-record.component';
+import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
 import { QaImportComponent } from './qa-import.component';
 import { MaterialsListComponent } from './materials-list.component';
 import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
@@ -39,8 +40,8 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatButtonModule, MatIconModule,
-    PrepReportComponent, RoundRecordComponent, QaImportComponent, MaterialsListComponent
-  ],
+    PrepReportComponent, RoundRecordComponent, QaImportComponent, MaterialsListComponent,
+    QaZoomComponent],
   template: `
     <section class="card" data-testid="round-card">
       <!-- 票169:详情头去重——轮次号/类型/日期/Outcome/Materials 数已在上方轨道节点(票164)显示,此处不再重复。
@@ -53,7 +54,15 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         </span>
         <span class="spacer"></span>
         @if (tab() === 'record') {
-          <button mat-stroked-button (click)="openRecordExport()">{{ t('pb.v2.r.exportRecord') }}</button>
+          <!-- 票191：实录页功能收进卡片右上角一行（图标按钮，复用 .rc-icon-btn；Text size 原样保留）。 -->
+          <app-qa-zoom></app-qa-zoom>
+          <button type="button" class="rc-icon-btn" (click)="openRecordExport()"
+                  [title]="t('pb.v2.r.exportRecord')" [attr.aria-label]="t('pb.v2.r.exportRecord')"><mat-icon>download</mat-icon></button>
+          @if (recordComp(); as rc) {
+            <button type="button" class="rc-icon-btn" (click)="rc.generateReview()" [disabled]="rc.busy()"
+                    [title]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"
+                    [attr.aria-label]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"><mat-icon>analytics</mat-icon></button>
+          }
         }
         <!-- 票188:铅笔按钮已上移至父级页签行最右侧（viewChild 接线），此处不再渲染，避免重复。 -->
       </div>
@@ -261,6 +270,8 @@ export class RoundCardComponent implements OnInit {
   // 票189：用户令去掉的两处（先隐藏不删除：日历提醒数据、上传/addMaterialHere/addNoteHere 接线、i18n 键一律保留；恢复只改开关）。
   readonly hideCalBar = true;
   readonly hideMatActions = true;
+  /** 票191：实录页子组件（188 铅笔同款 viewChild 接线，供 .rc-head 的逐题分析图标按钮调用）。 */
+  readonly recordComp = viewChild(RoundRecordComponent);
   readonly editing = signal(false);
   /** 票188：详情卡 Location 显示项暂隐藏（见模板处注释）。 */
   readonly hideLocation = true;

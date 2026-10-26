@@ -9,7 +9,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   InterviewAsset, InterviewDetail, InterviewQuestion, InterviewRound
 } from '../../../../core/models/api.models';
-import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
 import { QaZoomService } from '../../../../core/qa-zoom/qa-zoom.service';
 import { TtsPlayerService } from '../../../../core/tts/tts-player.service';
 import { PlaybookV2Api } from '../playbook-v2.api';
@@ -33,24 +32,24 @@ interface StdEdit { spoken: string; technical: string; }
 @Component({
   selector: 'app-round-record',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, QaZoomComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule],
   template: `
     <div class="record" [style.--qa-scale]="zoom.scale()">
       <div class="toolbar">
         <span class="tb-title">{{ t('pb.v2.rec.transcriptTitle') }} <span class="orig-tag">{{ t('pb.v2.rec.origTag') }}</span></span>
         <span class="spacer"></span>
-        <app-qa-zoom></app-qa-zoom>
         @if (audioAsset()) {
           <button mat-stroked-button (click)="toggleTranscribe()" [disabled]="busy()">
             {{ hasTranscript() ? t('pb.v2.rec.retranscribe') : t('pb.v2.rec.startTranscribe') }}
           </button>
         }
-        <button mat-stroked-button (click)="extractQuestions()" [disabled]="busy() || !segments().length">
-          {{ t('pb.v2.rec.extractQa') }}
-        </button>
-        <button mat-raised-button color="primary" (click)="generateReview()" [disabled]="busy()">
-          {{ busy() ? t('pb.v2.rec.processing') : (roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')) }}
-        </button>
+        <!-- 票191：Extract Q&A 直接去掉（先隐藏不删除：开关 + @if，extractQuestions() 仍供自动抽取调用；解析完成自动进 Q&A 页签候选，不再需要手动按钮）。 -->
+        @if (!hideExtractQa) {
+          <button mat-stroked-button (click)="extractQuestions()" [disabled]="busy() || !segments().length">
+            {{ t('pb.v2.rec.extractQa') }}
+          </button>
+        }
+        <!-- 票191：Text size 与逐题分析按钮已上移至父级详情卡 .rc-head 右上角一行，此处不再渲染，避免重复。 -->
       </div>
       @if (notice()) { <p class="notice">{{ notice() }}</p> }
       @if (tts.error()) { <p class="notice warn">{{ tts.error() }}</p> }
@@ -326,8 +325,13 @@ export class RoundRecordComponent {
     safeJson<RoundReview>(this.round().reviewJson));
   readonly speakerList = computed(() =>
     [...new Set(this.segments().map(s => s.speaker))]);
+  /** 票191：Extract Q&A 按钮先隐藏不删除（恢复时改回 false 即一处恢复）。 */
+  readonly hideExtractQa = true;
 
   private loadedRoundId = '';
+  private loadedAssetSig = '';
+  /** 票191：已自动抽取过的轮次（每轮一次；组件重建后由 questions() 非空与后端幂等双重兜底）。 */
+  private readonly autoExtractTried = new Set<string>();
 
   constructor() {
     this.tts.onSentence = (key, idx) => {
@@ -335,8 +339,13 @@ export class RoundRecordComponent {
     };
     effect(() => {
       const rid = this.round().id;
-      if (rid !== this.loadedRoundId) {
+      // 票191：轮次切换或转写材料签名变化（入口新增转写）都重载转写，无需切轮次。
+      const sig = this.roundAssets()
+        .filter(a => a.kind === 'Transcript' || a.kind === 'Text' || a.kind === 'Notes')
+        .map(a => a.id).sort().join('|');
+      if (rid !== this.loadedRoundId || sig !== this.loadedAssetSig) {
         this.loadedRoundId = rid;
+        this.loadedAssetSig = sig;
         this.currentSeg.set(-1);
         void this.loadTranscript();
       }
@@ -361,6 +370,15 @@ export class RoundRecordComponent {
       } catch { /* 单件失败不阻塞其它材料 */ }
     }
     this.segments.set(all);
+    // 票191：解析完成自动抽取——转写段落就绪且本轮尚无题目时，调既有抽取逻辑（每轮一次；
+    // 后端幂等：已有题目返回 0，不重复建题；抽取结果经 changed 刷新进 Save Q&A 候选）。
+    // 仅 Transcript/Text 材料触发（纯 Notes 不触发，避免无转写时的失败提示噪音）。
+    const fromTranscript = candidates.some(a => a.kind === 'Transcript' || a.kind === 'Text');
+    const rid = this.round().id;
+    if (fromTranscript && all.length && !this.questions().length && !this.autoExtractTried.has(rid)) {
+      this.autoExtractTried.add(rid);
+      void this.extractQuestions();
+    }
   }
 
   reviewOf(q: InterviewQuestion): QuestionReview | null {

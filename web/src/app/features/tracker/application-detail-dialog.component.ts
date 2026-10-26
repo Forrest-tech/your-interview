@@ -25,7 +25,7 @@ import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-v
 import { extractPdfText } from '../../core/utils/pdf-text';
 import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 import { commFormMode, commSaveChannel } from './comm-form.helpers';
-import { mergeSectionsForReparse, parseSectionsJson, visibleDetailSections } from './jd-sections.helpers';
+import { dedupSectionsAgainstSummary, isListPhraseLine, mergeSectionsForReparse, parseSectionsJson, visibleDetailSections } from './jd-sections.helpers';
 import { JdSection } from '../../core/models/api.models';
 import { computeMatch, type MatchResult } from '../../core/match/resume-match';
 import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWidth, saveDrawerWidth } from './detail-drawer-width';
@@ -155,6 +155,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
       <!-- 2026-10-19:Simplify 风格 —— 无 "About the job" 大标题,JD 正文直接跟字段网格 -->
       <mat-divider></mat-divider>
       <section class="about-job">
+        @if (!hideJdTools) {
         <div class="about-job-edit">
           <button mat-icon-button (click)="reparseJd()" [matTooltip]="t('tracker.dReparse')"
                   class="edit-btn" [disabled]="reparsing()"
@@ -167,6 +168,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
             <mat-icon>{{ jdSummaryEditing() ? 'close' : 'edit' }}</mat-icon>
           </button>
         </div>
+        }
         @if (jdSummaryEditing()) {
           <textarea class="plain-area" rows="8" [(ngModel)]="jdSummaryDraft"
                     (ngModelChange)="jdSummaryError.set(null)"
@@ -199,8 +201,8 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
           }
           <!-- 票 154 R-154-6：有小节渲染原标题小节（公司介绍重复节已去重），
                否则一字不差走今日 legacy 两块。 -->
-          @if (visibleSections.length > 0) {
-            @for (s of visibleSections; track $index) {
+          @if (displaySections.length > 0) {
+            @for (s of displaySections; track $index) {
               <div class="jd-subhead">{{ s.title }}</div>
               @for (b of richBlocks(s.body); track $index) {
                 @if (b.kind === 'ul') {
@@ -280,6 +282,8 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
         }
       </section>
 
+      <!-- 票189：用户令去掉 Company intel 节（先隐藏不删除，编辑/抓取逻辑与 i18n 键保留）。 -->
+      @if (!hideCompanyIntel) {
       <!-- 公司情报(票142:空态也渲染,公司级共享) -->
       <mat-divider></mat-divider>
       <section>
@@ -345,6 +349,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
           }
         }
       </section>
+      }
 
 
       @if ((detail.rounds?.length ?? 0) > 0) {
@@ -370,6 +375,8 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
         </section>
       }
 
+      <!-- 票189：用户令去掉 Job link 节（先隐藏不删除，app.link 数据与链接渲染保留）。 -->
+      @if (!hideJobLink) {
       @if (app.link) {
         <mat-divider></mat-divider>
         <section>
@@ -378,6 +385,7 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
             {{ app.link }}
           </a>
         </section>
+      }
       }
       </div><!-- /.main-col -->
 
@@ -586,8 +594,8 @@ import { DRAWER_KEY_STEP, DRAWER_NARROW_BELOW, drawerWidthRange, initialDrawerWi
                 <p class="dim">{{ t('tracker.dNoJd') }}</p>
               }
               <!-- 票 154 R-154-6：Score 页与 Overview 同规则（小节 + 命中词高亮，否则 legacy）。 -->
-              @if (visibleSections.length > 0) {
-                @for (s of visibleSections; track $index) {
+              @if (displaySections.length > 0) {
+                @for (s of displaySections; track $index) {
                   <div class="jd-subhead">{{ s.title }}</div>
                   @for (b of richBlocks(s.body); track $index) {
                     @if (b.kind === 'ul') {
@@ -2194,6 +2202,19 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
     return visibleDetailSections(parseSectionsJson(this.detail.sectionsJson), this.detail.companyDescription);
   }
 
+  /** 票189：用户令去掉的三处（先隐藏不删除，恢复只改开关一处；数据、保存逻辑、i18n 键一律保留）。 */
+  readonly hideCompanyIntel = true;
+  readonly hideJobLink = true;
+  readonly hideJdTools = true;
+
+  /**
+   * 票189：展示用小节 = 可见小节再去掉与 JD 摘要（票 152 原文摘录）重复的前导内容。
+   * Overview 与 Score 两处同用本 getter（票 139 逐节一致口径不变）。
+   */
+  get displaySections(): JdSection[] {
+    return dedupSectionsAgainstSummary(this.jdSummaryDisplay(), this.visibleSections);
+  }
+
   reparseJd(): void {
     const d = this.detail;
     const raw = d.jdText?.trim();
@@ -2340,18 +2361,36 @@ export class ApplicationDetailDialogComponent implements OnInit, OnDestroy {
     const out: { kind: 'p' | 'ul'; items: string[] }[] = [];
     let curUl: string[] | null = null;
     const flushUl = () => { if (curUl && curUl.length > 0) out.push({ kind: 'ul', items: curUl }); curUl = null; };
+    // 票189：连续单句行成列表。原帖 <ul><li> 经纯文本粘贴丢 bullet 后只剩换行短行，
+    // 旧逻辑把它们当散文段落合并成一团；现连续 ≥2 行单句行（isListPhraseLine）即渲染
+    // 为 <ul>，恢复原帖列表结构；单行不成列表时降级为段落，仍走后续合并（硬换行恢复）。
+    // 无换行大段（>600 字 blob）无行结构可恢复，走上方句子切分，不动。
+    let curList: string[] | null = null;
+    const flushList = () => {
+      if (!curList) return;
+      if (curList.length >= 2) out.push({ kind: 'ul', items: curList });
+      else out.push({ kind: 'p', items: [curList[0]] });
+      curList = null;
+    };
     for (const ln of lines) {
       // bullet: • · - * 或数字编号开头
       const m = ln.match(/^[•·▪–—\-*]\s*(.+)$/) || ln.match(/^\d+[.)、]\s*(.+)$/);
       if (m) {
+        flushList();
         if (!curUl) curUl = [];
         curUl.push(m[1].trim());
+      } else if (isListPhraseLine(ln)) {
+        flushUl();
+        if (!curList) curList = [];
+        curList.push(ln);
       } else {
         flushUl();
+        flushList();
         out.push({ kind: 'p', items: [ln] });
       }
     }
     flushUl();
+    flushList();
     // 合并连续的单句段落,避免碎片化(LinkedIn 风格:长描述为段落)
     const merged: { kind: 'p' | 'ul'; items: string[] }[] = [];
     for (const b of out) {

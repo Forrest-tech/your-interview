@@ -354,11 +354,13 @@
                       (pendingCount)="onCommPending($event)" />
       }
     </section>
+    @if (!hideFootDelete) {
     <footer class="entry-foot">
       <button mat-button class="foot-delete" (click)="deleteEntry()">
         {{ confirmDelete() ? t('pb.v2.d.confirmDeleteEntry') : t('pb.v2.d.deleteEntry') }}
       </button>
     </footer>
+    }
   }
   </div>
 </div>

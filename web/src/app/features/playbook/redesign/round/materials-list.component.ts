@@ -56,9 +56,11 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                   }
                 </select>
               </label>
+              @if (!hideMatDelete) {
               <button type="button" class="icon-btn danger" (click)="remove(a)" [title]="t('common.delete')">
                 <mat-icon>delete_outline</mat-icon>
               </button>
+              }
             </div>
 
             @if (roundAnchor(a); as anc) {
@@ -134,9 +136,11 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                   }
                 </select>
               </label>
+              @if (!hideMatDelete) {
               <button type="button" class="icon-btn danger" (click)="remove(a)" [title]="t('common.delete')">
                 <mat-icon>delete_outline</mat-icon>
               </button>
+              }
             </div>
 
             @if (metaOf(a); as m) {
@@ -261,6 +265,8 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
 })
 export class MaterialsListComponent {
   readonly entryId = input.required<string>();
+  // 票189：用户令去掉材料卡红色删除图标（先隐藏不删除：remove() 逻辑、后端 deleteAsset、i18n 键保留；恢复只改开关）。
+  readonly hideMatDelete = true;
   readonly assets = input.required<InterviewAsset[]>();
   readonly rounds = input<InterviewRound[]>([]);
 

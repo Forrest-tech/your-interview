@@ -79,6 +79,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
       <!-- 票177:.rc-sub 行删除：Edit round 已改右上角铅笔图标，不再为单个按钮占一整行。 -->
 
       @if (round().scheduledDate) {
+        @if (!hideCalBar) {
         <div class="cal-bar" data-testid="round-cal-bar">
           <mat-icon>event</mat-icon>
           <span>{{ t('pb.v2.r.calInApp') }}</span>
@@ -92,6 +93,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
           <!-- 票 118 / F-4:日历条不再放第二个 Edit round —— 编辑入口只保留轮次标题旁那一个,
                本条只报状态(到期/下一次提醒走上方状态文案)。 -->
         </div>
+        }
       }
 
       @if (editing()) {
@@ -156,11 +158,13 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
           <div class="mat-head-row">
             <span class="mh-note">{{ t('pb.v2.r.matNote') }}</span>
             <span class="spacer"></span>
+            @if (!hideMatActions) {
             <label class="mini-btn file-label">{{ t('pb.v2.r.uploadFile') }}
               <input type="file" hidden (change)="onUpload($event)">
             </label>
             <button mat-stroked-button (click)="addMaterialHere.emit(round().id)">{{ t('pb.v2.r.addMaterialHere') }}</button>
             <button mat-stroked-button (click)="addNoteHere.emit()">{{ t('pb.v2.d.addNote') }}</button>
+            }
           </div>
           <app-materials-list [entryId]="entry().id" [assets]="roundAssets()"
                               [rounds]="entry().rounds ?? []" (changed)="changed.emit()" />
@@ -254,6 +258,9 @@ export class RoundCardComponent implements OnInit {
   }
 
   readonly tab = signal<RoundTab>('prep');
+  // 票189：用户令去掉的两处（先隐藏不删除：日历提醒数据、上传/addMaterialHere/addNoteHere 接线、i18n 键一律保留；恢复只改开关）。
+  readonly hideCalBar = true;
+  readonly hideMatActions = true;
   readonly editing = signal(false);
   /** 票188：详情卡 Location 显示项暂隐藏（见模板处注释）。 */
   readonly hideLocation = true;

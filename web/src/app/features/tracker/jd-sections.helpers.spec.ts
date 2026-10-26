@@ -1,5 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  dedupSectionsAgainstSummary,
+  isListPhraseLine,
   mergeSectionsForReparse,
   normalizeSectionKey,
   normalizeSectionText,
@@ -81,5 +83,48 @@ describe('jd-sections.helpers (票 154)', () => {
   it('normalizeSectionText：空白折叠', () => {
     expect(normalizeSectionText('  a\n\n  b\t c ')).toBe('a b c');
     expect(normalizeSectionText(null)).toBe('');
+  });
+});
+
+describe('jd-sections.helpers（票 189）', () => {
+  it('dedupSectionsAgainstSummary：Intuit 式——摘要即首段时，Job Overview 首段去掉、余段全留', () => {
+    const summary = 'Come join the Intuit Toronto site as a Senior Software Developer.';
+    const sections = [
+      sec('Job Overview', 'Come join the Intuit Toronto site as a Senior Software Developer.\nThe ideal candidate is an experienced full stack Software Developer.\nIntuit has embraced a hybrid way of working.'),
+      sec('Responsibilities', 'Development of customer-facing applications.'),
+    ];
+    const out = dedupSectionsAgainstSummary(summary, sections);
+    expect(out.map((s) => s.title)).toEqual(['Job Overview', 'Responsibilities']);
+    expect(out[0].body).toBe(
+      'The ideal candidate is an experienced full stack Software Developer.\nIntuit has embraced a hybrid way of working.',
+    );
+    expect(out[1]).toBe(sections[1]);
+  });
+
+  it('dedupSectionsAgainstSummary：摘要句末截断、行内还有后半段时只去重叠前缀、不丢新内容', () => {
+    const summary = 'First sentence here.';
+    const sections = [sec('Job Overview', 'First sentence here. Second sentence is new.')];
+    const out = dedupSectionsAgainstSummary(summary, sections);
+    expect(out.length).toBe(1);
+    expect(out[0].body).toBe('Second sentence is new.');
+  });
+
+  it('dedupSectionsAgainstSummary：整节都被摘要覆盖时整节去掉；无重叠时原样返回同一对象', () => {
+    const summary = 'Only paragraph.';
+    const sections = [sec('Job Overview', 'Only paragraph.'), sec('Benefits', 'Health and dental.')];
+    const out = dedupSectionsAgainstSummary(summary, sections);
+    expect(out.map((s) => s.title)).toEqual(['Benefits']);
+    expect(out[0]).toBe(sections[1]);
+    expect(dedupSectionsAgainstSummary('', sections)).toBe(sections);
+    expect(dedupSectionsAgainstSummary(null, sections)).toBe(sections);
+  });
+
+  it('isListPhraseLine：列表项行（单句、大写开头）为真；多句段落行与小写续行为假', () => {
+    expect(isListPhraseLine('Development of customer-facing applications from design through implementation')).toBe(true);
+    expect(isListPhraseLine('BS/MS in computer science or relevant field or equivalent work experience.')).toBe(true);
+    expect(isListPhraseLine('Roughly 70-85% hands-on coding')).toBe(true);
+    expect(isListPhraseLine('Pay offered is based on factors. To drive ongoing fair pay for employees, we compare.')).toBe(false);
+    expect(isListPhraseLine('across multiple lines in the paste')).toBe(false);
+    expect(isListPhraseLine('')).toBe(false);
   });
 });

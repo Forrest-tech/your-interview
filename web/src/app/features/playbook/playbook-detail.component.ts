@@ -169,6 +169,8 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly hideTrackAddRound = true;
   // 票 187：四格条下方 Open job posting 按钮暂隐藏（隐藏不是删除：按钮本身、openJd() handler、i18n 键 pb.v2.d.openJd、JD 面板与数据逻辑一律保留；恢复时改回 false 即一处恢复）。
   readonly hideOpenJd = true;
+  // 票 189：用户令去掉页脚 Delete entry（先隐藏不删除：deleteEntry() 两步确认逻辑、i18n 键一律保留；恢复时改回 false 即一处恢复）。
+  readonly hideFootDelete = true;
 
   readonly intake = viewChild(IntakePanelComponent);
 

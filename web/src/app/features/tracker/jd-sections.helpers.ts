@@ -53,11 +53,68 @@ export function isCompanyIntroSection(section: JdSection): boolean {
 }
 
 /**
- * 详情页可见小节（票 154 首步定法 ①：内容相等去重）。
- * 公司介绍类小节仅当其正文（空白折叠后）与已存 companyDescription 逐字相等时，
- * 才从 Overview/Score 的小节列表中排除 —— 否则照常渲染。
- * 纯前端渲染规则：存储两侧都保留，不做静默合并；companyDescription 为空时不排除。
+ * 票 189：单句/短语行判定（JD 渲染列表恢复用）。
+ * 原帖 <ul><li> 经纯文本粘贴后 bullet 字符常丢失（自定义 CSS marker 不进剪贴板），
+ * 只剩换行分隔的短行；旧 richBlocks 把这些行当散文段落合并成一团。
+ * 单句行 = 行内无“句中标点 + 空白 + 文字”（即至多一个句子），且首字符不是小写字母
+ * （硬换行续行通常小写开头，不算独立项）。显式 bullet/编号行由调用方先行处理，
+ * 不走本判定。中文行首汉字不属小写字母，同样算候选（中文无大小写，硬换行
+ * 误判为列表项时仍分行可读，不会挤成一团）。
  */
+export function isListPhraseLine(line: string): boolean {
+  const ln = line.trim();
+  if (!ln) return false;
+  if (/[.。!！?？]\s+\S/.test(ln)) return false;
+  return !/\p{Ll}/u.test(ln[0]);
+}
+
+/**
+ * 票 189：小节去重（摘要 vs 小节正文前导重叠）。
+ * 票 152 摘要 = JD 正文前 N 字原文摘录，故摘要文本必然与首节（如 Job Overview）
+ * 的前导段落逐字重叠；渲染时若两处都显示即重复。本函数纯前端展示层去重，
+ * 存储（jdSummary / SectionsJson）一字不动。
+ * 算法：按行顺序消费摘要剩余文本 —— 整行被摘要剩余文本覆盖则整行去掉；
+ * 行长于摘要剩余且以其开头（摘要句末截断、行内还有后半段）则只去掉重叠前缀、
+ * 保留行内剩余新内容；首行与摘要剩余无重叠即判定摘要已无后续重叠，余行全留。
+ * 去重后空节整节去掉；无任何改动时返回原节对象（渲染零差异）。
+ */
+export function dedupSectionsAgainstSummary(
+  summary: string | null | undefined,
+  sections: JdSection[] | null | undefined,
+): JdSection[] {
+  if (!sections || sections.length === 0) return [];
+  let rest = normalizeSectionText(summary);
+  if (!rest) return sections;
+  const out: JdSection[] = [];
+  for (const s of sections) {
+    const lines = (s.body ?? '').split('\n');
+    const kept: string[] = [];
+    let changed = false;
+    for (const raw of lines) {
+      const ln = normalizeSectionText(raw);
+      if (!ln) continue;
+      if (!rest) { kept.push(ln); continue; }
+      if (rest.startsWith(ln)) {
+        rest = rest.slice(ln.length).trim();
+        changed = true;
+        continue;
+      }
+      if (ln.startsWith(rest)) {
+        const rem = ln.slice(rest.length).trim();
+        rest = '';
+        changed = true;
+        if (rem) kept.push(rem);
+        continue;
+      }
+      kept.push(ln);
+      rest = '';
+    }
+    if (kept.length === 0) continue;
+    out.push(changed ? { ...s, body: kept.join('\n') } : s);
+  }
+  return out;
+}
+
 export function visibleDetailSections(
   sections: JdSection[] | null | undefined,
   companyDescription: string | null | undefined,

@@ -147,7 +147,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                     </div>
                   } @else if (b.type === 'points' || b.type === 'list') {
                     @if (b.title) { <div class="sb-title">{{ b.title }}</div> }
-                    <ul class="pts">
+                    <ul class="pts pts-scale">
                       @for (it of b.items ?? []; track $index) { <li>{{ it }}</li> }
                     </ul>
                   } @else if (b.text) {
@@ -283,6 +283,8 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .sb-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #475569); margin-bottom: 4px; }
     .script-box p { margin: 2px 0 8px; }
     .pts { margin: 4px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.65; }
+    /* 票184 修法 B：仅要点块跟随 Text size 缩放（guidance 文件名列表仍用 .pts 固定字号）。 */
+    .pts-scale { font-size: calc(14px * var(--qa-scale, 1)); }
     .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
     .mini-btn { border: 1px solid var(--yi-border, #e2e8f0); background: transparent; color: inherit;
                 border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 500; cursor: pointer; }

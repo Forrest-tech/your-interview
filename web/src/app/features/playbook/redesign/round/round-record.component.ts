@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Output, computed, effect, inject, input, signal
+  Component, DestroyRef, EventEmitter, Output, computed, effect, inject, input, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -294,6 +294,7 @@ export class RoundRecordComponent {
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
   private readonly i18n = inject(I18nService);
+  private readonly destroyRef = inject(DestroyRef);
   readonly t = makeV2T(this.i18n);
   readonly fmt = makeV2Fmt(this.i18n);
   readonly zoom = inject(QaZoomService);
@@ -332,8 +333,23 @@ export class RoundRecordComponent {
   private loadedAssetSig = '';
   /** 票191：已自动抽取过的轮次（每轮一次；组件重建后由 questions() 非空与后端幂等双重兜底）。 */
   private readonly autoExtractTried = new Set<string>();
+  /** 票195：销毁旗（DestroyRef 回调置位；loadTranscript/extractQuestions 每次 await 后查旗，丢弃迟到写入）。 */
+  private destroyed = false;
+  /**
+   * 票195：转写加载世代号。每次新发起一次 loadTranscript 就 +1 并由本次加载捕获；
+   * 迟到返回的旧世代结果整批丢弃（防旧轮次迟到转写覆盖新轮次）。
+   * 注意：只在真正发起加载时 +1——effect 也会被 speakerList/renameFrom 变化重触发，
+   * 那些重触发不发起加载，若也 +1 会无故作废一次正在飞行的同轮加载且无替代加载补位，
+   * 反而留下旧转写；只在发起点 +1 与“旧轮次覆盖新轮次”的防护目标等价且无此副作用。
+   */
+  private loadGen = 0;
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      this.destroyed = true;
+      // 票195：解绑 TTS 句高亮回调，销毁后不再写 activeSentence。
+      this.tts.onSentence = null;
+    });
     this.tts.onSentence = (key, idx) => {
       this.activeSentence.set(idx == null ? null : { key, idx });
     };
@@ -347,14 +363,14 @@ export class RoundRecordComponent {
         this.loadedRoundId = rid;
         this.loadedAssetSig = sig;
         this.currentSeg.set(-1);
-        void this.loadTranscript();
+        void this.loadTranscript(++this.loadGen);
       }
       const list = this.speakerList();
       if (list.length && !list.includes(this.renameFrom())) this.renameFrom.set(list[0]);
     }, { allowSignalWrites: true });
   }
 
-  private async loadTranscript(): Promise<void> {
+  private async loadTranscript(gen: number): Promise<void> {
     const candidates = this.roundAssets()
       .filter(a => a.kind === 'Transcript' || a.kind === 'Text' || a.kind === 'Notes');
     const all: TranscriptSegment[] = [];
@@ -368,13 +384,19 @@ export class RoundRecordComponent {
             .map(x => ({ speaker: this.t('pb.v2.rec.speakerTranscript'), text: x.trim() })));
         }
       } catch { /* 单件失败不阻塞其它材料 */ }
+      // 票195：每次 await 之后查销毁旗与世代号——已销毁或已有更新的加载发起时，本批结果整批丢弃。
+      if (this.destroyed || gen !== this.loadGen) return;
     }
+    // 票195：写信号之前再查一次（覆盖材料为空、循环零次的情况）。
+    if (this.destroyed || gen !== this.loadGen) return;
     this.segments.set(all);
     // 票191：解析完成自动抽取——转写段落就绪且本轮尚无题目时，调既有抽取逻辑（每轮一次；
     // 后端幂等：已有题目返回 0，不重复建题；抽取结果经 changed 刷新进 Save Q&A 候选）。
     // 仅 Transcript/Text 材料触发（纯 Notes 不触发，避免无转写时的失败提示噪音）。
     const fromTranscript = candidates.some(a => a.kind === 'Transcript' || a.kind === 'Text');
     const rid = this.round().id;
+    // 票195：发起自动抽取之前查销毁旗与世代号，避免为已销毁/已过期的轮次发起抽取调用。
+    if (this.destroyed || gen !== this.loadGen) return;
     if (fromTranscript && all.length && !this.questions().length && !this.autoExtractTried.has(rid)) {
       this.autoExtractTried.add(rid);
       void this.extractQuestions();
@@ -486,17 +508,24 @@ export class RoundRecordComponent {
   }
 
   async extractQuestions(): Promise<void> {
+    // 票195：已销毁则不发起任何工作。
+    if (this.destroyed) return;
     this.busy.set(true);
     try {
       const r = await this.api.extractQuestions(this.entry().id, this.round().id).toPromise();
+      // 票195：await 之后、写信号与 changed.emit() 之前查销毁旗，已销毁则整批丢弃。
+      if (this.destroyed) return;
       this.notice.set(r && r.created > 0
         ? this.fmt('pb.v2.rec.extracted', { n: r.created })
         : this.t('pb.v2.rec.extractNone'));
       this.changed.emit();
     } catch (e) {
+      // 票195：失败分支写信号之前同样查销毁旗。
+      if (this.destroyed) return;
       this.notice.set(this.fmt('pb.v2.rec.extractFailed', { msg: errText(e, this.t('pb.v2.rec.unknownError')) }));
     } finally {
-      this.busy.set(false);
+      // 票195：已销毁的组件不再写 busy（正常路径行为一字不变）。
+      if (!this.destroyed) this.busy.set(false);
     }
   }
 
@@ -524,7 +553,8 @@ export class RoundRecordComponent {
       this.renameTo.set('');
       this.snack.open(this.fmt('pb.v2.rec.renamed', { from, to }), this.t('common.close'), { duration: 2500 });
       this.changed.emit();
-      void this.loadTranscript();
+      // 票195：同轮重载同样取新世代号，使飞行中的旧加载结果作废。
+      void this.loadTranscript(++this.loadGen);
     } catch (e) {
       this.notice.set(this.fmt('pb.v2.rec.renameFailed', { msg: errText(e, this.t('pb.v2.rec.unknownError')) }));
     } finally {

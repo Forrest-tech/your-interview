@@ -41,9 +41,8 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
   template: `
     <div class="prep" [style.--qa-scale]="zoom.scale()">
       <div class="prep-head">
-        <div>
-          <div class="ph-title">{{ t('pb.v2.p.title') }}</div>
-        </div>
+        <!-- 票198：页头左标题 = 正文第一小节标题（正文首节 h4 不再渲染，防重复）；页签栏不动。 -->
+        <div class="ph-title">{{ firstSecTitle() }}</div>
         <span class="spacer"></span>
         <div class="ph-actions">
           <app-qa-zoom [compact]="true"></app-qa-zoom>
@@ -62,8 +61,9 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
 
       <!-- 票159：Prep 两框删除，换为读回区——显示本轮当前备考输入资产原文；
            读回与材料列表是同一资产（编辑/删除都在统一入口与材料列表完成）。 -->
+      <!-- 票198：@if 外移到 readback 包裹层，隐藏时空 div 不渲染（原空 div 的 margin-top:14px 是页头与正文间空白带的一部分）。 -->
+      @if (!hidePrepInputs) {
       <div class="readback">
-        @if (!hidePrepInputs) {
         <div class="rb-block">
           <div class="rb-head">
             <span class="rb-title">{{ t('pb.v2.p.inputExpTitle') }}</span>
@@ -94,8 +94,8 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
             <p class="rb-empty">{{ t('pb.v2.p.noInputResume') }}</p>
           }
         </div>
-        }
       </div>
+      }
         <div class="prep-body">
           <nav class="toc">
             @for (s of displayReport()!.sections; track s.id) {
@@ -106,7 +106,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
           <div class="sections">
             @for (s of displayReport()!.sections; track s.id) {
               <section class="psec" [id]="'prep-sec-' + s.id" data-testid="prep-section">
-                <h4>{{ s.title }}</h4>
+                @if (!$first) { <h4>{{ s.title }}</h4> }
                 @for (b of s.blocks ?? []; track $index) {
                   @if (b.type === 'script') {
                     <div class="script-box">
@@ -247,7 +247,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .notice { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .notice.warn { color: #dc2626; }
     /* 票159 读回区：两块输入原文 + 生成口径提示；窄屏自动单列（父级 pv-grid 模式复用）。 */
-    .readback { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; max-width: 720px; }
+    .readback { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; margin-bottom: 12px; max-width: 720px; } /* 票198：下边距承接原 prep-body 上边距 12px，hidePrepInputs 恢复显示时间距不变。 */
     .rb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
     .rb-title { font-size: 14px; font-weight: 600; }
     .rb-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
@@ -257,7 +257,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
            font-size: 14px; background: transparent; color: inherit; box-sizing: border-box; }
     .fld.sm { padding: 5px 8px; font-size: 14px; }
     .hint { font-size: 13px; color: var(--yi-text-muted, #475569); }
-    .prep-body { display: grid; grid-template-columns: 170px 1fr; gap: 20px; margin-top: 12px; }
+    .prep-body { display: grid; grid-template-columns: 170px 1fr; gap: 20px; margin-top: 0; } /* 票198：页头与正文间空白去掉（隐藏态下空 readback 已不渲染）。 */
     @media (max-width: 760px) { .prep-body { grid-template-columns: 1fr; } .toc { position: static !important; flex-direction: row !important; flex-wrap: wrap; } }
     .toc { position: sticky; top: 8px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
     .toc-item { text-align: left; border: none; background: transparent; color: inherit; cursor: pointer;
@@ -383,6 +383,12 @@ export class PrepReportComponent {
    */
   readonly displayReport = computed<PrepReport | null>(
     () => this.report() ?? this.frameworkReport());
+
+  /** 票198：页头左标题 = 正文第一小节标题（正文首节 h4 不再渲染，防重复）；报告无小节时为空串。 */
+  readonly firstSecTitle = computed(() => {
+    const secs = this.displayReport()?.sections;
+    return secs && secs.length > 0 ? secs[0].title : '';
+  });
 
   private frameworkReport(): PrepReport {
     const cls = classifyPrepStage(this.round().stage);

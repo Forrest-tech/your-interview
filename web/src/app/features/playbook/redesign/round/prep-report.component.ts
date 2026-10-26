@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   InterviewAsset, InterviewDetail, InterviewRound, KnowledgeItem
@@ -36,7 +37,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
 @Component({
   selector: 'app-prep-report',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, QaZoomComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, QaZoomComponent],
   template: `
     <div class="prep" [style.--qa-scale]="zoom.scale()">
       <div class="prep-head">
@@ -45,13 +46,14 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
         </div>
         <span class="spacer"></span>
         <div class="ph-actions">
-          <app-qa-zoom></app-qa-zoom>
+          <app-qa-zoom [compact]="true"></app-qa-zoom>
           @if (report()) {
-            <button mat-stroked-button (click)="openExport()"><mat-icon>download</mat-icon>{{ t('pb.v2.p.exportPrep') }}</button>
+            <button mat-icon-button (click)="openExport()" [matTooltip]="t('pb.v2.p.exportPrep')" [attr.aria-label]="t('pb.v2.p.exportPrep')"><mat-icon>download</mat-icon></button>
           }
-          <button mat-raised-button color="primary" (click)="generate()" [disabled]="busy()">
+          <button mat-icon-button color="primary" (click)="generate()" [disabled]="busy()"
+                  [matTooltip]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')"
+                  [attr.aria-label]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')">
             <mat-icon>refresh</mat-icon>
-            {{ busy() ? t('pb.v2.p.generating') : (report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')) }}
           </button>
         </div>
       </div>

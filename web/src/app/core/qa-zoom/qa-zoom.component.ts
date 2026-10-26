@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, Input, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { QaZoomService } from './qa-zoom.service';
@@ -7,6 +7,8 @@ import { I18nService } from '../i18n/i18n.service';
 /**
  * 字号控件:− / 百分比(点击可直接输入)/ ＋。
  * 与 AI Practice 的 zoom 同一套交互与同一份 localStorage 偏好。
+ * compact 模式（票 194，Prep report 页头专用）：隐藏“字号”名与百分比显示，只留 −/+；
+ * Interview record 页仍用完整版，不受影响。
  */
 @Component({
   selector: 'app-qa-zoom',
@@ -14,18 +16,22 @@ import { I18nService } from '../i18n/i18n.service';
   imports: [CommonModule, FormsModule],
   template: `
     <div class="qa-zoom" role="group" [attr.aria-label]="i18n.t('zoom.aria')">
-      <span class="qa-zoom-label">{{ i18n.t('zoom.label') }}</span>
+      @if (!compact) {
+        <span class="qa-zoom-label">{{ i18n.t('zoom.label') }}</span>
+      }
       <button type="button" class="zbtn" (click)="zoom.decrease()"
               [disabled]="zoom.level() <= 80" [title]="i18n.t('zoom.decrease')">−</button>
-      @if (editing()) {
-        <input class="zpct-input" type="text" inputmode="numeric"
-               [ngModel]="draft()" (ngModelChange)="onDraft($event)"
-               (keyup.enter)="commit()" (keyup.escape)="editing.set(false)"
-               (blur)="commit()" autofocus>
-      } @else {
-        <button type="button" class="zpct" (click)="startEdit()" [title]="i18n.t('zoom.inputTitle')">
-          {{ zoom.level() }}%
-        </button>
+      @if (!compact) {
+        @if (editing()) {
+          <input class="zpct-input" type="text" inputmode="numeric"
+                 [ngModel]="draft()" (ngModelChange)="onDraft($event)"
+                 (keyup.enter)="commit()" (keyup.escape)="editing.set(false)"
+                 (blur)="commit()" autofocus>
+        } @else {
+          <button type="button" class="zpct" (click)="startEdit()" [title]="i18n.t('zoom.inputTitle')">
+            {{ zoom.level() }}%
+          </button>
+        }
       }
       <button type="button" class="zbtn" (click)="zoom.increase()"
               [disabled]="zoom.level() >= 400" [title]="i18n.t('zoom.increase')">＋</button>
@@ -45,6 +51,7 @@ import { I18nService } from '../i18n/i18n.service';
   `]
 })
 export class QaZoomComponent {
+  @Input() compact = false;
   readonly zoom = inject(QaZoomService);
   readonly i18n = inject(I18nService);
   readonly editing = signal(false);

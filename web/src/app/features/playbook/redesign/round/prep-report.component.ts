@@ -40,22 +40,6 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, QaZoomComponent],
   template: `
     <div class="prep" [style.--qa-scale]="zoom.scale()">
-      <div class="prep-head">
-        <!-- 票198：页头左标题 = 正文第一小节标题（正文首节 h4 不再渲染，防重复）；页签栏不动。 -->
-        <div class="ph-title">{{ firstSecTitle() }}</div>
-        <span class="spacer"></span>
-        <div class="ph-actions">
-          <app-qa-zoom [compact]="true"></app-qa-zoom>
-          @if (report()) {
-            <button mat-icon-button (click)="openExport()" [matTooltip]="t('pb.v2.p.exportPrep')" [attr.aria-label]="t('pb.v2.p.exportPrep')"><mat-icon>download</mat-icon></button>
-          }
-          <button mat-icon-button color="primary" (click)="generate()" [disabled]="busy()"
-                  [matTooltip]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')"
-                  [attr.aria-label]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')">
-            <mat-icon>auto_awesome</mat-icon>
-          </button>
-        </div>
-      </div>
       @if (notice() && noticeIsError()) { <p class="notice warn">{{ notice() }}</p> }
       @if (tts.error()) { <p class="notice warn">{{ tts.error() }}</p> }
 
@@ -104,6 +88,22 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
             }
           </nav>
           <div class="sections">
+            <!-- 票203：标题行整体移入正文列顶部（不再横跨整宽压在菜单上方）——标题即正文列第一行，与下方 Warm-up 等小节 h4 同一竖列左沿对齐；菜单列与该行顶部齐平（同 grid 行起始）。正文首节 h4 仍不渲染，防重复；按钮一字不动。 -->
+            <div class="prep-head">
+              <div class="ph-title">{{ firstSecTitle() }}</div>
+              <span class="spacer"></span>
+              <div class="ph-actions">
+                <app-qa-zoom [compact]="true"></app-qa-zoom>
+                @if (report()) {
+                  <button mat-icon-button (click)="openExport()" [matTooltip]="t('pb.v2.p.exportPrep')" [attr.aria-label]="t('pb.v2.p.exportPrep')"><mat-icon>download</mat-icon></button>
+                }
+                <button mat-icon-button color="primary" (click)="generate()" [disabled]="busy()"
+                        [matTooltip]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')"
+                        [attr.aria-label]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')">
+                  <mat-icon>auto_awesome</mat-icon>
+                </button>
+              </div>
+            </div>
             @for (s of displayReport()!.sections; track s.id) {
               <section class="psec" [id]="'prep-sec-' + s.id" data-testid="prep-section">
                 @if (!$first) { <h4>{{ s.title }}</h4> }
@@ -236,7 +236,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .prep { padding: 4px 2px; }
     .qa-text { font-size: calc(15px * var(--qa-scale, 1)); line-height: 1.65; }
     .pre { white-space: pre-wrap; }
-    .prep-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+    .prep-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; } /* 票203：标题行现为正文列首行，下边距取 h4 同款 8px，使首节要点与标题间距同其他小节一致。 */
     /* 票190：三个控件成组，窄屏整组落到标题下一行、不散不溢出。 */
     .ph-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .ph-title { font-size: 16px; font-weight: 600; }

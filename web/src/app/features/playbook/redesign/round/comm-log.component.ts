@@ -354,7 +354,7 @@ export class CommLogComponent {
         feedback: round?.feedback ?? null,
         version: round?.version ?? null
       }).toPromise();
-      await this.persistMeta(c, { ...c.meta, handlingStatus: 'Done' }, 'Done');
+      await this.persistMeta(c, { ...c.meta, handlingStatus: 'Done', movedToRoundId: roundId }, 'Done');
       this.snack.open(this.t('pb.v2.c.syncedRound'), this.t('common.close'), { duration: 2500 });
       await this.load();
       this.changed.emit();

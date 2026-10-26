@@ -182,7 +182,10 @@
 .ehead-company { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
 /* 票176:上下文分散——页头唯一主按钮 / 标题行铅笔 / 四格条下文本链接 / 入口触发行 / 页脚危险操作。 */
 .ehead-mock { margin-top: 13px; }
-.ehead-title-row { display: flex; align-items: center; gap: 6px; }
+/* 票 230：176 §8-1 铅笔换行贴边钉死为行内固定位置——flex-start 使铅笔顶对齐标题首行（换行再长也不中途漂移），
+   gap 6px 固定间距（不贴标题字边），标题 min-width: 0 使长标题在行内换行、不把铅笔挤出。铅笔现被 193 藏起，恢复时此规则即生效。 */
+.ehead-title-row { display: flex; align-items: flex-start; gap: 6px; }
+.ehead-title-row h1 { min-width: 0; }
 /* 票205:标题旁铅笔统一成 196 三按钮基准（原 32px 无边框无底色，与顶部三按钮不一致；现虽被 193 藏起，统一样式后恢复时仍一致）。 */
 .edit-basic-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; padding: 0; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px;
@@ -204,7 +207,10 @@
 .zone-actions button:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
 .zone-actions button mat-icon { font-size: 19px; width: 19px; height: 19px; }
 .entry-foot { margin-top: 24px; border-top: 1px solid var(--yi-border); padding-top: 14px; }
-.foot-delete { color: #dc2626; }
+/* 票 230：176 §8-2 页脚 Delete 再弱化一档——危险色 #dc2626 不变，常态 opacity .72，悬停/聚焦回满；
+   仍一眼可辨为删除操作，两步确认流程不动。 */
+.foot-delete { color: #dc2626; opacity: .72; transition: opacity .15s ease; }
+.foot-delete:hover, .foot-delete:focus-visible { opacity: 1; }
 .status-badge {
   font-size: 12px; font-weight: 700;
   border: 1px solid var(--signal-soft); background: var(--signal-tint); color: var(--brand);

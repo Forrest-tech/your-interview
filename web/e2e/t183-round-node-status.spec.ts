@@ -99,8 +99,8 @@ test.describe('票 183 · 轮次轨道节点状态与评分', () => {
     });
 
     try {
-      // 预置六轮(创建序即 order 序)
-      for (let i = 0; i < 6; i++) {
+      // 建单自带首轮(Technical)，再新增五轮，共六轮(创建序即 order 序)
+      for (let i = 0; i < 5; i++) {
         await addRound(request, auth.token, entryId, 'Technical');
       }
       const rounds = await getRounds(request, auth.token, entryId);

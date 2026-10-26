@@ -4,6 +4,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
@@ -36,7 +37,7 @@ const BEHAVIORAL_HINTS = [
 @Component({
   selector: 'app-qa-import',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatCheckboxModule],
   template: `
     <div class="qa-import">
       <div class="qi-head">
@@ -48,10 +49,14 @@ const BEHAVIORAL_HINTS = [
         @if (!hideExtractQa) {
           <button mat-stroked-button (click)="extract()" [disabled]="busy()">{{ t('pb.v2.rec.extractQa') }}</button>
         }
-        <button mat-raised-button color="primary" (click)="importSelected()"
-                [disabled]="busy() || !selectedCount()">
-          {{ fmt('pb.v2.q.importSelected', { n: selectedCount() }) }}
-        </button>
+        <!-- 票212：Import selected 改 36×36 图标方框（196/205 基准），不再是蓝色文字按钮；计数以角标 + tooltip（含计数文案）保留，禁用态不变。 -->
+        <span class="qi-import-wrap">
+          <button type="button" class="qi-icon-btn" (click)="importSelected()"
+                  [disabled]="busy() || !selectedCount()"
+                  [title]="fmt('pb.v2.q.importSelected', { n: selectedCount() })"
+                  [attr.aria-label]="fmt('pb.v2.q.importSelected', { n: selectedCount() })"><mat-icon>library_add</mat-icon></button>
+          <span class="qi-count">{{ selectedCount() }}</span>
+        </span>
       </div>
       @if (notice()) { <p class="notice">{{ notice() }}</p> }
 
@@ -88,6 +93,19 @@ const BEHAVIORAL_HINTS = [
     .qi-head { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
     .qi-title { font-size: 16px; font-weight: 600; }
     .spacer { flex: 1; }
+    /* 票212：Import selected 图标方框，照 .rc-icon-btn（196 基准）/ .ph-actions（205 基准）同款：36×36、1px 边框、圆角 10px、白底、19px 图标、悬停同款加深；角标只承载计数，不改按钮尺寸。 */
+    .qi-import-wrap { position: relative; display: inline-flex; flex: 0 0 auto; }
+    .qi-icon-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+                   width: 36px; height: 36px; padding: 0; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px;
+                   background: #ffffff; color: var(--yi-text-muted, #475569); cursor: pointer;
+                   transition: background .15s ease, border-color .15s ease, color .15s ease; }
+    .qi-icon-btn:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
+    .qi-icon-btn:disabled { opacity: .45; cursor: default; }
+    .qi-icon-btn mat-icon { font-size: 19px; width: 19px; height: 19px; }
+    .qi-count { position: absolute; top: -7px; right: -7px; min-width: 17px; height: 17px; padding: 0 4px;
+                display: inline-flex; align-items: center; justify-content: center;
+                font-size: 11px; font-weight: 700; line-height: 1; color: #ffffff;
+                background: var(--yi-accent, #2563eb); border-radius: 999px; pointer-events: none; }
     .notice { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .empty { font-size: 14px; color: var(--yi-text-muted, #475569); padding: 12px 0; }
     .cand { display: flex; gap: 6px; border: 1px solid var(--yi-border, #e2e8f0);

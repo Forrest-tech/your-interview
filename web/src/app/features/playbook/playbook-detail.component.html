@@ -62,7 +62,10 @@
         <div class="ehead-main">
           <div class="ehead-titles">
             <!-- 票 171：状态胶囊移到职位标题上方（原在标题/公司名之后），胶囊自身样式一字不动 -->
-            <span class="status-badge">{{ statusText() }}</span>
+            <!-- 票 178：状态胶囊暂隐藏（模板层不渲染，恢复只改 hideStatusBadge 一处） -->
+            @if (!hideStatusBadge) {
+              <span class="status-badge">{{ statusText() }}</span>
+            }
             <div class="ehead-name">
               <div class="ehead-title-row">
                 <h1>{{ e.role }}</h1>

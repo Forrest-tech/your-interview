@@ -1,13 +1,26 @@
 <!-- 票 146：GitHub 式设置中心 —— 左导航 + 子路由出口；本壳不设大标题页头（左导航即是标识）。 -->
 <div class="settings-hub">
-  <nav class="settings-nav">
+  <nav class="settings-nav" data-testid="settings-nav" [class.collapsed]="navCollapsed() && !isNavNarrow()">
+    @if (!isNavNarrow()) {
+      <!-- 票 181：整列折叠按钮（在 @if 之外，收起后仍可点开；窄屏下隐藏，沿用顶部横向行形态） -->
+      <button type="button" class="settings-nav-toggle" data-testid="settings-nav-toggle"
+              [matTooltip]="navCollapsed() ? t('common.expand') : t('common.collapse')"
+              [attr.aria-label]="navCollapsed() ? t('common.expand') : t('common.collapse')"
+              [attr.aria-expanded]="!navCollapsed()"
+              (click)="toggleNav()">
+        <mat-icon>{{ navCollapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+      </button>
+    }
     @for (item of navItems; track item.path) {
       <a class="settings-nav-item"
          [routerLink]="item.path"
          routerLinkActive="active"
-         [routerLinkActiveOptions]="{ exact: true }">
+         [routerLinkActiveOptions]="{ exact: true }"
+         [attr.aria-label]="(navCollapsed() && !isNavNarrow()) ? t(item.labelKey) : null"
+         [matTooltip]="(navCollapsed() && !isNavNarrow()) ? t(item.labelKey) : ''"
+         matTooltipPosition="right">
         <mat-icon>{{ item.icon }}</mat-icon>
-        <span>{{ t(item.labelKey) }}</span>
+        @if (!navCollapsed() || isNavNarrow()) { <span>{{ t(item.labelKey) }}</span> }
       </a>
     }
   </nav>

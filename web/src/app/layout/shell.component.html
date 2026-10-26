@@ -96,7 +96,9 @@
   @if (subnav().length > 0) {
     <nav class="sidebar" [class.collapsed]="collapsed()">
       <button class="side-toggle" (click)="toggleSidebar()"
-              [matTooltip]="t('common.collapse')" matTooltipPosition="right">
+              [matTooltip]="collapsed() ? t('common.expand') : t('common.collapse')"
+              [attr.aria-label]="collapsed() ? t('common.expand') : t('common.collapse')"
+              [attr.aria-expanded]="!collapsed()" matTooltipPosition="right">
         <mat-icon>{{ collapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
       </button>
       @for (s of subnav(); track s.key) {

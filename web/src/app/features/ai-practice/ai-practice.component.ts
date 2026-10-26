@@ -479,7 +479,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   }
 
   toggleTree(): void {
-    this.tree.treeOpen.set(!this.tree.treeOpen());
+    const next = !this.tree.treeOpen();
+    this.tree.treeOpen.set(next);
+    try { localStorage.setItem('ui.navCollapsed.practiceTree', next ? '0' : '1'); } catch { /* ignore */ }
   }
 
   // ---------- 题目导航(扁平化后可上一题/下一题) ----------

@@ -446,6 +446,20 @@ mat-form-field { width: 100%; }
 
 .list-pane { padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 
+/* 票 181：左列表整列折叠——收起态网格列为 34px，.list-pane.collapsed 本身就是窄条（仅含按钮），
+   展开恢复持久化的 listWidth；网格列过渡用全局 token；收起态按钮居中。 */
+.split {
+  transition: grid-template-columns var(--dur) var(--ease);
+}
+.tech-list-toggle {
+  align-self: flex-end;
+  border: none; background: transparent; cursor: pointer; color: #64748b;
+  border-radius: 6px; padding: 4px; display: inline-flex;
+}
+.tech-list-toggle:hover { background: rgba(15, 23, 42, 0.06); }
+.tech-list-toggle mat-icon { font-size: 20px; width: 20px; height: 20px; }
+.list-pane.collapsed .tech-list-toggle { align-self: center; }
+
 .list-head {
   padding: 11px 14px;
   font-size: 12.5px;

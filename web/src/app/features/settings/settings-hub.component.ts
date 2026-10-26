@@ -1,6 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { I18nService } from '../../core/i18n/i18n.service';
 
 /**
@@ -24,13 +25,44 @@ const NAV_ITEMS: readonly SettingsNavItem[] = [
 @Component({
   selector: 'app-settings-hub',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, MatIconModule],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, MatIconModule, MatTooltipModule],
   templateUrl: './settings-hub.component.html',
   styleUrl: './settings-hub.component.scss'
 })
-export class SettingsHubComponent {
+export class SettingsHubComponent implements OnDestroy {
   readonly i18n = inject(I18nService);
   readonly navItems = NAV_ITEMS;
+
+  /** 票 181：左导航整列折叠状态，记 localStorage（默认展开）。 */
+  readonly navCollapsed = signal(
+    (() => {
+      try {
+        return typeof localStorage !== 'undefined' && localStorage.getItem('ui.navCollapsed.settingsNav') === '1';
+      } catch { return false; }
+    })());
+  /** 票 181：窄屏（≤860px）下整列折叠不生效——沿用已有顶部横向行形态，回到宽屏时按存值恢复。 */
+  readonly isNavNarrow = signal(false);
+  private navMql: MediaQueryList | null = null;
+  private readonly onNavMqlChange = (e: MediaQueryListEvent): void => { this.isNavNarrow.set(e.matches); };
+
+  constructor() {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      this.navMql = window.matchMedia('(max-width: 860px)');
+      this.isNavNarrow.set(this.navMql.matches);
+      this.navMql.addEventListener('change', this.onNavMqlChange);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.navMql?.removeEventListener('change', this.onNavMqlChange);
+  }
+
+  /** 票 181：翻转左导航折叠并写回 localStorage。 */
+  toggleNav(): void {
+    const next = !this.navCollapsed();
+    this.navCollapsed.set(next);
+    try { localStorage.setItem('ui.navCollapsed.settingsNav', next ? '1' : '0'); } catch { /* ignore */ }
+  }
 
   /** 模板用:直接暴露 t() 给模板调用。 */
   t(key: string): string {

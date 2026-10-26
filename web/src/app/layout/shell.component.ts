@@ -46,8 +46,13 @@ export class ShellComponent {
   readonly auth = inject(AuthService);
   readonly i18n = inject(I18nService);
 
-  /** 左侧栏折叠状态。 */
-  readonly collapsed = signal(false);
+  /** 左侧栏折叠状态。票 181：改为读写 localStorage（默认展开），与全系统左栏折叠行为对齐。 */
+  readonly collapsed = signal(
+    (() => {
+      try {
+        return typeof localStorage !== 'undefined' && localStorage.getItem('ui.navCollapsed.shellSubnav') === '1';
+      } catch { return false; }
+    })());
 
   private readonly allNav: NavItem[] = [
     { path: '/dashboard',  labelKey: 'nav.dashboard',  icon: 'insights' },
@@ -128,7 +133,9 @@ export class ShellComponent {
   }
 
   toggleSidebar(): void {
-    this.collapsed.set(!this.collapsed());
+    const next = !this.collapsed();
+    this.collapsed.set(next);
+    try { localStorage.setItem('ui.navCollapsed.shellSubnav', next ? '1' : '0'); } catch { /* ignore */ }
   }
 
   goProfile(): void {

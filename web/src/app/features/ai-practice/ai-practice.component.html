@@ -36,7 +36,9 @@
     <!-- 折叠按钮属于素材树这一栏自己,固定贴该栏右边缘;放在 @if 之外,
          所以收起后依然存在(折叠态该栏收成 34px 细竖条)。 -->
     <button class="side-toggle" (click)="toggleTree()"
-            [matTooltip]="treeOpen() ? t('practice.collapseTree') : t('practice.expandTree')">
+            [matTooltip]="treeOpen() ? t('practice.collapseTree') : t('practice.expandTree')"
+            [attr.aria-label]="treeOpen() ? t('practice.collapseTree') : t('practice.expandTree')"
+            [attr.aria-expanded]="treeOpen()">
       <mat-icon>{{ treeOpen() ? 'chevron_left' : 'chevron_right' }}</mat-icon>
     </button>
 

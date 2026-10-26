@@ -57,6 +57,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'common.refresh': { zh: '刷新', en: 'Refresh', fr: 'Actualiser' },
   'common.loadFailed': { zh: '加载失败', en: 'Failed to load', fr: 'Échec du chargement' },
   'common.collapse': { zh: '折叠/展开', en: 'Collapse / expand', fr: 'Réduire / développer' },
+  // 票 181：折叠按钮收起态文案（新增一键，其余零新键；展开态复用 common.collapse）。
+  'common.expand': { zh: '展开', en: 'Expand', fr: 'Développer' },
   'common.save': { zh: '保存', en: 'Save', fr: 'Enregistrer' },
   'common.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
   'common.confirm': { zh: '确认', en: 'Confirm', fr: 'Confirmer' },

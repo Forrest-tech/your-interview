@@ -276,9 +276,20 @@
     </mat-card>
   }
 
-  <div class="split" id="concepts" [style.grid-template-columns]="listWidth() + 'px 8px minmax(0, 1fr)'">
+  <div class="split" id="concepts" [style.grid-template-columns]="isListNarrow() ? 'minmax(0, 1fr)' : (listCollapsed() ? '34px minmax(0, 1fr)' : listWidth() + 'px 8px minmax(0, 1fr)')">
     <!-- 左:条目列表 -->
-    <mat-card class="list-pane">
+    <mat-card class="list-pane" [class.collapsed]="listCollapsed() && !isListNarrow()">
+      @if (!isListNarrow()) {
+        <!-- 票 181：列表折叠按钮（在 @if 之外，收起后仍可点开；窄屏下隐藏，沿用单列形态） -->
+        <button type="button" class="tech-list-toggle" data-testid="tech-list-toggle"
+                [matTooltip]="listCollapsed() ? t('common.expand') : t('common.collapse')"
+                [attr.aria-label]="listCollapsed() ? t('common.expand') : t('common.collapse')"
+                [attr.aria-expanded]="!listCollapsed()"
+                (click)="toggleList()">
+          <mat-icon>{{ listCollapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+        </button>
+      }
+      @if (!listCollapsed() || isListNarrow()) {
       <div class="list-head">
         <span>{{ tn('ts.list.total', total()) }}</span>
       </div>
@@ -328,10 +339,13 @@
           </button>
         </div>
       }
+      }
     </mat-card>
 
+    @if (!listCollapsed() || isListNarrow()) {
     <!-- 拖拽手柄:调整左列表宽度 -->
     <div class="split-handle" (mousedown)="startListResize($event)"></div>
+    }
 
     <!-- 右:九块详情 -->
     <mat-card class="detail-pane">

@@ -219,6 +219,33 @@ export class TechStackComponent implements OnInit, OnDestroy {
       } catch { return 340; }
     })());
 
+  /** 票 181：左列表整列折叠状态，记 localStorage（默认展开；与拖拽调宽、筛选区收起互不读写）。 */
+  readonly listCollapsed = signal(
+    (() => {
+      try {
+        return typeof localStorage !== 'undefined' && localStorage.getItem('ui.navCollapsed.techList') === '1';
+      } catch { return false; }
+    })());
+  /** 票 181：窄屏（≤900px）下列表折叠不生效——沿用已有单列形态，回到宽屏时按存值恢复。 */
+  readonly isListNarrow = signal(false);
+  private listMql: MediaQueryList | null = null;
+  private readonly onListMqlChange = (e: MediaQueryListEvent): void => { this.isListNarrow.set(e.matches); };
+
+  constructor() {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      this.listMql = window.matchMedia('(max-width: 900px)');
+      this.isListNarrow.set(this.listMql.matches);
+      this.listMql.addEventListener('change', this.onListMqlChange);
+    }
+  }
+
+  /** 票 181：翻转左列表折叠并写回 localStorage（listWidth 原样保留，展开即恢复原宽）。 */
+  toggleList(): void {
+    const next = !this.listCollapsed();
+    this.listCollapsed.set(next);
+    try { localStorage.setItem('ui.navCollapsed.techList', next ? '1' : '0'); } catch { /* ignore */ }
+  }
+
   startListResize(ev: MouseEvent): void {
     ev.preventDefault();
     const startX = ev.clientX;
@@ -1587,5 +1614,6 @@ export class TechStackComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.categorySubs.unsubscribe();
     this.subnav.unregister('/tech-stack');
+    this.listMql?.removeEventListener('change', this.onListMqlChange);
   }
 }

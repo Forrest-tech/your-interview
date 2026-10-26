@@ -104,7 +104,16 @@ export class PracticeMaterialTree {
    *    表现就是"左侧素材树没渲染"。任务书要求默认展开,故改为 true。
    *    折叠态仍可通过 ◀ 按钮随时收起。
    */
-  readonly treeOpen = signal(true);
+  /**
+   * 票 181：开合状态改为读写 localStorage（默认展开），与全系统左栏折叠行为对齐。
+   * 注意极性：存值记的是“收起”（'1' = 收起），与 treeOpen（展开 = true）相反。
+   */
+  readonly treeOpen = signal(
+    (() => {
+      try {
+        return !(typeof localStorage !== 'undefined' && localStorage.getItem('ui.navCollapsed.practiceTree') === '1');
+      } catch { return true; }
+    })());
 
   /**
    * 左侧素材板块宽度(px)—— Forrest 第十三轮要求可拖动调整。

@@ -1,6 +1,17 @@
 <div class="page content-in">
   <!-- 左侧条目导航(定稿第八节):分组口径与列表页同一套 helper;点击只切路由不整页刷新 -->
-  <aside class="entry-nav" data-testid="entry-nav">
+  <aside class="entry-nav" data-testid="entry-nav" [class.collapsed]="navCollapsed() && !isNavNarrow()">
+    @if (!isNavNarrow()) {
+      <!-- 票 181：整列折叠按钮（在 @if 之外，收起后仍可点开；窄屏下隐藏，沿用顶部横向条形态） -->
+      <button type="button" class="entry-nav-toggle" data-testid="entry-nav-toggle"
+              [matTooltip]="navCollapsed() ? t('common.expand') : t('common.collapse')"
+              [attr.aria-label]="navCollapsed() ? t('common.expand') : t('common.collapse')"
+              [attr.aria-expanded]="!navCollapsed()"
+              (click)="toggleNav()">
+        <mat-icon>{{ navCollapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+      </button>
+    }
+    @if (!navCollapsed() || isNavNarrow()) {
     <div class="nav-group">
       <button type="button" class="nav-group-toggle" data-testid="nav-active-toggle"
               [attr.aria-expanded]="navActiveOpen()"
@@ -44,6 +55,7 @@
         </div>
       }
     </div>
+    }
   </aside>
 
   <div class="page-main">

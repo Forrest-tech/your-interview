@@ -47,6 +47,23 @@
   &::-webkit-scrollbar-thumb { background: #7d8797; border-radius: 5px; }
   &::-webkit-scrollbar-thumb:hover { background: #2563eb; }
 }
+/* 票 181：左栏整列折叠——收起态 34px 窄条仅含按钮（绝不压成 0），展开恢复 280px；
+   宽度过渡用全局 token；收起态按钮居中（flex 列内 align-self，与 AI 实战竖条居中同效果）。 */
+.entry-nav {
+  transition: flex-basis var(--dur) var(--ease), width var(--dur) var(--ease);
+}
+.entry-nav.collapsed {
+  flex-basis: 34px;
+  width: 34px;
+}
+.entry-nav-toggle {
+  align-self: flex-end;
+  border: none; background: transparent; cursor: pointer; color: #64748b;
+  border-radius: 6px; padding: 4px; display: inline-flex;
+}
+.entry-nav-toggle:hover { background: rgba(15, 23, 42, 0.06); }
+.entry-nav-toggle mat-icon { font-size: 20px; width: 20px; height: 20px; }
+.entry-nav.collapsed .entry-nav-toggle { align-self: center; }
 .nav-group-title {
   display: flex; align-items: center; gap: 6px;
   font-size: 15px; font-weight: 600; margin: 4px 0 12px; padding-left: 2px;

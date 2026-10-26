@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { JobsApiService } from '../../core/api/jobs-api.service';
@@ -49,7 +50,7 @@ interface ResumeFileItem {
   standalone: true,
   imports: [
     CommonModule, FormsModule, RouterLink,
-    MatButtonModule, MatIconModule,
+    MatButtonModule, MatIconModule, MatTooltipModule,
     IntakePanelComponent, RoundCardComponent, CommLogComponent,
     PdfContentViewerComponent
   ],
@@ -79,6 +80,24 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly navCompletedOpen = signal(false);
   // 票180：In Progress 组折叠与 Completed 组同一套机制，默认展开（现状）只多一个可点收起的按钮
   readonly navActiveOpen = signal(true);
+  /** 票 181：左栏整列折叠状态，记 localStorage（默认展开）。 */
+  readonly navCollapsed = signal(
+    (() => {
+      try {
+        return typeof localStorage !== 'undefined' && localStorage.getItem('ui.navCollapsed.entryNav') === '1';
+      } catch { return false; }
+    })());
+  /** 票 181：窄屏（≤820px）下整列折叠不生效——沿用已有顶部横向条形态，回到宽屏时按存值恢复。 */
+  readonly isNavNarrow = signal(false);
+  private navMql: MediaQueryList | null = null;
+  private readonly onNavMqlChange = (e: MediaQueryListEvent): void => { this.isNavNarrow.set(e.matches); };
+
+  /** 票 181：翻转左栏折叠并写回 localStorage。 */
+  toggleNav(): void {
+    const next = !this.navCollapsed();
+    this.navCollapsed.set(next);
+    try { localStorage.setItem('ui.navCollapsed.entryNav', next ? '1' : '0'); } catch { /* ignore */ }
+  }
   readonly navActive = computed(() =>
     this.navEntries().filter(e => entryResultOutcome(e.outcome) === null));
   readonly navCompleted = computed(() =>
@@ -372,6 +391,12 @@ export class PlaybookDetailComponent implements OnDestroy {
   });
 
   constructor() {
+    // 票 181：窄屏监听（≤820px 时整列折叠不生效）。
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      this.navMql = window.matchMedia('(max-width: 820px)');
+      this.isNavNarrow.set(this.navMql.matches);
+      this.navMql.addEventListener('change', this.onNavMqlChange);
+    }
     this.route.paramMap.subscribe(pm => {
       const id = pm.get('id');
       if (id && id !== this.id()) {
@@ -478,6 +503,7 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.setResumePdfUrl(null);
+    this.navMql?.removeEventListener('change', this.onNavMqlChange);
   }
 
   /**

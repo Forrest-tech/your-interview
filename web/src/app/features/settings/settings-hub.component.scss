@@ -14,6 +14,28 @@
   top: 0;
 }
 
+/* 票 181：左导航整列折叠——收起态 56px 图标条（照 Shell），展开恢复 220px；
+   宽度过渡用全局 token；收起态按钮与项均居中。 */
+.settings-nav {
+  transition: flex-basis var(--dur) var(--ease), width var(--dur) var(--ease);
+}
+.settings-nav.collapsed {
+  flex-basis: 56px;
+  width: 56px;
+}
+.settings-nav-toggle {
+  align-self: flex-end;
+  border: none; background: transparent; cursor: pointer; color: #64748b;
+  border-radius: 6px; padding: 4px; display: inline-flex;
+}
+.settings-nav-toggle:hover { background: rgba(15, 23, 42, 0.06); }
+.settings-nav-toggle mat-icon { font-size: 20px; width: 20px; height: 20px; }
+.settings-nav.collapsed .settings-nav-toggle { align-self: center; }
+.settings-nav.collapsed .settings-nav-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+
 .settings-nav-item {
   display: flex;
   align-items: center;

@@ -227,3 +227,15 @@ export function segmentEmailBody(text: string): EmailBodySegmentation {
     .map(({ dateTime, sender, body, meetingCard }) => ({ dateTime, sender, body, meetingCard }));
   return { fallback: false, timeline, remainder };
 }
+
+/**
+ * 票217：正文归一（纯函数）——null/空串/纯空白字符一律归一为空串；
+ * 非空文本原样返回（首尾空白原样保留，只做展示切分，不改写原文）。
+ * 用意：纯空白文本经 segmentEmailBody 必走 fallback 全文分支，模板
+ * <pre>{{ text }}</pre> 只渲染出不可见的空白块（noBody 守卫 !text 拦不住
+ * 空白串）——归一后模板落入 noBody 可见态，不再静默空白。
+ */
+export function normalizeEmailBodyText(text: string | null | undefined): string {
+  if (text == null) return '';
+  return text.trim() ? text : '';
+}

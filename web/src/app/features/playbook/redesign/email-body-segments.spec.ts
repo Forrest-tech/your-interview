@@ -3,7 +3,7 @@
  * 全部夹具均为合成文本（张三/李四 + 合成日期），零真实邮件内容、零真实会议凭据。
  */
 import { describe, expect, it } from '@jest/globals';
-import { segmentEmailBody } from './email-body-segments';
+import { normalizeEmailBodyText, segmentEmailBody } from './email-body-segments';
 
 describe('segmentEmailBody', () => {
   it('防蒙混1：全切分成功——多消息 + 会议卡，时间线节点齐全', () => {
@@ -131,5 +131,26 @@ describe('segmentEmailBody', () => {
   it('空文本与纯空白整段回落', () => {
     expect(segmentEmailBody('').fallback).toBe(true);
     expect(segmentEmailBody('   \n  ').fallback).toBe(true);
+  });
+});
+
+describe('normalizeEmailBodyText（票217：纯空白不得渲染不可见空块）', () => {
+  it('null / 空串 / 纯空白字符一律归一为空串（模板落入 noBody 可见态）', () => {
+    expect(normalizeEmailBodyText(null)).toBe('');
+    expect(normalizeEmailBodyText(undefined)).toBe('');
+    expect(normalizeEmailBodyText('')).toBe('');
+    expect(normalizeEmailBodyText('   \n\t\n  ')).toBe('');
+  });
+
+  it('非空文本原样返回（不改写原文，只拦纯空白）', () => {
+    expect(normalizeEmailBodyText('  Hi, invite text.\n')).toBe('  Hi, invite text.\n');
+    expect(normalizeEmailBodyText('From: 张三\n正文行。')).toBe('From: 张三\n正文行。');
+  });
+
+  it('机理钉死：纯空白经分段必走 fallback 全文分支（未归一时模板 <pre> 只出不可见空白）', () => {
+    const r = segmentEmailBody('   \n  ');
+    expect(r.fallback).toBe(true);
+    expect(r.timeline).toEqual([]);
+    expect(r.remainder).toEqual([]);
   });
 });

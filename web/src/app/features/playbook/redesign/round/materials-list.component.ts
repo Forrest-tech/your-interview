@@ -13,7 +13,7 @@ import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { derivePhase, extractMeetingLink, formatInterviewHeadTime, formatLabel, isAudioAsset, isPrepInputPurpose, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, shortEmailTitle } from '../v2.helpers';
-import { segmentEmailBody, EmailBodySegmentation } from '../email-body-segments';
+import { normalizeEmailBodyText, segmentEmailBody, EmailBodySegmentation } from '../email-body-segments';
 
 /** 票165：邮件卡挂载即取的全文状态（仅邮件 kind；id → 取数状态）。 */
 interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: EmailBodySegmentation | null; }
@@ -45,7 +45,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                  头部行右侧渲染 Join meeting 芯片；芯片是头部按钮的兄弟元素（不是 button 的
                  子元素），点击直达会议、不触发展开/收起。 -->
             <div class="eh-row">
-            <button type="button" class="email-head" (click)="toggleEmail(a.id)"
+            <button type="button" class="email-head" (click)="toggleEmail(a)"
                     [attr.aria-expanded]="emailOpenId() === a.id">
               <span class="avatar">{{ senderInitial(a) }}</span>
               <span class="eh-main">
@@ -342,21 +342,47 @@ export class MaterialsListComponent {
 
   constructor() {
     // 票165：邮件卡挂载即取全文（现成懒取改挂载取），正文不再需要点击才出现；非邮件 kind 不动。
+    // 票217：取数收敛到 ensureEmailBody（transcript 优先 + 截图回落 + 空白归一），effect 与展开共用。
     effect(() => {
       for (const a of this.assets()) {
-        if (!this.isEmailAsset(a) || this.fetchedEmailIds.has(a.id)) continue;
-        this.fetchedEmailIds.add(a.id);
-        this.emailBodies.update(m => new Map(m).set(a.id, { loading: true, error: false, text: '', seg: null }));
-        this.api.getTranscript(this.entryId(), a.id).subscribe({
-          next: t => {
-            const text = t.transcriptText ?? '';
-            this.emailBodies.update(m => new Map(m).set(a.id, { loading: false, error: false, text, seg: segmentEmailBody(text) }));
-          },
-          error: () => {
-            this.emailBodies.update(m => new Map(m).set(a.id, { loading: false, error: true, text: '', seg: null }));
-          }
-        });
+        this.ensureEmailBody(a);
       }
+    });
+  }
+
+  /**
+   * 票217：邮件正文取数（单点，幂等）——本体 transcript 优先；本体为空白时
+   * 回落到截图资产（meta.screenshotAssetId）的转写文本；两路皆空则正文置空串
+   * （模板 noBody 可见态）；本体取数失败且无回落（或回落亦失败）则 error 可见态。
+   * 纯空白文本先归一为空串，绝不渲染不可见空白 <pre>；只展示已存文本，不编造。
+   * 215 的芯片派生读 emailBodies().get(a.id)?.text，本回落链恢复全文后芯片随之恢复，
+   * 215 逻辑本身一字不动。
+   */
+  private ensureEmailBody(a: InterviewAsset): void {
+    if (!this.isEmailAsset(a) || this.fetchedEmailIds.has(a.id)) return;
+    this.fetchedEmailIds.add(a.id);
+    this.emailBodies.update(m => new Map(m).set(a.id, { loading: true, error: false, text: '', seg: null }));
+    const done = (text: string) => {
+      this.emailBodies.update(m => new Map(m).set(a.id, { loading: false, error: false, text, seg: segmentEmailBody(text) }));
+    };
+    const fail = () => {
+      this.emailBodies.update(m => new Map(m).set(a.id, { loading: false, error: true, text: '', seg: null }));
+    };
+    const shotId = this.metaOf(a)?.screenshotAssetId;
+    const fallback = (primaryFailed: boolean) => {
+      if (!shotId) { primaryFailed ? fail() : done(''); return; }
+      this.api.getTranscript(this.entryId(), shotId).subscribe({
+        next: t => { done(normalizeEmailBodyText(t.transcriptText)); },
+        error: () => { primaryFailed ? fail() : done(''); },
+      });
+    };
+    this.api.getTranscript(this.entryId(), a.id).subscribe({
+      next: t => {
+        const text = normalizeEmailBodyText(t.transcriptText);
+        if (text) done(text);
+        else fallback(false);
+      },
+      error: () => { fallback(true); },
     });
   }
 
@@ -380,9 +406,12 @@ export class MaterialsListComponent {
     return this.metaOf(a)?.subject || a.fileName;
   }
 
-  /** 票210：邮件卡展开态开关。 */
-  toggleEmail(id: string): void {
-    this.emailOpenId.set(this.emailOpenId() === id ? null : id);
+  /** 票210：邮件卡展开态开关。票217：展开时补取正文（effect 未覆盖到的卡，展开即有条目，至少 loading 态）。 */
+  toggleEmail(a: InterviewAsset): void {
+    const id = a.id;
+    const opening = this.emailOpenId() !== id;
+    this.emailOpenId.set(opening ? id : null);
+    if (opening) this.ensureEmailBody(a);
   }
 
   /** 票210：提炼短标题（原主题全文不当标题）。 */

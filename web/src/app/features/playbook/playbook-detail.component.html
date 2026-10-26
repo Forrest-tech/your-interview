@@ -64,7 +64,11 @@
             <!-- 票 171：状态胶囊移到职位标题上方（原在标题/公司名之后），胶囊自身样式一字不动 -->
             <span class="status-badge">{{ statusText() }}</span>
             <div class="ehead-name">
-              <h1>{{ e.role }}</h1>
+              <div class="ehead-title-row">
+                <h1>{{ e.role }}</h1>
+                <button mat-icon-button class="edit-basic-btn" (click)="startEditBasic()"
+                        [attr.aria-label]="t('pb.v2.d.editBasic')"><mat-icon>edit</mat-icon></button>
+              </div>
               <div class="ehead-company">{{ e.companyName }}</div>
             </div>
           </div>
@@ -93,6 +97,9 @@
               <span class="meta-k">{{ t('pb.v2.d.lastContact') }}</span>
               <span class="meta-v" [class.missing]="!lastContactDate()">{{ lastContactDate() || t('pb.v2.d.emptyNoContact') }}</span>
             </div>
+          </div>
+          <div class="ehead-mock">
+            <button mat-raised-button color="primary" (click)="goMock()">{{ t('pb.v2.d.mock') }}</button>
           </div>
           @if (editingBasic()) {
             <div class="basic-edit">
@@ -169,28 +176,18 @@
             }
           </section>
         }
-      </div>
-      <!-- 按钮行(上区最后一行) -->
-      <div class="ehead-actions">
-        <button mat-raised-button color="primary" (click)="openIntake('email')">
-          {{ t('pb.v2.d.addMaterial') }}
-        </button>
-        <button mat-stroked-button (click)="goMock()">{{ t('pb.v2.d.mock') }}</button>
-        <button mat-stroked-button (click)="openJd()">{{ t('pb.v2.d.openJd') }}</button>
-        <button mat-icon-button [matMenuTriggerFor]="moreMenu" [attr.aria-label]="t('pb.v2.d.moreActions')">
-          <mat-icon>more_vert</mat-icon>
-        </button>
-        <mat-menu #moreMenu="matMenu">
-          <button mat-menu-item (click)="startEditBasic()">{{ t('pb.v2.d.editBasic') }}</button>
-          <button mat-menu-item (click)="openIntake('note')">{{ t('pb.v2.d.addNote') }}</button>
-          <button mat-menu-item (click)="deleteEntry()" class="danger-item">
-            {{ confirmDelete() ? t('pb.v2.d.confirmDeleteEntry') : t('pb.v2.d.deleteEntry') }}
-          </button>
-        </mat-menu>
+        <div class="strip-foot">
+          <button mat-button (click)="openJd()">{{ t('pb.v2.d.openJd') }}</button>
+        </div>
       </div>
     </section>
 
     <!-- ② 统一入口 -->
+    <div class="intake-head">
+      <button mat-raised-button color="primary" (click)="openIntake('email')">
+        {{ t('pb.v2.d.addMaterial') }}
+      </button>
+    </div>
     <app-intake-panel [entry]="e" (saved)="onChildChanged()" (prepGenerate)="onPrepGenerate($event)" />
 
     <!-- 下区:轮次工作区(页签 + stepper + Round + 复盘与待办,单一边框容器) -->
@@ -259,6 +256,7 @@
                                 [prepGenRequest]="prepGenRequest()"
                                 (changed)="onChildChanged()"
                                 (addMaterialHere)="openIntake('email', $event)"
+                                (addNoteHere)="openIntake('note')"
                                 (editPrepInput)="openPrepInput($event.roundId, $event.purpose, $event.assetId, $event.text)"
                                 (generateConsumed)="prepGenRequest.set(null)" />
               </div>
@@ -320,6 +318,11 @@
                       (pendingCount)="onCommPending($event)" />
       }
     </section>
+    <footer class="entry-foot">
+      <button mat-button class="foot-delete" (click)="deleteEntry()">
+        {{ confirmDelete() ? t('pb.v2.d.confirmDeleteEntry') : t('pb.v2.d.deleteEntry') }}
+      </button>
+    </footer>
   }
   </div>
 </div>

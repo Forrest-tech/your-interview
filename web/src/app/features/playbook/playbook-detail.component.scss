@@ -117,7 +117,6 @@
 }
 .zone-work { margin-top: 22px; }
 .zone-work .page-tabs { margin-top: 0; }
-.zone-entry .ehead-actions { margin-top: 16px; }
 
 .back { margin-bottom: 6px; }
 .state { color: var(--yi-text-muted, #475569); font-size: 14px; padding: 22px 0; }
@@ -151,11 +150,19 @@
 }
 /* 左列只剩标题/元信息块;右侧下一步卡独立一列、顶部对齐。
    四格条与按钮行已移出左列,作 .zone-entry 内 .ehead 之后的通栏行:
-   定稿顺序 头行 → 四格条(整行通栏) → 按钮行(上区最后一行)。 */
+   定稿顺序 头行 → 四格条 →（按钮行已于票 176 按上下文分散拆除）。 */
 .ehead-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ehead-titles { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .ehead-titles h1 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600; line-height: 1.25; margin: 0; letter-spacing: -0.01em; }
 .ehead-company { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
+/* 票176:上下文分散——页头唯一主按钮 / 标题行铅笔 / 四格条下文本链接 / 入口触发行 / 页脚危险操作。 */
+.ehead-mock { margin-top: 13px; }
+.ehead-title-row { display: flex; align-items: center; gap: 6px; }
+.edit-basic-btn { width: 32px; height: 32px; padding: 4px; color: var(--ink-2); }
+.strip-foot { border-top: 1px solid var(--yi-border); padding: 10px 16px 12px; }
+.intake-head { margin: 18px 0 10px; }
+.entry-foot { margin-top: 24px; border-top: 1px solid var(--yi-border); padding-top: 14px; }
+.foot-delete { color: #dc2626; }
 .status-badge {
   font-size: 12px; font-weight: 700;
   border: 1px solid var(--signal-soft); background: var(--signal-tint); color: var(--brand);
@@ -166,7 +173,6 @@
 .meta-k { font-size: 12px; font-weight: 500; color: var(--ink-2); }
 .meta-v { font-size: 13.5px; font-weight: 500; color: var(--ink); }
 .meta-v.missing { font-weight: 400; color: var(--ink-2); }
-.ehead-actions { display: flex; gap: 9px; align-items: center; margin-top: 13px; flex-wrap: wrap; }
 
 .basic-edit {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));

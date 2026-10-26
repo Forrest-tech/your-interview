@@ -6,7 +6,6 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { JobsApiService } from '../../core/api/jobs-api.service';
@@ -50,7 +49,7 @@ interface ResumeFileItem {
   standalone: true,
   imports: [
     CommonModule, FormsModule, RouterLink,
-    MatButtonModule, MatIconModule, MatMenuModule,
+    MatButtonModule, MatIconModule,
     IntakePanelComponent, RoundCardComponent, CommLogComponent,
     PdfContentViewerComponent
   ],

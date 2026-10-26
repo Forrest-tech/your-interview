@@ -161,6 +161,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
               <input type="file" hidden (change)="onUpload($event)">
             </label>
             <button mat-stroked-button (click)="addMaterialHere.emit(round().id)">{{ t('pb.v2.r.addMaterialHere') }}</button>
+            <button mat-stroked-button (click)="addNoteHere.emit()">{{ t('pb.v2.d.addNote') }}</button>
           </div>
           <app-materials-list [entryId]="entry().id" [assets]="roundAssets()"
                               [rounds]="entry().rounds ?? []" (changed)="changed.emit()" />
@@ -222,6 +223,7 @@ export class RoundCardComponent implements OnInit {
   readonly prepGenRequest = input<{ roundId: string; token: number } | null>(null);
   @Output() readonly changed = new EventEmitter<void>();
   @Output() readonly addMaterialHere = new EventEmitter<string>();
+  @Output() readonly addNoteHere = new EventEmitter<void>();
   /** 票159：读回区编辑 / 添加输入（透传自备考报告，详情页据此打开统一对话框）。 */
   @Output() readonly editPrepInput = new EventEmitter<{ roundId: string; purpose: 'experiences' | 'resume'; assetId: string | null; text: string }>();
   /** 票159：生成请求已被备考报告消费（透传，详情页据此清零）。 */

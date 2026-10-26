@@ -42,37 +42,20 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
       <div class="prep-head">
         <div>
           <div class="ph-title">{{ t('pb.v2.p.title') }}</div>
-          @if (report(); as r) {
-            <div class="ph-sub">
-              {{ fmt('pb.v2.p.generatedAt', { when: (r.generatedAt ?? '').slice(0, 16).replace('T', ' ') }) }}
-              · {{ t('pb.v2.p.sourcesLabel') }}:{{ t('pb.v2.p.srcJd') }} {{ r.sources?.jd ? '✓' : '—' }}
-              / {{ t('pb.v2.p.srcCompany') }} {{ r.sources?.company ? '✓' : '—' }}
-              / {{ t('pb.v2.p.srcExp') }} {{ r.sources?.experiences ? '✓' : '—' }}
-              / {{ t('pb.v2.p.srcResume') }} {{ r.sources?.resume ? '✓' : '—' }}
-              / {{ fmt('pb.v2.p.srcPast', { n: r.sources?.pastQuestions ?? 0 }) }}
-              / {{ fmt('pb.v2.p.srcWeak', { n: r.sources?.weaknesses ?? 0 }) }}
-            </div>
-            @if (r.sources?.details?.length) {
-              <div class="ph-sub src-details" data-testid="prep-source-details">
-                @for (d of r.sources!.details!; track d.key) {
-                  <span class="src-detail">{{ sourceLabel(d.key) }}: {{ t('pb.v2.srcst.' + d.status) }}@if (d.count != null) { ({{ d.count }}) }</span>
-                }
-              </div>
-            }
-          } @else {
-            <div class="ph-sub">{{ t('pb.v2.p.fwNote') }}</div>
-          }
         </div>
         <span class="spacer"></span>
-        <app-qa-zoom></app-qa-zoom>
-        @if (report()) {
-          <button mat-stroked-button (click)="openExport()">{{ t('pb.v2.p.exportPrep') }}</button>
-        }
-        <button mat-raised-button color="primary" (click)="generate()" [disabled]="busy()">
-          {{ busy() ? t('pb.v2.p.generating') : (report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')) }}
-        </button>
+        <div class="ph-actions">
+          <app-qa-zoom></app-qa-zoom>
+          @if (report()) {
+            <button mat-stroked-button (click)="openExport()"><mat-icon>download</mat-icon>{{ t('pb.v2.p.exportPrep') }}</button>
+          }
+          <button mat-raised-button color="primary" (click)="generate()" [disabled]="busy()">
+            <mat-icon>refresh</mat-icon>
+            {{ busy() ? t('pb.v2.p.generating') : (report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')) }}
+          </button>
+        </div>
       </div>
-      @if (notice()) { <p class="notice">{{ notice() }}</p> }
+      @if (notice() && noticeIsError()) { <p class="notice warn">{{ notice() }}</p> }
       @if (tts.error()) { <p class="notice warn">{{ tts.error() }}</p> }
 
       <!-- 票159：Prep 两框删除，换为读回区——显示本轮当前备考输入资产原文；
@@ -110,7 +93,6 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
           }
         </div>
         }
-        <p class="hint">{{ t('pb.v2.p.genHint') }}</p>
       </div>
         <div class="prep-body">
           <nav class="toc">
@@ -253,6 +235,8 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .qa-text { font-size: calc(15px * var(--qa-scale, 1)); line-height: 1.65; }
     .pre { white-space: pre-wrap; }
     .prep-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+    /* 票190：三个控件成组，窄屏整组落到标题下一行、不散不溢出。 */
+    .ph-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .ph-title { font-size: 16px; font-weight: 600; }
     .ph-sub { font-size: 13px; color: var(--yi-text-muted, #475569); margin-top: 2px; max-width: 560px; }
     .ph-sub.src-details { display: flex; gap: 2px 14px; flex-wrap: wrap; max-width: none; }
@@ -343,6 +327,9 @@ export class PrepReportComponent {
 
   readonly busy = signal(false);
   readonly notice = signal<string | null>(null);
+  // 票190：notice 原兼三用（本地聚合说明 / 生成成功 / 生成失败）；页头描述全删后，
+  // 渲染只留失败一种（错误反馈不能丢），故用本标志区分，说明类文本不再渲染。
+  readonly noticeIsError = signal(false);
   /** 票159：读回区当前资产原文（经 getTranscript 取回；列表 DTO 本身不带正文）。 */
   readonly expText = signal('');
   readonly resumeText = signal('');
@@ -557,6 +544,7 @@ export class PrepReportComponent {
   async generate(): Promise<void> {
     this.busy.set(true);
     this.notice.set(null);
+    this.noticeIsError.set(false);
     try {
       // 票159：入参取自已归档的当前资产原文（空 → null，留空仍只用 JD 与题库生成，
       // 与旧两框行为一致）；loadPrepText 自保证新鲜，不读展示层可能滞后的缓存。
@@ -576,6 +564,7 @@ export class PrepReportComponent {
       this.changed.emit();
     } catch (e) {
       this.notice.set(this.fmt('pb.v2.p.generateFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.rec.unknownError') }));
+      this.noticeIsError.set(true);
     } finally {
       this.busy.set(false);
     }

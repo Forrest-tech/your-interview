@@ -355,6 +355,16 @@
   width: max-content;
 }
 
+/* 票214 方案 C：相邻节点间的极简圆点线。只含一条 1px 细线 + 一个 8px 小圆点，
+   除此之外什么都不加；完全静态，无动画、无过渡。颜色：左侧轮 roundIsDone 为真
+   则绿（全局 --go，与 Passed 同绿），否则灰；选中态不改变连接颜色。 */
+.rconn { flex: 0 0 auto; align-self: center; position: relative; width: 24px; height: 8px; }
+.rconn::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+                 transform: translateY(-50%); background: #cbd5e1; }
+.rconn::after { content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px;
+                transform: translate(-50%, -50%); border-radius: 50%; background: #cbd5e1; }
+.rconn.done::before, .rconn.done::after { background: var(--go); }
+
 /* 轮次单元:原生 button(键盘可达,焦点环走全局 :focus-visible)。
    UA 默认按钮面(底色/边框/内边距/字形)在此全部复位,改走卡片口径。 */
 .rnode {

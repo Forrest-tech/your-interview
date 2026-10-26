@@ -253,6 +253,11 @@
             <div class="rtrack-scroll">
               <div class="rtrack-row">
                 @for (r of rounds(); track r.id) {
+                  <!-- 票214 方案 C：相邻节点间的极简圆点线（细线 + 小圆点），只在非首节点前渲染；
+                       颜色认左侧轮 roundIsDone（已有结果或日期已过）为真则绿、否则灰；纯装饰，不可聚焦。 -->
+                  @if (!$first) {
+                    <span class="rconn" [class.done]="roundIsDone(rounds()[$index - 1])" aria-hidden="true"></span>
+                  }
                   <button type="button" class="rnode"
                           [class.selected]="r.id === selectedRoundId()"
                           [attr.aria-pressed]="r.id === selectedRoundId()"

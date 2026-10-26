@@ -27,6 +27,9 @@
                     (click)="goEntry(e.id)">
               <span class="nav-company">{{ e.companyName }}</span>
               <span class="nav-role">{{ e.role }}</span>
+              @if (e.enteredActiveAt) {
+                <span class="nav-entered">{{ t('pb.section.enteredInProgress') }} {{ enteredDate(e) }}</span>
+              }
             </button>
           }
         </div>

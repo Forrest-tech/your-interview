@@ -95,12 +95,15 @@ public sealed class UpdateEntryCommandHandler(InterviewsDbContext db)
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         ConcurrencyPin.Pin(db, e, request.Version);
 
+        // 票186 W3:变异前取派生 Outcome,变异后、保存前按变前/变后对比刷新进入时刻。
+        var beforeOutcome = InterviewMappingExtensions.DeriveOutcome(e);
         e.UpdateBasicInfo(request.CompanyName, request.Role, request.CompanyProfile,
             request.JdText, request.JdSummary, request.RoundNo, request.InterviewDate,
             request.InterviewFormat, request.Interviewers, request.Location, request.Result,
             request.Notes, request.QuestionsToAskJson);
         if (request.DebriefJson is not null)
             e.SetDebrief(request.DebriefJson);
+        InterviewMappingExtensions.RefreshEnteredActiveAt(e, beforeOutcome);
 
         await db.SaveChangesAsync(ct);
         // CONF-CAL-2:基本信息里的日期/结果变更可能影响轮次排期与终态,同步提醒。
@@ -745,11 +748,14 @@ public sealed class UpdateRoundCommandHandler(InterviewsDbContext db)
 
         try
         {
+            // 票186 W2:变异前取派生 Outcome,变异后、保存前按变前/变后对比刷新进入时刻。
+            var beforeOutcome = InterviewMappingExtensions.DeriveOutcome(e);
             e.UpdateRound(request.RoundId, request.Stage, request.ScheduledDate, request.Interviewers,
                 request.Format, request.Location, outcome, request.Notes, request.Feedback);
             var round = e.Rounds.FirstOrDefault(r => r.Id == request.RoundId);
             round?.UpdateDetails(request.MeetingLink, request.ScheduledTime, request.PrepQuestionsJson,
                 request.EmailsJson, request.Transcript, request.RecordingUrl, request.ChecklistJson);
+            InterviewMappingExtensions.RefreshEnteredActiveAt(e, beforeOutcome);
             await db.SaveChangesAsync(ct);
             // CONF-CAL-2:改期 → 提醒重算;出终态 → 取消待触发提醒。
             await ReminderSync.SafeSyncEntryAsync(db, request.UserId, e.Id, ct);
@@ -771,7 +777,10 @@ public sealed class RemoveRoundCommandHandler(InterviewsDbContext db)
         if (e is null) return Result.Failure(Error.NotFound("面试条目"));
         try
         {
+            // 票186 W4:变异前取派生 Outcome,变异后、保存前按变前/变后对比刷新进入时刻。
+            var beforeOutcome = InterviewMappingExtensions.DeriveOutcome(e);
             e.RemoveRound(request.RoundId);
+            InterviewMappingExtensions.RefreshEnteredActiveAt(e, beforeOutcome);
             await db.SaveChangesAsync(ct);
             // CONF-CAL-2:轮次删除 → 其待触发提醒取消。
             await ReminderSync.SafeSyncEntryAsync(db, request.UserId, e.Id, ct);

@@ -294,6 +294,8 @@ export interface InterviewEntry {
   questionCount?: number;
   hasTranscript?: boolean;
   createdAt: string;
+  /** 票186:最近一次进入 Active(In Progress 组)的时刻,必填;缺失时导航不渲染日期行、绝不回落 createdAt。 */
+  enteredActiveAt: string;
   analyzedAt?: string;
   /** 票101:读时 xmin(全量保存回传,过期后端 409)。 */
   version?: number;

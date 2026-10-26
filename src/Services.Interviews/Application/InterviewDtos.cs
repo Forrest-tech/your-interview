@@ -106,6 +106,8 @@ public sealed record InterviewEntryDto(
     List<AssetDto> Assets, List<QuestionDto> Questions, List<WeaknessDto> Weaknesses,
     List<RoundDto> Rounds,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
+    // 票186:最近一次进入 Active 的时刻(必填位,不得放在可选位之后)。
+    DateTimeOffset EnteredActiveAt,
     string? QuestionsToAskJson = null, int ActionCount = 0,
     List<ActionDto>? Actions = null, string? DebriefJson = null,
     // 票05(ARC-14):结构化结果 —— 后端按 DeriveOutcome 单一口径派生(值域与
@@ -121,7 +123,9 @@ public sealed record InterviewEntryListItemDto(
     int? OverallScore, int? PronunciationScore, int? FluencyScore, int? StructureScore,
     int? TechnicalDepthScore, int? RelevanceScore,
     int AssetCount, int QuestionCount, int WeaknessCount, bool HasTranscript,
-    DateTimeOffset CreatedAt, Guid? JobApplicationId = null,
+    DateTimeOffset CreatedAt,
+    // 票186:最近一次进入 Active 的时刻(必填位,不得放在可选位之后)。
+    DateTimeOffset EnteredActiveAt, Guid? JobApplicationId = null,
     // 票05(ARC-14):结构化结果,口径同 InterviewEntryDto.Outcome(见 DeriveOutcome)。
     string? Outcome = null);
 

@@ -1791,6 +1791,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.filter.allStatuses': { zh: '全部状态', en: 'All statuses', fr: 'Tous les statuts' },
   'pb.empty.title': { zh: '还没有机经记录', en: 'No interview records yet', fr: 'Aucun dossier d’entretien' },
   'pb.section.active': { zh: '进行中', en: 'In Progress', fr: 'En cours' },
+  'pb.section.enteredInProgress': { zh: '进入 In Progress', en: 'Entered In Progress', fr: 'Entré en cours' },
   'pb.select': { zh: '选择', en: 'Select', fr: 'Sélectionner' },
   'pb.selectDone': { zh: '完成', en: 'Done', fr: 'Terminé' },
   'pb.section.completed': { zh: '已结束', en: 'Completed', fr: 'Terminé' },

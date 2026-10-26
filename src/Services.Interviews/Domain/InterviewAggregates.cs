@@ -141,6 +141,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Role = role;
         JobApplicationId = jobApplicationId;
         Status = InterviewStatus.Draft;
+        // 票186:出生即 Active —— CreatedAt 由基类属性初始化器在构造时定死,
+        // 构造函数体直接取它赋值,同一时刻、不是两次时钟读取。
+        EnteredActiveAt = CreatedAt;
         RaiseDomainEvent(new InterviewEntryCreatedDomainEvent(Id, companyId, companyName, role));
     }
 
@@ -194,6 +197,17 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public string? Notes { get; private set; }
 
     // ---------- 状态与流水线 ----------
+    /// <summary>
+    /// 票186:最近一次进入 Active(In Progress 组)的时刻。Active 判定与前端分组逐字一致:
+    /// 派生 Outcome 为 null 或 Pending → Active。离开 Active 不清零,只有再次进入时才刷新
+    /// (见 InterviewMapping.RefreshEnteredActiveAt);存量行由迁移回填 = CreatedAt,
+    /// 迁移前若曾重返过则回填值早于真实最近一次进入 —— 接受为未知,绝不启发式猜值。
+    /// </summary>
+    public DateTimeOffset EnteredActiveAt { get; private set; }
+
+    /// <summary>票186:仅做进入时刻刷新,不代劳 Touch、不改其他语义。</summary>
+    internal void MarkReenteredActive() => EnteredActiveAt = DateTimeOffset.UtcNow;
+
     public InterviewStatus Status { get; private set; }
     public string? FailureReason { get; private set; }
     public DateTimeOffset? TranscribedAt { get; private set; }

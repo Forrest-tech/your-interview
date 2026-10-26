@@ -9,7 +9,7 @@
  * 特征测试锁现状,不改被测函数行为。
  */
 import { describe, expect, it } from '@jest/globals';
-import { entryResultOutcome, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, scoreTierKey } from './v2.helpers';
+import { entryResultOutcome, formatEnteredDate, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, scoreTierKey } from './v2.helpers';
 
 describe('entryResultOutcome(枚举全值,源码 switch 逐值)', () => {
   // [枚举-终局] Rejected -> rejected
@@ -190,6 +190,23 @@ describe('resolveScoreJd(票 173 回落链)', () => {
   it('两侧全空 -> 空串(调用方按无分处理,不编造)', () => {
     expect(resolveScoreJd(null, null)).toBe('');
     expect(resolveScoreJd({ jdText: '', jdSummary: '' }, { jdText: '', jdSummary: '' })).toBe('');
+  });
+});
+
+describe('formatEnteredDate(票 186 进入 Active 日期,时区感知)', () => {
+  // 2026-10-26T03:30Z = 10 月 25 日 23:30 EDT:账号时区必须出本地日期 10 月 25 日,
+  // 绝不能是 UTC 的次日 10 月 26 日(Simplify 式 UTC 日期 bug 的同类)。
+  it('EDT 晚上 23:30 的 ISO 串格式化为本地日期(不是 UTC 次日)', () => {
+    expect(formatEnteredDate('2026-10-26T03:30:00.000Z', 'America/Toronto', 'en')).toBe('Oct 25, 2026');
+  });
+  it('只含日期,不含时间', () => {
+    expect(formatEnteredDate('2026-10-26T03:30:00.000Z', 'America/Toronto', 'en')).not.toContain(':');
+  });
+  it('非法 ISO 不抛错', () => {
+    expect(() => formatEnteredDate('not-a-date', 'America/Toronto', 'en')).not.toThrow();
+  });
+  it('非法时区不抛错(回落浏览器本地日期)', () => {
+    expect(() => formatEnteredDate('2026-10-26T03:30:00.000Z', 'Mars/Olympus', 'en')).not.toThrow();
   });
 });
 

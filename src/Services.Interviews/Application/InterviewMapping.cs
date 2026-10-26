@@ -74,7 +74,7 @@ public static class InterviewMappingExtensions
         e.Weaknesses.OrderByDescending(x => x.Severity).Select(x => x.ToDto()).ToList(),
         e.Rounds.OrderBy(x => x.Order).Select(x => x.ToDto(
             roundVersions is not null && roundVersions.TryGetValue(x.Id, out var rv) ? rv : 0)).ToList(),
-        e.CreatedAt, e.UpdatedAt,
+        e.CreatedAt, e.UpdatedAt, e.EnteredActiveAt,
         e.QuestionsToAskJson, e.Actions.Count,
         e.Actions.OrderBy(x => x.IsDone).ThenBy(x => x.CreatedAt)
             .Select(x => x.ToDto()).ToList(), e.DebriefJson,
@@ -102,7 +102,7 @@ public static class InterviewMappingExtensions
         e.TechnicalDepthScore, e.RelevanceScore,
         e.Assets.Count, e.Questions.Count, e.Weaknesses.Count,
         e.Assets.Any(a => a.TranscriptText != null),
-        e.CreatedAt,
+        e.CreatedAt, e.EnteredActiveAt,
         // Tracker 联动(M1.4):邀请登记自动建的草稿带申请 Id,前端可回链
         e.JobApplicationId,
         DeriveOutcome(e)?.ToString());
@@ -185,6 +185,22 @@ public static class InterviewMappingExtensions
 
     private static bool ContainsAny(string s, params string[] keywords)
         => keywords.Any(k => s.Contains(k, StringComparison.Ordinal));
+
+    // ===================== 进入 Active 时刻刷新(票186,单一事实源) =====================
+    //
+    // 仅当派生 Outcome 从「非 Active」翻转为「Active」时刷新 EnteredActiveAt:
+    // stays Active、stays 终态、终态 → 另一终态一律不动。调用方在变异前取 beforeOutcome,
+    // 变异后、SaveChangesAsync 之前调一次(同一事务、同一 xmin 钉版)。
+    // Active 判定与前端分组逐字一致:派生 Outcome 为 null 或 Pending → Active。
+    /// <summary>票186:变前非 Active → 变后 Active 时刷新最近一次进入 Active 的时刻,其余一律不动。</summary>
+    public static void RefreshEnteredActiveAt(InterviewEntry e, InterviewRoundOutcome? beforeOutcome)
+    {
+        var after = DeriveOutcome(e);
+        if (IsActive(beforeOutcome) || !IsActive(after)) return;
+        e.MarkReenteredActive();
+    }
+
+    private static bool IsActive(InterviewRoundOutcome? o) => o is null or InterviewRoundOutcome.Pending;
 }
 
 // ============================ 归属加载(COD-01/票03) ============================

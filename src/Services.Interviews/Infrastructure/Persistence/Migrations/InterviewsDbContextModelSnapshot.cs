@@ -322,6 +322,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<string>("DebriefJson")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset>("EnteredActiveAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("FailureReason")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");

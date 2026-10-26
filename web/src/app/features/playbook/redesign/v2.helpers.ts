@@ -342,3 +342,20 @@ export function resolveActionDoneState(
 export function entryEndKey(e: { interviewDate?: string | null; createdAt?: string | null }): string {
   return e.interviewDate || (e.createdAt ?? '').slice(0, 10);
 }
+
+/**
+ * 票186:进入 Active 日期格式化(只日期,不要时间)。
+ * 时区感知:用账号时区(默认 America/Toronto),绝不对 UTC ISO 串 slice 取日
+ * —— EDT 晚上创建的条目会被算成 UTC 的次日(与 Simplify UTC 日期问题同类)。
+ * 非法 ISO / 非法时区 → 回落浏览器本地日期,绝不让脏数据炸掉整页。
+ */
+export function formatEnteredDate(iso: string, timeZone: string, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      timeZone,
+      dateStyle: 'medium'
+    }).format(new Date(iso));
+  } catch {
+    return new Date(iso).toLocaleDateString(locale);
+  }
+}

@@ -8,6 +8,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { AuthService } from '../../core/auth/auth.service';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { JobsApiService } from '../../core/api/jobs-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -20,7 +21,7 @@ import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
-  entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatLabel, htmlToPlainText, latestPrepInputAsset, makeV2Fmt, makeV2T,
+  entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatEnteredDate, formatLabel, htmlToPlainText, latestPrepInputAsset, makeV2Fmt, makeV2T,
   PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, roundDisplayNo, scoreTierKey, sortRoundsByDate
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
@@ -66,6 +67,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   private readonly v2 = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
   readonly i18n = inject(I18nService);
+  private readonly auth = inject(AuthService);
   readonly t = makeV2T(this.i18n);
   readonly fmt = makeV2Fmt(this.i18n);
 
@@ -107,6 +109,11 @@ export class PlaybookDetailComponent implements OnDestroy {
   private navLoaded = false;
 
   navOutcome(e: InterviewEntry) { return entryResultOutcome(e.outcome); }
+
+  /** 票186:进入 Active 日期(账号时区,仅日期)—— 缺失值由模板 @if 守卫不渲染,绝不回落 createdAt。 */
+  enteredDate(e: InterviewEntry): string {
+    return formatEnteredDate(e.enteredActiveAt, this.auth.user()?.timeZone ?? 'America/Toronto', this.i18n.locale());
+  }
 
   goEntry(entryId: string): void {
     if (entryId === this.id()) return;

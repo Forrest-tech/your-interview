@@ -7,7 +7,7 @@ import { I18nService } from '../i18n/i18n.service';
 /**
  * 字号控件:− / 百分比(点击可直接输入)/ ＋。
  * 与 AI Practice 的 zoom 同一套交互与同一份 localStorage 偏好。
- * compact 模式（票 194，Prep report 页头专用）：隐藏“字号”名与百分比显示，只留 −/+；
+ * compact 模式（票 194，Prep report 页头专用）：只隐藏“字号”名，百分比数字显示按票 197 恢复（与完整版同一元素、同一服务值）；
  * Interview record 页仍用完整版，不受影响。
  */
 @Component({
@@ -21,17 +21,15 @@ import { I18nService } from '../i18n/i18n.service';
       }
       <button type="button" class="zbtn" (click)="zoom.decrease()"
               [disabled]="zoom.level() <= 80" [title]="i18n.t('zoom.decrease')">−</button>
-      @if (!compact) {
-        @if (editing()) {
-          <input class="zpct-input" type="text" inputmode="numeric"
-                 [ngModel]="draft()" (ngModelChange)="onDraft($event)"
-                 (keyup.enter)="commit()" (keyup.escape)="editing.set(false)"
-                 (blur)="commit()" autofocus>
-        } @else {
-          <button type="button" class="zpct" (click)="startEdit()" [title]="i18n.t('zoom.inputTitle')">
-            {{ zoom.level() }}%
-          </button>
-        }
+      @if (editing()) {
+        <input class="zpct-input" type="text" inputmode="numeric"
+               [ngModel]="draft()" (ngModelChange)="onDraft($event)"
+               (keyup.enter)="commit()" (keyup.escape)="editing.set(false)"
+               (blur)="commit()" autofocus>
+      } @else {
+        <button type="button" class="zpct" (click)="startEdit()" [title]="i18n.t('zoom.inputTitle')">
+          {{ zoom.level() }}%
+        </button>
       }
       <button type="button" class="zbtn" (click)="zoom.increase()"
               [disabled]="zoom.level() >= 400" [title]="i18n.t('zoom.increase')">＋</button>

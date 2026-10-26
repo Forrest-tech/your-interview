@@ -53,7 +53,7 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
           <button mat-icon-button color="primary" (click)="generate()" [disabled]="busy()"
                   [matTooltip]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')"
                   [attr.aria-label]="report() ? t('pb.v2.p.regenerate') : t('pb.v2.p.generate')">
-            <mat-icon>refresh</mat-icon>
+            <mat-icon>auto_awesome</mat-icon>
           </button>
         </div>
       </div>

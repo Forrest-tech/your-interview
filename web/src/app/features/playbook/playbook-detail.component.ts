@@ -19,7 +19,11 @@ import { computeMatch, MatchResult } from '../../core/match/resume-match';
 import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
 import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
-import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { IntakeType } from './redesign/intake/intake-panel.component';
+import {
+  IntakeDialogData, IntakeDialogHostComponent, IntakeDialogMode, IntakeDialogResult
+} from './redesign/intake/intake-dialog-host.component';
 import {
   entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatEnteredDate, formatLabel, htmlToPlainText, latestPrepInputAsset, makeV2Fmt, makeV2T,
   PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, roundDisplayNo, scoreTierKey, sortRoundsByDate
@@ -51,8 +55,8 @@ interface ResumeFileItem {
   standalone: true,
   imports: [
     CommonModule, FormsModule, RouterLink,
-    MatButtonModule, MatIconModule, MatTooltipModule,
-    IntakePanelComponent, RoundCardComponent, CommLogComponent,
+    MatButtonModule, MatIconModule, MatTooltipModule, MatDialogModule,
+    RoundCardComponent, CommLogComponent,
     PdfContentViewerComponent
   ],
   templateUrl: './playbook-detail.component.html',
@@ -66,6 +70,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   private readonly jobsApi = inject(JobsApiService);
   private readonly v2 = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
   readonly i18n = inject(I18nService);
   private readonly auth = inject(AuthService);
   readonly t = makeV2T(this.i18n);
@@ -173,8 +178,6 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly hideFootDelete = true;
   // 票 193：卡片标题旁铅笔暂隐藏（隐藏不是删除：startEditBasic() 与基本信息编辑表单逻辑一律保留；恢复时改回 false 即一处恢复；188 的页签行铅笔 .ptab-edit 不动）。
   readonly hideEditBasic = true;
-
-  readonly intake = viewChild(IntakePanelComponent);
 
   /** 票188：详情卡铅笔按钮上移至页签行（viewChild 接线；卡片未渲染时为空，按钮侧以 @if (selectedRound()) 守门）。 */
   readonly roundCard = viewChild(RoundCardComponent);
@@ -580,16 +583,36 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   // ---------------- 头部动作 ----------------
 
+  /** 票 199：统一入口改弹窗承载（MatDialog，站内 Admin/素材对话框同款写法）。
+   * 页内不再渲染面板，页面结构与滚动位置不再被展开顶动；关弹窗即回原样。
+   * Esc / 点击遮罩按 MatDialog 默认关闭（站内对话框均未设 disableClose，与此一致）。
+   * 尺寸：宽 min(760px, 100vw-16px)（360px 下近全宽贴边）、高封顶 92vh，
+   * 超高内容由宿主 :host 内部滚动，解析预览不得把弹窗顶出视口。 */
+  private openIntakeDialog(mode: IntakeDialogMode): void {
+    const entry = this.entry();
+    if (!entry) return;
+    const data: IntakeDialogData = { entry, mode };
+    const ref = this.dialog.open(IntakeDialogHostComponent, {
+      data,
+      panelClass: 'intake-dialog',
+      width: 'min(760px, calc(100vw - 16px))',
+      maxWidth: 'calc(100vw - 16px)',
+      maxHeight: '92vh',
+    });
+    ref.afterClosed().subscribe((res?: IntakeDialogResult) => {
+      if (res?.saved) void this.onChildChanged();
+      else if (res?.prepGenerate) void this.onPrepGenerate(res.prepGenerate);
+    });
+  }
+
   /** 票 185：presetNew 为真时面板打开即预置新建轮次目标（触发行「加一轮」按钮用）。 */
   openIntake(type: IntakeType = 'email', roundId?: string, presetNew = false): void {
-    this.intake()?.openPanel(type, roundId, presetNew);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    this.openIntakeDialog({ kind: 'panel', type, roundId, presetNew });
   }
 
   /** 票159：Prep 页读回区“编辑输入” / “添加输入”——打开统一对话框并预填。 */
   openPrepInput(roundId: string, purpose: 'experiences' | 'resume', assetId: string | null, text: string): void {
-    this.intake()?.openPrepInput(purpose, roundId, text, assetId ?? undefined);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    this.openIntakeDialog({ kind: 'prepInput', purpose, roundId, text, assetId: assetId ?? undefined });
   }
 
   /**

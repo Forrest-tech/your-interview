@@ -1,5 +1,5 @@
 using System.Text;
-using System.Text.Json;
+using YourInterview.Services.Interviews.Domain.JsonFields;
 
 namespace YourInterview.Services.Interviews.Application;
 
@@ -9,8 +9,6 @@ namespace YourInterview.Services.Interviews.Application;
 /// </summary>
 public static class PlaybookText
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
-
     /// <summary>
     /// A4 题目归一化:ToLowerInvariant + 去标点 + 去空白,然后精确相等匹配。
     ///
@@ -39,7 +37,7 @@ public static class PlaybookText
     public static string? SummaryToBulletsJson(string? summary, int maxBullets = 5)
     {
         var bullets = SummaryToBullets(summary, maxBullets);
-        return bullets.Count == 0 ? null : JsonSerializer.Serialize(bullets, JsonOpts);
+        return bullets.Count == 0 ? null : JsonFieldAdapter.Serialize(bullets);
     }
 
     public static List<string> SummaryToBullets(string? summary, int maxBullets = 5)
@@ -62,7 +60,7 @@ public static class PlaybookText
     /// </summary>
     public static string BuildDimensionsJson(int? overall, int? pronunciation, int? fluency,
         int? structure, int? technicalDepth, int? relevance)
-        => JsonSerializer.Serialize(new
+        => JsonFieldAdapter.Serialize(new
         {
             overall,
             pronunciation,
@@ -70,5 +68,5 @@ public static class PlaybookText
             structure,
             technicalDepth,
             relevance
-        }, JsonOpts);
+        });
 }

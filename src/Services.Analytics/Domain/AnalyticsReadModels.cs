@@ -139,6 +139,45 @@ public sealed class MasteryBreakdown
 }
 
 /// <summary>
+/// 单条目掌握状态台账(票34/REQ-18)—— MasteryBreakdown 的计数依据。
+///
+/// 为什么需要它:MasteryBreakdown 是「按主题的分布计数」,而 KnowledgeLevelChanged
+/// 事件只说「某条目变成了某等级」,不带该条目此前的等级。没有台账,消费者无法知道
+/// 一次等级变化该把哪个桶 -1、哪个桶 +1,也无法区分「同一条目再变」与「新条目加入」
+/// —— 旧实现因此以原值回写(CONF-AN-3),计数永不迁移。本台账按 (UserId, KnowledgeItemId)
+/// 记每条目最近一次的 Topic + 桶,消费者据此做增量迁移;重建时由真源全量覆写。
+/// 它仍是投影的一部分(可从真源/事件流重建),不存业务事实本体。
+/// </summary>
+public sealed class MasteryItemState
+{
+    private MasteryItemState() { }
+
+    public MasteryItemState(Guid userId, Guid knowledgeItemId, string topic, string bucket)
+    {
+        UserId = userId;
+        KnowledgeItemId = knowledgeItemId;
+        Topic = topic;
+        Bucket = bucket;
+        RecordedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Guid Id { get; private set; } = Guid.NewGuid();
+    public Guid UserId { get; private set; }
+    public Guid KnowledgeItemId { get; private set; }
+    public string Topic { get; private set; } = string.Empty;
+    /// <summary>桶名:Mastered / Learning / Fresh(与 MasteryLevelMapping.MasteryBucket 对应)。</summary>
+    public string Bucket { get; private set; } = string.Empty;
+    public DateTimeOffset RecordedAt { get; private set; }
+
+    public void Update(string topic, string bucket)
+    {
+        Topic = topic;
+        Bucket = bucket;
+        RecordedAt = DateTimeOffset.UtcNow;
+    }
+}
+
+/// <summary>
 /// 事件处理台账 —— 幂等消费的基石。
 ///
 /// 消息投递是 at-least-once,同一个事件可能被投递多次。

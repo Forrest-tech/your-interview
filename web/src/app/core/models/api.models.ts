@@ -45,6 +45,8 @@ export interface AuthUser {
   timeZone?: string | null;
   /** 账号创建时间。 */
   createdAt?: string;
+  /** 票101:读时 xmin(PUT /auth/me 回传)。 */
+  version?: number;
 }
 
 export interface AuthResult {
@@ -55,6 +57,18 @@ export interface AuthResult {
    */
   profile: AuthUser;
   tokens: Tokens;
+}
+
+/**
+ * 票 154：JD 动态小节（与后端 JdSection 对齐；key 由后端按标题重算，前端不维护）。
+ * origin: auto = 解析产出，manual = 用户手动添加；edited = 用户在对话框改过标题/正文。
+ */
+export interface JdSection {
+  title: string;
+  key: string;
+  body: string;
+  origin: 'auto' | 'manual';
+  edited: boolean;
 }
 
 // ============================ Tracker(投递跟踪) ============================
@@ -72,6 +86,8 @@ export interface Application {
   role: string;
   location?: string;
   salary?: string;
+  /** 工作方式 (Remote / Hybrid / Onsite;后端 DTO 一直有返回,此前模型漏声明导致编辑回填无从引用)。 */
+  workMode?: string | null;
   status: ApplicationStatus;
   priority?: string;
   /** 投递来源(如 LinkedIn / Indeed / 官网)。 */
@@ -102,6 +118,11 @@ export interface Application {
   requirements?: string;
   /** 福利待遇(2026-10-19):完整存储。Smart paste 从 Benefits/Advantages 段提取。 */
   benefits?: string;
+  /**
+   * 票 154：JD 动态小节 JSON（null = 存量记录，走 legacy 三字段；不批量回填）。
+   * requirements / benefits 继续填作兼容投影，与小节列表一致（后端保存时重算）。
+   */
+  sectionsJson?: string | null;
   resumeScore?: number;
   /** 预估通过率(后端存为字符串,如 "75%";展示时原样显示)。 */
   passRateEstimate?: string | null;
@@ -116,6 +137,8 @@ export interface Application {
   rounds?: InterviewRound[];
   createdAt: string;
   updatedAt?: string;
+  /** 票101:读时 xmin 乐观并发版本(保存时回传,过期后端 409)。 */
+  version?: number;
 }
 
 /** 公司(2026-09-18:补 Profile 公司情报,面试前准备包的输入之一)。 */
@@ -125,9 +148,12 @@ export interface Company {
   website?: string;
   industry?: string;
   location?: string;
-  logoUrl?: string;
+  // 票 150:后端 LogoUrl 可空,详情弹窗清 logo 时会写 null,故放宽为 string | null。
+  logoUrl?: string | null;
   notes?: string;
   isBlacklisted: boolean;
+  /** 票 150:员工规模(UpdateCompany 全量回传时原值带回,防 logo 保存清掉它)。 */
+  employeeCount?: number | null;
   companyType: string;
   applicationCount: number;
   /** 公司情况长文本(规模/主营业务/技术栈/面试风格/文化/近期动态)。 */
@@ -135,6 +161,8 @@ export interface Company {
   /** 公司情报来源 URL(JSON 数组字符串)。 */
   profileSourcesJson?: string;
   createdAt: string;
+  /** 票101:读时 xmin(同 Application.version)。 */
+  version?: number;
 }
 
 /** Playbook 公司聚合(后端 CompanySummaryDto 子集):备考中的公司。 */
@@ -197,6 +225,8 @@ export interface AnswerTemplate {
   sortOrder: number;
   createdAt: string;
   updatedAt?: string | null;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 /** M3:沟通记录类型。 */
@@ -215,6 +245,8 @@ export interface Communication {
   occurredAt: string;
   createdAt: string;
   updatedAt?: string | null;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 // ============================ 实战机经(Interviews) ============================
@@ -235,6 +267,12 @@ export interface InterviewEntry {
   location?: string;
   status: InterviewStatus;
   result?: string;
+  /**
+   * 结构化结果(票05/ARC-14):后端 DeriveOutcome 派生的枚举名
+   * (Pending|Passed|Rejected|Ghosted|Cancelled|NoShow),列表与详情 DTO 同源。
+   * 分组/徽章只许消费此字段,禁止再判读 result 自由文本。
+   */
+  outcome?: string | null;
   jdText?: string;
   jdSummary?: string;
   companyProfile?: string;
@@ -257,6 +295,8 @@ export interface InterviewEntry {
   hasTranscript?: boolean;
   createdAt: string;
   analyzedAt?: string;
+  /** 票101:读时 xmin(全量保存回传,过期后端 409)。 */
+  version?: number;
 }
 
 export interface InterviewQuestion {
@@ -279,6 +319,8 @@ export interface InterviewQuestion {
   askedBy?: string | null;
   reviewJson?: string | null;
   mastery?: number;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 export interface InterviewRound {
@@ -302,6 +344,8 @@ export interface InterviewRound {
   /** 2026-10-20 v2:整轮复盘汇总 / 结构化备考报告 JSON。 */
   reviewJson?: string | null;
   prepReportJson?: string | null;
+  /** 票101:读时 xmin。 */
+  version?: number;
 }
 
 export interface PrepQuestion {
@@ -324,6 +368,27 @@ export interface UpcomingRound {
   location?: string;
   meetingLink?: string;
   outcome: string;
+}
+
+/**
+ * CONF-CAL-2 轮次提醒(应用内):后端 RoundReminderDto 的前端镜像。
+ * isDue 由后端按服务器时钟判定,前端不重算;status 列表端点只回 Pending。
+ */
+export interface RoundReminderDto {
+  id: string;
+  entryId: string;
+  roundId: string;
+  companyName: string;
+  role: string;
+  stage: string;
+  roundOrder: number;
+  scheduledDate?: string | null;
+  scheduledTime?: string | null;
+  startAt: string;
+  kind: 'DayBefore' | 'HourBefore';
+  remindAt: string;
+  isDue: boolean;
+  status: string;
 }
 
 /** 轮次通过概率:基于历史同 stage 通过率 + 准备度信号。 */
@@ -536,6 +601,8 @@ export interface KnowledgeItem {
   relations?: KnowledgeRelation[];
   createdAt?: string;
   updatedAt?: string;
+  /** 票70:读详情时的 xmin 并发版本;详情编辑保存时原样回传,过期保存会被后端 409 拒绝。票113 起列表项亦回传(批量删逐项 If-Match 用)。 */
+  version?: number;
 
   // ---- 来源标记(需求 6.4.2 / 6.4.4)----
   /** 来源实战机经条目 id。 */
@@ -668,6 +735,8 @@ export interface MockSession {
   summary?: string;
   startedAt: string;
   completedAt?: string;
+  /** 票113:列表项读时 xmin(票111 只在详情回传);列表删会话时 If-Match 回传,过期后端 409。 */
+  version?: number;
 }
 
 export interface MockQuestion {
@@ -707,15 +776,16 @@ export interface RadarPoint {
   dimension: string;
   nameZh: string;
   current: number;
-  best: number;
+  /** 后端 int?:无快照时为 null(JSON 中直接省略),见 radar.helpers.ts 的守卫口径。 */
+  best: number | null;
   previous: number;
   changeFromPrevious: number;
 }
 
+/** FUN-07(票35):后端只回结构化 Code+Params,文案由前端 localized-messages.helpers 本地化。 */
 export interface Insight {
-  headline: string;
-  detail: string;
-  suggestedAction?: string;
+  code: string;
+  params: Record<string, string>;
   severity?: 'info' | 'warning' | 'critical' | string;
 }
 
@@ -817,6 +887,8 @@ export interface AdminUser {
   avatarUrl?: string;
   /** 锁定到期时间;大于当前时间即处于锁定状态。 */
   lockedUntil?: string;
+  /** 票101:读时 xmin(管理员保存回传)。 */
+  version?: number;
 }
 
 export interface AdminRole {
@@ -826,6 +898,8 @@ export interface AdminRole {
   isSystemRole: boolean;
   permissions: string[];
   userCount: number;
+  /** 票101:读时 xmin(角色保存回传)。 */
+  version?: number;
 }
 
 /** GET /api/admin/permissions —— 权限点目录(按资源分组渲染勾选框)。 */

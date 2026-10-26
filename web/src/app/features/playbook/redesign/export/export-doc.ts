@@ -217,26 +217,26 @@ interface Line { text: string; size: number; bold: boolean; color: string; gapAf
 
 function docToLines(doc: ExportDoc): Line[] {
   const lines: Line[] = [
-    { text: doc.title, size: 30, bold: true, color: '#111', gapAfter: 10 }
+    { text: doc.title, size: 30, bold: true, color: '#0f172a', gapAfter: 10 }
   ];
-  if (doc.subtitle) lines.push({ text: doc.subtitle, size: 16, bold: false, color: '#555', gapAfter: 16 });
-  const body: Line = { text: '', size: 17, bold: false, color: '#222', gapAfter: 8 };
+  if (doc.subtitle) lines.push({ text: doc.subtitle, size: 16, bold: false, color: '#475569', gapAfter: 16 });
+  const body: Line = { text: '', size: 17, bold: false, color: '#0f172a', gapAfter: 8 };
   for (const b of doc.blocks) {
     switch (b.kind) {
-      case 'heading': lines.push({ text: b.text, size: 22, bold: true, color: '#111', gapAfter: 8 }); break;
-      case 'subheading': lines.push({ text: b.text, size: 19, bold: true, color: '#222', gapAfter: 6 }); break;
+      case 'heading': lines.push({ text: b.text, size: 22, bold: true, color: '#0f172a', gapAfter: 8 }); break;
+      case 'subheading': lines.push({ text: b.text, size: 19, bold: true, color: '#0f172a', gapAfter: 6 }); break;
       case 'para': lines.push({ ...body, text: b.text }); break;
       case 'qa':
-        lines.push({ text: `${b.speaker}${b.timeLabel ? ` · ${b.timeLabel}` : ''}`, size: 15, bold: true, color: '#3f51b5', gapAfter: 2 });
+        lines.push({ text: `${b.speaker}${b.timeLabel ? ` · ${b.timeLabel}` : ''}`, size: 15, bold: true, color: '#2563eb', gapAfter: 2 });
         lines.push({ ...body, text: b.text, gapAfter: 12 });
         break;
       case 'analysis':
-        lines.push({ text: b.title, size: 16, bold: true, color: '#111', gapAfter: 4 });
+        lines.push({ text: b.title, size: 16, bold: true, color: '#0f172a', gapAfter: 4 });
         for (const l of b.lines) lines.push({ ...body, text: `• ${l}`, size: 16, gapAfter: 4 });
         lines.push({ ...body, text: '', gapAfter: 6 });
         break;
       case 'std':
-        lines.push({ text: b.label, size: 15, bold: true, color: '#3f51b5', gapAfter: 2 });
+        lines.push({ text: b.label, size: 15, bold: true, color: '#2563eb', gapAfter: 2 });
         lines.push({ ...body, text: b.text, gapAfter: 12 });
         break;
       case 'list':

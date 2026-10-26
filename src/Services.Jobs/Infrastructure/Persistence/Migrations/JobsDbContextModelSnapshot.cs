@@ -122,6 +122,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -132,7 +135,92 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ApplicationId");
 
+                    b.HasIndex("UserId");
+
                     b.ToTable("application_communications", "jobs");
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationFavorite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "ApplicationId")
+                        .IsUnique();
+
+                    b.ToTable("application_favorites", "jobs");
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationQuestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("UserId", "ApplicationId");
+
+                    b.ToTable("application_questions", "jobs");
                 });
 
             modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationStatusChange", b =>
@@ -218,6 +306,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Website")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
@@ -230,7 +321,11 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("Name");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "Name")
                         .IsUnique();
 
                     b.ToTable("companies", "jobs");
@@ -354,12 +449,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasColumnType("date");
 
                     b.Property<string>("Benefits")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("CompanyDescription")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid");
@@ -381,12 +474,10 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(2048)");
 
                     b.Property<string>("JdSummary")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("JdText")
-                        .HasMaxLength(40000)
-                        .HasColumnType("character varying(40000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("JobType")
                         .HasMaxLength(100)
@@ -439,8 +530,7 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.Property<string>("Requirements")
-                        .HasMaxLength(20000)
-                        .HasColumnType("character varying(20000)");
+                        .HasColumnType("text");
 
                     b.Property<int?>("ResumeScore")
                         .HasColumnType("integer");
@@ -454,6 +544,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("SectionsJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Source")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -465,6 +558,9 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("WorkAuthorization")
                         .HasMaxLength(500)
@@ -485,6 +581,8 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
 
                     b.HasIndex("Status", "Priority");
 
@@ -589,6 +687,24 @@ namespace YourInterview.Services.Jobs.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationCommunication", b =>
+                {
+                    b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationFavorite", b =>
+                {
+                    b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Jobs.Domain.ApplicationQuestion", b =>
                 {
                     b.HasOne("YourInterview.Services.Jobs.Domain.JobApplication", null)
                         .WithMany()

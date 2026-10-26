@@ -1,4 +1,4 @@
-<div class="page">
+<div class="page content-in">
   <header class="page-head">
     <div>
       <h2>{{ t('nav.techstack') }}</h2>
@@ -18,11 +18,13 @@
         {{ t(editing() ? 'common.done' : 'common.edit') }}
       </button>
       <button mat-icon-button (click)="openCategoryManager()"
-              [matTooltip]="t('ts.cat.manage')">
+              [matTooltip]="t('ts.cat.manage')"
+      [attr.aria-label]="t('ts.cat.manage')">
         <mat-icon>category</mat-icon>
       </button>
       <button mat-icon-button (click)="openTrash()"
-              [matTooltip]="t('ts.trash.title')">
+              [matTooltip]="t('ts.trash.title')"
+      [attr.aria-label]="t('ts.trash.title')">
         <mat-icon>delete_outline</mat-icon>
       </button>
       @if (duplicateGroups().length > 0) {
@@ -39,7 +41,8 @@
           <span class="review-badge">{{ buckets()?.dueToday }}</span>
         </button>
       }
-      <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')">
+      <button mat-icon-button (click)="reload()" [matTooltip]="t('common.refresh')"
+      [attr.aria-label]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
       <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('techstack.newEntry')">
@@ -99,12 +102,13 @@
           </div>
 
           <!-- ★ #4:FSRS 期望留存率 + 面试日复习量预测 -->
-          <!-- ★ #9:复习热力图 + 连击 -->
+          <!-- ★ #9:复习热力图 + 连击（票 138：先隐藏，showReviewHeatmap 改 true 即恢复） -->
+          @if (showReviewHeatmap) {
           <div class="heatmap-panel">
             <div class="heatmap-head">
-              <span class="heatmap-title">复习热力图</span>
+              <span class="heatmap-title">{{ t('ts.heatmap.title') }}</span>
               @if (reviewStreak() > 0) {
-                <span class="streak-badge">🔥 {{ reviewStreak() }} 天连击</span>
+                <span class="streak-badge">{{ tn('ts.heatmap.streak', reviewStreak()) }}</span>
               }
             </div>
             <div class="heatmap-grid">
@@ -112,21 +116,32 @@
                 <div class="heatmap-week">
                   @for (day of week; track day.date) {
                     <div class="heatmap-day" [class]="'lv-' + day.level"
-                         [matTooltip]="day.count >= 0 ? day.date + ': ' + day.count + ' 条' : ''"></div>
+                         [matTooltip]="day.count >= 0 ? tf('ts.heatmap.count', { date: day.date, n: day.count }) : ''"></div>
                   }
                 </div>
               }
             </div>
             <div class="heatmap-legend">
-              <span>少</span>
+              <span>{{ t('ts.heatmap.less') }}</span>
               <div class="heatmap-day lv-0"></div>
               <div class="heatmap-day lv-1"></div>
               <div class="heatmap-day lv-2"></div>
               <div class="heatmap-day lv-3"></div>
               <div class="heatmap-day lv-4"></div>
-              <span>多</span>
+              <span>{{ t('ts.heatmap.more') }}</span>
             </div>
+            <!-- 票123 R-10:窗口内一次复习都没有时,图例下面给出一次邀请 ——
+                 一句话说明这张图会怎么填起来,加一个进入既有复习流程的行动。
+                 startReview() 是复习流程的真实入口;没有到期项时它自己报
+                 techstack.reviewNoDue(既有行为,不是这里发明的)。 -->
+            @if (heatmapTotalCount() === 0) {
+              <div class="heatmap-invite">
+                <p>{{ t('ts.heatmap.empty') }}</p>
+                <button mat-button color="primary" (click)="startReview()">{{ t('ts.heatmap.startReview') }}</button>
+              </div>
+            }
           </div>
+          }
         </div>
       }
       <div class="filter-header">
@@ -179,7 +194,8 @@
           <mat-icon matPrefix>search</mat-icon>
           @if (search()) {
             <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
-                    [matTooltip]="t('common.clearFilter')">
+                    [matTooltip]="t('common.clearFilter')"
+            [attr.aria-label]="t('common.clearFilter')">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -301,7 +317,8 @@
       @if (totalPages() > 1) {
         <div class="list-pager">
           <button mat-icon-button [disabled]="page() <= 1" (click)="goPage(page() - 1)"
-                  [matTooltip]="t('common.prevPage')">
+                  [matTooltip]="t('common.prevPage')"
+          [attr.aria-label]="t('common.prevPage')">
             <mat-icon>chevron_left</mat-icon>
           </button>
           <span>{{ page() }} / {{ totalPages() }}</span>
@@ -324,8 +341,12 @@
             @if (detailEditing()) {
               <mat-form-field class="meta-title-field" subscriptSizing="dynamic">
                 <mat-label>{{ t('ts.detail.titleLabel') }}</mat-label>
-                <input matInput [(ngModel)]="detailDraft.title" />
+                <input matInput [(ngModel)]="detailDraft.title"
+                       (ngModelChange)="clearDetailFieldError('title')" />
               </mat-form-field>
+              @if (detailFieldErrors().title) {
+                <div class="field-error" role="alert">{{ detailFieldErrors().title }}</div>
+              }
             } @else {
               <h3>{{ it.title }}</h3>
             }
@@ -358,7 +379,7 @@
               </button>
               <!-- ★ 打通:去 AI Practice 练这张卡 -->
               <button mat-stroked-button (click)="practiceCard(it)">
-                <mat-icon>mic</mat-icon> 口语练习
+                <mat-icon>mic</mat-icon> {{ t('ts.detail.speakingPractice') }}
               </button>
             }
             <mat-menu #reviewMenu="matMenu" class="app-menu">
@@ -385,12 +406,16 @@
               <div class="detail-meta-row">
                 <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
                   <mat-label>{{ t('ts.filter.topic') }}</mat-label>
-                  <mat-select [(ngModel)]="detailDraft.topic">
+                  <mat-select [(ngModel)]="detailDraft.topic"
+                              (ngModelChange)="clearDetailFieldError('topic')">
                     @for (tp of topics(); track tp) {
                       <mat-option [value]="tp">{{ tp }}</mat-option>
                     }
                   </mat-select>
                 </mat-form-field>
+                @if (detailFieldErrors().topic) {
+                  <div class="field-error" role="alert">{{ detailFieldErrors().topic }}</div>
+                }
                 <mat-form-field subscriptSizing="dynamic" class="detail-meta-field">
                   <mat-label>{{ t('ts.detail.difficultyLabel') }}</mat-label>
                   <mat-select [(ngModel)]="detailDraft.difficulty">
@@ -435,8 +460,9 @@
                 <!-- ★ #8:一键转为闪卡 -->
                 @if (!detailEditing() && blockText(it, b.key)) {
                   <button mat-icon-button class="flashcard-btn"
-                          matTooltip="转为闪卡 (加入复习队列)"
-                          (click)="makeFlashcard(b.key)">
+                          [matTooltip]="t('ts.detail.toFlashcard')"
+                          (click)="makeFlashcard(b.key)"
+                  [attr.aria-label]="t('ts.detail.toFlashcard')">
                     <mat-icon>style</mat-icon>
                   </button>
                 }
@@ -466,7 +492,9 @@
                 <div class="source-edit-list">
                   @for (s of detailDraft.sources; track $index) {
                     <mat-chip class="source-chip">
-                      {{ sourceEntryLabel(s) }}
+                      <span class="source-entry">
+                        @for (p of sourceEntryParts(s); track $index) { <span class="source-part">{{ p }}</span> }
+                      </span>
                       <button matChipRemove (click)="removeDetailSource($index)">
                         <mat-icon>cancel</mat-icon>
                       </button>
@@ -497,7 +525,9 @@
                     <mat-label>{{ t('ts.source.round') }}</mat-label>
                     <mat-select [disabled]="!selectedCompanyId()" [value]="selectedRoundId()" (selectionChange)="onRoundSelected($event.value)">
                       @for (r of companyRounds(); track r.roundId) {
-                        <mat-option [value]="r.roundId">{{ roundOptionLabel(r) }}</mat-option>
+                        <mat-option [value]="r.roundId">
+                          @for (p of roundOptionParts(r); track $index) { <span class="round-option-part">{{ p }}</span> }
+                        </mat-option>
                       } @empty {
                         <mat-option disabled>{{ t('ts.source.roundEmpty') }}</mat-option>
                       }
@@ -512,10 +542,14 @@
                 <div class="source-text-list">
                   @for (s of parseSources(it); track $index) {
                     @if (s.interviewEntryId) {
-                      <a class="source-text link" [routerLink]="['/playbook', s.interviewEntryId]"
-                         [queryParams]="{ tab: 'rounds' }">{{ sourceEntryLabel(s) }}</a>
+                      <a class="source-text link source-entry" [routerLink]="['/playbook', s.interviewEntryId]"
+                         [queryParams]="{ tab: 'rounds' }">
+                        @for (p of sourceEntryParts(s); track $index) { <span class="source-part">{{ p }}</span> }
+                      </a>
                     } @else {
-                      <span class="source-text">{{ sourceEntryLabel(s) }}</span>
+                      <span class="source-text source-entry">
+                        @for (p of sourceEntryParts(s); track $index) { <span class="source-part">{{ p }}</span> }
+                      </span>
                     }
                   }
                 </div>
@@ -611,23 +645,23 @@
             <!-- ★ #5:重做模式开关 -->
             <label class="resole-toggle">
               <input type="checkbox" [checked]="resoleMode()" (change)="toggleResoleMode()" />
-              <span>重做模式 (只看题,讲套路)</span>
+              <span>{{ t('ts.resole.toggle') }}</span>
             </label>
             @if (resoleMode()) {
               <!-- 二元评分: Pass/Fail -->
               @if (!resoleRevealed()) {
-                <p class="resole-hint">看着题目,把核心套路讲出来 (不要背答案),然后翻开对照。</p>
-                <button mat-flat-button color="primary"
-                        (click)="resoleRevealed.set(true)">翻开答案</button>
+                <p class="resole-hint">{{ t('ts.resole.hint') }}</p>
+                <button mat-flat-button color="primary" class="resole-reveal"
+                        (click)="resoleRevealed.set(true)">{{ t('ts.resole.reveal') }}</button>
               } @else {
                 <div class="binary-grade">
                   <button mat-flat-button class="g-pass"
                           [disabled]="reviewLoading()" (click)="gradeBinary(true)">
-                    ✓ 讲出了套路
+                    {{ t('ts.resole.pass') }}
                   </button>
                   <button mat-flat-button class="g-fail"
                           [disabled]="reviewLoading()" (click)="gradeBinary(false)">
-                    ✗ 没讲出来
+                    {{ t('ts.resole.fail') }}
                   </button>
                 </div>
               }

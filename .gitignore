@@ -72,3 +72,20 @@ artifacts/
 # --- agent working docs(本地过程文档,不入库) ---
 replica/
 web/proxy.local.json
+
+# --- 覆盖率产物(CI/本地跑出来的报告,不入库;基线本身入库见 scripts/coverage-baseline.txt) ---
+coverage/
+web/.tmp-check/
+
+# --- E2E 产物(票89:报告、截图、trace) ---
+web/e2e/.results/
+web/e2e/.report/
+web/test-results/
+web/playwright-report/
+
+# --- 票119 词典本地数据(牛津包为用户个人版权数据,永不入库;SPEC §5.1) ---
+dict-data/
+**/dict-data/
+*.mdx
+*.mdd
+*oxford-pack*

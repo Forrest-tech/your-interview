@@ -9,7 +9,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: #fff;
+  background: #ffffff;
   /* ★ 2026-09-26(Forrest):右边框删除 —— 外层 .col-tree 已经画了
      分隔线,这里再画一条就变成"两条竖线"。分隔职责归外层,只留一条。 */
 }
@@ -21,7 +21,7 @@
   align-items: stretch;
   gap: 0;
   padding: 8px 8px 6px 14px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
   flex: 0 0 auto;
   /* ★ 2026-09-26:头部内按钮的隐形触摸目标(Material touch-target)
      会向右探出几px,裁在头部内部,不再把 scrollWidth 撑过容器。 */
@@ -32,14 +32,14 @@
   font-size: 18px;
   width: 18px;
   height: 18px;
-  color: #5a6270;
+  color: #475569;
 }
 
 .head-title {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  color: #3a3f47;
+  color: #0f172a;
 }
 
 .spacer { flex: 1 1 auto; }
@@ -83,11 +83,11 @@
   height: 28px;
   padding: 0 24px 0 8px;
   font-size: 12.5px;
-  color: #3a3f47;
-  background: #fff
+  color: #0f172a;
+  background: #ffffff
     url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237a8393' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")
     no-repeat right 8px center;
-  border: 1px solid #d7dce4;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   appearance: none;
   -webkit-appearance: none;
@@ -95,11 +95,11 @@
   text-overflow: ellipsis;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.cat-select:hover { border-color: #b9c2d0; }
+.cat-select:hover { border-color: #e2e8f0; }
 .cat-select:focus {
   outline: none;
-  border-color: #2f6fed;
-  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.14);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
 }
 
 .cat-manage {
@@ -116,7 +116,7 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  color: #3a3f47;
+  color: #0f172a;
   margin-right: 8px;
 }
 
@@ -127,7 +127,7 @@
   height: 26px !important;
   line-height: 26px !important;
   padding: 0 !important;
-  color: #7a8393 !important;
+  color: #64748b !important;
   border-radius: 6px;
 }
 .head-tool mat-icon {
@@ -136,8 +136,62 @@
   height: 17px;
 }
 .head-tool:hover {
-  color: #2f6fed !important;
-  background: #eef4ff;
+  color: #2563eb !important;
+  background: #eff6ff;
+}
+
+/* ---------- 回收站入口(★ 票124) ----------
+   按钮本体沿用 .head-tool;徽标绝对定位在右上角,
+   >99 时显示 99+(文案由 trashBadgeLabel 给出)。 */
+.head-trash {
+  position: relative;
+}
+
+.trash-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ---------- 树空时的回收站指针行(★ 票124 §8.4) ----------
+   追加在既有 .tree-empty 下方,是一行可点击的出路提示。 */
+.tree-trash-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 16px 18px;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f7f8fb;
+  color: #2563eb;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-trash-hint:hover {
+  background: #eff6ff;
+}
+
+.tree-trash-hint mat-icon {
+  flex: none;
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #2563eb;
 }
 
 /* ---------- 展开/收起双箭头(2026-09-23 第十二轮) ----------
@@ -175,22 +229,22 @@
   padding: 0;
   border: 1px solid #e2e8f0;
   border-radius: 9px;
-  background: #fff;
+  background: #ffffff;
   color: #475569;
   cursor: pointer;
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 .head-act:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #1e293b;
+  background: #f6f8fb;
+  border-color: #e2e8f0;
+  color: #0f172a;
 }
 .head-act[disabled] {
   opacity: .45;
   cursor: not-allowed;
 }
 .head-act:focus-visible {
-  outline: 2px solid #2f6fed;
+  outline: 2px solid #2563eb;
   outline-offset: 1px;
 }
 .head-act + .head-act { margin-left: 6px; }
@@ -211,11 +265,46 @@
   padding: 6px 0 24px;
 }
 
+/* ★ ML-FIX-UI(W-UI-2):只读说明 —— 与空态同级的弱化提示,不抢视觉。 */
+.tree-readonly {
+  margin: 8px 14px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* ★ ML-FIX-UI(W-UI-1):保存失败横幅 —— 与全站 err-card 同口径:红左线 + 浅红底。 */
+.tree-save-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 14px 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--stop);
+  border-radius: 0 8px 8px 0;
+  background: #fef2f2;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.tree-save-error-text {
+  flex: 1;
+  min-width: 0;
+}
+.tree-save-error-retry {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--stop);
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .tree-empty {
   margin: 18px 16px;
   font-size: 12.5px;
   line-height: 1.7;
-  color: #8a9099;
+  color: #64748b;
 }
 
 /* ---------- 节点行 ----------
@@ -230,18 +319,18 @@
   padding: 4px 6px 4px 0;
   cursor: pointer;
   font-size: 13.5px;
-  color: #363a41;
+  color: #0f172a;
   border-radius: 6px;
   margin: 0 6px;
   transition: background 110ms ease;
   user-select: none;
 }
 
-.node-row:hover { background: rgba(0, 0, 0, 0.045); }
+.node-row:hover { background: rgba(15, 23, 42, 0.045); }
 
 .node-row.selected {
-  background: rgba(63, 81, 181, 0.13);
-  color: #303f9f;
+  background: rgba(37, 99, 235, 0.13);
+  color: #2563eb;
   font-weight: 600;
 }
 
@@ -250,7 +339,7 @@
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
-  color: #7b828c;
+  color: #64748b;
 }
 
 .chev-ph {
@@ -265,8 +354,8 @@
   flex: 0 0 17px;
 }
 
-.node-icon.folder { color: #d9a326; }
-.node-icon.file { color: #6d7787; }
+.node-icon.folder { color: var(--attention); }
+.node-icon.file { color: #475569; }
 
 /* ★ 第四十三轮(Forrest):标记色圆点 —— 标记属于素材条目本身,
    有标记的素材在树上直接可见,之后可按颜色筛选(如"只看红色")。 */
@@ -276,7 +365,7 @@
   height: 8px;
   border-radius: 50%;
   margin-right: 7px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .08);
 }
 
 .node-name {
@@ -288,7 +377,7 @@
 
 .node-count {
   font-size: 11px;
-  color: #9aa1ab;
+  color: #64748b;
   padding: 0 4px;
 }
 
@@ -298,7 +387,7 @@
   font-size: 13px;
   font-family: inherit;
   padding: 2px 6px;
-  border: 1px solid #3f51b5;
+  border: 1px solid #2563eb;
   border-radius: 4px;
   outline: none;
 }
@@ -337,24 +426,24 @@
 
 /* 移入文件夹:整行高亮 + 蓝色描边 */
 .node-row.drop-into {
-  background: rgba(63, 81, 181, 0.16);
-  box-shadow: inset 0 0 0 2px #3f51b5;
+  background: rgba(37, 99, 235, 0.16);
+  box-shadow: inset 0 0 0 2px #2563eb;
 }
 
 /* 插到前面:顶部一条粗线 */
 .node-row.drop-before {
-  box-shadow: inset 0 3px 0 0 #3f51b5;
+  box-shadow: inset 0 3px 0 0 #2563eb;
 }
 
 /* 插到后面:底部一条粗线 */
 .node-row.drop-after {
-  box-shadow: inset 0 -3px 0 0 #3f51b5;
+  box-shadow: inset 0 -3px 0 0 #2563eb;
 }
 
 /* 空白区落点:虚线框提示"放这里=移到最外层" */
 .tree-body.root-drop {
-  background: rgba(63, 81, 181, 0.06);
-  outline: 2px dashed #3f51b5;
+  background: rgba(37, 99, 235, 0.06);
+  outline: 2px dashed #2563eb;
   outline-offset: -6px;
 }
 
@@ -362,17 +451,17 @@
 .move-panel {
   margin: 4px 10px 8px;
   padding: 6px;
-  border: 1px solid rgba(63, 81, 181, 0.3);
+  border: 1px solid rgba(37, 99, 235, 0.3);
   border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.09);
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.09);
 }
 
 .move-title {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.4px;
-  color: #7b828c;
+  color: #64748b;
   text-transform: uppercase;
   padding: 4px 6px 6px;
 }
@@ -388,28 +477,28 @@
   background: transparent;
   font-size: 12.5px;
   font-family: inherit;
-  color: #363a41;
+  color: #0f172a;
   text-align: left;
   cursor: pointer;
 }
 
-.move-item:hover { background: rgba(63, 81, 181, 0.1); }
+.move-item:hover { background: rgba(37, 99, 235, 0.1); }
 
 /* ★ 2026-09-25:类别分区 —— 图标用中性蓝灰(区别于文件夹的黄),可辨识即可 */
-.move-item.is-category mat-icon { color: #5b7fd4; }
+.move-item.is-category mat-icon { color: #2563eb; }
 
 /* 类别分区与文件夹分区之间的细分隔线(Notion Move to 同款分组法) */
 .move-divider {
   height: 1px;
   margin: 4px 6px;
-  background: rgba(63, 81, 181, 0.16);
+  background: rgba(37, 99, 235, 0.16);
 }
 
 .move-item mat-icon {
   font-size: 16px;
   width: 16px;
   height: 16px;
-  color: #d9a326;
+  color: var(--attention);
   flex: 0 0 16px;
 }
 
@@ -422,5 +511,5 @@
 .move-empty {
   margin: 4px 8px;
   font-size: 11.5px;
-  color: #9aa1ab;
+  color: #64748b;
 }

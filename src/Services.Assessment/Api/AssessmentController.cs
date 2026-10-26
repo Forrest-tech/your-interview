@@ -1,10 +1,12 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.BuildingBlocks.Web;
 using YourInterview.Services.Assessment.Application;
 using YourInterview.Services.Assessment.Domain;
+using YourInterview.SharedContracts.Ai;
 using YourInterview.SharedContracts.Security;
 
 namespace YourInterview.Services.Assessment.Api;
@@ -20,7 +22,8 @@ namespace YourInterview.Services.Assessment.Api;
 [Route("api/assessment")]
 [Authorize]
 public sealed class AssessmentController(ISender sender, ICurrentUser currentUser,
-    PronunciationAssessor assessor, SpeechSynthesizer synthesizer) : ControllerBase
+    PronunciationAssessor assessor, SpeechSynthesizer synthesizer,
+    ILogger<AssessmentController> logger) : ControllerBase
 {
     private Guid Me => currentUser.UserId ?? Guid.Empty;
 
@@ -45,10 +48,22 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     }
 
     [HttpPost("sessions")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Create([FromBody] CreateSessionBody body, CancellationToken ct)
     {
-        var mode = Enum.TryParse<SessionMode>(body.Mode, true, out var m) ? m : SessionMode.TopicDrill;
+        // 票 63:mode 必须是 SessionMode 的合法枚举名(解析口径见 SessionModeParsing,
+        // 有单测钉住)—— 解析失败回 400 字段级校验错误,不再静默回退 TopicDrill
+        // (旧行为下前端误传 FullMock 时,用户选的「完整模拟」实际建成主题专项
+        // 会话且无任何提示)。
+        if (!SessionModeParsing.TryParse(body.Mode, out var mode))
+            return Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["Mode"] = [$"不支持的练习模式 '{body.Mode}'。合法值:{SessionModeParsing.ValidNames}。"]
+                },
+                title: "Validation failure",
+                statusCode: StatusCodes.Status400BadRequest);
+
         var r = await sender.Send(new CreateSessionCommand(Me, body.Title, mode, body.Topic,
             body.CompanyStyle, body.TargetQuestionCount, body.Language ?? "en"), ct);
         return r.IsSuccess
@@ -58,15 +73,16 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
     [HttpDelete("sessions/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> Delete(Guid id, CancellationToken ct)
+    public async Task<IResult> Delete(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new DeleteSessionCommand(id, Me), ct);
+        var r = await sender.Send(new DeleteSessionCommand(id, Me, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
     /// <summary>结束练习并生成总评。</summary>
     [HttpPost("sessions/{id:guid}/complete")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Complete(Guid id, [FromBody] CompleteBody body, CancellationToken ct)
     {
         var r = await sender.Send(new CompleteSessionCommand(id, Me, body.OverallSummary,
@@ -75,7 +91,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     }
 
     [HttpPost("sessions/{id:guid}/abandon")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Abandon(Guid id, CancellationToken ct)
     {
         var r = await sender.Send(new AbandonSessionCommand(id, Me), ct);
@@ -93,14 +109,59 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         return r.IsSuccess ? Results.Ok(new { ids = r.Value }) : r.ToProblemDetails();
     }
 
+    /// <summary>票95:后端编排 AI 出题(幂等补差额;失败会话留 Draft 可重试)。</summary>
+    [HttpPost("sessions/{id:guid}/generate")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
+    public async Task<IResult> Generate(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var r = await sender.Send(new GenerateQuestionsCommand(id, Me), ct);
+            if (r.IsSuccess) return Results.Ok(new { questionCount = r.Value });
+            if (r.Error.Code == "Mock.AiInvalidResponse")
+                return AiProblem(502, "Mock.AiGenerationFailed", "AI 出题失败", r.Error.Description);
+            return r.ToProblemDetails();
+        }
+        catch (AiGatewayException ex) { return MapAiError(ex, scoring: false); }
+    }
+
+    /// <summary>票95:后端编排 AI 评分(答后调用;失败题停 Answered 可重试;已评分幂等)。</summary>
+    [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/score-ai")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
+    public async Task<IResult> ScoreAi(Guid id, Guid questionId, CancellationToken ct)
+    {
+        try
+        {
+            var r = await sender.Send(new ScoreQuestionWithAiCommand(id, questionId, Me), ct);
+            if (r.IsSuccess) return Results.Ok(new { scored = true });
+            if (r.Error.Code == "Mock.AiInvalidResponse")
+                return AiProblem(502, "Mock.AiScoringFailed", "AI 评分失败", r.Error.Description);
+            return r.ToProblemDetails();
+        }
+        catch (AiGatewayException ex) { return MapAiError(ex, scoring: true); }
+    }
+
+    // 票116 F-H2:按票47 定版脱敏 —— 对外 detail 用 MockAiFailure 固定文案,
+    // 异常原文(含 AiGateway 连接细节)只进服务端日志,绝不下发。
+    private IResult MapAiError(AiGatewayException ex, bool scoring)
+    {
+        logger.LogWarning(ex, "Mock AI 编排调用 AiGateway 失败(scoring={Scoring})", scoring);
+        var p = MockAiFailure.For(ex, scoring);
+        return AiProblem(p.StatusCode, p.Code, p.Title, p.Detail);
+    }
+
+    private static IResult AiProblem(int status, string code, string title, string? detail)
+        => Results.Problem(title: title, detail: detail, statusCode: status,
+            extensions: new Dictionary<string, object?> { ["code"] = code });
+
     /// <summary>作答:提交文本或音频。</summary>
     [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/answer")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Answer(Guid id, Guid questionId, [FromBody] AnswerBody body,
         CancellationToken ct)
     {
         var r = await sender.Send(new AnswerQuestionCommand(id, questionId, Me, body.AnswerText,
-            body.AudioPath, body.DurationSeconds, body.TranscriptJson), ct);
+            body.AudioPath, body.DurationSeconds, body.TranscriptJson, body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -113,15 +174,16 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         var r = await sender.Send(new ScoreQuestionCommand(id, questionId, Me,
             body.Pronunciation, body.Fluency, body.SentenceIntegrity, body.Structure,
             body.TechnicalDepth, body.Relevance, body.Comment, body.RecommendedAnswer,
-            body.BetterStructure, body.FillerWordsJson, body.Issues ?? []), ct);
+            body.BetterStructure, body.FillerWordsJson, body.Issues ?? [], body.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
     [HttpPost("sessions/{id:guid}/questions/{questionId:guid}/skip")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> Skip(Guid id, Guid questionId, CancellationToken ct)
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
+    public async Task<IResult> Skip(Guid id, Guid questionId, [FromBody] SkipBody? body,
+        CancellationToken ct)
     {
-        var r = await sender.Send(new SkipQuestionCommand(id, questionId, Me), ct);
+        var r = await sender.Send(new SkipQuestionCommand(id, questionId, Me, body?.Version), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -147,9 +209,9 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// <summary>根据历史短板推荐下一次该练什么。</summary>
     [HttpGet("suggest")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
-    public async Task<IResult> Suggest([FromQuery] int questionCount = 5, CancellationToken ct = default)
+    public async Task<IResult> Suggest([FromQuery] int questionCount = 5, [FromQuery] string? lang = null, CancellationToken ct = default)
     {
-        var r = await sender.Send(new SuggestSessionCommand(Me, questionCount), ct);
+        var r = await sender.Send(new SuggestSessionCommand(Me, questionCount, lang ?? "zh"), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -165,7 +227,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// key 只在服务端;浏览器拿不到,也就无法被滥用。
     /// </summary>
     [HttpPost("pronunciation/assess")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> AssessPronunciation([FromBody] AssessPronunciationBody body,
         CancellationToken ct)
     {
@@ -238,12 +300,19 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             // 用 502 而不是 401(401 会被前端理解为"会话过期"→ 刷新/登出)。
             // 此处必须显式捕获:AzureAuthException 继承自 Exception 而非
             // InvalidOperationException,不捕获会漏到全局处理器变成 500。
-            return Results.Problem(title: "Azure 密钥/区域无效", detail: ex.Message,
+            // ★ 票117:detail 改 SpeechAiFailure 固定脱敏文案 —— AzureAuthException
+            // 消息拼有 Azure 上游响应 body,原文只进服务端日志(票47/116 定版)。
+            logger.LogWarning(ex, "发音评估被 Azure 拒绝凭据");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.InvalidCredential);
+            return Results.Problem(title: "Azure 密钥/区域无效", detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Problem(title: "发音评估失败", detail: ex.Message,
+            // ★ 票117:同上脱敏 —— 此链消息含重试聚合嵌的底层异常原文(last.Message)。
+            logger.LogWarning(ex, "发音评估失败");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.Pronunciation);
+            return Results.Problem(title: p.Title, detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
     }
@@ -259,14 +328,14 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
     // ---------- 素材树 ----------
 
-    /// <summary>取我的整棵素材树。</summary>
+    /// <summary>取我的整棵素材树。★ 票111 段2:包对象 { treeVersion, nodes }(乙案裁定传输形态)。</summary>
     [HttpGet("materials")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
     public async Task<IResult> GetMaterials(CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
         var tree = await sender.Send(new GetMaterialTreeQuery(userId), ct);
-        return Results.Ok(tree);
+        return Results.Ok(new { treeVersion = tree.TreeVersion, nodes = tree.Nodes });
     }
 
     /// <summary>
@@ -278,9 +347,24 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SaveMaterials([FromBody] SaveTreeBody body, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        var result = await sender.Send(new SaveMaterialTreeCommand(userId, body.Nodes ?? [], body.Force), ct);
-        return result.IsSuccess ? Results.Ok(new { saved = result.Value })
-                                : result.ToProblemDetails();
+        var result = await sender.Send(new SaveMaterialTreeCommand(userId, body.Nodes ?? [], body.Force, body.TreeVersion), ct);
+        if (result.IsSuccess)
+            return Results.Ok(new { saved = result.Value.Saved, treeVersion = result.Value.TreeVersion });
+        // ★ 票111 段2:409 响应体附当前 treeVersion,供前端刷新对齐(裁定要求)。
+        if (result.Error.Code == "concurrency_conflict")
+        {
+            var current = await sender.Send(new GetMaterialTreeQuery(userId), ct);
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Concurrency conflict",
+                detail: result.Error.Description,
+                extensions: new Dictionary<string, object?>
+                {
+                    ["code"] = "concurrency_conflict",
+                    ["treeVersion"] = current.TreeVersion
+                });
+        }
+        return result.ToProblemDetails();
     }
 
     /// <summary>
@@ -298,6 +382,77 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
         var result = await sender.Send(new SetMaterialMarkCommand(userId, materialId, body.Color), ct);
         return result.IsSuccess ? Results.Ok(new { saved = true })
                                 : result.ToProblemDetails();
+    }
+
+    // ---------- 素材回收站(★ 票124) ----------
+    // 事故背景:整树覆盖保存会把「未出现在提交树里的存量节点」一律软删,
+    // 而应用内没有任何列出/恢复已删素材的入口 —— 用户只能求助并靠一条
+    // 经批准的 UPDATE 才恢复(135 条素材)。本组端点补这个缺口。
+    //
+    // 路由不冲突性:materials/{materialId:guid} 系列带 guid 约束,
+    // 字面量 trash 不会被 guid 路由吞掉;trash/restore-all 与
+    // {materialId:guid}/restore 形状不同,无歧义。
+
+    /// <summary>
+    /// 我的回收站清单(顶层已删节点)。
+    /// </summary>
+    /// <remarks>
+    /// 裸数组返回(同 GET categories/recordings 的风格)。
+    /// 清单单位 = 顶层已删节点;已删文件夹内部的已删子项不单独列。
+    /// </remarks>
+    [HttpGet("materials/trash")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    public async Task<IResult> GetMaterialTrash(CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var items = await sender.Send(new GetMaterialTrashQuery(userId), ct);
+        return Results.Ok(items);
+    }
+
+    /// <summary>
+    /// 恢复某个已删素材(含已删祖先链 + 全部已删后代)。
+    /// </summary>
+    /// <remarks>
+    /// 响应回**整树包** { restored, treeVersion, nodes } —— 不只回版本号。
+    /// 理由(规格 §6 契约 C1):只回版本号不回节点,会让「版本已对齐、payload
+    /// 缺恢复项」的下一次整树保存畅通无阻地把它再删掉(碎纸机)。
+    /// </remarks>
+    [HttpPost("materials/{materialId:guid}/restore")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> RestoreMaterial(Guid materialId, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new RestoreMaterialCommand(userId, materialId), ct);
+        return result.IsSuccess
+            ? Results.Ok(new
+            {
+                restored = result.Value.Restored,
+                treeVersion = result.Value.TreeVersion,
+                nodes = result.Value.Nodes
+            })
+            : result.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 恢复我的全部已删素材(应对整树误删事故的一键兜底)。
+    /// </summary>
+    /// <remarks>
+    /// 无已删行时 restored=0 且照常回当前树包(幂等,不报错)。
+    /// </remarks>
+    [HttpPost("materials/trash/restore-all")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> RestoreAllMaterials(CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new RestoreAllMaterialsCommand(userId), ct);
+        return result.IsSuccess
+            ? Results.Ok(new
+            {
+                restored = result.Value.Restored,
+                treeVersion = result.Value.TreeVersion,
+                nodes = result.Value.Nodes
+            })
+            : result.ToProblemDetails();
     }
 
     // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
@@ -363,10 +518,11 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// <summary>删除类别;素材由数据库 SetNull 自动回"未分类",数据零丢失。</summary>
     [HttpDelete("categories/{categoryId:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> DeleteCategory(Guid categoryId, CancellationToken ct)
+    public async Task<IResult> DeleteCategory(Guid categoryId, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
         var userId = currentUser.RequireUserId();
-        var result = await sender.Send(new DeleteCategoryCommand(userId, categoryId), ct);
+        var result = await sender.Send(new DeleteCategoryCommand(userId, categoryId, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return result.IsSuccess ? Results.Ok(new { deleted = true }) : result.ToProblemDetails();
     }
 
@@ -439,10 +595,11 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// <summary>删除一条录音(元数据软删 + 尽力删文件)。</summary>
     [HttpDelete("recordings/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> DeleteRecording(Guid id, CancellationToken ct)
+    public async Task<IResult> DeleteRecording(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
         var userId = currentUser.RequireUserId();
-        var result = await sender.Send(new DeleteRecordingCommand(userId, id), ct);
+        var result = await sender.Send(new DeleteRecordingCommand(userId, id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return result.IsSuccess ? Results.NoContent() : result.ToProblemDetails();
     }
 
@@ -466,7 +623,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     ///    这样"评分"与"存分"两件事解耦:网络抖动时不会重复花额度。
     /// </summary>
     [HttpPost("recordings/{id:guid}/score")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> SaveRecordingScore(Guid id, [FromBody] RecordingScoreBody body,
         CancellationToken ct)
     {
@@ -479,7 +636,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             // ★ 第三十四轮:计费口径由前端回传(它刚从 /pronunciation/assess
             //   的响应里拿到 billedSeconds/billedBytes)——
             //   这样读库路径也能显示"当时花了多少",信息不残缺。
-            body.BilledSeconds, body.BilledBytes), ct);
+            body.BilledSeconds, body.BilledBytes, body.Version), ct);
         return result.IsSuccess ? Results.Ok(result.Value) : result.ToProblemDetails();
     }
 
@@ -565,7 +722,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// 这里失败就如实报 401/403 与区域不匹配,绝不做假成功。
     /// </summary>
     [HttpPost("speech/test")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
     public async Task<IResult> TestSpeech(CancellationToken ct)
     {
         if (!await assessor.IsAvailableAsync(Me, ct))
@@ -593,7 +750,10 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             // 网关错误,所以用 502 Bad Gateway。前端据 status 给出可操作提示。
             // 真正需要重新登录的情况由框架的 [Authorize] 中间件以 401 返回,
             // 与业务代码无关,两者从此不再混淆。
-            return Results.Problem(title: "密钥或区域无效", detail: ex.Message,
+            // ★ 票117:detail 改固定脱敏文案,Azure 原文只进日志(同 pronunciation/assess)。
+            logger.LogWarning(ex, "语音连通性测试被 Azure 拒绝凭据");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.InvalidCredential);
+            return Results.Problem(title: "密钥或区域无效", detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
     }
@@ -615,7 +775,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     ///    并告知用户"Azure 不可用",绝不静默冒充。
     /// </summary>
     [HttpPost("tts")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     public async Task<IResult> Synthesize([FromBody] TtsBody body, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(body.Text))
@@ -671,12 +831,18 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             // ⚠️ 同 TestSpeech:Azure 凭据错误绝不能用 401 —— 那会让前端拦截器
             // 误以为"会话过期"并触发刷新/登出。这是上游服务拒绝我们凭据的
             // 网关类错误,用 502;真正的会话失效由 [Authorize] 返回 401。
-            return Results.Problem(title: "密钥或区域无效", detail: ex.Message,
+            // ★ 票117:detail 改固定脱敏文案,Azure 原文(消息含上游 body)只进日志。
+            logger.LogWarning(ex, "语音合成被 Azure 拒绝凭据");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.InvalidCredential);
+            return Results.Problem(title: "密钥或区域无效", detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Problem(title: "语音合成失败", detail: ex.Message,
+            // ★ 票117:同上脱敏 —— 合成链消息嵌 Azure 非成功状态的响应 body。
+            logger.LogWarning(ex, "语音合成失败");
+            var p = SpeechAiFailure.For(SpeechAiFailure.Kind.Synthesis);
+            return Results.Problem(title: p.Title, detail: p.Detail,
                 statusCode: StatusCodes.Status502BadGateway);
         }
     }
@@ -687,48 +853,6 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     //   收敛之前是"界面存 Assessment、生成走 AiGateway"的割裂态,存了也不生效。
     // 历史数据(assessment.ai_settings)由 RemoveAiSettings 迁移自动搬走后删表。
     // 前端已改调 /api/ai/*(网关 YARP 直通 aigateway 集群)。
-
-    // ======================= 简历正文(2026-09-18)=======================
-    // 用途:简历匹配分析(简历 vs JD 关键词比对)+ 面试前准备包的输入。
-    //
-    // 权限沿用 MockRead/MockManage —— 简历与 AI 练习同属"面试准备"域,
-    // 不另起一套权限,避免用户要在两个地方各配一次。
-
-    /// <summary>
-    /// 读当前用户的简历正文。
-    /// 未设置时返回 resumeText = null(前端据此提示"先录入简历"),
-    /// 而不是 404 —— 404 会被前端当成错误弹出提示条。
-    /// </summary>
-    [HttpGet("resume-text")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
-    public async Task<IResult> GetResumeText(CancellationToken ct)
-    {
-        var r = await sender.Send(new GetResumeQuery(Me), ct);
-        return r.IsSuccess
-            ? Results.Ok(new { resumeText = r.Value.Content, version = r.Value.Version,
-                               updatedAt = r.Value.UpdatedAt })
-            : r.ToProblemDetails();
-    }
-
-    /// <summary>存/覆盖当前用户的简历正文(版本号自增)。</summary>
-    [HttpPut("resume-text")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> SaveResumeText([FromBody] ResumeTextBody body, CancellationToken ct)
-    {
-        var r = await sender.Send(new SaveResumeCommand(Me, body.ResumeText ?? string.Empty), ct);
-        return r.IsSuccess
-            ? Results.Ok(new { version = r.Value.Version, updatedAt = r.Value.UpdatedAt })
-            : r.ToProblemDetails();
-    }
-
-    /// <summary>清空简历(回到未设置状态)。</summary>
-    [HttpDelete("resume-text")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
-    public async Task<IResult> DeleteResumeText(CancellationToken ct)
-    {
-        var r = await sender.Send(new DeleteResumeCommand(Me), ct);
-        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
-    }
 
     // ---------- 本机录音存储目录(★ 2026-09-27 Forrest:"我的账户"里可自选) ----------
 
@@ -753,7 +877,7 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     public async Task<IResult> SaveStorageSettings([FromBody] StorageSettingsBody body, CancellationToken ct)
     {
         var r = await sender.Send(
-            new SaveStorageSettingCommand(currentUser.RequireUserId(), body.RootPath), ct);
+            new SaveStorageSettingCommand(currentUser.RequireUserId(), body.RootPath, body.Version), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -767,8 +891,6 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     }
 
 
-/// <summary>简历正文提交。空串由 Handler 归一为"清空"。</summary>
-public sealed record ResumeTextBody(string? ResumeText);
 }
 
 // ---------------- 请求体 ----------------
@@ -781,11 +903,18 @@ public sealed record CompleteBody(string? OverallSummary, string? PriorityAction
 public sealed record AddQuestionsBody(IReadOnlyList<QuestionDraftIn> Questions);
 
 public sealed record AnswerBody(string? AnswerText, string? AudioPath, double? DurationSeconds,
-    string? TranscriptJson);
+    string? TranscriptJson,
+    // ★ 票108 A09:题目行读时 xmin 回传钉版(不传 = 不钉,兼容旧调用方)。
+    uint? Version = null);
 
 public sealed record ScoreBody(int Pronunciation, int Fluency, int SentenceIntegrity, int Structure,
     int TechnicalDepth, int Relevance, string? Comment, string? RecommendedAnswer,
-    string? BetterStructure, string? FillerWordsJson, IReadOnlyList<IssueDraftIn>? Issues);
+    string? BetterStructure, string? FillerWordsJson, IReadOnlyList<IssueDraftIn>? Issues,
+    // ★ 票108 A09:同 AnswerBody。
+    uint? Version = null);
+
+/// <summary>★ 票108 A09:skip 原无 body —— 可选 body 仅承载题目行 Version(不带 body 的旧调用照常)。</summary>
+public sealed record SkipBody(uint? Version = null);
 
 /// <summary>
 /// 发音评估请求体。
@@ -802,14 +931,16 @@ public sealed record AssessPronunciationBody(
 
 // ---- /practice 页请求体(2026-09-15 第十七轮)----
 
-/// <summary>整树提交的根。</summary>
-public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessment.Application.MaterialNodeIn>? Nodes, bool Force = false);
+/// <summary>整树提交的根。★ 票111 段2:TreeVersion = 读树时摘要回传(缺省 null = 不校验兼容)。</summary>
+public sealed record SaveTreeBody(IReadOnlyList<YourInterview.Services.Assessment.Application.MaterialNodeIn>? Nodes, bool Force = false, string? TreeVersion = null);
 
 /// <summary>Azure Speech 设置提交。⚠️ 只入不出 —— 保存后绝不回传 key。</summary>
 public sealed record SpeechSettingsBody(string Key, string Region, string? Endpoint);
 
 /// <summary>本机存储目录提交。RootPath 为空串 = 恢复部署默认目录。</summary>
-public sealed record StorageSettingsBody(string? RootPath);
+public sealed record StorageSettingsBody(string? RootPath,
+    // ★ 票108 A13:设置行读时 xmin 回传钉版(不传 = 不钉,兼容旧调用方)。
+    uint? Version = null);
 
 /// <summary>
 /// 测试一把**尚未保存**的候选凭据(先测后存)。
@@ -835,10 +966,16 @@ public sealed record RecordingScoreBody(
     // ★ 第三十四轮:评分时的音频时长(秒)/字节数 —— 由前端从
     //   /pronunciation/assess 的响应回传,用于在读数路径重现"花了多少"。
     double? BilledSeconds = null,
-    int? BilledBytes = null);
+    int? BilledBytes = null,
+    // ★ 票108 A10:既有评分行读时 xmin 回传钉版(不传 = 不钉,兼容旧调用方)。
+    uint? Version = null);
 
-/// <summary>逐词评分明细。</summary>
-public sealed record WordScoreIn(string Word, double Accuracy, string ErrorType);
+/// <summary>逐词评分明细。★ 票122:补 OffsetMs/DurationMs(默认值参数)——
+/// 此前仅三字段,前端透传的词级时间偏移在 STJ 绑定时被当未知属性丢弃,
+/// 重载报告点词 seek 结构性不可达。补后保存路径逐字序列化自动进 WordsJson;
+/// 旧客户端不传 → 0 = 「无偏移」语义,与落库旧记录同口径。</summary>
+public sealed record WordScoreIn(string Word, double Accuracy, string ErrorType,
+    double OffsetMs = 0, double DurationMs = 0);
 
 /// <summary>
 /// 示范朗读合成请求。

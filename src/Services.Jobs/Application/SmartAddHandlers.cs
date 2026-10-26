@@ -1,12 +1,14 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.Services.Jobs.Domain;
 using YourInterview.Services.Jobs.Infrastructure.Persistence;
 using YourInterview.Services.Jobs.Infrastructure.Services;
+using YourInterview.SharedContracts.Ai;
 
 namespace YourInterview.Services.Jobs.Application;
 
@@ -26,6 +28,71 @@ namespace YourInterview.Services.Jobs.Application;
 //  ⚠️ 兜底是硬要求:任何一层失败都不能让整条链路挂掉。
 //     解析不出来就返回 Failed 让前端回退手动填写 —— 这是验收标准明确写的。
 // ============================================================================
+
+/// <summary>
+/// FUN-07(票35):parse 成功响应的用户提示不再直出中文句 —— 后端只回结构化码列表,
+/// 前端 smart-add-dialog 按码查 i18n 字典本地化拼接(parse.* 键,zh 值与改前原句逐字对齐)。
+/// 码序即呈现序:主状态码在前,附加说明(fetch/AI 降级)在后。
+/// </summary>
+public static class ParseMessageCodes
+{
+    public const string JdOkAi = "Parse.JdOkAi";
+    public const string JdOk = "Parse.JdOk";
+    public const string JdPartial = "Parse.JdPartial";
+    public const string JdFailed = "Parse.JdFailed";
+    public const string ImageUnsupported = "Parse.ImageUnsupported";
+    public const string FetchBlocked = "Parse.FetchBlocked";
+    public const string InviteOk = "Parse.InviteOk";
+    public const string InvitePartial = "Parse.InvitePartial";
+    public const string InviteFailed = "Parse.InviteFailed";
+    public const string AiNoCredentials = "Parse.AiNoCredentials";
+    public const string AiFailed = "Parse.AiFailed";
+    public const string AiTimeout = "Parse.AiTimeout";
+
+    /// <summary>AI 降级说明的种类(内部枚举,出门即转码)。</summary>
+    public enum AiNoteKind { None, NoCredentials, Failed, Timeout }
+
+    public static string CodeFor(AiNoteKind kind) => kind switch
+    {
+        AiNoteKind.NoCredentials => AiNoCredentials,
+        AiNoteKind.Timeout => AiTimeout,
+        _ => AiFailed
+    };
+
+    /// <summary>JD 主状态码:Ok 时区分是否经 AI 补齐(与改前文案分支一致)。</summary>
+    public static IReadOnlyList<string> ComposeJd(string status, bool usedAi,
+        bool fetchBlocked, AiNoteKind aiNote)
+    {
+        var codes = new List<string>
+        {
+            status switch
+            {
+                ParseOutcome.Ok => usedAi ? JdOkAi : JdOk,
+                ParseOutcome.Partial => JdPartial,
+                _ => JdFailed
+            }
+        };
+        if (fetchBlocked) codes.Add(FetchBlocked);
+        if (aiNote != AiNoteKind.None) codes.Add(CodeFor(aiNote));
+        return codes;
+    }
+
+    /// <summary>Invite 主状态码:改前 Ok 句不带 AI 说明,仅 Partial/Failed 追加(口径不变)。</summary>
+    public static IReadOnlyList<string> ComposeInvite(string status, AiNoteKind aiNote)
+    {
+        var codes = new List<string>
+        {
+            status switch
+            {
+                ParseOutcome.Ok => InviteOk,
+                ParseOutcome.Partial => InvitePartial,
+                _ => InviteFailed
+            }
+        };
+        if (status != ParseOutcome.Ok && aiNote != AiNoteKind.None) codes.Add(CodeFor(aiNote));
+        return codes;
+    }
+}
 
 /// <summary>解析一段粘贴内容。UseAi=false 时只做确定性解析(未配 AI 凭据也能用)。</summary>
 public sealed record ParseJdCommand(string Raw, bool UseAi = true) : IRequest<Result<ParsedJdDto>>;
@@ -51,7 +118,7 @@ public sealed class ParseJdCommandHandler(
         if (kind == PasteKind.Image)
         {
             return Result.Success(new ParsedJdDto(
-                kind, ParseOutcome.Failed, "已识别为图片,但当前尚未接入图片识别,请改为粘贴 JD 文本,或直接手动填写。",
+                kind, ParseOutcome.Failed, new[] { ParseMessageCodes.ImageUnsupported },
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 new Dictionary<string, int>(), false, true));
         }
@@ -77,7 +144,7 @@ public sealed class ParseJdCommandHandler(
                 }
                 else
                 {
-                    fetchNote = "该网站禁止自动抓取,已只按链接解析 —— 建议直接粘贴 JD 文本,解析会准很多。";
+                    fetchNote = ParseMessageCodes.FetchBlocked;
                 }
             }
         }
@@ -93,7 +160,7 @@ public sealed class ParseJdCommandHandler(
                 draft = draft with { Link = urlMatch.Value };
         }
         var usedAi = false;
-        string? aiNote = null;
+        var aiNoteKind = ParseMessageCodes.AiNoteKind.None;
 
         if (request.UseAi)
         {
@@ -107,17 +174,17 @@ public sealed class ParseJdCommandHandler(
             }
             catch (AiGatewayException ex)
             {
-                aiNote = ex.IsConfigurationError
-                    ? "未配置 AI 凭据,已只按规则解析。"
-                    : "AI 精修未成功,已只按规则解析。";
+                aiNoteKind = ex.IsConfigurationError
+                    ? ParseMessageCodes.AiNoteKind.NoCredentials
+                    : ParseMessageCodes.AiNoteKind.Failed;
             }
             catch (OperationCanceledException)
             {
-                aiNote = "AI 精修超时,已只按规则解析。";
+                aiNoteKind = ParseMessageCodes.AiNoteKind.Timeout;
             }
             catch (Exception)
             {
-                aiNote = "AI 精修未成功,已只按规则解析。";
+                aiNoteKind = ParseMessageCodes.AiNoteKind.Failed;
             }
         }
 
@@ -126,19 +193,11 @@ public sealed class ParseJdCommandHandler(
                    : filled >= 1 ? ParseOutcome.Partial
                    : ParseOutcome.Failed;
 
-        var extraNote = (fetchNote is null ? "" : " " + fetchNote)
-                      + (aiNote is null ? "" : " " + aiNote);
-        var message = status switch
-        {
-            ParseOutcome.Ok => (usedAi ? "已解析,并经过 AI 补齐全字段。" : "已解析出主要字段。") + extraNote,
-            ParseOutcome.Partial => "只解析出部分字段,请补全后再保存。" + extraNote,
-            _ => "没能识别出岗位信息,请手动填写。" + extraNote
-        };
-
         return Result.Success(draft with
         {
             Status = status,
-            Message = message,
+            MessageCodes = ParseMessageCodes.ComposeJd(status, usedAi,
+                fetchBlocked: fetchNote is not null, aiNoteKind),
             UsedAi = usedAi,
             NeedsManualReview = status != ParseOutcome.Ok
         });
@@ -148,15 +207,43 @@ public sealed class ParseJdCommandHandler(
 // ============================ 一键建档(解析结果 → 投递记录) ============================
 
 public sealed record SmartAddApplicationCommand(
-    string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
+    Guid UserId, string? Company, string? Role, string? Location, string? Salary, string? WorkMode, string? JobType,
     string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
     string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
     string? CompanyDescription = null, string? WorkAuthorization = null,
-    string? Requirements = null, string? Benefits = null)
+    string? Requirements = null, string? Benefits = null,
+    // 票 150:解析到的真实 logo(li-logo)经此透传落库;此前 Body/Command 无此字段,
+    // 真实 logo 在 Smart-add 边界静默丢失,新公司只剩 favicon 派生。
+    string? LogoUrl = null,
+    // 票 154:对话框确认后的小节列表 JSON（已过对话框编辑）。非 null 时后端据此重算
+    // requirements / benefits 投影（小节模式 wins，调用方传的旧字段被忽略）；
+    // null 时走 legacy（调用方传的 requirements / benefits 原样落库）。
+    string? SectionsJson = null)
     : IRequest<Result<SmartAddResultDto>>;
 
 public sealed record SmartAddResultDto(
     Guid ApplicationId, Guid CompanyId, string CompanyName, bool CompanyCreated, string Status);
+
+public sealed class SmartAddApplicationCommandValidator
+    : AbstractValidator<SmartAddApplicationCommand>
+{
+    public SmartAddApplicationCommandValidator()
+    {
+        // FUN-04:此前 SmartAdd 无校验,长 JD 直接撞列上限整单 500 (Postgres 22001)。
+        // 与全仓统一口径对齐 (JdTextLimits.MaxLength),超限在落库前给 400 校验提示。
+        RuleFor(x => x.JdText).MaximumLength(JdTextLimits.MaxLength);
+        // 票62:解析出的四段长文本同型隐患 —— 单段超旧列上限 20000 同样整单 500。
+        // 列已扩 text,四段与 JdText 共用同一闸门,超限在落库前给 400 字段提示。
+        RuleFor(x => x.JdSummary).MaximumLength(JdTextLimits.MaxLength);
+        RuleFor(x => x.Requirements).MaximumLength(JdTextLimits.MaxLength);
+        RuleFor(x => x.Benefits).MaximumLength(JdTextLimits.MaxLength);
+        RuleFor(x => x.CompanyDescription).MaximumLength(JdTextLimits.MaxLength);
+        // 票 150:LogoUrl 列上限 1024(JobsDbContext),超限在落库前给 400 提示。
+        RuleFor(x => x.LogoUrl).MaximumLength(1024);
+        // 票 154:小节列表 JSON 与四段长文本同闸门（JdTextLimits.MaxLength）。
+        RuleFor(x => x.SectionsJson).MaximumLength(JdTextLimits.MaxLength);
+    }
+}
 
 public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
     : IRequestHandler<SmartAddApplicationCommand, Result<SmartAddResultDto>>
@@ -177,8 +264,9 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
 
         // 公司按名大小写不敏感匹配 —— "Shopify" 与 "shopify" 是同一家,
         // 不这样做会在看板上出现两条同名的公司列。
+        // COD-01:find-or-create 按 (Name, UserId) 双条件 —— 同名公司在他人名下不算已存在
         var existing = await db.Companies
-            .FirstOrDefaultAsync(c => c.Name.ToLower() == companyName.ToLower(), ct);
+            .FirstOrDefaultAsync(c => c.Name.ToLower() == companyName.ToLower() && c.UserId == request.UserId, ct);
 
         var created = false;
         if (existing is null)
@@ -186,11 +274,19 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
             // 只在链接指向公司自有站点时才把它当官网 —— LinkedIn/Indeed 这类聚合站的域名
             // 不是公司官网,存进去会让"公司官网"字段变成噪音(Logo 也会取成招聘站的图标)。
             var website = JdPasteParser.IsAggregator(request.Link) ? null : JdPasteParser.HostOf(request.Link);
+            // 票 150:新建优先用解析到的显式 logo(li-logo),其次 Website 派生。
             existing = new Company(companyName,
                 website: website,
-                logoUrl: Company.LogoUrlFromWebsite(website));
+                logoUrl: CompanyLogoRules.ResolveNewCompanyLogo(request.LogoUrl, website),
+                userId: request.UserId);
             db.Companies.Add(existing);
             created = true;
+        }
+        // 票 150:已存在公司且存量 logo 为空时,用这次解析到的显式 logo 补上;
+        // 已有值绝不覆盖(ShouldFillExistingLogo 把关)。
+        else if (CompanyLogoRules.ShouldFillExistingLogo(existing.LogoUrl, request.LogoUrl))
+        {
+            existing.SetLogoUrl(request.LogoUrl!.Trim());
         }
 
         var app = new JobApplication(existing.Id, role,
@@ -199,7 +295,8 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
             salary: NullIfBlank(request.Salary),
             workMode: NullIfBlank(request.WorkMode),
             source: NullIfBlank(request.Source),
-            jdSummary: NullIfBlank(request.JdSummary));
+            jdSummary: NullIfBlank(request.JdSummary),
+            userId: request.UserId);
 
         if (!string.IsNullOrWhiteSpace(request.Priority)
             && Enum.TryParse<Priority>(request.Priority, true, out var p))
@@ -220,13 +317,32 @@ public sealed class SmartAddApplicationCommandHandler(JobsDbContext db)
         if (!string.IsNullOrWhiteSpace(request.JobType))
             app.SetJobType(request.JobType.Trim());
 
-        // 任职要求:Smart paste 从 Qualifications/Requirements 段提取,建档时一并存下。
-        if (!string.IsNullOrWhiteSpace(request.Requirements))
-            app.SetRequirements(request.Requirements.Trim());
+        // 票 154：小节模式（SectionsJson 非 null）时，requirements / benefits 由后端
+        // 从最终小节列表重算（投影），调用方传的旧字段被忽略 —— 对话框改了小节正文，
+        // 投影同步变，不出现“对话框改了 A、入库还是旧 B”的分裂；小节 JSON 先过
+        // Canonicalize（去空节、key 由最终标题重算），非法 JSON 整单 400。
+        if (request.SectionsJson is not null)
+        {
+            if (!JdSectionJson.IsValid(request.SectionsJson))
+                return Result.Failure<SmartAddResultDto>(Error.Validation("SmartAdd.SectionsInvalid", "小节列表格式无效"));
+            var canonical = JdSectionJson.Canonicalize(request.SectionsJson);
+            var sections = canonical is null
+                ? new List<JdSection>()
+                : JdSectionJson.Parse(canonical)!.ToList();
+            app.SetSections(canonical);
+            app.SetRequirements(JdSectionProjection.ProjectRequirements(sections));
+            app.SetBenefits(JdSectionProjection.ProjectBenefits(sections));
+        }
+        else
+        {
+            // 任职要求:Smart paste 从 Qualifications/Requirements 段提取,建档时一并存下。
+            if (!string.IsNullOrWhiteSpace(request.Requirements))
+                app.SetRequirements(request.Requirements.Trim());
 
-        // 福利待遇:Smart paste 从 Benefits/Advantages 段提取,建档时一并存下。
-        if (!string.IsNullOrWhiteSpace(request.Benefits))
-            app.SetBenefits(request.Benefits.Trim());
+            // 福利待遇:Smart paste 从 Benefits/Advantages 段提取,建档时一并存下。
+            if (!string.IsNullOrWhiteSpace(request.Benefits))
+                app.SetBenefits(request.Benefits.Trim());
+        }
 
         if (!string.IsNullOrWhiteSpace(request.MatchKeywords))
             app.SetAnalysis(null, null, request.MatchKeywords.Trim());
@@ -269,7 +385,7 @@ public sealed class ParseInviteCommandHandler(IAiGatewayClient ai)
 
         var draft = InvitePasteParser.Parse(raw);
         var usedAi = false;
-        string? aiNote = null;
+        var aiNoteKind = ParseMessageCodes.AiNoteKind.None;
 
         if (request.UseAi)
         {
@@ -282,24 +398,21 @@ public sealed class ParseInviteCommandHandler(IAiGatewayClient ai)
             }
             catch (AiGatewayException ex)
             {
-                aiNote = ex.IsConfigurationError ? "未配置 AI 凭据,已只按规则解析。" : "AI 精修未成功,已只按规则解析。";
+                aiNoteKind = ex.IsConfigurationError
+                    ? ParseMessageCodes.AiNoteKind.NoCredentials
+                    : ParseMessageCodes.AiNoteKind.Failed;
             }
-            catch (OperationCanceledException) { aiNote = "AI 精修超时,已只按规则解析。"; }
-            catch (Exception) { aiNote = "AI 精修未成功,已只按规则解析。"; }
+            catch (OperationCanceledException) { aiNoteKind = ParseMessageCodes.AiNoteKind.Timeout; }
+            catch (Exception) { aiNoteKind = ParseMessageCodes.AiNoteKind.Failed; }
         }
 
         var filled = InvitePasteParser.CountFilled(draft);
         var status = filled >= 3 ? ParseOutcome.Ok : filled >= 1 ? ParseOutcome.Partial : ParseOutcome.Failed;
-        var message = status switch
-        {
-            ParseOutcome.Ok => "已解析出面试安排,确认后一键关联。",
-            ParseOutcome.Partial => "只解析出部分信息,请补全后再关联。" + (aiNote ?? ""),
-            _ => "没能识别出面试安排,请手动填写。" + (aiNote ?? "")
-        };
-
         return Result.Success(draft with
         {
-            Status = status, Message = message, UsedAi = usedAi,
+            Status = status,
+            MessageCodes = ParseMessageCodes.ComposeInvite(status, aiNoteKind),
+            UsedAi = usedAi,
             NeedsManualReview = status != ParseOutcome.Ok
         });
     }
@@ -311,7 +424,7 @@ public sealed class ParseInviteCommandHandler(IAiGatewayClient ai)
 /// 而且 AddRound 会自动发出"邀请已登记"事件去建机经草稿(既有链路,不重复实现)。
 /// </summary>
 public sealed record LinkInviteCommand(
-    Guid ApplicationId, string? Stage, DateOnly? ScheduledDate, string? Interviewer,
+    Guid UserId, Guid ApplicationId, string? Stage, DateOnly? ScheduledDate, string? Interviewer,
     string? Format, string? Notes)
     : IRequest<Result<LinkInviteResultDto>>;
 
@@ -323,7 +436,7 @@ public sealed class LinkInviteCommandHandler(JobsDbContext db)
     public async Task<Result<LinkInviteResultDto>> Handle(LinkInviteCommand request, CancellationToken ct)
     {
         var app = await db.Applications.Include(x => x.Rounds)
-            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
         if (app is null) return Result.Failure<LinkInviteResultDto>(Error.NotFound("投递记录"));
 
         var stage = string.IsNullOrWhiteSpace(request.Stage) ? "面试" : request.Stage.Trim();
@@ -351,28 +464,27 @@ internal static class JdAiEnricher
     public static async Task<ParsedJdDto?> EnrichAsync(IAiGatewayClient ai, string raw,
         ParsedJdDto draft, CancellationToken ct)
     {
-        var material = draft.JdText ?? raw;
-        if (material.Length > 12_000) material = material[..12_000];
+        // 票 152 R-152-3：AI 材料先过同一模块切除（链接路径材料已是提纯后文本仍要过一遍，
+        // 防提纯层遗漏；粘贴文本路径材料直接过切除），再 12,000 字截断。
+        var cutMaterial = RelatedModuleCut.Cut(draft.JdText ?? raw);
+        var material = cutMaterial.Length > 12_000 ? cutMaterial[..12_000] : cutMaterial;
 
         var prompt = $$"""
-            你是招聘信息结构化提取器。从下面的内容中提取字段,只输出一个 JSON 对象,不要任何解释文字。
+            你是招聘信息结构化提取器。只搬运原文：从下面的内容中提取字段,只输出一个 JSON 对象,不要任何解释文字。
 
             字段(缺失就给 null,不要编造):
             {
-              "company": "公司名称",
-              "role": "职位名称",
-              "location": "工作地点",
-              "salary": "薪资范围原文或规范化写法",
+              "company": "公司名称原文",
+              "role": "职位名称原文",
+              "location": "工作地点原文",
+              "salary": "薪资范围原文逐字摘录，不得换算、不得从百分比/年限等其他数字推导，找不到就 null",
               "workMode": "Remote | Hybrid | Onsite",
               "jobType": "Full-time | Part-time | Permanent | Contract | Temporary | Freelance | Internship 或 null",
-              "jdSummary": "80-150 字的中文摘要",
-              "companyDescription": "公司介绍段落原文(About the company 段)",
-              "requirements": "任职要求/资格段落原文",
-              "benefits": "福利待遇段落原文",
-              "workAuthorization": "工作身份要求原文或归一写法(如 Citizen or PR required / Open work permit accepted / Must be legally authorized to work in Canada / No sponsorship available)",
-              "matchKeywords": "与岗位强相关的技术关键词,中文逗号分隔,最多 12 个",
-              "priority": "Low | Medium | High | Critical",
-              "deadline": "YYYY-MM-DD 或 null"
+              "companyDescription": "公司介绍段落原文逐字摘录，不得改写、不得翻译、不得扩写、不得把相关文章/博客/推荐模块内容当成段落内容",
+              "requirements": "任职要求/资格段落原文逐字摘录，不得改写、不得翻译、不得扩写、不得把相关文章/博客/推荐模块内容当成段落内容",
+              "benefits": "福利待遇段落原文逐字摘录，不得改写、不得翻译、不得扩写、不得把相关文章/博客/推荐模块内容当成段落内容",
+              "workAuthorization": "工作身份要求原文逐字摘录，不得改写、不得翻译、不得扩写",
+              "matchKeywords": "与岗位强相关的技术关键词，中文逗号分隔，最多 12 个，每个关键词必须在材料原文中出现"
             }
 
             内容(三短横之间):
@@ -395,42 +507,86 @@ internal static class JdAiEnricher
             && !string.IsNullOrWhiteSpace(v.GetString())
                 ? v.GetString()!.Trim() : null;
 
-        var company = draft.Company ?? S("company");
-        var role = draft.Role ?? S("role");
-        var location = draft.Location ?? S("location");
-        var salary = draft.Salary ?? S("salary");
-        var workMode = draft.WorkMode ?? S("workMode");
-        var jobType = draft.JobType ?? S("jobType");
+        // 票 152 R-152-5：输出校验 —— AI 值必须为归一化材料的子串，否则静默置 null
+        // （不报错、不降级提示、不回退到旧 AI 值；对话框里用户可见空字段自填）。
+        // 归一化：小写 + 全部空白折叠为单空格 + trim；标点保留（从严：宁可误杀，不可放行编造）。
+        // 校验材料 = AI 看到的同一份（模块切除后、12,000 字截断后）。
+        static string Normalize(string s)
+            => Regex.Replace(s.ToLowerInvariant(), @"\s+", " ").Trim();
+        var normalizedMaterial = Normalize(material);
+        string? V(string name, Func<string, bool>? extra = null)
+        {
+            var v = S(name);
+            if (v is null) return null;
+            if (!normalizedMaterial.Contains(Normalize(v))) return null;
+            if (extra is not null && !extra(v)) return null;
+            return v;
+        }
+        static bool IsWorkMode(string v)
+            => string.Equals(v, "Remote", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(v, "Hybrid", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(v, "Onsite", StringComparison.OrdinalIgnoreCase);
+        static bool IsJobType(string v)
+            => new[] { "Full-time", "Part-time", "Permanent", "Contract", "Temporary", "Freelance", "Internship" }
+                .Any(x => string.Equals(x, v, StringComparison.OrdinalIgnoreCase));
 
-        // 摘要与关键词:AI 的理解力强于取前 N 字,所以 AI 结果优先
-        var jdSummary = S("jdSummary") ?? draft.JdSummary;
+        // 票 152 R-152-5 评分 −0.1 修正：location 同列校验（删除后剩余 AI 字段中
+        // 唯一既无逐字措辞又无校验覆盖的字段，与 company/role 同规则）。
+        var company = draft.Company ?? V("company");
+        var role = draft.Role ?? V("role");
+        var location = draft.Location ?? V("location");
+        var salary = draft.Salary ?? V("salary");
+        var workMode = draft.WorkMode ?? V("workMode", IsWorkMode);
+        var jobType = draft.JobType ?? V("jobType", IsJobType);
 
-        // 段落级字段:规则没解出来时用 AI 的
-        var companyDescription = draft.CompanyDescription ?? S("companyDescription");
-        var requirements = draft.Requirements ?? S("requirements");
-        var benefits = draft.Benefits ?? S("benefits");
-        var workAuthorization = draft.WorkAuthorization ?? S("workAuthorization");
+        // 票 152 R-152-4：摘要归规则摘录，AI 不再产摘要 —— draft 摘要即最终摘要。
+        var jdSummary = draft.JdSummary;
 
-        // 关键词取并集 —— 规则命中的偏"技术名词",模型给的偏"岗位要求",两者互补
-        var keywords = MergeKeywords(draft.MatchKeywords, S("matchKeywords"));
+        // 段落级字段:规则没解出来时用 AI 的（已校验）
+        var companyDescription = draft.CompanyDescription ?? V("companyDescription");
+        var requirements = draft.Requirements ?? V("requirements");
+        var benefits = draft.Benefits ?? V("benefits");
+        var workAuthorization = draft.WorkAuthorization ?? V("workAuthorization");
 
+        // 关键词取并集 —— 规则命中的偏"技术名词",模型给的偏"岗位要求",两者互补；
+        // AI 侧逐个校验，不通过的单个丢弃，不株连整组。
+        string? filteredAiKeywords = null;
+        var aiKeywords = S("matchKeywords");
+        if (!string.IsNullOrWhiteSpace(aiKeywords))
+        {
+            var kept = aiKeywords.Split([',', '、', ';'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim())
+                .Where(p => p.Length > 0 && normalizedMaterial.Contains(Normalize(p)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            filteredAiKeywords = kept.Count == 0 ? null : string.Join(", ", kept);
+        }
+        var keywords = MergeKeywords(draft.MatchKeywords, filteredAiKeywords);
+
+        // 票 152 R-152-4：priority / deadline 不再由 AI 定 —— priority 无原文依据，
+        // 回对话框默认值（调用方/对话框层处理），deadline 归规则 GuessDeadline。
         var priority = draft.Priority;
-        var p = S("priority");
-        if (Enum.TryParse<Priority>(p, true, out _)) priority = p;
-
         var deadline = draft.Deadline;
-        var d = S("deadline");
-        if (deadline is null && DateOnly.TryParse(d, CultureInfo.InvariantCulture, out var dd)) deadline = dd;
 
         var conf = new Dictionary<string, int>(draft.Confidence);
         if (company is not null) conf["company"] = Math.Max(conf.GetValueOrDefault("company"), 90);
         if (role is not null) conf["role"] = Math.Max(conf.GetValueOrDefault("role"), 90);
         if (jobType is not null) conf["jobType"] = Math.Max(conf.GetValueOrDefault("jobType"), 85);
-        if (jdSummary is not null) conf["jdSummary"] = 85;
         if (companyDescription is not null) conf["companyDescription"] = Math.Max(conf.GetValueOrDefault("companyDescription"), 85);
         if (requirements is not null) conf["requirements"] = Math.Max(conf.GetValueOrDefault("requirements"), 85);
         if (benefits is not null) conf["benefits"] = Math.Max(conf.GetValueOrDefault("benefits"), 85);
         if (workAuthorization is not null) conf["workAuthorization"] = Math.Max(conf.GetValueOrDefault("workAuthorization"), 85);
+
+        // 票 154 R-154-8：AI 补出的段落值物化为小节，使小节列表与固定字段永远一致。
+        // 只物化 Requirements / Benefits（companyDescription 有独立面板，不物化）；
+        // 规则已产出同字段值时 AI 值在上文已被丢弃（draft ?? AI），此处不追加重复节。
+        var sections = draft.Sections is not null ? draft.Sections.ToList() : new List<JdSection>();
+        if (draft.Requirements is null && requirements is not null)
+            sections.Add(new JdSection("Requirements", JdSectionJson.NormalizeTitle("Requirements"),
+                requirements, "auto", false));
+        if (draft.Benefits is null && benefits is not null)
+            sections.Add(new JdSection("Benefits", JdSectionJson.NormalizeTitle("Benefits"),
+                benefits, "auto", false));
 
         return draft with
         {
@@ -438,7 +594,8 @@ internal static class JdAiEnricher
             WorkMode = workMode, JobType = jobType, JdSummary = jdSummary, MatchKeywords = keywords,
             Priority = priority, Deadline = deadline, Confidence = conf,
             CompanyDescription = companyDescription, Requirements = requirements, Benefits = benefits,
-            WorkAuthorization = workAuthorization
+            WorkAuthorization = workAuthorization,
+            Sections = sections.Count == 0 ? draft.Sections : sections
         };
     }
 

@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AuthService } from '../../core/auth/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { AuthApiService } from '../../core/api/auth-api.service';
 import { HumanCheckComponent } from './human-check.component';
 
 /** Google 登录状态(是否配置了凭据)。 */
@@ -21,7 +22,7 @@ interface GoogleLoginStatus {
   selector: 'app-login',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, MatCardModule, MatFormFieldModule,
+    CommonModule, FormsModule, RouterLink, MatCardModule, MatFormFieldModule,
     MatInputModule, MatButtonModule, MatIconModule, MatProgressBarModule,
     HumanCheckComponent
   ],
@@ -30,6 +31,7 @@ interface GoogleLoginStatus {
 })
 export class LoginComponent implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly authApi = inject(AuthApiService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly i18n = inject(I18nService);
@@ -118,7 +120,7 @@ export class LoginComponent implements OnInit {
   loginWithGoogle(): void {
     if (this.googleBusy()) return;
     window.location.href =
-      '/api/auth/google/authorize?returnUrl=' + encodeURIComponent(this.returnUrl);
+      this.authApi.getGoogleAuthorizeUrl(this.returnUrl);
   }
 
   /**

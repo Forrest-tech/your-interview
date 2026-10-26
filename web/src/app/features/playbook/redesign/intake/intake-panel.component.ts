@@ -9,14 +9,16 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   InterviewDetail, InterviewRound
 } from '../../../../core/models/api.models';
-import { normalizeEmailDate, parsePastedEmail } from '../../components/brief/brief.helpers';
+import { isValidCalendarDate, normalizeEmailDate, parsePastedEmail } from '../../components/brief/brief.helpers';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { PracticeApi } from '../../../../core/api/practice-api.service';
+import { OcrApiService } from '../../../../core/api/ocr-api.service';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject } from '../v2.helpers';
+import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, roundDisplayNo, sortRoundsByDate, type PrepInputPurpose } from '../v2.helpers';
+import { textLengthError } from '../../../../core/api/validation-errors.helpers';
 
-export type IntakeType = 'email' | 'transcript' | 'note';
+export type IntakeType = 'email' | 'transcript' | 'note' | 'experiences' | 'resume';
 /** 「录音·转写文本」类型内部的二选一模式:一次只呈现/保存一种来源。 */
 export type TranscriptMode = 'upload' | 'text';
 type Target = { kind: 'round'; roundId: string } | { kind: 'comm' } | { kind: 'new' };
@@ -41,12 +43,23 @@ interface EmailCard {
   /** 保存为材料正文的全文(OCR 转写原文,与粘文字时保存 raw 同口径)。 */
   body: string;
   duplicate: boolean;
+  /** 实际识别来源(定稿第九节来源标注口径,按实标注):本地共享 OCR / AI 视觉兜底。 */
+  source: 'local' | 'vision';
 }
 
 /** 预览聚合组:同归一化主题的卡片,组内时间正序。 */
 interface EmailCardGroup { key: string; subject: string; cards: EmailCard[]; }
 
 const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'other'];
+
+/**
+ * 共享 OCR 服务(票59,平台能力)前端配置 —— 只放可调常量,不写死在调用里:
+ * - 超时阈值:本地引擎慢(沙盒单图可达分钟级),超时即按兜底规则回落视觉;
+ *   部署机复测延迟后改这一处即可。
+ * - 服务基址:默认经网关 /api/ocr;globalThis.__SHARED_OCR_BASE_URL__ 可注入
+ *   覆盖(测试/降级模拟把地址指向死端口,验证视觉兜底分支被触发)。
+ */
+export const SHARED_OCR_TIMEOUT_MS = 180_000;
 
 /**
  * 条目级统一入口(2026-10-20 定稿):
@@ -61,7 +74,9 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
  * 截图是附件,不是类型;进入方式只有粘贴:直接粘进文本框,缩略图在框内
  * 底部呈现,没有单独的截图文件按钮。截图可多张共存(定稿第九节):再粘只
  * 追加不替换,每张可单独移除。Email 类型文字为空时,Parse 对全部截图逐张
- * 走 AI 网关视觉 OCR → 与粘文字同一解析管线出卡片,预览按归一化主题聚合。
+ * OCR → 与粘文字同一解析管线出卡片,预览按归一化主题聚合。OCR 通道(票59):
+ * 共享 OCR 服务(本地 PaddleOCR,经网关 /api/ocr)为主,服务不可达/超时/
+ * 识别失败/解析后卡片为 failed 时回落 AI 网关视觉;预览来源标注按实标注。
  */
 @Component({
   selector: 'app-intake-panel',
@@ -85,6 +100,40 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             </div>
           }
         </ng-template>
+        <!-- 票159：归属区（预览步与备考输入输入步共用同一模板）。 -->
+        <ng-template #targetsTpl>
+          <div class="sec">{{ t('pb.v2.i.assignTitle') }}</div>
+          <div class="targets">
+            <!-- 票161:归属由单选组改下拉列表(单封与批量共用同一区,两处一并改)。
+                 选项文本与旧单选一字不差;target() 仍是唯一事实源,建议默认/
+                 预设轮次/新建展开逻辑一字不动。
+                 票159:备考输入必须归属轮次，Communications 选项置灰不可选。 -->
+            <select class="fld" data-testid="intake-target-select"
+                    [attr.aria-label]="t('pb.v2.i.assignTitle')"
+                    [ngModel]="targetSelectValue()" (ngModelChange)="applyTargetValue($event)">
+              @for (r of rounds(); track r.id) {
+                <option [value]="'round:' + r.id">Round {{ roundNo(r) }} · {{ r.stage }}{{ r.scheduledDate ? ' · ' + r.scheduledDate : '' }}</option>
+              }
+              <option value="comm" [disabled]="isPrepInputType()">{{ t('pb.v2.i.targetComm') }}</option>
+              <option value="new">{{ t('pb.v2.i.targetNew') }}</option>
+            </select>
+          </div>
+          @if (isPrepInputType()) {
+            <p class="hint">{{ t('pb.v2.i.prepCommDisabled') }}</p>
+          }
+          @if (target().kind === 'new') {
+            <div class="pv-grid">
+              <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="nrDate()" (ngModelChange)="nrDate.set($event)"></label>
+              <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.nrTimePh')" [ngModel]="nrTime()" (ngModelChange)="nrTime.set($event)"></label>
+              <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.nrStagePh')" [ngModel]="nrStage()" (ngModelChange)="setNrStage($event)">
+                @if (stageErrors().nr) { <span class="field-error" role="alert">{{ stageErrors().nr }}</span> }</label>
+              <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="nrInterviewers()" (ngModelChange)="nrInterviewers.set($event)"></label>
+              <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [placeholder]="t('pb.v2.i.nrFormatPh')" [ngModel]="nrFormat()" (ngModelChange)="nrFormat.set($event)"></label>
+            </div>
+            <p class="hint">{{ t('pb.v2.i.newRoundHint') }}</p>
+            <p class="hint" data-testid="new-round-defaults-hint">{{ t('pb.v2.i.newRoundDefaultsHint') }}</p>
+          }
+        </ng-template>
         <div class="panel-head">
           <h3>{{ t('pb.v2.d.addMaterial') }}</h3>
           <button type="button" class="icon-btn" (click)="close()" [attr.aria-label]="t('common.close')">
@@ -104,6 +153,10 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             <p class="hint">{{ t('pb.v2.i.hintEmail') }}</p>
           } @else if (type() === 'transcript') {
             <p class="hint">{{ transcriptMode() === 'upload' ? t('pb.v2.i.hintTranscriptUpload') : t('pb.v2.i.hintTranscriptText') }}</p>
+          } @else if (type() === 'experiences') {
+            <p class="hint">{{ t('pb.v2.i.hintExperiences') }}</p>
+          } @else if (type() === 'resume') {
+            <p class="hint">{{ t('pb.v2.i.hintResumePoints') }}</p>
           } @else {
             <p class="hint">{{ t('pb.v2.i.hintNote') }}</p>
           }
@@ -120,9 +173,12 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
           @if (type() !== 'transcript' || transcriptMode() === 'text') {
             <div class="paste-box">
               <textarea class="paste" rows="9"
-                        [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : t('pb.v2.i.pasteNotePh')"
+                        [placeholder]="type() === 'email' ? t('pb.v2.i.pasteEmailPh') : type() === 'transcript' ? t('pb.v2.i.pasteTranscriptPh') : type() === 'experiences' ? t('pb.v2.i.pasteExperiencesPh') : type() === 'resume' ? t('pb.v2.i.pasteResumePointsPh') : t('pb.v2.i.pasteNotePh')"
                         [ngModel]="text()" (ngModelChange)="text.set($event)"></textarea>
-              <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
+              <!-- 票159：备考输入不接截图，截图条只在非备考输入类型下呈现。 -->
+              @if (!isPrepInputType()) {
+                <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
+              }
             </div>
           }
           @if (type() === 'transcript' && transcriptMode() === 'upload') {
@@ -140,6 +196,21 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             </div>
             <ng-container [ngTemplateOutlet]="shotTpl"></ng-container>
           }
+          @if (isPrepInputType()) {
+            <!-- 票159：备考输入单步保存——归属 + 保存 / 保存并生成，无 Parse 预览。 -->
+            <ng-container [ngTemplateOutlet]="targetsTpl"></ng-container>
+            <div class="row">
+              <button mat-stroked-button (click)="close()">{{ t('common.cancel') }}</button>
+              <span class="spacer"></span>
+              <button mat-raised-button color="primary" [disabled]="busy() || !text().trim()" (click)="save()">
+                {{ busy() ? t('pb.v2.i.saving') : t('common.save') }}
+              </button>
+              <button mat-raised-button color="primary" [disabled]="busy() || !text().trim()" (click)="save(true)">
+                {{ t('pb.v2.i.saveAndGenerate') }}
+              </button>
+            </div>
+            @if (errorMsg()) { <p class="err">{{ errorMsg() }}</p> }
+          } @else {
           <div class="row">
             @if (ocrBusy()) { <span class="hint">{{ t('pb.v2.i.ocrRunning') }}</span> }
             <span class="spacer"></span>
@@ -147,6 +218,7 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             <button mat-raised-button color="primary" [disabled]="!canParse() || busy() || ocrBusy()"
                     (click)="parse()">{{ t('pb.v2.i.parsePreview') }}</button>
           </div>
+          }
         } @else {
           <!-- 解析预览 -->
           <div class="preview" data-testid="intake-preview">
@@ -165,7 +237,7 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
                    组内时间正序、组间按最新时间倒序;每卡可改字段/移除,
                    识别失败的卡只标自己,可重试/移除,不拖垮整批。 -->
               <p class="hint" data-testid="intake-batch-summary">
-                {{ t('pb.v2.i.srcScreenshot') }} · {{ fmt('pb.v2.i.batchSummary', { n: cards.length, g: batchGroups().length }) }}
+                {{ t(batchSourceKey()) }} · {{ fmt('pb.v2.i.batchSummary', { n: cards.length, g: batchGroups().length }) }}
               </p>
               @for (g of batchGroups(); track g.key) {
                 <div class="bgroup" data-testid="batch-group">
@@ -259,7 +331,8 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
                 <div class="pv-grid">
                   <label>{{ t('pb.v2.i.arrDate') }} <input class="fld" type="date" [ngModel]="arrDate()" (ngModelChange)="arrDate.set($event)"></label>
                   <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.arrTimePh')" [ngModel]="arrTime()" (ngModelChange)="arrTime.set($event)"></label>
-                  <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.arrStagePh')" [ngModel]="arrStage()" (ngModelChange)="arrStage.set($event)"></label>
+                  <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.arrStagePh')" [ngModel]="arrStage()" (ngModelChange)="setArrStage($event)">
+                    @if (stageErrors().arr) { <span class="field-error" role="alert">{{ stageErrors().arr }}</span> }</label>
                 </div>
               }
             }
@@ -269,33 +342,7 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
             }
             }
 
-            <div class="sec">{{ t('pb.v2.i.assignTitle') }}</div>
-            <div class="targets">
-              @for (r of rounds(); track r.id) {
-                <label class="tgt">
-                  <input type="radio" name="tgt" [checked]="isTargetRound(r.id)" (change)="target.set({kind:'round', roundId: r.id})">
-                  Round {{ r.order }} · {{ r.stage }}{{ r.scheduledDate ? ' · ' + r.scheduledDate : '' }}
-                </label>
-              }
-              <label class="tgt">
-                <input type="radio" name="tgt" [checked]="target().kind === 'comm'" (change)="target.set({kind:'comm'})">
-                {{ t('pb.v2.i.targetComm') }}
-              </label>
-              <label class="tgt">
-                <input type="radio" name="tgt" [checked]="target().kind === 'new'" (change)="target.set({kind:'new'})">
-                {{ t('pb.v2.i.targetNew') }}
-              </label>
-            </div>
-            @if (target().kind === 'new') {
-              <div class="pv-grid">
-                <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="nrDate()" (ngModelChange)="nrDate.set($event)"></label>
-                <label>{{ t('pb.v2.r.fTime') }} <input class="fld" [placeholder]="t('pb.v2.i.nrTimePh')" [ngModel]="nrTime()" (ngModelChange)="nrTime.set($event)"></label>
-                <label>{{ t('pb.v2.r.fStage') }} <input class="fld" [placeholder]="t('pb.v2.i.nrStagePh')" [ngModel]="nrStage()" (ngModelChange)="nrStage.set($event)"></label>
-                <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="nrInterviewers()" (ngModelChange)="nrInterviewers.set($event)"></label>
-                <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [placeholder]="t('pb.v2.i.nrFormatPh')" [ngModel]="nrFormat()" (ngModelChange)="nrFormat.set($event)"></label>
-              </div>
-              <p class="hint">{{ t('pb.v2.i.newRoundHint') }}</p>
-            }
+            <ng-container [ngTemplateOutlet]="targetsTpl"></ng-container>
 
             <div class="row">
               <button mat-stroked-button (click)="step.set('input')">{{ t('pb.v2.i.backEdit') }}</button>
@@ -312,83 +359,89 @@ const CATEGORY_KEYS = ['invitation', 'reschedule', 'rejection', 'followup', 'oth
     }
   `,
   styles: [`
-    .panel { border: 1.5px solid var(--yi-accent, #3f51b5); border-radius: 14px; padding: 16px 18px;
-             margin: 14px 0; background: var(--yi-surface, transparent); }
+    .panel { border: 1.5px solid var(--yi-accent, #2563eb); border-radius: 14px; padding: 16px 18px;
+             margin: 14px 0; background: var(--yi-surface, #ffffff); }
     .panel-head { display: flex; align-items: center; justify-content: space-between; }
     /* 字号对齐网站统一四档(与 Tracker/详情页一致):标题 20/600、正文 14/400
        行高 1.5、次要标签 12/700、次要说明 13/400、按钮 14/500。 */
-    .panel-head h3 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; }
+    .panel-head h3 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 20px; font-weight: 600; line-height: 1.3; }
     .icon-btn { border: none; background: transparent; cursor: pointer; color: inherit; display: inline-flex; }
     .type-tabs { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
     .mode-tabs { margin: 4px 0 2px; }
-    .ttab { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+    .ttab { border: 1px solid var(--yi-border, #e2e8f0); background: transparent; color: inherit;
             border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 500; cursor: pointer; }
-    .ttab.on { background: var(--yi-accent, #3f51b5); color: #fff; border-color: transparent; }
-    .hint { font-size: 13px; line-height: 1.5; color: var(--yi-text-muted, #777); margin: 6px 0; }
-    .fld { width: 100%; border: 1px solid var(--yi-border, #ccc); border-radius: 8px;
+    .ttab.on { background: var(--yi-accent, #2563eb); color: #ffffff; border-color: transparent; }
+    .hint { font-size: 13px; line-height: 1.5; color: var(--yi-text-muted, #475569); margin: 6px 0; }
+    .fld { width: 100%; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 8px;
            padding: 8px 10px; font-size: 14px; background: transparent; color: inherit; box-sizing: border-box; }
     /* 文本框与粘入的截图同属一个带边框容器:截图不是框外附件行,
        而是直接粘在框里 —— 缩略图条出现在框内底部。 */
-    .paste-box { border: 1px solid var(--yi-border, #ccc); border-radius: 10px; margin-top: 8px; overflow: hidden; }
-    .paste-box:focus-within { border-color: var(--yi-accent, #3f51b5); }
+    .paste-box { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; margin-top: 8px; overflow: hidden; }
+    .paste-box:focus-within { border-color: var(--yi-accent, #2563eb); }
+    /* 票123 C-2.2:原来 "outline: none",键盘用户看不到焦点在哪。
+       外框 .paste-box:focus-within 已有 accent 边框线索,这里补回共享焦点环。 */
     .paste { width: 100%; border: none; border-radius: 0; padding: 10px 12px;
              font-size: 14px; line-height: 1.5; background: transparent; color: inherit;
-             box-sizing: border-box; resize: vertical; display: block; outline: none; }
-    .paste-box .shot-strip { display: flex; border: none; border-top: 1px solid var(--yi-border, #e3e3e3);
+             box-sizing: border-box; resize: vertical; display: block; }
+    .paste:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    .paste-box .shot-strip { display: flex; border: none; border-top: 1px solid var(--yi-border, #e2e8f0);
                              border-radius: 0; margin-top: 0; padding: 6px 8px; }
     .row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
     .spacer { flex: 1; }
     .file-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; cursor: pointer;
-                border: 1px dashed var(--yi-border, #bbb); border-radius: 8px; padding: 6px 10px; }
+                border: 1px dashed var(--yi-border, #e2e8f0); border-radius: 8px; padding: 6px 10px; }
     .file-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
-    .shot-name { font-size: 13px; color: var(--yi-text-muted, #777); }
+    .shot-name { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .shot-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .shot-item { display: inline-flex; align-items: center; gap: 9px;
-                 border: 1px solid var(--yi-border, #ccc); border-radius: 10px; padding: 6px 10px 6px 6px; }
+                 border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 6px 10px 6px 6px; }
     .shot-thumb { width: 54px; height: 40px; object-fit: cover; border-radius: 6px; display: block; }
     .audio-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .audio-row .file-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
-    .audio-info { font-size: 14px; line-height: 1.5; border: 1px dashed var(--yi-border, #bbb);
+    .audio-info { font-size: 14px; line-height: 1.5; border: 1px dashed var(--yi-border, #e2e8f0);
                   border-radius: 10px; padding: 9px 12px; margin: 4px 0 10px; }
     .pv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 14px; margin: 8px 0; }
-    .pv-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--yi-text-muted, #777); }
-    .sec { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #777); margin: 14px 0 6px; }
+    .pv-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--yi-text-muted, #475569); }
+    .sec { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #475569); margin: 14px 0 6px; }
     .targets { display: flex; flex-direction: column; gap: 6px; }
-    .tgt { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
     .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 8px 0; cursor: pointer; }
-    .warn { background: #fff7e0; border: 1px solid #e6c86e; color: #6d5410; border-radius: 8px;
+    .warn { background: #fffbeb; border: 1px solid #fffbeb; color: #b06a00; border-radius: 8px;
             padding: 8px 12px; font-size: 13px; line-height: 1.5; }
     .warn.slim { padding: 5px 10px; margin: 6px 0; }
     /* 批量预览(定稿第九节):主题组 + 邮件卡 */
     .bgroup { margin: 12px 0; }
     .bgroup-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
     .bgroup-subject { font-size: 14px; font-weight: 600; }
-    .bgroup-count { font-size: 12px; font-weight: 700; color: #475467; background: #eef2f7;
+    .bgroup-count { font-size: 12px; font-weight: 700; color: #475569; background: #e2e8f0;
                     border-radius: 999px; padding: 1px 9px; }
-    .bcard { display: flex; gap: 12px; border: 1px solid var(--yi-border, #ddd);
-             border-radius: 12px; padding: 10px 12px; margin: 8px 0; align-items: flex-start; }
+    .bcard { display: flex; gap: 12px; border: 1px solid var(--yi-border, #e2e8f0);
+             border-radius: 10px; padding: 10px 12px; margin: 8px 0; align-items: flex-start; }
     .bcard .shot-thumb.lg { width: 92px; height: 68px; flex: none; }
     .bcard-main { flex: 1; min-width: 0; }
     .bcard-body { white-space: pre-wrap; font-size: 13px; line-height: 1.55; font-family: inherit;
                   max-height: 150px; overflow-y: auto; margin: 6px 0 0;
-                  border-top: 1px dashed var(--yi-border, #ddd); padding-top: 7px; }
+                  border-top: 1px dashed var(--yi-border, #e2e8f0); padding-top: 7px; }
     .bcard-body::-webkit-scrollbar { width: 10px; }
-    .bcard-body::-webkit-scrollbar-track { background: #e7eaee; border-radius: 5px; }
+    .bcard-body::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 5px; }
     .bcard-body::-webkit-scrollbar-thumb { background: #7d8797; border-radius: 5px; }
-    .bcard-body::-webkit-scrollbar-thumb:hover { background: #3f51b5; }
+    .bcard-body::-webkit-scrollbar-thumb:hover { background: #2563eb; }
     .row.tight { margin-top: 6px; }
-    .err { color: #b3261e; font-size: 13px; }
-    .ok-row { font-size: 14px; color: #2e7d32; }
-    .link-btn { border: none; background: none; color: var(--yi-accent, #3f51b5); cursor: pointer;
+    .err { color: #dc2626; font-size: 13px; }
+    .field-error { color: #dc2626; font-size: 12px; }
+    .ok-row { font-size: 14px; color: #16a34a; }
+    .link-btn { border: none; background: none; color: var(--yi-accent, #2563eb); cursor: pointer;
                 font-size: 14px; text-decoration: underline; padding: 0; }
   `]
 })
 export class IntakePanelComponent {
   readonly entry = input.required<InterviewDetail>();
   @Output() readonly saved = new EventEmitter<void>();
+  /** 票159「保存并生成备考报告」：资产已保存，父级据此跳转到该轮 Prep 页并触发一次生成。 */
+  @Output() readonly prepGenerate = new EventEmitter<{ roundId: string }>();
 
   private readonly api = inject(PlaybookV2Api);
   private readonly aiApi = inject(PracticeApi);
+  private readonly ocrApi = inject(OcrApiService);
   private readonly snack = inject(MatSnackBar);
   private readonly i18n = inject(I18nService);
   readonly t = makeV2T(this.i18n);
@@ -418,8 +471,18 @@ export class IntakePanelComponent {
   readonly typeTabs = computed<{ key: IntakeType; label: string }[]>(() => [
     { key: 'email', label: this.t('pb.v2.i.typeEmail') },
     { key: 'transcript', label: this.t('pb.v2.i.typeTranscript') },
-    { key: 'note', label: this.t('pb.v2.i.typeNote') }
+    { key: 'note', label: this.t('pb.v2.i.typeNote') },
+    { key: 'experiences', label: this.t('pb.v2.i.typeExperiences') },
+    { key: 'resume', label: this.t('pb.v2.i.typeResumePoints') }
   ]);
+
+  /** 票159：面经 / 简历要点是备考输入类型——只有大文本框，无 Parse 预览、无解析字段。 */
+  readonly isPrepInputType = computed(() => this.type() === 'experiences' || this.type() === 'resume');
+  readonly prepPurpose = computed<PrepInputPurpose | null>(() =>
+    this.type() === 'experiences' ? PREP_INPUT_EXPERIENCES
+    : this.type() === 'resume' ? PREP_INPUT_RESUME : null);
+  /** 票159 编辑态：Prep 页读回区“编辑输入”带入的旧资产 id；保存走替换语义（先建新份再删旧份）。 */
+  readonly editingAssetId = signal<string | null>(null);
 
   readonly open = signal(false);
   readonly step = signal<'input' | 'preview'>('input');
@@ -433,6 +496,22 @@ export class IntakePanelComponent {
   readonly batch = signal<EmailCard[] | null>(null);
   /** 逐张 OCR 进行中(解析按钮禁用 + 进度提示)。 */
   readonly ocrBusy = signal(false);
+  /**
+   * 批量预览的来源标注(定稿第九节,按实标注):整批全本地 OCR → 本地;
+   * 全走视觉兜底 → 视觉;混合 → 混合。单卡实际来源另存于 EmailCard.source。
+   * 票160:整批全失败时不再默认本地——按失败卡实际最后尝试通道标注
+   * (失败卡 source 即 ocrShot 返回的最后通道);无卡时沿用本地(空批不展示)。
+   */
+  readonly batchSourceKey = computed(() => {
+    const cards = this.batch() ?? [];
+    const ok = cards.filter(c => c.status === 'ok');
+    if (ok.length && ok.every(c => c.source === 'vision')) return 'pb.v2.i.srcScreenshot';
+    if (ok.length && ok.every(c => c.source === 'local')) return 'pb.v2.i.srcScreenshotLocal';
+    if (ok.length) return 'pb.v2.i.srcScreenshotMixed';
+    if (cards.length && cards.every(c => c.source === 'vision')) return 'pb.v2.i.srcScreenshot';
+    if (cards.length && cards.every(c => c.source === 'local')) return 'pb.v2.i.srcScreenshotLocal';
+    return cards.length ? 'pb.v2.i.srcScreenshotMixed' : 'pb.v2.i.srcScreenshotLocal';
+  });
   private cardSeq = 0;
   readonly audioFile = signal<File | null>(null);
   readonly audioName = computed(() => this.audioFile()?.name ?? '');
@@ -461,18 +540,45 @@ export class IntakePanelComponent {
   /** 「添加到本轮」快捷入口的显式预设轮次:解析建议不得覆盖它。 */
   readonly presetRoundId = signal<string | null>(null);
   readonly errorMsg = signal<string | null>(null);
+  /** 票106(C2):Stage 字段级错误(后端 AddRound 校验器 Stage≤50;arrStage 经 meta 在 comm-log 建轮时同命中此限)。 */
+  readonly STAGE_MAX = 50;
+  readonly stageErrors = signal<Partial<Record<'nr' | 'arr', string>>>({});
+
+  private stageTooLongText(): string {
+    return this.i18n.tf('validation.tooLong', { max: this.STAGE_MAX });
+  }
+
+  setNrStage(v: string): void {
+    this.nrStage.set(v);
+    if (this.stageErrors().nr) this.stageErrors.update(s => ({ ...s, nr: undefined }));
+  }
+
+  setArrStage(v: string): void {
+    this.arrStage.set(v);
+    if (this.stageErrors().arr) this.stageErrors.update(s => ({ ...s, arr: undefined }));
+  }
   readonly duplicate = signal(false);
 
-  readonly rounds = computed(() =>
-    [...(this.entry().rounds ?? [])].sort((a, b) => a.order - b.order));
+  // 票30(REQ-10):归属列表与详情页 stepper 同一日期序、同一展示编号
+  readonly rounds = computed(() => sortRoundsByDate(this.entry().rounds ?? []));
+
+  roundNo(r: InterviewRound): number {
+    return roundDisplayNo(this.rounds(), r);
+  }
 
   speakerNames(): string {
     return joinNames(this.i18n, [...new Set(this.segments().map(s => s.speaker))]);
   }
 
-  isTargetRound(id: string): boolean {
-    const t = this.target();
-    return t.kind === 'round' && t.roundId === id;
+  /** 票161:归属下拉的当前值(纯函数 targetSelectValueOf 的组件侧委托)。 */
+  targetSelectValue(): string {
+    return targetSelectValueOf(this.target());
+  }
+
+  /** 票161:归属下拉变更回写 target();非法值忽略,保持当前归属不动。 */
+  applyTargetValue(v: string): void {
+    const t = targetFromSelectValue(v);
+    if (t) this.target.set(t);
   }
 
   /** 父组件调用:打开面板,可预置类型与目标轮次。 */
@@ -481,8 +587,35 @@ export class IntakePanelComponent {
     this.transcriptMode.set('text');
     this.step.set('input');
     this.errorMsg.set(null);
+    this.stageErrors.set({});
+    this.editingAssetId.set(null);
     this.presetRoundId.set(roundId ?? null);
-    this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
+    // 票159：备考输入无预置轮次时不回落 Communications——首个轮次或新建轮次区。
+    if (!roundId && (type === 'experiences' || type === 'resume')) {
+      const first = this.rounds()[0];
+      this.target.set(first ? { kind: 'round', roundId: first.id } : { kind: 'new' });
+    } else {
+      this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'comm' });
+    }
+    this.open.set(true);
+    this.setDocPaste(true);
+  }
+
+  /**
+   * 票159：Prep 页读回区“编辑输入” / “添加输入”的专用入口（不走 openPanel 的通用语义）。
+   * 预填旧文本、预置目标轮次并记下旧资产 id；保存时走替换语义。
+   * 备考输入必须归属轮次：roundId 缺省时按无轮次默认展开新建轮次区。
+   */
+  openPrepInput(purpose: 'experiences' | 'resume', roundId: string | null, text: string, assetId?: string): void {
+    this.type.set(purpose);
+    this.transcriptMode.set('text');
+    this.step.set('input');
+    this.errorMsg.set(null);
+    this.stageErrors.set({});
+    this.text.set(text);
+    this.editingAssetId.set(assetId ?? null);
+    this.presetRoundId.set(roundId);
+    this.target.set(roundId ? { kind: 'round', roundId } : { kind: 'new' });
     this.open.set(true);
     this.setDocPaste(true);
   }
@@ -490,11 +623,21 @@ export class IntakePanelComponent {
   close(): void {
     this.open.set(false);
     this.setDocPaste(false);
+    this.editingAssetId.set(null);
   }
 
   setType(t: IntakeType): void {
+    // 票159：编辑态只属于当前备考输入类型；切到其他类型即丢弃编辑态，
+    // 避免后续保存误删旧资产；同类型内重选保留编辑态。
+    if (this.editingAssetId() && t !== this.type()) this.editingAssetId.set(null);
     this.type.set(t);
     this.step.set('input');
+    // 票159：备考输入不能归属 Communications；切过来时若当前归属是
+    // Communications，改为首个轮次（无轮次时默认展开新建轮次区）。
+    if ((t === 'experiences' || t === 'resume') && this.target().kind === 'comm') {
+      const first = this.rounds()[0];
+      this.target.set(first ? { kind: 'round', roundId: first.id } : { kind: 'new' });
+    }
   }
 
   /**
@@ -537,6 +680,8 @@ export class IntakePanelComponent {
       this.maybeAutoSwitchTextPaste(ev);
       return;
     }
+    // 票159：备考输入只有大文本框，不接截图与录音文件（也不弹错类型提示）。
+    if (this.isPrepInputType()) return;
     const images = files.filter(f => f.type.startsWith('image/'));
     if (images.length) {
       ev.preventDefault();
@@ -639,7 +784,7 @@ export class IntakePanelComponent {
   /**
    * 解析分流:
    * - 录音上传模式:无文本可解析,预览只呈现文件信息 + 归属(原行为);
-   * - Email 且文字为空、有截图:逐张视觉 OCR → 批量卡片预览(定稿第九节);
+   * - Email 且文字为空、有截图:逐张 OCR(共享服务为主、视觉兜底)→ 批量卡片预览(定稿第九节);
    * - 备注/转写文本且文字为空、有截图:OCR 全部截图拼成文本,回落到与粘文字
    *   完全相同的管线;全失败则留在输入步报错,不静默;
    * - 有文字:原同步解析(文字为内容、截图为附件,不变)。
@@ -648,6 +793,8 @@ export class IntakePanelComponent {
     this.errorMsg.set(null);
     this.duplicate.set(false);
     this.batch.set(null);
+    // 票159：备考输入没有 Parse 预览（防御性守门；界面上本就没有解析按钮）。
+    if (this.isPrepInputType()) return;
     if (this.isAudioMode()) {
       // 录音没有可解析的文本:预览只呈现文件信息 + 归属,不假装已解析出内容。
       this.segments.set([]);
@@ -669,8 +816,11 @@ export class IntakePanelComponent {
     this.step.set('preview');
   }
 
-  /** 一张截图 → 网关视觉 OCR。任何失败如实回 status,绝不编造文本。 */
-  private async ocrShot(s: ShotItem): Promise<{ status: string; text: string | null }> {
+  /**
+   * 一张截图的视觉 OCR(AiGateway 视觉通道,原样保留作兜底)。
+   * 任何失败如实回 status,绝不编造文本。
+   */
+  private async ocrShotVision(s: ShotItem): Promise<{ status: string; text: string | null }> {
     try {
       const { b64, mime } = await fileToBase64(s.file);
       const r = await this.aiApi.extractImageText(b64, mime).toPromise();
@@ -678,6 +828,39 @@ export class IntakePanelComponent {
     } catch {
       return { status: 'failed', text: null };
     }
+  }
+
+  /** 一张截图 → 共享 OCR 服务(本地 PaddleOCR,主通道)。失败如实回 status。 */
+  private async ocrShotShared(s: ShotItem): Promise<{ status: string; text: string | null }> {
+    try {
+      const { b64, mime } = await fileToBase64(s.file);
+      const r = await this.aiApi.extractImageTextShared(
+        b64, mime, SHARED_OCR_TIMEOUT_MS, this.ocrApi.baseUrl).toPromise();
+      const text = r?.text?.trim() ? r.text : null;
+      return { status: r?.status === 'ok' && text ? 'ok' : 'failed', text };
+    } catch {
+      // 不可达/超时/HTTP 错误:一律 failed,由调用方按兜底规则回落视觉。
+      return { status: 'failed', text: null };
+    }
+  }
+
+  /**
+   * 一张截图 → 文字(票59 入口切换):共享 OCR 为主,AiGateway 视觉为兜底。
+   * 兜底判定(任一命中即回落视觉):共享服务不可达/超时/status 非 ok/文本为空;
+   * 邮件卡片场景(forEmailCard)再加一条:本地文本走既有管线解析后卡片为
+   * failed(头部三件套全空)。返回的 source 按实标注实际来源。
+   */
+  private async ocrShot(s: ShotItem, forEmailCard = false):
+    Promise<{ status: string; text: string | null; source: 'local' | 'vision' }> {
+    const local = await this.ocrShotShared(s);
+    if (local.status === 'ok' && local.text) {
+      // 探针与成卡同口径(票160 起适配门不再分来源,探针与成卡结果一致)。
+      if (!forEmailCard || this.cardFromText(0, local.text, 'local').status === 'ok') {
+        return { ...local, source: 'local' };
+      }
+    }
+    const vision = await this.ocrShotVision(s);
+    return { ...vision, source: 'vision' };
   }
 
   private ocrErrorKey(status: string): string {
@@ -720,17 +903,27 @@ export class IntakePanelComponent {
     });
   }
 
-  private blankCard(shotIndex: number, errorKey: string): EmailCard {
+  private blankCard(shotIndex: number, errorKey: string,
+                    source: 'local' | 'vision' = 'vision'): EmailCard {
     return {
       id: ++this.cardSeq, shotIndex, status: 'failed', errorKey,
       category: 'other', subject: '', from: '', date: '', when: '',
-      interviewers: '', format: '', body: '', duplicate: false
+      interviewers: '', format: '', body: '', duplicate: false, source
     };
   }
 
   /** OCR 文本 → 邮件卡片:与粘文字 parseEmail 同一套抽取器,不另起口径。 */
-  private cardFromText(shotIndex: number, raw: string): EmailCard {
-    const p = parsePastedEmail(raw);
+  private cardFromText(shotIndex: number, raw: string,
+                       source: 'local' | 'vision' = 'vision'): EmailCard {
+    let p = parsePastedEmail(raw);
+    // 票160:OCR 文本无 Key:value 头且 parsePastedEmail 无头命中时,先过
+    // 头部适配(adaptLocalOcrEmailText 合成头块)再走同一管线;不再以 source
+    // 区分——视觉纯转写同样可能无头,此前跳过适配是空卡断点。合成不出则
+    // 保持原解析结果(failed → 既有兜底)。粘贴路径不走 cardFromText,不受影响。
+    if (!p.from && !p.date && !p.subject) {
+      const adapted = adaptLocalOcrEmailText(raw);
+      if (adapted) p = parsePastedEmail(adapted);
+    }
     const body = p.body ?? raw;
     const card: EmailCard = {
       id: ++this.cardSeq, shotIndex, status: 'ok', errorKey: '',
@@ -742,7 +935,8 @@ export class IntakePanelComponent {
       interviewers: extractInterviewerNames(body).join(', '),
       format: extractFormat(body),
       body: raw,
-      duplicate: false
+      duplicate: false,
+      source
     };
     // 头部三件套全空 = 没识别出邮件内容(如粘错图):按失败卡处理,可重试/移除。
     if (!card.subject && !card.from && !card.date) {
@@ -760,12 +954,12 @@ export class IntakePanelComponent {
       const seen = new Set<string>();
       const list = this.shots();
       for (let i = 0; i < list.length; i++) {
-        const r = await this.ocrShot(list[i]);
+        const r = await this.ocrShot(list[i], true);
         if (r.status !== 'ok' || !r.text) {
-          cards.push(this.blankCard(i, this.ocrErrorKey(r.status)));
+          cards.push(this.blankCard(i, this.ocrErrorKey(r.status), r.source));
           continue;
         }
-        const card = this.cardFromText(i, r.text);
+        const card = this.cardFromText(i, r.text, r.source);
         if (card.status === 'ok') {
           const key = dedupeKey(card.from, card.date, card.subject);
           card.duplicate = this.assetDupExists(key) || seen.has(key);
@@ -838,11 +1032,11 @@ export class IntakePanelComponent {
     if (!s) return;
     this.ocrBusy.set(true);
     try {
-      const r = await this.ocrShot(s);
+      const r = await this.ocrShot(s, true);
       if (r.status !== 'ok' || !r.text) {
         card.errorKey = this.ocrErrorKey(r.status);
       } else {
-        const fresh = this.cardFromText(card.shotIndex, r.text);
+        const fresh = this.cardFromText(card.shotIndex, r.text, r.source);
         if (fresh.status !== 'ok') {
           card.errorKey = fresh.errorKey;
         } else {
@@ -903,10 +1097,30 @@ export class IntakePanelComponent {
 
   // ---------------- 保存 ----------------
 
-  async save(): Promise<void> {
+  async save(generatePrep = false): Promise<void> {
+    // 票106(C2):Stage 长度先挡(≤50),超限字段下亮含上限提示,不进保存流水线
+    const stageErrs: Partial<Record<'nr' | 'arr', string>> = {};
+    if (this.target().kind === 'new' && textLengthError(this.nrStage().trim(), this.STAGE_MAX)) {
+      stageErrs.nr = this.stageTooLongText();
+    }
+    if (this.hasArrangement() && textLengthError(this.arrStage().trim(), this.STAGE_MAX)) {
+      stageErrs.arr = this.stageTooLongText();
+    }
+    if (Object.keys(stageErrs).length > 0) { this.stageErrors.set(stageErrs); return; }
+    this.stageErrors.set({});
+    // 票161:单封邮件主题/发件人/发信日期全空 = 无可识别的邮件信息,留在预览
+    // 报错、不假装已保存(与批量全失败同口径);且须在建轮之前拦截,否则一次
+    // 被拦的保存会先留下一个空轮次。转写/备注无此三字段,不受影响。
+    if (this.type() === 'email' && !this.batch()
+        && isEmptyEmailHeaders(this.fSubject(), this.fFrom(), this.fDate())) {
+      this.errorMsg.set(this.t('pb.v2.i.nothingToSaveSingle'));
+      return;
+    }
     this.busy.set(true);
     this.errorMsg.set(null);
     try {
+      // 票159：备考输入单步保存（无 Parse 预览、无截图/录音、无沟通镜像），走独立分支。
+      if (this.isPrepInputType()) { await this.savePrepInput(generatePrep); return; }
       const entry = this.entry();
       let roundId: string | null = null;
       const t = this.target();
@@ -1085,7 +1299,64 @@ export class IntakePanelComponent {
   }
 
   /** 保存成功后的统一收尾(文本/录音两条路径共用)。 */
-  private finishSave(): void {
+  /**
+   * 票159 备考输入保存：面经 / 简历要点原文逐字以 kind=Notes 资产随轮次归档。
+   * - phase 定死为 Notes 落值规则 derivePhase(false, 保存当日, 目标轮日期)；
+   * - Communications 置灰不可选（界面禁用），此处为防御性守门；
+   * - 编辑保存走替换语义：先 attachAsset 建新份，成功后 deleteAsset 删旧份，
+   *   建新失败则旧份完好（异常由 save() 的 catch 接住，面板保持打开可重试）；
+   *   删旧失败不阻塞——新份已是最新一份，提示旧份仍在即可；
+   * - generate=true 时不发 saved（避免父级重复刷新），只发 prepGenerate，
+   *   父级据此跳转并触发一次生成。
+   */
+  private async savePrepInput(generate: boolean): Promise<void> {
+    const purpose = this.prepPurpose();
+    if (!purpose) return;
+    const raw = this.text().trim();
+    if (!raw) return;
+    const t = this.target();
+    if (t.kind === 'comm') { this.errorMsg.set(this.t('pb.v2.i.prepCommDisabled')); return; }
+    const entry = this.entry();
+    let roundId: string | null = null;
+    if (t.kind === 'round') roundId = t.roundId;
+    if (t.kind === 'new') {
+      const created = await this.api.addRound(entry.id, {
+        stage: this.nrStage().trim() || guessStage(this.category(), entry),
+        scheduledDate: this.nrDate() || null,
+        scheduledTime: this.nrTime() || null,
+        interviewers: this.nrInterviewers() || null,
+        format: this.nrFormat() || null
+      }).toPromise();
+      roundId = created!.id;
+    }
+    if (!roundId) return;
+    const phase = derivePhase(false, todayStr(), this.roundDateOf(roundId, t));
+    const meta: AssetMeta = { channel: 'note', date: todayStr(), purpose };
+    await this.api.attachAsset(entry.id, {
+      kind: 'Notes',
+      fileName: firstLineSummary(raw)
+        || this.t(purpose === PREP_INPUT_EXPERIENCES ? 'pb.v2.i.typeExperiences' : 'pb.v2.i.typeResumePoints'),
+      transcriptText: raw,
+      transcriptSegmentsJson: null,
+      roundId,
+      phase,
+      metaJson: JSON.stringify(meta)
+    }).toPromise();
+    const oldId = this.editingAssetId();
+    if (oldId) {
+      await this.api.deleteAsset(entry.id, oldId).toPromise().catch(() => {
+        this.snack.open(this.t('pb.v2.i.prepOldKept'), this.t('common.close'), { duration: 4000 });
+      });
+    }
+    if (generate) {
+      this.finishSave(false);
+      this.prepGenerate.emit({ roundId });
+    } else {
+      this.finishSave();
+    }
+  }
+
+  private finishSave(emitSaved = true): void {
     this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2500 });
     this.text.set('');
     this.clearShots();
@@ -1094,7 +1365,8 @@ export class IntakePanelComponent {
     this.open.set(false);
     this.setDocPaste(false);
     this.step.set('input');
-    this.saved.emit();
+    this.editingAssetId.set(null);
+    if (emitSaved) this.saved.emit();
   }
 
   /**
@@ -1170,6 +1442,31 @@ function dedupeKey(from: string, date: string, subject: string): string {
   return `${from.trim().toLowerCase()}|${date.trim()}|${subject.trim().toLowerCase()}`;
 }
 
+/**
+ * 票161:归属下拉值 ↔ Target 的纯映射(模板委托,单测无需 TestBed 即可覆盖)。
+ * 值域:轮次 'round:<id>'、沟通 'comm'、新建 'new';非法值解析为 null,
+ * 调用方忽略(保持当前归属不动),绝不把非法值写进 target()。
+ */
+export function targetSelectValueOf(t: Target): string {
+  return t.kind === 'round' ? `round:${t.roundId}` : t.kind;
+}
+
+export function targetFromSelectValue(v: string): Target | null {
+  if (v === 'comm') return { kind: 'comm' };
+  if (v === 'new') return { kind: 'new' };
+  const m = v.match(/^round:(.+)$/);
+  return m ? { kind: 'round', roundId: m[1] } : null;
+}
+
+/**
+ * 票161:单封邮件是否无可识别的头信息——主题/发件人/发信日期全空(仅空白亦算空)。
+ * 命中时保存须拦下并明示(与批量全失败的 nothingToSave 同口径:不假装已保存),
+ * 而不是静默建一个无主题、无发件人、无日期、dedupeKey 全空的资产。
+ */
+export function isEmptyEmailHeaders(subject: string, from: string, date: string): boolean {
+  return ![subject, from, date].some(s => (s ?? '').trim());
+}
+
 export function classifyEmail(subject: string, body: string): string {
   const s = `${subject}\n${body}`.toLowerCase();
   if (/reschedule|postpone|改期|重新安排|another time/.test(s)) return 'reschedule';
@@ -1179,11 +1476,23 @@ export function classifyEmail(subject: string, body: string): string {
   return 'other';
 }
 
-/** 从正文里找面试时间:优先 "Oct 7, 2026 at 11:00 AM" / "2026-10-07 11:00" 一类明确写法。 */
+/** 从正文里找面试时间:优先 "Oct 7, 2026 at 11:00 AM" / "2026-10-07 11:00" 一类明确写法;
+ *  OCR 邀请卡格式也要认:"2026-10-13 周二 10:00～11:00"(星期夹中间)、"2026年10月13日(星期二) 14:00"。 */
 export function extractInterviewWhen(text: string): string | null {
-  const iso = text.match(/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2})/);
+  const p = (n: string) => n.padStart(2, '0');
+  // 票104:三路抽取结果产出前过日历合法性校验(同源复用票102 isValidCalendarDate);
+  // 某路命中但日期不存在(平年 2/29 / 13 月 / 4 月 31 日等)→ 回落 null,与
+  // 票102 normalizeEmailDate 命中非法即归空同构(不续试后续路),走既有无时间路径。
+  // 年月日写法,日期与时间之间可夹星期;时段(～/〜/-)只取起始时间
+  const cn = text.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日\s*(?:(?:星期|周)[一二三四五六日天]\s*)?(\d{1,2})[:：](\d{2})/);
+  if (cn) {
+    if (!isValidCalendarDate(+cn[1], +cn[2], +cn[3])) return null;
+    return `${cn[1]}-${p(cn[2])}-${p(cn[3])} ${p(cn[4])}:${cn[5]}`;
+  }
+  // ISO 日期与时间之间可夹星期("2026-10-13 周二 10:00～11:00"),或仍是单个空格/T 分隔
+  const iso = text.match(/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})(?:[ T]|\s*(?:星期|周)[一二三四五六日天]\s*)(\d{1,2})[:：](\d{2})/);
   if (iso) {
-    const p = (n: string) => n.padStart(2, '0');
+    if (!isValidCalendarDate(+iso[1], +iso[2], +iso[3])) return null;
     return `${iso[1]}-${p(iso[2])}-${p(iso[3])} ${p(iso[4])}:${iso[5]}`;
   }
   const months: Record<string, number> = {
@@ -1191,6 +1500,7 @@ export function extractInterviewWhen(text: string): string | null {
   };
   const en = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})[^0-9]{0,12}?(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (en) {
+    if (!isValidCalendarDate(+en[3], months[en[1].slice(0, 3).toLowerCase()], +en[2])) return null;
     const mon = months[en[1].slice(0, 3).toLowerCase()];
     let hh = Number(en[4]);
     if (en[6]?.toUpperCase() === 'PM' && hh < 12) hh += 12;
@@ -1198,10 +1508,116 @@ export function extractInterviewWhen(text: string): string | null {
     const p = (n: number) => String(n).padStart(2, '0');
     return `${en[3]}-${p(mon)}-${p(Number(en[2]))} ${p(hh)}:${en[5]}`;
   }
+  // 票158:英文 day-month-year 顺序 + 无时间回落。既有带时间三路在先(行为一字
+  // 不动),新增路只在三路全 miss 时求值;日历合法性校验与票104 同构(命中非
+  // 法日期即 null,不续试后续路)。无时间回落产出日期-only "YYYY-MM-DD":
+  // 调用方已有 slice(0,10) 取 datePart、slice(11,16) 取时间(空 → undefined),
+  // 无需改调用方。注意:CN/ISO 日期-only 不在此列(既有 "date without time
+  // returns null" 用例仍锁定 ISO 日期-only 为 null,本票不扩范围)。
+  // day-first 带时间:"26 oct 2026 at 11:00 AM" / "26th October 2026 14:30"
+  const enDayFirst = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*,?\s+(20\d{2})[^0-9]{0,12}?(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (enDayFirst) {
+    if (!isValidCalendarDate(+enDayFirst[3], months[enDayFirst[2].slice(0, 3).toLowerCase()], +enDayFirst[1])) return null;
+    const mon = months[enDayFirst[2].slice(0, 3).toLowerCase()];
+    let hh = Number(enDayFirst[4]);
+    if (enDayFirst[6]?.toUpperCase() === 'PM' && hh < 12) hh += 12;
+    if (enDayFirst[6]?.toUpperCase() === 'AM' && hh === 12) hh = 0;
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${enDayFirst[3]}-${p(mon)}-${p(Number(enDayFirst[1]))} ${p(hh)}:${enDayFirst[5]}`;
+  }
+  // day-first 无时间:"26 oct 2026" / "26th Oct, 2026"
+  const enDayFirstDate = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*,?\s+(20\d{2})\b/i);
+  if (enDayFirstDate) {
+    if (!isValidCalendarDate(+enDayFirstDate[3], months[enDayFirstDate[2].slice(0, 3).toLowerCase()], +enDayFirstDate[1])) return null;
+    const mon = months[enDayFirstDate[2].slice(0, 3).toLowerCase()];
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${enDayFirstDate[3]}-${p(mon)}-${p(Number(enDayFirstDate[1]))}`;
+  }
+  // month-first 无时间:"Oct 26, 2026" / "October 26th, 2026"
+  const enDate = text.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b/i);
+  if (enDate) {
+    if (!isValidCalendarDate(+enDate[3], months[enDate[1].slice(0, 3).toLowerCase()], +enDate[2])) return null;
+    const mon = months[enDate[1].slice(0, 3).toLowerCase()];
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${enDate[3]}-${p(mon)}-${p(Number(enDate[2]))}`;
+  }
   return null;
 }
 
-function extractFormat(text: string): string {
+/**
+ * 票60/160:OCR 文本头部适配。OCR 输出是带阅读序的散行,没有 Key:value 头,
+ * parsePastedEmail 扫不到头 → 邮件卡 failed。本函数仅由 cardFromText 在
+ * 「OCR 文本且无头命中」时调用(票160 起不再分本地/视觉来源——视觉纯转写
+ * 同样可能无头),用轻量规则定位并合成为标准头块,之后仍走既有同一管线
+ * (parsePastedEmail → cardFromText 抽取),抽取器与抽取域口径不变:
+ * - 票60 主题行在先版式:主题行 = 首个非空行;带窗口标题前缀「人名 : 主题
+ *   本体」(该客户端标题固定格式,ocr-test RESULT.md 已知残余口径)时只剥
+ *   「人名 + 空格冒号」型前缀,剥不动就原样保留;发件人行在主题行之后
+ *   6 行内找;
+ * - 票160 发件人行在先版式:首行即发件人行(头像 + 姓名 + 日期时间同行)
+ *   时票60 的“首行 = 主题”假设失效(主题会被取成发件人行、发件人行又被
+ *   消耗,之后 6 行内再无发件人行 → null)。此时主题取发件人行之后首个
+ *   非收件人行/非会议卡行/非平台行/非客户端 chrome 行,找不到则不硬造;
+ * - 发件人行:含日期时间形态的行(日期 20\d{2}[-/年]\d{1,2}[-/月]\d{1,2}
+ *   与时间 \d{1,2}:\d{2} 可粘连无空格,如 Khalil Musazade2026-10-0809:18;
+ *   日期与时间之间可夹星期,如 Teams 会议卡行“2026-10-01 周四 13:00”,
+ *   星期组全部非捕获,m[1..5] 仍为年/月/日/时/分)——日期时间之前的部分
+ *   作 From、日期时间作 Sent;日期时间之前为空的行(以日期开头的会议卡
+ *   行)不算发件人行;
+ * - 合成 = Subject/From/Sent 头块 + 空行 + 主题行/发件人行之后的原文余部
+ *   作 body(会议卡落在 body 内,仍是 extractInterviewWhen 的抽取域;发信
+ *   时间不入 body,防被误抽成面试时间)。
+ * 找不到发件人行(或发件人行在先时找不到主题行) → 返回 null,不硬造头。
+ */
+export function adaptLocalOcrEmailText(raw: string): string | null {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  // 日期时间形态:日期与时间可粘连,日期与时间之间可夹星期;星期组全部非捕获。
+  const dateTime = /(20\d{2})[-/年](\d{1,2})[-/月](\d{1,2})日?(?:\s*(?:周[一二三四五六日天]|Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?))?\s*(\d{1,2}):(\d{2})/;
+  const p2 = (n: string) => n.padStart(2, '0');
+  /** 发件人行:含日期时间且日期时间之前有非空人名部分;以日期开头的会议卡行不算。 */
+  const senderOf = (line: string): { from: string; sent: string } | null => {
+    const m = line.match(dateTime);
+    if (!m || m.index === undefined) return null;
+    const from = line.slice(0, m.index).trim();
+    if (!from) return null;
+    return { from, sent: `${m[1]}-${p2(m[2])}-${p2(m[3])} ${p2(m[4])}:${m[5]}` };
+  };
+  const firstIdx = lines.findIndex(l => l.trim().length > 0);
+  if (firstIdx < 0) return null;
+  // 票160 发件人行在先版式:首行即发件人行时走此路,主题在发件人行之后找。
+  const firstSender = senderOf(lines[firstIdx].trim());
+  if (firstSender) {
+    const isRecipient = (t: string) => /^(发至|收件人|抄送)\s*[:：]?/.test(t) || /^(To|Cc)\s*[:：]/.test(t);
+    const isPlatform = (t: string) => /^(Microsoft Teams Meeting|Teams meeting|Zoom Meeting|腾讯会议|Google Meet)$/i.test(t);
+    const isChrome = (t: string) => /^(详情|Details)$/.test(t);
+    const last = Math.min(lines.length, firstIdx + 9);
+    for (let i = firstIdx + 1; i < last; i++) {
+      const t = lines[i].trim();
+      if (!t || isRecipient(t) || isPlatform(t) || isChrome(t) || dateTime.test(t)) continue;
+      const body = lines.slice(i + 1).join('\n').trim();
+      return `Subject: ${t}\nFrom: ${firstSender.from}\nSent: ${firstSender.sent}\n\n${body}`;
+    }
+    return null;
+  }
+  // 票60 主题行在先版式(原口径一字不动):主题行 = 首个非空行(剥窗口标题前缀),
+  // 发件人行在主题行之后 6 行内。
+  let subject = lines[firstIdx].trim();
+  // 窗口标题前缀:人名(字母/中文/空格/点/连字符,不含数字与冒号) + 空格冒号。
+  const titlePrefix = subject.match(/^([A-Za-z\u4e00-\u9fa5][A-Za-z\u4e00-\u9fa5 .'-]{0,40}?)\s+[:：]\s+(.+)$/);
+  if (titlePrefix) subject = titlePrefix[2].trim();
+  if (!subject) return null;
+  const last = Math.min(lines.length, firstIdx + 7);
+  for (let i = firstIdx + 1; i < last; i++) {
+    const s = senderOf(lines[i]);
+    if (!s) continue;
+    const body = lines.slice(i + 1).join('\n').trim();
+    return `Subject: ${subject}\nFrom: ${s.from}\nSent: ${s.sent}\n\n${body}`;
+  }
+  return null;
+}
+
+/** 票161:导出供 spec 覆盖(与 extractInterviewWhen / classifyEmail 同例)。 */
+export function extractFormat(text: string): string {
   if (/jdoodle/i.test(text)) return '线上做题平台';
   if (/teams|zoom|google meet|video call/i.test(text)) return '线上视频';
   if (/phone call|电话沟通/i.test(text)) return '电话';
@@ -1209,7 +1625,8 @@ function extractFormat(text: string): string {
   return '';
 }
 
-function extractInterviewerNames(text: string): string[] {
+/** 票161:导出供 spec 覆盖(与 extractInterviewWhen / classifyEmail 同例)。 */
+export function extractInterviewerNames(text: string): string[] {
   // 保守提取:只认 "with X Y" / "面试官:X" 这类明确句式,认不到就留空让用户补。
   const out = new Set<string>();
   for (const m of text.matchAll(/(?:面试官|interviewer)[:：]\s*([A-Za-z][A-Za-z .'-]{1,40})/gi)) {

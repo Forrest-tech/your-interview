@@ -11,8 +11,10 @@ public sealed class Company : AuditableAggregateRoot
     private Company() { }
 
     public Company(string name, string? website = null, string? industry = null,
-        string? location = null, string? logoUrl = null, string? notes = null)
+        string? location = null, string? logoUrl = null, string? notes = null,
+        Guid userId = default)
     {
+        UserId = userId;
         Name = name;
         Website = website;
         Industry = industry;
@@ -21,6 +23,9 @@ public sealed class Company : AuditableAggregateRoot
         Notes = notes;
         IsBlacklisted = false;
     }
+
+    /// <summary>归属用户(COD-01/票03):公司按用户隔离,同名公司在不同用户下各自一份。</summary>
+    public Guid UserId { get; private set; }
 
     public string Name { get; private set; } = string.Empty;
     public string? Website { get; private set; }
@@ -77,6 +82,16 @@ public sealed class Company : AuditableAggregateRoot
     }
 
     /// <summary>
+    /// 票 150:只改 logo 地址(回填/单家刷新/SmartAdd 补填共用)。
+    /// 与 Update 分开:回填不该要求把公司基本资料全量重传。
+    /// </summary>
+    public void SetLogoUrl(string? logoUrl)
+    {
+        LogoUrl = logoUrl;
+        Touch();
+    }
+
+    /// <summary>
     /// 按公司官网解析一个 Logo 地址(确定性,不做网络请求)。
     /// 用 Google 的 favicon 服务:输入一个能解析出 host 的网址即返回该 host 的图标,
     /// 浏览器侧再叠加"加载失败则降级为首字母头像"的兜底。
@@ -105,8 +120,10 @@ public sealed class JobApplication : AuditableAggregateRoot
     private JobApplication() { }
 
     public JobApplication(Guid companyId, string role, string? location = null, string? link = null,
-        string? salary = null, string? workMode = null, string? source = null, string? jdSummary = null)
+        string? salary = null, string? workMode = null, string? source = null, string? jdSummary = null,
+        Guid userId = default)
     {
+        UserId = userId;
         CompanyId = companyId;
         Role = role;
         Location = location;
@@ -119,6 +136,9 @@ public sealed class JobApplication : AuditableAggregateRoot
         Priority = Priority.Medium;
         RecordStatusChange(ApplicationStatus.Saved, "创建记录");
     }
+
+    /// <summary>归属用户(COD-01/票03):投递按用户隔离。</summary>
+    public Guid UserId { get; private set; }
 
     public Guid CompanyId { get; private set; }
     public string Role { get; private set; } = string.Empty;
@@ -172,6 +192,13 @@ public sealed class JobApplication : AuditableAggregateRoot
     /// 福利待遇(完整文本)。Smart paste 从 Benefits/Advantages 段提取。
     /// </summary>
     public string? Benefits { get; private set; }
+
+    /// <summary>
+    /// 票 154：JD 正文小节列表 JSON（[{title, key, body, origin, edited}]，原文顺序）。
+    /// 真相是 JdText + 本列表；requirements / benefits 是从本列表派生的兼容投影。
+    /// null = 老记录（未产出小节），显示走 legacy 路径；不批量回填。
+    /// </summary>
+    public string? SectionsJson { get; private set; }
 
     public ApplicationStatus Status { get; private set; }
     public Priority Priority { get; private set; }
@@ -269,7 +296,7 @@ public sealed class JobApplication : AuditableAggregateRoot
             RejectionReason = rejectionReason;
 
         RaiseDomainEvent(new JobApplicationStatusChangedDomainEvent(
-            Id, CompanyId, from.ToString(), target.ToString()));
+            Id, CompanyId, from.ToString(), target.ToString(), UserId));
 
         // 邀请登记(直接切状态,还没登记具体轮次):视为"下一轮"的邀请。
         // Rounds 里已有 2 轮却直接切 Interview → 第 3 轮草稿。
@@ -338,6 +365,16 @@ public sealed class JobApplication : AuditableAggregateRoot
     }
 
     /// <summary>
+    /// 设置备注。独立方法,理由同 SetJdContent:手动建单时备注随单落库,
+    /// 不该逼迫调用方走整份 UpdateDetails。空串归一为 null。
+    /// </summary>
+    public void SetNotes(string? notes)
+    {
+        Notes = string.IsNullOrWhiteSpace(notes) ? null : notes;
+        Touch();
+    }
+
+    /// <summary>
     /// 设置公司介绍。独立方法:Smart paste 抓到公司介绍是高频动作,
     /// 不该逼迫调用方传齐所有投递字段。空串归一为 null。
     /// </summary>
@@ -383,6 +420,16 @@ public sealed class JobApplication : AuditableAggregateRoot
         Touch();
     }
 
+    /// <summary>
+    /// 设置 JD 小节列表 JSON。空串归一为 null（语义 = 无小节，走 legacy 显示）。
+    /// 调用方负责先过 JdSectionJson.Canonicalize（去空节、key 重算），本方法只存。
+    /// </summary>
+    public void SetSections(string? sectionsJson)
+    {
+        SectionsJson = string.IsNullOrWhiteSpace(sectionsJson) ? null : sectionsJson;
+        Touch();
+    }
+
     public void SetPriority(Priority priority) { Priority = priority; Touch(); }
 
     public void SetDeadline(DateOnly? deadline) { Deadline = deadline; Touch(); }
@@ -402,7 +449,10 @@ public sealed class JobApplication : AuditableAggregateRoot
     public InterviewRound AddRound(string stage, DateOnly? scheduledDate, string? interviewer,
         string? format, string? notes)
     {
-        var round = new InterviewRound(Id, _rounds.Count + 1, stage, scheduledDate, interviewer, format, notes);
+        // 票04:结果回写补建的投影轮次号可不连续(如只有第 2 轮),新轮次号必须取 max+1,
+        // 用 Count+1 会与已有投影轮次撞号(Interviews 侧 AddRound 同口径)。
+        var round = new InterviewRound(Id, _rounds.Count == 0 ? 1 : _rounds.Max(r => r.Order) + 1,
+            stage, scheduledDate, interviewer, format, notes);
         _rounds.Add(round);
         if (Status is ApplicationStatus.Applied or ApplicationStatus.Screen)
             ChangeStatusCore(ApplicationStatus.Interview, $"新增面试轮次:{stage}", null, fromAddRound: true);
@@ -417,7 +467,7 @@ public sealed class JobApplication : AuditableAggregateRoot
     private void RaiseInvitation(int roundNo, string? stage, DateOnly? scheduledDate,
         string? interviewer, string? format)
         => RaiseDomainEvent(new InterviewInvitationRecordedDomainEvent(
-            Id, CompanyId, Role, roundNo, stage, scheduledDate, interviewer, format));
+            Id, CompanyId, Role, roundNo, stage, scheduledDate, interviewer, format, UserId));
 
     public void UpdateRound(Guid roundId, string? stage, DateOnly? date, string? interviewer,
         string? format, RoundOutcome outcome, string? notes)
@@ -429,23 +479,112 @@ public sealed class JobApplication : AuditableAggregateRoot
     }
 
     /// <summary>
-    /// 面试结果回写(M1.5):把实战机经里登记的结果落到对应轮次。
+    /// 面试结果回写(M1.5;票04 REQ-02+ARC-07 重写语义):把实战机经里登记的结果落到对应轮次。
     /// 轮次按 Order 匹配(M1.4 自动建的草稿 RoundNo = 轮次号,天然对齐)。
-    /// 被拒时申请整体转 Rejected —— 用户写下"被拒"就是明确判断,不该再靠手工切状态。
+    ///
+    /// Jobs 侧没有对应轮次时**按轮号补建投影**(轮次主数据在 Interviews,这里只是
+    /// Tracker 侧投影):旧实现直接抛 KeyNotFound、消费者吞掉跳过 —— Playbook 已填
+    /// 结果,Tracker 却停在 Saved、interviewed=0,同屏矛盾(REQ-02)。补建投影
+    /// **不发邀请事件**(RaiseInvitation):这是回写,不是新登记一轮,
+    /// 发了会让 Interviews 反向建草稿形成回环。
+    ///
+    /// 状态语义(与枚举一一对应,不再只处理 Failed@Interview 一种组合):
+    ///   Failed   → Saved/Applied/Screen/Interview 一律转 Rejected(用户写下"被拒"就是明确判断);
+    ///   Passed   → Saved/Applied/Screen 沿状态机走到 Interview(面过是事实,计数口径同源);
+    ///   Ghosted  → Saved/Applied/Screen/Interview 沿状态机走到 Ghosted;
+    ///   其余结果(Pending/Cancelled/NoShow)只落投影,不动申请状态;
+    ///   Offer/Accepted/Paused/Withdrawn 等用户已推进/已决定的状态不被回写覆盖。
     /// </summary>
     public void RecordRoundOutcome(int roundOrder, RoundOutcome outcome, string? note)
     {
-        var round = _rounds.FirstOrDefault(r => r.Order == roundOrder)
-            ?? throw new KeyNotFoundException($"第 {roundOrder} 轮不存在,无法回写结果");
+        var round = _rounds.FirstOrDefault(r => r.Order == roundOrder);
+        if (round is null)
+        {
+            round = new InterviewRound(Id, roundOrder, "Technical", null, null, null, note);
+            _rounds.Add(round);
+        }
 
         round.RecordOutcome(outcome);
 
-        if (outcome == RoundOutcome.Failed && Status == ApplicationStatus.Interview)
-            // note 进流转历史,rejectionReason 进拒因字段 —— 两者都要,别只留一半
-            ChangeStatus(ApplicationStatus.Rejected, note ?? $"第 {roundOrder} 轮面试未通过",
-                rejectionReason: note ?? $"第 {roundOrder} 轮面试未通过");
+        switch (outcome)
+        {
+            case RoundOutcome.Failed when Status is ApplicationStatus.Saved
+                or ApplicationStatus.Applied or ApplicationStatus.Screen
+                or ApplicationStatus.Interview:
+                // note 进流转历史,rejectionReason 进拒因字段 —— 两者都要,别只留一半
+                ChangeStatus(ApplicationStatus.Rejected, note ?? $"第 {roundOrder} 轮面试未通过",
+                    rejectionReason: note ?? $"第 {roundOrder} 轮面试未通过");
+                break;
+            case RoundOutcome.Passed when Status is ApplicationStatus.Saved
+                or ApplicationStatus.Applied or ApplicationStatus.Screen:
+                // Saved 不能一步到 Interview:先逐级到 Applied,再进 Interview。
+                // 进 Interview 必须走 fromAddRound 静默路径 —— 普通 ChangeStatus 会
+                // 顺带发「下一轮邀请」让 Interviews 反向建一张新草稿(回写不成回环)。
+                if (Status == ApplicationStatus.Saved)
+                    ChangeStatus(ApplicationStatus.Applied, note ?? $"第 {roundOrder} 轮面试已通过");
+                ChangeStatusCore(ApplicationStatus.Interview, note ?? $"第 {roundOrder} 轮面试已通过",
+                    null, fromAddRound: true);
+                break;
+            case RoundOutcome.Ghosted when Status is ApplicationStatus.Saved
+                or ApplicationStatus.Applied or ApplicationStatus.Screen
+                or ApplicationStatus.Interview:
+                TryWalkToStatus(ApplicationStatus.Ghosted, note ?? $"第 {roundOrder} 轮后无回复");
+                break;
+            default:
+                Touch();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 轮次排期回写(票114,REQ-02 残余/CONF-DASH-1):Playbook 里排了期,
+    /// Tracker 投影轮次同步排期,投递状态按口径推进 —— interviewed 计数
+    /// (Jobs 状态口径)与 Dashboard Upcoming(Interviews 排期口径)同屏不矛盾。
+    ///
+    /// 语义(定版,evidence-114/STATUS §4):
+    ///   · 投影同步:按 Order 找轮次,无则补建(带 Stage/日期,**不发邀请事件**防回环,
+    ///     与结果回写补建同型);有则同步 Stage(非空才覆盖)与 ScheduledDate。
+    ///   · 推进:ScheduledDate 非空、该轮投影 Outcome 仍 Pending、且状态 ∈
+    ///     {Saved, Applied, Screen} → 沿状态机走 Interview(与 Passed 回写同路:
+    ///     Saved 先 Applied,再 ChangeStatusCore 静默进 Interview)。
+    ///   · 不覆盖:状态 ∈ {Interview, Offer, Accepted, Rejected, Ghosted, Paused,
+    ///     Withdrawn} 一律不动 —— 已决定状态不因新排期「复活」;结果已先落
+    ///     (投影 Outcome 非 Pending)的轮次,迟到的排期事件只同步日期、永不
+    ///     推进状态(乱序不回退)。
+    ///   · 撤销(ScheduledDate=null:改期清空/删轮次):只清投影日期,**不回退
+    ///     状态** —— 状态机无 Interview→Applied 合法路径,「曾进入面试阶段」
+    ///     是历史事实。
+    ///   · 幂等:同事件重放 → 同值写入、推进分支不重复触发,无重复流转历史。
+    /// </summary>
+    public void RecordRoundSchedule(int roundOrder, string? stage, DateOnly? scheduledDate)
+    {
+        var round = _rounds.FirstOrDefault(r => r.Order == roundOrder);
+        if (round is null)
+        {
+            round = new InterviewRound(Id, roundOrder,
+                string.IsNullOrWhiteSpace(stage) ? "Technical" : stage.Trim(),
+                scheduledDate, null, null, null);
+            _rounds.Add(round);
+        }
         else
+        {
+            round.RecordSchedule(stage, scheduledDate);
+        }
+
+        if (scheduledDate is not null
+            && round.Outcome == RoundOutcome.Pending
+            && Status is ApplicationStatus.Saved or ApplicationStatus.Applied
+                or ApplicationStatus.Screen)
+        {
+            var note = $"第 {roundOrder} 轮面试已排期";
+            if (Status == ApplicationStatus.Saved)
+                ChangeStatus(ApplicationStatus.Applied, note);
+            ChangeStatusCore(ApplicationStatus.Interview, note, null, fromAddRound: true);
+        }
+        else
+        {
             Touch();
+        }
     }
 }
 
@@ -509,6 +648,16 @@ public sealed class InterviewRound : Entity
     /// </summary>
     internal void RecordOutcome(RoundOutcome outcome) => Outcome = outcome;
 
+    /// <summary>
+    /// 只同步排期、不动结果/其它字段(票114)—— Stage 非空才覆盖(事件 Stage
+    /// 为空时不抹掉投影已有阶段),ScheduledDate 无条件同步(null = 排期撤销)。
+    /// </summary>
+    internal void RecordSchedule(string? stage, DateOnly? scheduledDate)
+    {
+        if (!string.IsNullOrWhiteSpace(stage)) Stage = stage;
+        ScheduledDate = scheduledDate;
+    }
+
     public void SetFeedback(string? feedback) => Feedback = feedback;
 }
 
@@ -529,10 +678,11 @@ public enum ApplicationStatus
 
 public enum Priority { Low = 0, Medium = 1, High = 2, Critical = 3 }
 
-public enum RoundOutcome { Pending = 0, Passed = 1, Failed = 2, Cancelled = 3, NoShow = 4 }
+public enum RoundOutcome { Pending = 0, Passed = 1, Failed = 2, Cancelled = 3, NoShow = 4, Ghosted = 5 }
 
 public sealed record JobApplicationStatusChangedDomainEvent(
-    Guid ApplicationId, Guid CompanyId, string FromStatus, string ToStatus)
+    Guid ApplicationId, Guid CompanyId, string FromStatus, string ToStatus,
+    Guid UserId = default)
     : DomainEventBase;
 
 /// <summary>
@@ -541,7 +691,8 @@ public sealed record JobApplicationStatusChangedDomainEvent(
 /// </summary>
 public sealed record InterviewInvitationRecordedDomainEvent(
     Guid ApplicationId, Guid CompanyId, string Role, int RoundNo,
-    string? Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format)
+    string? Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format,
+    Guid UserId = default)
     : DomainEventBase;
 
 /// <summary>
@@ -653,8 +804,10 @@ public sealed class ApplicationCommunication : AuditableAggregateRoot
     private ApplicationCommunication() { }
 
     public ApplicationCommunication(Guid applicationId, string type, string? subject, string content,
-        string? contactName, string? contactEmail, DateTimeOffset occurredAt)
+        string? contactName, string? contactEmail, DateTimeOffset occurredAt,
+        Guid userId = default)
     {
+        UserId = userId;
         ApplicationId = applicationId;
         Type = type;
         Subject = subject;
@@ -665,6 +818,9 @@ public sealed class ApplicationCommunication : AuditableAggregateRoot
     }
 
     public Guid ApplicationId { get; private set; }
+
+    /// <summary>归属用户(COD-01/票03):写入时从所属投递盖章,与投递同主人。</summary>
+    public Guid UserId { get; private set; }
 
     /// <summary>Email / Call / Interview / Message / Note。</summary>
     public string Type { get; private set; } = string.Empty;

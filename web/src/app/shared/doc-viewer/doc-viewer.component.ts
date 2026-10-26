@@ -1,10 +1,12 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
+
+import { I18nService } from '../../core/i18n/i18n.service';
 
 /**
  * 通用文档阅读器(从 AI Practice 阅读卡片抽出的可复用模块)。
@@ -25,6 +27,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
   styleUrl: './doc-viewer.component.scss'
 })
 export class DocViewerComponent {
+  private readonly i18n = inject(I18nService);
+  t = (key: string): string => this.i18n.t(key);
+
   /** 文档标题 */
   readonly title = input<string>('');
   /** 正文内容(纯文本,保留换行) */

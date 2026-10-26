@@ -1,8 +1,6 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
+using YourInterview.BuildingBlocks.Ai;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
@@ -11,12 +9,8 @@ using YourInterview.SharedContracts;   // AddMassTransitWithRabbitMq 扩展所�
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ★ 2026-09-26(Forrest 413 修复):Kestrel 默认请求体上限 30MB,
-//   长录音(>2分钟)的 multipart 上传/评分送审会撞 413 Payload Too Large。
-//   行业做法(如 GitHub API):按业务最大合理体积显式声明 —— 这里放宽到 64MB,
-//   覆盖 10 分钟 16k 单声道 WAV 的 base64(约 25MB)绰绰有余。
-builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 64 * 1024 * 1024);
-
+// ★ Kestrel 请求体上限 64MB 已收进 AddServiceDefaults 全服务统一(ARC-09/票18);
+//   本服务 2026-09-26 的 413 修复口径不变(长录音 multipart 上传/评分送审,值仍 64MB)。
 builder.AddServiceDefaults("assessment-api");
 
 // ---------- 数据库:独占 schema "assessment" ----------
@@ -58,31 +52,40 @@ builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.S
 // Azure 神经语音合成(示范朗读走 Azure 时用;key 与评分共用同一份)
 builder.Services.AddSingleton<YourInterview.Services.Assessment.Application.SpeechSynthesizer>();
 
-// M2.3:LLM 凭据与补全已收敛到 AiGateway(前端统一走 /api/ai/*),
-// Assessment 不再持有 LLM 客户端/凭据栈;历史数据由 RemoveAiSettings 迁移搬走后删表。
+// M2.3:LLM 凭据仍只存 AiGateway;票95 起 Assessment 经票38 单一 AiGatewayClient
+// 编排 Mock 出题/评分(凭据不落本服务,JWT 透传由客户端处理)。
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddAiGatewayClient(builder.Configuration["AiGateway:BaseUrl"]);
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 
 // ---------- 鉴权 ----------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("缺少 Jwt:SigningKey");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-    });
+// ---------- JWT 认证(校验参数唯一定义在 ServiceDefaults,ARC-09/票18) ----------
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddAuthorization(options => PermissionPolicy.AddPermissionPolicies(options));
+
+// ---------- 票119 词典模块（静态数据：嵌入资源 + 本地数据目录，不落库） ----------
+builder.Services.Configure<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryOptions>(
+    builder.Configuration.GetSection(YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryOptions.SectionName));
+builder.Services.AddSingleton(sp =>
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<
+        YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryOptions>>().Value);
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(new Lazy<YourInterview.Services.Assessment.Infrastructure.Dictionary.OpenLayerStore>(
+    YourInterview.Services.Assessment.Infrastructure.Dictionary.OpenLayerStore.LoadFromEmbeddedResources));
+builder.Services.AddSingleton(sp => new YourInterview.Services.Assessment.Infrastructure.Dictionary.OxfordPackStore(
+    sp.GetRequiredService<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryOptions>().Oxford.PackDir));
+// Wikimedia 等源站按 UA 礼仪拒绝无 UA/库默认 UA（403）：统一带描述性 UA。
+builder.Services.AddHttpClient("dictionary-audio", c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(30);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("YourInterview-Dictionary/1.0 (personal vocabulary learning)");
+});
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Dictionary.AudioResolver>();
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryService>();
+// 票130 §4:启动预热(主机启动层一次性后台触发,把一次性构建搬出第一次查词;失败诚实降级不拖垮启动)
+builder.Services.AddSingleton<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryWarmup>();
+builder.Services.AddHostedService<YourInterview.Services.Assessment.Infrastructure.Dictionary.DictionaryWarmupHostedService>();
 
 var app = builder.Build();
 
@@ -91,7 +94,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-try { await AssessmentDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger); }
-catch (Exception ex) { app.Logger.LogError(ex, "Assessment 数据库初始化失败 —— 服务继续启动"); }
+// COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync("assessment-api", AssessmentDbSeeder.MigrateAndSeedAsync);
 
 app.Run();

@@ -1,9 +1,9 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using YourInterview.BuildingBlocks.Domain;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Interviews.Domain;
+using YourInterview.Services.Interviews.Domain.JsonFields;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
 
 namespace YourInterview.Services.Interviews.Infrastructure.Persistence;
@@ -62,7 +62,7 @@ public sealed class AnalysisJobOutboxInterceptor(ICurrentUser currentUser)
                 .AnyAsync(j => j.IdempotencyKey == key, ct);
             if (exists) continue;
 
-            var payload = JsonSerializer.Serialize(new JobPayload(
+            var payload = JsonFieldAdapter.SerializeRaw(new JobPayload(
                 evt.AssetId, evt.StoragePath, currentUser.UserId));
             db.AnalysisJobs.Add(new AnalysisJob(evt.EntryId,
                 AnalysisJobType.Transcription, key, payload));

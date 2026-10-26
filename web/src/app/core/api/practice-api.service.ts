@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { catchError, map, timeout } from 'rxjs/operators';
 
 import { ApiClient } from './api-client';
 
@@ -49,12 +49,47 @@ export interface MaterialNodeIn {
   children: MaterialNodeIn[];
 }
 
+/** ★ 票124:回收站清单项(顶层已删节点) —— 与后端 C# DeletedMaterialDto 逐字段对齐。 */
+export interface DeletedMaterialDto {
+  id: string;
+  name: string;
+  folder: boolean;
+  parentId: string | null;
+  /** 祖先名链(不含自身,根项为 null);分隔符 " / "。 */
+  path: string | null;
+  /** 该项所属根的类别(自身是根则取自身)。 */
+  categoryId: string | null;
+  categoryName: string | null;
+  markColor: string | null;
+  /** 删除时刻代理 = 行 UpdatedAt(零迁移)。 */
+  deletedAt: string;
+  /** 全部后代数(删/未删都算)。 */
+  descendantTotal: number;
+  /** 其中已删数。 */
+  descendantDeleted: number;
+  /** 子树内文件所挂未删录音数。 */
+  recordingCount: number;
+}
+
+/**
+ * ★ 票124:恢复响应 —— 必含**完整树包**(规格 §6 契约 C1)。
+ * 只回计数会让「版本已对齐、payload 缺恢复项」的下一次整树保存再删掉它。
+ */
+export interface MaterialRestoreResult {
+  /** 本次实际翻转的行数(含祖先与后代)。 */
+  restored: number;
+  treeVersion: string;
+  nodes: MaterialNodeDto[];
+}
+
 // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
 
 export interface PracticeCategoryDto {
   id: string;
   name: string;
   sortOrder: number;
+  /** ★ 票111 段3(A06):类别行读时 xmin,删除时 If-Match 回传。 */
+  version?: number | null;
   /** 链接的数据源: null=普通分类, "techstack"=Tech Stack 实时视图 */
   linkedSource?: string | null;
 }
@@ -65,6 +100,9 @@ export interface WordScoreDto {
   word: string;
   accuracy: number;
   errorType: string;
+  /** ★ 票122:词级时间偏移(后端落库读出);旧记录无此两键 → undefined = 无偏移。 */
+  offsetMs?: number;
+  durationMs?: number;
 }
 
 /**
@@ -89,6 +127,8 @@ export interface RecordingScoreDto {
   billedSeconds?: number | null;
   /** 送评的音频字节数(核对用)。 */
   billedBytes?: number | null;
+  /** ★ 票108 A10:评分行读时 xmin —— 重评分保存时回传钉版,过期得 409。 */
+  version?: number | null;
 }
 
 export interface RecordingDto {
@@ -99,6 +139,8 @@ export interface RecordingDto {
   contentType: string;
   createdAt: string;
   score: RecordingScoreDto | null;
+  /** ★ 票111 段3(A11):录音行自身读时 xmin(区别于 score.version),删除时 If-Match 回传。 */
+  version?: number | null;
 }
 
 // ---------- LLM 设置(2026-09-18 新增;M2.3 起收敛到 AiGateway:/api/ai/*) ----------
@@ -166,6 +208,20 @@ export interface ImageTextDto {
   text: string | null;
 }
 
+/**
+ * 共享 OCR 服务结果(平台能力,票59):本地 PaddleOCR,图片不出本地。
+ * text = 服务处理层组装的全文(逐行、阅读序);droppedLines = 被置信过滤
+ * 剔除的行数(不静默);失败/不可达由 Observable 错误通道如实上抛。
+ */
+export interface SharedOcrDto {
+  status: string;
+  engine?: string;
+  model?: string;
+  text: string | null;
+  droppedLines?: number;
+  elapsedMs?: number;
+}
+
 // ---------- Azure 语音设置 ----------
 
 export interface SpeechSettingStatusDto {
@@ -205,6 +261,8 @@ export interface StorageSettingDto {
   inContainer: boolean;
   /** 是否可以迁移已有录音到新目录。 */
   canMigrate: boolean;
+  /** ★ 票108 A13:设置行读时版本 —— 保存时回传钉版,过期得 409。 */
+  version?: number | null;
 }
 
 /** 迁移结果。 */
@@ -223,9 +281,36 @@ export class PracticeApi {
 
   // ---------- 素材树 ----------
 
-  /** 取整棵素材树。 */
+  /**
+   * ★ 票111 段2:最近一次读树/保存回传的树摘要(不透明串,前端只存不解析)。
+   *   整树保存时回传给服务端前置比对;树已被其他页签改动 → 409。
+   */
+  private treeVersion: string | null = null;
+
+  /** 取整棵素材树(包对象 { treeVersion, nodes },摘要在此留存供保存回传)。 */
   getMaterials(): Observable<MaterialNodeDto[]> {
-    return this.api.get<MaterialNodeDto[]>(`${PracticeApi.BASE}/materials`);
+    return this.api.get<{ treeVersion: string; nodes: MaterialNodeDto[] }>(`${PracticeApi.BASE}/materials`)
+      .pipe(map((r) => {
+        const nodes = PracticeApi.treePackageNodes(r);
+        this.treeVersion = r.treeVersion ?? null;
+        return nodes;
+      }));
+  }
+
+  /**
+   * ★ 票134:整树包形态门 —— 响应必须是包对象 { treeVersion, nodes[] }。
+   *   旧后端返裸数组时 r.nodes 为 undefined，旧代码 `?? []` 把它静默吞成空树
+   *   （票111 事故：200 空树与真空态无法区分，空态提示与错误态混为一谈）。
+   *   形态不符必须抛错，让调用方的 error 路径置 treeLoadFailed（错误态 + 重试），
+   *   而不是空态。401/500/502 不走这里（ApiClient 在 map 之前已抛错，错误态路径本来独立）。
+   *   注意：treeVersion 留存只在形态通过后写回，垃圾响应不污染留存摘要。
+   */
+  static treePackageNodes(r: unknown): MaterialNodeDto[] {
+    const nodes = (r as { nodes?: unknown } | null | undefined)?.nodes;
+    if (!Array.isArray(nodes)) {
+      throw new Error('getMaterials: unexpected response shape (expected { treeVersion, nodes[] })');
+    }
+    return nodes as MaterialNodeDto[];
   }
 
   /**
@@ -233,9 +318,66 @@ export class PracticeApi {
    *
    * ★ 第四十轮:force=true 仅在**用户显式删除**时传,用于越过服务端
    *   "防误删熔断"(一次删掉 >80% 且 ≥5 个时会被拦)。
+   * ★ 票111 段2:带上读时树摘要;成功后用响应里的新摘要续接;409 时
+   *   响应体附有当前摘要 —— 先刷新本地留存,组件侧再回读整树对齐。
    */
   saveMaterials(nodes: MaterialNodeIn[], force = false): Observable<{ saved: number }> {
-    return this.api.put<{ saved: number }>(`${PracticeApi.BASE}/materials`, { nodes, force });
+    return this.api.put<{ saved: number; treeVersion?: string }>(`${PracticeApi.BASE}/materials`,
+      { nodes, force, treeVersion: this.treeVersion })
+      .pipe(
+        map((r) => {
+          if (r.treeVersion) this.treeVersion = r.treeVersion;
+          return { saved: r.saved };
+        }),
+        catchError((e: { original?: { error?: { treeVersion?: string } } }) => {
+          const cur = e?.original?.error?.treeVersion;
+          if (typeof cur === 'string') this.treeVersion = cur;
+          throw e;
+        })
+      );
+  }
+
+  // ---------- 素材回收站(★ 票124) ----------
+
+  /**
+   * 我的回收站清单(顶层已删节点)。
+   *
+   * 事故背景:整树覆盖保存会把未提交的存量节点一律软删,而应用内原本没有
+   * 任何列出/恢复已删素材的入口(用户只能求助并靠一条经批准的 UPDATE 才恢复)。
+   */
+  getMaterialTrash(): Observable<DeletedMaterialDto[]> {
+    return this.api.get<DeletedMaterialDto[]>(`${PracticeApi.BASE}/materials/trash`);
+  }
+
+  /**
+   * 恢复某个已删素材(含已删祖先链 + 全部已删后代)。
+   *
+   * ★ 规格 §6 契约 C1:**在 service 层即完成整树包采纳** —— 响应里的
+   *   treeVersion 写回本服务的留存摘要,nodes 经与 getMaterials 同一 map 路径
+   *   返回给调用方。任何调用方都不可能「只拿计数、忘了树」——
+   *   只采纳版本号不采纳节点,会让「版本已对齐、payload 缺恢复项」的
+   *   下一次整树保存畅通无阻地把它再删掉(碎纸机)。
+   */
+  restoreMaterial(id: string): Observable<MaterialRestoreResult> {
+    return this.api.post<{ restored: number; treeVersion: string; nodes: MaterialNodeDto[] }>(
+      `${PracticeApi.BASE}/materials/${id}/restore`, {})
+      .pipe(map((r) => this.adoptTreePackage(r)));
+  }
+
+  /**
+   * 恢复我的全部已删素材(整树误删事故的一键兜底)。
+   * 无已删行时 restored=0 且照常回当前树包(幂等,不报错)。
+   */
+  restoreAllMaterials(): Observable<MaterialRestoreResult> {
+    return this.api.post<{ restored: number; treeVersion: string; nodes: MaterialNodeDto[] }>(
+      `${PracticeApi.BASE}/materials/trash/restore-all`, {})
+      .pipe(map((r) => this.adoptTreePackage(r)));
+  }
+
+  /** 采纳恢复响应的整树包(契约 C1):版本写回留存,nodes 走与 getMaterials 同一路径。 */
+  private adoptTreePackage(r: { restored: number; treeVersion: string; nodes: MaterialNodeDto[] }): MaterialRestoreResult {
+    this.treeVersion = r.treeVersion ?? null;
+    return { restored: r.restored ?? 0, treeVersion: this.treeVersion ?? '', nodes: r.nodes ?? [] };
   }
 
   // ---------- 练习类别(★ 2026-09-25 Forrest) ----------
@@ -259,8 +401,8 @@ export class PracticeApi {
   }
 
   /** 删除类别;其下素材由服务端自动归入"未分类"。 */
-  deleteCategory(id: string): Observable<{ deleted: boolean }> {
-    return this.api.delete<{ deleted: boolean }>(`${PracticeApi.BASE}/categories/${id}`);
+  deleteCategory(id: string, version?: number | null): Observable<{ deleted: boolean }> {
+    return this.api.delete<{ deleted: boolean }>(`${PracticeApi.BASE}/categories/${id}`, ApiClient.ifMatch(version));
   }
 
   /** 设置/取消类别的数据源链接(如 "techstack")。null = 取消链接。 */
@@ -332,8 +474,27 @@ export class PracticeApi {
     return this.api.getBlob(`${PracticeApi.BASE}/recordings/${recordingId}/audio`);
   }
 
-  deleteRecording(recordingId: string): Observable<void> {
-    return this.api.delete<void>(`${PracticeApi.BASE}/recordings/${recordingId}`);
+  // ---------- 票119 词典(点词查词典) ----------
+
+  /** 查词:命中任一层回 schema v2 词卡;全层未命中后端回 404(调用方据状态码分简卡)。 */
+  lookupDictionaryWord(word: string): Observable<DictionaryCardDto> {
+    return this.api.get<DictionaryCardDto>(
+      `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}`);
+  }
+
+  /** 发音链单点解析(票126 §8.2):只供卡内播放入口;链耗尽回 {available:false}。 */
+  pronounceDictionaryWord(word: string, accent: 'us' | 'uk'): Observable<DictionaryPronounceDto> {
+    return this.api.get<DictionaryPronounceDto>(
+      `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}/pronounce?accent=${accent}`);
+  }
+
+  /** 词典音频流:走 ApiClient 附鉴权头拿 Blob(同 fetchRecordingAudio 口径),调用方转 ObjectURL 播放。 */
+  fetchDictionaryAudio(key: string): Observable<Blob> {
+    return this.api.getBlob(`${PracticeApi.BASE}/dictionary/audio/${encodeURIComponent(key)}`);
+  }
+
+  deleteRecording(recordingId: string, version?: number | null): Observable<void> {
+    return this.api.delete<void>(`${PracticeApi.BASE}/recordings/${recordingId}`, ApiClient.ifMatch(version));
   }
 
   /** 读已缓存的评分(不调 Azure)。命中就不必重新花额度。 */
@@ -357,6 +518,8 @@ export class PracticeApi {
     //   那条路径显示不出当时花了多少,信息残缺。
     billedSeconds?: number | null;
     billedBytes?: number | null;
+    /** ★ 票108 A10:被替换评分行的读时版本(首次评分不传)。 */
+    version?: number | null;
   }): Observable<RecordingScoreDto> {
     return this.api.post<RecordingScoreDto>(
       `${PracticeApi.BASE}/recordings/${recordingId}/score`, {
@@ -369,7 +532,8 @@ export class PracticeApi {
         referenceText: score.referenceText,
         words: score.words,
         billedSeconds: score.billedSeconds ?? null,
-        billedBytes: score.billedBytes ?? null
+        billedBytes: score.billedBytes ?? null,
+        version: score.version ?? null
       });
   }
 
@@ -383,11 +547,6 @@ export class PracticeApi {
     Observable<SpeechSettingStatusDto> {
     return this.api.put<SpeechSettingStatusDto>(
       `${PracticeApi.BASE}/speech/settings`, { key, region, endpoint });
-  }
-
-  /** 真连通性测试 —— 拿当前 key 去 Azure 走一次。失败会返回 401/403。 */
-  testSpeech(): Observable<{ ok: boolean; message: string }> {
-    return this.api.post<{ ok: boolean; message: string }>(`${PracticeApi.BASE}/speech/test`);
   }
 
   // ---------- 本机录音存储目录(★ 2026-09-27 Forrest:"我的账户"里可自选) ----------
@@ -407,9 +566,9 @@ export class PracticeApi {
    * 只是状态标成 CustomPendingMount,并把需要的挂载配置回显给界面。
    * 传空串 = 恢复部署默认目录。
    */
-  saveStorageSettings(rootPath: string | null): Observable<StorageSettingDto> {
+  saveStorageSettings(rootPath: string | null, version?: number | null): Observable<StorageSettingDto> {
     return this.api.put<StorageSettingDto>(
-      `${PracticeApi.BASE}/storage/settings`, { rootPath });
+      `${PracticeApi.BASE}/storage/settings`, { rootPath, version: version ?? null });
   }
 
   /** 把已有录音搬到自选目录(相对路径不变,数据库记录不受影响)。 */
@@ -420,9 +579,7 @@ export class PracticeApi {
   /**
    * 测试一把**尚未保存**的候选凭据(先测后存)。
    *
-   * 2026-09-16(Forrest 第 1 条):与 testSpeech() 的区别在于 ——
-   *   · testSpeech()          → 测服务端**已保存**的 key
-   *   · testSpeechCredential() → 测请求体里这把**候选** key,不落库
+   * 2026-09-16(Forrest 第 1 条):测请求体里这把**候选** key,不落库。
    * 失败时后端返回 502(凭据错)或 400(没填全)。
    */
   testSpeechCredential(key: string, region: string): Observable<{ ok: boolean; message: string }> {
@@ -495,6 +652,20 @@ export class PracticeApi {
     return this.api.post<ImageTextDto>('/api/ai/vision/extract-text', { imageBase64, mimeType });
   }
 
+  // ---------- 共享 OCR 服务(2026-10-21:平台能力,票59) ----------
+
+  /**
+   * 共享 OCR 服务(经网关 /api/ocr → 本地 PaddleOCR):截图识别的主通道,
+   * 图片不出本地。timeoutMs 由调用方以可配置常量传入(不写死在此);
+   * 超时/不可达走错误通道,调用方据此回落视觉路径。baseUrl 可注入
+   * (测试/降级模拟指向其它地址),默认走网关前缀。
+   */
+  extractImageTextShared(imageBase64: string, mimeType: string, timeoutMs: number,
+                         baseUrl = '/api/ocr'): Observable<SharedOcrDto> {
+    return this.api.post<SharedOcrDto>(`${baseUrl}/v1/ocr`, { imageBase64, mimeType })
+      .pipe(timeout(timeoutMs));
+  }
+
   // ---------- 示范朗读(TTS) ----------
 
   /**
@@ -533,6 +704,48 @@ export class PracticeApi {
 }
 
 /** 示范朗读合成结果:音频字节 + 是否来自本地缓存(诚实来源标记)。 */
+/** 票119 词典卡 DTO(后端 schema v2,GET /dictionary/{word})。 */
+export interface DictionaryAudioOptionDto {
+  /** 票126 §8.1:呈现 kind 只余真人录音两档;无真人录音时后端省略此字段(available=false)。 */
+  kind?: 'oxford' | 'commons' | null;
+  key?: string | null;
+  available: boolean;
+}
+
+export interface DictionarySenseDto {
+  defEn: string;
+  glossZh?: string | null;
+  example?: { en: string; zh?: string | null } | null;
+}
+
+export interface DictionaryPosBlockDto {
+  pos: string;
+  label: string;
+  senses: DictionarySenseDto[];
+  foldedCount: number;
+  zhLines: string[];
+}
+
+export interface DictionaryCardDto {
+  query: string;
+  lemma: string;
+  matchedVia: string;
+  tier: 'oxford' | 'open';
+  phonetics: { uk?: string | null; us?: string | null };
+  posBlocks: DictionaryPosBlockDto[];
+  /** 票128:逐词形音频可用性(additive;旧后端无此字段,前端按缺失处理——无钮)。 */
+  forms: { label: string; text: string; audio?: { us: boolean; uk: boolean } }[];
+  audio: { us: DictionaryAudioOptionDto; uk: DictionaryAudioOptionDto };
+  attribution: { source: string; audioSource?: string | null };
+}
+
+export interface DictionaryPronounceDto {
+  /** 票126 §8.2:链耗尽 → available=false 且无 kind/key(端点回 200,不再有 device/neural 兜底)。 */
+  kind?: 'oxford' | 'commons' | null;
+  key?: string | null;
+  available: boolean;
+}
+
 export interface TtsSynthesisResult {
   blob: Blob;
   /**

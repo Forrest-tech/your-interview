@@ -39,7 +39,12 @@ x-service-build: &service-build
   context: .
   dockerfile: Dockerfile.service
 
+# ★ 票93(B4):依赖等待必须包含数据库。此前只等 rabbitmq —— 消息队列起来了、
+#   库还没就绪时,服务会带着连不上库的状态被判定可用,正是"页面能开但 API 全 500"
+#   这类假成功的来源之一。
 x-service-deps: &service-deps
+  postgres:
+    condition: service_healthy
   rabbitmq:
     condition: service_healthy
 
@@ -52,6 +57,33 @@ x-service-health: &service-health
   start_period: 60s
 
 services:
+  # ★ 票93(B4):数据库纳入编排。
+  #   此前 compose 头注释号称"一键起全套(数据库 + 消息队列 + …)",但库其实**不在**
+  #   compose 里 —— 连库走 host.docker.internal(宿主机 PG)。结果是"一条命令起不来
+  #   全套":宿主机没起 PG 就全盘 500,而报错根本指不到库上。
+  #   现在把 PG 也纳入编排,并**把 5432 发布到宿主**:这样既保持各服务现有连接串
+  #   (host.docker.internal:5432)一字不改(宿主机进程模式仍可用),又让 compose
+  #   真正自包含。
+  #   ⚠️ 前置:宿主 5432 端口需空闲。若本机已有 PG 在用,改这里的端口映射即可。
+  postgres:
+    image: postgres:16-alpine
+    container_name: yourinterview-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD_LOCAL:-postgres}
+      POSTGRES_DB: yourinterview
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # 容器里没有 pg_isready 之外的依赖,直接探;必须等它 healthy 其它服务才起
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres} -d yourinterview"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: yourinterview-rabbit
@@ -227,6 +259,29 @@ services:
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  # 共享 OCR 服务(2026-10-21,票59):PaddleOCR PP-OCRv6 本地识别,平台能力
+  # (定稿 replica/platform-ocr-spec.md)—— Playbook 入口先行接入,其余模块
+  # 经网关 /api/ocr/** 共用同一服务,禁止各模块自攒 OCR。无状态、无 DB 依赖;
+  # 配置全走 env(OCR_*),mkldnn 默认关(paddlepaddle 3.3.1 OneDNN bug 绕行)。
+  ocr-service:
+    build:
+      context: ./src/ocr-service
+      dockerfile: Dockerfile
+    container_name: yourinterview-ocr
+    restart: unless-stopped
+    environment:
+      OCR_PORT: "5300"
+      OCR_MIN_CONFIDENCE: "${OCR_MIN_CONFIDENCE:-0.5}"
+      OCR_ENABLE_MKLDNN: "${OCR_ENABLE_MKLDNN:-false}"
+      OCR_JOB_TTL_SECONDS: "${OCR_JOB_TTL_SECONDS:-600}"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5300/health', timeout=3)\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
   gateway:
     build:
       <<: *service-build
@@ -245,6 +300,7 @@ services:
       ReverseProxy__Clusters__assessment__Destinations__d1__Address: "http://assessment:8080/"
       ReverseProxy__Clusters__analytics__Destinations__d1__Address: "http://analytics:8080/"
       ReverseProxy__Clusters__aigateway__Destinations__d1__Address: "http://aigateway:8080/"
+      ReverseProxy__Clusters__ocr__Destinations__d1__Address: "http://ocr-service:5300/"
     ports:
       - "5200:8080"          # 唯一对外暴露的端口,前端连它
     depends_on:
@@ -311,6 +367,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 volumes:
+  pgdata:
   rabbitdata:
   analysis-work:
   # ★ 练习录音不再用数据卷 —— 改挂宿主机目录(见 assessment.volumes 的说明)。

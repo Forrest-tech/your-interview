@@ -2,7 +2,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MassTransit;
 using YourInterview.Analysis.Worker.Analysis;
+using YourInterview.BuildingBlocks.Storage;
 using YourInterview.SharedContracts.Events;
+using YourInterview.SharedContracts.Analysis;
 
 namespace YourInterview.Analysis.Worker.Consumers;
 
@@ -13,6 +15,10 @@ namespace YourInterview.Analysis.Worker.Consumers;
 /// 分析结果是一个**大的结构化产物**(六维 + 明细 + 报告),塞进消息体不合适;
 /// 而且回写需要幂等与失败可重试,用 HTTP + Polly 重试更直接可控。
 /// 消息用来"触发",HTTP 用来"传数据" —— 各司其职。
+///
+/// COD-01/票03(裁决 B):全部 Interviews 调用带 ?ownerUserId={事件 UserId} ——
+/// 服务账号 JWT 不是条目主人,服务端以 ownerUserId 校验 entry.UserId,
+/// 主人对不上即拒绝;不给服务账号全量豁免。
 /// </summary>
 public sealed class InterviewAnalysisRequestedConsumer(
     AnalysisPipeline pipeline,
@@ -99,10 +105,9 @@ public sealed class InterviewAnalysisRequestedConsumer(
     ///   2. 绝对路径(遗留/手工触发)原样使用;
     ///   3. 没有路径才走旧约定推导(storage/interviews/{entryId}/audio.*)。
     ///
-    /// 根目录解析与 Interviews 的 LocalInterviewAudioStore 保持同一优先级:
-    /// Storage:InterviewsRoot 配置 > INTERVIEW_STORAGE_DIR 环境变量 >
-    /// Storage:RootDirectory 下的 storage/interviews > 当前目录约定。
-    /// docker-compose 里两个服务挂**同一个卷**,所以路径天然一致。
+    /// 根目录解析已收编 BuildingBlocks adapter(ARC-12/票39):与 Interviews 服务
+    /// 共用 <see cref="StorageRootResolver.ResolveInterviewsRoot(IConfiguration)"/> 唯一实现,
+    /// 不再自带拷贝。docker-compose 里两个服务挂**同一个卷**,所以路径天然一致。
     /// </summary>
     private static string ResolveSourcePath(string? storagePath, Guid entryId, IConfiguration config)
     {
@@ -112,51 +117,11 @@ public sealed class InterviewAnalysisRequestedConsumer(
             if (Path.IsPathRooted(normalized) || normalized.Contains(".."))
                 return storagePath;   // 绝对路径:信发送方(服务内部事件,非用户输入)
 
-            return Path.Combine(InterviewsRoot(config),
+            return Path.Combine(StorageRootResolver.ResolveInterviewsRoot(config),
                 normalized.Replace('/', Path.DirectorySeparatorChar));
         }
 
         return ResolveDefaultPath(entryId, config["Storage:RootDirectory"]);
-    }
-
-    /// <summary>
-    /// 面试录音存储根 —— 解析链与 Interviews 的 LocalInterviewAudioStore **完全一致**:
-    ///   1. Storage:InterviewsRoot 配置;
-    ///   2. INTERVIEW_STORAGE_DIR 环境变量(docker-compose 里与 interviews 共卷,两边同值);
-    ///   3. {Storage:RootDirectory}/interviews(沙盒统一存储根派生);
-    ///   4. 仓库根下 storage/interviews(本地裸跑,锚定解决方案目录而非各自 cwd);
-    ///   5. cwd/storage/interviews(最后兜底)。
-    /// 两边同一条链,相对路径拼出来才是同一个文件。
-    /// </summary>
-    private static string InterviewsRoot(IConfiguration config)
-    {
-        var dedicated = config["Storage:InterviewsRoot"];
-        if (!string.IsNullOrWhiteSpace(dedicated)) return dedicated;
-
-        var env = Environment.GetEnvironmentVariable("INTERVIEW_STORAGE_DIR");
-        if (!string.IsNullOrWhiteSpace(env)) return env;
-
-        var rootDir = config["Storage:RootDirectory"];
-        if (!string.IsNullOrWhiteSpace(rootDir)) return Path.Combine(rootDir, "interviews");
-
-        var solutionRoot = FindSolutionRoot();
-        if (solutionRoot is not null) return Path.Combine(solutionRoot, "storage", "interviews");
-
-        return Path.Combine(Directory.GetCurrentDirectory(), "storage", "interviews");
-    }
-
-    private static string? FindSolutionRoot()
-    {
-        // 与 Interviews 的 LocalInterviewAudioStore.FindSolutionRoot 同一逻辑:
-        // 优先 docker-compose.yml 所在的仓库根(.sln 在 src/ 下,只认它会锚错一层)。
-        DirectoryInfo? withCompose = null, withSln = null;
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (var i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
-        {
-            if (dir.GetFiles("docker-compose.yml").Length > 0) withCompose = dir;
-            if (dir.GetFiles("*.sln").Length > 0) withSln = dir;
-        }
-        return (withCompose ?? withSln)?.FullName;
     }
 
     private static string ResolveDefaultPath(Guid entryId, string? configRoot)
@@ -227,7 +192,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         HttpClient http, string baseUrl, InterviewAnalysisRequested m, CancellationToken ct)
     {
         using var entryReq = new HttpRequestMessage(HttpMethod.Get,
-            $"{baseUrl}/api/interviews/{m.InterviewEntryId}");
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}?ownerUserId={m.UserId}");
         if (!await tokens.AuthorizeAsync(entryReq, ct)) return (null, null);
         using var entryResp = await http.SendAsync(entryReq, ct);
         if (!entryResp.IsSuccessStatusCode) return (null, null);
@@ -251,7 +216,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         if (assetId is null) return (null, null);
 
         using var tReq = new HttpRequestMessage(HttpMethod.Get,
-            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/assets/{assetId}/transcript");
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/assets/{assetId}/transcript?ownerUserId={m.UserId}");
         if (!await tokens.AuthorizeAsync(tReq, ct)) return (null, null);
         using var tResp = await http.SendAsync(tReq, ct);
         if (!tResp.IsSuccessStatusCode) return (null, null);
@@ -299,7 +264,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post,
-            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/analysis")
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/analysis?ownerUserId={m.UserId}")
         {
             Content = JsonContent.Create(payload)
         };
@@ -333,7 +298,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get,
-                $"{baseUrl}/api/interviews/{m.InterviewEntryId}");
+                $"{baseUrl}/api/interviews/{m.InterviewEntryId}?ownerUserId={m.UserId}");
             if (!await tokens.AuthorizeAsync(req, ct)) return null;
 
             using var resp = await http.SendAsync(req, ct);
@@ -389,7 +354,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         // "有没有可分析的转写文本" —— 传空串会让它报错(而且错误被下面吞掉,
         // 现象是"状态怎么都不动"),这是一个踩过的坑。
         var transcriptUrl = $"{baseUrl}/api/interviews/{m.InterviewEntryId}" +
-                            $"/assets/{assetId}/transcript";
+                            $"/assets/{assetId}/transcript?ownerUserId={m.UserId}";
 
         var segmentsJson = JsonSerializer.Serialize(artifact.Segments.Select(s => new
         {
@@ -423,7 +388,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
         // 不先走这一步直接存转写稿会被拒(Transcript.InvalidState),
         // 因为聚合根要求转写稿只能在 Transcribing 状态下写入。
         using (var sReq = new HttpRequestMessage(HttpMethod.Post,
-                   $"{baseUrl}/api/interviews/{m.InterviewEntryId}/transcription/start"))
+                   $"{baseUrl}/api/interviews/{m.InterviewEntryId}/transcription/start?ownerUserId={m.UserId}"))
         {
             if (await tokens.AuthorizeAsync(sReq, ct))
             {
@@ -439,7 +404,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
 
         // 3) 触发分析(Transcribed → Analyzing)
         using var aReq = new HttpRequestMessage(HttpMethod.Post,
-            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/analyze");
+            $"{baseUrl}/api/interviews/{m.InterviewEntryId}/analyze?ownerUserId={m.UserId}");
 
         if (await tokens.AuthorizeAsync(aReq, ct))
         {
@@ -554,7 +519,7 @@ public sealed class InterviewAnalysisRequestedConsumer(
             var baseUrl = config["Services:Interviews"] ?? "http://127.0.0.1:5264";
             var http = httpFactory.CreateClient("interviews");
             using var req = new HttpRequestMessage(HttpMethod.Post,
-                $"{baseUrl}/api/interviews/{m.InterviewEntryId}/failure")
+                $"{baseUrl}/api/interviews/{m.InterviewEntryId}/failure?ownerUserId={m.UserId}")
             {
                 Content = JsonContent.Create(new { reason })
             };
@@ -602,12 +567,13 @@ public sealed class InterviewAnalysisCompletedConsumer(
             if (!score.HasValue) continue;
             try
             {
+                // 票56:归属走可信通道 ?ownerUserId=(票03 query 形态)——Analytics 仅对带
+                // analytics.writeback claim 的服务账号 honoured;body 不再传 userId(票06 禁止形态)。
                 using var req = new HttpRequestMessage(HttpMethod.Post,
-                    $"{analyticsUrl}/api/analytics/ability")
+                    $"{analyticsUrl}/api/analytics/ability?ownerUserId={m.UserId}")
                 {
                     Content = JsonContent.Create(new
                     {
-                        userId = m.UserId,
                         dimension = dim,
                         score = score.Value,
                         source = "interview"

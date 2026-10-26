@@ -76,8 +76,12 @@
           <div class="name-edit">
             <mat-form-field appearance="outline" class="full name-field">
               <mat-label>{{ t('profile.nameLabel') }}</mat-label>
-              <input matInput name="nameDraft" [(ngModel)]="nameDraft" maxlength="200">
+              <input matInput name="nameDraft" [(ngModel)]="nameDraft" maxlength="200"
+                     (ngModelChange)="nameError.set(null)">
             </mat-form-field>
+            @if (nameError()) {
+              <div class="field-error" role="alert">{{ nameError() }}</div>
+            }
             <div class="name-actions">
               <button mat-raised-button color="primary"
                       [disabled]="savingName() || !nameDraft.trim()"

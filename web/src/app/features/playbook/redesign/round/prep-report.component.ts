@@ -14,12 +14,16 @@ import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
 import { QaZoomService } from '../../../../core/qa-zoom/qa-zoom.service';
 import { TtsPlayerService } from '../../../../core/tts/tts-player.service';
 import { PlaybookV2Api } from '../playbook-v2.api';
+import { serverFieldErrorSummary } from '../../../../core/api/validation-errors.helpers';
 import {
   PrepBlock, PrepQuestionItem, PrepReport, PrepSection, prepStdText, safeJson
 } from '../v2.models';
+import {
+  classifyPrepStage, prepFrameworkSectionIds, prepQuestionExportBlocks
+} from './prep-report.helpers';
 import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { makeV2Fmt, makeV2T } from '../v2.helpers';
+import { latestPrepInputAsset, makeV2Fmt, makeV2T, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, type PrepInputPurpose } from '../v2.helpers';
 import { ExportBlock, ExportDoc } from '../export/export-doc';
 
 /**
@@ -71,21 +75,43 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
       @if (notice()) { <p class="notice">{{ notice() }}</p> }
       @if (tts.error()) { <p class="notice warn">{{ tts.error() }}</p> }
 
-      @if (!report()) {
-        <div class="gen-box">
-          <label>{{ t('pb.v2.p.genExpLabel') }}
-            <textarea rows="4" class="fld" [ngModel]="experiencesDraft()"
-                      (ngModelChange)="experiencesDraft.set($event)"
-                      [placeholder]="t('pb.v2.p.genExpPh')"></textarea>
-          </label>
-          <label>{{ t('pb.v2.p.genResumeLabel') }}
-            <textarea rows="3" class="fld" [ngModel]="resumeDraft()"
-                      (ngModelChange)="resumeDraft.set($event)"
-                      [placeholder]="t('pb.v2.p.genResumePh')"></textarea>
-          </label>
-          <p class="hint">{{ t('pb.v2.p.genHint') }}</p>
+      <!-- 票159：Prep 两框删除，换为读回区——显示本轮当前备考输入资产原文；
+           读回与材料列表是同一资产（编辑/删除都在统一入口与材料列表完成）。 -->
+      <div class="readback">
+        @if (!hidePrepInputs) {
+        <div class="rb-block">
+          <div class="rb-head">
+            <span class="rb-title">{{ t('pb.v2.p.inputExpTitle') }}</span>
+            @if (expAsset(); as ea) {
+              <button mat-stroked-button [disabled]="!expLoaded()" (click)="editInput.emit({ purpose: 'experiences', assetId: ea.id, text: expText() })">{{ t('pb.v2.p.editInput') }}</button>
+            } @else {
+              <button mat-stroked-button (click)="editInput.emit({ purpose: 'experiences', assetId: null, text: '' })">{{ t('pb.v2.p.addInput') }}</button>
+            }
+          </div>
+          @if (expAsset()) {
+            <pre class="rb-text">{{ expLoaded() ? expText() : t('pb.v2.d.loading') }}</pre>
+          } @else {
+            <p class="rb-empty">{{ t('pb.v2.p.noInputExp') }}</p>
+          }
         </div>
-      }
+        <div class="rb-block">
+          <div class="rb-head">
+            <span class="rb-title">{{ t('pb.v2.p.inputResumeTitle') }}</span>
+            @if (resumeAsset(); as ra) {
+              <button mat-stroked-button [disabled]="!resumeLoaded()" (click)="editInput.emit({ purpose: 'resume', assetId: ra.id, text: resumeText() })">{{ t('pb.v2.p.editInput') }}</button>
+            } @else {
+              <button mat-stroked-button (click)="editInput.emit({ purpose: 'resume', assetId: null, text: '' })">{{ t('pb.v2.p.addInput') }}</button>
+            }
+          </div>
+          @if (resumeAsset()) {
+            <pre class="rb-text">{{ resumeLoaded() ? resumeText() : t('pb.v2.d.loading') }}</pre>
+          } @else {
+            <p class="rb-empty">{{ t('pb.v2.p.noInputResume') }}</p>
+          }
+        </div>
+        }
+        <p class="hint">{{ t('pb.v2.p.genHint') }}</p>
+      </div>
         <div class="prep-body">
           <nav class="toc">
             @for (s of displayReport()!.sections; track s.id) {
@@ -134,6 +160,9 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
                       @if (q.weaknessRelated) { <span class="weak-pin">{{ t('pb.v2.p.weakPin') }}</span> }
                       <span class="pq-text qa-text">{{ q.question }}</span>
                     </div>
+                    @if (q.note) {
+                      <div class="pq-note">{{ q.note }}</div>
+                    }
                     @if (q.sourceTags?.length) {
                       <div class="tags">@for (tg of q.sourceTags!; track $index) { <span class="tag">{{ tg }}</span> }</div>
                     }
@@ -225,66 +254,81 @@ import { ExportBlock, ExportDoc } from '../export/export-doc';
     .pre { white-space: pre-wrap; }
     .prep-head { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
     .ph-title { font-size: 16px; font-weight: 600; }
-    .ph-sub { font-size: 13px; color: var(--yi-text-muted, #888); margin-top: 2px; max-width: 560px; }
+    .ph-sub { font-size: 13px; color: var(--yi-text-muted, #475569); margin-top: 2px; max-width: 560px; }
     .ph-sub.src-details { display: flex; gap: 2px 14px; flex-wrap: wrap; max-width: none; }
     .src-detail { white-space: nowrap; }
     .spacer { flex: 1; }
-    .notice { font-size: 13px; color: var(--yi-text-muted, #777); }
-    .notice.warn { color: #b3261e; }
-    .gen-box { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; max-width: 720px; }
-    .gen-box label { display: flex; flex-direction: column; gap: 5px; font-size: 13px;
-                     color: var(--yi-text-muted, #777); }
-    .fld { border: 1px solid var(--yi-border, #ccc); border-radius: 8px; padding: 8px 10px;
+    .notice { font-size: 13px; color: var(--yi-text-muted, #475569); }
+    .notice.warn { color: #dc2626; }
+    /* 票159 读回区：两块输入原文 + 生成口径提示；窄屏自动单列（父级 pv-grid 模式复用）。 */
+    .readback { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; max-width: 720px; }
+    .rb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .rb-title { font-size: 14px; font-weight: 600; }
+    .rb-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+               margin: 0; padding: 10px 12px; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; }
+    .rb-empty { font-size: 13px; color: var(--yi-text-muted, #475569); margin: 0; }
+    .fld { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 8px; padding: 8px 10px;
            font-size: 14px; background: transparent; color: inherit; box-sizing: border-box; }
     .fld.sm { padding: 5px 8px; font-size: 14px; }
-    .hint { font-size: 13px; color: var(--yi-text-muted, #999); }
+    .hint { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .prep-body { display: grid; grid-template-columns: 170px 1fr; gap: 20px; margin-top: 12px; }
     @media (max-width: 760px) { .prep-body { grid-template-columns: 1fr; } .toc { position: static !important; flex-direction: row !important; flex-wrap: wrap; } }
     .toc { position: sticky; top: 8px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
     .toc-item { text-align: left; border: none; background: transparent; color: inherit; cursor: pointer;
-                font-size: 14px; padding: 6px 9px; border-radius: 7px; }
-    .toc-item.on { background: color-mix(in srgb, var(--yi-accent, #3f51b5) 14%, transparent); font-weight: 700; }
+                font-size: 14px; padding: 6px 9px; border-radius: 6px; }
+    .toc-item.on { background: color-mix(in srgb, var(--yi-accent, #2563eb) 14%, transparent); font-weight: 700; }
     .psec { margin-bottom: 22px; scroll-margin-top: 10px; }
     .psec h4 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
-    .script-box { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 8px 0; }
-    .sb-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); margin-bottom: 4px; }
+    .script-box { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 11px 13px; margin: 8px 0; }
+    .sb-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #475569); margin-bottom: 4px; }
     .script-box p { margin: 2px 0 8px; }
     .pts { margin: 4px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.65; }
     .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
-    .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+    .mini-btn { border: 1px solid var(--yi-border, #e2e8f0); background: transparent; color: inherit;
                 border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 500; cursor: pointer; }
-    .mine-tag { font-size: 12px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+    .mine-tag { font-size: 12px; font-weight: 700; color: #16a34a; border: 1px solid #f0fdf4;
                 border-radius: 999px; padding: 1px 7px; }
-    .pq { border: 1px solid var(--yi-border, #e0e0e0); border-radius: 10px; padding: 11px 13px; margin: 9px 0; }
-    .pq.weak { border-color: #e57373; background: color-mix(in srgb, #e57373 5%, transparent); }
+    .pq { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 11px 13px; margin: 9px 0; }
+    .pq.weak { border-color: #fef2f2; background: color-mix(in srgb, #fef2f2 5%, transparent); }
     .pq-head { display: flex; gap: 8px; align-items: flex-start; }
-    .weak-pin { font-size: 12px; font-weight: 700; color: #c62828; white-space: nowrap; margin-top: 3px; }
+    .pq-note { font-size: 12px; color: #666; margin-top: 2px; }
+    .weak-pin { font-size: 12px; font-weight: 700; color: #dc2626; white-space: nowrap; margin-top: 3px; }
     .pq-text { font-weight: 600; }
     .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
-    .tag { font-size: 12px; border: 1px solid var(--yi-border, #ccc); border-radius: 999px; padding: 1px 8px;
-           color: var(--yi-text-muted, #777); }
+    .tag { font-size: 12px; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 999px; padding: 1px 8px;
+           color: var(--yi-text-muted, #475569); }
     .sync-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
-    .sync-tag { font-size: 12px; font-weight: 700; color: #2e7d32; border: 1px solid #a5d6a7;
+    .sync-tag { font-size: 12px; font-weight: 700; color: #16a34a; border: 1px solid #f0fdf4;
                 border-radius: 999px; padding: 2px 9px; }
-    .sync-note { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .sync-note { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .sync-answer { margin-top: 6px; }
-    .sa-label { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); }
+    .sa-label { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #475569); }
     .sync-answer p { margin: 4px 0; }
     .std-line { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
-    .std-label { font-size: 13px; font-weight: 700; color: var(--yi-accent, #3f51b5); }
+    .std-label { font-size: 13px; font-weight: 700; color: var(--yi-accent, #2563eb); }
     .std-p { margin: 4px 0 2px; }
     .join-row { display: flex; gap: 10px; align-items: flex-end; margin-top: 10px; flex-wrap: wrap;
-                border-top: 1px dashed var(--yi-border, #ddd); padding-top: 10px; }
+                border-top: 1px dashed var(--yi-border, #e2e8f0); padding-top: 10px; }
     .join-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
-                      color: var(--yi-text-muted, #777); }
-    .join-note { font-size: 13px; color: var(--yi-text-muted, #999); }
+                      color: var(--yi-text-muted, #475569); }
+    .join-note { font-size: 13px; color: var(--yi-text-muted, #475569); }
   `]
 })
 export class PrepReportComponent {
   readonly entry = input.required<InterviewDetail>();
   readonly round = input.required<InterviewRound>();
   readonly guidanceAssets = input<InterviewAsset[]>([]);
+  /** 票159：本轮材料（由轮次卡按轮次过滤后传入），读回区据此取当前备考输入资产。 */
+  readonly roundAssets = input<InterviewAsset[]>([]);
+  /** 票159：统一入口“保存并生成”的单次生成请求（token 递增）；消费后即由父级清零。 */
+  readonly generateRequest = input<number>(0);
   @Output() readonly changed = new EventEmitter<void>();
+  /** 票159：读回区编辑 / 添加输入——父级打开统一对话框（预填原文与目标轮次）。 */
+  @Output() readonly editInput = new EventEmitter<{ purpose: 'experiences' | 'resume'; assetId: string | null; text: string }>();
+  /** 票159：生成请求已被消费（父级据此清零，避免切页签回来时重复触发）。 */
+  @Output() readonly generateConsumed = new EventEmitter<void>();
+  /** 票174：Prep 页两读回区块暂隐藏（隐藏不是删除：资产、生成取用逻辑、统一入口、i18n 键一律保留；恢复时改回 false 即一处恢复）。 */
+  readonly hidePrepInputs = true;
 
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
@@ -297,8 +341,11 @@ export class PrepReportComponent {
 
   readonly busy = signal(false);
   readonly notice = signal<string | null>(null);
-  readonly experiencesDraft = signal('');
-  readonly resumeDraft = signal('');
+  /** 票159：读回区当前资产原文（经 getTranscript 取回；列表 DTO 本身不带正文）。 */
+  readonly expText = signal('');
+  readonly resumeText = signal('');
+  private readonly expLoadedFor = signal<string | null>(null);
+  private readonly resumeLoadedFor = signal<string | null>(null);
   readonly activeSec = signal('');
   readonly editingBlock = signal<string | null>(null);
   readonly blockDraft = signal('');
@@ -312,15 +359,42 @@ export class PrepReportComponent {
 
   readonly report = computed(() => safeJson<PrepReport>(this.round().prepReportJson));
 
+  /** 票159：本轮当前备考输入资产（同轮同 purpose 最新一份为准，旧份不入选）。 */
+  readonly expAsset = computed(() => latestPrepInputAsset(this.roundAssets(), this.round().id, PREP_INPUT_EXPERIENCES));
+  readonly resumeAsset = computed(() => latestPrepInputAsset(this.roundAssets(), this.round().id, PREP_INPUT_RESUME));
+  readonly expLoaded = computed(() => { const a = this.expAsset(); return !!a && this.expLoadedFor() === a.id; });
+  readonly resumeLoaded = computed(() => { const a = this.resumeAsset(); return !!a && this.resumeLoadedFor() === a.id; });
+
   /**
-   * 展示用报告:已生成 → 用生成的;未生成 → 默认框架(2026-10-21 定稿 4.1)。
-   * 框架是确定性模板:与生成报告同构(八段 + 左目录 + 滚动高亮),文案全走
-   * v2.i18n 三语键,不调 AI、不落库;生成入口(gen-box)保留在框架上方。
+   * 票159：取当前备考输入资产原文。已取过当前资产 id 的直接返回缓存；
+   * 迟到回包（取数途中当前资产已换）不覆盖，避免读回与生成读到旧文本。
+   * 生成入口调用本方法自保证新鲜——“保存并生成”跳转过来时即使展示取数尚未完成，
+   * 生成用的也是刚保存的新文本，而非旧文本或空。
+   */
+  private async loadPrepText(purpose: PrepInputPurpose): Promise<string> {
+    const isExp = purpose === PREP_INPUT_EXPERIENCES;
+    const asset = isExp ? this.expAsset() : this.resumeAsset();
+    const textSig = isExp ? this.expText : this.resumeText;
+    const loadedSig = isExp ? this.expLoadedFor : this.resumeLoadedFor;
+    if (!asset) { textSig.set(''); loadedSig.set(null); return ''; }
+    if (loadedSig() === asset.id) return textSig();
+    const text = await this.api.getTranscript(this.entry().id, asset.id).toPromise()
+      .then(t => t?.transcriptText ?? '').catch(() => '');
+    const now = isExp ? this.expAsset() : this.resumeAsset();
+    if (now?.id === asset.id) { textSig.set(text); loadedSig.set(asset.id); }
+    return text;
+  }
+
+  /**
+   * 展示用报告:已生成 → 用生成的;未生成 → 默认框架(票133 定稿 §4.1/§10.1)。
+   * 框架与生成报告同构(13 节位顺序 + 左目录 + 滚动高亮),分类走 §4.2 镜像表;
+   * 文案全走核心字典 pb.v2 三语键,不调 AI、不落库;读回区(票159)保留在框架上方。
    */
   readonly displayReport = computed<PrepReport | null>(
     () => this.report() ?? this.frameworkReport());
 
   private frameworkReport(): PrepReport {
+    const cls = classifyPrepStage(this.round().stage);
     const pts = (keys: string[]): PrepBlock[] =>
       [{ type: 'points', items: keys.map(k => this.t(k)) }];
     const sec = (id: string, name: string, keys: string[]): PrepSection => ({
@@ -328,41 +402,34 @@ export class PrepReportComponent {
     });
     const p = (name: string, n: number): string[] =>
       Array.from({ length: n }, (_, i) => `pb.v2.p.fw.${name}.p${i + 1}`);
-    const tech: PrepSection = {
-      id: 'tech-qa',
-      title: this.t('pb.v2.p.fw.techQa.title'),
-      blocks: [
-        ...pts(p('techQa', 3)),
-        {
-          type: 'points', title: this.t('pb.v2.p.fw.focusTitle'),
-          items: [1, 2, 3].map(i => this.t(`pb.v2.p.fw.focus.${this.stageFocusCat()}.p${i}`))
+    const group: Record<string, string> = {
+      'round-brief': 'roundBrief', greeting: 'greeting', 'intro-listen': 'introListen',
+      'self-intro': 'selfIntro', 'deep-dive': 'deepDive', 'coding-round': 'codingRound',
+      'design-round': 'designRound', behavioral: 'behavioral', 'weakness-plan': 'weaknessPlan',
+      'ask-back': 'askBack', 'comp-process': 'compProcess', closing: 'closing'
+    };
+    /** ML-FIX-PREP:各节要点数(默认 4;新增段落的节在此登记,缺省仍为 4)。 */
+    const FW_POINTS: Record<string, number> = {
+      greeting: 5, 'design-round': 7, 'weakness-plan': 5, closing: 7,
+    };
+    const sections: PrepSection[] = [];
+    for (const id of prepFrameworkSectionIds(cls)) {
+      if (id === 'tech-qa') {
+        const blocks = [...pts(p('techQa', 4))];
+        if (!cls.isDesign) {
+          blocks.push({
+            type: 'points', title: this.t('pb.v2.p.fw.designCard.title'),
+            items: p('designCard', 3).map(k => this.t(k))
+          });
         }
-      ],
-      questions: []
-    };
-    return {
-      sections: [
-        sec('greeting', 'greeting', p('greeting', 4)),
-        sec('intro-listen', 'introListen', p('introListen', 4)),
-        sec('self-intro', 'selfIntro', p('selfIntro', 4)),
-        sec('deep-dive', 'deepDive', p('deepDive', 4)),
-        tech,
-        sec('behavioral', 'behavioral', p('behavioral', 4)),
-        sec('ask-back', 'askBack', p('askBack', 4)),
-        sec('closing', 'closing', p('closing', 4))
-      ]
-    };
-  }
-
-  /** 技术问答段的 stage 适配:按轮次 stage 关键词归类重点。 */
-  private stageFocusCat(): 'screen' | 'technical' | 'design' | 'behavioral' | 'final' | 'default' {
-    const st = (this.round().stage ?? '').toLowerCase();
-    if (/screen|phone|recruit|hr/.test(st)) return 'screen';
-    if (/design|architect|system/.test(st)) return 'design';
-    if (/behav|culture|fit/.test(st)) return 'behavioral';
-    if (/final|hiring|manager|onsite|panel/.test(st)) return 'final';
-    if (/tech|cod|engineer|deep/.test(st)) return 'technical';
-    return 'default';
+        sections.push({
+          id, title: this.t('pb.v2.p.fw.techQa.title'), blocks, questions: []
+        });
+      } else {
+        sections.push(sec(id, group[id], p(group[id], FW_POINTS[id] ?? 4)));
+      }
+    }
+    return { sections };
   }
 
   /** Sources 明细行的标签(后端 details.key → 文案键)。 */
@@ -419,7 +486,29 @@ export class PrepReportComponent {
         error: () => undefined
       });
     }, { allowSignalWrites: true });
+
+    // 票159：读回区展示取数——当前资产变化时拉取原文（取数本身带迟到回包守门）。
+    effect(() => {
+      const a = this.expAsset();
+      if (a && this.expLoadedFor() !== a.id) void this.loadPrepText(PREP_INPUT_EXPERIENCES);
+    }, { allowSignalWrites: true });
+    effect(() => {
+      const a = this.resumeAsset();
+      if (a && this.resumeLoadedFor() !== a.id) void this.loadPrepText(PREP_INPUT_RESUME);
+    }, { allowSignalWrites: true });
+
+    // 票159：统一入口“保存并生成”请求——每个 token 只触发一次生成；
+    // 触发即通知父级清零，避免切页签回来、组件重建时重复生成。
+    effect(() => {
+      const token = this.generateRequest();
+      if (!token || token === this.consumedGenToken) return;
+      this.consumedGenToken = token;
+      this.generateConsumed.emit();
+      void this.generate();
+    }, { allowSignalWrites: true });
   }
+
+  private consumedGenToken = 0;
 
   @HostListener('window:scroll')
   onScroll(): void {
@@ -467,10 +556,14 @@ export class PrepReportComponent {
     this.busy.set(true);
     this.notice.set(null);
     try {
+      // 票159：入参取自已归档的当前资产原文（空 → null，留空仍只用 JD 与题库生成，
+      // 与旧两框行为一致）；loadPrepText 自保证新鲜，不读展示层可能滞后的缓存。
+      const experiences = await this.loadPrepText(PREP_INPUT_EXPERIENCES);
+      const resumeText = await this.loadPrepText(PREP_INPUT_RESUME);
       const r = await this.api.generatePrepReport(this.entry().id, this.round().id, {
         jdText: this.entry().jdText ?? null,
-        resumeText: this.resumeDraft().trim() || null,
-        experiences: this.experiencesDraft().trim() || null,
+        resumeText: resumeText.trim() || null,
+        experiences: experiences.trim() || null,
         // 生成语言跟随系统语言(账号 preferredLanguage 决定界面语言,同一口径)
         language: this.i18n.lang()
       }).toPromise();
@@ -603,8 +696,10 @@ export class PrepReportComponent {
       } else {
         this.snack.open(this.t('pb.v2.p.alreadyIn'), this.t('common.close'), { duration: 3000 });
       }
-    } catch {
-      this.snack.open(this.t('pb.v2.p.joinFailed'), this.t('common.close'), { duration: 3000 });
+    } catch (e) {
+      // 票109:字段级校验错误(如分类超 100)透出后端具体文案,其余失败回落原通用提示。
+      this.snack.open(serverFieldErrorSummary(e) ?? this.t('pb.v2.p.joinFailed'),
+        this.t('common.close'), { duration: 3000 });
     } finally {
       this.busy.set(false);
     }
@@ -623,7 +718,7 @@ export class PrepReportComponent {
     const date = new Date().toISOString().slice(0, 10);
     const data: ExportDialogData = {
       title: this.t('pb.v2.p.exportPrep'),
-      subtitle: `${e.companyName} · Round ${r.order} ${r.stage}`,
+      subtitle: `${e.companyName} — Round ${r.order} ${r.stage}`,
       fileBase: `${e.companyName}-Round${r.order}-${this.t('pb.v2.p.fileSuffix')}-${date}`,
       storageKey: 'prep',
       toggles: [
@@ -655,13 +750,12 @@ export class PrepReportComponent {
         } else if (b.text) blocks.push({ kind: 'para', text: b.text });
       }
       for (const q of s.questions ?? []) {
-        blocks.push({ kind: 'subheading', text: q.question });
-        const sp = prepStdText(q.stdSpoken);
-        const te = prepStdText(q.stdTechnical);
-        const linked = q.knowledgeId ? this.knowledgeAnswer(q.knowledgeId) : '';
-        if (linked) blocks.push({ kind: 'std', label: this.t('pb.v2.p.docStdStack'), text: linked });
-        if (sp.text) blocks.push({ kind: 'std', label: this.t('pb.v2.p.spoken'), text: sp.text });
-        if (te.text) blocks.push({ kind: 'std', label: this.t('pb.v2.p.technical'), text: te.text });
+        blocks.push(...prepQuestionExportBlocks(q, {
+          linked: q.knowledgeId ? this.knowledgeAnswer(q.knowledgeId) : '',
+          stackLabel: this.t('pb.v2.p.docStdStack'),
+          spokenLabel: this.t('pb.v2.p.spoken'),
+          technicalLabel: this.t('pb.v2.p.technical')
+        }));
       }
     }
     return {

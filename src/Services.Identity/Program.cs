@@ -1,7 +1,5 @@
-using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using YourInterview.BuildingBlocks.Hosting;
@@ -59,30 +57,15 @@ builder.AddServiceDefaults(ServiceName, services =>
     services.AddHttpClient(GoogleOAuthService.HttpClientName);
 
     // ---------- JWT 认证 ----------
-    var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-    if (string.IsNullOrWhiteSpace(jwt.SigningKey))
-        throw new InvalidOperationException(
-            "缺少 Jwt:SigningKey 配置。请在本地 appsettings.Development.json 或环境变量 Jwt__SigningKey 中配置" +
-            "(至少 32 字符)。生产环境务必使用随机密钥,不要使用示例值。");
-
-    services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(options =>
+    // 校验参数唯一定义在 ServiceDefaults(ARC-09/票18):其 Issuer/Audience 兜底串与 JwtOptions
+    // 类默认值逐字相同,校验结果与旧 JwtOptions 绑定等价;签发侧(上方 Configure<JwtOptions>)不动。
+    // 本服务有意差异经 configure 回调原样保留:RequireHttpsMetadata、SaveToken=false、
+    // NameClaimType 显式化(框架默认同为 ClaimTypes.Name)、401/403 ProblemDetails Events。
+    services.AddJwtAuthentication(builder.Configuration, options =>
         {
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
             options.SaveToken = false;
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,                       // 关键:过期即拒
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwt.Issuer,
-                ValidAudience = jwt.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)),
-                ClockSkew = TimeSpan.FromSeconds(30),          // 默认 5 分钟太长
-                NameClaimType = System.Security.Claims.ClaimTypes.Name,
-                RoleClaimType = System.Security.Claims.ClaimTypes.Role
-            };
+            options.TokenValidationParameters.NameClaimType = System.Security.Claims.ClaimTypes.Name;
             options.Events = new JwtBearerEvents
             {
                 OnChallenge = ctx =>
@@ -156,14 +139,8 @@ app.UseServiceDefaults(ServiceName);
 app.MapControllers();
 
 // ---------- 启动时迁移 + 种子 ----------
-try
-{
-    await IdentityDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger);
-}
-catch (Exception ex)
-{
-    app.Logger.LogError(ex, "Identity 数据库初始化失败(数据库不可用?)—— 服务继续启动,稍后重试");
-}
+// COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync(ServiceName, IdentityDbSeeder.MigrateAndSeedAsync);
 
 app.Run();
 

@@ -53,7 +53,9 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
                       [matTooltip]="t('practice.categoryDrag')">drag_indicator</mat-icon>
 
             @if (editingId() === c.id) {
-              <input class="cat-edit" [(ngModel)]="editName"
+              <!-- 票106(C4):后端类别名上限 100(Handler 校验),重命名输入此前独缺 maxlength,
+                   与同弹窗新增输入(已有 maxlength=100)同口径补齐前端拦截 -->
+              <input class="cat-edit" [(ngModel)]="editName" maxlength="100"
                      (keyup.enter)="commitRename(c)" (keyup.escape)="cancelRename()"
                      (blur)="commitRename(c)" />
             } @else {
@@ -147,20 +149,20 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
     </div>
   `,
   styles: [`
-    .cat-hint { margin: 0 0 12px; font-size: 12.5px; color: #7a8393; }
+    .cat-hint { margin: 0 0 12px; font-size: 12.5px; color: #64748b; }
 
     .cat-list { display: flex; flex-direction: column; gap: 4px; }
     .cat-row {
       display: flex; align-items: center; gap: 4px;
       padding: 4px 6px;
-      background: #fff;
-      border: 1px solid #e3e7ee;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
       border-radius: 8px;
     }
-    .cat-row.confirming { border-color: #f0b4b4; background: #fdf3f3; }
+    .cat-row.confirming { border-color: #fef2f2; background: #fef2f2; }
 
     .drag-handle {
-      cursor: grab; color: #a7b0bf;
+      cursor: grab; color: #e2e8f0;
       font-size: 18px; width: 18px; height: 18px;
     }
     .drag-handle:active { cursor: grabbing; }
@@ -169,36 +171,36 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
     .cat-name {
       flex: 1; min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-size: 13.5px; color: #333a44;
+      font-size: 13.5px; color: #0f172a;
       cursor: default;
     }
     .cat-edit {
       flex: 1; min-width: 0;
       height: 28px; padding: 0 8px;
       font-size: 13px;
-      border: 1px solid #2f6fed; border-radius: 6px;
+      border: 1px solid #2563eb; border-radius: 6px;
       outline: none;
     }
 
     .spacer { flex: 1; }
 
-    .confirm-text { font-size: 12px; color: #c0392b; white-space: nowrap; }
-    .del-yes { color: #c0392b !important; }
+    .confirm-text { font-size: 12px; color: #dc2626; white-space: nowrap; }
+    .del-yes { color: #dc2626 !important; }
 
-    .cat-empty { margin: 4px 0 10px; font-size: 13px; color: #9aa3b0; }
+    .cat-empty { margin: 4px 0 10px; font-size: 13px; color: #64748b; }
 
     /* ★ 未分类系统行:锁图标 + 灰调,不可拖/不可删 */
-    .cat-row.cat-system { margin-top: 8px; background: #f6f8fb; border-style: dashed; }
-    .sys-lock { color: #a7b0bf; font-size: 18px; width: 18px; height: 18px; }
-    .sys-note { font-size: 11.5px; color: #9aa3b0; white-space: nowrap; }
+    .cat-row.cat-system { margin-top: 8px; background: #eff6ff; border-style: dashed; }
+    .sys-lock { color: #e2e8f0; font-size: 18px; width: 18px; height: 18px; }
+    .sys-note { font-size: 11.5px; color: #64748b; white-space: nowrap; }
 
     /* ★ 导入模板区 */
     .cat-import {
       margin-top: 12px; padding-top: 12px;
-      border-top: 1px solid #eef0f4;
+      border-top: 1px solid #f1f5f9;
     }
     .cat-import-title {
-      font-size: 12.5px; font-weight: 600; color: #55606f;
+      font-size: 12.5px; font-weight: 600; color: #475569;
       margin-bottom: 8px;
     }
     .cat-import-row { display: flex; align-items: center; gap: 8px; }
@@ -206,30 +208,30 @@ interface TemplateDef { key: string; labelKey: string; descKey: string; categori
       flex: 1; min-width: 0;
       height: 32px; padding: 0 8px;
       font-size: 13px; font-family: inherit;
-      border: 1px solid #d7dce4; border-radius: 6px;
-      outline: none; background: #fff; color: #333a44;
+      border: 1px solid #e2e8f0; border-radius: 6px;
+      outline: none; background: #ffffff; color: #0f172a;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .cat-tpl-select:focus { border-color: #2f6fed; box-shadow: 0 0 0 2px rgba(47,111,237,.14); }
-    .cat-tpl-desc { margin: 6px 2px 0; font-size: 12px; color: #8a93a2; }
+    .cat-tpl-select:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, .14); }
+    .cat-tpl-desc { margin: 6px 2px 0; font-size: 12px; color: #64748b; }
 
     .cat-add {
       display: flex; align-items: center; gap: 8px;
       margin-top: 14px; padding-top: 12px;
-      border-top: 1px solid #eef0f4;
+      border-top: 1px solid #f1f5f9;
     }
     .cat-new {
       flex: 1; min-width: 0;
       height: 32px; padding: 0 10px;
       font-size: 13px;
-      border: 1px solid #d7dce4; border-radius: 6px;
+      border: 1px solid #e2e8f0; border-radius: 6px;
       outline: none;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .cat-new:focus { border-color: #2f6fed; box-shadow: 0 0 0 2px rgba(47,111,237,.14); }
+    .cat-new:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, .14); }
 
     .cdk-drag-preview {
-      box-shadow: 0 4px 14px rgba(20, 30, 50, .16);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, .16);
       border-radius: 8px;
     }
     .cdk-drag-placeholder { opacity: .35; }
@@ -335,7 +337,7 @@ export class CategoryManagerDialogComponent {
 
   doDelete(c: PracticeCategoryDto): void {
     this.confirmDeleteId.set(null);
-    this.api.deleteCategory(c.id).subscribe({
+    this.api.deleteCategory(c.id, c.version ?? null).subscribe({
       next: () => {
         this.items.update((list) => list.filter((x) => x.id !== c.id));
         this.emitChanged();

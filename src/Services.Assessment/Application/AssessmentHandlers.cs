@@ -23,13 +23,18 @@ public sealed record DimensionIssueDto(Guid Id, string Dimension, string Title, 
 public sealed record SessionListItemDto(Guid Id, string Title, string Mode, string? Topic,
     string? CompanyStyle, string Status, int QuestionCount, int AnsweredCount, int ScoredCount,
     int? OverallScore, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt,
-    string? WeakestDimension);
+    string? WeakestDimension,
+    // ★ 票113(A08 残余):会话行读时 xmin —— 列表删会话时 If-Match 回传钉版用
+    //   (票111 只补了 SessionDetailDto,列表项无版本可带,列表删仍走兼容 LWW)。
+    uint? Version = null);
 
 public sealed record QuestionDto(Guid Id, int Sequence, string QuestionText, string Type,
     int Difficulty, string State, string? ExpectedPointsJson, string? AnswerText,
     double? AnswerDurationSeconds, string? Comment, string? RecommendedAnswer,
     string? BetterStructure, string? FillerWordsJson, int? Overall,
-    ScoresDto? Scores, IReadOnlyList<DimensionIssueDto> Issues, string? TopIssueTitle);
+    ScoresDto? Scores, IReadOnlyList<DimensionIssueDto> Issues, string? TopIssueTitle,
+    // ★ 票108 A09:题目行读时 xmin —— answer/score/skip 回传钉版,过期得 409。
+    uint? Version = null);
 
 public sealed record ScoresDto(int Pronunciation, int Fluency, int SentenceIntegrity,
     int Structure, int TechnicalDepth, int Relevance, int Overall, string WeakestDimension);
@@ -38,7 +43,9 @@ public sealed record SessionDetailDto(Guid Id, string Title, string Mode, string
     string? CompanyStyle, string Status, int TargetQuestionCount, string Language,
     DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, string? OverallSummary,
     string? PriorityAction, int? OverallScore, ScoresDto? AverageScores,
-    IReadOnlyList<QuestionDto> Questions, IReadOnlyList<WeaknessBucketDto> Weaknesses);
+    IReadOnlyList<QuestionDto> Questions, IReadOnlyList<WeaknessBucketDto> Weaknesses,
+    // ★ 票111 段3(A08):会话行自身读时 xmin —— DELETE sessions/{id} 时 If-Match 回传钉版用。
+    uint? Version = null);
 
 public sealed record WeaknessBucketDto(string Dimension, int Count, double AvgSeverity);
 
@@ -96,6 +103,13 @@ public sealed class ListSessionsQueryHandler(AssessmentDbContext db)
             .Take(r.PageSize)
             .ToListAsync(ct);
 
+        // ★ 票113:当页会话行读时 xmin(影子属性须投影读,先例 ListCategoriesQueryHandler)。
+        var pageIds = items.Select(x => x.Id).ToList();
+        var versions = await db.Sessions.AsNoTracking()
+            .Where(x => pageIds.Contains(x.Id))
+            .Select(x => new { x.Id, V = EF.Property<uint>(x, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+
         var dtos = items.Select(x =>
         {
             var scored = x.Questions.Where(q2 => q2.Scores is not null).ToList();
@@ -106,11 +120,14 @@ public sealed class ListSessionsQueryHandler(AssessmentDbContext db)
                 scored.Count,
                 x.OverallScore,
                 x.StartedAt, x.CompletedAt,
+                // COD-12/票23:已评分但 Issues 全为空集时分组序列为空 —— 取 null,
+                // 与本字段未评分口径及 Complete 的 FirstOrDefault 先例一致(原 .First() 抛异常冒 500)
                 scored.Count == 0 ? null : scored
                     .SelectMany(q2 => q2.Issues)
                     .GroupBy(i => i.Dimension)
                     .OrderByDescending(g => g.Average(i => i.Severity))
-                    .First().Key);
+                    .FirstOrDefault()?.Key,
+                versions.TryGetValue(x.Id, out var v) ? v : null);
         }).ToList();
 
         return Result.Success(new PagedResult<SessionListItemDto>(dtos, total,
@@ -132,16 +149,29 @@ public sealed class GetSessionQueryHandler(AssessmentDbContext db)
 
         if (s is null) return Result.Failure<SessionDetailDto>(Error.NotFound("模拟练习"));
 
+        // ★ 票111 A08:会话行自身读时 xmin(同题目口径投影读)。
+        var sessionVersion = await db.Sessions.AsNoTracking()
+            .Where(x => x.Id == s.Id)
+            .Select(x => EF.Property<uint>(x, "xmin")).FirstAsync(ct);
+
+        // ★ 票108 A09:逐题读时 xmin(影子属性须投影读,AsNoTracking 实体上取不到)。
+        var versions = await db.Questions.AsNoTracking()
+            .Where(q => q.SessionId == s.Id)
+            .Select(q => new { q.Id, V = EF.Property<uint>(q, "xmin") })
+            .ToDictionaryAsync(x => x.Id, x => x.V, ct);
+
         return Result.Success(new SessionDetailDto(
             s.Id, s.Title, s.Mode.ToString(), s.Topic, s.CompanyStyle, s.Status.ToString(),
             s.TargetQuestionCount, s.Language, s.StartedAt, s.CompletedAt,
             s.OverallSummary, s.PriorityAction, s.OverallScore,
             ToScores(s.AverageScores()),
-            s.Questions.OrderBy(q => q.Sequence).Select(ToQuestion).ToList(),
-            s.WeaknessSummary().Select(w => new WeaknessBucketDto(w.Dimension, w.Count, w.AvgSeverity)).ToList()));
+            s.Questions.OrderBy(q => q.Sequence)
+                .Select(q => ToQuestion(q, versions.TryGetValue(q.Id, out var v) ? v : null)).ToList(),
+            s.WeaknessSummary().Select(w => new WeaknessBucketDto(w.Dimension, w.Count, w.AvgSeverity)).ToList(),
+            sessionVersion));
     }
 
-    internal static QuestionDto ToQuestion(MockQuestion q) => new(
+    internal static QuestionDto ToQuestion(MockQuestion q, uint? version = null) => new(
         q.Id, q.Sequence, q.QuestionText, q.Type.ToString(), q.Difficulty, q.State.ToString(),
         q.ExpectedPointsJson, q.AnswerText, q.AnswerDurationSeconds,
         q.Comment, q.RecommendedAnswer, q.BetterStructure, q.FillerWordsJson,
@@ -151,7 +181,7 @@ public sealed class GetSessionQueryHandler(AssessmentDbContext db)
             q.Scores.Relevance, q.Scores.Overall, q.Scores.WeakestDimension()),
         q.Issues.Select(i => new DimensionIssueDto(i.Id, i.Dimension, i.Title, i.Detail,
             i.Evidence, i.Suggestion, i.Severity)).ToList(),
-        q.TopIssue?.Title);
+        q.TopIssue?.Title, version);
 
     internal static ScoresDto? ToScores((int Pronunciation, int Fluency, int SentenceIntegrity,
         int Structure, int TechnicalDepth, int Relevance)? t)
@@ -355,7 +385,9 @@ public sealed class AddQuestionsCommandHandler(AssessmentDbContext db)
 
 /// <summary>作答。</summary>
 public sealed record AnswerQuestionCommand(Guid SessionId, Guid QuestionId, Guid UserId,
-    string? AnswerText, string? AudioPath, double? DurationSeconds, string? TranscriptJson)
+    string? AnswerText, string? AudioPath, double? DurationSeconds, string? TranscriptJson,
+    // ★ 票108 A09:题目行读时 xmin(不传 = 不钉版,兼容旧调用方)。
+    uint? Version = null)
     : IRequest<Result<Guid>>;
 
 public sealed class AnswerQuestionCommandValidator : AbstractValidator<AnswerQuestionCommand>
@@ -387,6 +419,8 @@ public sealed class AnswerQuestionCommandHandler(AssessmentDbContext db)
             return Result.Failure<Guid>(Error.Validation("Answer", ex.Message));
         }
 
+        // ★ 票108 A09:钉题目行版本 —— 期间已被改(答/评/跳)则 409,不静默覆盖。
+        ConcurrencyPin.Pin(db, s.Questions.First(q => q.Id == r.QuestionId), r.Version);
         await db.SaveChangesAsync(ct);
         return Result.Success(r.QuestionId);
     }
@@ -396,7 +430,9 @@ public sealed class AnswerQuestionCommandHandler(AssessmentDbContext db)
 public sealed record ScoreQuestionCommand(Guid SessionId, Guid QuestionId, Guid UserId,
     int Pronunciation, int Fluency, int SentenceIntegrity, int Structure, int TechnicalDepth,
     int Relevance, string? Comment, string? RecommendedAnswer, string? BetterStructure,
-    string? FillerWordsJson, IReadOnlyList<IssueDraftIn> Issues) : IRequest<Result>;
+    string? FillerWordsJson, IReadOnlyList<IssueDraftIn> Issues,
+    // ★ 票108 A09:题目行读时 xmin(不传 = 不钉版;AI 编排路径不传,行为不变)。
+    uint? Version = null) : IRequest<Result>;
 
 public sealed class ScoreQuestionCommandValidator : AbstractValidator<ScoreQuestionCommand>
 {
@@ -444,12 +480,16 @@ public sealed class ScoreQuestionCommandHandler(AssessmentDbContext db)
             return Result.Failure<Guid>(Error.Validation("Score", ex.Message));
         }
 
+        // ★ 票108 A09:钉题目行版本(同 AnswerQuestionCommandHandler)。
+        ConcurrencyPin.Pin(db, s.Questions.First(q => q.Id == r.QuestionId), r.Version);
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }
 }
 
-public sealed record SkipQuestionCommand(Guid SessionId, Guid QuestionId, Guid UserId)
+public sealed record SkipQuestionCommand(Guid SessionId, Guid QuestionId, Guid UserId,
+    // ★ 票108 A09:题目行读时 xmin(不传 = 不钉版,兼容旧调用方)。
+    uint? Version = null)
     : IRequest<Result>;
 
 public sealed class SkipQuestionCommandHandler(AssessmentDbContext db)
@@ -464,6 +504,8 @@ public sealed class SkipQuestionCommandHandler(AssessmentDbContext db)
         try { s.SkipQuestion(r.QuestionId); }
         catch (InvalidOperationException ex) { return Result.Failure<Guid>(Error.Validation("Skip", ex.Message)); }
 
+        // ★ 票108 A09:钉题目行版本(同 AnswerQuestionCommandHandler)。
+        ConcurrencyPin.Pin(db, s.Questions.First(q => q.Id == r.QuestionId), r.Version);
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }
@@ -513,7 +555,7 @@ public sealed class AbandonSessionCommandHandler(AssessmentDbContext db)
     }
 }
 
-public sealed record DeleteSessionCommand(Guid SessionId, Guid UserId) : IRequest<Result>;
+public sealed record DeleteSessionCommand(Guid SessionId, Guid UserId, uint? Version = null) : IRequest<Result>; // 票111段3:If-Match 钉版
 
 public sealed class DeleteSessionCommandHandler(AssessmentDbContext db)
     : IRequestHandler<DeleteSessionCommand, Result>
@@ -523,6 +565,7 @@ public sealed class DeleteSessionCommandHandler(AssessmentDbContext db)
         var s = await db.Sessions.FirstOrDefaultAsync(x => x.Id == r.SessionId && x.UserId == r.UserId, ct);
         if (s is null) return Result.Failure<SessionSummaryResult>(Error.NotFound("模拟练习"));
 
+        ConcurrencyPin.Pin(db, s, r.Version);
         s.MarkDeleted();
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -533,7 +576,9 @@ public sealed class DeleteSessionCommandHandler(AssessmentDbContext db)
 /// 从知识库薄弱点自动生成练习。
 /// 这是"技术栈 → 模拟练习"的联动入口:把不会的题直接变成要开口答的题。
 /// </summary>
-public sealed record SuggestSessionCommand(Guid UserId, int QuestionCount = 5)
+/// <summary>ML-FIX-UI(W-UI-9):Lang = 界面语言(zh/en/fr),推荐标题与文案按此渲染;
+/// 默认 zh,既有调用与单测行为不变;未知语言回落 zh。</summary>
+public sealed record SuggestSessionCommand(Guid UserId, int QuestionCount = 5, string Lang = "zh")
     : IRequest<Result<SuggestedSessionDto>>;
 
 public sealed record SuggestedSessionDto(string Title, SessionMode Mode, string? Topic,
@@ -555,13 +600,33 @@ public sealed class SuggestSessionCommandHandler(AssessmentDbContext db)
             .ToListAsync(ct);
 
         var top = issues.FirstOrDefault();
-        var topic = top?.Dimension ?? "综合";
+        // ★ ML-FIX-UI(W-UI-9):推荐文案此前硬编码中文,英文 UI 下推荐卡也出中文。
+        //   维度码本身是存储值(各语言共用),只本地化模板与无历史默认主题。
+        var lang = r.Lang switch { "en" => "en", "fr" => "fr", _ => "zh" };
+        var defaultTopic = lang switch { "en" => "General", "fr" => "Général", _ => "综合" };
+        var topic = top?.Dimension ?? defaultTopic;
+        var title = lang switch
+        {
+            "en" => $"Weakness focus · {topic}",
+            "fr" => $"Renforcement des faiblesses · {topic}",
+            _ => $"薄弱点强化 · {topic}"
+        };
         var rationale = top is null
-            ? "还没有历史练习记录,先从综合模拟起步建立基线分。"
-            : $"历史评分里 \"{top.Dimension}\" 这一维扣分最多(共 {top.Count} 条问题),优先强攻。";
+            ? lang switch
+            {
+                "en" => "No practice history yet — start with a general mock to build your baseline.",
+                "fr" => "Aucun historique de pratique pour l'instant — commencez par une simulation générale pour établir votre score de base.",
+                _ => "还没有历史练习记录,先从综合模拟起步建立基线分。"
+            }
+            : lang switch
+            {
+                "en" => $"\"{top.Dimension}\" lost the most points in past scores ({top.Count} issues) — focus here first.",
+                "fr" => $"« {top.Dimension} » a perdu le plus de points dans les scores passés ({top.Count} problèmes) — concentrez-vous d'abord ici.",
+                _ => $"历史评分里 \"{top.Dimension}\" 这一维扣分最多(共 {top.Count} 条问题),优先强攻。"
+            };
 
         return Result.Success(new SuggestedSessionDto(
-            $"薄弱点强化 · {topic}", SessionMode.WeaknessFocus, topic,
+            title, SessionMode.WeaknessFocus, topic,
             Math.Clamp(r.QuestionCount, 1, 20), rationale));
     }
 }

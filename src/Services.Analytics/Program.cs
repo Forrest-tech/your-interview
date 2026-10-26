@@ -1,7 +1,4 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Security;
@@ -24,36 +21,24 @@ builder.Services.AddHealthChecks().AddDbContextCheck<AnalyticsDbContext>("postgr
 
 builder.Services.AddCurrentUser();
 
+// ---------- 票34:投影对账/重建的真源通道(经 Knowledge API 转发调用方令牌) ----------
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<YourInterview.Services.Analytics.Application.IKnowledgeTruthSource,
+    YourInterview.Services.Analytics.Infrastructure.Services.HttpKnowledgeTruthSource>();
+
 // ---------- 消息总线:Analytics 是纯消费者(读模型由事件驱动) ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration, x =>
 {
     // 每个消费者独立队列 —— 一个消费者反复失败(反复重投)不会拖垮其他读模型更新
-    x.AddConsumer<MockAnswerSubmittedConsumer>();
     x.AddConsumer<KnowledgeLevelChangedConsumer>();
+    x.AddConsumer<KnowledgeItemDeletedConsumer>();
     x.AddConsumer<JobApplicationStatusChangedConsumer>();
     x.AddConsumer<InterviewAnalysisCompletedConsumer>();
-    x.AddConsumer<AuditEventRecordedConsumer>();
 });
 
 // ---------- 鉴权 ----------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("缺少 Jwt:SigningKey");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-    });
+// ---------- JWT 认证(校验参数唯一定义在 ServiceDefaults,ARC-09/票18) ----------
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddAuthorization(options => PermissionPolicy.AddPermissionPolicies(options));
 
@@ -64,7 +49,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-try { await AnalyticsDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger); }
-catch (Exception ex) { app.Logger.LogError(ex, "Analytics 数据库初始化失败 —— 服务继续启动"); }
+// COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync("analytics-api", AnalyticsDbSeeder.MigrateAndSeedAsync);
 
 app.Run();

@@ -5,6 +5,10 @@
    ============================================================================ */
 
 @use '@angular/material' as mat;
+/* 票123 R-9:The Track 的唯一几何样式源 —— 四个消费者(Tracker 列表 stepper /
+   Dashboard Pipeline Band / Playbook Rounds Track / Tracker 抽屉时间轴)共用这一份声明。
+   详见 styles/_track-geometry.scss 的头注。 */
+@use './styles/track-geometry';
 
 /* ----------------------------------------------------------------------------
    Material Icons 字体(必须自托管,不能用 Google Fonts CDN)
@@ -40,6 +44,100 @@ mat-icon {
   text-rendering: optimizeLegibility;
 }
 
+/* ----------------------------------------------------------------------------
+   Space Grotesk(标题与数字的「声音」,票 118 设计系统)
+   同样自托管 —— 本项目禁止 Google Fonts CDN(见上)。只承担标题/卡片题/
+   统计数字/品牌字标;正文与数据仍走 Inter 栈(其 CJK 回落链经十二轮调试,
+   不重开)。字体文件:assets/fonts/space-grotesk-{500,600,700}.woff2。
+   ---------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/assets/fonts/space-grotesk-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/assets/fonts/space-grotesk-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/assets/fonts/space-grotesk-700.woff2') format('woff2');
+}
+
+$display-font: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+
+/* ----------------------------------------------------------------------------
+   票 118 设计令牌(全站唯一口径;设计契约见工作区 design-overhaul/DESIGN-PLAN.md)
+   语义色一句话:indigo = 进行中 · green = 已赢 · red = 已输 · amber = 需注意 ·
+   grey = 停放。任何组件不得在令牌之外另起强调色。
+   ---------------------------------------------------------------------------- */
+:root {
+  /* 配色方案 A“亮蓝轻氧”:顶栏改白色后 --midnight 壳色退役(仅顶栏用过它),
+     深色面改用 blue-900 #1e3a8a 直写;--hover-wash-dark 随深底顶栏一并退役。 */
+  --brand: #2563eb;
+  --brand-deep: #1d4ed8;
+  --signal-tint: #eff6ff;
+  --signal-soft: #dbeafe;
+  --go: #16a34a;
+  --go-deep: #15803d;
+  --go-tint: #f0fdf4;
+  --stop: #dc2626;
+  --stop-deep: #b91c1c;
+  --stop-tint: #fef2f2;
+  /* 注意:--attention 本身在全站约 30 处作正文色(含 G-DES 对比度守门单测,
+     要求 --attention 作正文 on 白/淡底/白字 on 它均 ≥4.5:1)。
+     提案表列警告主色 #d97706(amber-600),但它作正文仅 3.19:1,过不了守门;
+     故 --attention 取提案 §2.5.2 的深档 #92400e(6.84:1),与芯片文字同一值,
+     图形元素(边框/底色)随 token 同为深琥珀,色相不变。 */
+  --attention: #92400e;
+  --attention-deep: #92400e;
+  --attention-tint: #fffbeb;
+  --parked: #64748b;
+  --parked-deep: #334155;
+  --parked-fill: #f1f5f9;
+  /* 票 162:画布底色改纯白(原配色方案 A #f6f8fb);卡片面仍走 --surface 白底,
+     卡片与画布区分靠既有边框/阴影,非 token 色差。 */
+  --paper: #ffffff;
+  --surface: #ffffff;
+  --hairline: #e2e8f0;
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --track: #e2e8f0;
+  /* MDC 形状令牌:按钮 8 · 输入框 6 · 弹窗 14(圆角阶梯 6/10/14/999) */
+  --mdc-filled-button-container-shape: 8px;
+  --mdc-outlined-button-container-shape: 8px;
+  --mdc-text-button-container-shape: 8px;
+  --mdc-outlined-text-field-container-shape: 6px;
+  --mdc-dialog-container-shape: 14px;
+
+  /* ★ 票123 C-1:动效令牌 —— 全站 transition 的唯一时长/缓动来源。
+     定稿:「`--dur-fast: 120ms` · `--dur: 160ms` · `--dur-slow: 400ms` ·
+     `--ease: cubic-bezier(0.2, 0, 0, 1)`(the Material emphasized easing — this
+     is a Material app; the values consolidate the census clusters rather than
+     importing a foreign feel)」。
+     值域合并自 Phase 0 的普查簇(110/120/130/150/160/180/200/220/400ms),
+     不是新造的一套数值。 */
+  --dur-fast: 120ms;
+  --dur: 160ms;
+  --dur-slow: 400ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ★ 票123 C-3:悬停/按压洗色 —— 受审面两种合法悬停形态共用这两个值。
+     品牌色 alpha 派生(R-2 白名单规则下的 alpha 衍生,不是新颜色)。 */
+  --hover-wash: rgba(37, 99, 235, 0.06);
+  --press-wash: rgba(37, 99, 235, 0.12);
+  /* 配色方案 A:顶栏改白色后,导航悬停/激活直接用浅底规则
+     (shell.component.scss 的 .nav-item:hover/.active),不再需要深底洗色。 */
+}
+
 @include mat.core();
 
 /* 字体族抽成变量 —— 主题配置和 body 都要用同一份,硬编码两遍必然不同步。
@@ -51,8 +149,21 @@ mat-icon {
    Latin 走 Inter/Segoe,CJK 恒定走 苹方/思源/雅黑,与语言无关。 */
 $app-font: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', Roboto, Helvetica, Arial, sans-serif;
 
-/* 主题:靛蓝主色 + 琥珀强调。偏冷静专业,不抢数据本身的注意力。 */
-$primary: mat.define-palette(mat.$indigo-palette, 600);
+/* 主题:配色方案 A“亮蓝轻氧” —— Tailwind blue 全档重建品牌色阶
+   (原票 118 深靛蓝 scale 已退役;600 即品牌主色 #2563eb)。
+   对比映射沿用旧表结构:50–300 深字,400–900 白字。 */
+$brand-palette: (
+  50: #eff6ff, 100: #dbeafe, 200: #bfdbfe, 300: #93c5fd, 400: #60a5fa,
+  500: #3b82f6, 600: #2563eb, 700: #1d4ed8, 800: #1e40af, 900: #1e3a8a,
+  A100: #dbeafe, A200: #bfdbfe, A400: #60a5fa, A700: #1d4ed8,
+  contrast: (
+    50: rgba(0, 0, 0, 0.87), 100: rgba(0, 0, 0, 0.87), 200: rgba(0, 0, 0, 0.87),
+    300: rgba(0, 0, 0, 0.87), 400: #fff, 500: #fff, 600: #fff, 700: #fff,
+    800: #fff, 900: #fff, A100: rgba(0, 0, 0, 0.87), A200: rgba(0, 0, 0, 0.87),
+    A400: #fff, A700: #fff,
+  ),
+);
+$primary: mat.define-palette($brand-palette, 600);
 $accent: mat.define-palette(mat.$amber-palette, 700);
 $warn: mat.define-palette(mat.$red-palette);
 
@@ -69,8 +180,8 @@ html, body {
   margin: 0;
   font-family: $app-font;
   font-size: 14px;
-  color: #24262b;
-  background: #fff;
+  color: var(--ink);
+  background: var(--paper);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -93,15 +204,16 @@ html, body {
 
   h2 {
     margin: 0;
-    font-size: 21px;
+    font-family: $display-font;
+    font-size: 24px;
     font-weight: 600;
-    letter-spacing: 0.2px;
+    letter-spacing: -0.01em;
   }
 
   .sub {
     margin: 5px 0 0;
     font-size: 13px;
-    color: #6b6f76;
+    color: var(--ink-2);
     line-height: 1.5;
   }
 
@@ -109,30 +221,34 @@ html, body {
     display: inline-block;
     margin-left: 2px;
     padding: 2px 8px;
-    border-radius: 5px;
-    background: rgba(63, 81, 181, 0.09);
-    color: #303f9f;
+    border-radius: 999px;
+    background: var(--signal-tint);
+    color: var(--brand);
   }
 }
 
-/* 卡片面板统一留白 —— Material 默认偏紧,内容多的页面会显得挤 */
+/* 卡片面板统一留白 —— Material 默认偏紧,内容多的页面会显得挤。
+   票 118:卡片改为扁平 —— 1px 细边 + 无静止阴影;阴影只留给真正浮起的层
+   (弹窗/菜单/抽屉),去掉「每张卡同一团柔和阴影」的套装感。 */
 mat-card {
   border-radius: 10px !important;
+  border: 1px solid var(--hairline);
+  box-shadow: none !important;
 }
 
 mat-card-header { padding-bottom: 6px; }
 
-mat-card-title { font-size: 15.5px !important; font-weight: 600 !important; }
+mat-card-title { font-family: $display-font; font-size: 15px !important; font-weight: 600 !important; }
 
 mat-card-subtitle { font-size: 12.5px !important; }
 
 /* ---------------- 分数色档(全站统一语义) ---------------- */
 
-.good { color: #1b7f4b; }
-.mid  { color: #b06a00; }
-.bad  { color: #b3261e; }
+.good { color: #16a34a; }
+.mid  { color: var(--attention); }
+.bad  { color: #dc2626; }
 
-mat-progress-bar.good .mdc-linear-progress__bar-inner { border-color: #1b7f4b !important; }
+mat-progress-bar.good .mdc-linear-progress__bar-inner { border-color: #16a34a !important; }
 mat-progress-bar.mid  .mdc-linear-progress__bar-inner { border-color: #e0a030 !important; }
 mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !important; }
 
@@ -142,28 +258,37 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   display: inline-flex;
   align-items: center;
   padding: 2px 9px;
-  border-radius: 11px;
+  /* 票123 R-1.4:药丸/徽标角色 → 999px(原 11px 不在 §0.3 角色集合内)。 */
+  border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1.7;
   white-space: nowrap;
 }
 
-.chip.saved     { background: #eceff1; color: #455a64; }
-.chip.applied   { background: #e3f2fd; color: #1565c0; }
-.chip.screen    { background: #fff8e1; color: #a06a00; }
-.chip.interview { background: #ede7f6; color: #4527a0; }
-.chip.offer     { background: #e8f5e9; color: #1b7f4b; }
-.chip.rejected  { background: #fdecea; color: #b3261e; }
-.chip.paused    { background: #f3f3f6; color: #6b6f76; }
-.chip.withdrawn { background: #f3f3f6; color: #6b6f76; }
+/* 票 118 语义色:进行中阶段一律 signal(applied/screen/interview 同一品牌蓝),
+   offer = 已赢绿,rejected = 已输红,paused/withdrawn/saved = 停放灰。
+   配色方案 A §2.5.2:芯片一律淡底 + 深档字(不用语义主色直接作字,
+   旧彩色字 + 淡底实测 3.07–4.41:1 均未达 4.5:1)。 */
+.chip.saved     { background: var(--parked-fill); color: var(--parked-deep); }
+.chip.applied   { background: var(--signal-tint); color: var(--brand-deep); }
+.chip.screen    { background: var(--signal-tint); color: var(--brand-deep); }
+.chip.interview { background: var(--signal-tint); color: var(--brand-deep); }
+.chip.offer     { background: var(--go-tint); color: var(--go-deep); }
+.chip.accepted  { background: var(--go-tint); color: var(--go-deep); }
+.chip.ghosted   { background: var(--attention-tint); color: var(--attention-deep); }
+.chip.rejected  { background: var(--stop-tint); color: var(--stop-deep); }
+.chip.paused    { background: var(--parked-fill); color: var(--parked-deep); }
+.chip.withdrawn { background: var(--parked-fill); color: var(--parked-deep); }
+/* 票123 R-4:看板卡片的「待跟进」chip(与 .chip.ghosted 同为琥珀语义色系)。 */
+.chip.attention { background: var(--attention-tint); color: var(--attention-deep); }
 
 /* ---------------- 空态 ---------------- */
 
 .empty {
   padding: 26px 12px;
   text-align: center;
-  color: #8b8f96;
+  color: var(--ink-2);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -174,11 +299,11 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   gap: 12px;
   padding: 14px 16px;
   margin-bottom: 16px;
-  border-left: 3px solid #b3261e !important;
+  border-left: 3px solid #dc2626 !important;
 
-  mat-icon { color: #b3261e; }
+  mat-icon { color: #dc2626; }
   strong { font-size: 14px; }
-  p { margin: 3px 0 0; font-size: 13px; color: #6b6f76; }
+  p { margin: 3px 0 0; font-size: 13px; color: #475569; }
 }
 
 /* ---------------- 表单通用 ---------------- */
@@ -213,7 +338,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 .text-block.mine { background: #f7f9fd; }
 .text-block.recommended {
   background: #f4fbf6;
-  border-color: rgba(27, 127, 75, 0.2);
+  border-color: rgba(22, 163, 74, 0.2);
 }
 
 /* ---------------- 滚动条(内容区深色细条,不抢视觉) ---------------- */
@@ -267,8 +392,8 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 }
 .app-menu .mat-mdc-menu-item:hover { background: #f3f6fa !important; }
 .app-menu .mat-mdc-menu-item.on {
-  color: #2f6fed !important;
-  background: #eef4ff !important;
+  color: var(--brand) !important;
+  background: var(--signal-tint) !important;
   font-weight: 600;
 }
 .app-menu .mat-mdc-menu-item mat-icon {
@@ -278,7 +403,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   margin-right: 8px;
   color: #6b7480;
 }
-.app-menu .mat-mdc-menu-item.on mat-icon { color: #2f6fed; }
+.app-menu .mat-mdc-menu-item.on mat-icon { color: var(--brand); }
 .app-menu .menu-sep { height: 1px; background: #eceff4; margin: 5px 6px; }
 
 /* 标记颜色菜单:Notion 同款的圆点色块 */
@@ -307,6 +432,33 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   min-width: 0;
 }
 
+/* 票 118 / D-11:弹窗内容区顶部留白 —— outline 字段的浮动标签会升到字段框上方约 10px,
+   内容区顶边距不足时首行标签被滚动容器裁掉一半。全站弹窗统一在此兜底。 */
+.mat-mdc-dialog-container .mat-mdc-dialog-content { padding-top: 12px !important; }
+
+/* 票 118:Tracker 列表状态下拉按状态着浅底 —— 与筛选 chips、流程徽标同一套语义色。
+   必须写在全局:mat-form-field 内部元素不带 Tracker 组件的封装属性,组件内样式够不到。 */
+.lr-status.st-applied .mat-mdc-text-field-wrapper,
+.lr-status.st-screen .mat-mdc-text-field-wrapper,
+.lr-status.st-interview .mat-mdc-text-field-wrapper { background: var(--signal-tint); }
+.lr-status.st-applied .mat-mdc-select-value-text,
+.lr-status.st-screen .mat-mdc-select-value-text,
+.lr-status.st-interview .mat-mdc-select-value-text { color: var(--brand); font-weight: 600; }
+.lr-status.st-offer .mat-mdc-text-field-wrapper,
+.lr-status.st-accepted .mat-mdc-text-field-wrapper { background: var(--go-tint); }
+.lr-status.st-offer .mat-mdc-select-value-text,
+.lr-status.st-accepted .mat-mdc-select-value-text { color: var(--go); font-weight: 600; }
+.lr-status.st-rejected .mat-mdc-text-field-wrapper { background: var(--stop-tint); }
+.lr-status.st-rejected .mat-mdc-select-value-text { color: var(--stop); font-weight: 600; }
+.lr-status.st-ghosted .mat-mdc-text-field-wrapper { background: var(--attention-tint); }
+.lr-status.st-ghosted .mat-mdc-select-value-text { color: var(--attention); font-weight: 600; }
+.lr-status.st-saved .mat-mdc-text-field-wrapper,
+.lr-status.st-paused .mat-mdc-text-field-wrapper,
+.lr-status.st-withdrawn .mat-mdc-text-field-wrapper { background: var(--parked-fill); }
+.lr-status.st-saved .mat-mdc-select-value-text,
+.lr-status.st-paused .mat-mdc-select-value-text,
+.lr-status.st-withdrawn .mat-mdc-select-value-text { color: var(--parked); font-weight: 600; }
+
 /* ---------------- 全站统一确认弹窗(app-confirm) ----------------
    ★ 2026-09-20(Forrest):所有确认弹窗(保存素材树 / 删除素材 /
    删除录音)都用同一个组件(shared/confirm-dialog),面板挂在全局
@@ -314,7 +466,7 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
    基准:白卡片、圆角 12、无 MDC 默认内边距(组件自控 22px)。 */
 .app-confirm .mat-mdc-dialog-container { padding: 0; }
 .app-confirm .mat-mdc-dialog-surface {
-  border-radius: 12px !important;
+  border-radius: 14px !important;
   padding: 0 !important;
   box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
 }
@@ -333,7 +485,22 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
   min-height: 440px;
 }
 .app-transfer .mat-mdc-dialog-surface {
-  border-radius: 12px !important;
+  border-radius: 14px !important;
+  padding: 0 !important;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------------- 全站统一「回收站」弹窗(app-trash)(★ 票124) ----------------
+   素材回收站与 app-confirm / app-transfer 同一套外壳 ——
+   白卡片、圆角 14、无 MDC 默认内边距(组件自控标题栏/内容留白)。
+   尺寸:560×min(70vh,560px),列表超高时内容区内部滚动。 */
+.app-trash .mat-mdc-dialog-container { padding: 0; }
+.app-trash .mat-mdc-dialog-surface {
+  border-radius: 14px !important;
   padding: 0 !important;
   box-shadow: 0 18px 50px rgba(15, 23, 42, .18);
   display: flex;
@@ -344,17 +511,26 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 
 /* ---------------- 全站键盘可访问性:可见焦点环 (2026-10-07) ----------------
    Material 的默认焦点样式很淡,键盘用户 Tab 到卡片/按钮时看不清位置。
-   只在键盘导航时显示(:focus-visible),鼠标点击不打扰。 */
+   只在键盘导航时显示(:focus-visible),鼠标点击不打扰。
+
+   ★ 票123 C-2.1:去掉强制 `border-radius`。
+   定稿:「Remove the forced `border-radius: 4px` from the global `:focus-visible`
+   rule and the `8px` from its `.app-card` / `.entry` variant —— the outline
+   follows each element's own radius in every browser the app targets; offsets
+   stay exactly as they are.」
+   之前这两行会在聚焦瞬间把药丸与 10px 卡片的圆角**重新掰成 4px/8px** ——
+   一次可见的形状跳变。轮廓跟随元素自身圆角是浏览器的默认行为,不需要我们插手。 */
+/* 配色方案 A §2.5.4:焦点环统一为品牌深档 2px 实线 + 2px 间隙
+   (蓝 700 白底 6.70:1、页面底 6.30:1,过 3:1 焦点指示线);
+   选中态 = 淡底填充 + 深档字(无环),两者叠加时共存。 */
 :focus-visible {
-  outline: 2px solid #3f51b5;
+  outline: 2px solid var(--brand-deep);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 /* 卡片是 div,给它一个合适的焦点环形状 */
 .app-card:focus-visible,
 .entry:focus-visible {
   outline-offset: -2px;
-  border-radius: 8px;
 }
 /* 让可点击卡片能被 Tab 到(配合 tabindex="0") */
 .app-card[tabindex],
@@ -395,4 +571,68 @@ mat-progress-bar.bad  .mdc-linear-progress__bar-inner { border-color: #d93b30 !i
 @keyframes drawerSlideIn {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
+}
+
+/* ---------------- 票123 C-4:全站唯一的一次编排入场 ----------------
+   定稿原文:
+     One shared keyframe in `styles.scss` — `@keyframes contentIn { from {
+     opacity: 0; transform: translateY(4px); } to { opacity: 1; transform:
+     none; } }` — and a utility class `.content-in { animation: contentIn
+     var(--dur) var(--ease); }`, applied **once** to the primary content
+     container of Dashboard / Tracker / Playbook list / Playbook detail /
+     Tech Stack / Calendar, bound to the first data render.
+
+   审计量到的旧状态:「progress bar, then a hard swap」—— 内容与空态
+   瞬间弹出,没有任何过渡。这个 keyframe 把那一次硬切换变成一次编排。
+
+   显式拒绝(定稿点名):per-section staggers、fade-up-on-scroll、
+   对话框上超出 Material 自带范围的入场动效 —— 分散的入场正是
+   「通用感」的标志。
+
+   绑定语义:容器本来就渲染在 `loading()` 清除之后,挂载语义天然给出
+   「每次挂载只播一次」;页内重复交互不重播。 */
+@keyframes contentIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.content-in {
+  animation: contentIn var(--dur) var(--ease);
+}
+
+/* ---------------- 票126 词典卡 popup 浮层(§6.3:宽 = min(400px, 视口宽 − 16px)) ---------------- */
+.dict-popup-panel {
+  width: min(400px, calc(100vw - 16px));
+  filter: drop-shadow(0 14px 34px rgba(15, 23, 42, .20));
+}
+@media (max-width: 639px) {
+  /* 移动 sheet:宿主 global 以 left 8px 定锚,本宽保证右侧同为 8px
+     (CDK global 同时给 left+right 只落一边 margin,E7 活体实测) */
+  .dict-popup-panel { width: calc(100vw - 16px); }
+}
+
+/* ---------------- 票123 C-1.2:尊重系统的「减少动效」偏好 ----------------
+   定稿原文:
+     @media (prefers-reduced-motion: reduce) {
+       *, *::before, *::after {
+         transition-duration: 0.01ms !important;
+         animation-duration: 0.01ms !important;
+         animation-iteration-count: 1 !important;
+         scroll-behavior: auto !important;
+       }
+     }
+
+   App-wide by nature(它是全局块,故而也一并压住 AI Practice 的录音脉冲
+   与 Tracker 抽屉的 `drawerSlideIn` 入场动画 —— 两者都压得住,而且这里
+   写明是**决定**而非意外)。
+
+   放在文件末尾:这条规则要压得住前面所有声明,靠 `!important` 兜底,
+   但位置靠后更利于后来的维护者一眼看到「全局动效开关在这里」。 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

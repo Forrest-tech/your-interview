@@ -10,7 +10,7 @@
       <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
         <mat-icon>refresh</mat-icon>
       </button>
-      @if (auth.can('mock.manage')) {
+      @if (auth.can('mock.answer')) {
         <button mat-mini-fab color="primary" (click)="openDialog()" [matTooltip]="t('mock.newSession')">
           <mat-icon>play_circle</mat-icon>
         </button>
@@ -30,6 +30,22 @@
         <p>{{ error() }}</p>
       </div>
       <button mat-stroked-button (click)="load()">{{ t('common.retry') }}</button>
+    </mat-card>
+  }
+
+  <!-- 票95:推荐练习卡(Suggest 最弱维度) —— 点入预填建会话表单 -->
+  @if (suggestion(); as sug) {
+    <mat-card class="suggest-card">
+      <mat-icon>lightbulb</mat-icon>
+      <div class="suggest-body">
+        <strong>{{ t('mock.suggestTitle') }}:{{ sug.title }}</strong>
+        <p>{{ sug.rationale }}</p>
+      </div>
+      @if (auth.can('mock.answer')) {
+        <button mat-flat-button color="primary" (click)="applySuggestion()">
+          <mat-icon>play_circle</mat-icon> {{ t('mock.suggestApply') }}
+        </button>
+      }
     </mat-card>
   }
 
@@ -79,7 +95,7 @@
         <mat-icon>record_voice_over</mat-icon>
         <h3>{{ t('mock.noRecords') }}</h3>
         <p>{{ t('mock.noRecordsHint') }}</p>
-        @if (auth.can('mock.manage')) {
+        @if (auth.can('mock.answer')) {
           <button mat-flat-button color="primary" (click)="openDialog()">
             <mat-icon>play_circle</mat-icon> {{ t('mock.startFirst') }}
           </button>
@@ -164,12 +180,16 @@
           <mat-form-field appearance="outline" class="wide">
             <mat-label>{{ t('mock.fieldTitle') }} *</mat-label>
             <input matInput [(ngModel)]="form.title"
+                   (ngModelChange)="clearFieldError('title')"
                    [placeholder]="t('mock.titlePlaceholder')" />
           </mat-form-field>
+          @if (fieldErrors().title) {
+            <div class="field-error" role="alert">{{ fieldErrors().title }}</div>
+          }
 
           <mat-form-field appearance="outline" class="wide">
             <mat-label>{{ t('mock.fieldMode') }}</mat-label>
-            <mat-select [(ngModel)]="form.mode">
+            <mat-select [(ngModel)]="form.mode" (ngModelChange)="clearFieldError('mode')">
               @for (m of modeOptions(); track m.value) {
                 <mat-option [value]="m.value">
                   {{ m.label }}
@@ -178,15 +198,22 @@
               }
             </mat-select>
           </mat-form-field>
+          @if (fieldErrors().mode) {
+            <div class="field-error" role="alert">{{ fieldErrors().mode }}</div>
+          }
 
           <mat-form-field appearance="outline" class="wide">
             <mat-label>
               @if (form.mode === 'CompanyStyle') { {{ t('mock.fieldTopicCompany') }} * } @else { {{ t('mock.fieldTopic') }} * }
             </mat-label>
             <input matInput [(ngModel)]="form.topic"
+                   (ngModelChange)="clearFieldError('topic')"
                    [placeholder]="form.mode === 'CompanyStyle'
                      ? t('mock.topicCompanyPlaceholder') : t('mock.topicPlaceholder')" />
           </mat-form-field>
+          @if (fieldErrors().topic) {
+            <div class="field-error" role="alert">{{ fieldErrors().topic }}</div>
+          }
 
           <mat-form-field appearance="outline" class="wide">
             <mat-label>{{ t('mock.fieldDifficulty') }}</mat-label>

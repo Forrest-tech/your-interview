@@ -54,9 +54,19 @@ public sealed class AssetRoundPhaseTests
     }
 
     [Fact]
-    public void AttachAssetValidator_MissingRoundId_Invalid()
+    public void AttachAssetValidator_EntryLevelWithoutRoundId_Valid()
     {
-        var cmd = new AttachAssetCommand(Guid.NewGuid(), "Text", "x.txt", null, 1, null, null,
+        // RoundId 可空是有意设计:条目级材料(截图、整场转写等)靠 EntryId 挂载,
+        // 不属于某一轮;校验器对 RoundId 无规则,缺 RoundId 时应校验通过。
+        var cmd = new AttachAssetCommand(Guid.Empty, Guid.NewGuid(), "Text", "x.txt", null, 1, null, null,
+            "hello", null, null);
+        new AttachAssetCommandValidator().Validate(cmd).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AttachAssetValidator_MissingEntryId_Invalid()
+    {
+        var cmd = new AttachAssetCommand(Guid.Empty, Guid.Empty, "Text", "x.txt", null, 1, null, null,
             "hello", null, null);
         new AttachAssetCommandValidator().Validate(cmd).IsValid.Should().BeFalse();
     }
@@ -66,7 +76,7 @@ public sealed class AssetRoundPhaseTests
     {
         foreach (var kind in new[] { "PrepDoc", "Email", "Feedback", "Other" })
         {
-            var cmd = new AttachAssetCommand(Guid.NewGuid(), kind, "x.txt", null, 1, null, null,
+            var cmd = new AttachAssetCommand(Guid.Empty, Guid.NewGuid(), kind, "x.txt", null, 1, null, null,
                 "content", null, null, "en", null, Guid.NewGuid(), "Pre");
             new AttachAssetCommandValidator().Validate(cmd).IsValid
                 .Should().BeTrue($"{kind} 应是合法类型");
@@ -84,7 +94,7 @@ public sealed class AssetRoundPhaseTests
             transcriptText: "R1TRANSCRIPT: asked about EF Core migrations",
             roundId: r1.Id, phase: AssetPhase.Post);
 
-        var cmd = new GeneratePrepPlanCommand(e.Id, r2.Id,
+        var cmd = new GeneratePrepPlanCommand(Guid.Empty, e.Id, r2.Id,
             JdText: "JD: system design focus", ResumeText: "Forrest resume",
             Experiences: "Glassdoor: URL shortener", Requirements: "SystemDesign round");
         var prompt = GeneratePrepPlanCommandHandler.BuildPrompt(e, r2, cmd);
@@ -103,7 +113,7 @@ public sealed class AssetRoundPhaseTests
     public void PrepPlanPrompt_FirstRound_NoPreviousSection()
     {
         var e = NewEntryWithRounds(out var r1, out _);
-        var cmd = new GeneratePrepPlanCommand(e.Id, r1.Id, JdText: "JD only");
+        var cmd = new GeneratePrepPlanCommand(Guid.Empty, e.Id, r1.Id, JdText: "JD only");
         var prompt = GeneratePrepPlanCommandHandler.BuildPrompt(e, r1, cmd);
         prompt.Should().NotContain("之前轮次复盘");
         prompt.Should().Contain("备考方案");

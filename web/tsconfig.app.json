@@ -11,5 +11,9 @@
   "include": [
     "src/**/*.d.ts",
     "src/**/*.ts"
+  ],
+  /* 票64 ARC-08c:spec 只归 Jest(tsconfig.jest.json),不进应用口径 */
+  "exclude": [
+    "src/**/*.spec.ts"
   ]
 }

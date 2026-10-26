@@ -49,7 +49,7 @@ export interface GuidanceInputData {
         @if (!data.resumeText.trim()) {
           <mat-hint>
             {{ t('pb.guidance.noResume') }}
-            <a routerLink="/profile" (click)="close()">{{ t('pb.guidance.goProfile') }}</a>
+            <a routerLink="/settings/profile" (click)="close()">{{ t('pb.guidance.goProfile') }}</a>
           </mat-hint>
         } @else {
           <mat-hint>{{ t('pb.guidance.resumeFromProfile') }}</mat-hint>
@@ -78,7 +78,7 @@ export interface GuidanceInputData {
   styles: [`
     .guidance-input { min-width: 600px; }
     .full { width: 100%; margin-bottom: 8px; }
-    .hint { color: #666; font-size: 13px; margin: 0 0 12px; }
+    .hint { color: #475569; font-size: 13px; margin: 0 0 12px; }
     textarea { font-family: inherit; }
   `]
 })

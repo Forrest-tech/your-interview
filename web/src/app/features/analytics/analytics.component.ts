@@ -12,12 +12,14 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import * as echarts from 'echarts';
 import { catchError, of } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { AnalyticsApiService } from '../../core/api/analytics-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AbilityTrend, Dashboard } from '../../core/models/api.models';
+import { hasScoredRadarData, weakestRadarPoints } from '../../core/models/radar.helpers';
+import { dimensionLabel, localizeInsight } from '../../core/i18n/localized-messages.helpers';
 
 /** 漏斗阶段的颜色档:越靠后越"贵",用同一色系由浅到深表示推进。 */
-const FUNNEL_COLORS = ['#9fa8da', '#7986cb', '#5c6bc0', '#3f51b5', '#303f9f'];
+const FUNNEL_COLORS = ['#bfdbfe', '#60a5fa', '#60a5fa', '#2563eb', '#2563eb'];
 
 /**
  * 数据分析页。
@@ -39,7 +41,7 @@ const FUNNEL_COLORS = ['#9fa8da', '#7986cb', '#5c6bc0', '#3f51b5', '#303f9f'];
   styleUrl: './analytics.component.scss'
 })
 export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
-  private readonly api = inject(ApiClient);
+  private readonly analyticsApi = inject(AnalyticsApiService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
@@ -64,8 +66,20 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private resizeObserver: ResizeObserver | null = null;
 
-  // 后端 insight 是对象 {headline, detail, suggestedAction, severity}
-  readonly insight = computed(() => this.dashboard()?.insight ?? null);
+  // FUN-07(票35):后端 insight 只回 {code, params, severity},文案在此本地化
+  readonly insightRaw = computed(() => this.dashboard()?.insight ?? null);
+  readonly insight = computed(() => {
+    const raw = this.insightRaw();
+    if (!raw) return null;
+    const text = localizeInsight(raw, this.i18n.lang(),
+      (k) => this.i18n.t(k), (k, p) => this.i18n.tf(k, p));
+    return text ? { ...text, severity: raw.severity } : null;
+  });
+
+  /** B3 口径维度名(与 Dashboard 共用纯函数):缺键仅 zh 回退 nameZh。 */
+  dimLabelOf(dimension: string, nameZh?: string): string {
+    return dimensionLabel(dimension, nameZh, this.i18n.lang(), (k) => this.i18n.t(k));
+  }
 
   readonly radarPoints = computed(() => this.dashboard()?.radar ?? []);
 
@@ -106,9 +120,10 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
     }).sort((a, b) => b.total - a.total);
   });
 
-  readonly weakest = computed(() =>
-    [...this.radarPoints()].sort((a, b) => a.current - b.current).slice(0, 3)
-  );
+  /** REQ-08:是否有 scored 数据——无数据时弱项区走 an.noRadar 空态,不列 Top 3、不渲染 Best。 */
+  readonly hasScoredData = computed(() => hasScoredRadarData(this.radarPoints()));
+
+  readonly weakest = computed(() => weakestRadarPoints(this.radarPoints()));
 
   /** 趋势只做粗粒度摘要 —— 先把"在变好还是变差"说清楚,曲线细节留给图表。 */
   readonly trendSummary = computed(() => {
@@ -123,6 +138,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
       return {
         dimension: ser.dimension,
         nameZh: ser.nameZh,
+        name: this.dimLabelOf(ser.dimension, ser.nameZh),
         delta: Math.round((last - first) * 10) / 10,
         from: first,
         to: last
@@ -159,14 +175,15 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     };
 
-    this.api.get<Dashboard>('/api/analytics/dashboard').subscribe({
+    this.analyticsApi.getDashboard().subscribe({
       next: (d) => { this.dashboard.set(d); done(); },
       error: (e: Error) => { this.error.set(e.message); done(); }
     });
 
-    // 趋势是可选增强:接口不存在也不该让整页报错
-    this.api.get<AbilityTrend>('/api/analytics/ability/trend', { days: 30 })
-      .pipe(catchError(() => of(null)))
+    // 趋势接口为正式端点(FUN-08/票36:后端基于 AbilitySnapshots 按天聚合);
+    // 请求失败时降级为空 series,让区块走本地化空态(an.trendEmpty),不让整页报错
+    this.analyticsApi.getAbilityTrend()
+      .pipe(catchError(() => of<AbilityTrend>({ days: 30, series: [] })))
       .subscribe((t) => { this.trend.set(t); done(); });
   }
 
@@ -201,7 +218,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private buildOption(points: Dashboard['radar']): echarts.EChartsOption {
-    const dims = points.map((p) => p.nameZh || p.dimension);
+    const dims = points.map((p) => this.dimLabelOf(p.dimension, p.nameZh));
     const curName = this.t('an.curLevel');
     const bestName = this.t('an.bestLevel');
 
@@ -211,7 +228,7 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
         bottom: 0,
         itemWidth: 10,
         itemHeight: 10,
-        textStyle: { fontSize: 12, color: '#5f6368' },
+        textStyle: { fontSize: 12, color: '#475569' },
         data: [curName, bestName]
       },
       radar: {
@@ -219,10 +236,10 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
         radius: '62%',
         center: ['50%', '46%'],
         splitNumber: 4,
-        axisName: { color: '#5f6368', fontSize: 12 },
-        splitLine: { lineStyle: { color: 'rgba(0,0,0,0.09)' } },
-        splitArea: { areaStyle: { color: ['rgba(63,81,181,0.02)', 'rgba(63,81,181,0.05)'] } },
-        axisLine: { lineStyle: { color: 'rgba(0,0,0,0.12)' } }
+        axisName: { color: '#475569', fontSize: 12 },
+        splitLine: { lineStyle: { color: 'rgba(15, 23, 42, 0.09)' } },
+        splitArea: { areaStyle: { color: ['rgba(37, 99, 235, 0.02)', 'rgba(37, 99, 235, 0.05)'] } },
+        axisLine: { lineStyle: { color: 'rgba(15, 23, 42, 0.12)' } }
       },
       series: [
         {
@@ -232,16 +249,16 @@ export class AnalyticsComponent implements OnInit, AfterViewInit, OnDestroy {
             {
               value: points.map((p) => p.current),
               name: curName,
-              lineStyle: { width: 2, color: '#3f51b5' },
-              itemStyle: { color: '#3f51b5' },
-              areaStyle: { color: 'rgba(63,81,181,0.22)' }
+              lineStyle: { width: 2, color: '#2563eb' },
+              itemStyle: { color: '#2563eb' },
+              areaStyle: { color: 'rgba(37, 99, 235, 0.22)' }
             },
             {
               value: points.map((p) => p.best),
               name: bestName,
-              lineStyle: { width: 1.5, type: 'dashed', color: '#2e7d32' },
-              itemStyle: { color: '#2e7d32' },
-              areaStyle: { color: 'rgba(46,125,50,0.1)' }
+              lineStyle: { width: 1.5, type: 'dashed', color: '#16a34a' },
+              itemStyle: { color: '#16a34a' },
+              areaStyle: { color: 'rgba(22, 163, 74, 0.1)' }
             }
           ]
         }

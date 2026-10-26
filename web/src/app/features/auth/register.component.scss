@@ -1,0 +1,85 @@
+/* ★ ML-FIX-UI(W-UI-5):注册页 —— 居中卡片,与登录页同款 Material 表单口径。 */
+.register-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--paper);
+}
+
+.register-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 32px 28px 24px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.12);
+}
+
+.form-head h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: var(--ink);
+}
+
+.form-head p {
+  margin: 0 0 20px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.top-bar {
+  margin-bottom: 12px;
+}
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.full {
+  width: 100%;
+}
+
+.human-row {
+  margin: 8px 0;
+}
+
+.err {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--stop);
+  border-radius: 0 8px 8px 0;
+  background: #fef2f2;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.submit {
+  margin-top: 12px;
+  height: 44px;
+}
+
+.human-hint {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.switch-link {
+  margin: 20px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.switch-link a {
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: none;
+}

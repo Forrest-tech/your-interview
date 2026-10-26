@@ -15,7 +15,7 @@
       <path d="M22 22V13" stroke="currentColor" stroke-width="2.6"
             stroke-linecap="round" opacity="0.3"/>
     </svg>
-    <span class="brand-name">Your Interview</span>
+    <span class="brand-name"><span class="brand-your">Your</span> <span class="brand-interview">Interview</span></span>
   </a>
 
   <!-- 横向主导航 -->
@@ -74,6 +74,10 @@
     <mat-divider></mat-divider>
     <button mat-menu-item (click)="goProfile()">
       <mat-icon>person</mat-icon><span>{{ t('account.profile') }}</span>
+    </button>
+    <!-- 票 146：头像菜单新增 Settings 项（My Account 之后、Admin 之前）。 -->
+    <button mat-menu-item (click)="goSettings()">
+      <mat-icon>settings</mat-icon><span>{{ t('settings.title') }}</span>
     </button>
     @if (auth.can('admin.users.read')) {
       <button mat-menu-item (click)="goAdmin()">

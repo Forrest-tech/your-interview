@@ -26,6 +26,11 @@ export class ApiClient {
       .pipe(catchError(this.rethrow));
   }
 
+  /** ★ 票111 段3:If-Match 头组装(version = DTO 回传的读时 xmin;null/undefined = 不带头,服务端兼容 LWW)。 */
+  static ifMatch(version?: number | null): Record<string, string> | undefined {
+    return version === null || version === undefined ? undefined : { 'If-Match': `"${version}"` };
+  }
+
   put<T>(path: string, body?: unknown): Observable<T> {
     return this.http.put<T>(this.url(path), body ?? {})
       .pipe(catchError(this.rethrow));
@@ -36,17 +41,19 @@ export class ApiClient {
       .pipe(catchError(this.rethrow));
   }
 
-  delete<T>(path: string): Observable<T> {
-    return this.http.delete<T>(this.url(path))
+  /** ★ 票111 段3:可选 headers 通道(向后兼容 —— 既有调用不传 headers,行为零变化)。 */
+  delete<T>(path: string, headers?: Record<string, string>): Observable<T> {
+    return this.http.delete<T>(this.url(path), { headers })
       .pipe(catchError(this.rethrow));
   }
 
   /** 上传文件(录音等)。用 FormData,不设 Content-Type —— 让浏览器自动带 boundary。 */
-  upload<T>(path: string, file: File, extra?: Record<string, string>): Observable<T> {
+  upload<T>(path: string, file: File, extra?: Record<string, string>,
+    headers?: Record<string, string>): Observable<T> {
     const fd = new FormData();
     fd.append('file', file, file.name);
     for (const [k, v] of Object.entries(extra ?? {})) fd.append(k, v);
-    return this.http.post<T>(this.url(path), fd)
+    return this.http.post<T>(this.url(path), fd, { headers })
       .pipe(catchError(this.rethrow));
   }
 
@@ -103,8 +110,8 @@ export class ApiClient {
    * 与 upload() 的区别:upload 接收单个 File,这里适合**多字段**表单
    * (录音上传要同时带 durationSeconds / contentType / language)。
    */
-  postForm<T>(path: string, form: FormData): Observable<T> {
-    return this.http.post<T>(this.url(path), form)
+  postForm<T>(path: string, form: FormData, headers?: Record<string, string>): Observable<T> {
+    return this.http.post<T>(this.url(path), form, { headers })
       .pipe(catchError(this.rethrow));
   }
 
@@ -157,6 +164,12 @@ export class ApiClient {
     };
 
     let msg = backendText || statusFallback();
+
+    // COD-05:后端乐观并发冲突(409 + code=concurrency_conflict)—— 覆盖后端英文 detail,
+    // 给用户可执行的提示:这份改动没存上,刷新拿到最新版本后再改。
+    if (e?.status === 409 && obj?.code === 'concurrency_conflict') {
+      msg = '该记录已被他人修改,本次修改未保存,请刷新后重试';
+    }
 
     // ★ 空响应体的 401(框架 [Authorize] 拦截)没有 JSON 可供解析。
     //   从 WWW-Authenticate 头里把 error_description 抠出来,

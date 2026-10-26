@@ -25,4 +25,14 @@
     <ProjectReference Include="..\SharedContracts\YourInterview.SharedContracts.csproj" />
   </ItemGroup>
 
+  <!-- 票119 词典开放层数据（构建脚本 scripts/dictionary/；许可 NOTICE 同目录） -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Dictionary\ecdict-subset.tsv.gz" />
+    <EmbeddedResource Include="Resources\Dictionary\wordnet-subset.jsonl.gz" />
+    <EmbeddedResource Include="Resources\Dictionary\wordnet-exceptions.json" />
+    <EmbeddedResource Include="Resources\Dictionary\audio-index.json" />
+    <EmbeddedResource Include="Resources\Dictionary\NOTICE-ecdict.txt" />
+    <EmbeddedResource Include="Resources\Dictionary\NOTICE-wordnet.txt" />
+  </ItemGroup>
+
 </Project>

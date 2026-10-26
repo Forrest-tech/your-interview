@@ -1,9 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 
 import { PracticeApi, AiProviderPresetDto, PrepSourceSettingsDto } from '../../core/api/practice-api.service';
+import { serverFieldErrorSummary } from '../../core/api/validation-errors.helpers';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -41,7 +41,7 @@ const REGION_KEY = 'practice.azureRegion';
   selector: 'app-ai-setting',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, RouterLink,
+    CommonModule, FormsModule,
     MatIconModule, MatButtonModule,
     MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatTooltipModule
   ],
@@ -536,7 +536,10 @@ export class AiSettingComponent {
   }
 
   private errText(e: unknown): string {
-    return String((e as { message?: string })?.message ?? e ?? '未知错误').slice(0, 200);
+    // 票109:字段级校验错误(errors{})优先透出具体文案 —— 只读 e.message
+    // 时 flash 只剩通用英文标题,看不到「…长度不能超过 N 个字符」。
+    return (serverFieldErrorSummary(e)
+      ?? String((e as { message?: string })?.message ?? e ?? '未知错误')).slice(0, 200);
   }
 
   // kind 参数化:成功走绿色,失败走红色。所有错误分支必须传 'err'。

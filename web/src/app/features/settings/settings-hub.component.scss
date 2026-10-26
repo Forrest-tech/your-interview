@@ -1,0 +1,68 @@
+/* 票 146：GitHub 式设置中心布局 —— 左导航列 + 主内容区；外层内边距沿用 Shell .content，不另加。 */
+.settings-hub {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+
+.settings-nav {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.settings-nav-item mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.settings-nav-item:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.settings-nav-item.active {
+  background: var(--signal-tint);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.settings-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 窄屏：左导航收为顶部横向可滚动节签行，主内容全宽；断点与 Shell 移动端断点一致（860px），不引入新断点值。 */
+@media (max-width: 860px) {
+  .settings-hub {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .settings-nav {
+    flex: none;
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .settings-nav-item {
+    flex-shrink: 0;
+  }
+}

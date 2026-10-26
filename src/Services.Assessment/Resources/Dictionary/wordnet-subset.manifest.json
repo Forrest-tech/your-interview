@@ -1,0 +1,31 @@
+{
+ "builder": "build_wordnet_subset.py v1",
+ "vocab_source": "ecdict-subset.tsv.gz",
+ "lemmas": 43630,
+ "synsets": 94546,
+ "exception_forms": 5940,
+ "source_sha256": {
+  "index.noun": "799fad7c8084eb0f6f2a32ec737a251c85f51adb8b2603eb02bfebc4ce5ffa3d",
+  "data.noun": "2cad22fe43461ee7ae61a564ae6a518c57445c8597e53542caddb5c26a6a5d94",
+  "noun.exc": "fbde4026e4732d8698ca605edfd18cc0274312cf3751513d182bd2d89e47ce34",
+  "index.verb": "e65b2d67274c8a5f9ba6f696fdc73f4546db2a138b362a3be582e3787c879c7a",
+  "data.verb": "eb1cf196dab6e1b815a1c86fa20c909fb7413b2f34250d7fe60a0fb35ef59e03",
+  "verb.exc": "dbbcf9a601b2d77e934e413b91d90e88ec7f933a8b77cfc00602a923b891b42c",
+  "index.adj": "7d2b4d4037f0571ca309ce2ebadbe860a1607d494a70cd40f9bd61bc25a57016",
+  "data.adj": "ca1033bf627eb95f6cbb2864f8990be8e6a01a3c182e7d7c7094ccf8ead242cc",
+  "adj.exc": "8824cc24bbedd797b9702316b27f07cd4c2b76b629539f0a1276f03926758016",
+  "index.adv": "0ea0811bb06eeeb973805ab0b066cb724ebc9dc01f07583582b59579a5b4a36c",
+  "data.adv": "aea301f39ac1b24be9a880dbc6cc6331bc5391f58c7525a1b298a13c922f2ed3",
+  "adv.exc": "e7291461b629abfe63301bbe1998cee09fd575ed7107abd7ea9763adb05bf0a8"
+ },
+ "outputs": {
+  "wordnet-subset.jsonl.gz": {
+   "sha256": "3350218bd7e3e4e0e584712529f8760a13a415aff9a3a44a2004e73e8c923a3d",
+   "bytes": 2947200
+  },
+  "wordnet-exceptions.json": {
+   "sha256": "23f3f615ac6808b55236546d7583ba9e6b7cbbb3b3060e16f38f1673600dd8b7",
+   "bytes": 147121
+  }
+ }
+}

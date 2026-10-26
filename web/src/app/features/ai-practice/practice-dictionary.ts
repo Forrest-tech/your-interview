@@ -1,0 +1,397 @@
+import { computed, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { Howl } from 'howler';
+import type { AiPracticeComponent } from './ai-practice.component';
+import {
+  DictAccent, DictCardState, PassageToken, errorStatusOf, isRovingKey, lookupKeyOf,
+  nextRovingIndex, tokenizePassage,
+} from './dictionary.helpers';
+import { DictionaryShadowSession, DictShadowAction } from './dictionary-shadow';
+import type { DictPlayRequest } from './dictionary-card.component';
+
+/** 票130 H3:空壳延迟出示阈值(ms)——落定快于此值不挂浮层、内容直达;慢于此值才挂骨架壳。 */
+export const DICT_POPUP_DELAY_MS = 150;
+
+/**
+ * 票119 篇章点词词典(宿主委托类,同 PracticeTtsPlayer 例):
+ * 篇章 token 化、查词状态机、roving tabindex、发音链播放入口都在这里,
+ * 宿主组件只挂模板与一行 effect(换素材即 reset)。
+ *
+ * 票126 变更:
+ * - 卡载体改 popup 浮层(§6):开/关卡时通知宿主把卡挂到锚定触发词的 overlay 上,
+ *   篇章文档流内不再有卡节点,开卡零版面位移。
+ * - F-1(§4.2):404 判定改读转换后错误的状态码(errorStatusOf),不再 instanceof 硬判。
+ * - S-2(§8.1):发音只走 pronounce 端点解析的真人录音链;链耗尽(available=false)
+ *   即无发音,不再有设备朗读兜底(词典代码内浏览器朗读 API 调用数 = 0)。
+ */
+export class PracticeDictionary {
+  constructor(private readonly host: AiPracticeComponent) {
+    document.addEventListener('click', this.docClickHandler);
+    document.addEventListener('keydown', this.docKeydownHandler);
+    document.addEventListener('scroll', this.pendingScrollHandler, true);
+  }
+
+  /**
+   * 票127 跟读会话:目标解析/状态机/评分复用都在 DictionaryShadowSession;
+   * 本类只做卡生命周期接线(begin/attach/teardown)与手势口径(§9.4)。
+   * 依赖以闭包注入 —— 方法缺失的替身宿主下调用即抛,被会话内 try/catch 归 F-S7,不伤查词主链。
+   */
+  readonly shadow = new DictionaryShadowSession({
+    pronounce: (word, accent) => this.host.practiceApi.pronounceDictionaryWord(word, accent),
+    fetchAudio: (key) => this.host.practiceApi.fetchDictionaryAudio(key),
+    // ⚠️ 惰性代理:本类在宿主字段初始化序上早于 recorder/practiceApi 的 inject,
+    // 构造期直取必为 undefined —— 全部依赖一律闭包延迟到调用时求值(查词主链同例)。
+    recorder: {
+      startShadowRecording: () => this.host.recorder.startShadowRecording(),
+      stopShadowRecording: () => this.host.recorder.stopShadowRecording(),
+      cancelShadowRecording: () => this.host.recorder.cancelShadowRecording(),
+      assessShadowRecording: (blob, referenceText) =>
+        this.host.recorder.assessShadowRecording(blob, referenceText),
+    },
+  });
+
+  /** 卡内跟读动作回抛入口(模板绑定)。 */
+  shadowAction(a: DictShadowAction): void {
+    this.shadow.action(a);
+  }
+
+  /** 点卡外关闭(SPEC §6.1):词跨度与卡本体内的点击不算「卡外」。 */
+  private readonly docClickHandler = (event: MouseEvent): void => {
+    if (this.state() === null) return;
+    // 票127 §9.4:跟读录音态下点外不关卡(关闭手势被忽略,防手滑点空丢录音)。
+    if (this.shadow.isRecording) return;
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest('.dict-word, app-dictionary-card')) return;
+    this.close(false);
+  };
+
+  /**
+   * 票130 §6.3:待挂出态下 Esc 取消本次开卡。焦点此时仍在触发词上(浮层未挂、焦点未入卡),
+   * 卡根 keydown 够不着,必须在文档层接住;卡已挂出时焦点在卡内,Esc 由卡根处理并
+   * stopPropagation,不会与此重复触发。取消后按既有 Esc 收口(焦点留/回触发词)。
+   */
+  private readonly docKeydownHandler = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || !this.pendingMount) return;
+    if (this.shadow.isRecording) return;
+    this.close(true);
+  };
+
+  /**
+   * 票130 §6.3:待挂出态无浮层可依宿主滚动跟随——滚动时只记录锚点是否已出视口,
+   * 挂出动作(阈值到时/落定直达)发生前以 anchorInView() 复核,出视口则不挂出。
+   */
+  private readonly pendingScrollHandler = (): void => {
+    if (!this.pendingMount || !this.triggerEl) return;
+    if (!this.anchorInView()) this.anchorOutOfView = true;
+  };
+
+  /** 篇章 token(词/分隔符交替,拼接恒等于原文)。 */
+  readonly tokens = computed(() => tokenizePassage(this.host.readonlyText() ?? ''));
+  readonly wordCount = computed(() => this.tokens().reduce((n, t) => n + (t.kind === 'word' ? 1 : 0), 0));
+
+  /** 当前词卡状态;null = 未开卡。 */
+  readonly state = signal<DictCardState | null>(null);
+  /** 开卡对应的词序(触发词);-1 = 未开卡。 */
+  readonly openWordIndex = signal(-1);
+  /** roving tabindex 停靠的词序(区内仅此词 tabindex=0)。 */
+  readonly roving = signal(0);
+  /** 已查过的词键(本地状态:词面小写键 + 词元;票126 §7 起无任何视觉呈现,仅作状态钩子)。 */
+  readonly lookedUp = signal<ReadonlySet<string>>(new Set());
+
+  private triggerEl: HTMLElement | null = null;
+  private requestSeq = 0;
+  private howl: Howl | null = null;
+  private objectUrl: string | null = null;
+
+  // ---------- 票130 H3 空壳延迟出示状态 ----------
+  /** 浮层当前是否已挂出(挂出动作只经 mountPopup 收口,关闭路径统一清)。 */
+  private popupMounted = false;
+  /** 本次开卡处于延迟窗内(已点词、未挂出):三事件状态机(§6.2)的「待挂出」态。 */
+  private pendingMount = false;
+  /** 延迟窗计时器(阈值事件);落定/取消先到即作废。 */
+  private mountTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 待挂出期间锚点曾滚出视口(挂出前复核命中即不挂出,§6.3)。 */
+  private anchorOutOfView = false;
+
+  /** 当前触发词元素(宿主 overlay 滚动跟随/出视口判定用)。 */
+  get triggerElement(): HTMLElement | null {
+    return this.triggerEl;
+  }
+
+  /** 换素材时由宿主 effect 调用:关卡、清已查标记、roving 归首。 */
+  reset(): void {
+    this.shadow.teardown();
+    this.cancelPendingMount();
+    this.popupMounted = false;
+    this.requestSeq++;
+    this.state.set(null);
+    this.openWordIndex.set(-1);
+    this.roving.set(0);
+    this.lookedUp.set(new Set());
+    this.triggerEl = null;
+    this.host.closeDictPopup();
+  }
+
+  destroy(): void {
+    this.shadow.teardown();
+    this.cancelPendingMount();
+    document.removeEventListener('click', this.docClickHandler);
+    document.removeEventListener('keydown', this.docKeydownHandler);
+    document.removeEventListener('scroll', this.pendingScrollHandler, true);
+    this.howl?.unload();
+    this.howl = null;
+    if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
+    this.objectUrl = null;
+  }
+
+  isLookedUp(token: PassageToken): boolean {
+    return this.lookedUp().has(lookupKeyOf(token.text));
+  }
+
+  /** 点击词:同词再点关闭;点另一词直接切换内容(SPEC §6.1)。 */
+  onWordClick(token: PassageToken, event: MouseEvent): void {
+    // 票127 §9.4:跟读录音态下点任何词都不关不换(关闭/换词手势被忽略)。
+    if (this.shadow.isRecording) return;
+    if (this.openWordIndex() === token.wordIndex && this.state() !== null) {
+      this.close(false);
+      return;
+    }
+    void this.open(token, event.currentTarget as HTMLElement | null);
+  }
+
+  async open(
+    token: PassageToken,
+    el: HTMLElement | null,
+    opts?: { keepCurrentCardUntilSettle?: boolean },
+  ): Promise<void> {
+    const key = lookupKeyOf(token.text);
+    const seq = ++this.requestSeq;
+    this.triggerEl = el;
+    this.openWordIndex.set(token.wordIndex);
+    this.roving.set(token.wordIndex);
+    // K-2 裁决(评分门微瑕,主线裁):错误卡重试时旧卡保留在席直至新结果落定——
+    // 不卸下、不换骨架、不重锚;150ms 延迟窗只管「无卡在席」的全新挂载(与 §6.5 同界)。
+    const keepCurrent = !!opts?.keepCurrentCardUntilSettle
+      && this.popupMounted
+      && this.state()?.status === 'error';
+    if (keepCurrent) {
+      this.cancelPendingMount();
+    } else if (this.popupMounted) {
+      // §6.5 已挂出切换:立即重锚、新词 loading 立即可见,不进延迟窗(D7)。
+      this.cancelPendingMount();
+      this.state.set({ status: 'loading', query: key });
+      if (el) this.host.openDictPopup(el);
+    } else {
+      // §6.2 全新挂载进延迟窗:落定先到直达挂出(事件 1)、150ms 阈值先到挂骨架壳
+      // (事件 2)、取消先到永不挂出(事件 3,见 close/reset/代际校验)。
+      this.cancelPendingMount();
+      this.state.set({ status: 'loading', query: key });
+      this.anchorOutOfView = false;
+      this.pendingMount = true;
+      this.mountTimer = setTimeout(() => {
+        this.mountTimer = null;
+        if (seq !== this.requestSeq || !this.pendingMount) return;
+        this.pendingMount = false;
+        if (!this.anchorInView()) {
+          // §6.3:锚点已出视口 → 不挂出,按 closeFromScroll 语义收口。
+          this.closeFromScroll();
+          return;
+        }
+        this.mountPopup(el);
+      }, DICT_POPUP_DELAY_MS);
+    }
+    // 票127 §5.2:跟读目标解析与卡内容加载并行开跑(自带代际丢弃,不与查词主链互相等待)。
+    this.shadow.begin(key);
+    try {
+      const dto = await firstValueFrom(this.host.practiceApi.lookupDictionaryWord(key));
+      if (seq !== this.requestSeq) return;
+      this.markLookedUp(key, dto.lemma);
+      this.state.set({ status: 'ok', query: key, card: dto });
+      this.shadow.attachCard(dto);
+    } catch (err) {
+      if (seq !== this.requestSeq) return;
+      this.markLookedUp(key);
+      // F-1(§4.2):状态判定认转换后错误的状态码;404 → 负卡,其余一切错误 → 错误卡。
+      this.state.set(
+        errorStatusOf(err) === 404
+          ? { status: 'notfound', query: key }
+          : { status: 'error', query: key },
+      );
+      // 负卡/错误卡无跟读区(票127 §5.1)。
+      this.shadow.attachNoCard();
+    }
+    if (seq !== this.requestSeq) return;
+    // §6.2 事件 1:终态先于阈值抵达 → 立即以终态挂出,全程无 loading 帧(§6.4 错误同理不等阈值)。
+    this.settleMount(el);
+    // 内容落定后卡高才稳定:让宿主按真实高度重选浮层位序(开卡瞬间量到的是骨架高,
+    // CDK 不会自行翻转 —— E2 活体实测)。
+    this.host.refreshDictPopupPosition();
+  }
+
+  /** 挂出浮层的唯一收口(挂出后 popupMounted 为真;后续落定在同一浮层内原地换内容)。 */
+  private mountPopup(el: HTMLElement | null): void {
+    if (!el) return;
+    this.host.openDictPopup(el);
+    this.popupMounted = true;
+  }
+
+  /** 落定收口:待挂出态下终态抵达 → 作废计时器、复核锚点、立即以终态挂出。 */
+  private settleMount(el: HTMLElement | null): void {
+    if (!this.pendingMount) return;
+    this.clearMountTimer();
+    this.pendingMount = false;
+    if (!this.anchorInView()) {
+      this.closeFromScroll();
+      return;
+    }
+    this.mountPopup(el);
+  }
+
+  private clearMountTimer(): void {
+    if (this.mountTimer !== null) {
+      clearTimeout(this.mountTimer);
+      this.mountTimer = null;
+    }
+  }
+
+  /** 取消待挂出(关闭/重置/新开卡接管时):计时器作废、本次开卡永不挂出。 */
+  private cancelPendingMount(): void {
+    this.clearMountTimer();
+    this.pendingMount = false;
+  }
+
+  /**
+   * 锚点是否仍在视口内(判据与宿主滚动跟随一致:底缘出顶或顶缘出底即出视口)。
+   * 元素无几何能力(测试替身)或视口高度不可得时按在视口内处理,不误杀。
+   */
+  private anchorInView(): boolean {
+    if (this.anchorOutOfView) return false;
+    const el = this.triggerEl;
+    if (!el || typeof el.getBoundingClientRect !== 'function') return true;
+    const vh = (globalThis as { innerHeight?: number }).innerHeight;
+    if (vh === undefined) return true;
+    const r = el.getBoundingClientRect();
+    return !(r.bottom < 0 || r.top > vh);
+  }
+
+  /** 关闭词卡;returnFocus 时焦点送回触发词(Esc 路径,SPEC §6.3)。 */
+  close(returnFocus: boolean): void {
+    // 票127 §6.5/§9.4:关卡即 teardown 跟读(录音中经 Close 关闭 = 先停录丢弃再关卡)。
+    this.shadow.teardown();
+    // 票130 §6.3:待挂出态被关闭 → 计时器作废、永不挂出(取消事件)。
+    this.cancelPendingMount();
+    this.popupMounted = false;
+    this.requestSeq++;
+    this.state.set(null);
+    this.openWordIndex.set(-1);
+    this.host.closeDictPopup();
+    if (returnFocus) this.triggerEl?.focus();
+  }
+
+  /**
+   * 滚动被动关闭(票126 §6.6 + M-5):触发词滚出视口时宿主调用。
+   * 与 Esc 主动关闭分开:焦点返回必须 preventScroll——不许把用户刚滚走的页面又拉回来。
+   */
+  closeFromScroll(): void {
+    this.shadow.teardown();
+    this.cancelPendingMount();
+    this.popupMounted = false;
+    this.requestSeq++;
+    this.state.set(null);
+    this.openWordIndex.set(-1);
+    this.host.closeDictPopup();
+    this.triggerEl?.focus({ preventScroll: true });
+  }
+
+  /** 错误简卡重试:以当前 query 重新查词(K-2:旧错误卡保留在席直至新结果落定)。 */
+  retry(): void {
+    const st = this.state();
+    if (!st) return;
+    const token: PassageToken = { kind: 'word', text: st.query, wordIndex: this.openWordIndex() };
+    void this.open(token, this.triggerEl, { keepCurrentCardUntilSettle: true });
+  }
+
+  /**
+   * 篇章区键盘(SPEC §6.3):事件自词跨度冒泡至此。
+   * 方向键/Home/End 移动 roving 并聚焦目标词;Enter/Space 在触发词上开/关卡。
+   */
+  onPassageKeydown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement;
+    const wiRaw = target.dataset?.['wi'];
+    if (wiRaw === undefined) return;
+    const wi = Number(wiRaw);
+    if (isRovingKey(event.key)) {
+      event.preventDefault();
+      const next = nextRovingIndex(wi, event.key, this.wordCount());
+      this.roving.set(next);
+      const container = event.currentTarget as HTMLElement;
+      container
+        .querySelector<HTMLElement>(`[data-wi="${next}"]`)
+        ?.focus();
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      // 票127 §9.4:跟读录音态下键盘换词/关卡同点词口径,一律忽略。
+      if (this.shadow.isRecording) return;
+      event.preventDefault();
+      const token = this.tokens().find((t) => t.kind === 'word' && t.wordIndex === wi);
+      if (!token) return;
+      if (this.openWordIndex() === wi && this.state() !== null) this.close(false);
+      else void this.open(token, target);
+    }
+  }
+
+  // ---------- 发音 ----------
+
+  /** 卡内播放请求分发:口音钮 / 词形钮(票126 后不再有设备朗读钮)。 */
+  play(req: DictPlayRequest): void {
+    const st = this.state();
+    if (!st) return;
+    if (req.target === 'accent') {
+      const word = st.status === 'ok' ? st.card.lemma : st.query;
+      void this.pronounceAndPlay(word, req.accent);
+    } else {
+      void this.pronounceAndPlay(req.text, req.accent);
+    }
+  }
+
+  /**
+   * pronounce 端点解析真人录音链 → 有 key 取流播。
+   * 票126 §8.1/§8.2(S-2):链耗尽(available=false)或端点失败 → 无发音,就此静默,
+   * 绝不回退任何机器发音(设备 TTS 档已整级移除)。
+   */
+  private async pronounceAndPlay(word: string, accent: DictAccent): Promise<void> {
+    try {
+      const dto = await firstValueFrom(
+        this.host.practiceApi.pronounceDictionaryWord(word, accent),
+      );
+      if (dto.available && dto.key) await this.playKey(dto.key);
+    } catch {
+      /* 端点失败 → 无发音(卡面状态文案已说明,不另行兜底) */
+    }
+  }
+
+  private async playKey(key: string): Promise<boolean> {
+    try {
+      const blob = await firstValueFrom(this.host.practiceApi.fetchDictionaryAudio(key));
+      if (!blob || blob.size === 0) return false;
+      if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
+      this.objectUrl = URL.createObjectURL(blob);
+      this.howl?.unload();
+      this.howl = new Howl({ src: [this.objectUrl], format: ['mp3'] });
+      this.howl.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private markLookedUp(key: string, lemma?: string): void {
+    this.lookedUp.update((set) => {
+      const next = new Set(set);
+      next.add(key);
+      if (lemma) next.add(lemma);
+      return next;
+    });
+  }
+}

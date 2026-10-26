@@ -1,7 +1,4 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
@@ -51,8 +48,9 @@ builder.Services.AddHttpClient("vision", c =>
 
 // 客户端工厂:按协议(openai-compatible / azure-openai / anthropic)派发。
 // 单例安全 —— 只持有 IHttpClientFactory 与 ILoggerFactory。
+// 票40(ARC-15):接口仍是 SharedContracts 契约,实现已迁 BuildingBlocks/Ai —— 仅实现类型全名变更,注册口径不变。
 builder.Services.AddSingleton<YourInterview.SharedContracts.Ai.ILlmClientFactory,
-    YourInterview.SharedContracts.Ai.LlmClientFactory>();
+    YourInterview.BuildingBlocks.Ai.LlmClientFactory>();
 
 // LLM 凭据解析(数据库 > 环境变量 > appsettings)。
 // 单例:内部用 IServiceScopeFactory 读 Scoped 的 DbContext,查完即释放。
@@ -62,24 +60,8 @@ builder.Services.AddSingleton<YourInterview.Services.AiGateway.Application.AiKey
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 
 // ---------- 鉴权 ----------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("缺少 Jwt:SigningKey");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-    });
+// ---------- JWT 认证(校验参数唯一定义在 ServiceDefaults,ARC-09/票18) ----------
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddAuthorization(options => PermissionPolicy.AddPermissionPolicies(options));
 
@@ -90,7 +72,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-try { await AiGatewayDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger); }
-catch (Exception ex) { app.Logger.LogError(ex, "AiGateway 数据库初始化失败 —— 服务继续启动"); }
+// COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync("aigateway-api", AiGatewayDbSeeder.MigrateAndSeedAsync);
 
 app.Run();

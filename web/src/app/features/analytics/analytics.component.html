@@ -30,9 +30,9 @@
       <div class="insight-body">
         <strong>{{ ins.headline }}</strong>
         <p>{{ ins.detail }}</p>
-        @if (ins.suggestedAction) {
+        @if (ins.action) {
           <p class="insight-action">
-            <mat-icon>arrow_forward</mat-icon> {{ ins.suggestedAction }}
+            <mat-icon>arrow_forward</mat-icon> {{ ins.action }}
           </p>
         }
       </div>
@@ -59,11 +59,14 @@
             <span><i class="dot best"></i> {{ t('an.bestLevel') }}</span>
           </div>
 
+          @if (!hasScoredData()) {
+            <p class="empty">{{ t('an.noRadar') }}</p>
+          } @else {
           <div class="weak-list">
             <div class="weak-title">{{ t('an.weakTitle') }}</div>
             @for (r of weakest(); track r.dimension) {
               <div class="weak-row">
-                <span class="w-name">{{ r.nameZh }}</span>
+                <span class="w-name">{{ dimLabelOf(r.dimension, r.nameZh) }}</span>
                 <span class="w-score" [class]="scoreClass(r.current)">{{ r.current }}</span>
                 <span class="w-best">{{ tn('an.bestOf', r.best) }}</span>
                 @if (r.changeFromPrevious) {
@@ -75,6 +78,7 @@
               </div>
             }
           </div>
+          }
         }
       </mat-card-content>
     </mat-card>
@@ -152,7 +156,7 @@
           <div class="trend-grid">
             @for (t of list; track t.dimension) {
               <div class="trend-item">
-                <div class="t-name">{{ t.nameZh || t.dimension }}</div>
+                <div class="t-name">{{ t.name }}</div>
                 <div class="t-delta" [class.up]="t.delta > 0" [class.down]="t.delta < 0">
                   <mat-icon>{{ t.delta > 0 ? 'trending_up' : (t.delta < 0 ? 'trending_down' : 'trending_flat') }}</mat-icon>
                   {{ t.delta > 0 ? '+' : '' }}{{ t.delta }}
@@ -163,7 +167,7 @@
           </div>
         }
       } @else {
-        <p class="empty">{{ t('an.trendUnavailable') }}</p>
+        <p class="empty">{{ t('an.trendEmpty') }}</p>
       }
     </mat-card-content>
   </mat-card>

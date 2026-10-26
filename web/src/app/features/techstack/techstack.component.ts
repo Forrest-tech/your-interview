@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DocViewerComponent } from '../../shared/doc-viewer/doc-viewer.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { CategoryManagerComponent } from './category-manager/category-manager.component';
 import { forkJoin } from 'rxjs';
 import { CommonModule } from '@angular/common';
@@ -22,14 +23,22 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
-import { catchError, of } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { Subscription, catchError, of } from 'rxjs';
+import { KnowledgeApiService, ReviewOutcome } from '../../core/api/knowledge-api.service';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeItem, KnowledgeSourceEntry, KnowledgeTopic, KnowledgeStats, MasteryLevel, Paged, PlaybookCompany, PlaybookCompanyRound } from '../../core/models/api.models';
 import {
   KnowledgeSourceCompany, KnowledgeDuplicateGroup
 } from '../../core/models/api.models';
+import { TechStackLocalService } from '../../core/api/techstack-local.service';
+import {
+  UNCATEGORIZED_TOPIC, heatmapLevel, localDateKey, remapDeletedCategoryTopic, remapTopicName,
+  topicDetailsAfterCategoryDelete, topicDetailsAfterCategoryRename,
+  topicNamesAfterCategoryDelete, topicNamesAfterCategoryRename,
+} from '../../core/api/techstack-local.helpers';
 import { KnowledgeDialogComponent, KnowledgeForm } from './knowledge-dialog.component';
+import { fieldErrorFromServer, textLengthError } from '../../core/api/validation-errors.helpers';
 import { DuplicatesDialogComponent } from './duplicates-dialog.component';
 import { SubnavService } from '../../layout/subnav.service';
 
@@ -52,15 +61,6 @@ const CONFIDENCE_FOR: Record<ReviewResultLabel, number> = {
   Good: 4,
   Easy: 5
 };
-
-/** 后端 POST /api/knowledge/{id}/review 的回包形状(ReviewOutcomeDto)。 */
-interface ReviewOutcome {
-  nextReviewAt: string | null;
-  intervalDays: number;
-  easinessFactor: number;
-  mastery: string;
-  repetitionStreak: number;
-}
 
 /** 9 块详情里正文区的定义。用数据驱动模板,新增一块不用改 HTML。 */
 interface DetailBlock {
@@ -114,7 +114,8 @@ const DETAIL_BLOCKS: DetailBlock[] = [
   styleUrl: './techstack.component.scss'
 })
 export class TechStackComponent implements OnInit, OnDestroy {
-  private readonly api = inject(ApiClient);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
+  private readonly interviewsApi = inject(InterviewsApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly subnav = inject(SubnavService);
@@ -122,9 +123,12 @@ export class TechStackComponent implements OnInit, OnDestroy {
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
+  tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
 
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
+  /** ★ 票16:自定义分类/复习活动的单一读写路径(后端真源,见 TechStackLocalService)。 */
+  private readonly tsLocal = inject(TechStackLocalService);
 
   readonly masteryOrder = MASTERY_ORDER;
   readonly blocks = DETAIL_BLOCKS;
@@ -141,6 +145,8 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 是否进入"今日复习"专注模式:进入后隐藏列表/筛选,改走闪卡队列。 */
   readonly reviewMode = signal(false);
+  /** 票 138:复习热力图先隐藏（用户 2026-10-25 令）——面板代码保留，改 true 即恢复；数据记录（recordReview）不受影响。 */
+  readonly showReviewHeatmap = false;
   /** ★ 回收站模式:显示已删除的卡片,可恢复。 */
   readonly trashMode = signal(false);
   readonly trashItems = signal<KnowledgeItem[]>([]);
@@ -257,15 +263,12 @@ export class TechStackComponent implements OnInit, OnDestroy {
         if (!counts.has(tp)) counts.set(tp, 0);
       }
     }
-    // 加上用户手动建的空分类(localStorage)
-    try {
-      const custom: string[] = JSON.parse(localStorage.getItem('ts.customCategories') ?? '[]');
-      for (const n of custom) {
-        if (![...counts.keys()].some(k => k.toLowerCase() === n.toLowerCase())) {
-          counts.set(n, 0);
-        }
+    // 加上用户手动建的空分类(票16:后端真源,经 TechStackLocalService 信号)
+    for (const n of this.tsLocal.customCategories()) {
+      if (![...counts.keys()].some(k => k.toLowerCase() === n.toLowerCase())) {
+        counts.set(n, 0);
       }
-    } catch { /* ignore */ }
+    }
     const dialogRef = this.dialog.open(CategoryManagerComponent, {
       width: '520px',
       data: {}
@@ -278,6 +281,80 @@ export class TechStackComponent implements OnInit, OnDestroy {
         this.loadBuckets();
       }
     });
+  }
+
+  /**
+   * 票84:分类删除成功后的本地同步 —— 与服务端 DeleteTopic 同语义
+   * (名下条目回落 Uncategorized),把本页全部本地状态消费方一次对齐,
+   * 不发请求、不等关弹窗重拉(关弹窗后既有 load() 对账仍保留):
+   * 条目卡/详情头/复习队列副本的 topic、Topic chips、管理器计数行、
+   * 以及正指向被删名的当前筛选值。纯映射在 techstack-local.helpers。
+   */
+  private applyCategoryDeleted(name: string): void {
+    const deleted = (name ?? '').trim();
+    if (!deleted) return;
+    const isDeleted = (tp: string | null | undefined) =>
+      (tp ?? '').trim().toLowerCase() === deleted.toLowerCase();
+
+    // 受影响条数:以 topics 全量计数行为准(当前页只是分页子集);
+    // 接口计数缺失时退当前页命中数 —— 只用来决定要不要补 Uncategorized chip
+    const detailRow = this.topicDetails().find((d) => isDeleted(d.topic));
+    let pageHits = 0;
+    this.items.update((list) => list.map((it) => {
+      if (!isDeleted(it.topic)) return it;
+      pageHits++;
+      return { ...it, topic: UNCATEGORIZED_TOPIC };
+    }));
+    const hadItems = (detailRow?.total ?? 0) > 0 || pageHits > 0;
+
+    const sel = this.selected();
+    if (sel && isDeleted(sel.topic)) {
+      this.selected.set({ ...sel, topic: UNCATEGORIZED_TOPIC });
+    }
+    this.reviewQueue.update((list) => remapDeletedCategoryTopic(list, deleted));
+    const rc = this.reviewCurrent();
+    if (rc && isDeleted(rc.topic)) {
+      this.reviewCurrent.set({ ...rc, topic: UNCATEGORIZED_TOPIC });
+    }
+
+    this.topics.update((names) => topicNamesAfterCategoryDelete(names, deleted, hadItems));
+    this.topicDetails.update((rows) => topicDetailsAfterCategoryDelete(rows, deleted));
+
+    // 当前筛选正指着被删名:改指 Uncategorized,同一批条目仍在眼前
+    // (分页/总数在关弹窗的 load() 对账时归位,这里不额外发请求)
+    if (this.topic() !== null && isDeleted(this.topic())) {
+      this.topic.set(UNCATEGORIZED_TOPIC);
+      this.syncFiltersToUrl();
+    }
+  }
+
+  /**
+   * 票84 邻居:分类改名成功后的本地同步 —— 与删分类同一通道、同一批
+   * 消费方(条目卡/详情头/复习队列副本/Topic chips/管理器计数行/当前
+   * 筛选值),把旧名整体换成新名(合并时计数并入目标行)。不发请求;
+   * 关弹窗后的 load() 对账不变。
+   */
+  private applyCategoryRenamed(oldName: string, newName: string): void {
+    const from = (oldName ?? '').trim();
+    const to = (newName ?? '').trim();
+    if (!from || !to || from.toLowerCase() === to.toLowerCase()) return;
+    const isFrom = (tp: string | null | undefined) =>
+      (tp ?? '').trim().toLowerCase() === from.toLowerCase();
+
+    this.items.update((list) => remapTopicName(list, from, to));
+    const sel = this.selected();
+    if (sel && isFrom(sel.topic)) this.selected.set({ ...sel, topic: to });
+    this.reviewQueue.update((list) => remapTopicName(list, from, to));
+    const rc = this.reviewCurrent();
+    if (rc && isFrom(rc.topic)) this.reviewCurrent.set({ ...rc, topic: to });
+
+    this.topics.update((names) => topicNamesAfterCategoryRename(names, from, to));
+    this.topicDetails.update((rows) => topicDetailsAfterCategoryRename(rows, from, to));
+
+    if (this.topic() !== null && isFrom(this.topic())) {
+      this.topic.set(to);
+      this.syncFiltersToUrl();
+    }
   }
 
   /** 激活的筛选数量(用于折叠态的计数徽标) */
@@ -336,7 +413,16 @@ export class TechStackComponent implements OnInit, OnDestroy {
     }));
   });
 
+  /** 票84:分类删除/改名事件订阅(组件销毁时退订)。 */
+  private readonly categorySubs = new Subscription();
+
   ngOnInit(): void {
+    this.tsLocal.ensureLoaded(); // 票16:分类/复习活动改读后端(首次自动导入本地存量)
+    // 票84:分类管理器删/改名成功后即时同步本地呈现,不等关弹窗/整页刷新(F4)
+    this.categorySubs.add(this.tsLocal.categoryDeleted$
+      .subscribe((name) => this.applyCategoryDeleted(name)));
+    this.categorySubs.add(this.tsLocal.categoryRenamed$
+      .subscribe(({ oldName, newName }) => this.applyCategoryRenamed(oldName, newName)));
     this.restoreFiltersFromUrl();
     this.load();
     this.loadBuckets();
@@ -397,7 +483,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 来源公司清单属于可选增强(老库没有来源字段时为空),失败静默降级。 */
   loadSources(): void {
-    this.api.get<KnowledgeSourceCompany[]>('/api/knowledge/sources')
+    this.knowledgeApi.getSources()
       .pipe(catchError(() => of(null)))
       .subscribe((list) => {
         this.sourceCompanies.set(
@@ -407,7 +493,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 重复条目是"偶发需要"的功能:只报个数,点开才真正拉取分组。 */
   loadDuplicates(): void {
-    this.api.get<KnowledgeDuplicateGroup[]>('/api/knowledge/duplicates')
+    this.knowledgeApi.getDuplicates()
       .pipe(catchError(() => of(null)))
       .subscribe((groups) => this.duplicateGroups.set(
         Array.isArray(groups) ? groups : []));
@@ -435,7 +521,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
     // 列表路由是 /api/knowledge(不是 /items),筛选参数名是 mastery(不是 masteryLevel)。
     // 最初按直觉写的名字全 404 —— 前端对后端契约不能"看起来合理"就写。
-    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', {
+    this.knowledgeApi.getItems({
       page: this.page(),
       pageSize: this.pageSize(),
       topic: this.topic(),
@@ -475,7 +561,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** 主题列表是可选增强:后端没这个接口(404)或出错都降级,不让页面挂掉。 */
   loadTopics(): void {
-    this.api.get<KnowledgeTopic[]>('/api/knowledge/topics')
+    this.knowledgeApi.getTopics()
       .pipe(catchError(() => of(null)))
       .subscribe((list) => {
         if (list && Array.isArray(list) && list.length > 0) {
@@ -492,7 +578,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   loadBuckets(): void {
     // 没有独立的 /mastery 端点 —— 分布数据在 /stats 的 byMastery 里。
     // 顺手把 totalItems 也拿来做分母,顶部统计条就不用再发一次请求。
-    this.api.get<KnowledgeStats>('/api/knowledge/stats')
+    this.knowledgeApi.getStats()
       .pipe(catchError(() => of(null)))
       .subscribe((st) => {
         if (!st) return;
@@ -603,7 +689,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
       queryParamsHandling: 'merge',
       replaceUrl: true
     });
-    this.api.get<KnowledgeItem>(`/api/knowledge/${item.id}`).subscribe({
+    this.knowledgeApi.getItem(item.id).subscribe({
       next: (full) => {
         this.selected.set(full);
         this.items.update(list => list.map((x) => x.id === full.id ? { ...x, ...full } : x));
@@ -651,35 +737,76 @@ export class TechStackComponent implements OnInit, OnDestroy {
       list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
   }
 
-  /** 批量删除:逐个调删除接口(后端暂无批量接口),完成后退出编辑模式并刷新。 */
+  /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
+   *  true 才执行,取消/Esc/点遮罩一律不执行(与原生 confirm 的 false 同义)。 */
+  private confirmDlg(body: string, danger: boolean): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: danger ? this.t('common.delete') : this.t('common.confirmTitle'),
+        body,
+        confirmText: danger ? this.t('common.delete') : this.t('common.confirm'),
+        cancelText: this.t('common.cancel'),
+        danger,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
+  /** 批量删除:逐个调删除接口(后端暂无批量接口),完成后退出编辑模式并刷新。
+   *  票113:逐项带列表项读时版本(If-Match 钉版,票111 契约);逐项独立结算——
+   *  一项失败(如 409 版本已推进)不中断其余项,已删项不回滚(逐项 API 固有事实);
+   *  失败项保留勾选并停留在编辑模式,刷新列表后可重试,提示中点名失败项。 */
   deleteSelected(): void {
     const ids = this.batchIds();
     if (ids.length === 0) return;
-    const names = this.items().filter(e => ids.includes(e.id))
-      .map(e => e.title).join('、');
-    const ok = confirm(
+    const picked = this.items().filter(e => ids.includes(e.id));
+    const names = picked.map(e => e.title).join('、');
+    void this.confirmDlg(
       this.t('ts.list.confirmDeleteBatch')
         .replace('{n}', String(ids.length))
-        .replace('{names}', names));
-    if (!ok) return;
+        .replace('{names}', names), true).then((ok) => {
+      if (!ok) return;
 
-    forkJoin(ids.map(id => this.api.delete<void>(`/api/knowledge/${id}`))).subscribe({
-      next: () => {
-        this.notify(this.t('ts.deleted'));
-        this.editing.set(false);
-        this.batchIds.set([]);
-        this.selected.set(null);
-        this.clearUrlId();
-        this.reload();
-      },
-      error: (e: Error) => this.notify(e.message, true)
+      const byId = new Map(picked.map(e => [e.id, e]));
+      forkJoin(ids.map(id => this.knowledgeApi.deleteItem(id, byId.get(id)?.version).pipe(
+        catchError((e: Error) => of({ failedId: id, error: e }))
+      ))).subscribe({
+        next: (results) => {
+          const failed = results.filter(
+            (r): r is { failedId: string; error: Error } =>
+              !!r && typeof r === 'object' && 'failedId' in r);
+          if (failed.length === 0) {
+            this.notify(this.t('ts.deleted'));
+            this.editing.set(false);
+            this.batchIds.set([]);
+            this.selected.set(null);
+            this.clearUrlId();
+            this.reload();
+            return;
+          }
+          // 部分失败:已删项不回滚;失败项保留勾选待重试,列表刷新对齐服务端真值。
+          this.batchIds.set(failed.map(f => f.failedId));
+          const failedIds = new Set(failed.map(f => f.failedId));
+          const sel = this.selected();
+          if (sel && ids.includes(sel.id) && !failedIds.has(sel.id)) {
+            this.selected.set(null);
+            this.clearUrlId();
+          }
+          const failedNames = failed
+            .map(f => byId.get(f.failedId)?.title ?? f.failedId).join('、');
+          this.notify(`${failed[0].error.message}：${failedNames}`, true);
+          this.reload();
+        },
+        error: (e: Error) => this.notify(e.message, true)
+      });
     });
   }
 
   /** ★ 进入回收站:加载已删除的卡片。 */
   openTrash(): void {
     this.trashMode.set(true);
-    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', {
+    this.knowledgeApi.getItems({
       page: 1, pageSize: 100, includeDeleted: true
     }).subscribe({
       next: (p) => this.trashItems.set(p.items ?? []),
@@ -695,7 +822,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   /** ★ 从回收站恢复卡片。 */
   restoreItem(id: string): void {
-    this.api.post<void>(`/api/knowledge/${id}/restore`, {}).subscribe({
+    this.knowledgeApi.restoreItem(id).subscribe({
       next: () => {
         this.notify(this.t('ts.trash.restored'));
         this.openTrash(); // 刷新回收站列表
@@ -711,7 +838,8 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const names = this.parseSources(item)
       .map((s) => s.companyName?.trim())
       .filter((n): n is string => !!n);
-    if (names.length > 0) return names.join(' · ');
+    // 票123 R-3:多来源公司名之间用「、」分隔(不是中点)——中点只留给人名/角色那类标签串。
+    if (names.length > 0) return names.join('、');
     return this.i18n.t('nav.playbook');
   }
 
@@ -734,18 +862,14 @@ export class TechStackComponent implements OnInit, OnDestroy {
 
   openCreate(): void {
     const ref = this.dialog.open(KnowledgeDialogComponent, { autoFocus: 'first-tabbable' });
-    // 对话框返回的已经是后端契约形状(title/topic/...Json),这里不再二次加工
+    // FUN-05:保存已收进对话框内部(成功才关窗,失败在弹窗内给字段级提示),
+    // 这里只在保存成功(回传 payload)时刷新列表,不再二次 POST。
     ref.afterClosed().subscribe((payload?: Record<string, unknown> | null) => {
       if (!payload) return;
-      this.api.post<KnowledgeItem>('/api/knowledge', payload).subscribe({
-        next: () => {
-          this.notify(this.t('ts.created'));
-          this.page.set(1);
-          this.reload();
-          this.loadTopics();
-        },
-        error: (e: Error) => this.notify(e.message, true)
-      });
+      this.notify(this.t('ts.created'));
+      this.page.set(1);
+      this.reload();
+      this.loadTopics();
     });
   }
 
@@ -760,6 +884,31 @@ export class TechStackComponent implements OnInit, OnDestroy {
   /** 详情是否处于编辑态。右上角 Edit 进入,Save/Cancel 退出。 */
   readonly detailEditing = signal(false);
   readonly savingDetail = signal(false);
+  /** 票106(C1):详情编辑字段级错误(后端 UpdateKnowledge 校验器 Title≤500 / Topic≤100)。 */
+  readonly DETAIL_TITLE_MAX = 500;
+  readonly DETAIL_TOPIC_MAX = 100;
+  readonly detailFieldErrors = signal<Partial<Record<'title' | 'topic', string>>>({});
+
+  private tooLongText(max: number): string {
+    return this.tf('validation.tooLong', { max });
+  }
+
+  /** 服务端字段错误 → 本地化文案(票75 mapFieldError 同型);无该字段错误返回 null,调用方回落原路径。 */
+  private mapDetailFieldError(e: unknown, field: string, sentLength: number, max: number): string | null {
+    const c = fieldErrorFromServer(e, field, { sentLength, max });
+    if (!c) return null;
+    if (c.kind === 'tooLong') return this.tooLongText(max);
+    if (c.kind === 'required') return this.t('validation.required');
+    return c.text;
+  }
+
+  clearDetailFieldError(field: 'title' | 'topic'): void {
+    if (this.detailFieldErrors()[field]) {
+      const next = { ...this.detailFieldErrors() };
+      delete next[field];
+      this.detailFieldErrors.set(next);
+    }
+  }
   readonly difficultyOptions = [1, 2, 3, 4, 5];
   /** 编辑态下所有字段的草稿。 */
   detailDraft: {
@@ -792,7 +941,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   /** 懒加载 Playbook 公司库(只加载一次)。 */
   loadPlaybookCompanies(): void {
     if (this.playbookCompanies().length > 0) return;
-    this.api.get<PlaybookCompany[]>('/api/interviews/companies').subscribe({
+    this.interviewsApi.getCompanies().subscribe({
       next: (list) => this.playbookCompanies.set(list ?? []),
       error: () => this.playbookCompanies.set([]),
     });
@@ -808,7 +957,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     this.newDetailSourceRound = null;
     this.newDetailSourceDate = '';
     this.companyRounds.set([]);
-    this.api.get<PlaybookCompanyRound[]>(`/api/interviews/companies/${c.companyId}/rounds`).subscribe({
+    this.interviewsApi.getCompanyRounds(c.companyId).subscribe({
       next: (list) => this.companyRounds.set(list ?? []),
       error: () => this.companyRounds.set([]),
     });
@@ -824,12 +973,17 @@ export class TechStackComponent implements OnInit, OnDestroy {
     this.newDetailSourceDate = r.scheduledDate ?? '';
   }
 
-  /** 轮次下拉显示:Round 1 · Technical · 2026-10-07 */
+  /** 轮次下拉显示:轮次编号 / 阶段 / 日期 三行(票123 R-3:不再用中点串成一行)。 */
   roundOptionLabel(r: PlaybookCompanyRound): string {
-    const parts = [`Round ${r.order}`];
+    return this.roundOptionParts(r).join(' / ');
+  }
+
+  /** 轮次下拉的各段:编号、阶段、日期 —— 供模板分行渲染。 */
+  roundOptionParts(r: PlaybookCompanyRound): string[] {
+    const parts: string[] = [`Round ${r.order}`];
     if (r.stage) parts.push(r.stage);
     parts.push(r.scheduledDate ?? this.t('ts.source.noDate'));
-    return parts.join(' · ');
+    return parts;
   }
 
   /** 展开来源表单时重置搜索框并加载公司库。 */
@@ -865,14 +1019,19 @@ export class TechStackComponent implements OnInit, OnDestroy {
     return [];
   }
 
-  /** 多来源显示文案:公司 · Round N · 日期。 */
+  /** 多来源显示文案:公司 / Round N / 日期 —— 票123 R-3:改为分段结构,不再用中点串成一行。 */
   sourceEntryLabel(s: KnowledgeSourceEntry): string {
+    return this.sourceEntryParts(s).join(' / ');
+  }
+
+  /** 多来源的各段:公司、轮次、日期 —— 供模板分行渲染。 */
+  sourceEntryParts(s: KnowledgeSourceEntry): string[] {
     const parts: string[] = [];
     if (s.companyName) parts.push(s.companyName);
     if (s.roundNo) parts.push(`Round ${s.roundNo}`);
     else if (s.roundStage) parts.push(s.roundStage);
     if (s.date) parts.push(s.date);
-    return parts.join(' · ') || this.t('ts.source.unknown');
+    return parts.length ? parts : [this.t('ts.source.unknown')];
   }
 
   /** 进入详情编辑:把当前值全部填进草稿。 */
@@ -904,10 +1063,12 @@ export class TechStackComponent implements OnInit, OnDestroy {
     this.selectedEntryId.set(null);
     this.companyRounds.set([]);
     this.showDetailSourceForm.set(false);
+    this.detailFieldErrors.set({});
     this.detailEditing.set(true);
   }
 
   cancelDetailEdit(): void {
+    this.detailFieldErrors.set({});
     this.detailEditing.set(false);
   }
 
@@ -941,12 +1102,21 @@ export class TechStackComponent implements OnInit, OnDestroy {
   saveDetailEdit(item: KnowledgeItem): void {
     const title = this.detailDraft.title.trim();
     if (!title) return;
-    this.savingDetail.set(true);
     const d = this.detailDraft;
+    const topic = d.topic.trim() || item.topic;
+    // 票106(C1):长度先挡(Title≤500 / Topic≤100),超限字段下亮含上限提示,不走通用 snack
+    const preErrors: Partial<Record<'title' | 'topic', string>> = {};
+    if (textLengthError(title, this.DETAIL_TITLE_MAX)) preErrors.title = this.tooLongText(this.DETAIL_TITLE_MAX);
+    if (textLengthError(topic, this.DETAIL_TOPIC_MAX)) preErrors.topic = this.tooLongText(this.DETAIL_TOPIC_MAX);
+    if (Object.keys(preErrors).length > 0) { this.detailFieldErrors.set(preErrors); return; }
+    this.detailFieldErrors.set({});
+    this.savingDetail.set(true);
     const payload: Record<string, unknown> = {
       title,
       topic: d.topic.trim() || item.topic,
-      question: d.blocks['question'] ?? '',
+      // 票61:DETAIL_BLOCKS 无 question 块(详情不展示题干),保存时必须回填条目现存值,
+      // 否则恒发空串、后端全量 PUT 会把已存 Question 清空(数据丢失)。
+      question: item.question,
       conceptExplanation: d.blocks['conceptExplanation'] || null,
       keyPointsJson: this.linesToJson(d.blocks['keyPoints'] ?? ''),
       commonMistakesJson: this.linesToJson(d.blocks['commonMistakes'] ?? ''),
@@ -955,8 +1125,11 @@ export class TechStackComponent implements OnInit, OnDestroy {
       difficulty: d.difficulty,
       importance: d.importance,
       sourcesJson: d.sources.length > 0 ? JSON.stringify(d.sources) : null,
+      // 票70:回传打开详情时读到的版本;期间被他人(或另一页签)先存过,后端 409 拦下,
+      // 不再静默覆盖。version 缺失(列表项直达等)时传 null,后端按老口径不检查。
+      version: item.version ?? null,
     };
-    this.api.put<void>(`/api/knowledge/${item.id}`, payload).subscribe({
+    this.knowledgeApi.updateItem(item.id, payload).subscribe({
       next: () => {
         this.savingDetail.set(false);
         this.detailEditing.set(false);
@@ -967,7 +1140,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
           topic: d.topic.trim() || item.topic,
           difficulty: d.difficulty,
           importance: d.importance,
-          question: d.blocks['question'] ?? '',
+          question: item.question,
           conceptExplanation: d.blocks['conceptExplanation'] || undefined,
           keyPointsJson: this.linesToJson(d.blocks['keyPoints'] ?? '') ?? undefined,
           commonMistakesJson: this.linesToJson(d.blocks['commonMistakes'] ?? '') ?? undefined,
@@ -978,9 +1151,25 @@ export class TechStackComponent implements OnInit, OnDestroy {
         this.selected.set(updated);
         this.items.update(list => list.map((x) => x.id === updated.id ? updated : x));
         this.loadTopics();
+        // 票70:本地拼的 updated 不带新 version —— 保存后重拉详情刷新 version,
+        // 否则同页签连续编辑会拿旧版本误报 409。重拉失败不回滚已保存结果,保持本地值。
+        this.knowledgeApi.getItem(item.id).subscribe({
+          next: (fresh) => {
+            if (this.selected()?.id === fresh.id) this.selected.set(fresh);
+            this.items.update(list => list.map((x) => x.id === fresh.id ? { ...x, version: fresh.version } : x));
+          },
+          error: () => { /* 已保存成功,刷新版本失败仅影响下次编辑的并发校验,不打扰用户 */ }
+        });
       },
       error: (e: Error) => {
         this.savingDetail.set(false);
+        // 票106(C1):errors{Title/Topic} 落字段下方;非字段级失败回落原通用 notify
+        const mapped: Partial<Record<'title' | 'topic', string>> = {};
+        const titleText = this.mapDetailFieldError(e, 'Title', title.length, this.DETAIL_TITLE_MAX);
+        if (titleText) mapped.title = titleText;
+        const topicText = this.mapDetailFieldError(e, 'Topic', topic.length, this.DETAIL_TOPIC_MAX);
+        if (topicText) mapped.topic = topicText;
+        if (Object.keys(mapped).length > 0) { this.detailFieldErrors.set(mapped); return; }
         this.notify(e.message, true);
       }
     });
@@ -1006,31 +1195,32 @@ export class TechStackComponent implements OnInit, OnDestroy {
       return;
     }
     const next = PROMOTE_ORDER[idx + 1];
-    const ok = confirm(
+    void this.confirmDlg(
       this.t('ts.promote.confirm')
         .replace('{title}', item.title)
         .replace('{from}', this.masteryLabel(item.mastery))
-        .replace('{to}', this.masteryLabel(next))
-    );
-    if (!ok) return;
+        .replace('{to}', this.masteryLabel(next)), false).then((ok) => {
+      if (!ok) return;
 
-    this.acting.set(true);
-    this.api.post<KnowledgeItem>(`/api/knowledge/${item.id}/mastery`, {
-      level: next,
-      confidence: 0.7
-    }).subscribe({
-      next: (updated) => {
-        this.acting.set(false);
-        this.notify(this.t('ts.promote.done').replace('{to}', this.masteryLabel(next)));
-        this.applyUpdate(updated, item.id);
-        this.loadBuckets();
-        // 主题列表可能因为新条目而需要刷新,顺手重拉
-        this.loadTopics();
-      },
-      error: (e: Error) => {
-        this.acting.set(false);
-        this.notify(e.message, true);
-      }
+      this.acting.set(true);
+      this.knowledgeApi.updateMastery(item.id, {
+        level: next,
+        confidence: 0.7,
+        version: item.version ?? null // 票101:读时 xmin(后端 MasteryBody 可选字段)
+      }).subscribe({
+        next: (updated) => {
+          this.acting.set(false);
+          this.notify(this.t('ts.promote.done').replace('{to}', this.masteryLabel(next)));
+          this.applyUpdate(updated, item.id);
+          this.loadBuckets();
+          // 主题列表可能因为新条目而需要刷新,顺手重拉
+          this.loadTopics();
+        },
+        error: (e: Error) => {
+          this.acting.set(false);
+          this.notify(e.message, true);
+        }
+      });
     });
   }
 
@@ -1049,8 +1239,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
    */
   review(item: KnowledgeItem, result: ReviewResultLabel = 'Good'): void {
     this.acting.set(true);
-    this.api
-      .post<ReviewOutcome>(`/api/knowledge/${item.id}/review`, {
+    this.knowledgeApi.review(item.id, {
         result,
         confidenceAfter: CONFIDENCE_FOR[result]
       })
@@ -1062,6 +1251,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
               .replace('{grade}', this.reviewLabel(result))
               .replace('{date}', this.fmtDate(outcome.nextReviewAt)));
           this.applyReviewOutcome(item.id, outcome);
+          this.recordReviewActivity(); // ★ #9:记录复习活动(热力图)——与 grade() 同接线,此前 Log review 漏调致热力图无痕(票81)
         },
         error: (e: Error) => {
           this.acting.set(false);
@@ -1105,7 +1295,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   startReview(): void {
     if (this.reviewMode()) return;
     this.reviewLoading.set(true);
-    this.api.get<Paged<KnowledgeItem>>('/api/knowledge', {
+    this.knowledgeApi.getItems({
       page: 1, pageSize: 200, dueOnly: true
     }).subscribe({
       next: (r) => {
@@ -1158,7 +1348,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const card = this.currentCard();
     if (!card || this.reviewRevealed()) return;
     this.reviewLoading.set(true);
-    this.api.get<KnowledgeItem>(`/api/knowledge/${card.id}`)
+    this.knowledgeApi.getItem(card.id)
       .pipe(catchError(() => of(null)))
       .subscribe((full) => {
         this.reviewLoading.set(false);
@@ -1178,8 +1368,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const card = this.currentCard();
     if (!card) return;
     this.reviewLoading.set(true);
-    this.api
-      .post<ReviewOutcome>(`/api/knowledge/${card.id}/review`, {
+    this.knowledgeApi.review(card.id, {
         result,
         confidenceAfter: CONFIDENCE_FOR[result]
       })
@@ -1216,23 +1405,14 @@ export class TechStackComponent implements OnInit, OnDestroy {
     );
   }
 
-  /** ★ #9:记录每日复习数 (localStorage,供热力图)。 */
+  /** ★ #9:记录每日复习数 (票16:后端真源,经 TechStackLocalService;日期仍按本地口径)。 */
   private recordReviewActivity(): void {
-    const key = 'ts.reviewActivity';
-    // ★ 用本地日期,不用 UTC (21:00 EDT 会记到第二天)
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    try {
-      const data: Record<string, number> = JSON.parse(localStorage.getItem(key) || '{}');
-      data[today] = (data[today] || 0) + 1;
-      localStorage.setItem(key, JSON.stringify(data));
-    } catch { /* ignore */ }
+    this.tsLocal.recordReview();
   }
 
-  /** ★ #9:过去 12 周的热力图数据。 */
+  /** ★ #9:过去 12 周的热力图数据。(票16:数据源改后端信号;网格/档位规则逐字不变,键统一走 localDateKey 本地口径) */
   readonly heatmapWeeks = computed(() => {
-    let data: Record<string, number> = {};
-    try { data = JSON.parse(localStorage.getItem('ts.reviewActivity') || '{}'); } catch { /* ignore */ }
+    const data: Record<string, number> = this.tsLocal.reviewActivity();
     const weeks: { date: string; count: number; level: number }[][] = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1244,9 +1424,9 @@ export class TechStackComponent implements OnInit, OnDestroy {
       for (let d = 0; d < 7; d++) {
         const dt = new Date(start);
         dt.setDate(dt.getDate() + w * 7 + d);
-        const key = dt.toISOString().slice(0, 10);
+        const key = localDateKey(dt);
         const count = dt > today ? -1 : (data[key] || 0);
-        const level = count < 0 ? -1 : count === 0 ? 0 : count < 3 ? 1 : count < 6 ? 2 : count < 10 ? 3 : 4;
+        const level = count < 0 ? -1 : heatmapLevel(count);
         week.push({ date: key, count, level });
       }
       weeks.push(week);
@@ -1254,17 +1434,32 @@ export class TechStackComponent implements OnInit, OnDestroy {
     return weeks;
   });
 
-  /** ★ #9:当前连击 (连续复习天数)。 */
+  /**
+   * ★ 票123 R-10:热力图窗口内的复习总数 —— 窗口内过去的日子 count 之和。
+   *
+   * 未来日子 count 为 -1(不是 0),不参与求和。
+   * 为 0 时热力图是一片灰格,没有一句话也没有一个行动 —— 面板要改成一次邀请。
+   */
+  readonly heatmapTotalCount = computed(() => {
+    let total = 0;
+    for (const week of this.heatmapWeeks()) {
+      for (const day of week) {
+        if (day.count > 0) total += day.count;
+      }
+    }
+    return total;
+  });
+
+  /** ★ #9:当前连击 (连续复习天数)。(票16:数据源改后端信号;算法逐字不变) */
   readonly reviewStreak = computed(() => {
-    let data: Record<string, number> = {};
-    try { data = JSON.parse(localStorage.getItem('ts.reviewActivity') || '{}'); } catch { /* ignore */ }
+    const data: Record<string, number> = this.tsLocal.reviewActivity();
     let streak = 0;
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    const todayKey = d.toISOString().slice(0, 10);
+    const todayKey = localDateKey(d);
     if (!data[todayKey]) d.setDate(d.getDate() - 1);
     while (true) {
-      const key = d.toISOString().slice(0, 10);
+      const key = localDateKey(d);
       if (data[key]) { streak++; d.setDate(d.getDate() - 1); }
       else break;
     }
@@ -1290,10 +1485,10 @@ export class TechStackComponent implements OnInit, OnDestroy {
     const item = this.selected();
     if (!item) return;
     const content = this.blockText(item, blockKey);
-    if (!content.trim()) { this.notify('该块无内容'); return; }
+    if (!content.trim()) { this.notify(this.t('ts.detail.blockEmpty')); return; }
     // 用块内容的前 60 字作标题,全文作问题
     const title = content.trim().slice(0, 60) + (content.length > 60 ? '…' : '');
-    this.api.post<KnowledgeItem>('/api/knowledge', {
+    this.knowledgeApi.createItem({
       title: `🃏 ${title}`,
       topic: item.topic,
       question: content,
@@ -1304,7 +1499,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
       importance: 3
     }).subscribe({
       next: () => {
-        this.notify('闪卡已创建,加入复习队列');
+        this.notify(this.t('ts.detail.flashcardCreated'));
         this.reload();
       },
       error: (e: Error) => this.notify(e.message, true)
@@ -1390,6 +1585,7 @@ export class TechStackComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.categorySubs.unsubscribe();
     this.subnav.unregister('/tech-stack');
   }
 }

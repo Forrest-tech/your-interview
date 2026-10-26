@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Output, computed, effect, inject, input, signal
+  Component, EventEmitter, OnInit, Output, computed, effect, inject, input, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -11,6 +11,8 @@ import {
   InterviewDetail, InterviewRound
 } from '../../../../core/models/api.models';
 import { PlaybookV2Api } from '../playbook-v2.api';
+import { RoundRemindersService } from './round-reminders.service';
+import { formatRemindAt, reminderStateForRound } from './reminders.helpers';
 import { TranscriptSegment, parseQuestionReview, safeJson } from '../v2.models';
 import { PrepReportComponent } from './prep-report.component';
 import { RoundRecordComponent } from './round-record.component';
@@ -20,6 +22,7 @@ import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog
 import { ExportBlock, ExportDoc } from '../export/export-doc';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
+import { fieldErrorFromServer, textLengthError } from '../../../../core/api/validation-errors.helpers';
 
 type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
 
@@ -40,26 +43,40 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   ],
   template: `
     <section class="card" data-testid="round-card">
+      <!-- 票169:详情头去重——轮次号/类型/日期/Outcome/Materials 数已在上方轨道节点(票164)显示,此处不再重复。
+           仅保留轨道上没有的信息:时间(仅当时段存在时,日期本身不重复显示)、面试官、形式。 -->
       <div class="rc-head">
-        <h3>Round {{ round().order }} · {{ round().stage }}</h3>
         <span class="rc-meta">
-          {{ round().scheduledDate ?? t('pb.v2.d.dateTbd') }}{{ round().scheduledTime ? ' ' + round().scheduledTime : '' }}
-          @if (round().interviewers) { · {{ round().interviewers }} }
-          @if (round().format) { · {{ formatLabel(t, round().format) }} }
+          @if (round().scheduledTime) { <span class="rc-meta-line">{{ round().scheduledTime }}</span> }
+          @if (round().interviewers) { <span class="rc-meta-line">{{ round().interviewers }}</span> }
+          @if (round().format) { <span class="rc-meta-line">{{ formatLabel(t, round().format) }}</span> }
         </span>
         <span class="spacer"></span>
         @if (tab() === 'record') {
           <button mat-stroked-button (click)="openRecordExport()">{{ t('pb.v2.r.exportRecord') }}</button>
         }
-        <button type="button" class="mini-btn" (click)="toggleEdit()">{{ editing() ? t('pb.v2.d.collapse') : t('pb.v2.r.editRound') }}</button>
       </div>
       <div class="rc-outcome">
-        {{ t('pb.v2.r.outcome') }}<b>{{ outcomeLabel(round().outcome) }}</b>
-        @if (roundScore() != null) { · {{ t('pb.v2.r.overall') }} <b>{{ roundScore() }}</b> }
-        @if (questionCount()) { · {{ fmt('pb.v2.r.questionsCount', { n: questionCount() }) }} }
-        · {{ fmt('pb.v2.r.assetsCount', { n: roundAssets().length }) }}
-        @if (round().meetingLink) { · <a [href]="round().meetingLink" target="_blank" rel="noopener">{{ t('pb.v2.r.meetingLink') }}</a> }
-        @if (round().location) { · {{ round().location }} }
+        @if (roundScore() != null) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.overall') }}</span><b>{{ roundScore() }}</b></span>
+        }
+        @if (questionCount()) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.questionsCountLabel') }}</span><b>{{ questionCount() }}</b></span>
+        }
+        @if (round().interviewers) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.interviewersLabel') }}</span><b>{{ round().interviewers }}</b></span>
+        }
+        @if (round().meetingLink) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.meetingLink') }}</span><a [href]="round().meetingLink" target="_blank" rel="noopener">{{ t('pb.v2.r.openLink') }}</a></span>
+        }
+      </div>
+      <!-- 票169:Location(轨道节点上没有)与 Edit round(功能入口)不删、只挪到此处一行,始终可见可用。 -->
+      <div class="rc-sub">
+        @if (round().location) {
+          <span class="rc-fact"><span class="rc-fact-label">{{ t('pb.v2.r.location') }}</span><b>{{ round().location }}</b></span>
+        }
+        <span class="spacer"></span>
+        <button type="button" class="mini-btn" (click)="toggleEdit()">{{ editing() ? t('pb.v2.d.collapse') : t('pb.v2.r.editRound') }}</button>
       </div>
 
       @if (round().scheduledDate) {
@@ -67,23 +84,32 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
           <mat-icon>event</mat-icon>
           <span>{{ t('pb.v2.r.calInApp') }}</span>
           <span class="cal-remind">{{ t('pb.v2.r.calReminders') }}</span>
+          @if (reminderState().kind === 'due') {
+            <span class="cal-due" data-testid="round-cal-due">{{ t('pb.v2.r.calDue') }}</span>
+          } @else if (reminderState().kind === 'upcoming') {
+            <span class="cal-next" data-testid="round-cal-next">{{ t('pb.v2.r.calNext') }} {{ nextRemindLabel() }}</span>
+          }
           <span class="spacer"></span>
-          <button type="button" class="mini-btn" (click)="toggleEdit()">{{ t('pb.v2.r.editRound') }}</button>
+          <!-- 票 118 / F-4:日历条不再放第二个 Edit round —— 编辑入口只保留轮次标题旁那一个,
+               本条只报状态(到期/下一次提醒走上方状态文案)。 -->
         </div>
       }
 
       @if (editing()) {
         <div class="edit-grid">
           <label>{{ t('pb.v2.r.fStage') }}
-            <select class="fld" data-testid="round-stage-select" [ngModel]="eStage()" (ngModelChange)="eStage.set($event)">
+            <select class="fld" data-testid="round-stage-select" [ngModel]="eStage()" (ngModelChange)="setStage($event)">
               @for (s of stageOptions(); track s) { <option [value]="s">{{ stageLabel(s) }}</option> }
             </select>
+            @if (fieldErrors().stage) { <span class="field-error" role="alert">{{ fieldErrors().stage }}</span> }
           </label>
           <label>{{ t('pb.v2.r.fDate') }} <input class="fld" type="date" [ngModel]="eDate()" (ngModelChange)="eDate.set($event)"></label>
           <label>{{ t('pb.v2.r.fTime') }} <input class="fld" placeholder="11:00" [ngModel]="eTime()" (ngModelChange)="eTime.set($event)"></label>
-          <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="eInterviewers()" (ngModelChange)="eInterviewers.set($event)"></label>
+          <label>{{ t('pb.v2.r.fInterviewers') }} <input class="fld" [ngModel]="eInterviewers()" (ngModelChange)="setInterviewers($event)">
+            @if (fieldErrors().interviewers) { <span class="field-error" role="alert">{{ fieldErrors().interviewers }}</span> }</label>
           <label>{{ t('pb.v2.r.fFormat') }} <input class="fld" [ngModel]="eFormat()" (ngModelChange)="eFormat.set($event)"></label>
-          <label>{{ t('pb.v2.r.fLocation') }} <input class="fld" [ngModel]="eLocation()" (ngModelChange)="eLocation.set($event)"></label>
+          <label>{{ t('pb.v2.r.fLocation') }} <input class="fld" [ngModel]="eLocation()" (ngModelChange)="setLocation($event)">
+            @if (fieldErrors().location) { <span class="field-error" role="alert">{{ fieldErrors().location }}</span> }</label>
           <label>{{ t('pb.v2.r.meetingLink') }} <input class="fld" [ngModel]="eLink()" (ngModelChange)="eLink.set($event)"></label>
           <label>{{ t('pb.v2.r.fOutcome') }}
             <select class="fld" [ngModel]="eOutcome()" (ngModelChange)="eOutcome.set($event)">
@@ -115,7 +141,11 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         @case ('prep') {
           <app-prep-report [entry]="entry()" [round]="round()"
                            [guidanceAssets]="guidanceAssets()"
-                           (changed)="changed.emit()" />
+                           [roundAssets]="roundAssets()"
+                           [generateRequest]="prepGenToken()"
+                           (changed)="changed.emit()"
+                           (editInput)="editPrepInput.emit({ roundId: round().id, purpose: $event.purpose, assetId: $event.assetId, text: $event.text })"
+                           (generateConsumed)="generateConsumed.emit()" />
         }
         @case ('record') {
           <app-round-record [entry]="entry()" [round]="round()" (changed)="changed.emit()" />
@@ -141,48 +171,81 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   styles: [`
     .card { padding: 2px 2px 0; margin-top: 14px; }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .rc-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
-    .rc-meta { font-size: 13px; color: var(--yi-text-muted, #888); }
+    /* 票169:Location 与 Edit round 的承接行(详情头去重后仅剩的头部外信息)。 */
+    .rc-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 7px; }
+    /* 票123 R-3:日期/时间/形式改为堆叠小字行(§9 mock 的 .rwhen),不再串在中点上。 */
+    .rc-meta { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px;
+               color: var(--yi-text-muted, #475569); }
+    .rc-meta-line { display: block; line-height: 1.5; }
     .spacer { flex: 1; }
-    .rc-outcome { font-size: 14px; color: var(--yi-text-muted, #777); margin-top: 5px; }
+    /* 票123 R-3:结果行改为「标签 + 值」成对事实(§9 mock 的 .facts/.fact/.k/.v)。 */
+    .rc-outcome { display: flex; gap: 26px; flex-wrap: wrap; align-items: baseline;
+                  font-size: 13px; color: var(--yi-text, #0f172a); margin-top: 7px; }
+    .rc-fact { display: inline-flex; align-items: baseline; gap: 7px; }
+    .rc-fact-label { font-size: 12px; font-weight: 500; color: var(--yi-text-muted, #475569); }
+    .rc-fact b { font-size: 13px; font-weight: 500; }
     .cal-bar { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 14px;
-               border: 1px dashed var(--yi-border, #bbb); border-radius: 10px; padding: 7px 12px; }
-    .cal-bar mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--yi-accent, #3f51b5); }
-    .cal-bar .cal-remind { color: var(--yi-text-muted, #777); }
-    .rc-outcome a { color: var(--yi-accent, #3f51b5); }
-    .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+               border: 1px dashed var(--yi-border, #e2e8f0); border-radius: 10px; padding: 7px 12px; }
+    .cal-bar mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--yi-accent, #2563eb); }
+    .cal-bar .cal-remind { color: var(--yi-text-muted, #475569); }
+    .cal-bar .cal-due { color: #dc2626; font-weight: 600; }
+    .cal-bar .cal-next { color: var(--yi-text-muted, #475569); }
+    .rc-outcome a { color: var(--yi-accent, #2563eb); }
+    .mini-btn { border: 1px solid var(--yi-border, #e2e8f0); background: transparent; color: inherit;
                 border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 500; cursor: pointer; }
     .edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
                  gap: 10px 14px; margin: 12px 0; }
     .edit-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
-                       color: var(--yi-text-muted, #777); }
+                       color: var(--yi-text-muted, #475569); }
     .edit-grid .wide { grid-column: span 2; }
-    .fld { border: 1px solid var(--yi-border, #ccc); border-radius: 8px; padding: 7px 9px;
+    .fld { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 8px; padding: 7px 9px;
            font-size: 14px; background: transparent; color: inherit; }
+    .field-error { color: #dc2626; font-size: 12px; }
     .row { display: flex; gap: 8px; align-items: center; }
-    .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e0e0e0); margin: 14px 0 10px; flex-wrap: wrap; }
+    .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e2e8f0); margin: 14px 0 10px; flex-wrap: wrap; }
     .rtab { border: none; background: transparent; color: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
             padding: 8px 13px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; }
-    .rtab.on { border-bottom-color: var(--yi-accent, #3f51b5); font-weight: 700; }
-    .cnt { font-size: 12px; font-weight: 700; background: color-mix(in srgb, var(--yi-text, #222) 10%, transparent);
+    .rtab.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; }
+    .cnt { font-size: 12px; font-weight: 700; background: color-mix(in srgb, var(--yi-text, #0f172a) 10%, transparent);
            border-radius: 999px; padding: 1px 7px; margin-left: 5px; }
     .mat-head-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .mh-note { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .mh-note { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .file-label { display: inline-flex; align-items: center; }
   `]
 })
-export class RoundCardComponent {
+export class RoundCardComponent implements OnInit {
   readonly entry = input.required<InterviewDetail>();
   readonly round = input.required<InterviewRound>();
+  /** 票30(REQ-10):展示编号(日期序位置),由详情页传入;缺省回落存储 order(其他调用方零感知)。 */
+  readonly displayNo = input<number | null>(null);
+  /** 票159：统一入口“保存并生成”的单次生成请求（详情页透传，token 递增）。 */
+  readonly prepGenRequest = input<{ roundId: string; token: number } | null>(null);
   @Output() readonly changed = new EventEmitter<void>();
   @Output() readonly addMaterialHere = new EventEmitter<string>();
+  /** 票159：读回区编辑 / 添加输入（透传自备考报告，详情页据此打开统一对话框）。 */
+  @Output() readonly editPrepInput = new EventEmitter<{ roundId: string; purpose: 'experiences' | 'resume'; assetId: string | null; text: string }>();
+  /** 票159：生成请求已被备考报告消费（透传，详情页据此清零）。 */
+  @Output() readonly generateConsumed = new EventEmitter<void>();
 
   private readonly api = inject(PlaybookV2Api);
+  private readonly remindersSvc = inject(RoundRemindersService);
   private readonly snack = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18nService);
   readonly t = makeV2T(this.i18n);
   readonly fmt = makeV2Fmt(this.i18n);
+
+  /** CONF-CAL-2:本轮真实提醒状态(与日历页横幅共用 RoundRemindersService 一份数据)。 */
+  readonly reminderState = computed(() =>
+    reminderStateForRound(this.remindersSvc.reminders(), this.round().id));
+  readonly nextRemindLabel = computed(() => {
+    const s = this.reminderState();
+    return s.kind === 'upcoming' ? formatRemindAt(s.next.remindAt) : '';
+  });
+
+  ngOnInit(): void {
+    this.remindersSvc.ensureLoaded();
+  }
 
   readonly tab = signal<RoundTab>('prep');
   readonly editing = signal(false);
@@ -195,6 +258,35 @@ export class RoundCardComponent {
   readonly eLink = signal('');
   readonly eOutcome = signal('Pending');
   readonly eFeedback = signal('');
+  /** 票106(C2):轮次编辑字段级错误(后端 UpdateRound 校验器 Stage≤50 / Interviewers≤1000 / Location≤300)。 */
+  readonly STAGE_MAX = 50;
+  readonly INTERVIEWERS_MAX = 1000;
+  readonly LOCATION_MAX = 300;
+  readonly fieldErrors = signal<Partial<Record<'stage' | 'interviewers' | 'location', string>>>({});
+
+  private tooLongText(max: number): string {
+    return this.i18n.tf('validation.tooLong', { max });
+  }
+
+  private mapFieldError(e: unknown, field: string, sentLength: number, max: number): string | null {
+    const c = fieldErrorFromServer(e, field, { sentLength, max });
+    if (!c) return null;
+    if (c.kind === 'tooLong') return this.tooLongText(max);
+    if (c.kind === 'required') return this.t('validation.required');
+    return c.text;
+  }
+
+  private clearFieldError(field: 'stage' | 'interviewers' | 'location'): void {
+    if (this.fieldErrors()[field]) {
+      const next = { ...this.fieldErrors() };
+      delete next[field];
+      this.fieldErrors.set(next);
+    }
+  }
+
+  setStage(v: string): void { this.eStage.set(v); this.clearFieldError('stage'); }
+  setInterviewers(v: string): void { this.eInterviewers.set(v); this.clearFieldError('interviewers'); }
+  setLocation(v: string): void { this.eLocation.set(v); this.clearFieldError('location'); }
 
   private tabRoundId = '';
 
@@ -241,17 +333,23 @@ export class RoundCardComponent {
         this.editing.set(false);
       }
     }, { allowSignalWrites: true });
+
+    // 票159：“保存并生成”跳转到本轮时切到 Prep 页签；备考报告收到 token 后触发一次生成。
+    // 只响应与本轮匹配的请求；父级清零请求后转发 token 同步归零——否则切页签回来、
+    // 备考报告重建时旧 token 会被当成新请求再次触发生成。
+    effect(() => {
+      const req = this.prepGenRequest();
+      if (req && req.roundId === this.round().id) {
+        this.tab.set('prep');
+        this.prepGenToken.set(req.token);
+      } else {
+        this.prepGenToken.set(0);
+      }
+    }, { allowSignalWrites: true });
   }
 
-  outcomeLabel(o: string): string {
-    switch (o) {
-      case 'Pending': return this.t('pb.v2.r.ocPending');
-      case 'Passed': return this.t('outcome.Passed');
-      case 'Failed': return this.t('outcome.Failed');
-      case 'Cancelled': return this.t('pb.v2.r.ocCancelled');
-      default: return o;
-    }
-  }
+  /** 票159：转发给备考报告的生成 token（0 = 无请求）。 */
+  readonly prepGenToken = signal(0);
 
   toggleEdit(): void {
     const r = this.round();
@@ -264,33 +362,54 @@ export class RoundCardComponent {
     this.eLink.set(r.meetingLink ?? '');
     this.eOutcome.set(r.outcome);
     this.eFeedback.set(r.feedback ?? '');
+    this.fieldErrors.set({});
     this.editing.set(!this.editing());
   }
 
   async saveEdit(): Promise<void> {
+    // 票106(C2):长度先挡,超限字段下亮含上限提示、编辑保持打开,不走通用 saveFailed
+    const preErrors: Partial<Record<'stage' | 'interviewers' | 'location', string>> = {};
+    if (textLengthError(this.eStage(), this.STAGE_MAX)) preErrors.stage = this.tooLongText(this.STAGE_MAX);
+    if (textLengthError(this.eInterviewers(), this.INTERVIEWERS_MAX)) preErrors.interviewers = this.tooLongText(this.INTERVIEWERS_MAX);
+    if (textLengthError(this.eLocation(), this.LOCATION_MAX)) preErrors.location = this.tooLongText(this.LOCATION_MAX);
+    if (Object.keys(preErrors).length > 0) { this.fieldErrors.set(preErrors); return; }
+    this.fieldErrors.set({});
     try {
       await this.api.updateRound(this.entry().id, this.round().id, {
         stage: this.eStage(),
         scheduledDate: this.eDate() || null,
-        scheduledTime: this.eTime() || null,
+        // COD-04 部分更新协议:扩展字段传空串 = 清空、缺省/null = 保持。
+        // 本表单显式编辑这两个字段,清空须发空串,不能再用 || null(会被后端当作保持)。
+        scheduledTime: this.eTime(),
         interviewers: this.eInterviewers() || null,
         format: this.eFormat() || null,
         location: this.eLocation() || null,
-        meetingLink: this.eLink() || null,
+        meetingLink: this.eLink(),
         outcome: this.eOutcome(),
-        feedback: this.eFeedback() || null
+        feedback: this.eFeedback() || null,
+        version: this.round().version ?? null
       }).toPromise();
       this.editing.set(false);
       this.snack.open(this.t('pb.v2.r.roundSaved'), this.t('common.close'), { duration: 2000 });
+      this.remindersSvc.refresh();   // CONF-CAL-2:排期可能已变,提醒状态重新对账
       this.changed.emit();
-    } catch {
+    } catch (e) {
+      // 票106(C2):errors{Stage/Interviewers/Location} 落字段下方;非字段级失败回落原通用 snack
+      const mapped: Partial<Record<'stage' | 'interviewers' | 'location', string>> = {};
+      const stageText = this.mapFieldError(e, 'Stage', this.eStage().length, this.STAGE_MAX);
+      if (stageText) mapped.stage = stageText;
+      const intText = this.mapFieldError(e, 'Interviewers', this.eInterviewers().length, this.INTERVIEWERS_MAX);
+      if (intText) mapped.interviewers = intText;
+      const locText = this.mapFieldError(e, 'Location', this.eLocation().length, this.LOCATION_MAX);
+      if (locText) mapped.location = locText;
+      if (Object.keys(mapped).length > 0) { this.fieldErrors.set(mapped); return; }
       this.snack.open(this.t('pb.v2.d.saveFailed'), this.t('common.close'), { duration: 3000 });
     }
   }
 
   deleteRound(): void {
     this.api.deleteRound(this.entry().id, this.round().id).subscribe({
-      next: () => { this.snack.open(this.t('pb.v2.r.roundDeleted'), this.t('common.close'), { duration: 2000 }); this.changed.emit(); },
+      next: () => { this.snack.open(this.t('pb.v2.r.roundDeleted'), this.t('common.close'), { duration: 2000 }); this.remindersSvc.refresh(); this.changed.emit(); },
       error: () => this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 })
     });
   }
@@ -331,7 +450,7 @@ export class RoundCardComponent {
     const date = new Date().toISOString().slice(0, 10);
     const data: ExportDialogData = {
       title: this.t('pb.v2.r.exportTitle'),
-      subtitle: `${e.companyName} · Round ${r.order} ${r.stage}`,
+      subtitle: `${e.companyName} — Round ${r.order} ${r.stage}`,
       fileBase: `${e.companyName}-Round${r.order}-${this.t('pb.v2.r.fileSuffix')}-${date}`,
       storageKey: 'record',
       toggles: [

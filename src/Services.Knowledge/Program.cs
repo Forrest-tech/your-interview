@@ -1,7 +1,4 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using YourInterview.BuildingBlocks.Hosting;
@@ -30,26 +27,15 @@ builder.Services.AddHealthChecks().AddDbContextCheck<KnowledgeDbContext>("postgr
 // ---------- 消息总线(掌握度变化 → Analytics) ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration);
 builder.Services.AddScoped<KnowledgeMasteryChangedPublisher>();
+builder.Services.AddScoped<KnowledgeItemLifecyclePublisher>();
+
+// COD-01/票03:此前 Knowledge 根本没注册 ICurrentUser —— DbContext 全局过滤器与
+// Handler 谓词都以它为归属来源,缺了它过滤器只能 fail-closed 到零行。
+builder.Services.AddCurrentUser();
 
 // ---------- 鉴权 ----------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("缺少 Jwt:SigningKey");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-    });
+// ---------- JWT 认证(校验参数唯一定义在 ServiceDefaults,ARC-09/票18) ----------
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddAuthorization(options => PermissionPolicy.AddPermissionPolicies(options));
 
@@ -70,8 +56,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// 建表 + 灌种子(迁移失败不阻塞启动,便于本地调试)
-try { await KnowledgeDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger); }
-catch (Exception ex) { app.Logger.LogError(ex, "Knowledge 数据库初始化失败 —— 服务继续启动"); }
+// 建表 + 灌种子。COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync("knowledge-api", KnowledgeDbSeeder.MigrateAndSeedAsync);
 
 app.Run();

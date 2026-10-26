@@ -14,6 +14,10 @@
             <span class="saved-date">{{ savedResumeDate() }}</span>
           }
         </div>
+        <!-- 文本简历全文只读展示(无 PDF 预览时):已存文本必须可见,不能只剩一个标签 -->
+        @if (!editing() && !resumePdfRawUrl()) {
+          <pre class="saved-resume-text">{{ savedResumePreview() }}</pre>
+        }
       </div>
     }
 
@@ -30,6 +34,13 @@
       }
       <span class="extract-hint">{{ t('profile.resumeExtractHint') }}</span>
     </div>
+
+    <!-- 简历全文编辑框:带现值,可直接改/粘贴;上传文件提取的文字也落在这里供检查修改 -->
+    <mat-form-field class="resume-field" appearance="outline">
+      <mat-label>{{ t('profile.resumeLabel') }}</mat-label>
+      <textarea matInput [(ngModel)]="resumeDraft" rows="18"
+                [placeholder]="t('profile.resumePh')"></textarea>
+    </mat-form-field>
     }
 
     <!-- 简历内容:每页渲染成图片,无浏览器 PDF 工具栏 -->

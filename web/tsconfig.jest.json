@@ -1,0 +1,19 @@
+/* 票64 ARC-08c:ts-jest 专用口径。extends 应用口径,仅把 module 改为
+   CommonJS(Jest 运行时)并关掉 importHelpers(tslib 辅助在 CJS 直出)。
+   spec 的 jest 全局一律从 '@jest/globals' 显式导入,不在此引入全局
+   @types/jest —— 避免与既有 @types/jasmine 全局声明冲突。 */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/jest",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "importHelpers": false,
+    "types": []
+  },
+  "include": [
+    "src/**/*.spec.ts",
+    "src/**/*.d.ts",
+    "test/**/*.ts"
+  ]
+}

@@ -11,14 +11,18 @@ namespace YourInterview.Services.Jobs.Application;
 
 public sealed record AnswerTemplateDto(
     Guid Id, string Category, string Question, string Answer, int SortOrder,
-    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
+    // 票101:读时 xmin(更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 public sealed record CommunicationDto(
     Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
     string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt,
     // 2026-10-20 Playbook v2:解析元数据 + 安排处理状态(Tracker 旧 UI 忽略)。
-    string? MetaJson = null, string? HandlingStatus = null);
+    string? MetaJson = null, string? HandlingStatus = null,
+    // 票101:读时 xmin(更新回传钉版;0 = 未填充)。
+    uint Version = 0);
 
 // ============================ 申请问答库(用户级) ============================
 
@@ -28,33 +32,35 @@ public sealed record ListAnswerTemplatesQuery(Guid UserId, string? Category = nu
 public sealed record CreateAnswerTemplateCommand(Guid UserId, string Category, string Question, string Answer)
     : IRequest<Result<Guid>>;
 
-public sealed record UpdateAnswerTemplateCommand(Guid Id, Guid UserId, string Category, string Question, string Answer)
+public sealed record UpdateAnswerTemplateCommand(Guid Id, Guid UserId, string Category, string Question, string Answer,
+    uint? Version = null) // 票101:读时 xmin 回传钉版,null=旧调用方不钉
     : IRequest<Result>;
 
 public sealed record DeleteAnswerTemplateCommand(Guid Id, Guid UserId) : IRequest<Result>;
 
 // ============================ 沟通记录(投递级) ============================
 
-public sealed record ListCommunicationsQuery(Guid ApplicationId)
+public sealed record ListCommunicationsQuery(Guid UserId, Guid ApplicationId)
     : IRequest<Result<IReadOnlyList<CommunicationDto>>>;
 
 public sealed record CreateCommunicationCommand(
-    Guid ApplicationId, string Type, string? Subject, string Content,
+    Guid UserId, Guid ApplicationId, string Type, string? Subject, string Content,
     string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
     string? MetaJson = null, string? HandlingStatus = null)
     : IRequest<Result<Guid>>;
 
 public sealed record UpdateCommunicationCommand(
-    Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
-    string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt)
+    Guid UserId, Guid Id, Guid ApplicationId, string Type, string? Subject, string Content,
+    string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
+    uint? Version = null) // 票101:同 UpdateAnswerTemplateCommand
     : IRequest<Result>;
 
 /// <summary>Playbook v2:单独更新沟通的元数据 / 安排处理状态(不动正文)。</summary>
 public sealed record SetCommunicationMetaCommand(
-    Guid Id, Guid ApplicationId, string? MetaJson = null, string? HandlingStatus = null)
+    Guid UserId, Guid Id, Guid ApplicationId, string? MetaJson = null, string? HandlingStatus = null)
     : IRequest<Result>;
 
-public sealed record DeleteCommunicationCommand(Guid Id, Guid ApplicationId) : IRequest<Result>;
+public sealed record DeleteCommunicationCommand(Guid UserId, Guid Id, Guid ApplicationId) : IRequest<Result>;
 
 // ============================ 校验 ============================
 
@@ -62,9 +68,13 @@ public sealed class CreateAnswerTemplateCommandValidator : AbstractValidator<Cre
 {
     public CreateAnswerTemplateCommandValidator()
     {
-        RuleFor(x => x.Category).NotEmpty().MaximumLength(100).WithMessage("分类必填");
-        RuleFor(x => x.Question).NotEmpty().MaximumLength(500).WithMessage("问题必填");
-        RuleFor(x => x.Answer).NotEmpty().MaximumLength(20000).WithMessage("答案必填");
+        // 票107:必填/长度文案分挂两条规则(WithMessage 只挂紧邻的前一条规则)。
+        RuleFor(x => x.Category).NotEmpty().WithMessage("分类必填")
+            .MaximumLength(100).WithMessage("分类长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.Question).NotEmpty().WithMessage("问题必填")
+            .MaximumLength(500).WithMessage("问题长度不能超过 {MaxLength} 个字符");
+        RuleFor(x => x.Answer).NotEmpty().WithMessage("答案必填")
+            .MaximumLength(20000).WithMessage("答案长度不能超过 {MaxLength} 个字符");
     }
 }
 
@@ -75,7 +85,8 @@ public sealed class CreateCommunicationCommandValidator : AbstractValidator<Crea
         RuleFor(x => x.Type).NotEmpty()
             .Must(t => new[] { "Email", "Call", "Interview", "Message", "Note" }.Contains(t))
             .WithMessage("沟通类型必须是 Email / Call / Interview / Message / Note");
-        RuleFor(x => x.Content).NotEmpty().MaximumLength(20000).WithMessage("内容必填");
+        RuleFor(x => x.Content).NotEmpty().WithMessage("内容必填")
+            .MaximumLength(20000).WithMessage("内容长度不能超过 {MaxLength} 个字符");
         RuleFor(x => x.Subject).MaximumLength(300);
         RuleFor(x => x.ContactName).MaximumLength(300);
         RuleFor(x => x.ContactEmail).MaximumLength(300);
@@ -94,7 +105,8 @@ public sealed class ListAnswerTemplatesQueryHandler(JobsDbContext db)
             q = q.Where(t => t.Category == request.Category.Trim());
 
         var items = await q.OrderBy(t => t.Category).ThenBy(t => t.SortOrder).ThenBy(t => t.Question)
-            .Select(t => new AnswerTemplateDto(t.Id, t.Category, t.Question, t.Answer, t.SortOrder, t.CreatedAt, t.UpdatedAt))
+            .Select(t => new AnswerTemplateDto(t.Id, t.Category, t.Question, t.Answer, t.SortOrder, t.CreatedAt, t.UpdatedAt,
+                EF.Property<uint>(t, "xmin")))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<AnswerTemplateDto>>(items);
@@ -124,6 +136,7 @@ public sealed class UpdateAnswerTemplateCommandHandler(JobsDbContext db)
     {
         var t = await db.AnswerTemplates.FirstOrDefaultAsync(x => x.Id == request.Id && x.UserId == request.UserId, ct);
         if (t is null) return Result.Failure(Error.NotFound("问答模板"));
+        ConcurrencyPin.Pin(db, t, request.Version);
 
         t.Update(request.Category.Trim(), request.Question.Trim(), request.Answer, t.SortOrder);
         await db.SaveChangesAsync(ct);
@@ -152,15 +165,15 @@ public sealed class ListCommunicationsQueryHandler(JobsDbContext db)
 {
     public async Task<Result<IReadOnlyList<CommunicationDto>>> Handle(ListCommunicationsQuery request, CancellationToken ct)
     {
-        if (!await db.Applications.AsNoTracking().AnyAsync(x => x.Id == request.ApplicationId, ct))
+        if (!await db.Applications.AsNoTracking().AnyAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct))
             return Result.Failure<IReadOnlyList<CommunicationDto>>(Error.NotFound("投递记录"));
 
         var items = await db.Communications.AsNoTracking()
-            .Where(c => c.ApplicationId == request.ApplicationId)
+            .Where(c => c.ApplicationId == request.ApplicationId && c.UserId == request.UserId)
             .OrderByDescending(c => c.OccurredAt).ThenByDescending(c => c.CreatedAt)
             .Select(c => new CommunicationDto(c.Id, c.ApplicationId, c.Type, c.Subject, c.Content,
                 c.ContactName, c.ContactEmail, c.OccurredAt, c.CreatedAt, c.UpdatedAt,
-                c.MetaJson, c.HandlingStatus))
+                c.MetaJson, c.HandlingStatus, EF.Property<uint>(c, "xmin")))
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<CommunicationDto>>(items);
@@ -172,11 +185,15 @@ public sealed class CreateCommunicationCommandHandler(JobsDbContext db)
 {
     public async Task<Result<Guid>> Handle(CreateCommunicationCommand request, CancellationToken ct)
     {
-        if (!await db.Applications.AsNoTracking().AnyAsync(x => x.Id == request.ApplicationId, ct))
+        var app = await db.Applications.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
+        if (app is null)
             return Result.Failure<Guid>(Error.NotFound("投递记录"));
 
+        // 归属从所属投递盖章(不从请求另传)—— 沟通的主人恒等于投递的主人
         var c = new ApplicationCommunication(request.ApplicationId, request.Type, request.Subject,
-            request.Content, request.ContactName, request.ContactEmail, request.OccurredAt);
+            request.Content, request.ContactName, request.ContactEmail, request.OccurredAt,
+            userId: app.UserId);
         if (!string.IsNullOrWhiteSpace(request.MetaJson)) c.SetMeta(request.MetaJson);
         if (!string.IsNullOrWhiteSpace(request.HandlingStatus)) c.SetHandlingStatus(request.HandlingStatus);
         db.Communications.Add(c);
@@ -191,7 +208,7 @@ public sealed class SetCommunicationMetaCommandHandler(JobsDbContext db)
     public async Task<Result> Handle(SetCommunicationMetaCommand request, CancellationToken ct)
     {
         var c = await db.Communications.FirstOrDefaultAsync(
-            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId, ct);
+            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("沟通记录"));
 
         if (request.MetaJson is not null) c.SetMeta(request.MetaJson);
@@ -207,8 +224,9 @@ public sealed class UpdateCommunicationCommandHandler(JobsDbContext db)
     public async Task<Result> Handle(UpdateCommunicationCommand request, CancellationToken ct)
     {
         var c = await db.Communications.FirstOrDefaultAsync(
-            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId, ct);
+            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("沟通记录"));
+        ConcurrencyPin.Pin(db, c, request.Version);
 
         c.Update(request.Type, request.Subject, request.Content, request.ContactName,
             request.ContactEmail, request.OccurredAt);
@@ -223,7 +241,7 @@ public sealed class DeleteCommunicationCommandHandler(JobsDbContext db)
     public async Task<Result> Handle(DeleteCommunicationCommand request, CancellationToken ct)
     {
         var c = await db.Communications.FirstOrDefaultAsync(
-            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId, ct);
+            x => x.Id == request.Id && x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
         if (c is null) return Result.Failure(Error.NotFound("沟通记录"));
 
         c.MarkDeleted();

@@ -5,6 +5,7 @@ using YourInterview.BuildingBlocks.Results;
 using YourInterview.Services.Jobs.Domain;
 using YourInterview.Services.Jobs.Infrastructure.Persistence;
 using YourInterview.Services.Jobs.Infrastructure.Services;
+using YourInterview.SharedContracts.Ai;
 
 namespace YourInterview.Services.Jobs.Application;
 
@@ -62,7 +63,7 @@ public sealed class GenerateCoverLetterCommandHandler(
     {
         // ---------- 1. 取齐四个输入 ----------
         var app = await db.Applications.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId, ct);
+            .FirstOrDefaultAsync(x => x.Id == request.ApplicationId && x.UserId == request.UserId, ct);
         if (app is null)
             return Result.Failure<CoverLetterDto>(Error.NotFound("投递记录"));
 
@@ -74,9 +75,9 @@ public sealed class GenerateCoverLetterCommandHandler(
                 "尚未录入简历 —— 求职信必须基于你的真实经历撰写,请先录入简历。"));
 
         var company = await db.Companies.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == app.CompanyId, ct);
+            .FirstOrDefaultAsync(x => x.Id == app.CompanyId && x.UserId == request.UserId, ct);
 
-        var existing = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, ct);
+        var existing = await db.CoverLetters.FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId && x.UserId == request.UserId, ct);
 
         // 默认不覆盖已有内容 —— 生成一次要花钱花时间,把用户手改的信冲掉是严重体验事故。
         if (existing is not null && !string.IsNullOrWhiteSpace(existing.Content) && !request.Overwrite)
@@ -146,8 +147,9 @@ public sealed class GenerateCoverLetterCommandHandler(
     /// ⚠️ 长度控制:简历/JD/公司情报各自截断到上限再拼。
     /// 无脑全塞会遇到两个问题:(1) 超出上下文窗口被上游拒;
     /// (2) 塞在中间的信息注意力衰减,反而丢失关键匹配点。
-    /// 上限取的是"够用且不溢出"的经验值 —— JD 40000 是库里的上限,这里收到 12000
-    /// 是因为求职信只需要抓 3-4 个核心要求,不是把整份 JD 逐条对应。
+    /// 上限取的是"够用且不溢出"的经验值 —— JD 在库里不限长 (text 列,应用层上限
+    /// JdTextLimits.MaxLength),这里收到 12000 是 prompt 侧的截断、与保存上限无关:
+    /// 求职信只需要抓 3-4 个核心要求,不是把整份 JD 逐条对应。
     /// </summary>
     private static string BuildPrompt(JobApplication app, Company? company, string resumeContent,
         string? extraInstructions)

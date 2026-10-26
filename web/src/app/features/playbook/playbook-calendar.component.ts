@@ -5,8 +5,11 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ApiClient } from '../../core/api/api-client';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { RoundRemindersService } from './redesign/round/round-reminders.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { weekDayHeaders } from '../../core/i18n/localized-messages.helpers';
+import { dueBanners, dueReminderIdsForRound } from './redesign/round/reminders.helpers';
 import { UpcomingRound } from '../../core/models/api.models';
 
 interface CalDay {
@@ -29,9 +32,15 @@ interface CalDay {
   styleUrl: './playbook-calendar.component.scss'
 })
 export class PlaybookCalendarComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly interviewsApi = inject(InterviewsApiService);
+  private readonly remindersSvc = inject(RoundRemindersService);
   private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
+
+  /** CONF-CAL-2:已到期未确认的提醒(横幅数据源,与轮次卡共用同一份状态)。
+      ★ ML-FIX-UI(W-UI-10):横幅按轮去重(每轮一条,最早到期),不再出现
+      同一场面试两条完全相同的横幅。 */
+  readonly dueList = computed(() => dueBanners(this.remindersSvc.reminders()));
 
   readonly t = (key: string) => this.i18n.t(key);
 
@@ -82,20 +91,37 @@ export class PlaybookCalendarComponent implements OnInit {
     return weeks;
   });
 
+  /* 票 118 / F-8:月题写月份名(October 2026 / 2026年10月),不再是 2026 / 10 的数字拼接;
+     语言随界面语言(Intl 长月份名)。 */
   readonly monthLabel = computed(() => {
     const d = this.viewMonth();
-    return `${d.getFullYear()} / ${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const locale = { zh: 'zh-CN', fr: 'fr-FR', en: 'en-US' }[this.i18n.lang()] ?? 'en-US';
+    return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(d);
   });
 
-  readonly weekHeaders = ['一', '二', '三', '四', '五', '六', '日'];
+  /** A10(票35):星期头按界面语言取(zh 与改前逐字一致)。 */
+  readonly weekHeaders = computed(() => weekDayHeaders(this.i18n.lang()));
 
   ngOnInit(): void {
     this.reload();
+    this.remindersSvc.ensureLoaded();
+  }
+
+  /** CONF-CAL-2:确认一条到期提醒,横幅即时消失。
+      ★ ML-FIX-UI(W-UI-10):横幅已按轮去重,确认时须 ack 该轮全部到期行,
+      否则被折叠的另一条(DayBefore/HourBefore 之另一)下次又冒出来。 */
+  ackReminder(id: string): void {
+    const row = this.dueList().find(r => r.id === id)
+      ?? this.remindersSvc.reminders().find(r => r.id === id);
+    if (!row) return;
+    for (const rid of dueReminderIdsForRound(this.remindersSvc.reminders(), row.roundId)) {
+      this.remindersSvc.ack(rid);
+    }
   }
 
   reload(): void {
     this.loading.set(true);
-    this.api.get<UpcomingRound[]>(`/api/interviews/rounds/upcoming?days=60`).subscribe({
+    this.interviewsApi.getUpcomingRounds(60).subscribe({
       next: (list) => {
         this.rounds.set(list ?? []);
         this.loading.set(false);

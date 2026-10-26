@@ -16,7 +16,9 @@ import { MatExpansionModule } from '@angular/material/expansion';
 
 import { TrackerApi, ParsedJd, ParsedInvite } from '../../core/api/tracker-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { parseMessageText } from '../../core/i18n/localized-messages.helpers';
 import { Application } from '../../core/models/api.models';
+import { normalizeSectionKey } from './jd-sections.helpers';
 
 /** 弹窗入参:邀请模式需要一份现有投递清单供选择归属。 */
 export interface SmartAddDialogData {
@@ -58,7 +60,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
   template: `
     <h2 mat-dialog-title>
       <mat-icon>auto_awesome</mat-icon>
-      {{ t('tracker.smartPasteJob') }}
+      {{ t('tracker.smartAdd') }}
     </h2>
 
     <mat-dialog-content class="sad-body">
@@ -197,16 +199,36 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
                 <textarea matInput rows="4" name="jdSummary" [(ngModel)]="jd.jdSummary"
                           [placeholder]="t('tracker.saNotFound')"></textarea>
               </mat-form-field>
-              <mat-form-field appearance="outline" class="full">
-                <mat-label>{{ t('tracker.saRequirements') }}</mat-label>
-                <textarea matInput rows="4" name="jdRequirements" [(ngModel)]="jd.requirements"
-                          [placeholder]="t('tracker.saNotFound')"></textarea>
-              </mat-form-field>
-              <mat-form-field appearance="outline" class="full">
-                <mat-label>{{ t('tracker.saBenefits') }}</mat-label>
-                <textarea matInput rows="3" name="jdBenefits" [(ngModel)]="jd.benefits"
-                          [placeholder]="t('tracker.saNotFound')"></textarea>
-              </mat-form-field>
+              <!-- 票 154：解析出小节时渲染小节列表（原标题可改、正文可改、可删、可增）；
+                   无小节时回退今日 requirements / benefits 两个文本框。 -->
+              @if (sections.length > 0) {
+                <div class="sa-sections-label">{{ t('tracker.saSections') }}</div>
+                @for (s of sections; track s.id) {
+                  <div class="sa-section">
+                    <mat-form-field appearance="outline" class="full">
+                      <mat-label>{{ t('tracker.saSectionTitle') }}</mat-label>
+                      <input matInput [name]="'secTitle' + s.id" [(ngModel)]="s.title">
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="full">
+                      <mat-label>{{ t('tracker.saSectionBody') }}</mat-label>
+                      <textarea matInput rows="4" [name]="'secBody' + s.id" [(ngModel)]="s.body"></textarea>
+                    </mat-form-field>
+                    <button mat-button type="button" (click)="removeSection(s.id)">{{ t('tracker.saSectionDelete') }}</button>
+                  </div>
+                }
+                <button mat-stroked-button type="button" (click)="addSection()">{{ t('tracker.saSectionAdd') }}</button>
+              } @else {
+                <mat-form-field appearance="outline" class="full">
+                  <mat-label>{{ t('tracker.saRequirements') }}</mat-label>
+                  <textarea matInput rows="4" name="jdRequirements" [(ngModel)]="jd.requirements"
+                            [placeholder]="t('tracker.saNotFound')"></textarea>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="full">
+                  <mat-label>{{ t('tracker.saBenefits') }}</mat-label>
+                  <textarea matInput rows="3" name="jdBenefits" [(ngModel)]="jd.benefits"
+                            [placeholder]="t('tracker.saNotFound')"></textarea>
+                </mat-form-field>
+              }
             </mat-expansion-panel>
 
             <!-- 公司介绍:有内容时展开 -->
@@ -241,7 +263,7 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
               <mat-select name="invApp" [(ngModel)]="inviteApplicationId">
                 <mat-option [value]="null">{{ t('tracker.saSelectApp') }}</mat-option>
                 @for (a of applications; track a.id) {
-                  <mat-option [value]="a.id">{{ a.companyName }} · {{ a.role }}</mat-option>
+                  <mat-option [value]="a.id">{{ a.companyName }} — {{ a.role }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
@@ -312,10 +334,10 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
     .mode-btn {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 6px 14px; border-radius: 999px; cursor: pointer;
-      border: 1px solid rgba(0,0,0,0.14); background: transparent; font-size: 13px;
+      border: 1px solid rgba(15, 23, 42, 0.14); background: transparent; font-size: 13px;
     }
     .mode-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .mode-btn.on { background: rgba(63,81,181,0.12); border-color: rgba(63,81,181,0.5); color: #3f51b5; font-weight: 600; }
+    .mode-btn.on { background: rgba(37, 99, 235,0.12); border-color: rgba(37, 99, 235,0.5); color: var(--brand); font-weight: 600; }
     .full { width: 100%; }
     mat-form-field { width: 100%; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -326,13 +348,17 @@ const INVITE_FORMATS = ['Phone', 'Video', 'Onsite'];
     .note {
       display: flex; align-items: flex-start; gap: 6px; margin: 10px 0;
       padding: 8px 12px; border-radius: 6px; font-size: 13px;
-      background: rgba(76,175,80,0.10); color: #2e7d32;
+      background: var(--go-tint); color: var(--go);
     }
-    .note.warn { background: rgba(255,152,0,0.12); color: #a05a00; }
+    .note.warn { background: var(--attention-tint); color: var(--attention); }
     .note mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .hint { font-size: 12.5px; opacity: .7; margin: 8px 0 0; }
     .sad-sections { margin-top: 4px; }
     .sad-sections mat-expansion-panel { margin-bottom: 8px; }
+    /* 票 154：小节列表 —— 标题与分隔，仅布局，不引入新色板。 */
+    .sa-sections-label { font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
+    .sa-section { border-top: 1px solid rgba(15, 23, 42, 0.10); padding-top: 8px; margin-bottom: 4px; }
+    .sa-section > button { margin: -4px 0 8px auto; display: block; }
     .sad-sections mat-panel-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; }
     .sad-sections mat-panel-title mat-icon { font-size: 18px; width: 18px; height: 18px; opacity: .7; }
     .sad-sections mat-panel-description { font-size: 12.5px; }
@@ -383,14 +409,8 @@ export class SmartAddDialogComponent {
     this.trackerApi.fetchLinkedIn(url).subscribe({
       next: (r: any) => {
         this.fetching.set(false);
-        if (r?.ok === false) {
-          if (r.error === 'needs_login') {
-            this.msg.set(this.t('tracker.saNeedLogin'));
-          } else {
-            this.msg.set(this.t('tracker.saFetchFail'));
-          }
-          return;
-        }
+        // 票47(COD-20):失败已改为非 200 ProblemDetails,不再走 next 的 ok:false 分支;
+        // 失败分流见下方 error 回调(按 ProblemDetails 的 code 扩展)。
         // 用抓取结果填充表单（复用 parsed 结构）
         // 2026-10-19:保留原 URL 在 link 字段，raw 保留 JD 文本用于保存
         const fetchedUrl = url;
@@ -404,6 +424,8 @@ export class SmartAddDialogComponent {
           message: '', confidence: {}
         } as any;
         this.parsed.set(parsedData);
+        // 票 154：LinkedIn 抓取路径不返回小节 → 空列表，走 legacy 文本框。
+        this.initSections(parsedData);
         // 2026-10-19:同步 jd 表单（模板绑的是 jd，不是 parsed），实现自动填充
         this.jd = {
           company: parsedData.company, role: parsedData.role, location: parsedData.location,
@@ -426,9 +448,13 @@ export class SmartAddDialogComponent {
           this.raw = fetchedUrl;
         }
       },
-      error: () => {
+      error: (e: unknown) => {
         this.fetching.set(false);
-        this.msg.set(this.t('tracker.saFetchFail'));
+        // 票47(COD-20):ApiClient.rethrow 把 ProblemDetails 的 code 扩展透传到 error.code
+        // (COD-05 同型读法)—— linkedin_needs_login 显示登录提示,其余一律抓取失败。
+        const code = (e as { code?: string } | null)?.code;
+        this.msg.set(this.t(code === 'linkedin_needs_login'
+          ? 'tracker.saNeedLogin' : 'tracker.saFetchFail'));
       }
     });
   }
@@ -459,6 +485,39 @@ export class SmartAddDialogComponent {
     logoUrl: ''
   };
 
+  /**
+   * 票 154：对话框小节编辑态（解析快照 + 编辑副本）。
+   * parsedTitle/parsedBody 是解析时的快照（手动新增节为空），保存时据此判定 edited；
+   * id 与快照字段只活在对话框内，保存时剥离 —— 后端按标题重算 key。
+   */
+  sections: {
+    id: number; title: string; body: string; origin: 'auto' | 'manual';
+    parsedTitle: string; parsedBody: string;
+  }[] = [];
+  private nextSectionId = 1;
+
+  /** 从解析结果初始化小节编辑态（LinkedIn 抓取路径无小节 → 空列表，走 legacy 文本框）。 */
+  private initSections(parsed: { sections?: { title: string; body: string; origin: string }[] | null }): void {
+    this.nextSectionId = 1;
+    this.sections = (parsed.sections ?? []).map((s) => ({
+      id: this.nextSectionId++,
+      title: s.title, body: s.body,
+      origin: s.origin === 'manual' ? 'manual' as const : 'auto' as const,
+      parsedTitle: s.title, parsedBody: s.body,
+    }));
+  }
+
+  addSection(): void {
+    this.sections.push({
+      id: this.nextSectionId++, title: '', body: '',
+      origin: 'manual', parsedTitle: '', parsedBody: '',
+    });
+  }
+
+  removeSection(id: number): void {
+    this.sections = this.sections.filter((s) => s.id !== id);
+  }
+
   /** 邀请解析结果的可编辑副本。日期与时间拆开存 —— 表单控件就是两个。 */
   inv: {
     roundNo: number | null; stage: string | null; format: string | null;
@@ -471,14 +530,19 @@ export class SmartAddDialogComponent {
 
   /** 职位详情区是否有解析出的内容 —— 有则默认展开,无则收起。 */
   get hasJobDetails(): boolean {
-    return !!(this.jd.jdSummary?.trim() || this.jd.requirements?.trim() || this.jd.benefits?.trim());
+    return !!(this.jd.jdSummary?.trim()
+      || this.sections.some((s) => s.title.trim() || s.body.trim())
+      || this.jd.requirements?.trim() || this.jd.benefits?.trim());
   }
   /** 公司介绍区是否有解析出的内容 —— 有则默认展开,无则收起。 */
   get hasCompanyDesc(): boolean { return !!this.jd.companyDescription?.trim(); }
-  /** 职位详情区的摘要提示:已填几项 / 空。 */
+  /** 职位详情区的摘要提示:已填几项 / 空（有小节时计摘要 + 非空小节数）。 */
   get detailsSummary(): string {
-    const n = [this.jd.jdSummary, this.jd.requirements, this.jd.benefits]
-      .filter(v => v?.trim()).length;
+    const n = this.sections.length > 0
+      ? (this.jd.jdSummary?.trim() ? 1 : 0)
+        + this.sections.filter((s) => s.title.trim() || s.body.trim()).length
+      : [this.jd.jdSummary, this.jd.requirements, this.jd.benefits]
+        .filter(v => v?.trim()).length;
     return n > 0 ? this.tf('tracker.saSecFilled', { n }) : this.t('tracker.saSecEmpty');
   }
 
@@ -509,7 +573,7 @@ export class SmartAddDialogComponent {
       this.trackerApi.parseJd(this.raw, this.useAi).subscribe(done<ParsedJd>((r) => {
         this.parsed.set(r);
         this.status.set(r.status);
-        this.msg.set(r.message);
+        this.msg.set(parseMessageText(r.messageCodes, (k) => this.i18n.t(k), this.mode() === 'jd' ? ' ' : ''));
         // 图片/完全解析不出时保留空白表单 —— 用户可以直接手工填,入口不中断
         this.jd = {
           company: r.company ?? '', role: r.role ?? '', location: r.location ?? '',
@@ -524,12 +588,13 @@ export class SmartAddDialogComponent {
           jobType: r.jobType ?? '',
           logoUrl: (r as any).logoUrl ?? ''
         };
+        this.initSections(r);
       }));
     } else {
       this.trackerApi.parseInvite(this.raw, this.useAi).subscribe(done<ParsedInvite>((r) => {
         this.invite.set(r);
         this.status.set(r.status);
-        this.msg.set(r.message);
+        this.msg.set(parseMessageText(r.messageCodes, (k) => this.i18n.t(k), this.mode() === 'jd' ? ' ' : ''));
         const at = r.scheduledAt ? new Date(r.scheduledAt) : null;
         this.inv = {
           roundNo: r.roundNo,
@@ -547,6 +612,29 @@ export class SmartAddDialogComponent {
 
   saveJd(): void {
     if (!this.canSaveJd) return;
+    // 票 154：小节保存校验（首步定法 ③：存储闸门为整 JSON ≤ JdText 上限，后端校验；
+    // 对话框层另做两项阻断提示；全空节静默丢弃，不阻断）。
+    const keptSections = this.sections.filter((s) => s.title.trim() || s.body.trim());
+    for (const s of keptSections) {
+      if (s.title.trim().length > 60) {
+        this.msg.set(this.t('tracker.saSectionTitleTooLong'));
+        return;
+      }
+      if (!s.title.trim() && s.body.trim()) {
+        this.msg.set(this.t('tracker.saSectionTitleRequired'));
+        return;
+      }
+    }
+    // 小节 JSON：剥离对话框本地 id 与解析快照；edited = 自动节标题/正文改过快照；
+    // 手动节 edited=false（origin 已区分）。无小节时传 null，走 legacy 三字段。
+    const sectionsJson = keptSections.length > 0 ? JSON.stringify(keptSections.map((s) => ({
+      title: s.title.trim(),
+      key: normalizeSectionKey(s.title.trim()),
+      body: s.body.trim(),
+      origin: s.origin,
+      edited: s.origin === 'auto'
+        && (s.title.trim() !== s.parsedTitle || s.body.trim() !== s.parsedBody),
+    }))) : null;
     this.busy.set(true);
     this.trackerApi.smartAdd({
       company: this.jd.company.trim(),
@@ -566,11 +654,17 @@ export class SmartAddDialogComponent {
       companyDescription: this.jd.companyDescription || null,
       workAuthorization: this.jd.workAuthorization || null,
       requirements: this.jd.requirements || null,
-      benefits: this.jd.benefits || null
+      benefits: this.jd.benefits || null,
+      // 票 150:解析到的真实 logo(li-logo)随 Smart-add 落库;此前草稿带 logoUrl
+      // 但提交体没传,后端 Body/Command 无此字段,真实 logo 在边界静默丢失。
+      logoUrl: this.jd.logoUrl || null,
+      // 票 154：有小节时以后端重算为准（requirements/benefits 仍随体发送作兼容，
+      // 后端 SectionsJson 非空时忽略二者、改从小节列表投影）。
+      sectionsJson
     }).subscribe({
       next: (r) => {
         this.busy.set(false);
-        this.dialogRef.close({ ok: true, message: this.tf('tracker.saCreated', { a: `${r.companyName} · ${this.jd.role}` }) });
+        this.dialogRef.close({ ok: true, message: this.tf('tracker.saCreated', { a: `${r.companyName} — ${this.jd.role}` }) });
       },
       error: (e: Error) => { this.busy.set(false); this.status.set('Failed'); this.msg.set(e.message); }
     });

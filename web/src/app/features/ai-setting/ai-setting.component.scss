@@ -16,7 +16,7 @@
   gap: 5px;
   margin-bottom: 12px;
   font-size: 13px;
-  color: #2f6fed;
+  color: #2563eb;
   text-decoration: none;
 }
 .sp-head .back:hover { text-decoration: underline; }
@@ -26,19 +26,19 @@
   margin: 0 0 6px;
   font-size: 21px;
   font-weight: 700;
-  color: #1f2733;
+  color: #0f172a;
 }
 .sp-sub {
   margin: 0;
   font-size: 13px;
   line-height: 1.65;
-  color: #6b7280;
+  color: #64748b;
 }
 
 /* ---------- 卡片 ---------- */
 .sp-card {
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, .07);
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, .07);
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
   padding: 18px 20px 20px;
@@ -51,21 +51,21 @@
   margin: 0 0 12px;
   font-size: 14.5px;
   font-weight: 700;
-  color: #1f2733;
+  color: #0f172a;
 }
 .sp-card-title mat-icon {
   font-size: 19px;
   width: 19px;
   height: 19px;
-  color: #2f6fed;
+  color: #2563eb;
 }
 .sp-card-desc {
   margin: 0 0 14px;
   font-size: 12.5px;
   line-height: 1.7;
-  color: #6b7280;
+  color: #64748b;
 }
-.sp-card-desc strong { color: #3b4351; }
+.sp-card-desc strong { color: #0f172a; }
 
 /* ---------- 引擎选项(与 /practice 弹窗同款视觉) ---------- */
 .eng-list {
@@ -80,17 +80,17 @@
   width: 100%;
   text-align: left;
   padding: 12px 14px;
-  border: 1px solid #e3e8ef;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
-  background: #fff;
+  background: #ffffff;
   cursor: pointer;
   transition: border-color .15s ease, background .15s ease;
 }
-.eng-row:hover { border-color: #c3d6f7; background: #f8fbff; }
+.eng-row:hover { border-color: #dbeafe; background: #eff6ff; }
 .eng-row.on {
-  border-color: #2f6fed;
-  background: #f2f7ff;
-  box-shadow: 0 0 0 1px rgba(47, 111, 237, .18);
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, .18);
 }
 
 /* 单选圆圈:显式尺寸 + 居中,避免"圆圈未对齐"的老问题 */
@@ -99,18 +99,18 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid #c5cdd9;
+  border: 2px solid #e2e8f0;
   box-sizing: border-box;
   position: relative;
   transition: border-color .15s ease;
 }
-.eng-radio.checked { border-color: #2f6fed; }
+.eng-radio.checked { border-color: #2563eb; }
 .eng-radio.checked::after {
   content: '';
   position: absolute;
   inset: 2px;
   border-radius: 50%;
-  background: #2f6fed;
+  background: #2563eb;
 }
 
 .eng-icon {
@@ -118,9 +118,9 @@
   font-size: 20px;
   width: 20px;
   height: 20px;
-  color: #5b6472;
+  color: #475569;
 }
-.eng-row.on .eng-icon { color: #2f6fed; }
+.eng-row.on .eng-icon { color: #2563eb; }
 
 .eng-body {
   display: flex;
@@ -132,20 +132,20 @@
 .eng-name {
   font-size: 13.5px;
   font-weight: 600;
-  color: #1f2733;
+  color: #0f172a;
 }
 .eng-note {
   font-size: 12px;
   line-height: 1.5;
-  color: #9aa1ab;
+  color: #64748b;
 }
 
 .eng-badge {
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: 600;
-  color: #2f6fed;
-  background: #e4eeff;
+  color: #2563eb;
+  background: #eff6ff;
   border-radius: 9px;
   padding: 2px 8px;
 }
@@ -167,19 +167,19 @@
 }
 .key-preview {
   font-size: 12px;
-  color: #6b7280;
+  color: #64748b;
   font-variant-numeric: tabular-nums;
 }
 .saved-hint {
   font-size: 12.5px;
   font-weight: 600;
-  color: #22a35c; /* 成功 = 绿色 */
+  color: #16a34a; /* 成功 = 绿色 */
 }
 
 /* ⚠️ 失败必须与成功视觉上区分开。以前无此分支,错误信息被染成绿色,
    用户会把 "保存失败:...28P01..." 误读为成功。 */
 .saved-hint.err {
-  color: #c0392b; /* 失败 = 红色 */
+  color: #dc2626; /* 失败 = 红色 */
 }
 
 /* ---------- 服务端已保存凭据的状态行 ---------- */
@@ -192,7 +192,7 @@
   margin: 14px 0 0;
   font-size: 12.5px;
   line-height: 1.7;
-  color: #6b7280;
+  color: #64748b;
 }
 .remote-line mat-icon {
   flex: 0 0 auto;
@@ -200,7 +200,7 @@
   width: 17px;
   height: 17px;
 }
-.remote-line.on { color: #22a35c; }
+.remote-line.on { color: #16a34a; }
 .remote-line strong {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -224,11 +224,11 @@
   margin: 14px 0 0;
   padding: 10px 12px;
   border-radius: 9px;
-  background: #fff8e6;
-  border: 1px solid #f5e3b3;
+  background: #fffbeb;
+  border: 1px solid #fffbeb;
   font-size: 12.5px;
   line-height: 1.7;
-  color: #8a6d1f;
+  color: var(--attention);
 }
 .warn-note mat-icon {
   flex: 0 0 auto;
@@ -237,14 +237,14 @@
   height: 17px;
   margin-top: 1px;
 }
-.warn-note strong { color: #6f5714; }
+.warn-note strong { color: var(--attention); }
 
 /* ---------- 配置教程卡(2026-09-16 Forrest 本轮新增) ---------- */
 .tut-card .tut-intro {
   margin: 0 0 12px;
   font-size: 12.5px;
   line-height: 1.75;
-  color: #5b6472;
+  color: #475569;
 }
 
 /* 说明副条:与主文区分开,读起来像"注意事项"而不像正文 */
@@ -252,11 +252,11 @@
   margin: 0 0 16px;
   padding: 11px 14px 11px 28px;
   border-radius: 9px;
-  background: #f7f9fc;
-  border: 1px solid #e8edf5;
+  background: #f6f8fb;
+  border: 1px solid #eff6ff;
   font-size: 12.5px;
   line-height: 1.8;
-  color: #5b6472;
+  color: #475569;
 }
 .tut-notes li + li { margin-top: 7px; }
 
@@ -264,7 +264,7 @@
   margin: 16px 0 8px;
   font-size: 13px;
   font-weight: 700;
-  color: #3b4351;
+  color: #0f172a;
 }
 
 /* 编号步骤:用细边框包住,让"6 步"一眼看得到 */
@@ -273,9 +273,9 @@
   padding-left: 20px;
   font-size: 12.5px;
   line-height: 1.95;
-  color: #5b6472;
+  color: #475569;
 }
-.tut-steps li::marker { color: #2f6fed; font-weight: 700; }
+.tut-steps li::marker { color: #2563eb; font-weight: 700; }
 
 .tut-docs {
   margin: 0;
@@ -290,7 +290,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12.5px;
-  color: #2f6fed;
+  color: #2563eb;
   text-decoration: none;
   /* ⚠️ 长链接文字不能让容器被撑宽 */
   flex-wrap: wrap;
@@ -301,7 +301,7 @@
   width: 15px;
   height: 15px;
 }
-.tut-doc-note { color: #6b7280; }
+.tut-doc-note { color: #64748b; }
 
 /* ---------- 事实清单 ---------- */
 .fact-list {
@@ -309,9 +309,9 @@
   padding-left: 20px;
   font-size: 12.5px;
   line-height: 1.85;
-  color: #5b6472;
+  color: #475569;
 }
-.fact-list strong { color: #3b4351; }
+.fact-list strong { color: #0f172a; }
 
 /* ---------- 备考数据源开关组 ---------- */
 .ps-toggles {

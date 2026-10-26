@@ -7,8 +7,8 @@
 
 /* ---------- 左侧品牌区 ---------- */
 .brand-panel {
-  background: linear-gradient(160deg, #1a237e 0%, #283593 45%, #3f51b5 100%);
-  color: #fff;
+  background: linear-gradient(160deg, #1e3a8a 0%, #1e3a8a 45%, #2563eb 100%);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -42,7 +42,7 @@
 .brand-mark {
   width: 56px;
   height: 56px;
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.14);
   display: flex;
   align-items: center;
@@ -53,13 +53,16 @@
   font-size: 30px;
   width: 30px;
   height: 30px;
-  color: #fff;
+  color: #ffffff;
 }
 
+/* 票123 R-8.1:登录页 H1「Your Interview」—— 产品名要出现在产品自己的展示字体里。
+   Inter → Space Grotesk 600,字号不变(32px)。 */
 .brand-content h1 {
   margin: 0 0 8px;
+  font-family: 'Space Grotesk', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', sans-serif;
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.3px;
 }
 .tagline {
@@ -86,7 +89,7 @@
   flex: 0 0 40px;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
@@ -108,6 +111,11 @@
   margin: 0;
   font-size: 12px;
   opacity: 0.5;
+  /* 票123 R-3:两个事实分列两行(不再用中点串成一句)。 */
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.5;
 }
 
 /* ---------- 右侧表单区 ---------- */
@@ -116,7 +124,7 @@
   align-items: center;
   justify-content: center;
   padding: 40px 24px;
-  background: #fafbfe;
+  background: #f6f8fb;
 }
 
 .form-inner {
@@ -130,17 +138,17 @@
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.2px;
-  color: #1a1a2e;
+  color: #0f172a;
 }
 .form-head p {
   margin: 0;
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(15, 23, 42, 0.55);
 }
 
 .top-bar {
   margin-bottom: 16px;
-  border-radius: 4px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -157,8 +165,22 @@ mat-form-field { margin-bottom: 2px; }
 .human-hint {
   margin: 8px 0 0;
   font-size: 12.5px;
-  color: #b26a00;
+  color: var(--attention);
   text-align: center;
+}
+
+/* ★ ML-FIX-UI(W-UI-5):注册入口行 —— 与注册页的回登录链接同口径。 */
+.switch-link {
+  margin: 16px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.switch-link a {
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .info, .err {
@@ -178,8 +200,8 @@ mat-form-field { margin-bottom: 2px; }
   flex: 0 0 18px;
   margin-top: 1px;
 }
-.info { background: #e6f4ea; color: #1e7e34; }
-.err { background: #fdecea; color: #b3261e; }
+.info { background: #f0fdf4; color: #16a34a; }
+.err { background: #fef2f2; color: #dc2626; }
 
 .submit {
   height: 46px;
@@ -189,8 +211,8 @@ mat-form-field { margin-bottom: 2px; }
   border-radius: 8px;
 }
 .submit:disabled {
-  background: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.35);
+  background: rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.35);
 }
 
 .divider {
@@ -198,7 +220,7 @@ mat-form-field { margin-bottom: 2px; }
   align-items: center;
   gap: 12px;
   margin: 22px 0 14px;
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(15, 23, 42, 0.45);
   font-size: 12.5px;
 }
 .divider::before,
@@ -206,15 +228,15 @@ mat-form-field { margin-bottom: 2px; }
   content: '';
   flex: 1;
   height: 1px;
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(15, 23, 42, 0.12);
 }
 
 .google-btn {
   height: 44px;
   font-size: 14.5px;
   border-radius: 8px;
-  border-color: rgba(0, 0, 0, 0.18);
-  background: #fff;
+  border-color: rgba(15, 23, 42, 0.18);
+  background: #ffffff;
 }
 .g-mark {
   width: 18px;

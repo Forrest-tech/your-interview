@@ -59,12 +59,16 @@
             [selectedId]="selectedId()"
             [editable]="treeEditing()"
             [canSave]="treeDirty()"
+            [canEdit]="canEditTree()"
+            [saveError]="treeSaveError()"
             [emptyHint]="t('practice.emptyHint')"
             [categories]="categories()"
             [categoryFilter]="categoryFilter()"
             [showFromTechOption]="true"
+            [trashCount]="trashCount()"
             (categorySelect)="onCategoryFilterChange($event)"
             (categoryManage)="openManage('categories')"
+            (trashOpen)="openTrash()"
             (nodeSelect)="onSelect($event)"
             (folderToggle)="onFolderToggle($event)"
             (nodeChange)="onTreeChange($event)"
@@ -274,8 +278,8 @@
           @if (customQuestion(); as cq) {
             <div class="custom-q-banner">
               <mat-icon>forum</mat-icon>
-              <span>练习题: {{ cq }}</span>
-              <button mat-icon-button (click)="customQuestion.set(null)" matTooltip="清除">
+              <span>{{ t('practice.customQuestionLabel') }} {{ cq }}</span>
+              <button mat-icon-button (click)="customQuestion.set(null)" [matTooltip]="t('practice.clearTooltip')">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -292,7 +296,9 @@
           } @else {
             @if (readonlyText()) {
               <!-- ★ 第十三轮(Forrest):标记属于素材本身,不再给正文涂色 -->
-              <p class="read-text">{{ readonlyText() }}</p>
+              <!-- 票119:篇章点词查词典 —— token 化渲染(分隔符为显式 token,模板内不留游离空白节点) -->
+              <p class="read-text dict-passage" (keydown)="dict.onPassageKeydown($event)">@for (tok of dict.tokens(); track $index) {@if (tok.kind === 'word') {<span class="dict-word" [attr.data-wi]="tok.wordIndex" [attr.tabindex]="dict.roving() === tok.wordIndex ? 0 : -1" aria-haspopup="dialog" [attr.aria-expanded]="dict.openWordIndex() === tok.wordIndex" (click)="dict.onWordClick(tok, $event)">{{ tok.text }}</span>} @else {{{ tok.text }}}}</p>
+              <!-- 票126 §6:词典卡改 popup 浮层(见文末 #dictPopupTpl),篇章文档流内不再有卡节点 -->
             } @else {
               <p class="readonly-empty">{{ t('practice.emptyContent') }}</p>
             }
@@ -406,7 +412,7 @@
             <div class="rec-pill" [class.has-take]="!!activeTake()">
 
             <!-- 居中:圆形绿麦 + 紧贴右侧的绿色小字(第二十三轮:横向排布,
-                 文字样式沿用原左侧标签 13px/500/#047857)。 -->
+                 文字样式沿用原左侧标签 13px/500/#16a34a)。 -->
             <div class="rec-center">
               <!-- ★ 第四十九轮(Forrest 报"两个按钮关联在一起")重构:
                    旧实现这里有三态 —— 没选中录音时是麦克风,一旦选中(activeTake)
@@ -522,9 +528,11 @@
           @for (r of myRecordings(); track r.id) {
             <div class="hist-item" [class.active]="activeTakeId() === r.id"
                  [class.grading]="r.grading"
-                 (click)="selectTake(r.id)"
+                 (click)="toggleTakeReport(r.id)"
                  tabindex="0"
-                 (keyup.enter)="selectTake(r.id)">
+                 (keyup.enter)="toggleTakeReport(r.id)"
+                 (keydown.space)="onRowSpaceKey($event, r.id)"
+                 [attr.aria-expanded]="isTakeReportOpen(r.id)">
 
               <button class="hi-play" (click)="$event.stopPropagation(); togglePlay(r)" [disabled]="r.grading"
                       [matTooltip]="isPlaying(r.id) ? t('practice.stop') : t('practice.recPlay')">
@@ -558,6 +566,7 @@
 
               @if (r.score) {
                 <button class="hi-view" [class.on]="isTakeReportOpen(r.id)"
+                        [attr.aria-expanded]="isTakeReportOpen(r.id)"
                         (click)="$event.stopPropagation(); toggleTakeReport(r.id)">
                   <span>
                     {{ isTakeReportOpen(r.id) ? t('practice.collapseReport') : t('practice.viewReport') }}
@@ -575,247 +584,272 @@
                 <p class="hi-fail"><mat-icon>error_outline</mat-icon>{{ r.error }}</p>
               }
             </div>
+
+            <!-- ★ 票121:报告区内嵌到所属 Take 行下 —— 原 ②-3 整块原样搬入 @for 循环，循环外原 section 已删除 -->
+            @if (isTakeReportOpen(r.id)) {
+              <section class="report-section">
+                @if (activeTake()?.score; as sc) {
+                  @if (reportOpen()) {
+                    <div class="result-wrap">
+
+                      <!-- ★ #3:Orai 模式 — 一次只给一个最关键的改进点 -->
+                      @if (oneFix(); as fix) {
+                        <section class="one-fix-banner">
+                          <mat-icon>{{ fix.icon }}</mat-icon>
+                          <div>
+                            <div class="one-fix-title">{{ fix.title }}</div>
+                            <div class="one-fix-detail">{{ fix.detail }}</div>
+                          </div>
+                          <!-- ★ 打通:低分 → 建 Tech Stack 复习卡 -->
+                          <button mat-button (click)="addToReview()">
+                            <mat-icon>school</mat-icon> {{ t('practice.addToReviewBtn') }}
+                          </button>
+                        </section>
+                      }
+
+                      <!-- ★ #10:Interviewing.io 模式 — Hire/No-Hire verdict -->
+                      <!-- ★ #14:AI 追问 -->
+                      <section class="followup-section">
+                        @if (!followUpQuestion() && !followUpLoading()) {
+                          <button mat-stroked-button (click)="generateFollowUp()">
+                            <mat-icon>psychology</mat-icon> {{ t('practice.followUpBtn') }}
+                          </button>
+                        }
+                        @if (followUpLoading()) {
+                          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+                        }
+                        @if (followUpQuestion(); as fq) {
+                          <div class="followup-card">
+                            <div class="followup-label"><mat-icon>forum</mat-icon> {{ t('practice.followUpLabel') }}</div>
+                            <p>{{ fq }}</p>
+                            <button mat-button (click)="generateFollowUp()">{{ t('practice.followUpAnother') }}</button>
+                          </div>
+                        }
+                      </section>
+
+                      <!-- ★ 第三十一轮(Forrest 指定):音频波形移入评分报告内部。
+                           位置 = 总分胶囊之后、Recognition 之前。
+                           数据源就是本报告的这条录音(activeTake 的 id),
+                           与录音条下方那块是同一份 waveBars/waveCache,零重复解码。
+                           ★ 票137 R-137-2：三种态分流，绝无裸绿条 ——
+                           loading 只露节头 + 进度条；ready 露条带 + 柱 + 指标行；
+                           failed 露节头 + 分级诚实文案；idle（无目标）节隐藏。 -->
+                      @if (showWaveform() && waveStatus() !== 'idle') {
+                        <section class="res-block">
+                          <div class="res-head">
+                            <h3>{{ t('practice.audioWaveform') }}</h3>
+                          </div>
+                          @if (waveStatus() === 'loading') {
+                            <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+                          } @else if (waveStatus() === 'ready') {
+                            <div class="wave-strip"
+                                 [class.wave-live]="activePlaying() || previewingPending()">
+                              <div class="ws-bars" [matTooltip]="t('practice.recPlay')">
+                                @for (b of waveBars(); track $index) {
+                                  <span class="ws-bar"
+                                        [style.height.%]="b"
+                                        [class.played]="wavePlayed($index)"></span>
+                                }
+                              </div>
+                            </div>
+                            @if (speechPace() || waveAvgHz() !== null) {
+                              <div class="wave-metrics" data-testid="wave-metrics">
+                                @if (speechPace(); as pace) {
+                                  <span class="wave-metric">{{ t('practice.wordsPerMinute').replace('{wpm}', pace.wpm) }} · {{ pace.verdict }}</span>
+                                }
+                                @if (speechPace() && waveAvgHz() !== null) {
+                                  <span class="wave-metric-sep">|</span>
+                                }
+                                @if (waveAvgHz() !== null) {
+                                  <span class="wave-metric">{{ t('practice.avgFrequency').replace('{hz}', '' + waveAvgHz()) }}</span>
+                                }
+                              </div>
+                            }
+                          } @else if (waveStatus() === 'failed') {
+                            <p class="wave-fail" data-testid="wave-fail">{{ t(waveFailReason() === 'gone' ? 'practice.recGone' : 'practice.waveUnavailable') }}</p>
+                          }
+                        </section>
+                      }
+
+                      <!-- 总分 + 四维胶囊 -->
+                      <section class="res-block">
+                        <div class="res-head">
+                          <h3>{{ t('practice.scoreResults') }}</h3>
+
+                          <!-- ★ 第三十三/三十四轮(Forrest):评分额度消耗提示 **+ 精确数字**。
+                               有消耗 → 报"本次调用了 Azure,评估 N 秒音频";
+                               无消耗 → 报"读取本地点存评分,未消耗额度"。
+                               ⚠️ 单位是**音频秒数**不是 token —— 发音评估按时长计费。 -->
+                          @if (scoreCost() === 'fresh') {
+                            <span class="cost-chip fresh"
+                                  [title]="t('practice.scoreCostFreshHint')">
+                              <mat-icon>cloud_upload</mat-icon>
+                              <span>{{ t('practice.scoreCostFreshN')
+                                        .replace('{n}', scoreSecondsText()) }}</span>
+                            </span>
+                          } @else if (scoreCost() === 'cache') {
+                            <span class="cost-chip local"
+                                  [title]="t('practice.scoreCostLocalHint')">
+                              <mat-icon>sd_storage</mat-icon>
+                              <span>{{ t('practice.scoreCostLocalN')
+                                        .replace('{n}', scoreSecondsText()) }}</span>
+                            </span>
+                          }
+
+                          <span class="spacer"></span>
+                          <span class="res-total" [class]="scoreClass(sc.pronScore)">
+                            {{ sc.pronScore }}<i>{{ t('practice.points') }}</i>
+                          </span>
+                        </div>
+
+                        <div class="pills">
+                          <span class="pill p-blue">
+                            <i class="dot"></i>{{ t('dim.pronunciation') }}
+                            <b>{{ sc.pronScore }}</b>
+                          </span>
+
+                          @if (sc.fluencyScore !== null) {
+                            <span class="pill p-green">
+                              <i class="dot"></i>{{ t('dim.fluency') }}<b>{{ sc.fluencyScore }}</b>
+                            </span>
+                          } @else {
+                            <!-- Free F0 不返回流利度:明示,不拿 0 充数 -->
+                            <span class="pill p-na">
+                              <i class="dot"></i>{{ t('dim.fluency') }}<b>{{ t('common.na') }}</b>
+                            </span>
+                          }
+
+                          @if (sc.completenessScore !== null) {
+                            <span class="pill p-purple">
+                              <i class="dot"></i>{{ t('dim.completeness') }}<b>{{ sc.completenessScore }}</b>
+                            </span>
+                          } @else {
+                            <span class="pill p-na">
+                              <i class="dot"></i>{{ t('dim.completeness') }}<b>{{ t('common.na') }}</b>
+                            </span>
+                          }
+
+                          <span class="pill p-dark">
+                            <i class="dot"></i>{{ t('dim.recognition') }}<b>{{ recognitionPct(sc) }}%</b>
+                          </span>
+
+                          @if (sc.accuracyScore !== null) {
+                            <span class="pill p-teal">
+                              <i class="dot"></i>{{ t('dim.accuracy') }}<b>{{ sc.accuracyScore }}</b>
+                            </span>
+                          }
+                        </div>
+                      </section>
+
+                      <!-- Recognition Result:左逐词 Diff + 右错误统计 -->
+                      <section class="res-block">
+                        <div class="res-head">
+                          <h3>{{ t('practice.recognition') }}</h3>
+                        </div>
+                        <p class="res-note">{{ t('practice.recognitionNote') }}</p>
+
+                        <!-- ★ 票120:无逐词数据时整块以占位文案交代,不静默消失 -->
+                        @if (!sc.words.length) {
+                          <p class="res-note">{{ t('practice.noWordData') }}</p>
+                        } @else {
+                          <!-- ★ #1:填充词统计条 —— ★ 票120:移出 .recog-grid 置于网格上方通栏。
+                               它原是网格的第三个子元素,自动排版把逐词文本挤进了右侧窄图例列。 -->
+                          @if (fillerStats(); as fs) {
+                            <div class="filler-bar">
+                              <mat-icon>graphic_eq</mat-icon>
+                              <span>{{ t('practice.fillerStats').split('{count}')[0] }}<b>{{ fs.count }}</b>{{ t('practice.fillerStats').split('{count}')[1].replace('{per}', '' + fs.perMinute) }}</span>
+                              <!-- ★ 票120:回放提示只在真有可回放填充词(带 offsetMs)时出现,
+                                   不承诺一个不会发生的动作;计数为 0 时同样隐藏。 -->
+                              @if (fs.count > 0 && hasSeekableFiller(sc.words, isFiller)) {
+                                <span class="filler-hint">{{ t('practice.fillerReplayHint') }}</span>
+                              }
+                              <!-- ★ #15:语速 -->
+                              @if (speechPace(); as pace) {
+                                <span class="pace-chip" [class]="'pace-' + pace.level">
+                                  <mat-icon>speed</mat-icon>
+                                  {{ t('practice.wordsPerMinute').replace('{wpm}', '' + pace.wpm) }} · {{ pace.verdict }}
+                                </span>
+                              }
+                            </div>
+                          }
+                          <div class="recog-grid">
+                            <p class="recog-text">
+                              @for (w of sc.words; track $index) {
+                                <span class="rw" [class]="errorClass(w.errorType)"
+                                      [class.is-filler]="isFiller(w.word)"
+                                      [class.picked]="pickedWord() === $index"
+                                      [tabIndex]="$index === recogTabStop(sc.words.length) ? 0 : -1"
+                                      (focus)="recogFocusIdx.set($index)"
+                                      (keydown)="onWordKeydown($event, $index, sc.words.length)"
+                                      (click)="wordClickAction(isFiller(w.word), w.offsetMs) === 'replay' ? replayAt(w.offsetMs!) : pickWord($index)"
+                                      [matTooltip]="(isFiller(w.word) ? t('practice.fillerWord') + (w.offsetMs ? ' · ' + t('practice.fillerClickReplay') : '') + ' · ' : '') + errLabel(w.errorType) + ' · ' + w.accuracy">{{ w.word }}</span>{{ ' ' }}
+                              }
+                            </p>
+
+                            <div class="err-cards">
+                              @for (c of errorCounts(); track c.key) {
+                                <span class="ec" [class]="c.cls" [class.ec-zero]="c.n === 0">
+                                  <b>{{ c.n }}</b>
+                                  <span class="ec-label">{{ t(c.key) }}</span>
+                                </span>
+                              }
+                            </div>
+                          </div>
+                        }
+
+                        @if (pickedWord() !== null && sc.words[pickedWord()!]; as pw) {
+                          <div class="word-pop">
+                            <span class="wp-word">{{ pw.word }}</span>
+                            @if (phonetic(pw.word); as ph) {
+                              <span class="wp-phon">/{{ ph }}/</span>
+                            } @else {
+                              <span class="wp-phon na">{{ t('practice.noPhonetic') }}</span>
+                            }
+                            <span class="wp-err">{{ errLabel(pw.errorType) }}</span>
+                            <span class="wp-score" [class]="scoreClass(pw.accuracy)">{{ pw.accuracy.toFixed(1) }}</span>
+                          </div>
+                        }
+                      </section>
+
+                      <!-- Word Scores:逐词分值网格
+                           ★ 第三十五轮(Forrest):去掉折叠功能,一直展开。
+                             理由:这里只是纯文本展示,与 Recognition 同性质 ——
+                             没有任何理由要点一下才能看。折叠反而把最关键的
+                             逐词反馈藏起来,用户要额外点一次才能看到。
+                             现在改为常驻显示,不做任何 toggle。 -->
+                      <section class="res-block">
+                        <div class="res-head">
+                          <h3>{{ t('practice.wordScores') }}</h3>
+                        </div>
+
+                        <div class="word-grid">
+                          @for (w of sc.words; track $index) {
+                            <div class="wg-cell">
+                              <span class="wg-word">{{ w.word }}</span>
+                              <!-- 无词级数据就显示 "—",不显示误导性的 0.0 -->
+                              @if (hasWordScore(w)) {
+                                <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
+                              } @else {
+                                <span class="wg-score na">{{ t('common.na') }}</span>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </section>
+                    </div>
+                  }
+                } @else {
+                  <!-- 空状态:报告区骨架在位,引导用户产出报告;不显示假分数 -->
+                  <p class="rep-empty">
+                    <mat-icon>info_outline</mat-icon>
+                    <span>{{ t('practice.reportEmpty') }}</span>
+                  </p>
+                }
+              </section>
+            }
           }
         }
 
-        <!-- ②-3 Score Results 评测报告区(始终渲染外框与标题,DOM 稳定) -->
-        <section class="report-section">
-          <div class="rep-title">
-            <mat-icon>assessment</mat-icon>
-            <h3>{{ t('practice.scoreResults') }}</h3>
-
-            @if (activeTake()?.score) {
-              <span class="spacer"></span>
-              <button mat-button class="rep-toggle" (click)="toggleReport()">
-                <span>{{ reportOpen() ? t('practice.collapseReport') : t('practice.viewReportDetail') }}</span>
-                <mat-icon>{{ reportOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
-              </button>
-            }
-          </div>
-
-          @if (activeTake()?.score; as sc) {
-            @if (reportOpen()) {
-              <div class="result-wrap">
-
-                <!-- ★ #3:Orai 模式 — 一次只给一个最关键的改进点 -->
-                @if (oneFix(); as fix) {
-                  <section class="one-fix-banner">
-                    <mat-icon>{{ fix.icon }}</mat-icon>
-                    <div>
-                      <div class="one-fix-title">{{ fix.title }}</div>
-                      <div class="one-fix-detail">{{ fix.detail }}</div>
-                    </div>
-                    <!-- ★ 打通:低分 → 建 Tech Stack 复习卡 -->
-                    <button mat-button (click)="addToReview()">
-                      <mat-icon>school</mat-icon> 加入复习
-                    </button>
-                  </section>
-                }
-
-                <!-- ★ #10:Interviewing.io 模式 — Hire/No-Hire verdict -->
-                <!-- ★ #14:AI 追问 -->
-                <section class="followup-section">
-                  @if (!followUpQuestion() && !followUpLoading()) {
-                    <button mat-stroked-button (click)="generateFollowUp()">
-                      <mat-icon>psychology</mat-icon> AI 追问一层
-                    </button>
-                  }
-                  @if (followUpLoading()) {
-                    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-                  }
-                  @if (followUpQuestion(); as fq) {
-                    <div class="followup-card">
-                      <div class="followup-label"><mat-icon>forum</mat-icon> 面试官追问</div>
-                      <p>{{ fq }}</p>
-                      <button mat-button (click)="generateFollowUp()">换一个</button>
-                    </div>
-                  }
-                </section>
-
-                <!-- ★ 第三十一轮(Forrest 指定):音频波形移入评分报告内部。
-                     位置 = 总分胶囊之后、Recognition 之前。
-                     数据源就是本报告的这条录音(activeTake 的 id),
-                     与录音条下方那块是同一份 waveBars/waveCache,零重复解码。 -->
-                @if (showWaveform()) {
-                  <section class="res-block">
-                    <div class="res-head">
-                      <h3>{{ t('practice.audioWaveform') }}</h3>
-                    </div>
-                    <div class="wave-strip"
-                         [class.wave-live]="activePlaying() || previewingPending()">
-                      <div class="ws-bars" [matTooltip]="t('practice.recPlay')">
-                        @for (b of waveBars(); track $index) {
-                          <span class="ws-bar"
-                                [style.height.%]="b"
-                                [class.played]="wavePlayed($index)"></span>
-                        }
-                      </div>
-                    </div>
-                  </section>
-                }
-
-                <!-- 总分 + 四维胶囊 -->
-                <section class="res-block">
-                  <div class="res-head">
-                    <h3>{{ t('practice.scoreResults') }}</h3>
-
-                    <!-- ★ 第三十三/三十四轮(Forrest):评分额度消耗提示 **+ 精确数字**。
-                         有消耗 → 报"本次调用了 Azure,评估 N 秒音频";
-                         无消耗 → 报"读取本地点存评分,未消耗额度"。
-                         ⚠️ 单位是**音频秒数**不是 token —— 发音评估按时长计费。 -->
-                    @if (scoreCost() === 'fresh') {
-                      <span class="cost-chip fresh"
-                            [title]="t('practice.scoreCostFreshHint')">
-                        <mat-icon>cloud_upload</mat-icon>
-                        <span>{{ t('practice.scoreCostFreshN')
-                                  .replace('{n}', scoreSecondsText()) }}</span>
-                      </span>
-                    } @else if (scoreCost() === 'cache') {
-                      <span class="cost-chip local"
-                            [title]="t('practice.scoreCostLocalHint')">
-                        <mat-icon>sd_storage</mat-icon>
-                        <span>{{ t('practice.scoreCostLocalN')
-                                  .replace('{n}', scoreSecondsText()) }}</span>
-                      </span>
-                    }
-
-                    <span class="spacer"></span>
-                    <span class="res-total" [class]="scoreClass(sc.pronScore)">
-                      {{ sc.pronScore }}<i>{{ t('practice.points') }}</i>
-                    </span>
-                  </div>
-
-                  <div class="pills">
-                    <span class="pill p-blue">
-                      <i class="dot"></i>{{ t('dim.pronunciation') }}
-                      <b>{{ sc.pronScore }}</b>
-                    </span>
-
-                    @if (sc.fluencyScore !== null) {
-                      <span class="pill p-green">
-                        <i class="dot"></i>{{ t('dim.fluency') }}<b>{{ sc.fluencyScore }}</b>
-                      </span>
-                    } @else {
-                      <!-- Free F0 不返回流利度:明示,不拿 0 充数 -->
-                      <span class="pill p-na">
-                        <i class="dot"></i>{{ t('dim.fluency') }}<b>{{ t('common.na') }}</b>
-                      </span>
-                    }
-
-                    @if (sc.completenessScore !== null) {
-                      <span class="pill p-purple">
-                        <i class="dot"></i>{{ t('dim.completeness') }}<b>{{ sc.completenessScore }}</b>
-                      </span>
-                    } @else {
-                      <span class="pill p-na">
-                        <i class="dot"></i>{{ t('dim.completeness') }}<b>{{ t('common.na') }}</b>
-                      </span>
-                    }
-
-                    <span class="pill p-dark">
-                      <i class="dot"></i>{{ t('dim.recognition') }}<b>{{ recognitionPct(sc) }}%</b>
-                    </span>
-
-                    @if (sc.accuracyScore !== null) {
-                      <span class="pill p-teal">
-                        <i class="dot"></i>{{ t('dim.accuracy') }}<b>{{ sc.accuracyScore }}</b>
-                      </span>
-                    }
-                  </div>
-                </section>
-
-                <!-- Recognition Result:左逐词 Diff + 右错误统计 -->
-                <section class="res-block">
-                  <div class="res-head">
-                    <h3>{{ t('practice.recognition') }}</h3>
-                  </div>
-                  <p class="res-note">{{ t('practice.recognitionNote') }}</p>
-
-                  <div class="recog-grid">
-                    <!-- ★ #1:填充词统计条 -->
-                    @if (fillerStats(); as fs) {
-                      <div class="filler-bar">
-                        <mat-icon>graphic_eq</mat-icon>
-                        <span>填充词 <b>{{ fs.count }}</b> · {{ fs.perMinute }}/分钟</span>
-                        <span class="filler-hint">点击橙色词回放该时刻</span>
-                        <!-- ★ #15:语速 -->
-                        @if (speechPace(); as pace) {
-                          <span class="pace-chip" [class]="'pace-' + pace.level">
-                            <mat-icon>speed</mat-icon>
-                            {{ pace.wpm }} 词/分钟 · {{ pace.verdict }}
-                          </span>
-                        }
-                      </div>
-                    }
-                    <p class="recog-text">
-                      @for (w of sc.words; track $index) {
-                        <span class="rw" [class]="errorClass(w.errorType)"
-                              [class.is-filler]="isFiller(w.word)"
-                              [class.picked]="pickedWord() === $index"
-                              (click)="isFiller(w.word) && w.offsetMs ? replayAt(w.offsetMs!) : pickWord($index)"
-                              [matTooltip]="(isFiller(w.word) ? '填充词 · 点击回放 · ' : '') + errLabel(w.errorType) + ' · ' + w.accuracy">{{ w.word }}</span>
-                      }
-                    </p>
-
-                    <div class="err-cards">
-                      @for (c of errorCounts(); track c.key) {
-                        <span class="ec" [class]="c.cls">
-                          <b>{{ c.n }}</b>
-                          <span class="ec-label">{{ t(c.key) }}</span>
-                        </span>
-                      }
-                    </div>
-                  </div>
-
-                  @if (pickedWord() !== null && sc.words[pickedWord()!]; as pw) {
-                    <div class="word-pop">
-                      <span class="wp-word">{{ pw.word }}</span>
-                      @if (phonetic(pw.word); as ph) {
-                        <span class="wp-phon">/{{ ph }}/</span>
-                      } @else {
-                        <span class="wp-phon na">{{ t('practice.noPhonetic') }}</span>
-                      }
-                      <span class="wp-err">{{ errLabel(pw.errorType) }}</span>
-                      <span class="wp-score" [class]="scoreClass(pw.accuracy)">{{ pw.accuracy.toFixed(1) }}</span>
-                    </div>
-                  }
-                </section>
-
-                <!-- Word Scores:逐词分值网格
-                     ★ 第三十五轮(Forrest):去掉折叠功能,一直展开。
-                       理由:这里只是纯文本展示,与 Recognition 同性质 ——
-                       没有任何理由要点一下才能看。折叠反而把最关键的
-                       逐词反馈藏起来,用户要额外点一次才能看到。
-                       现在改为常驻显示,不做任何 toggle。 -->
-                <section class="res-block">
-                  <div class="res-head">
-                    <h3>{{ t('practice.wordScores') }}</h3>
-                  </div>
-
-                  <div class="word-grid">
-                    @for (w of sc.words; track $index) {
-                      <div class="wg-cell">
-                        <span class="wg-word">{{ w.word }}</span>
-                        <!-- 无词级数据就显示 "—",不显示误导性的 0.0 -->
-                        @if (hasWordScore(w)) {
-                          <span class="wg-score" [class]="scoreClass(w.accuracy)">{{ w.accuracy.toFixed(1) }}</span>
-                        } @else {
-                          <span class="wg-score na">{{ t('common.na') }}</span>
-                        }
-                      </div>
-                    }
-                  </div>
-                </section>
-              </div>
-            }
-          } @else {
-            <!-- 空状态:报告区骨架在位,引导用户产出报告;不显示假分数 -->
-            <p class="rep-empty">
-              <mat-icon>info_outline</mat-icon>
-              <span>{{ t('practice.reportEmpty') }}</span>
-            </p>
-          }
-        </section>
       </section>
     }
       </div><!-- /.practice-main-panel -->
@@ -830,3 +864,16 @@
     </div>
   }
 </div>
+
+<!-- 票126 §6:词典卡 popup 浮层模板(由宿主 openDictPopup 挂进 CDK Overlay,锚定触发词) -->
+<ng-template #dictPopupTpl>
+  @if (dict.state(); as dictState) {
+    <app-dictionary-card [state]="dictState"
+                         [shadow]="dict.shadow.view()"
+                         (closeRequested)="dict.close(true)"
+                         (retryRequested)="dict.retry()"
+                         (playRequested)="dict.play($event)"
+                         (shadowAction)="dict.shadowAction($event)"
+                         (layoutChanged)="refreshDictPopupPosition()"></app-dictionary-card>
+  }
+</ng-template>

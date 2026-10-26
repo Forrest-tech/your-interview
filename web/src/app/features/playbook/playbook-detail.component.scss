@@ -10,26 +10,27 @@
 }
 
 .page {
-  /* 内容区放宽(2026-10-21 用户要求):接近视口全宽、左右只留小边距,上限 1600px。
-     壳层 .content 对本页已零内边距,唯一约束就是这里。只作用于详情页。
-     定稿第八节:左侧条目导航列(280px)+ 内容区占余下宽度,这是放宽的最终形态。 */
-  width: min(97vw, 1600px);
-  max-width: calc(100% - 24px);
+  /* 票123 R-7.2:内容度量统一到全站共享的 1240px(全局 .page 已声明)。
+     定稿第八节:左侧条目导航列(280px)+ 内容区占余下宽度,导航列在度量**之内**,
+     与 §9 mock 的页面网格一致。 */
+  max-width: 1240px;
   margin: 0 auto;
   box-sizing: border-box;
   padding: 18px 20px 60px;
   display: flex;
   gap: 22px;
   align-items: flex-start;
-  /* --yi-border 全局未定义,各组件一直吃 #ddd 等过浅兜底色,模块糊在一起。
-     在本页作用域给出肉眼可辨的实边色,本页内所有 var(--yi-border) 一并生效。 */
-  --yi-border: #98a2b3;
+  /* --yi-border 全局未定义,各组件一直吃 #e2e8f0 等过浅兜底色,模块糊在一起。
+     在本页作用域给出肉眼可辨的实边色,本页内所有 var(--yi-border) 一并生效。
+     票123 R-2:该回退色已按「近义语义色映射到令牌」改为 --hairline(#e2e8f0),
+     本页仍保留这条例外声明(实边色比 hairline 更深,是本页的既定视觉契约)。 */
+  --yi-border: #e2e8f0;
 }
 
 .page-main { flex: 1; min-width: 0; width: 100%; }
 
 /* ---------- 左侧条目导航(与列表页同一套视觉:分组标题 15/600 + 计数徽章、
-   公司 16.5/650、岗位 13px #667085、结果徽章语义色均与列表卡一致) ---------- */
+   公司 16.5/650、岗位 13px #475569、结果徽章语义色均与列表卡一致) ---------- */
 .entry-nav {
   flex: 0 0 280px;
   width: 280px;
@@ -42,9 +43,9 @@
   flex-direction: column;
   gap: 18px;
   &::-webkit-scrollbar { width: 10px; }
-  &::-webkit-scrollbar-track { background: #e7eaee; border-radius: 5px; }
+  &::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 5px; }
   &::-webkit-scrollbar-thumb { background: #7d8797; border-radius: 5px; }
-  &::-webkit-scrollbar-thumb:hover { background: #3f51b5; }
+  &::-webkit-scrollbar-thumb:hover { background: #2563eb; }
 }
 .nav-group-title {
   display: flex; align-items: center; gap: 6px;
@@ -54,31 +55,35 @@
   display: flex; align-items: center; gap: 6px;
   font-size: 15px; font-weight: 600; margin: 4px 0 12px; padding: 2px 2px 2px 0;
   border: none; background: transparent; color: inherit; cursor: pointer; font-family: inherit;
-  mat-icon { font-size: 20px; width: 20px; height: 20px; color: #667085; }
+  mat-icon { font-size: 20px; width: 20px; height: 20px; color: #475569; }
 }
 .entry-nav .count-badge {
   font-size: 12px; font-weight: 700; line-height: 1;
-  padding: 4px 8px; border-radius: 999px; background: #eef2f7; color: #475467;
+  padding: 4px 8px; border-radius: 999px; background: #e2e8f0; color: #475569;
 }
 .nav-items { display: flex; flex-direction: column; gap: 8px; }
 .nav-item {
   display: flex; flex-direction: column; gap: 2px;
   width: 100%; box-sizing: border-box; text-align: left;
-  padding: 10px 12px; border: 1px solid #eaecf0; border-radius: 12px;
-  background: #fff; color: inherit; cursor: pointer; font-family: inherit;
-  &:hover { border-color: #c3d6f7; background: #f8fbff; }
+  padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px;
+  background: #ffffff; color: inherit; cursor: pointer; font-family: inherit;
+  /* ★ 票123 C-3.2:可点项取统一洗色(原为 `#eff6ff`);它原有的
+     `border-color: #dbeafe` 线索保留 —— 那是「有边框的面板」自己的形状提示,
+     不是悬停洗色。 */
+  &:hover { border-color: #dbeafe; background: var(--hover-wash); }
+  &:active { background: var(--press-wash); }
   &.on {
-    border-color: var(--yi-accent, #3f51b5);
-    background: color-mix(in srgb, var(--yi-accent, #3f51b5) 8%, #fff);
-    box-shadow: 0 0 0 1px var(--yi-accent, #3f51b5);
+    border-color: var(--yi-accent, #2563eb);
+    background: color-mix(in srgb, var(--yi-accent, #2563eb) 8%, #ffffff);
+    box-shadow: 0 0 0 1px var(--yi-accent, #2563eb);
   }
 }
 .nav-company {
-  font-size: 16.5px; font-weight: 650; color: #101828;
+  font-size: 16.5px; font-weight: 650; color: #0f172a;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .nav-role {
-  font-size: 13px; color: #667085;
+  font-size: 13px; color: #475569;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .entry-nav .result-badge {
@@ -86,9 +91,9 @@
   padding: 3px 10px; border-radius: 999px;
   font-size: 12px; font-weight: 700; white-space: nowrap;
   border: 1px solid transparent;
-  &.rejected { background: #fdecec; color: #c62828; border-color: #f5c6c6; }
-  &.positive { background: #e6f7ee; color: #157f3d; border-color: #bfe8cf; }
-  &.closed { background: #e8f1fd; color: #1565c0; border-color: #c4dcfa; }
+  &.rejected { background: #fef2f2; color: #dc2626; border-color: #fef2f2; }
+  &.positive { background: #f0fdf4; color: #16a34a; border-color: #f0fdf4; }
+  &.closed { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
 }
 
 /* 窄屏 ≤820:导航收起为顶部横向滚动条,内容不再被挤 */
@@ -107,7 +112,7 @@
 /* ---------- 分区容器:上=条目信息 / 下=轮次工作 ---------- */
 .zone {
   border: 1px solid var(--yi-border);
-  border-radius: 16px;
+  border-radius: 10px;
   padding: 18px;
 }
 .zone-work { margin-top: 22px; }
@@ -115,12 +120,12 @@
 .zone-entry .ehead-actions { margin-top: 16px; }
 
 .back { margin-bottom: 6px; }
-.state { color: var(--yi-text-muted, #888); font-size: 14px; padding: 22px 0; }
-.state.err { color: #b3261e; }
+.state { color: var(--yi-text-muted, #475569); font-size: 14px; padding: 22px 0; }
+.state.err { color: #dc2626; }
 .spacer { flex: 1; }
 
 .fld {
-  border: 1px solid var(--yi-border, #ccc);
+  border: 1px solid var(--yi-border, #e2e8f0);
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 14px;
@@ -133,7 +138,7 @@
 
 .icon-btn {
   border: none; background: transparent; cursor: pointer; color: inherit; display: inline-flex;
-  &.danger { color: #b3261e; }
+  &.danger { color: #dc2626; }
   mat-icon { font-size: 19px; width: 19px; height: 19px; }
 }
 
@@ -148,35 +153,44 @@
    四格条与按钮行已移出左列,作 .zone-entry 内 .ehead 之后的通栏行:
    定稿顺序 头行 → 四格条(整行通栏) → 按钮行(上区最后一行)。 */
 .ehead-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.ehead-titles { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.ehead-titles h1 { font-size: 20px; font-weight: 600; line-height: 1.3; margin: 0; }
+.ehead-titles { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+.ehead-titles h1 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600; line-height: 1.25; margin: 0; letter-spacing: -0.01em; }
+.ehead-company { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
 .status-badge {
   font-size: 12px; font-weight: 700;
-  border: 1px solid var(--yi-accent, #3f51b5); color: var(--yi-accent, #3f51b5);
+  border: 1px solid var(--signal-soft); background: var(--signal-tint); color: var(--brand);
   border-radius: 999px; padding: 3px 11px;
 }
-.ehead-meta { font-size: 14px; line-height: 1.5; color: var(--yi-text-muted, #777); margin: 7px 0 0; }
+.ehead-meta { display: flex; flex-wrap: wrap; gap: 12px 30px; margin: 14px 0 0; }
+.meta-pair { display: flex; flex-direction: column; gap: 3px; }
+.meta-k { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.meta-v { font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.meta-v.missing { font-weight: 400; color: var(--ink-2); }
 .ehead-actions { display: flex; gap: 9px; align-items: center; margin-top: 13px; flex-wrap: wrap; }
 
 .basic-edit {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px 14px; margin-top: 14px;
-  border: 1px solid var(--yi-border, #ddd); border-radius: 12px; padding: 13px 15px;
-  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--yi-text-muted, #777); }
+  border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 13px 15px;
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--yi-text-muted, #475569); }
   .wide { grid-column: span 2; }
   .be-actions { display: flex; gap: 8px; align-items: end; }
 }
-.danger-item { color: #b3261e !important; }
+.danger-item { color: #dc2626 !important; }
 
 .next-card {
   width: 300px;
   flex: none;
   @media (max-width: 820px) { width: auto; align-self: stretch; }
-  border: 1.5px solid var(--yi-accent, #3f51b5);
-  border-radius: 14px;
+  border: 1px solid var(--signal-soft);
+  background: #f6f8fb;
+  border-radius: 10px;
   padding: 14px 16px;
-  .nc-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--yi-accent, #3f51b5); }
-  .nc-text { font-size: 16px; font-weight: 600; line-height: 1.5; margin: 6px 0 0; }
+  .nc-label { font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--brand); }
+  .nc-text { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16.5px; font-weight: 600; line-height: 1.45; margin: 6px 0 0; }
+  /* 票123 R-3:阶段/日期/形式各自成行弱化文字(§9 mock 的 .d),不再串成一行中点句。 */
+  .nc-lines { margin-top: 3px; color: var(--ink-2); font-size: 12.5px; line-height: 1.5; }
+  .nc-line { display: block; }
 }
 
 /* ---------- 岗位四格条(.zone-entry 内通栏行,占满整行宽度) ---------- */
@@ -185,7 +199,7 @@
   box-sizing: border-box;
   margin-top: 18px;
   border: 1px solid var(--yi-border);
-  border-radius: 14px;
+  border-radius: 6px;
   overflow: hidden;
 }
 .strip {
@@ -193,32 +207,43 @@
   @media (max-width: 820px) { grid-template-columns: repeat(2, 1fr); }
 }
 .cell {
-  border: none; border-right: 1px solid var(--yi-border, #e3e3e3);
+  border: none; border-right: 1px solid var(--yi-border, #e2e8f0);
   background: transparent; color: inherit; text-align: left; cursor: pointer;
   padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; min-height: 86px;
   &:last-child { border-right: none; }
-  &:hover { background: color-mix(in srgb, var(--yi-text, #222) 4%, transparent); }
+  /* ★ 票123 C-3.2:可点项取统一洗色(原为 `color-mix(... 4%, transparent)`)。 */
+  &:hover { background: var(--hover-wash); }
+  &:active { background: var(--press-wash); }
+  /* 票170:展开中的格子常驻选中底色(与 hover/press 的瞬时洗色不同,鼠标移开仍在)。
+     放 hover/active 之后、同等优先级,选中态不被瞬时洗色盖掉。 */
+  &.on { background: var(--signal-tint); }
 }
-.cell-label { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #888); }
+.cell-label { font-size: 12px; font-weight: 700; color: var(--yi-text-muted, #475569); }
 .cell-body { font-size: 14px; line-height: 1.5; flex: 1;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.cell-body.big { font-size: 22px; font-weight: 800; }
-.cell-more { font-size: 12px; color: var(--yi-accent, #3f51b5); font-weight: 600; }
+.cell-body.big { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cell-body.missing { color: var(--ink-2); }
+/* 票 173:分数档位小标签(与 Score 页圆环标签同文案,中性次字色,不引入新语义色)。 */
+.cell-tier { font-size: 12px; color: var(--yi-text-muted, #475569); }
+.cell-more { font-size: 12px; color: var(--brand); font-weight: 600; }
 .strip-detail {
   /* 展开说明行是四格条容器内部的底部行,不再靠负 margin 贴在框外。 */
   border-top: 1px solid var(--yi-border);
   padding: 13px 16px;
+  /* 票170:展开区高度唯一出处。文本面板与简历 PDF 框共用此值(简历框经
+     frameHeightCap 传入同一变量,两区显示高度一致,不再各写一份)。 */
+  --strip-detail-max: min(420px, 45vh);
   /* 展开面板封顶 + 框内滚动(2026-10-21 设计稿确认参数):长 JD/公司介绍/简历与分数说明
      都在面板内部滚动,不再把整页撑长。滚动条纯 webkit 方案 —— 不要加
      scrollbar-width/scrollbar-color,Chrome 会因此忽略 ::-webkit-scrollbar 样式。 */
   .full-text, .full-note {
-    max-height: min(420px, 45vh);
+    max-height: var(--strip-detail-max);
     overflow-y: auto;
     overscroll-behavior: contain;
     &::-webkit-scrollbar { width: 10px; }
-    &::-webkit-scrollbar-track { background: #e7eaee; border-radius: 5px; }
+    &::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 5px; }
     &::-webkit-scrollbar-thumb { background: #7d8797; border-radius: 5px; }
-    &::-webkit-scrollbar-thumb:hover { background: #3f51b5; }
+    &::-webkit-scrollbar-thumb:hover { background: #2563eb; }
   }
   .full-text { white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.65; margin: 0; }
   .full-note { font-size: 14px; line-height: 1.65; margin: 0; }
@@ -228,70 +253,164 @@
 /* ---------- ③ 页面页签 ---------- */
 .page-tabs {
   display: flex; gap: 4px; margin-top: 20px;
-  border-bottom: 1.5px solid var(--yi-border, #e0e0e0);
+  border-bottom: 1.5px solid var(--yi-border, #e2e8f0);
 }
 .ptab {
   border: none; background: transparent; color: inherit; cursor: pointer;
   font-size: 14px; font-weight: 500; padding: 9px 15px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
   display: inline-flex; align-items: center; gap: 7px;
-  &.on { border-bottom-color: var(--yi-accent, #3f51b5); font-weight: 700; }
+  &.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; }
 }
 .red-dot {
-  background: #d32f2f; color: #fff; font-size: 12px; font-weight: 800;
+  background: #dc2626; color: #ffffff; font-size: 12px; font-weight: 800;
   border-radius: 999px; min-width: 20px; height: 20px; padding: 0 6px;
   display: inline-flex; align-items: center; justify-content: center;
 }
 
 .comm-banner {
   width: 100%; text-align: left; margin-top: 12px; cursor: pointer;
-  background: #fdecea; border: 1px solid #f0b8b2; color: #7c1d16;
+  background: #fef2f2; border: 1px solid #fef2f2; color: #dc2626;
   border-radius: 10px; padding: 10px 14px; font-size: 14px;
 }
 
-/* ---------- ④ stepper ---------- */
-.stepper {
-  display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+/* ---------- ④ 轮次选择(票164:紧凑可选单元横向排列;点选即切换下方详情卡) ---------- */
+.rtrack {
+  position: relative;
+  margin-top: 8px;
+  min-width: 0;
 }
-.step {
-  flex: 1 1 150px; max-width: 240px;
-  border: 1px solid var(--yi-border, #ddd); border-radius: 12px;
-  background: transparent; color: inherit; cursor: pointer; text-align: left;
-  padding: 11px 13px; display: flex; flex-direction: column; gap: 5px;
-  &.on { border-color: var(--yi-accent, #3f51b5); outline: 1.5px solid var(--yi-accent, #3f51b5); }
-  &.add { border-style: dashed; align-items: flex-start; justify-content: center; }
+
+/* 横向滚动容器:内容超宽时横向滚动,未超宽不出现滚动条。 */
+.rtrack-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
 }
-.step-top { display: flex; align-items: center; gap: 8px; }
-.step-badge {
-  width: 21px; height: 21px; border-radius: 50%; font-size: 12px; font-weight: 800;
-  border: 1.5px solid var(--yi-border, #bbb); color: var(--yi-text-muted, #888);
-  display: inline-flex; align-items: center; justify-content: center;
-  &.passed { border-color: #2e7d32; color: #2e7d32; }
-  &.failed { border-color: #b3261e; color: #b3261e; }
+
+/* 选择行:单元左 → 右一排,列不挤压、不换行;行宽 = 内容自然宽度。 */
+.rtrack-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: max-content;
 }
-.step-name { font-size: 14px; font-weight: 700; }
-.step-sub { font-size: 13px; color: var(--yi-text-muted, #888); }
+
+/* 轮次单元:原生 button(键盘可达,焦点环走全局 :focus-visible)。
+   UA 默认按钮面(底色/边框/内边距/字形)在此全部复位,改走卡片口径。 */
+.rnode {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--yi-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rnode:hover {
+  border-color: var(--brand);
+}
+/* 选中态:品牌边框 + 品牌淡底 + 品牌色标签,与非选中项肉眼可辨。 */
+.rnode.selected {
+  border-color: var(--brand);
+  background: var(--signal-tint);
+}
+.rnode.selected .rlabel {
+  color: var(--brand);
+}
+
+/* ★ 票123 C-4.3:选中轮详情卡用 var(--dur)/var(--ease) 淡入一次。 */
+.rexpand {
+  margin-top: 16px;
+  animation: contentIn var(--dur) var(--ease);
+}
+
+.rhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rlabel {
+  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.stagechip {
+  background: var(--signal-tint);
+  color: var(--brand);
+  border-radius: 999px;
+  padding: 1.5px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.rwhen {
+  display: flex;
+  flex-direction: column;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+/* 事实行:Outcome / Materials —— 与轮次工作卡的标签/值口径一致 */
+.rfacts {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.rfact { display: flex; align-items: baseline; gap: 6px; }
+.rfact .k { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.rfact .v { font-size: 13px; font-weight: 500; color: var(--ink); }
+.rfact .v.go { color: var(--go); }
+.rfact .v.stop { color: var(--stop); }
+
+/* 「加一轮」收为行末紧凑按钮:行为与旧宽卡一致(开 intake 面板),只留主文案。 */
+.radd {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  border: 1px dashed var(--yi-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 10px 12px;
+}
+.radd:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
 
 /* ---------- ⑤ 复盘与待办(与 Round 同属下区,仅内部分隔线,不再自起外框) ---------- */
 .tail-card {
   border-top: 1px solid var(--yi-border);
   padding: 16px 2px 2px; margin-top: 18px;
-  h3 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
+  h3 { margin: 0 0 10px; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; }
 }
 .action-row {
   display: flex; align-items: center; gap: 9px; padding: 5px 0; font-size: 14px;
-  .done { text-decoration: line-through; color: var(--yi-text-muted, #999); }
-  .a-due { font-size: 13px; color: var(--yi-text-muted, #888); }
+  .done { text-decoration: line-through; color: var(--yi-text-muted, #475569); }
+  .a-due { font-size: 13px; color: var(--yi-text-muted, #475569); }
 }
 .action-add { display: flex; gap: 9px; margin-top: 8px; .fld { flex: 1; } }
-.debrief-label { display: block; font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); margin: 16px 0 6px; }
+.debrief-label { display: block; font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #475569); margin: 16px 0 6px; }
 .debrief { resize: vertical; }
 .debrief-actions { margin-top: 8px; }
 .weak-list { margin-top: 16px; }
-.weak-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); margin-bottom: 6px; }
+.weak-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #475569); margin-bottom: 6px; }
 .weak-row { display: flex; gap: 9px; align-items: center; font-size: 14px; padding: 4px 0; }
 .weak-sev {
-  font-size: 12px; font-weight: 800; border: 1px solid var(--yi-border, #ccc);
+  font-size: 12px; font-weight: 800; border: 1px solid var(--yi-border, #e2e8f0);
   border-radius: 6px; padding: 1px 6px;
-  &.s3 { border-color: #b3261e; color: #b3261e; }
+  &.s3 { border-color: #dc2626; color: #dc2626; }
 }
-.weak-cat { font-size: 13px; color: var(--yi-text-muted, #888); }
+.weak-cat { font-size: 13px; color: var(--yi-text-muted, #475569); }

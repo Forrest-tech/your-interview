@@ -1,4 +1,5 @@
 using YourInterview.BuildingBlocks.Domain;
+using YourInterview.Services.Interviews.Domain.JsonFields;
 
 namespace YourInterview.Services.Interviews.Domain;
 
@@ -132,8 +133,9 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     private InterviewEntry() { }
 
     public InterviewEntry(Guid companyId, string companyName, string role,
-        Guid? jobApplicationId = null)
+        Guid? jobApplicationId = null, Guid userId = default)
     {
+        UserId = userId;
         CompanyId = companyId;
         CompanyName = companyName;
         Role = role;
@@ -143,13 +145,17 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     }
 
     // ---------- 基本信息 ----------
+    /// <summary>归属用户(COD-01/票03):条目按用户隔离,子实体经本聚合根归属。</summary>
+    public Guid UserId { get; private set; }
+
     public Guid CompanyId { get; private set; }
     public string CompanyName { get; private set; } = string.Empty;
     public Guid? JobApplicationId { get; private set; }
     public string Role { get; private set; } = string.Empty;
 
     /// <summary>复盘 (JSON):面试后总结,原存 localStorage,现迁后端。</summary>
-    public string? DebriefJson { get; private set; }
+    private string? _debriefJson;
+    public string? DebriefJson { get => JsonFieldAdapter.Unwrap(_debriefJson); private set => _debriefJson = JsonFieldAdapter.Wrap(value); }
 
     public void SetDebrief(string? json) { DebriefJson = json; Touch(); }
 
@@ -175,7 +181,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     public string? JdSummary { get; private set; }
 
     /// <summary>"我要问面试官的问题"JSON 数组(F3):[{text, checked?}]。</summary>
-    public string? QuestionsToAskJson { get; private set; }
+    private string? _questionsToAskJson;
+    public string? QuestionsToAskJson { get => JsonFieldAdapter.Unwrap(_questionsToAskJson); private set => _questionsToAskJson = JsonFieldAdapter.Wrap(value); }
 
     // ---------- 面试场次信息 ----------
     public int RoundNo { get; private set; } = 1;
@@ -205,7 +212,8 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     /// 客观声学指标 JSON(缺口4,2026-10-07)。Worker 回写时带上,
     /// 内容即 Analysis.Worker 的 SpeechMetrics 序列化。存原文,前端直接展示。
     /// </summary>
-    public string? SpeechMetricsJson { get; private set; }
+    private string? _speechMetricsJson;
+    public string? SpeechMetricsJson { get => JsonFieldAdapter.Unwrap(_speechMetricsJson); private set => _speechMetricsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>
     /// 计分文本(2026-10-15):被 SpeakerLabelStage 标为 CANDIDATE 的分段拼接。
@@ -273,8 +281,17 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Touch();
 
         if (outcomeRecorded)
+        {
+            // 票04(REQ-02+ARC-07):结构化 outcome 只认轮次枚举这一事实源 ——
+            // 对应轮次已有定论(非 Pending)时把枚举带进事件,发布端直接映射;
+            // 轮次尚无定论时留空:发布端禁止拿自由文本猜枚举,
+            // 由 Jobs 侧单一 adapter 按旧事件回落处理 Result 原文。
+            var roundOutcome = _rounds.FirstOrDefault(r => r.Order == RoundNo)?.Outcome;
             RaiseDomainEvent(new InterviewOutcomeRecordedDomainEvent(
-                Id, JobApplicationId!.Value, RoundNo, result!));
+                Id, JobApplicationId!.Value, RoundNo, result!, UserId,
+                roundOutcome is not null and not InterviewRoundOutcome.Pending
+                    ? roundOutcome : null));
+        }
     }
 
     /// <summary>挂上一份材料(录音或文本)。会自动把 Draft 推进到 AssetsUploaded。</summary>
@@ -333,8 +350,12 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         Touch();
     }
 
-    /// <summary>开始转写(用户点「开始转写」,或 Worker 状态推进时调用)。</summary>
-    public void StartTranscription()
+    /// <summary>
+    /// 开始转写(用户点「开始转写」,或 Worker 状态推进时调用)。
+    /// assetId 给定时精确转写那一件录音(COD-07:前端在某一轮的录音上发起);
+    /// 不给时保留条目级旧语义 —— 取全条目第一件有落盘路径的录音(Worker 重跑路径)。
+    /// </summary>
+    public void StartTranscription(Guid? assetId = null)
     {
         // 幂等:流程中/已完成的不重复触发 ——
         // 尤其 Transcribing:Worker 回写时也会调它,不挡住会重复发事件 → 重复跑管线。
@@ -345,13 +366,27 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         if (!_assets.Any())
             throw new InvalidOperationException("还没有上传任何材料,无法开始转写");
 
+        InterviewAsset? audio;
+        if (assetId is not null)
+        {
+            // 指定了材料就必须精确命中:不存在 / 不是录音 / 没有落盘路径都直接报错,
+            // 绝不回落到"第一件录音" —— 多轮条目里那会把别的轮次的录音送去转写。
+            audio = _assets.FirstOrDefault(a => a.Id == assetId.Value)
+                ?? throw new InvalidOperationException("材料不存在");
+            if (audio.Kind != AssetKind.Audio || string.IsNullOrWhiteSpace(audio.StoragePath))
+                throw new InvalidOperationException("指定材料不是可转写的录音文件");
+        }
+        else
+        {
+            audio = _assets.FirstOrDefault(a =>
+                a.Kind == AssetKind.Audio && !string.IsNullOrWhiteSpace(a.StoragePath));
+        }
+
         TransitionTo(InterviewStatus.Transcribing);
         Touch();
 
         // 只在"真正开始"时发事件(带着录音的真实路径)→ 触发 Analysis.Worker。
         // 之前这一步只改状态不发事件,点完按钮就石沉大海 —— M1 修复的核心断点。
-        var audio = _assets.FirstOrDefault(a =>
-            a.Kind == AssetKind.Audio && !string.IsNullOrWhiteSpace(a.StoragePath));
         RaiseDomainEvent(new InterviewTranscriptionStartedDomainEvent(
             Id, audio?.Id ?? Guid.Empty, audio?.StoragePath));
     }
@@ -595,16 +630,45 @@ public sealed class InterviewEntry : AuditableAggregateRoot
     {
         var r = _rounds.FirstOrDefault(x => x.Id == roundId)
             ?? throw new InvalidOperationException("轮次不存在");
+        var outcomeChanged = r.Outcome != outcome;
+        var oldScheduledDate = r.ScheduledDate;
         r.Update(stage, scheduledDate, interviewers, format, location, outcome, notes, feedback);
         Touch();
+
+        // 票04(REQ-02+ARC-07):轮次结果变更 = 结构化事实,直接带轮次枚举发回写事件。
+        // 此前只有条目级自由文本 Result 变更才发事件,用户在轮次卡上填结果
+        // (结构化下拉)根本传不到 Tracker —— 同屏矛盾的一半根源。
+        // 守卫:未关联投递不发;结果没变不发(邀约建稿/AddRound 补字段等内部
+        // 调用都以原 outcome 保存,不会误触发)。
+        if (outcomeChanged && JobApplicationId is not null)
+            RaiseDomainEvent(new InterviewOutcomeRecordedDomainEvent(
+                Id, JobApplicationId.Value, r.Order, outcome.ToString(), UserId, outcome));
+
+        // 票114(REQ-02 残余/CONF-DASH-1):排期实际变化 = 回写事实 —— Jobs 据此
+        // 同步投影日期并推进投递状态(排了面试不能仍停在 Saved)。
+        // 守卫与结果事件同型:未关联投递不发;日期未变不发(票91 计数纪律 ——
+        // 内部补字段调用、邀请消费者同日期回放都不会误触发)。
+        if (oldScheduledDate != scheduledDate && JobApplicationId is not null)
+            RaiseDomainEvent(new InterviewRoundScheduledDomainEvent(
+                Id, JobApplicationId.Value, r.Order, r.Stage, scheduledDate, UserId));
     }
 
     public void RemoveRound(Guid roundId)
     {
         var r = _rounds.FirstOrDefault(x => x.Id == roundId)
             ?? throw new InvalidOperationException("轮次不存在");
+        var hadDate = r.ScheduledDate is not null;
+        var order = r.Order;
+        var stage = r.Stage;
         _rounds.Remove(r);
         Touch();
+
+        // 票114:删掉一个有日期的轮次 = 排期撤销 —— 以 ScheduledDate=null 形态
+        // 发排期事件,Jobs 只清投影日期、不回退投递状态(见契约注释)。
+        // 被删轮次本来就没日期时无排期事实可撤销,不发。
+        if (hadDate && JobApplicationId is not null)
+            RaiseDomainEvent(new InterviewRoundScheduledDomainEvent(
+                Id, JobApplicationId.Value, order, stage, null, UserId));
     }
 
     /// <summary>写入轮次的邮件时间线(A7):整体替换 EmailsJson。</summary>
@@ -672,22 +736,6 @@ public sealed class InterviewEntry : AuditableAggregateRoot
         _materials.Add(m);
         Touch();
         return m;
-    }
-
-    public InterviewWeakness AddWeakness(WeaknessCategory category, string title, string? detail,
-        string? evidence, int severity, string? suggestion)
-    {
-        var w = new InterviewWeakness(Id, category, title, detail, evidence, severity,
-            suggestion, WeaknessSource.Manual);
-        _weaknesses.Add(w);
-        Touch();
-        return w;
-    }
-
-    public void RemoveWeakness(Guid weaknessId)
-    {
-        var w = _weaknesses.FirstOrDefault(x => x.Id == weaknessId);
-        if (w is not null) { _weaknesses.Remove(w); Touch(); }
     }
 
     private void TransitionTo(InterviewStatus target)
@@ -780,14 +828,16 @@ public sealed class InterviewAsset : Entity
     public string? TranscriptText { get; private set; }
 
     /// <summary>转写分段 JSON: [{idx,speaker,start,end,text,pitchHz}] —— 说话人分离结果。</summary>
-    public string? TranscriptSegmentsJson { get; private set; }
+    private string? _transcriptSegmentsJson;
+    public string? TranscriptSegmentsJson { get => JsonFieldAdapter.Unwrap(_transcriptSegmentsJson); private set => _transcriptSegmentsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>
     /// 材料元数据 JSON(2026-10-20 详情页 v2):统一入口解析出的字段
     /// (邮件分类/发件人/主题/时间、截图附件 assetId、AI 摘要、提取到的安排、
     /// 沟通处理状态、来源场景 如电话/邮件)。结构由前端约定,后端只透传存储。
     /// </summary>
-    public string? MetaJson { get; private set; }
+    private string? _metaJson;
+    public string? MetaJson { get => JsonFieldAdapter.Unwrap(_metaJson); private set => _metaJson = JsonFieldAdapter.Wrap(value); }
 
     internal void Reassign(Guid? roundId) => RoundId = roundId;
 
@@ -848,7 +898,8 @@ public sealed class InterviewQuestion : Entity
     /// pronunciation:{score,comment,fix}}, stdSpoken:{ai,user}, stdTechnical:{ai,user}}。
     /// 标准答案 AI 原版与用户编辑版分开存,用户版优先、可还原。
     /// </summary>
-    public string? ReviewJson { get; private set; }
+    private string? _reviewJson;
+    public string? ReviewJson { get => JsonFieldAdapter.Unwrap(_reviewJson); private set => _reviewJson = JsonFieldAdapter.Wrap(value); }
 
     internal void SetReview(string? reviewJson) => ReviewJson = reviewJson;
 
@@ -885,13 +936,16 @@ public sealed class InterviewQuestion : Entity
     public double? AskedAtSeconds { get; private set; }
 
     /// <summary>短板标签 JSON 数组,如 ["Structure","Terminology"]。</summary>
-    public string? WeaknessTagsJson { get; private set; }
+    private string? _weaknessTagsJson;
+    public string? WeaknessTagsJson { get => JsonFieldAdapter.Unwrap(_weaknessTagsJson); private set => _weaknessTagsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>可能被追问什么(JSON 数组),提前准备。</summary>
-    public string? FollowUpQuestionsJson { get; private set; }
+    private string? _followUpQuestionsJson;
+    public string? FollowUpQuestionsJson { get => JsonFieldAdapter.Unwrap(_followUpQuestionsJson); private set => _followUpQuestionsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>漏掉的得分点(JSON 数组)。</summary>
-    public string? MissedPointsJson { get; private set; }
+    private string? _missedPointsJson;
+    public string? MissedPointsJson { get => JsonFieldAdapter.Unwrap(_missedPointsJson); private set => _missedPointsJson = JsonFieldAdapter.Wrap(value); }
 
     internal void FillAnswer(string? myAnswerText, string? assessment, bool gotStuck,
         string? stuckReason, string? recommendedAnswer, double? askedAtSeconds)
@@ -1017,10 +1071,12 @@ public sealed class InterviewRound : Entity
     public string? ScheduledTime { get; private set; }
 
     /// <summary>备考问题清单 JSON:[{text, checked}]。</summary>
-    public string? PrepQuestionsJson { get; private set; }
+    private string? _prepQuestionsJson;
+    public string? PrepQuestionsJson { get => JsonFieldAdapter.Unwrap(_prepQuestionsJson); private set => _prepQuestionsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>相关邮件 JSON:[{subject, from, date, snippet}]。</summary>
-    public string? EmailsJson { get; private set; }
+    private string? _emailsJson;
+    public string? EmailsJson { get => JsonFieldAdapter.Unwrap(_emailsJson); private set => _emailsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>面试录音文稿。</summary>
     public string? Transcript { get; private set; }
@@ -1029,21 +1085,24 @@ public sealed class InterviewRound : Entity
     public string? RecordingUrl { get; private set; }
 
     /// <summary>准备清单 JSON:[{text, done}]。</summary>
-    public string? ChecklistJson { get; private set; }
+    private string? _checklistJson;
+    public string? ChecklistJson { get => JsonFieldAdapter.Unwrap(_checklistJson); private set => _checklistJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>
     /// 整轮复盘汇总 JSON(2026-10-20 详情页 v2):
     /// {overall, passProbability, passBasis, strongest, weakest, summary}。
     /// passProbability 明确是 AI 估计,依据写在 passBasis。
     /// </summary>
-    public string? ReviewJson { get; private set; }
+    private string? _reviewJson;
+    public string? ReviewJson { get => JsonFieldAdapter.Unwrap(_reviewJson); private set => _reviewJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>
     /// 结构化备考报告 JSON(2026-10-20 详情页 v2):
     /// {generatedAt, generatedBy, sources, sections:[{id,title,blocks}], questions:[...]}。
     /// 题目与 Tech Stack 的关联以 knowledgeId 挂接(同一条记录,不复制答案)。
     /// </summary>
-    public string? PrepReportJson { get; private set; }
+    private string? _prepReportJson;
+    public string? PrepReportJson { get => JsonFieldAdapter.Unwrap(_prepReportJson); private set => _prepReportJson = JsonFieldAdapter.Wrap(value); }
 
     internal void SetReview(string? reviewJson) => ReviewJson = reviewJson;
 
@@ -1063,19 +1122,27 @@ public sealed class InterviewRound : Entity
         Feedback = feedback;
     }
 
-    /// <summary>更新轮次扩展信息(会议链接/时间/备考/邮件/文稿/录音/清单)。</summary>
+    /// <summary>
+    /// 更新轮次扩展信息(会议链接/时间/备考/邮件/文稿/录音/清单)—— 部分更新协议(COD-04):
+    /// 每个字段 null = 调用方未提供,保持原值;空字符串 = 明确清空(存 null);非空 = 赋值。
+    /// 此前无条件整字段赋值,前端只传基础字段保存一次即静默抹除转写/备考题/邮件/录音。
+    /// </summary>
     internal void UpdateDetails(string? meetingLink, string? scheduledTime,
         string? prepQuestionsJson, string? emailsJson, string? transcript, string? recordingUrl,
         string? checklistJson = null)
     {
-        MeetingLink = meetingLink;
-        ScheduledTime = scheduledTime;
-        PrepQuestionsJson = prepQuestionsJson;
-        EmailsJson = emailsJson;
-        Transcript = transcript;
-        RecordingUrl = recordingUrl;
-        if (checklistJson != null) ChecklistJson = checklistJson;
+        MeetingLink = ApplyPartial(meetingLink, MeetingLink);
+        ScheduledTime = ApplyPartial(scheduledTime, ScheduledTime);
+        PrepQuestionsJson = ApplyPartial(prepQuestionsJson, PrepQuestionsJson);
+        EmailsJson = ApplyPartial(emailsJson, EmailsJson);
+        Transcript = ApplyPartial(transcript, Transcript);
+        RecordingUrl = ApplyPartial(recordingUrl, RecordingUrl);
+        ChecklistJson = ApplyPartial(checklistJson, ChecklistJson);
     }
+
+    /// <summary>部分更新单字段:未提供(null)保持、空串清空、非空赋值。</summary>
+    private static string? ApplyPartial(string? provided, string? current)
+        => provided is null ? current : provided.Length == 0 ? null : provided;
 
     /// <summary>只记结果,不动其它字段 —— 结果回写不该清掉已填的时间/面试官/形式。</summary>
     internal void RecordOutcome(InterviewRoundOutcome outcome) => Outcome = outcome;
@@ -1210,10 +1277,12 @@ public sealed class AnalysisSnapshot : Entity
     /// 六维分数 JSON:{overall,pronunciation,fluency,structure,technicalDepth,relevance}。
     /// 各维度可空(如文本模式的 pronunciation 为 null),前端按"未测量"展示。
     /// </summary>
-    public string? DimensionsJson { get; private set; }
+    private string? _dimensionsJson;
+    public string? DimensionsJson { get => JsonFieldAdapter.Unwrap(_dimensionsJson); private set => _dimensionsJson = JsonFieldAdapter.Wrap(value); }
 
     /// <summary>3~5 条一句话结论的 JSON 数组(由回写时的 Summary 句子切分得到)。</summary>
-    public string? SummaryBulletsJson { get; private set; }
+    private string? _summaryBulletsJson;
+    public string? SummaryBulletsJson { get => JsonFieldAdapter.Unwrap(_summaryBulletsJson); private set => _summaryBulletsJson = JsonFieldAdapter.Wrap(value); }
 
     public DateTimeOffset CreatedAt { get; private set; }
 }
@@ -1244,7 +1313,17 @@ public sealed record InterviewAnalysisFailedDomainEvent(Guid EntryId, string Rea
 /// Jobs 消费后回写对应轮次的 Outcome,被拒时申请自动转 Rejected。
 /// </summary>
 public sealed record InterviewOutcomeRecordedDomainEvent(
-    Guid EntryId, Guid ApplicationId, int RoundNo, string Result) : DomainEventBase;
+    Guid EntryId, Guid ApplicationId, int RoundNo, string Result,
+    Guid UserId = default, InterviewRoundOutcome? Outcome = null) : DomainEventBase;
+
+/// <summary>
+/// 轮次排期变更(票114):轮次 ScheduledDate 实际变化(含删有日期轮次的
+/// 撤销形态,ScheduledDate=null)。只有关联了 Tracker 申请的条目才发 ——
+/// Jobs 消费后同步投影轮次排期并按口径推进投递状态。
+/// </summary>
+public sealed record InterviewRoundScheduledDomainEvent(
+    Guid EntryId, Guid ApplicationId, int RoundNo, string? Stage,
+    DateOnly? ScheduledDate, Guid UserId = default) : DomainEventBase;
 
 // ============================ 分析回写用的 DTO(领域层不依赖 Application) ============================
 

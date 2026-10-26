@@ -1,9 +1,16 @@
+using YourInterview.SharedContracts.Analysis;
+
 namespace YourInterview.Analysis.Worker.Analysis;
 
 /// <summary>
-/// 分析管线的领域契约。
+/// 分析管线的 Worker 内部编排类型(非跨服务契约)。
 ///
-/// 这些类型刻意与 SharedContracts.Analysis 的六维契约保持同构 ——
+/// 票40(ARC-15)合一:原同文件的 SpeechMetrics / TranscriptSegment /
+/// WordPronunciation 三个线缆类型已升入 SharedContracts.Analysis 成为唯一
+/// 定义(字段逐字不变,见 SpeechAnalysisContracts.cs),本文件只留管线
+/// 编排内部类型(PipelineContext/StageResult/AnalysisArtifact/
+/// IPipelineStage/PipelineState)——它们无 SharedContracts 对应物、
+/// 从不以类型形态跨服务序列化,不存在副本问题。
 /// Worker 只负责"把音频变成数字",业务怎么用这些数字由各服务决定。
 ///
 /// 管线五阶段(每阶段都能单独重跑,这是排障的关键):
@@ -25,62 +32,6 @@ public sealed record PipelineContext(
     /// (Prepare/Transcribe 的 CanRun 本来就要求音频文件),直接从文本算指标。
     /// </summary>
     IReadOnlyList<TranscriptSegment>? SeedSegments = null);
-
-/// <summary>转写出来的一段话。</summary>
-public sealed record TranscriptSegment(
-    int Index,
-    double StartSeconds,
-    double EndSeconds,
-    string Text,
-    /// <summary>说话人标签:INTERVIEWER(面试官)/ CANDIDATE(我)/ UNKNOWN。</summary>
-    string Speaker,
-    /// <summary>说话人置信度 0-1。</summary>
-    double SpeakerConfidence = 1.0);
-
-/// <summary>逐词发音评估结果。</summary>
-public sealed record WordPronunciation(
-    string Word,
-    double AccuracyScore,
-    double? FluencyScore,
-    double StartSeconds,
-    double EndSeconds);
-
-/// <summary>客观声学与语言指标 —— 这些是"可测量"的,不掺主观判断。</summary>
-public sealed record SpeechMetrics(
-    double DurationSeconds,
-    int WordCount,
-    /// <summary>词/分钟。北美技术面试对话的舒适区间约 130-170。</summary>
-    double WordsPerMinute,
-    /// <summary>平均句长(词)。低于 10 说明句子被切碎。</summary>
-    double AverageSentenceLength,
-    /// <summary>过短句(<5 词)条数。</summary>
-    int ShortSentenceCount,
-    /// <summary>填充词总数(um/uh/like...)。</summary>
-    int FillerWordCount,
-    /// <summary>填充词明细:词 → 次数。</summary>
-    Dictionary<string, int> FillerWordBreakdown,
-    /// <summary>自我重复片段数。</summary>
-    int SelfRepetitionCount,
-    /// <summary>长停顿(>2 秒)次数。</summary>
-    int LongPauseCount,
-    /// <summary>总停顿秒数。</summary>
-    double TotalSilenceSeconds,
-    /// <summary>发音准确度均分(0-100)。</summary>
-    double PronunciationAccuracy,
-    /// <summary>低分词(<60)占比。</summary>
-    double LowScoreWordRatio,
-    /// <summary>读错的专业术语。</summary>
-    IReadOnlyList<WordPronunciation> ProblemWords,
-    /// <summary>
-    /// 结构骨架标记(缺口4补齐,2026-10-07):检出的分点/转折/收尾标记 → 次数。
-    /// 有标记 = 在尝试结构化表达;全空 = 全程平铺直叙。
-    /// </summary>
-    Dictionary<string, int>? StructureMarkers = null,
-    /// <summary>
-    /// 是否有音频。文本模式(粘贴文本)下为 false:发音相关指标无意义,
-    /// 诊断时发音维度记为 null(不参与总分)。
-    /// </summary>
-    bool HasAudio = true);
 
 /// <summary>一阶段的结果 —— 带成功/失败,让管线能"部分成功"地报错。</summary>
 public sealed record StageResult(string Stage, bool Success, string? Error, double ElapsedMs);

@@ -1,12 +1,22 @@
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Persistence;
+using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Jobs.Domain;
 
 namespace YourInterview.Services.Jobs.Infrastructure.Persistence;
 
-public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbContext(options)
+public sealed class JobsDbContext(
+    DbContextOptions<JobsDbContext> options,
+    ICurrentUser? currentUser = null) : DbContext(options)
 {
     public const string Schema = "jobs";
+
+    /// <summary>
+    /// 当前请求用户(COD-01/票03 全局过滤器用)。EF 查询过滤器引用本属性:
+    /// 无 HTTP 上下文(后台/消费者)时为 null,过滤器 fail-closed 匹配零行,
+    /// 非请求路径必须 IgnoreQueryFilters + 事件 UserId 显式校验。
+    /// </summary>
+    public Guid? CurrentUserId { get; } = currentUser?.UserId;
 
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<JobApplication> Applications => Set<JobApplication>();
@@ -25,6 +35,10 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
     // ---- M3:申请问答库(用户级)与沟通记录(投递级)----
     public DbSet<ApplicationAnswerTemplate> AnswerTemplates => Set<ApplicationAnswerTemplate>();
     public DbSet<ApplicationCommunication> Communications => Set<ApplicationCommunication>();
+
+    // ---- COD-10a/票14:Tracker 收藏与按投递自备问题(原 localStorage 孤岛上后端)----
+    public DbSet<ApplicationFavorite> Favorites => Set<ApplicationFavorite>();
+    public DbSet<ApplicationQuestion> ApplicationQuestions => Set<ApplicationQuestion>();
 
     /// <summary>
     /// 修正「新增子实体被 EF 误判为 Modified」。共享实现见 NewChildEntityFixer ——
@@ -63,10 +77,12 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             // 但设上限避免无界增长拖垮行存储。
             e.Property(x => x.Profile).HasMaxLength(20000);
             e.Property(x => x.ProfileSourcesJson).HasMaxLength(4000);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
-            // 公司名唯一(同一用户视角;当前为单租户账号空间)
-            e.HasIndex(x => x.Name).IsUnique();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+            // 公司名按用户唯一(COD-01 contract):同名公司在不同用户下各自一份
+            e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();
         });
 
         // 用户简历正文(2026-09-18)
@@ -94,21 +110,29 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             e.Property(x => x.Salary).HasMaxLength(200);
             e.Property(x => x.WorkMode).HasMaxLength(200);
             e.Property(x => x.Source).HasMaxLength(100);
-            e.Property(x => x.JdSummary).HasMaxLength(20000);
-            // JD 全文:与 JdSummary 同量级上限。取 40000 是因为真实 JD 常含
-            // 岗位职责+任职要求+公司介绍三段,20000 在长 JD 上会截断。
-            e.Property(x => x.JdText).HasMaxLength(40000);
+            // JD 摘要:text 列不限长 (票62,与 JdText 同口径)。SmartAdd 解析出的
+            // 长摘要曾撞 varchar(20000) 整单 500 (Postgres 22001);长度口径改由
+            // 应用层校验统一把关 (JdTextLimits.MaxLength,超限 400 而非落库 500)。
+            e.Property(x => x.JdSummary).HasColumnType("text");
+            // JD 全文:text 列不限长 (FUN-04)。真实 LinkedIn 长 JD 可达 44K+ 字符,
+            // varchar 上限曾让 smart-add 整单 500 (Postgres 22001)。长度口径改由
+            // 应用层校验统一把关 (JdTextLimits.MaxLength,超限 400 而非落库 500),
+            // 口径与 UserResume.Content 的 text 先例一致。
+            e.Property(x => x.JdText).HasColumnType("text");
             e.Property(x => x.JdSourceUrl).HasMaxLength(2048);
-            // 公司介绍:完整存储,20000 上限(LinkedIn 公司介绍通常 2000-5000 字)。
-            e.Property(x => x.CompanyDescription).HasMaxLength(20000);
+            // 公司介绍:text 列不限长 (票62,与 JdText 同口径,理由同 JdSummary)。
+            e.Property(x => x.CompanyDescription).HasColumnType("text");
             // 工作身份要求:归一短文本,500 足够。
             e.Property(x => x.WorkAuthorization).HasMaxLength(500);
             // 岗位性质:归一短文本(Full-time/Part-time/Permanent/Contract/...),100 足够。
             e.Property(x => x.JobType).HasMaxLength(100);
-            // 任职要求:完整存储,20000 上限。
-            e.Property(x => x.Requirements).HasMaxLength(20000);
-            // 福利待遇:完整存储,20000 上限。
-            e.Property(x => x.Benefits).HasMaxLength(20000);
+            // 任职要求:text 列不限长 (票62,与 JdText 同口径,理由同 JdSummary)。
+            e.Property(x => x.Requirements).HasColumnType("text");
+            // 福利待遇:text 列不限长 (票62,与 JdText 同口径,理由同 JdSummary)。
+            e.Property(x => x.Benefits).HasColumnType("text");
+            // 票 154：JD 小节列表 JSON:text 列不限长，与 JdText 同口径；
+            // 长度口径改由应用层校验统一把关（JdTextLimits.MaxLength，超限 400 而非落库 500）。
+            e.Property(x => x.SectionsJson).HasColumnType("text");
             e.Property(x => x.PassRateEstimate).HasMaxLength(1000);
             e.Property(x => x.MatchKeywords).HasMaxLength(4000);
             e.Property(x => x.Notes).HasMaxLength(8000);
@@ -120,8 +144,10 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.CompanyId);
             e.HasIndex(x => new { x.Status, x.Priority });
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
             e.HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.History).WithOne().HasForeignKey(h => h.ApplicationId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Rounds).WithOne().HasForeignKey(r => r.ApplicationId).OnDelete(DeleteBehavior.Cascade);
@@ -149,6 +175,8 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Feedback).HasMaxLength(4000);
             e.HasIndex(x => x.ApplicationId);
+            // 票101:轮次行纳入 xmin 并发令牌(系统列,零迁移)——轮次详情编辑回传钉版。
+            e.UseXminAsConcurrencyToken();
         });
 
         // 求职信(2026-09-18)。一条投递一封 —— ApplicationId 唯一。
@@ -222,9 +250,44 @@ public sealed class JobsDbContext(DbContextOptions<JobsDbContext> options) : DbC
             // 2026-10-20 Playbook v2:解析元数据 + 安排处理状态。
             e.Property(x => x.MetaJson).HasColumnType("text");
             e.Property(x => x.HandlingStatus).HasMaxLength(20);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
             e.HasIndex(x => x.ApplicationId);
+            e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // COD-10a/票14:Tracker 收藏(用户级关系行)。(UserId, ApplicationId) 唯一 ——
+        // 同一用户对同一投递最多一条收藏,导入/重复 PUT 靠它在库层兜底幂等;
+        // 软删后重加走 Restore(Handler 以 IgnoreQueryFilters 查含删行),不新建第二行。
+        b.Entity<ApplicationFavorite>(e =>
+        {
+            e.ToTable("application_favorites");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.ApplicationId).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.ApplicationId }).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+            e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // COD-10a/票14:按投递自备问题。归属从所属投递盖章(同沟通记录口径),
+        // 查询过滤器与 Handler 谓词双保险。
+        b.Entity<ApplicationQuestion>(e =>
+        {
+            e.ToTable("application_questions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.ApplicationId).IsRequired();
+            e.Property(x => x.Text).HasMaxLength(4000).IsRequired();
+            e.Property(x => x.SortOrder).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.ApplicationId });
+            e.HasIndex(x => x.ApplicationId);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
             e.HasOne<JobApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
         });
     }

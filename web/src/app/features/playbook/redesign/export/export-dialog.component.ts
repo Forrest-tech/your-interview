@@ -83,21 +83,21 @@ interface ExportPrefs { selected: string[]; format: ExportFormat; }
     </mat-dialog-actions>
   `,
   styles: [`
-    .sub { color: var(--yi-text-muted, #777); font-size: 13px; margin: 0 0 4px; }
-    .sec-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #777); margin: 14px 0 6px; }
-    .hint { font-size: 13px; color: var(--yi-text-muted, #999); margin: 0 0 4px; }
+    .sub { color: var(--yi-text-muted, #475569); font-size: 13px; margin: 0 0 4px; }
+    .sec-title { font-size: 13px; font-weight: 700; color: var(--yi-text-muted, #475569); margin: 14px 0 6px; }
+    .hint { font-size: 13px; color: var(--yi-text-muted, #475569); margin: 0 0 4px; }
     .opts { display: flex; gap: 6px 16px; flex-wrap: wrap; }
     .fcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .fcard { border: 1px solid var(--yi-border, #ccc); border-radius: 10px; padding: 10px 6px;
+    .fcard { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 10px 6px;
              text-align: center; background: transparent; color: inherit; cursor: pointer; }
-    .fcard.on { border-color: var(--yi-accent, #3f51b5); outline: 1.5px solid var(--yi-accent, #3f51b5); }
+    .fcard.on { border-color: var(--yi-accent, #2563eb); outline: 1.5px solid var(--yi-accent, #2563eb); }
     .fcard .fn { font-size: 14px; font-weight: 700; }
-    .fcard .fd { font-size: 12px; color: var(--yi-text-muted, #888); margin-top: 2px; }
+    .fcard .fd { font-size: 12px; color: var(--yi-text-muted, #475569); margin-top: 2px; }
     .fname-row { display: flex; align-items: center; gap: 8px; }
-    .fname-input { flex: 1; border: 1px solid var(--yi-border, #ccc); border-radius: 8px;
+    .fname-input { flex: 1; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 8px;
                    padding: 8px 11px; font-size: 14px; background: transparent; color: inherit; }
-    .ext { font-size: 14px; font-weight: 700; color: var(--yi-text-muted, #777); }
-    .err { color: #b3261e; font-size: 13px; }
+    .ext { font-size: 14px; font-weight: 700; color: var(--yi-text-muted, #475569); }
+    .err { color: #dc2626; font-size: 13px; }
   `]
 })
 export class ExportDialogComponent {

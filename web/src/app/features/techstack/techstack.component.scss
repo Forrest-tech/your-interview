@@ -1,11 +1,21 @@
 .page {
-  max-width: 1500px;
+  /* 票123 R-7.3:内容度量统一到全站共享的 1240px —— 让本页「按声明」满足不变量,
+     而不是在审计视口下碰巧量到 1240(左侧 200px 是全站壳层侧边栏,属壳层 chrome,
+     不是本页的库栏;本页自己的库栏是度量内部的栅格切分)。 */
+  max-width: 1240px;
   margin: 0 auto;
   height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* 票123 接手修失败 2:720p 下 filters 卡(含 R-10 零活动邀请行 +47px)与
+     R-7.4 标题放大(+~4px)把 .split 压到 0 高,list-body 只剩 12px,
+     条目中心永不可点。原 overflow:hidden 使页面无法滚动兜底;
+     改为纵向可滚后,条目可经页面滚动进入视口被点中(Playwright
+     scrollIntoView 走可滚祖先链)。横向仍禁滚,本规则仅作用于本页
+     (组件级样式),不影响其他页。content-in 动效与根因无关,未动。 */
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 24px 28px 16px;
 }
 
@@ -16,9 +26,16 @@
   gap: 6px 16px;
   margin-top: 8px;
 }
-.source-text { font-size: 13px; color: #555; }
-.source-text.link { color: #1565c0; text-decoration: underline; cursor: pointer; }
-.source-text.link:hover { color: #0d47a1; }
+.source-text { font-size: 13px; color: #475569; }
+.source-text.link { color: #2563eb; text-decoration: underline; cursor: pointer; }
+.source-text.link:hover { color: #2563eb; }
+/* 票123 R-3:来源条目(公司 / Round N / 日期)改为分段并排,不再用中点串成一行正文。 */
+.source-entry { display: inline-flex; gap: 8px; align-items: baseline; }
+.source-part { white-space: nowrap; }
+.source-part + .source-part { color: #7d8797; }
+/* 轮次下拉选项的分段(编号 / 阶段 / 日期)。 */
+.round-option-part { display: inline-block; margin-right: 8px; }
+.round-option-part:last-child { margin-right: 0; }
 .source-edit-list {
   display: flex;
   flex-wrap: wrap;
@@ -61,7 +78,9 @@
   margin-bottom: 14px;
 }
 
-.page-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+/* 票123 R-7.4:页标题统一 24px / Space Grotesk 600(全局 .page-head h2 已是该口径,
+   这里显式声明字体族,避免依赖全局规则与组件样式的层叠顺序)。 */
+.page-head h2 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
 .page-head .sub { margin: 4px 0 0; font-size: 13px; opacity: 0.6; }
 .head-actions { display: flex; gap: 8px; flex: 0 0 auto; }
 
@@ -72,7 +91,7 @@ mat-card { border-radius: 8px; }
 .buckets-inline {
   margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
 }
 
 .buckets-head {
@@ -82,7 +101,7 @@ mat-card { border-radius: 8px; }
   margin-bottom: 10px;
 }
 
-.buckets-title { font-size: 14px; font-weight: 600; }
+.buckets-title { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 15px; font-weight: 600; }
 .buckets-total { font-size: 12px; opacity: 0.55; }
 
 .bucket-row {
@@ -108,16 +127,16 @@ mat-card { border-radius: 8px; }
 
 .bar {
   height: 6px;
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.07);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.07);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 3px;
-  background: var(--m-color, #3f51b5);
-  transition: width 220ms ease;
+  border-radius: 6px;
+  background: var(--m-color, #2563eb);
+  transition: width var(--dur) var(--ease);
 }
 
 .bucket-pct { font-size: 11px; opacity: 0.45; margin-top: 3px; }
@@ -125,9 +144,9 @@ mat-card { border-radius: 8px; }
 .fsrs-panel {
   margin-top: 12px;
   padding: 10px 12px;
-  background: #f5f7fa;
-  border-radius: 8px;
-  border: 1px solid #e1e5eb;
+  background: #eff6ff;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
 }
 .fsrs-row {
   display: flex;
@@ -138,30 +157,30 @@ mat-card { border-radius: 8px; }
 .fsrs-row:last-child { margin-bottom: 0; }
 .fsrs-row label {
   font-size: 12px;
-  color: #5a6472;
+  color: #475569;
   min-width: 70px;
 }
 .fsrs-row input[type="range"] { flex: 1; }
 .fsrs-val {
   font-weight: 600;
-  color: #2b6cb0;
+  color: #2563eb;
   min-width: 40px;
 }
 .fsrs-forecast {
   font-size: 12px;
-  color: #5a6472;
+  color: #475569;
 }
 .fsrs-forecast b {
-  color: #c53030;
+  color: #dc2626;
   font-size: 14px;
 }
 /* ★ #9:热力图 */
 .heatmap-panel {
   margin-top: 12px;
   padding: 10px 12px;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e1e5eb;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
 }
 .heatmap-head {
   display: flex;
@@ -172,14 +191,14 @@ mat-card { border-radius: 8px; }
 .heatmap-title {
   font-size: 13px;
   font-weight: 600;
-  color: #2b3340;
+  color: #0f172a;
 }
 .streak-badge {
   font-size: 12px;
-  background: #fff3e0;
-  color: #e65100;
+  background: var(--attention-tint);
+  color: var(--attention);
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: 999px;
   font-weight: 600;
 }
 .heatmap-grid {
@@ -196,13 +215,15 @@ mat-card { border-radius: 8px; }
 .heatmap-day {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
-  background: #ebedf0;
+  border-radius: 6px;
+  background: #e2e8f0;
 }
-.heatmap-day.lv-1 { background: #c6e48b; }
-.heatmap-day.lv-2 { background: #7bc96f; }
-.heatmap-day.lv-3 { background: #239a3b; }
-.heatmap-day.lv-4 { background: #196127; }
+.heatmap-day.lv-1 { background: #bfdbfe; } /* 配色方案 A §2.5.3:lv-1 = blue-200,与提案表一致 */
+.heatmap-day.lv-2 { background: #60a5fa; }
+.heatmap-day.lv-3 { background: #2563eb; }
+/* 配色方案 A §2.5.3:热力图取品牌蓝家族(lv-0 中性 slate-200 → lv-4 blue-900);
+   扫荡把 lv-4 的旧品牌色机械映射到了 blue-600,此处纠正为 blue-900。 */
+.heatmap-day.lv-4 { background: #1e3a8a; }
 .heatmap-day.lv--1 { background: transparent; }
 .heatmap-legend {
   display: flex;
@@ -210,11 +231,32 @@ mat-card { border-radius: 8px; }
   gap: 4px;
   margin-top: 8px;
   font-size: 11px;
-  color: #8a94a6;
+  color: #64748b;
 }
 .heatmap-legend .heatmap-day {
   width: 10px;
   height: 10px;
+}
+/* 票123 R-10:热力图零活动的邀请行 —— 图例下面一句话 + 一个既有行动。
+   不引入新的颜色或版式系统:文字用既有的次级墨色,按钮交给 Material 的
+   text button 令牌(--mdc-text-button-container-shape: 8px)。 */
+.heatmap-invite {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+.heatmap-invite p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.heatmap-invite button {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 /* ★ #5:重做模式 */
 .resole-toggle {
@@ -222,30 +264,39 @@ mat-card { border-radius: 8px; }
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #5a6472;
+  color: #475569;
   margin-bottom: 10px;
   cursor: pointer;
 }
 .resole-hint {
   font-size: 13px;
-  color: #6b7280;
-  background: #fef3c7;
+  color: #64748b;
+  background: var(--attention-tint);
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: 6px;
   margin-bottom: 10px;
-  border: 1px solid #fde68a;
+  border: 1px solid #fffbeb;
 }
 .binary-grade {
   display: flex;
   gap: 12px;
 }
+/* 票 149：重做模式子项占满整行——.rs-grade 是 4 列网格（为四档评分设计），
+   重做模式的子项若不跨列会被压进 1/4 列宽，二元按钮各剩约 70px，
+   文字换行后被 36px 固定高裁掉（截图现状）。开关/提示/揭示钮/二元评分一律跨满整行。 */
+.rs-grade .resole-toggle,
+.rs-grade .resole-hint,
+.rs-grade .resole-reveal,
+.rs-grade .binary-grade { grid-column: 1 / -1; }
+/* 窄屏兜底：二元按钮文字允许换行、高度自适应，不再裁字。 */
+.binary-grade button { white-space: normal; height: auto; min-height: 36px; line-height: 1.4; padding-top: 6px; padding-bottom: 6px; }
 .binary-grade .g-pass {
-  background: #10b981;
+  background: var(--go);
   color: white;
   flex: 1;
 }
 .binary-grade .g-fail {
-  background: #ef4444;
+  background: var(--stop);
   color: white;
   flex: 1;
 }
@@ -268,7 +319,7 @@ mat-card { border-radius: 8px; }
   gap: 4px;
   font-weight: 600;
   font-size: 13.5px;
-  color: #3f51b5;
+  color: #2563eb;
   padding: 4px 8px;
   min-width: 0;
 }
@@ -281,8 +332,8 @@ mat-card { border-radius: 8px; }
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #3f51b5;
-  color: #fff;
+  background: #2563eb;
+  color: #ffffff;
   font-size: 11.5px;
   font-weight: 700;
 }
@@ -295,17 +346,19 @@ mat-card { border-radius: 8px; }
 }
 .achip {
   font-size: 12.5px;
-  background: rgba(63, 81, 181, 0.1);
-  color: #3f51b5;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
 }
 
 /* 分类管理按钮 */
 .manage-btn {
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(15, 23, 42, 0.45);
   width: 32px;
   height: 32px;
 }
-.manage-btn:hover { color: #3f51b5; background: rgba(63, 81, 181, 0.08); }
+/* ★ 票123 C-3.2:可点项取统一洗色(原为 `rgba(37, 99, 235, 0.08)`)。 */
+.manage-btn:hover { color: #2563eb; background: var(--hover-wash); }
+.manage-btn:active { background: var(--press-wash); }
 .manage-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
 /* 筛选区底部:Clear filters 右对齐 */
@@ -345,7 +398,7 @@ mat-form-field { width: 100%; }
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(15, 23, 42, 0.06);
   opacity: 0.6;
 }
 
@@ -359,7 +412,11 @@ mat-form-field { width: 100%; }
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
   flex: 1 1 auto;
-  min-height: 0;
+  /* 票123 接手修失败 2(续):仅 .page 纵向可滚不够——flex 预算内 split 仍塌到 0、
+     list-body 只剩 12px,条目中心永不可点(本地探针实测)。给 split 保底高度:
+     一项条目(实测 59px)+ list-head(约 40px)= 约 99px,取 120px 留余量;
+     非挤压态 split 本就高于此值,无视觉变化;挤压态多出部分由 .page 纵向滚动承接。 */
+  min-height: 120px;
 }
 
 @media (max-width: 900px) {
@@ -378,12 +435,12 @@ mat-form-field { width: 100%; }
 .split-handle::after {
   content: '';
   width: 3px;
-  border-radius: 2px;
+  border-radius: 6px;
   background: transparent;
-  transition: background 0.15s;
+  transition: background var(--dur);
   margin: 8px 0;
 }
-.split-handle:hover::after { background: rgba(63, 81, 181, 0.35); }
+.split-handle:hover::after { background: rgba(37, 99, 235, 0.35); }
 
 /* ---------- 左:列表 ---------- */
 
@@ -393,7 +450,7 @@ mat-form-field { width: 100%; }
   padding: 11px 14px;
   font-size: 12.5px;
   opacity: 0.55;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
 }
 
 .list-body {
@@ -414,22 +471,24 @@ mat-form-field { width: 100%; }
   cursor: pointer;
   font: inherit;
   color: inherit;
-  transition: background 110ms ease;
+  transition: background var(--dur-fast) var(--ease);
 }
 
-.list-item:hover { background: rgba(0, 0, 0, 0.045); }
+/* ★ 票123 C-3.2:行取统一洗色(原为 `rgba(15, 23, 42, 0.045)` 黑 alpha)。 */
+.list-item:hover { background: var(--hover-wash); }
+.list-item:active { background: var(--press-wash); }
 
 .list-item.active {
-  background: rgba(63, 81, 181, 0.1);
-  box-shadow: inset 2px 0 0 #3f51b5;
+  background: rgba(37, 99, 235, 0.1);
+  box-shadow: inset 2px 0 0 #2563eb;
 }
 
 .list-item + .list-item { margin-top: 2px; }
 
 /* 批量编辑模式:勾选项高亮 + 复选框 */
 .list-item.batch-selected {
-  background: rgba(63, 81, 181, 0.08);
-  box-shadow: inset 2px 0 0 #3f51b5;
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: inset 2px 0 0 #2563eb;
 }
 .batch-check {
   margin-right: 8px;
@@ -441,7 +500,7 @@ mat-form-field { width: 100%; }
 }
 .sel-count {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(15, 23, 42, 0.6);
   margin-right: 4px;
   white-space: nowrap;
 }
@@ -461,9 +520,9 @@ mat-form-field { width: 100%; }
   flex: 0 0 auto;
   font-size: 10.5px;
   padding: 1px 7px;
-  border-radius: 9px;
-  background: var(--m-color-bg, rgba(0, 0, 0, 0.06));
-  color: var(--m-color, #5f6368);
+  border-radius: 999px;
+  background: var(--m-color-bg, rgba(15, 23, 42, 0.06));
+  color: var(--m-color, #475569);
   white-space: nowrap;
 }
 
@@ -481,14 +540,14 @@ mat-form-field { width: 100%; }
 .li-topic {
   padding: 0 6px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(15, 23, 42, 0.05);
 }
 
 .li-src {
   padding: 0 6px;
   border-radius: 8px;
-  background: rgba(249, 168, 37, 0.18);
-  color: #a15c00;
+  background: rgba(176, 106, 0, 0.18);
+  color: var(--attention);
   opacity: 1;
 
   &.link {
@@ -506,7 +565,7 @@ mat-form-field { width: 100%; }
   justify-content: center;
   gap: 10px;
   padding: 6px;
-  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
   font-size: 12.5px;
   opacity: 0.7;
 }
@@ -524,15 +583,17 @@ mat-form-field { width: 100%; }
 
 .detail-head {
   padding: 16px 20px 14px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
-  background: #fcfcfe;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+  background: #f6f8fb;
 }
 
 .dh-main { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.dh-main h3 { margin: 0; font-size: 19px; font-weight: 600; }
+.dh-main h3 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 19px; font-weight: 600; }
 
 /* 元数据行内编辑 */
 .meta-title-field { flex: 1 1 280px; min-width: 200px; }
+/* 票106(C1):字段级校验提示(对齐票12/75 .field-error 口径:红色 12px、贴字段下方) */
+.field-error { color: #dc2626; font-size: 12px; margin: 2px 0 6px 2px; flex-basis: 100%; }
 .meta-field { width: 130px; }
 .dh-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dh-zh { font-size: 14px; opacity: 0.6; }
@@ -548,8 +609,8 @@ mat-form-field { width: 100%; }
 .dh-topic {
   font-size: 11.5px;
   padding: 1px 8px;
-  border-radius: 9px;
-  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
   opacity: 0.75;
 }
 
@@ -573,7 +634,7 @@ mat-form-field { width: 100%; }
 
 .block {
   padding: 20px 0;
-  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+  border-bottom: 1px dashed rgba(15, 23, 42, 0.08);
 }
 
 .block:last-child { border-bottom: none; }
@@ -589,7 +650,7 @@ mat-form-field { width: 100%; }
   font-size: 20px;
   width: 20px;
   height: 20px;
-  color: #3f51b5;
+  color: #2563eb;
   opacity: 0.8;
   flex: 0 0 auto;
 }
@@ -606,15 +667,18 @@ mat-form-field { width: 100%; }
   font-size: 15px;
   line-height: 1.8;
   padding: 10px 12px;
-  border: 1px solid rgba(63, 81, 181, 0.35);
+  border: 1px solid rgba(37, 99, 235, 0.35);
   border-radius: 8px;
   resize: vertical;
 }
-.blk-editor:focus { outline: none; border-color: #3f51b5; }
+/* 票123 C-2.2:原来 `outline: none`,键盘用户看不到焦点在哪。
+   保留既有的 border-color 线索,并在 :focus-visible 上补回全站共享焦点环。 */
+.blk-editor:focus { border-color: #2563eb; }
+.blk-editor:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .block-empty-hint {
   margin: 0;
   font-size: 12.5px;
-  color: rgba(0, 0, 0, 0.35);
+  color: rgba(15, 23, 42, 0.35);
   font-style: italic;
 }
 
@@ -662,17 +726,17 @@ mat-form-field { width: 100%; }
 /* ---------- 熟练度配色 ---------- */
 /* 五级从冷灰到暖绿:视觉上就能看出"这块还有没有欠债" */
 
-.m-new { --m-color: #9e9e9e; --m-color-bg: rgba(158, 158, 158, 0.16); }
-.m-learning { --m-color: #a15c00; --m-color-bg: rgba(249, 168, 37, 0.18); }
-.m-familiar { --m-color: #1565c0; --m-color-bg: rgba(21, 101, 192, 0.14); }
-.m-proficient { --m-color: #00695c; --m-color-bg: rgba(0, 105, 92, 0.14); }
-.m-mastered { --m-color: #2e7d32; --m-color-bg: rgba(46, 125, 50, 0.16); }
+.m-new { --m-color: #64748b; --m-color-bg: rgba(100, 116, 139, 0.14); }
+.m-learning { --m-color: #60a5fa; --m-color-bg: rgba(102, 115, 194, 0.14); }
+.m-familiar { --m-color: #2563eb; --m-color-bg: rgba(37, 99, 235, 0.13); }
+.m-proficient { --m-color: #2563eb; --m-color-bg: rgba(37, 99, 235, 0.14); }
+.m-mastered { --m-color: #16a34a; --m-color-bg: rgba(22, 163, 74, 0.14); }
 
-.b-new { --m-color: #9e9e9e; }
-.b-learning { --m-color: #f9a825; }
-.b-familiar { --m-color: #1565c0; }
-.b-proficient { --m-color: #00695c; }
-.b-mastered { --m-color: #2e7d32; }
+.b-new { --m-color: #64748b; }
+.b-learning { --m-color: #60a5fa; }
+.b-familiar { --m-color: #2563eb; }
+.b-proficient { --m-color: #2563eb; }
+.b-mastered { --m-color: #16a34a; }
 
 /* ---------- 错误 ---------- */
 
@@ -682,10 +746,10 @@ mat-form-field { width: 100%; }
   gap: 10px;
   margin-bottom: 12px;
   padding: 12px 16px;
-  border-left: 3px solid #b3261e;
+  border-left: 3px solid #dc2626;
 }
 
-.err-card mat-icon { color: #b3261e; }
+.err-card mat-icon { color: #dc2626; }
 .err-card p { margin: 4px 0 0; font-size: 13px; opacity: 0.75; }
 
 /* ---------- 今日复习入口 + 会话 ---------- */
@@ -704,9 +768,9 @@ mat-form-field { width: 100%; }
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: 9px;
-  background: #e53935;
-  color: #fff;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #ffffff;
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
@@ -728,9 +792,9 @@ mat-form-field { width: 100%; }
   font-size: 13px;
   font-weight: 600;
   padding: 3px 12px;
-  border-radius: 11px;
-  background: rgba(63, 81, 181, 0.12);
-  color: #3f51b5;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
 }
 
 .rs-card {
@@ -744,7 +808,7 @@ mat-form-field { width: 100%; }
   flex-wrap: wrap;
 }
 
-.rs-head h3 { margin: 0; font-size: 20px; font-weight: 600; }
+.rs-head h3 { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 20px; font-weight: 600; }
 
 .rs-meta {
   display: flex;
@@ -760,14 +824,14 @@ mat-form-field { width: 100%; }
   margin: 18px 0 4px;
   padding: 14px 16px;
   border-radius: 10px;
-  background: rgba(63, 81, 181, 0.06);
+  background: rgba(37, 99, 235, 0.06);
 }
 
 .rs-question mat-icon {
   font-size: 20px;
   width: 20px;
   height: 20px;
-  color: #3f51b5;
+  color: #2563eb;
   flex: 0 0 auto;
   margin-top: 1px;
 }
@@ -796,7 +860,7 @@ mat-form-field { width: 100%; }
 .rs-answer {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+  border-top: 1px dashed rgba(15, 23, 42, 0.08);
 }
 
 .rs-grade {
@@ -808,13 +872,13 @@ mat-form-field { width: 100%; }
 
 .rs-grade button {
   font-weight: 600;
-  color: #fff;
+  color: #ffffff;
 }
 
-.g-again { background: #e53935 !important; }
-.g-hard { background: #fb8c00 !important; }
-.g-good { background: #43a047 !important; }
-.g-easy { background: #1e88e5 !important; }
+.g-again { background: #dc2626 !important; }
+.g-hard { background: var(--attention) !important; }
+.g-good { background: #16a34a !important; }
+.g-easy { background: #2563eb !important; }
 
 .rs-summary {
   text-align: center;
@@ -825,11 +889,11 @@ mat-form-field { width: 100%; }
   font-size: 46px;
   width: 46px;
   height: 46px;
-  color: #2e7d32;
+  color: #16a34a;
   margin-bottom: 6px;
 }
 
-.rs-summary h3 { margin: 4px 0 10px; font-size: 19px; font-weight: 600; }
+.rs-summary h3 { margin: 4px 0 10px; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 19px; font-weight: 600; }
 
 .rs-summary-msg {
   margin: 0 auto 18px;
@@ -858,7 +922,7 @@ mat-form-field { width: 100%; }
   padding: 0 5px;
   border-radius: 8px;
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(15, 23, 42, 0.08);
   opacity: 0.75;
 }
 

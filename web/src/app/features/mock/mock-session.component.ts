@@ -10,9 +10,11 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MatDividerModule } from '@angular/material/divider';
 import { catchError, of } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { MockApiService } from '../../core/api/mock-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { DimensionIssue, MockQuestion, MockSessionDetail } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -38,6 +40,8 @@ interface AssessmentQuestion {
   scores?: AssessmentScores;
   issues?: AssessmentIssue[];
   topIssueTitle?: string;
+  /** ★ 票108 A09:题目行读时版本 —— 作答回传钉版,过期得 409。 */
+  version?: number | null;
 }
 
 /** 六维分数(Assessment 服务用 ScoresDto,比 MockSession 多一个 sentenceIntegrity)。 */
@@ -86,9 +90,14 @@ interface AssessmentSessionDetail {
  * 一屏只做一件事:答当前这题。所以布局是「题干 → 输入框 → 提交 → 评分结果」的单列流,
  * 而不是把所有题铺开。理由是练习时注意力就是一次一题,铺开反而让人想跳过。
  *
- * 关于"下一题":后端暂未提供 next-question 端点。
- * 这里实现为 getNextQuestion() —— 先尝试请求该端点,404/409 则退化为
- * 「从已加载的题目列表里找第一道未作答的题」。这样端点上线后无需改前端。
+ * 关于"下一题"(票95 裁定,含票48):不实现 next-question 端点 —— 出题是
+ * 按 TargetQuestionCount 一次性批量生成(后端 POST /generate 编排),导航纯本地:
+ * 从已加载题目里挑下一道未作答的题。旧实现每次点下一题都试调必-404 的
+ * /next-question,已删除(会话页网络面不得再有必 404 请求)。
+ *
+ * 出题/评分(票95):进入 0 题会话自动调一次 /generate;答题成功后自动调
+ * /questions/{qid}/score-ai。失败口径:生成失败→空态卡三态(生成中/失败可重试/
+ * AI 未配置 503);评分失败→题目停 Answered + 评分失败提示与重试按钮。
  */
 @Component({
   selector: 'app-mock-session',
@@ -97,14 +106,15 @@ interface AssessmentSessionDetail {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule,
-    MatSnackBarModule, MatDividerModule
+    MatSnackBarModule, MatDividerModule, MatDialogModule
   ],
   templateUrl: './mock-session.component.html',
   styleUrl: './mock-session.component.scss'
 })
 export class MockSessionComponent implements OnInit, OnDestroy {
-  private readonly api = inject(ApiClient);
+  private readonly mockApi = inject(MockApiService);
   private readonly route = inject(ActivatedRoute);
+  private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
   private readonly i18n = inject(I18nService);
@@ -127,6 +137,12 @@ export class MockSessionComponent implements OnInit, OnDestroy {
   readonly nextHint = signal<string | null>(null);
 
   readonly answerText = signal('');
+
+  /** 票95:AI 出题状态机 —— 空态卡据此呈现真实状态,不再是无出路文案。 */
+  readonly genState = signal<'idle' | 'generating' | 'failed' | 'notConfigured'>('idle');
+
+  /** 票95:AI 评分失败态(题目停 Answered 时展示,带重试入口)。 */
+  readonly scoreError = signal<'failed' | 'notConfigured' | null>(null);
 
   /** 结束后的总评。 */
   readonly summary = signal<{
@@ -186,7 +202,7 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     if (showSpinner) this.loading.set(true);
     this.error.set(null);
 
-    this.api.get<AssessmentSessionDetail>(`/api/assessment/sessions/${this.id()}`)
+    this.mockApi.getSession<AssessmentSessionDetail>(this.id())
       .pipe(catchError((e: Error) => {
         this.error.set(e.message);
         this.loading.set(false);
@@ -198,6 +214,13 @@ export class MockSessionComponent implements OnInit, OnDestroy {
         this.loading.set(false);
         // 优先停在"已答但未评分"或"未答"的第一题,这是用户接着练的位置
         this.syncCurrent(d.questions ?? []);
+        // 票95:0 题且会话未终结 → 自动编排出题一次(失败后由空态卡手动重试,
+        // 不在每次 load 里无限重试)。
+        if ((d.questions?.length ?? 0) === 0
+          && d.status !== 'Completed' && d.status !== 'Abandoned'
+          && this.genState() === 'idle') {
+          this.generateQuestions();
+        }
       });
   }
 
@@ -224,6 +247,50 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     this.lastResult.set(next.state === 'Scored' ? next : null);
   }
 
+  // ---------------------------------------------------------------- AI 编排(票95)
+
+  /** 调后端编排生成题目(幂等补差额)。成功后重拉会话;失败置 genState 供空态卡重试。 */
+  generateQuestions(): void {
+    if (this.genState() === 'generating') return;
+    this.genState.set('generating');
+    this.mockApi.generateQuestions(this.id())
+      .subscribe({
+        next: () => {
+          this.genState.set('idle');
+          this.load(false);
+        },
+        error: (e: Error) => {
+          const code = (e as { code?: string }).code;
+          this.genState.set(code === 'Mock.AiNotConfigured' ? 'notConfigured' : 'failed');
+        }
+      });
+  }
+
+  /** 调后端编排为某题评分。答题后自动调用;失败置 scoreError,题目停 Answered 可重试。 */
+  scoreWithAi(questionId: string): void {
+    this.busy.set('score');
+    this.scoreError.set(null);
+    this.mockApi.scoreWithAi(this.id(), questionId)
+      .subscribe({
+        next: () => {
+          this.busy.set(null);
+          this.load(false);
+        },
+        error: (e: Error) => {
+          this.busy.set(null);
+          const code = (e as { code?: string }).code;
+          this.scoreError.set(code === 'Mock.AiNotConfigured' ? 'notConfigured' : 'failed');
+          this.load(false);
+        }
+      });
+  }
+
+  /** 评分失败后的重试入口(当前题仍 Answered 时)。 */
+  retryScoring(): void {
+    const q = this.current();
+    if (q && q.state === 'Answered') this.scoreWithAi(q.id);
+  }
+
   // ---------------------------------------------------------------- 提交回答
 
   submitAnswer(): void {
@@ -240,16 +307,16 @@ export class MockSessionComponent implements OnInit, OnDestroy {
 
     // 后端签名是 AnswerBody(AnswerText, AudioPath, DurationSeconds, TranscriptJson)。
     // 端点路径按 questionId 走 —— 这是每个题目的答案,不是会话级答案。
-    this.api.post<void>(
-      `/api/assessment/sessions/${this.id()}/questions/${q.id}/answer`,
-      { answerText: text, audioPath: null, durationSeconds: null, transcriptJson: null })
+    this.mockApi.answerQuestion<void>(
+      this.id(), q.id,
+      { answerText: text, audioPath: null, durationSeconds: null, transcriptJson: null, version: q.version ?? null })
       .subscribe({
         next: () => {
           this.busy.set(null);
           this.answerText.set('');
           this.snack.open(this.t('mock.answerSubmitted'), this.t('common.close'), { duration: 2500 });
-          // 重新拉会话:评分由后端流水线写回,以服务端为准而不是本地拼
-          this.load(false);
+          // 票95:答完立即触发后端 AI 评分编排;评分结果以重拉的服务端数据为准。
+          this.scoreWithAi(q.id);
         },
         error: (e: Error) => {
           this.busy.set(null);
@@ -261,43 +328,25 @@ export class MockSessionComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------- 下一题
 
   /**
-   * 下一题。
-   *
-   * 后端没有 next-question 端点,所以我们先试一次(为了将来端点上线时自动受益),
-   * 失败就本地挑下一道未作答的题。这是刻意的优雅降级 ——
-   * 让"接口不存在"表现为"功能仍然可用",而不是一个红色报错。
+   * 下一题 —— 纯本地导航(票95/48):题目已在建会话后批量生成完毕,
+   * 这里只在已加载列表里找下一道未作答的题,不发任何请求
+   * (旧实现试调不存在的 /next-question,每次点击必 404,已删除)。
    */
   nextQuestion(): void {
     this.nextHint.set(null);
-    this.busy.set('next');
+    const list = this.questions();
+    const idx = list.findIndex((q) => q.id === this.current()?.id);
+    const upcoming = list.slice(idx + 1).find((q) => q.state === 'Asked')
+      ?? list.find((q) => q.state === 'Asked');
 
-    this.api.post<AssessmentQuestion>(
-      `/api/assessment/sessions/${this.id()}/next-question`, {})
-      .pipe(catchError(() => {
-        // 404/409 或任何错误:回退到本地逻辑,不把错误抛给用户
-        const list = this.questions();
-        const idx = list.findIndex((q) => q.id === this.current()?.id);
-        const upcoming = list.slice(idx + 1).find((q) => q.state === 'Asked')
-          ?? list.find((q) => q.state === 'Asked');
-
-        if (upcoming) {
-          this.current.set(upcoming);
-          this.lastResult.set(upcoming.state === 'Scored' ? upcoming : null);
-          this.answerText.set('');
-        } else {
-          this.nextHint.set(this.t('mock.noMoreQuestions'));
-        }
-        return of(null);
-      }))
-      .subscribe((q) => {
-        this.busy.set(null);
-        if (q) {
-          // 端点存在:直接用后端返回的题
-          this.current.set(q);
-          this.lastResult.set(null);
-          this.answerText.set('');
-        }
-      });
+    if (upcoming) {
+      this.current.set(upcoming);
+      this.lastResult.set(upcoming.state === 'Scored' ? upcoming : null);
+      this.answerText.set('');
+      this.scoreError.set(null);
+    } else {
+      this.nextHint.set(this.t('mock.noMoreQuestions'));
+    }
   }
 
   /** 手动切到某道题(左侧题号列表用)。 */
@@ -306,21 +355,34 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     this.lastResult.set(q.state === 'Scored' ? q : null);
     this.answerText.set('');
     this.nextHint.set(null);
+    this.scoreError.set(null);
   }
 
   // ---------------------------------------------------------------- 结束
 
   complete(): void {
-    if (!confirm(this.t('mock.confirmComplete'))) return;
+    // 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.confirmTitle'), body: this.t('mock.confirmComplete'),
+        confirmText: this.t('common.confirm'), cancelText: this.t('common.cancel'),
+      } as ConfirmDialogData,
+    });
+    ref.afterClosed().subscribe((v) => {
+      if (v !== true) return;
+      this.doComplete();
+    });
+  }
 
+  private doComplete(): void {
     this.busy.set('complete');
-    this.api.post<{
+    this.mockApi.completeSession<{
       overallScore?: number;
       scoredQuestions: number;
       weaknesses: { dimension: string; count: number; avgSeverity: number }[];
       weakestDimension?: string;
-    }>(`/api/assessment/sessions/${this.id()}/complete`,
-      { overallSummary: null, priorityAction: null })
+    }>(this.id(), { overallSummary: null, priorityAction: null })
       .subscribe({
         next: (r) => {
           this.busy.set(null);
@@ -347,8 +409,22 @@ export class MockSessionComponent implements OnInit, OnDestroy {
     return map[state] ?? state;
   }
 
+  /** 模式标签走 i18n 映射(含后端枚举值 FullLoop),不直出枚举原文。 */
+  modeLabel(mode: string): string {
+    const keyMap: Record<string, string> = {
+      TopicDrill: 'mock.modeTopicDrill',
+      FullMock: 'mock.modeFullMock',
+      FullLoop: 'mock.modeFullMock',
+      WeaknessFocus: 'mock.modeWeakness',
+      CompanyStyle: 'mock.modeCompanyStyle'
+    };
+    const key = keyMap[mode];
+    return key ? this.t(key) : mode;
+  }
+
   statusLabel(s: string): string {
     const map: Record<string, string> = {
+      Draft: this.t('mock.statusDraft'),
       InProgress: this.t('mock.statusInProgress'),
       Completed: this.t('mock.statusCompleted'),
       Abandoned: this.t('mock.statusAbandoned')

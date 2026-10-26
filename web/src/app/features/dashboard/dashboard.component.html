@@ -1,4 +1,4 @@
-<div class="page">
+<div class="page content-in">
   <header class="page-head">
     <div>
       <h2>{{ t('dash.title') }}</h2>
@@ -7,7 +7,8 @@
         @if (insight()) { <span class="insight">{{ insight() }}</span> }
       </p>
     </div>
-    <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')">
+    <button mat-icon-button (click)="load()" [matTooltip]="t('common.refresh')"
+    [attr.aria-label]="t('common.refresh')">
       <mat-icon>refresh</mat-icon>
     </button>
   </header>
@@ -24,6 +25,48 @@
         <p>{{ error() }}</p>
       </div>
     </mat-card>
+  }
+
+  <!-- 票123 R-9:Pipeline Band —— 取代原来那张「投递漏斗」chip 卡。
+       它不是卡片:是一条坐在纸面上、两道发丝线之间的带子。
+       节点 = 规范阶段序列(共享常量)+ 断口后的终局裁决节点;
+       计数取自 ActionCenter.byStatus(缺席 ⇒ 0)—— 不新增任何 API。
+       每个节点都是一条链接,点进去就是 Tracker 按该阶段过滤好的视图。 -->
+  @if (actionCenter(); as ac) {
+    <section class="band" [attr.aria-label]="t('dash.pipeline')">
+      <div class="brow">
+        @for (n of bandNodes(); track n.status; let i = $index) {
+          @if (n.verdict) {
+            <!-- 断口:阶段序列与终局裁决之间 -->
+            <div class="bgap" aria-hidden="true"></div>
+          }
+          <a class="bcell" [class.verdict]="n.verdict" [class.laststage]="!n.verdict && i === bandNodes().length - 2"
+             [routerLink]="['/tracker']" [queryParams]="{ status: n.status }">
+            <div class="bnum" [class.zero]="n.count === 0">{{ n.count }}</div>
+            <div class="btrack">
+              @if (!n.verdict) {
+                <span class="seg" [class.done]="bandSegmentDone(i)"></span>
+              }
+              <span class="bdot" [class]="bandNodeClass(n)"></span>
+            </div>
+            <div class="blab">{{ statusLabel(n.status) }}</div>
+          </a>
+        }
+      </div>
+      <div class="band-cap">
+        <div class="note">
+          @if (ac.total === 0) {
+            {{ t('tracker.empty') }}
+          } @else {
+            <b>{{ tn('dash.bandMoving', ac.activeCount) }}</b>
+            @if (ac.followUps.length > 0) {
+              <span>{{ tn('dash.bandFollowUp', ac.followUps.length) }}</span>
+            }
+          }
+        </div>
+        <a [routerLink]="['/tracker']">{{ t('dash.viewTracker') }}</a>
+      </div>
+    </section>
   }
 
   <!-- 行动中心(M4):把聚合数据变成"今天该做什么" -->
@@ -57,7 +100,8 @@
                         {{ companyInitials(a.companyName) }}
                       </span>
                       <span class="ac-item-main">
-                        <span class="ac-item-title">{{ a.companyName }} · {{ a.role }}</span>
+                        <span class="ac-item-title">{{ a.companyName }}</span>
+                        <span class="ac-item-role">{{ a.role }}</span>
                         <span class="ac-item-sub">{{ t('dash.followUpAt') }} {{ dateOnly(a.nextFollowUpAt) }}</span>
                       </span>
                       @if (a.priority) {
@@ -74,15 +118,21 @@
                         {{ companyInitials(r.companyName) }}
                       </span>
                       <span class="ac-item-main">
-                        <span class="ac-item-title">{{ r.companyName }} · {{ r.role }}</span>
+                        <span class="ac-item-title">{{ r.companyName }}</span>
+                        <span class="ac-item-role">{{ r.role }}</span>
                         <span class="ac-item-sub">
-                          第 {{ r.order }} 轮 · {{ r.stage }}
-                          @if (r.scheduledDate) { · {{ r.scheduledDate }} }
-                          @if (r.scheduledTime) { {{ r.scheduledTime }} }
-                          @if (r.format) { · {{ r.format }} }
+                          <span class="ac-stage">
+                            <span class="chip applied">{{ roundLabel(r.order) }}</span>
+                            <span class="chip applied">{{ stageText(r.stage) }}</span>
+                          </span>
+                          <span class="ac-when">
+                            @if (r.scheduledDate) { <span class="ac-when-line">{{ r.scheduledDate }}</span> }
+                            @if (r.scheduledTime) { <span class="ac-when-line">{{ r.scheduledTime }}</span> }
+                            @if (r.format) { <span class="ac-when-line">{{ formatText(r.format) }}</span> }
+                          </span>
                         </span>
                       </span>
-                      <a mat-icon-button [routerLink]="['/playbook', r.entryId]" [queryParams]="{tab: 'rounds'}" matTooltip="去准备">
+                      <a mat-icon-button [routerLink]="['/playbook', r.entryId]" [queryParams]="{tab: 'rounds'}" [matTooltip]="t('dash.goPrepareTip')">
                         <mat-icon>arrow_forward</mat-icon>
                       </a>
                     </li>
@@ -96,7 +146,8 @@
                         {{ companyInitials(a.companyName) }}
                       </span>
                       <span class="ac-item-main">
-                        <span class="ac-item-title">{{ a.companyName }} · {{ a.role }}</span>
+                        <span class="ac-item-title">{{ a.companyName }}</span>
+                        <span class="ac-item-role">{{ a.role }}</span>
                         <span class="ac-item-sub">{{ t('dash.deadlineOn') }} {{ dateOnly(a.deadline) }}</span>
                       </span>
                     </li>
@@ -112,7 +163,7 @@
                         <!-- ★ #16:弱项一键刷题 -->
                         <button mat-button (click)="drillWeakness(r.dimension)"
                                 class="drill-btn">
-                          <mat-icon>fitness_center</mat-icon> 口语练习
+                          <mat-icon>fitness_center</mat-icon> {{ t('dash.drillSpeaking') }}
                         </button>
                       </div>
                       <mat-progress-bar [value]="r.current" [class]="scoreClass(r.current)"></mat-progress-bar>
@@ -123,16 +174,13 @@
                   }
                 </div>
               } @else if (c.kind === 'pipeline') {
-                <div class="ac-chips">
-                  @for (s of ac.byStatus; track s.status) {
-                    <span class="chip"><b>{{ s.count }}</b> {{ statusLabel(s.status) }}</span>
-                  }
-                </div>
+                <!-- 票123 R-9:「投递漏斗」chip 卡已删,漏斗改由页面上方的 Pipeline Band 承担。
+                     这一格保留为空分支,是为了不改动 cards() 的类型与既有分支结构 ——
+                     但 pipeline 卡不再被 push 进 cards()(见 dashboard.component.ts)。 -->
               }
 
               <a mat-stroked-button color="primary" [routerLink]="c.link" class="ac-cta">
                 {{ t(c.ctaKey) }}
-                <mat-icon>arrow_forward</mat-icon>
               </a>
             </mat-card>
           }
@@ -155,7 +203,7 @@
       <div class="metric-val">{{ interviewCount() }}</div>
       <div class="metric-label">{{ t('dash.interviewing') }}</div>
     </mat-card>
-    <mat-card class="metric highlight">
+    <mat-card class="metric" [class.highlight]="offerCount() > 0">
       <div class="metric-val">{{ offerCount() }}</div>
       <div class="metric-label">{{ t('dash.offer') }}</div>
     </mat-card>
@@ -166,7 +214,9 @@
     <mat-card class="panel">
       <mat-card-header>
         <mat-card-title>{{ t('dash.radar') }}</mat-card-title>
-        <mat-card-subtitle>{{ t('dash.radarSub') }}</mat-card-subtitle>
+        @if (weakest().length) {
+          <mat-card-subtitle>{{ t('dash.radarSub') }}</mat-card-subtitle>
+        }
       </mat-card-header>
       <mat-card-content>
         @if (weakest().length === 0) {
@@ -191,13 +241,13 @@
             </div>
           }
           <a mat-button color="primary" routerLink="/analytics">
-            {{ t('dash.viewFull') }} <mat-icon>arrow_forward</mat-icon>
+            {{ t('dash.viewFull') }}
           </a>
         }
       </mat-card-content>
     </mat-card>
 
-    <!-- 快速入口:纯图标,靠 tooltip 说明 -->
+    <!-- 快速入口(票 118 / F-3):图标 + 文字标签成行,不再是靠 tooltip 猜的裸图标 -->
     <mat-card class="panel">
       <mat-card-header>
         <mat-card-title>{{ t('dash.next') }}</mat-card-title>
@@ -205,21 +255,21 @@
       </mat-card-header>
       <mat-card-content>
         <div class="actions">
-          <a mat-icon-button color="primary" routerLink="/playbook"
-             [matTooltip]="t('dash.importAudio')">
+          <a mat-button routerLink="/playbook" class="step-link">
             <mat-icon>upload_file</mat-icon>
+            <span>{{ t('dash.importAudio') }}</span>
           </a>
-          <a mat-icon-button routerLink="/tech-stack"
-             [matTooltip]="t('dash.reviewStack')">
-            <mat-icon>school</mat-icon>
-          </a>
-          <a mat-icon-button routerLink="/mock"
-             [matTooltip]="t('dash.startMock')">
+          <a mat-button routerLink="/mock" class="step-link">
             <mat-icon>record_voice_over</mat-icon>
+            <span>{{ t('dash.startMock') }}</span>
           </a>
-          <a mat-icon-button routerLink="/tracker"
-             [matTooltip]="t('dash.newApp')">
+          <a mat-button routerLink="/tech-stack" class="step-link">
+            <mat-icon>school</mat-icon>
+            <span>{{ t('dash.reviewStack') }}</span>
+          </a>
+          <a mat-button routerLink="/tracker" class="step-link">
             <mat-icon>add_task</mat-icon>
+            <span>{{ t('dash.newApp') }}</span>
           </a>
         </div>
       </mat-card-content>

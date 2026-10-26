@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Knowledge.Domain;
 
 namespace YourInterview.Services.Knowledge.Infrastructure.Persistence;
@@ -8,13 +9,25 @@ namespace YourInterview.Services.Knowledge.Infrastructure.Persistence;
 /// 独立 schema "knowledge" —— 对应 database-per-service:服务之间不共享表,
 /// 谁的表谁改 schema,不再出现"改一列全公司排队"的老共享库问题。
 /// </summary>
-public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> options) : DbContext(options)
+public sealed class KnowledgeDbContext(
+    DbContextOptions<KnowledgeDbContext> options,
+    ICurrentUser? currentUser = null) : DbContext(options)
 {
     public const string Schema = "knowledge";
+
+    /// <summary>
+    /// 当前请求用户(COD-01/票03 全局过滤器用)。无 HTTP 上下文时为 null,
+    /// 过滤器 fail-closed 匹配零行 —— 非请求路径必须 IgnoreQueryFilters + 显式归属校验。
+    /// </summary>
+    public Guid? CurrentUserId { get; } = currentUser?.UserId;
 
     public DbSet<KnowledgeItem> Items => Set<KnowledgeItem>();
     public DbSet<KnowledgeReviewLog> ReviewLogs => Set<KnowledgeReviewLog>();
     public DbSet<KnowledgeRelation> Relations => Set<KnowledgeRelation>();
+
+    // ---- COD-10c/票16:Tech Stack 本地数据(原 localStorage 孤岛上后端)----
+    public DbSet<TechStackCategory> CustomCategories => Set<TechStackCategory>();
+    public DbSet<ReviewActivityDay> ReviewActivities => Set<ReviewActivityDay>();
 
     /// <summary>
     /// 把"新加进聚合子集合、但 Id 由 C# 端生成"的子实体显式标成 Added。
@@ -102,8 +115,10 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
             e.HasIndex(x => x.SourceCompanyName);
             e.HasIndex(x => x.ImportKey);
 
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.UserId).IsRequired();   // COD-01 contract:回填后收紧为非空
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
 
             e.HasMany(x => x.ReviewLogs).WithOne().HasForeignKey(r => r.ItemId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Relations).WithOne().HasForeignKey(r => r.ItemId).OnDelete(DeleteBehavior.Cascade);
@@ -123,6 +138,41 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
             // 进步曲线/本周复习数按时间倒序取 —— 复合索引让它走 Index Scan 而不是 Sort。
             e.HasIndex(x => new { x.ItemId, x.ReviewedAt });
             e.HasIndex(x => x.ReviewedAt);
+        });
+
+        // COD-10c/票16:自定义空分类(用户级占位行)。同一用户同名分类最多一行,
+        // 导入/重复 PUT 靠库层兜底幂等;大小写不敏感查重在 Handler 层(存首现原文)。
+        // 软删后重加走 Restore,不新建第二行。
+        //
+        // 票96:唯一语义必须是大小写不敏感 —— 原 (UserId, Name) 唯一索引在
+        // Postgres 默认排序下大小写敏感,"React"/"react" 并发同发可双双落库(票92
+        // 观察项)。模型层不再声明该大小写敏感唯一索引;真正的约束是迁移里
+        // 的 lower(Name) 函数唯一索引(见 CaseInsensitiveCategoryNameUniqueIndex
+        // 迁移 Up/Down),与 Handler 层 ToLower 回查同口径。
+        b.Entity<TechStackCategory>(e =>
+        {
+            e.ToTable("tech_stack_categories");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        // COD-10c/票16:每日复习活动。(UserId, Date) 唯一 —— 一人一天一行,
+        // Record 累加与导入合并都收敛到这一行。Date 为用户本地日历日期(逐字口径)。
+        b.Entity<ReviewActivityDay>(e =>
+        {
+            e.ToTable("review_activities");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.Date).IsRequired();
+            e.Property(x => x.Count).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.Date }).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
         });
 
         b.Entity<KnowledgeRelation>(e =>

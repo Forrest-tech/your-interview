@@ -2,12 +2,13 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
-import { ApiClient } from '../../core/api/api-client';
+import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { KnowledgeDuplicateGroup, KnowledgeItem } from '../../core/models/api.models';
 
@@ -54,8 +55,9 @@ export interface DuplicatesDialogData {
               <div class="row-main">
                 <span class="r-title">{{ it.title }}</span>
                 <span class="r-meta">
-                  {{ tn('ts.reviewCount', it.reviewCount) }} · {{ t('ts.mastery.' + it.mastery) }}
-                  @if (it.sourceCompanyName) { · {{ it.sourceCompanyName }} }
+                  <span class="r-meta-part">{{ tn('ts.reviewCount', it.reviewCount) }}</span>
+                  <span class="r-meta-part">{{ t('ts.mastery.' + it.mastery) }}</span>
+                  @if (it.sourceCompanyName) { <span class="r-meta-part">{{ it.sourceCompanyName }}</span> }
                 </span>
                 @if (it.conceptExplanation) {
                   <span class="r-has" [matTooltip]="t('ts.dup.hasExplanation')">
@@ -95,24 +97,28 @@ export interface DuplicatesDialogData {
     .g-count { opacity: .65; }
     .row {
       display: flex; align-items: center; gap: 12px;
-      padding: 10px 12px; border-top: 1px solid rgba(0,0,0,0.06);
+      padding: 10px 12px; border-top: 1px solid rgba(15, 23, 42, 0.06);
     }
     .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .r-title { font-size: 13.5px; }
     .r-meta { font-size: 12px; opacity: .6; }
+    /* 票123 R-3:复习数 / 掌握度 / 来源公司分列(中点清扫)。 */
+    .r-meta-part { display: inline-block; margin-right: 8px; }
+    .r-meta-part:last-child { margin-right: 0; }
     .r-has {
       display: inline-flex; align-items: center; gap: 4px;
-      font-size: 11.5px; padding: 1px 6px; border-radius: 4px;
-      background: rgba(63,81,181,0.10); color: #3f51b5; width: fit-content;
+      font-size: 11.5px; padding: 1px 6px; border-radius: 999px;
+      background: rgba(37, 99, 235, 0.10); color: #2563eb; width: fit-content;
     }
     .r-has mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .msg { font-size: 12.5px; color: #a05a00; margin: 8px 0 0; }
+    .msg { font-size: 12.5px; color: #b06a00; margin: 8px 0 0; }
   `]
 })
 export class DuplicatesDialogComponent {
   readonly dialogRef = inject(MatDialogRef<DuplicatesDialogComponent, boolean>);
   readonly data = inject<DuplicatesDialogData>(MAT_DIALOG_DATA);
-  private readonly api = inject(ApiClient);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
+  private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
@@ -122,14 +128,23 @@ export class DuplicatesDialogComponent {
   readonly msg = signal<string | null>(null);
 
   /** 保留 keep,把同组其余条目依次并进来。 */
-  keep(item: KnowledgeItem, group: KnowledgeDuplicateGroup): void {
+  async keep(item: KnowledgeItem, group: KnowledgeDuplicateGroup): Promise<void> {
     const others = group.items.filter((x) => x.id !== item.id);
     if (others.length === 0) return;
 
-    const ok = confirm(
-      this.t('ts.dup.confirmMerge')
-        .replace('{count}', String(others.length))
-        .replace('{title}', item.title));
+    // 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.confirmTitle'),
+        body: this.t('ts.dup.confirmMerge')
+          .replace('{count}', String(others.length))
+          .replace('{title}', item.title),
+        confirmText: this.t('common.confirm'), cancelText: this.t('common.cancel'),
+      } as ConfirmDialogData,
+    });
+    const ok = await new Promise<boolean>(
+      (resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
     if (!ok) return;
 
     this.busy.set(true);
@@ -144,7 +159,7 @@ export class DuplicatesDialogComponent {
         this.dialogRef.close(true);
         return;
       }
-      this.api.post<void>('/api/knowledge/merge', {
+      this.knowledgeApi.merge({
         keepId: item.id,
         mergeId: others[done].id
       }).subscribe({

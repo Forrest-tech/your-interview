@@ -9,6 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { AutoFocusDirective } from './auto-focus.directive';
 
 import { I18nService } from '../../core/i18n/i18n.service';
+import { trashBadgeLabel } from '../../features/ai-practice/material-trash.helpers';
 
 /**
  * 素材节点。folder=true 可嵌套 children;文件承载正文。
@@ -92,6 +93,19 @@ export class MaterialTreeComponent {
    */
   @Input() canSave = true;
 
+  /**
+   * ★ ML-FIX-UI(W-UI-2):当前账号是否可编辑素材树(父级绑 auth.can('mock.manage'))。
+   * false 时新建/编辑入口全部禁用并显示只读说明 —— 缺 mock.manage 的默认 User
+   * 绝不能再拿到"看起来能存、实际 403"的完整创作入口。
+   */
+  @Input() canEdit = true;
+
+  /**
+   * ★ ML-FIX-UI(W-UI-1):最近一次保存失败的真实原因(父级绑 treeError())。
+   * 空 = 无失败。非空时模板渲染 role=alert 横幅 —— 失败绝不能只留在 signal 里。
+   */
+  @Input() saveError = '';
+
   // ★ 2026-09-23(Forrest):面板标题字段(materials)已删除 —— 头部只留工具按钮。
   @Input() emptyHint = '';
 
@@ -111,6 +125,42 @@ export class MaterialTreeComponent {
 
   /** 用户点了「配置类别」小按钮(弹窗由父级打开)。 */
   @Output() categoryManage = new EventEmitter<void>();
+
+  // ---------- 素材回收站(★ 票124) ----------
+
+  /**
+   * 回收站里的顶层项数(由父级从清单长度给出)。
+   *
+   * 理由:事故里用户对"135 条已删素材躺在库里"毫无感知 ——
+   * 入口必须在有内容时自己说话(规格 §8.1)。
+   * 计数口径 = 顶层项数,不是行数总数(与规格 §8.1 一致)。
+   */
+  @Input() trashCount = 0;
+
+  /** 用户点了回收站入口(按钮或空态指针行)。 */
+  @Output() trashOpen = new EventEmitter<void>();
+
+  /**
+   * 回收站计数徽标的文案(>0 才显示;>99 显示 99+)。
+   * 判定口径由纯函数给出(与 i18n 无关,便于 spec 钉住)。
+   */
+  get trashBadge(): string | null {
+    return trashBadgeLabel(this.trashCount);
+  }
+
+  /**
+   * 空态下的回收站指针行是否渲染(规格 §8.4)。
+   * 仅在"树为空 且 回收站非空"时追加 —— 回收站为空时,
+   * 既有空态与显示条件完全不变(不变项 #7)。
+   */
+  get showTrashHint(): boolean {
+    return this.trashCount > 0;
+  }
+
+  /** 指针行文案({count} = 顶层项数)。 */
+  get trashHintText(): string {
+    return this.i18n.tf('practice.trash.hintInEmpty', { count: this.trashCount });
+  }
 
   /**
   /**
@@ -220,7 +270,7 @@ export class MaterialTreeComponent {
    * 色值与右侧 Mark 按钮同一套(Notion 浅色图标色)。
    */
   private static readonly MARK_DOTS: Record<string, string> = {
-    orange: '#d9730d', red: '#d44c47', green: '#448361'
+    orange: '#b06a00', red: '#dc2626', green: '#2563eb'
   };
   markDot(color?: string | null): string | null {
     return (color && MaterialTreeComponent.MARK_DOTS[color]) || null;

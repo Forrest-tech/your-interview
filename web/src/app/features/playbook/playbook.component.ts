@@ -11,15 +11,22 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, forkJoin, of } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { PlaybookLocalService } from '../../core/api/playbook-local.service';
+import {
+  STAR_STORY_TITLE_MAX, shouldStartStorySave, starStoryBodyError, starStoryTitleError,
+  type StarStoryBodyError, type StarStoryTitleError
+} from '../../core/api/playbook-local.helpers';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { InterviewEntry, InterviewStatus, Paged, UpcomingRound } from '../../core/models/api.models';
 import { AuthService } from '../../core/auth/auth.service';
-import { BRIEF_I18N } from './components/brief/brief.i18n';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { JobsApiService } from '../../core/api/jobs-api.service';
 import { entryEndKey, entryResultOutcome } from './redesign/v2.helpers';
-import type { CoverageRow } from './components/brief/brief.models';
+import type { CoverageRow } from '../../core/api/jobs-api.service';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -88,27 +95,21 @@ interface NewEntryForm {
     CommonModule, FormsModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressBarModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule, MatTooltipModule, MatCheckboxModule, MatExpansionModule
+    MatSnackBarModule, MatTooltipModule, MatCheckboxModule, MatExpansionModule, MatDialogModule
   ],
   templateUrl: './playbook.component.html',
   styleUrl: './playbook.component.scss'
 })
 export class PlaybookComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly interviewsApi = inject(InterviewsApiService);
+  private readonly jobsApi = inject(JobsApiService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
   /**
-   * ★ F6（2026-10-16）：技术覆盖图谱文案走 brief/ 本地 BRIEF_I18N（key 前缀 pb.br.），
-   * 先查本地表再回退全局 service —— coordinator 并入全局字典后行为不变。
+   * ★ F6（2026-10-16）：技术覆盖图谱文案 key 前缀 pb.br.；
+   * 票43 ARC-13 起已并入全局 I18nService 字典，直委托行为不变。
    */
-  t = (key: string): string => {
-    const e = BRIEF_I18N[key];
-    if (e) {
-      const l = this.i18n.lang();
-      return e[l] ?? e.en ?? e.zh ?? key;
-    }
-    return this.i18n.t(key);
-  };
+  t = (key: string): string => this.i18n.t(key);
   tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
   fmt = (key: string, params: Record<string, string | number>): string => {
     let s = this.t(key);
@@ -116,8 +117,10 @@ export class PlaybookComponent implements OnInit {
     return s;
   };
 
+  private readonly localData = inject(PlaybookLocalService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   readonly auth = inject(AuthService);
 
@@ -126,17 +129,14 @@ export class PlaybookComponent implements OnInit {
   readonly entries = signal<InterviewEntry[]>([]);
 
   /**
-   * 结果归类(定稿第七节,2026-10-21 用户拍板):
-   * result 是自由文本(域约定 Passed | Rejected | Pending | Ghosted,详情页也是自由输入),
-   * 不能"非空即完成"——填了 Pending/等回复 的条目还在流程里。
-   * 口径:先排未落定(pending/waiting/等回复…),再按关键词判终局:
-   *   rejected(红) / positive(绿:offer·passed·通过·录用) / closed(中性:Ghosted·放弃·取消·结束)。
-   * 关键词都不命中的自由文本一律返回 null 留在 In Progress —— 宁可漏分,不可错分。
+   * 结果归类(定稿第七节分组口径不变;判读来源票05/ARC-14 起收归后端):
+   * 只消费 DTO 的结构化 outcome(后端 DeriveOutcome 派生,与 Tracker 回写
+   * 同一事实源),经 v2.helpers 的 entryResultOutcome 映射成展示三态 ——
+   * rejected(红) / positive(绿) / closed(中性);Pending/无 outcome 留 In Progress。
+   * 不许再判读 e.result 自由文本。
    */
   resultOutcome(e: InterviewEntry): 'rejected' | 'positive' | 'closed' | null {
-    // 判定实现只此一份:redesign/v2.helpers 的 entryResultOutcome ——
-    // 详情页左侧导航用同一个函数,两处不许各抄一份正则(2026-10-21 定稿第八节)。
-    return entryResultOutcome(e.result);
+    return entryResultOutcome(e.outcome);
   }
 
   /** 进行中:没有落定最终结果的(含轮次全完但还在等回复的) */
@@ -210,6 +210,10 @@ export class PlaybookComponent implements OnInit {
   form: NewEntryForm = this.emptyForm();
 
   ngOnInit(): void {
+    // ★ COD-10b/票15:故事库改读后端(首次加载一次性导入本地存量);
+    // 历史复盘/粘贴材料孤儿键一并一次性导入后端归档。本地旧键保留不清除。
+    this.localData.ensureStarStoriesLoaded();
+    this.localData.importLegacyOnce();
     this.load();
     this.loadCompanies();
     this.loadStats();
@@ -223,7 +227,7 @@ export class PlaybookComponent implements OnInit {
 
   /** 全局 upcoming 轮次:后端聚合,失败时静默留空(不挡主列表)。 */
   private loadUpcoming(): void {
-    this.api.get<UpcomingRound[]>('/api/interviews/rounds/upcoming', { days: 30 })
+    this.interviewsApi.getUpcomingRounds()
       .pipe(catchError(() => of([] as UpcomingRound[])))
       .subscribe((list) => this.upcomingRounds.set(list ?? []));
   }
@@ -245,7 +249,7 @@ export class PlaybookComponent implements OnInit {
 
     const size = 200;
     const fetchPage = (page: number, acc: InterviewEntry[]): void => {
-      this.api.get<Paged<InterviewEntry>>('/api/interviews', {
+      this.interviewsApi.getEntries({
         page,
         pageSize: size,
         // 后端只认 companyId(Guid):公司名先经聚合列表解析,解析不到就不带条件
@@ -277,7 +281,7 @@ export class PlaybookComponent implements OnInit {
 
   /** 公司聚合:用于过滤下拉。失败退化为空列表。 */
   private loadCompanies(): void {
-    this.api.get<CompanySummary[]>('/api/interviews/companies')
+    this.interviewsApi.getCompanies()
       .pipe(catchError(() => of([] as CompanySummary[])))
       .subscribe((list) => {
         this.companies.set(list ?? []);
@@ -289,7 +293,7 @@ export class PlaybookComponent implements OnInit {
 
   /** 统计:失败就当没有,不显示统计条即可。 */
   private loadStats(): void {
-    this.api.get<InterviewStats>('/api/interviews/stats')
+    this.interviewsApi.getStats()
       .pipe(catchError(() => of(null)))
       .subscribe((s) => this.stats.set(s));
   }
@@ -307,7 +311,7 @@ export class PlaybookComponent implements OnInit {
 
   private loadCoverage(): void {
     this.coverageLoading.set(true);
-    this.api.get<CoverageRow[]>('/api/interviews/coverage')
+    this.interviewsApi.getCoverage()
       .pipe(catchError(() => of([] as CoverageRow[])))
       .subscribe((list) => {
         this.coverage.set(list ?? []);
@@ -376,7 +380,7 @@ export class PlaybookComponent implements OnInit {
       notes: this.form.notes || null
     };
 
-    this.api.post<{ id: string }>('/api/interviews', body).subscribe({
+    this.interviewsApi.createEntry(body).subscribe({
       next: (r) => {
         this.saving.set(false);
         this.dialogOpen.set(false);
@@ -417,27 +421,43 @@ export class PlaybookComponent implements OnInit {
       list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
   }
 
+  /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
+   *  true 才执行,取消/Esc/点遮罩一律不执行(与原生 confirm 的 false 同义)。 */
+  private confirmDeleteDlg(body: string): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('common.delete'), body,
+        confirmText: this.t('common.delete'), cancelText: this.t('common.cancel'),
+        danger: true,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
   /** 批量删除:逐个调删除接口(后端暂无批量接口),全部完成后退出编辑模式。 */
   deleteSelected(): void {
     const ids = this.selectedIds();
     if (ids.length === 0) return;
     const names = this.entries().filter(e => ids.includes(e.id))
       .map(e => `${e.companyName}·${e.role}`).join('、');
-    const ok = confirm(
+    void this.confirmDeleteDlg(
       this.t('pb.list.confirmDeleteBatch')
         .replace('{n}', String(ids.length))
-        .replace('{names}', names));
-    if (!ok) return;
+        .replace('{names}', names)).then((ok) => {
+      if (!ok) return;
 
-    forkJoin(ids.map(id => this.api.delete<void>(`/api/interviews/${id}`))).subscribe({
-      next: () => {
-        this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
-        this.editing.set(false);
-        this.selectedIds.set([]);
-        this.load();
-        this.loadStats();
-      },
-      error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
+      forkJoin(ids.map(id => this.interviewsApi.deleteEntry(id,
+        this.entries().find((e) => e.id === id)?.version ?? null))).subscribe({
+        next: () => {
+          this.snack.open(this.t('pb.deleted'), this.t('common.close'), { duration: 3000 });
+          this.editing.set(false);
+          this.selectedIds.set([]);
+          this.load();
+          this.loadStats();
+        },
+        error: (e: Error) => this.snack.open(e.message, this.t('common.close'), { duration: 5000 })
+      });
     });
   }
 
@@ -506,44 +526,94 @@ export class PlaybookComponent implements OnInit {
     };
   }
 
-  // ★ #13:STAR 故事库 (localStorage)
-  readonly starStories = signal<StarStory[]>(this.loadStarStories());
+  // ★ #13:STAR 故事库 —— COD-10b/票15 起真源在 Interviews 后端
+  // (star_stories 表),读写收敛到 PlaybookLocalService 单一路径;组件只消费
+  // 同一份信号。localStorage 旧键(pb.starStories)仅作首次导入来源,保留不清除。
+  readonly starStories = this.localData.starStories;
   readonly showStarBank = signal(false);
   readonly editingStory = signal<StarStory | null>(null);
-
-  private loadStarStories(): StarStory[] {
-    try { return JSON.parse(localStorage.getItem('pb.starStories') || '[]'); }
-    catch { return []; }
-  }
-  private saveStarStories(list: StarStory[]): void {
-    localStorage.setItem('pb.starStories', JSON.stringify(list));
-    this.starStories.set(list);
-  }
+  /**
+   * 票79:STAR 标题字段级错误(口径同票12 Knowledge 弹窗字段级呈现)——
+   * 点保存时由纯函数 starStoryTitleError 判定,错误文案挂在标题框下方;
+   * 用户补填标题(ngModelChange)即清除;开新表单/编辑/取消时一并清空。
+   */
+  readonly storyTitleError = signal<StarStoryTitleError>(null);
+  readonly storyTitleErrorText = computed(() => {
+    const e = this.storyTitleError();
+    if (e === 'required') return this.t('pb.star.titleRequired');
+    if (e === 'tooLong') return this.fmt('pb.star.titleTooLong', { max: STAR_STORY_TITLE_MAX });
+    return null;
+  });
+  /**
+   * ML-FIX-PREP(R-27):STAR 正文级错误(口径同标题字段级呈现)——
+   * 点保存时由纯函数 starStoryBodyError 判定,错误文案挂在表单下方;
+   * 用户补填正文(ngModelChange)即清除;开新表单/编辑/取消时一并清空。
+   */
+  readonly storyBodyError = signal<StarStoryBodyError>(null);
+  readonly storyBodyErrorText = computed(() => {
+    const e = this.storyBodyError();
+    if (!e) return null;
+    if (e.kind === 'required') return this.fmt('pb.star.bodyRequired', { field: e.field });
+    if (e.kind === 'resultNeedsNumber') return this.t('pb.star.resultNeedsNumber');
+    return this.t('pb.star.actionTooVague');
+  });
   newStory(): void {
+    this.storyTitleError.set(null);
+    this.storyBodyError.set(null);
     this.editingStory.set({
       id: 's' + Date.now(), title: '', situation: '', task: '', action: '', result: '', tags: ''
     });
   }
   editStory(s: StarStory): void {
+    this.storyTitleError.set(null);
+    this.storyBodyError.set(null);
     this.editingStory.set({ ...s });
   }
-  saveStory(s: StarStory): void {
-    if (!s.title.trim()) return;
-    // 空故事没有意义:标题之外 S/T/A/R 至少填一项,否则就是一张废卡
-    const filled = [s.situation, s.task, s.action, s.result].filter(v => v && v.trim()).length;
-    if (filled === 0) {
-      this.snack.open('故事内容是空的:请至少填写 S/T/A/R 中的一项', '关闭', { duration: 3500 });
-      return;
-    }
-    const list = this.loadStarStories();
-    const idx = list.findIndex(x => x.id === s.id);
-    if (idx >= 0) list[idx] = s; else list.push(s);
-    this.saveStarStories(list);
+  cancelStoryEdit(): void {
+    this.storyTitleError.set(null);
+    this.storyBodyError.set(null);
     this.editingStory.set(null);
   }
+  /** 票79:用户开始补填标题时先撤掉标题的旧错误(票12 clearFieldError 同口径)。 */
+  clearStoryTitleError(): void {
+    if (this.storyTitleError()) this.storyTitleError.set(null);
+  }
+  /** ML-FIX-PREP(R-27):用户开始补填正文时先撤掉正文的旧错误。 */
+  clearStoryBodyError(): void {
+    if (this.storyBodyError()) this.storyBodyError.set(null);
+  }
+  /** 票78:STAR 保存在飞守卫(口径同本组件 save() 的 saving 与票92)。 */
+  readonly storySaving = signal(false);
+  saveStory(s: StarStory): void {
+    if (!shouldStartStorySave(this.storySaving())) return;
+    // 票79:标题必填/超长校验落到界面 —— 此前此处静默 return,用户只看到「点了没反应」
+    const titleError = starStoryTitleError(s.title);
+    if (titleError) {
+      this.storyTitleError.set(titleError);
+      return;
+    }
+    this.storyTitleError.set(null);
+    // ML-FIX-PREP(R-27):正文收紧 —— S/T/A/R 四项均必填、Result 须带数字、
+    // Action 空泛拦截;取代此前“至少填一项”的 snack 口径(空泛叙述不再放行)。
+    const bodyError = starStoryBodyError(s);
+    if (bodyError) {
+      this.storyBodyError.set(bodyError);
+      return;
+    }
+    this.storyBodyError.set(null);
+    this.storySaving.set(true);
+    const settle = () => {
+      this.storySaving.set(false);
+      this.editingStory.set(null);
+    };
+    this.localData.saveStory(s).subscribe({ next: settle, error: settle, complete: settle });
+  }
   deleteStory(id: string): void {
-    if (!confirm('删除这个故事?')) return;
-    this.saveStarStories(this.loadStarStories().filter(x => x.id !== id));
+    // 票45 REQ-14:站内确认弹窗替代原生 confirm;原文案为硬编码中文,逐字作 body 保留
+    void this.confirmDeleteDlg('删除这个故事?').then((ok) => {
+      if (!ok) return;
+      this.localData.deleteStory(id);
+    });
   }
   /** ★ #13:按 JD 关键词推荐故事 */
   recommendStories(jdText: string): StarStory[] {

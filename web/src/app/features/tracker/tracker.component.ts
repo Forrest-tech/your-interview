@@ -1,301 +1,44 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
-import { ApiClient } from '../../core/api/api-client';
+import { JobsApiService } from '../../core/api/jobs-api.service';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { SubnavService } from '../../layout/subnav.service';
 import { TrackerApi } from '../../core/api/tracker-api.service';
-import { Application, ApplicationStatus, AnswerTemplate, Communication, CommunicationType, Company, Paged, TrackerStats } from '../../core/models/api.models';
+import { TrackerPreferencesService } from '../../core/api/tracker-preferences.service';
+import { Application, ApplicationStatus, Company, TrackerStats } from '../../core/models/api.models';
+import { PIPELINE_STAGES } from '../../core/models/pipeline-stages';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
+import { InputDialogComponent, InputDialogData } from '../../shared/input-dialog/input-dialog.component';
+import { parseWeeklyGoalInput, clampWeeklyGoal } from './tracker-goal.helpers';
 import { AnswerLibraryDialogComponent } from './answer-library-dialog.component';
 import { SmartAddDialogComponent } from './smart-add-dialog.component';
-import { extractPdfText } from '../../core/utils/pdf-text';
-import { PdfContentViewerComponent } from '../../shared/pdf-viewer/pdf-content-viewer.component';
-import { computeMatch, type MatchResult } from '../../core/match/resume-match';
-
-/** 状态下拉的选项 —— 顺序即漏斗顺序,下拉里也按流程排,避免用户找"面试中"要找半天。 */
-const STATUS_ORDER: ApplicationStatus[] = [
-  'Saved', 'Applied', 'Screen', 'Interview', 'Offer', 'Accepted', 'Rejected', 'Ghosted', 'Paused', 'Withdrawn'
-];
-
-/**
- * 新建对话框允许直接设置的初始状态(只能是从 Saved 合法流转出去的那几个;
- * 其余状态(面试中/Offer 等)需要走正式的状态流转,不能在新建时越级设置)。
- */
-const CREATE_STATUS_OPTIONS: ApplicationStatus[] = ['Saved', 'Applied', 'Screen', 'Interview', 'Paused', 'Rejected'];
-
-/** 从 Saved 走到目标状态的合法路径(后端状态机不允许越级)。 */
-const STATUS_PATH_FROM_SAVED: Record<string, ApplicationStatus[]> = {
-  'Applied': ['Applied'],
-  'Screen': ['Applied', 'Screen'],
-  'Interview': ['Applied', 'Screen', 'Interview'],
-  'Paused': ['Paused'],
-  'Rejected': ['Rejected'],
-};
-
-/**
- * 投递表单的可编辑形状。
- * 与 Application 分开定义:新建时表单没有 id/createdAt 这类服务端字段,
- * 硬套 Application 会到处写 undefined,不如用一个贴合表单的接口。
- */
-export interface ApplicationForm {
-  companyName: string;
-  role: string;
-  location: string;
-  salary: string;
-  status: ApplicationStatus;
-  priority: string;
-  appliedDate: string;
-  link: string;
-  notes: string;
-  needsConnectFirst: boolean;
-  /** 对应后端 OutreachMessage(外联留言,如"已发 LinkedIn 私信")。 */
-  outreachMessage: string;
-  /** ★ #6:投递的文档版本 (如 "Forrest_Lin_Resume_Corpay.pdf")。存 notes 前缀。 */
-  sentDocuments: string;
-  /** 职位描述 JD,供关键词提取和备战计划使用。 */
-  jdText: string;
-}
-
-function emptyForm(): ApplicationForm {
-  return {
-    companyName: '', role: '', location: '', salary: '',
-    status: 'Applied', priority: 'Medium', appliedDate: todayIso(), link: '',
-    notes: '', needsConnectFirst: false, outreachMessage: '', sentDocuments: '',
-    jdText: ''
-  };
-}
-
-function todayIso(): string {
-  const d = new Date();
-  const m = `${d.getMonth() + 1}`.padStart(2, '0');
-  const day = `${d.getDate()}`.padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
-/**
- * 新建/编辑投递的弹窗(内联模板)。
- *
- * 为什么内联而不是单独文件:这个表单只在 tracker 用一次,
- * 拆成独立组件要额外传 MAT_DIALOG_DATA + 回传结果,收益不大;
- * 超过两处复用再拆。
- */
-@Component({
-  selector: 'app-application-dialog',
-  standalone: true,
-  imports: [
-    CommonModule, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule,
-    MatSelectModule, MatButtonModule, MatIconModule, MatSlideToggleModule, MatDividerModule
-  ],
-  template: `
-    <h2 mat-dialog-title>{{ isEdit ? t('tracker.dlgEdit') : t('tracker.dlgNew') }}</h2>
-
-    <mat-dialog-content class="dlg-body">
-      <div class="row2">
-        <mat-form-field appearance="outline">
-          <mat-label>{{ t('tracker.fCompany') }}</mat-label>
-          <input matInput name="companyName" [(ngModel)]="form.companyName" required>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>{{ t('tracker.fRole') }}</mat-label>
-          <input matInput name="role" [(ngModel)]="form.role" required>
-        </mat-form-field>
-      </div>
-
-      <div class="row2">
-        <mat-form-field appearance="outline">
-          <mat-label>{{ t('tracker.fLocation') }}</mat-label>
-          <input matInput name="location" [(ngModel)]="form.location" [placeholder]="t('tracker.fLocationPh')">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>{{ t('tracker.fSalary') }}</mat-label>
-          <input matInput name="salary" [(ngModel)]="form.salary" [placeholder]="t('tracker.fSalaryPh')">
-        </mat-form-field>
-      </div>
-
-      <div class="row2">
-        <mat-form-field appearance="outline">
-          <mat-label>{{ t('tracker.fStatus') }}</mat-label>
-          <mat-select name="status" [(ngModel)]="form.status">
-            @for (s of statusOptions; track s) {
-              <mat-option [value]="s">{{ label(s) }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>{{ t('tracker.fPriority') }}</mat-label>
-          <mat-select name="priority" [(ngModel)]="form.priority">
-            @for (p of priorities; track p) {
-              <mat-option [value]="p">{{ p }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-      </div>
-
-      <div class="row2">
-        <mat-form-field appearance="outline">
-          <mat-label>{{ t('tracker.fAppliedDate') }}</mat-label>
-          <input matInput type="date" name="appliedDate" [(ngModel)]="form.appliedDate">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>{{ t('tracker.fOutreach') }}</mat-label>
-          <input matInput name="outreachMessage" [(ngModel)]="form.outreachMessage"
-                 [placeholder]="t('tracker.fOutreachPh')">
-        </mat-form-field>
-      </div>
-
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>{{ t('tracker.fLink') }}</mat-label>
-        <input matInput name="link" [(ngModel)]="form.link" placeholder="https://...">
-      </mat-form-field>
-
-      <!-- ★ #6:投递文档版本 -->
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>投递文档 (如 Forrest_Lin_Resume_Corpay.pdf)</mat-label>
-        <input matInput name="sentDocuments" [(ngModel)]="form.sentDocuments"
-               placeholder="记录本次投递用的简历/求职信文件名">
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>{{ t('tracker.fNotes') }}</mat-label>
-        <textarea matInput name="notes" rows="4" [(ngModel)]="form.notes"></textarea>
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>职位描述 (JD)</mat-label>
-        <textarea matInput name="jdText" rows="6" [(ngModel)]="form.jdText"
-                  placeholder="粘贴完整 JD,用于关键词提取和备战计划"></textarea>
-      </mat-form-field>
-
-      <div class="qa-row">
-        <span class="qa-hint">{{ t('tracker.insertAnswer') }}</span>
-        <button mat-stroked-button type="button" (click)="insertAnswer()">
-          <mat-icon>library_books</mat-icon>{{ t('tracker.insertAnswer') }}
-        </button>
-      </div>
-
-      <mat-divider></mat-divider>
-
-      <mat-slide-toggle name="needsConnectFirst" [(ngModel)]="form.needsConnectFirst">
-        {{ t('tracker.fConnectFirst') }}
-      </mat-slide-toggle>
-
-      @if (error()) {
-        <div class="err">
-          <mat-icon>error_outline</mat-icon> {{ error() }}
-        </div>
-      }
-    </mat-dialog-content>
-
-    <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>{{ t('common.cancel') }}</button>
-      <button mat-raised-button color="primary" [disabled]="!canSave()"
-              (click)="save()">
-        {{ isEdit ? t('common.save') : t('common.create') }}
-      </button>
-    </mat-dialog-actions>
-  `,
-  styles: [`
-    .dlg-body { min-width: 520px; max-width: 640px; }
-    @media (max-width: 640px) { .dlg-body { min-width: auto; } }
-    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    mat-form-field { width: 100%; }
-    .full { width: 100%; }
-    mat-divider { margin: 6px 0 14px; }
-    .err {
-      display: flex; align-items: center; gap: 6px;
-      margin-top: 12px; padding: 8px 12px; border-radius: 6px;
-      background: #fdecea; color: #b3261e; font-size: 13px;
-    }
-    .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .qa-row {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 10px 12px; margin-bottom: 4px; border-radius: 8px;
-      background: rgba(63, 81, 181, 0.06); border: 1px solid rgba(63, 81, 181, 0.16);
-    }
-    .qa-row .qa-hint { font-size: 12.5px; opacity: 0.7; }
-    .qa-row mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; vertical-align: middle; }
-  `]
-})
-export class ApplicationDialogComponent {
-  readonly dialogRef = inject(MatDialogRef<ApplicationDialogComponent, ApplicationForm | null>);
-  /** 传入 null 表示新建;传入 Application 表示编辑。 */
-  readonly existing = inject<Application | null>(MAT_DIALOG_DATA);
-  private readonly dialog = inject(MatDialog);
-  private readonly trackerApi = inject(TrackerApi);
-  private readonly i18n = inject(I18nService);
-  t = (key: string): string => this.i18n.t(key);
-
-  /** 新建时只允许从 Saved 合法流转出去的状态;编辑时沿用全部顺序。 */
-  readonly statusOptions: ApplicationStatus[] = this.existing ? STATUS_ORDER : CREATE_STATUS_OPTIONS;
-  readonly priorities = ['High', 'Medium', 'Low'];
-
-  readonly error = signal<string | null>(null);
-
-  form: ApplicationForm = this.existing ? fromApplication(this.existing) : emptyForm();
-
-  get isEdit(): boolean {
-    return this.existing !== null;
-  }
-
-  label(s: ApplicationStatus): string {
-    return this.i18n.t('status.' + s);
-  }
-
-  canSave(): boolean {
-    return this.form.companyName.trim().length > 0 && this.form.role.trim().length > 0;
-  }
-
-  /**
-   * 从问答库挑一条标准回答,插入到备注末尾(留一个空行分隔)。
-   * 选完即关弹窗,不阻断主表单填写。
-   */
-  insertAnswer(): void {
-    const ref = this.dialog.open(AnswerLibraryDialogComponent, {
-      data: { pick: true as const },
-      maxWidth: '720px'
-    });
-    ref.afterClosed().subscribe((tpl?: AnswerTemplate | null) => {
-      if (!tpl) return;
-      const block = `【${tpl.question}】\n${tpl.answer}`;
-      const cur = this.form.notes?.trim() ?? '';
-      this.form.notes = cur ? `${cur}\n\n${block}` : block;
-    });
-  }
-
-  save(): void {
-    if (!this.canSave()) {
-      this.error.set(this.t('tracker.required'));
-      return;
-    }
-    // 空字符串在这里统一转 clean,避免后端存下一堆 "" 的脏字段
-    this.dialogRef.close(trimForm(this.form));
-  }
-}
+import { STATUS_ORDER, STATUS_PATH_FROM_SAVED, ApplicationForm } from './tracker-form.helpers';
+import { ApplicationDialogComponent } from './application-dialog.component';
+import { ApplicationDetailDialogComponent } from './application-detail-dialog.component';
+import { initialDrawerWidth } from './detail-drawer-width';
+import { PrepPlanDialogComponent } from './prep-plan-dialog.component';
+import {
+  favCountsByStatus, favoriteItems, itemsAtStatus, nextFlowStageSelection
+} from './tracker-flow-favorites.helpers';
 
 /**
  * 投递看板。
@@ -313,16 +56,20 @@ export class ApplicationDialogComponent {
     CommonModule, FormsModule, MatCardModule, MatIconModule, MatButtonModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatProgressBarModule,
     MatDialogModule, MatTooltipModule, MatSnackBarModule, MatDividerModule,
-    MatSelectModule, MatMenuModule, MatButtonToggleModule, MatCheckboxModule,
+    MatMenuModule, MatButtonToggleModule,
     DragDropModule
   ],
   templateUrl: './tracker.component.html',
   styleUrl: './tracker.component.scss'
 })
 export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
-  private readonly api = inject(ApiClient);
+  private readonly jobsApi = inject(JobsApiService);
+  private readonly interviewsApi = inject(InterviewsApiService);
+  private readonly knowledgeApi = inject(KnowledgeApiService);
   private readonly trackerApi = inject(TrackerApi);
+  private readonly prefs = inject(TrackerPreferencesService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly subnav = inject(SubnavService);
   /** ★ 2026-09-23:页面 tooltip 接入全站语言设置。 */
   private readonly i18n = inject(I18nService);
@@ -342,6 +89,10 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   setViewMode(m: 'board' | 'list' | 'chart'): void {
     this.viewMode.set(m);
+    // ★ 票73:切走流程视图后条带恢复默认态(再点节点选中口径见 selectFlowStage);
+    // 进入流程视图时刷新全量缓存(徽标/条带的全量口径)。
+    if (m !== 'chart') this.flowStage.set(null);
+    if (m === 'chart') this.loadFlowAll();
     try { localStorage.setItem('yi-tracker-view', m); } catch { /* 忽略 */ }
   }
 
@@ -369,9 +120,11 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     }))
   );
 
-  /** 列表视图的 pipeline stepper:5 个阶段。 */
+  /** 列表视图的 pipeline stepper:5 个阶段。
+   *  票123 R-9:阶段序列搬进共享常量(core/models/pipeline-stages)——
+   *  Dashboard 的 Pipeline Band 读同一份,两处不可能再分叉。行为不变。 */
   readonly pipelineStages: ApplicationStatus[] =
-    ['Saved', 'Applied', 'Screen', 'Interview', 'Offer'] as ApplicationStatus[];
+    [...PIPELINE_STAGES] as ApplicationStatus[];
 
   /** 某申请在某阶段的到达日期(从 history 里找),没到过返回 null。 */
   stageDate(app: Application, stage: ApplicationStatus): string | null {
@@ -396,44 +149,41 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     return Math.max(0, Math.floor(ms / 86400000));
   }
 
-  /** 公司 Logo:优先用后端解析的,fallback 用 Clearbit 按域名猜,再失败显示首字母。 */
+  /** 公司 Logo:后端 Company.LogoUrl 透传,为空或加载失败时显示首字母色块。 */
   logoUrl(app: Application): string | null {
-    // 2026-10-19:去掉 clearbit 外部 logo，直接用首字母头像（避免控制台报错）
+    // 票 150:Clearbit 回退已于 2026-10-19 去掉(用户否决,DNS 失败刷控制台);
+    // 本方法只透传后端值,不再按域名猜任何外部 logo 地址。
     return app.companyLogoUrl || null;
-  }
-
-  /** 常见公司名 → 域名(猜错也没关系,加载失败会自动 fallback 到首字母)。 */
-  private guessDomain(name: string): string | null {
-    const n = (name || '').toLowerCase().trim();
-    const map: Record<string, string> = {
-      'td bank': 'td.com',
-      'td securities': 'td.com',
-      'thoughtstorm': 'thoughtstorm.ca',
-      'descartes': 'descartes.com',
-      'questrade': 'questrade.com',
-      'corpay': 'corpay.com',
-      'mohawk medbuy': 'mohawkmedbuy.ca',
-      'rbc': 'rbc.com',
-      'cibc': 'cibc.com',
-      'scotiabank': 'scotiabank.com',
-      'bmo': 'bmo.com',
-    };
-    for (const [k, v] of Object.entries(map)) {
-      if (n.includes(k)) return v;
-    }
-    // 通用猜测:去掉空格+特殊字符+.com
-    const clean = n.replace(/[^a-z0-9]/g, '');
-    return clean.length >= 3 ? `${clean}.com` : null;
   }
 
   /** 是否需要跟进:到了 nextFollowUpAt,或早期阶段投递超过 14 天无进展。 */
   needsFollowUp(app: Application): boolean {
-    if (['Offer', 'Accepted', 'Rejected', 'Withdrawn', 'Ghosted'].includes(app.status)) return false;
+    // 票123 R-4:终态口径只有 `terminalStatuses` 一处定义,这里与 `isTerminal()` 同源,两处判定不可能分叉。
+    if (this.terminalStatuses.includes(app.status)) return false;
     if (app.nextFollowUpAt && new Date(app.nextFollowUpAt).getTime() <= Date.now()) return true;
     // 14天规则只适用于早期阶段(Saved/Applied/Screen)——Interview+ 已有明确进展
     if (!['Saved', 'Applied', 'Screen'].includes(app.status)) return false;
     const d = this.daysWaiting(app);
     return d !== null && d >= 14;
+  }
+
+  /** 终态:已有明确结果,不再需要跟进。票123 R-4:看板卡片的「结果 chip」只在此态出现。 */
+  readonly terminalStatuses: ApplicationStatus[] = ['Offer', 'Accepted', 'Rejected', 'Withdrawn', 'Ghosted'];
+
+  /** 是否终态投递。 */
+  isTerminal(app: Application): boolean {
+    return this.terminalStatuses.includes(app.status);
+  }
+
+  /** 终态对应的 chip 语义类(与全局 .chip 变体同名)。 */
+  terminalChipClass(app: Application): string {
+    switch (app.status) {
+      case 'Offer': case 'Accepted': return 'offer';
+      case 'Rejected': return 'rejected';
+      case 'Ghosted': return 'ghosted';
+      case 'Withdrawn': return 'withdrawn';
+      default: return '';
+    }
   }
 
   /**
@@ -449,7 +199,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // 状态流转走专门的 /status 接口(后端状态机校验合法流转),
     // 不能塞进 PUT body —— UpdateApplicationBody 没有 Status 字段,会被静默忽略。
-    this.api.post<void>(`/api/jobs/applications/${app.id}/status`, { status }).subscribe({
+    this.jobsApi.changeStatus(app.id, status).subscribe({
       next: () => {
         this.loadStats();
         // ★ #2:卡片进入 Interview → 从 JD 自动生成备战计划
@@ -486,9 +236,12 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     dialogRef.afterClosed().subscribe(go => {
       if (go) {
         // ★ F-B1: 直接创建 Playbook 条目并预填,不让用户重输
-        this.api.post<{ id: string }>('/api/interviews', {
+        // FUN-03:必须带 jobApplicationId —— 后端按它幂等,已有条目时返回既有 id,
+        // 前端直接跳既有条目;此前这条路径没带,每次改状态到 Interview 都新建第二条。
+        this.interviewsApi.createEntry<{ id: string }>({
           companyName: app.companyName,
           role: app.role,
+          jobApplicationId: app.id,
           jdText: app.jdText || null,
         }).subscribe({
           next: (r) => {
@@ -551,14 +304,14 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     };
     // 申请
     try {
-      const apps = await this.api.get<Paged<Application>>('/api/jobs/applications', {
+      const apps = await this.jobsApi.getApplications<Application>({
         page: 1, pageSize: 1000
       }).toPromise();
       data['applications'] = apps?.items ?? [];
     } catch { data['applications'] = []; }
     // 知识库
     try {
-      const kb = await this.api.get<Paged<any>>('/api/knowledge', {
+      const kb = await this.knowledgeApi.getItems({
         page: 1, pageSize: 1000
       }).toPromise();
       data['knowledge'] = kb?.items ?? [];
@@ -593,7 +346,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     link.download = `your-interview-backup-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    this.snack.open('备份已下载', '关闭', { duration: 2500 });
+    this.snack.open(this.t('tracker.backupDownloaded'), this.t('common.close'), { duration: 2500 });
   }
 
   /** ★ 从备份恢复 localStorage 数据 (STAR/复盘/粘贴材料)。 */
@@ -624,9 +377,9 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
             count++;
           }
         }
-        this.snack.open(`已恢复 ${count} 项本地数据`, '关闭', { duration: 3000 });
+        this.snack.open(this.tn('tracker.backupRestored', count), this.t('common.close'), { duration: 3000 });
       } catch {
-        this.snack.open('备份文件解析失败', '关闭', { duration: 3000 });
+        this.snack.open(this.t('tracker.backupParseFailed'), this.t('common.close'), { duration: 3000 });
       }
       input.value = '';
     };
@@ -670,7 +423,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
             notes: (r[8] ?? '').trim() || null,
           };
           if (!body.companyName || !body.role) { failed++; this.checkImportDone(++created + failed, total, created, failed); continue; }
-          this.api.post('/api/jobs/applications', body).subscribe({
+          this.jobsApi.createApplication(body).subscribe({
             next: () => { created++; this.checkImportDone(created + failed, total, created, failed); },
             error: () => { failed++; this.checkImportDone(created + failed, total, created, failed); }
           });
@@ -733,7 +486,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 /** 备战:从投递一键创建 Playbook 面试条目,JD/公司/职位/投递关联自动带入。 */  prepareInterview(app: Application, event: Event): void {
     event.stopPropagation();
     // 直接传 companyId,避免后端按名复用时找不到而生成随机 ID 导致孤儿条目。
-    this.api.post<{ id: string }>('/api/interviews', {
+    this.interviewsApi.createEntry<{ id: string }>({
       companyId: app.companyId,
       companyName: app.companyName,
       role: app.role,
@@ -812,97 +565,18 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly error = signal<string | null>(null);
 
   readonly items = signal<Application[]>([]);
-  /** ★ 收藏 (localStorage):id 集合。 */
-  readonly favorites = signal<Set<string>>(new Set(
-    JSON.parse(localStorage.getItem('yi-tracker-favorites') || '[]')
-  ));
+  /** ★ 收藏(COD-10a/票14:后端为真源,与详情弹窗共用同一份信号 —— 单一读写路径)。 */
+  readonly favorites = this.prefs.favorites;
 
   toggleFavorite(id: string): void {
-    const f = new Set(this.favorites());
-    if (f.has(id)) f.delete(id); else f.add(id);
-    this.favorites.set(f);
-    try { localStorage.setItem('yi-tracker-favorites', JSON.stringify([...f])); } catch { /* 忽略 */ }
+    this.prefs.toggleFavorite(id);
   }
 
   isFavorite(id: string): boolean {
-    return this.favorites().has(id);
+    return this.prefs.isFavorite(id);
   }
 
-  /** ★ 批量操作:选中的申请 id 集合。 */
-  readonly selected = signal<Set<string>>(new Set());
-  readonly selectedCount = computed(() => this.selected().size);
-
-  /** ★ 选择模式:默认关闭,卡片不显示勾选框;点工具栏"选择"进入。 */
-  readonly selectMode = signal(false);
-
-  toggleSelectMode(): void {
-    const next = !this.selectMode();
-    this.selectMode.set(next);
-    if (!next) this.clearSelection();
-  }
-
-  toggleSelect(id: string, ev?: Event | any): void {
-    // MatCheckboxChange 没有 stopPropagation,直接忽略
-    try { (ev as Event)?.stopPropagation?.(); } catch {}
-    const next = new Set(this.selected());
-    if (next.has(id)) next.delete(id); else next.add(id);
-    this.selected.set(next);
-  }
-
-  isSelected(id: string): boolean {
-    return this.selected().has(id);
-  }
-
-  clearSelection(): void {
-    this.selected.set(new Set());
-  }
-
-  /** 全选当前页。 */
-  selectAllVisible(): void {
-    const next = new Set(this.selected());
-    for (const a of this.displayItems()) next.add(a.id);
-    this.selected.set(next);
-  }
-
-  /** 批量改状态:逐个调 /status(走状态机校验),失败的单独 toast。 */
-  bulkSetStatus(status: ApplicationStatus): void {
-    const ids = [...this.selected()];
-    if (ids.length === 0) return;
-    let done = 0, failed = 0;
-    for (const id of ids) {
-      this.api.post<void>(`/api/jobs/applications/${id}/status`, { status }).subscribe({
-        next: () => {
-          done++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'status');
-        },
-        error: () => {
-          failed++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'status');
-        }
-      });
-    }
-  }
-
-  /** 批量归档。 */
-  bulkArchive(): void {
-    const ids = [...this.selected()];
-    if (ids.length === 0) return;
-    let done = 0, failed = 0;
-    for (const id of ids) {
-      this.api.post<void>(`/api/jobs/applications/${id}/archive`, {}).subscribe({
-        next: () => {
-          done++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'archive');
-        },
-        error: () => {
-          failed++;
-          if (done + failed === ids.length) this.finishBulk(done, failed, 'archive');
-        }
-      });
-    }
-  }
-
-  /** ★ F-02:删除确认统一走全站确认弹窗 —— 原生 confirm() 在无弹窗处理的环境
+  /** ★ F-02:删除确认统一走全站确认弹窗 —— 原生 confirm 在无弹窗处理的环境
    *  (自动化测试/某些内嵌浏览器)会被静默 dismiss,删除看起来"点了没反应"。 */
   private confirmDelete(body: string): Promise<boolean> {
     const ref = this.dialog.open(ConfirmDialogComponent, {
@@ -914,40 +588,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       } as ConfirmDialogData,
     });
     return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
-  }
-
-  /** 批量删除:二次确认。 */
-  bulkDelete(): void {
-    const n = this.selected().size;
-    if (n === 0) return;
-    void this.confirmDelete(this.tf('tracker.confirmBulkDelete', { n })).then((ok) => {
-      if (!ok) return;
-      const ids = [...this.selected()];
-      let done = 0, failed = 0;
-      for (const id of ids) {
-        this.api.delete<void>(`/api/jobs/applications/${id}`).subscribe({
-          next: () => {
-            done++;
-            if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
-          },
-          error: () => {
-            failed++;
-            if (done + failed === ids.length) this.finishBulk(done, failed, 'delete');
-          }
-        });
-      }
-    });
-  }
-
-  private finishBulk(done: number, failed: number, _op: string): void {
-    this.clearSelection();
-    this.selectMode.set(false);
-    this.reload();
-    if (failed > 0) {
-      this.notify(this.tf('tracker.bulkPartial', { done, failed }), true);
-    } else {
-      this.notify(this.tn('tracker.bulkDone', done));
-    }
   }
 
   readonly total = signal(0);
@@ -983,13 +623,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       if (s) localStorage.setItem('yi-tracker-status', s);
       else localStorage.removeItem('yi-tracker-status');
     } catch { /* 忽略 */ }
-    this.page.set(1);
-    this.reload();
-  }
-
-  setSort(s: string): void {
-    this.sort.set(s);
-    try { localStorage.setItem('yi-tracker-sort', s); } catch { /* 忽略 */ }
     this.page.set(1);
     this.reload();
   }
@@ -1047,13 +680,22 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.showStaleOnly() ? all.filter(a => this.staleIds().has(a.id)) : all;
   });
 
-  /** 点击每周目标卡片:用原生 prompt 改数字(简单直接,比再开一个 dialog 轻)。 */
+  /** 点击每周目标卡片:站内输入弹窗改数字(票45 REQ-14,替代原生 prompt ——
+   *  与 F-02 同理,原生 prompt 在无弹窗处理的环境会被静默 dismiss)。
+   *  解析/校验口径逐字不变:取消/空/非数字/≤0 静默不改,>100 由 setWeeklyGoal 钳到 100。 */
   promptGoal(): void {
-    const cur = this.weeklyGoal();
-    const raw = window.prompt(this.i18n.t('tracker.goalPrompt'), String(cur));
-    if (raw === null) return;
-    const n = parseInt(raw, 10);
-    if (Number.isFinite(n) && n > 0) this.setWeeklyGoal(n);
+    const ref = this.dialog.open(InputDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: this.t('tracker.goalTitle'), label: this.i18n.t('tracker.goalPrompt'),
+        initialValue: String(this.weeklyGoal()),
+        confirmText: this.t('common.save'), cancelText: this.t('common.cancel'),
+      } as InputDialogData,
+    });
+    ref.afterClosed().subscribe((raw) => {
+      const n = parseWeeklyGoalInput(raw);
+      if (n !== null) this.setWeeklyGoal(n);
+    });
   }
 
   // ------------------------------ Simplify 对标:每周目标 ------------------------------
@@ -1067,7 +709,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     } catch { return 5; }
   }
   setWeeklyGoal(n: number): void {
-    const v = Math.max(1, Math.min(100, Math.round(n) || 5));
+    const v = clampWeeklyGoal(n);
     this.weeklyGoal.set(v);
     try { localStorage.setItem(TrackerComponent.GOAL_KEY, String(v)); } catch { /* 忽略 */ }
   }
@@ -1089,7 +731,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     const start = TrackerComponent.weekStart().getTime();
     const pageSize = 200;
     const fetchPage = (page: number, acc: Application[]): void => {
-      this.api.get<Paged<Application>>('/api/jobs/applications', {
+      this.jobsApi.getApplications<Application>({
         page, pageSize, sortBy: 'updated'
       }).subscribe({
         next: (r) => {
@@ -1120,7 +762,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.ghostingDismissed.set(true);
   }
   loadGhosting(): void {
-    this.api.get<Paged<Application>>('/api/jobs/applications', {
+    this.jobsApi.getApplications<Application>({
       page: 1, pageSize: 200, status: 'Applied'
     }).subscribe({
       next: (r) => {
@@ -1173,9 +815,72 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     };
   });
 
+  // ------------------------------ 票73:流程视图收藏 ------------------------------
+  /**
+   * 流程图是聚合图(stats 口径),徽标与条带需要投递全量:items() 只是分页
+   * 切片(同 weeklyAppliedCount 的教训),故进流程视图时逐页拉全量缓存。
+   * 收藏真源仍只有 prefs.favorites 一份信号 —— 切换后徽标/条带经下面的
+   * computed 即时同步,缓存本身不随切换刷新(状态变更不在流程视图发生)。
+   */
+  readonly flowAllItems = signal<Application[]>([]);
+  /** 条带选中的阶段;null = 默认条带「收藏的投递」。 */
+  readonly flowStage = signal<ApplicationStatus | null>(null);
+  readonly flowFavCounts = computed(() =>
+    favCountsByStatus(this.flowAllItems(), this.prefs.favorites()));
+  readonly flowStripItems = computed(() => {
+    const stage = this.flowStage();
+    return stage
+      ? itemsAtStatus(this.flowAllItems(), stage)
+      : favoriteItems(this.flowAllItems(), this.prefs.favorites());
+  });
+
+  flowFavCount(status: ApplicationStatus): number {
+    return this.flowFavCounts().get(status) ?? 0;
+  }
+
+  /** 点阶段节点:选中 ↔ 取消(回默认条带)↔ 切换阶段。 */
+  selectFlowStage(status: ApplicationStatus): void {
+    this.flowStage.update(cur => nextFlowStageSelection(cur, status) as ApplicationStatus | null);
+  }
+
+  private loadFlowAll(): void {
+    const pageSize = 200;
+    const fetchPage = (page: number, acc: Application[]): void => {
+      this.jobsApi.getApplications<Application>({
+        page, pageSize, sortBy: 'updated', archived: false
+      }).subscribe({
+        next: (r) => {
+          const all = acc.concat(r.items ?? []);
+          if (page < (r.totalPages ?? 1)) fetchPage(page + 1, all);
+          else this.flowAllItems.set(all);
+        },
+        error: () => { /* 失败保留旧缓存,主流程不受影响 */ }
+      });
+    };
+    fetchPage(1, []);
+  }
+
   ngOnInit(): void {
     this.reload();
+    this.prefs.ensureFavoritesLoaded(); // ★ 票14:收藏读后端 + 本地旧数据一次性导入
+    if (this.viewMode() === 'chart') this.loadFlowAll(); // ★ 票73:刷新后直落流程视图时也要全量缓存
     this.loadGhosting(); // ★ #18
+
+    // ★ 票123 R-9:Dashboard Pipeline Band 的节点链接带着 ?status=<阶段> 进来。
+    //   定稿:「Tracker — which today reads **no route input** — gains one
+    //   `route.queryParamMap` subscription in `ngOnInit` that applies a valid
+    //   `status` param through the same `setStatusFilter`; an absent or invalid
+    //   param changes nothing, so the band link behaves exactly like today's
+    //   plain `/tracker` link whenever the param isn't there.」
+    //   机制沿用应用自己的跨页先例(反方向):Tracker 已经在用 queryParams 跳
+    //   /playbook?company=…,而 Playbook 正是用 route.queryParamMap 读的。
+    this.route.queryParamMap.subscribe(params => {
+      const s = params.get('status');
+      if (!s) return;                       // 没有这个参数 —— 什么都不改
+      if (!STATUS_ORDER.includes(s as ApplicationStatus)) return; // 非法值 —— 什么都不改
+      if (this.statusFilter() === s) return; // 已是该过滤 —— 不重复触发
+      this.setStatusFilter(s as ApplicationStatus);
+    });
     // ★ 子导航:有实际功能 —— Status 切看板, List 切列表, Overview 滚到指标区
     this.subnav.register('/tracker', [
       {
@@ -1219,7 +924,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.api.get<Paged<Application>>('/api/jobs/applications', {
+    this.jobsApi.getApplications<Application>({
       page: this.page(),
       pageSize: this.pageSize(),
       status: this.statusFilter(),
@@ -1243,7 +948,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** 统计是"锦上添花",失败就静默降级 —— 列表本身还能用。 */
   loadStats(): void {
-    this.api.get<TrackerStats>('/api/jobs/stats')
+    (this.jobsApi.getStats() as unknown as Observable<TrackerStats>)
       .pipe(catchError(() => of(null)))
       .subscribe((s) => this.stats.set(s));
   }
@@ -1274,10 +979,6 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleStatusFilter(s: ApplicationStatus): void {
     this.setStatusFilter(this.statusFilter() === s ? null : s);
-  }
-
-  onSortChange(v: string): void {
-    this.setSort(v);
   }
 
   /** 当前是否有搜索/筛选生效（空态文案区分"真没数据"与"被筛掉了"）。 */
@@ -1324,16 +1025,23 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     ref.afterClosed().subscribe((form?: ApplicationForm | null) => {
       if (!form) return;
-      if (app) this.update(app.id, form);
+      if (app) this.update(app, form);
       else this.create(form);
     });
+  }
+
+  /** ★ #6:文档版本存入 notes 前缀 [DOCS:...] —— 建单与编辑共用同一口径。 */
+  private composeNotes(form: ApplicationForm): string | null {
+    return form.sentDocuments?.trim()
+      ? `[DOCS:${form.sentDocuments.trim()}] ${form.notes || ''}`.trim()
+      : (form.notes || null);
   }
 
   private create(form: ApplicationForm): void {
     // 先按公司名解析/创建公司(幂等),拿到 companyId 再建投递 —— 否则后端会因缺 CompanyId 拒收。
     this.trackerApi.resolveCompany(form.companyName.trim()).subscribe({
       next: (c) => {
-        this.api.post<Application>('/api/jobs/applications', {
+        this.jobsApi.createApplication<Application>({
           companyId: c.id,
           role: form.role,
           location: form.location || null,
@@ -1343,7 +1051,11 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
           source: null,
           jdSummary: null,
           priority: form.priority || null,
-          appliedDate: form.appliedDate || null
+          appliedDate: form.appliedDate || null,
+          // FUN-02:手动建单填的 JD 与备注随建单负载一并提交 —— 此前根本不发,
+          // 保存后抽屉恒显示 "No JD yet"、API jdText/notes 为空。
+          jdText: form.jdText?.trim() || null,
+          notes: this.composeNotes(form)
         }).subscribe({
           next: (app) => this.afterCreate(app, form),
           error: (e: Error) => this.notify(e.message, true)
@@ -1353,23 +1065,21 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  /** 建完投递后,补齐初始状态(走合法路径逐步流转)/备注/外联留言,再刷新看板。 */
+  /** 建完投递后,补齐初始状态(走合法路径逐步流转)/外联留言,再刷新看板。
+   *  备注与 JD 已随 create 负载落库 (FUN-02),不再补发全量 PUT —— 旧做法只在
+   *  form.notes 非空时才发,且新建返回对象只有 id、全量 PUT 反而可能误清字段。 */
   private afterCreate(app: Application, form: ApplicationForm): void {
     const tasks: Observable<unknown>[] = [];
     const path = STATUS_PATH_FROM_SAVED[form.status] ?? [];
     if (path.length > 0) {
       // 按路径逐步流转(如 Saved→Applied→Screen→Interview),每步都是后端允许的合法流转
       const steps$: Observable<unknown>[] = path.map((s) =>
-        this.api.post<void>(`/api/jobs/applications/${app.id}/status`,
-          { status: s, note: this.t('tracker.historyCreated') }).pipe(catchError(() => of(null)))
+        this.jobsApi.changeStatus(app.id, s, this.t('tracker.historyCreated')).pipe(catchError(() => of(null)))
       );
       tasks.push(concat(...steps$));
     }
-    if (form.notes) {
-      tasks.push(this.updateAppPayload(app.id, form).pipe(catchError(() => of(null))));
-    }
     if (form.needsConnectFirst || form.outreachMessage) {
-      tasks.push(this.api.put<void>(`/api/jobs/applications/${app.id}/outreach`,
+      tasks.push(this.jobsApi.updateOutreach(app.id,
         { posterName: null, needsConnectFirst: form.needsConnectFirst, message: form.outreachMessage || null })
         .pipe(catchError(() => of(null))));
     }
@@ -1379,12 +1089,13 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     forkJoin(tasks).subscribe({ next: done, error: done });
   }
 
-  private update(id: string, form: ApplicationForm): void {
+  private update(existing: Application, form: ApplicationForm): void {
+    const id = existing.id;
     const tasks: Observable<unknown>[] = [
-      this.updateAppPayload(id, form).pipe(catchError((e: Error) => { this.notify(e.message, true); return of(null); }))
+      this.updateAppPayload(existing, form).pipe(catchError((e: Error) => { this.notify(e.message, true); return of(null); }))
     ];
     if (form.needsConnectFirst || form.outreachMessage) {
-      tasks.push(this.api.put<void>(`/api/jobs/applications/${id}/outreach`,
+      tasks.push(this.jobsApi.updateOutreach(id,
         { posterName: null, needsConnectFirst: form.needsConnectFirst, message: form.outreachMessage || null })
         .pipe(catchError(() => of(null))));
     }
@@ -1392,24 +1103,32 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     forkJoin(tasks).subscribe({ next: done, error: done });
   }
 
-  /** 把表单字段拼成 UpdateApplication 所需的完整负载(后端要求全量)。 */
-  private updateAppPayload(id: string, form: ApplicationForm): Observable<unknown> {
-    // ★ #6:文档版本存入 notes 前缀 [DOCS:...]
-    const notes = form.sentDocuments?.trim()
-      ? `[DOCS:${form.sentDocuments.trim()}] ${form.notes || ''}`.trim()
-      : (form.notes || null);
-    return this.api.put<void>(`/api/jobs/applications/${id}`, {
+  /**
+   * 把表单字段拼成 UpdateApplication 所需的完整负载(后端要求全量)。
+   * FUN-02:表单有的字段带真实值 (含 jdText —— 此前根本不发,编辑填的 JD 静默丢失);
+   * 表单没有的字段 (workMode/source/jdSummary/deadline 及详情长字段) 从现有投递
+   * 回填 —— 硬编码 null 在全量 PUT 下会把已有值误清。
+   */
+  private updateAppPayload(existing: Application, form: ApplicationForm): Observable<unknown> {
+    return this.jobsApi.updateApplication(existing.id, {
       role: form.role,
       location: form.location || null,
       link: form.link || null,
       salary: form.salary || null,
-      workMode: null,
-      source: null,
-      jdSummary: null,
-      notes: notes,
+      workMode: existing.workMode ?? null,
+      source: existing.source ?? null,
+      jdSummary: existing.jdSummary ?? null,
+      notes: this.composeNotes(form),
       priority: form.priority || null,
       appliedDate: form.appliedDate || null,
-      deadline: null
+      deadline: existing.deadline ?? null,
+      // 始终发送 (空串 = 用户清空 JD,后端归一为 null;不发则后端保持原值)
+      jdText: form.jdText?.trim() ?? '',
+      companyDescription: existing.companyDescription ?? null,
+      workAuthorization: existing.workAuthorization ?? null,
+      requirements: existing.requirements ?? null,
+      benefits: existing.benefits ?? null,
+      version: existing.version ?? null
     });
   }
 
@@ -1439,9 +1158,9 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   /** 删除必须二次确认 —— 误删一条投递记录要重新回忆时间线,代价不对称。 */
   remove(app: Application, ev?: Event): void {
     ev?.stopPropagation();
-    void this.confirmDelete(this.tf('tracker.confirmDelete', { a: `${app.companyName} · ${app.role}` })).then((ok) => {
+    void this.confirmDelete(this.tf('tracker.confirmDelete', { a: this.tf('tracker.confirmDeleteApp', { company: app.companyName, role: app.role }) })).then((ok) => {
       if (!ok) return;
-      this.api.delete<void>(`/api/jobs/applications/${app.id}`).subscribe({
+      this.jobsApi.deleteApplication(app.id, app.version ?? null).subscribe({
         next: () => {
           this.notify(this.t('tracker.deleted'));
           this.reload();
@@ -1454,7 +1173,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   /** ★ 归档 (Simplify 对等)。 */
   archive(app: Application, ev?: Event): void {
     ev?.stopPropagation();
-    this.api.post<void>(`/api/jobs/applications/${app.id}/archive`, {}).subscribe({
+    this.jobsApi.archive(app.id).subscribe({
       next: () => {
         this.notify(this.t('tracker.archived'));
         this.reload();
@@ -1466,7 +1185,7 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   /** ★ 取消归档。 */
   unarchive(app: Application, ev?: Event): void {
     ev?.stopPropagation();
-    this.api.post<void>(`/api/jobs/applications/${app.id}/unarchive`, {}).subscribe({
+    this.jobsApi.unarchive(app.id).subscribe({
       next: () => {
         this.notify(this.t('tracker.unarchived'));
         this.reload();
@@ -1477,13 +1196,14 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
 
   openDetail(app: Application): void {
     // Simplify 模式:右侧抽屉(不是居中弹窗),看板在左侧保持可见。
-    // 宽度对齐 Simplify 真站: 66vw (max 1280px)
+    // 票 147:初始宽 = 记忆宽/66vw(钳制到拖拽范围)或窄屏 100vw,见 detail-drawer-width.ts;
+    // 钳制全由对话框拖拽逻辑执行,故开启时即把 pane 的 min/maxWidth 置空(定稿 §2.2 陷阱 a)。
     // 高度由 CSS .detail-drawer-panel 控制为 100vh
     const ref = this.dialog.open(ApplicationDetailDialogComponent, {
       data: app,
-      width: '66vw',
-      maxWidth: '1280px',
-      minWidth: '900px',
+      width: initialDrawerWidth(window.innerWidth),
+      maxWidth: 'none',
+      minWidth: '0',
       position: { right: '0', top: '0' },
       panelClass: 'detail-drawer-panel',
       autoFocus: false
@@ -1521,2055 +1241,4 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   trackById(_i: number, a: Application): string {
     return a.id;
   }
-}
-
-/** Application → 表单形状。缺省值就地补,让编辑弹窗不出现 undefined。 */
-function fromApplication(a: Application): ApplicationForm {
-  const notes = a.notes ?? '';
-  // ★ #6:从 notes 提取 [DOCS:...] 标记的文档版本
-  const m = notes.match(/^\[DOCS:([^\]]+)\]\s*/);
-  return {
-    companyName: a.companyName ?? '',
-    role: a.role ?? '',
-    location: a.location ?? '',
-    salary: a.salary ?? '',
-    status: a.status ?? 'Applied',
-    priority: a.priority ?? 'Medium',
-    appliedDate: (a.appliedDate ?? '').slice(0, 10) || todayIso(),
-    link: a.link ?? '',
-    notes: m ? notes.slice(m[0].length) : notes,
-    needsConnectFirst: a.needsConnectFirst ?? false,
-    outreachMessage: a.outreachMessage ?? '',
-    sentDocuments: m ? m[1] : '',
-    jdText: a.jdText ?? ''
-  };
-}
-
-function trimForm(f: ApplicationForm): ApplicationForm {
-  return {
-    ...f,
-    companyName: f.companyName.trim(),
-    role: f.role.trim(),
-    location: f.location.trim(),
-    salary: f.salary.trim(),
-    link: f.link.trim(),
-    notes: f.notes.trim(),
-    outreachMessage: f.outreachMessage.trim()
-  };
-}
-
-/**
- * 详情抽屉(内联)。
- *
- * 只读展示:要改内容走卡片上的"编辑"按钮。分开的好处是详情页可以放心
- * 展示只读的服务端字段(历史、评分),不必担心用户以为能直接改。
- */
-@Component({
-  selector: 'app-application-detail-dialog',
-  standalone: true,
-  imports: [
-    CommonModule, MatDialogModule, MatButtonModule, MatIconModule,
-    MatChipsModule, MatDividerModule, FormsModule, MatProgressBarModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule,
-    PdfContentViewerComponent
-  ],
-  template: `
-    <h2 mat-dialog-title class="detail-header">
-      <span class="logo-wrap detail-logo">
-        <span class="logo-avatar" [style.background]="avatarColor(app.companyName)">{{ companyInitials(app.companyName) }}</span>
-        @if (app.companyLogoUrl && !logoBroken()) {
-          <img class="logo" [src]="app.companyLogoUrl" (error)="logoBroken.set(true)">
-        }
-      </span>
-      <span class="title-wrap">
-        <span class="main-title">{{ app.role }}</span>
-        <span class="sub-title">{{ app.companyName }}</span>
-      </span>
-      <span class="header-actions">
-        <button class="hdr-btn" (click)="toggleFav()" [matTooltip]="t('tracker.favorite')">
-          <mat-icon>{{ isFav() ? 'favorite' : 'favorite_border' }}</mat-icon>
-          <span>{{ t('tracker.favorite') }}</span>
-        </button>
-        <button class="hdr-btn" (click)="doArchive()" [matTooltip]="t('tracker.archive')">
-          <mat-icon>archive</mat-icon>
-          <span>{{ t('tracker.archive') }}</span>
-        </button>
-        <button class="hdr-btn danger" (click)="doDelete()" [matTooltip]="t('common.delete')">
-          <mat-icon>delete</mat-icon>
-          <span>{{ t('common.delete') }}</span>
-        </button>
-        <button class="hdr-close" mat-dialog-close [matTooltip]="t('common.close')">
-          <mat-icon>close</mat-icon>
-        </button>
-      </span>
-    </h2>
-
-    <mat-dialog-content class="detail-body">
-      @if (loadError()) {
-        <div class="stale-warning">
-          <mat-icon>warning</mat-icon>
-          <span>{{ t('tracker.detailStale') }}</span>
-        </div>
-      }
-      <div class="tabs">
-        <button class="tab" [class.active]="detailTab() === 'overview'"
-                (click)="switchTab('overview')">
-          <mat-icon>visibility</mat-icon>{{ t('tracker.dOverview') }}</button>
-        <button class="tab" [class.active]="detailTab() === 'documents'"
-                (click)="switchTab('documents')">
-          <mat-icon>folder</mat-icon>{{ t('tracker.dDocuments') }}</button>
-        <button class="tab" [class.active]="detailTab() === 'score'"
-                (click)="switchTab('score')">
-          <mat-icon>assessment</mat-icon>{{ t('tracker.dResumeScore') }}</button>
-        <button class="tab" [class.active]="detailTab() === 'email'"
-                (click)="switchTab('email')">
-          <mat-icon>email</mat-icon>{{ t('tracker.dEmail') }}
-          @if (comms().length > 0) { ({{ comms().length }}) }</button>
-        <button class="tab" [class.active]="detailTab() === 'questions'"
-                (click)="switchTab('questions')">
-          <mat-icon>help</mat-icon>{{ t('tracker.dQuestions') }}</button>
-      </div>
-
-      @if (detailTab() === 'overview') {
-      <div class="two-col">
-      <div class="main-col">
-      <!-- ★ Simplify 真站:Job Posting 区块 -->
-      <div class="sec-head">
-        <span>{{ t('tracker.dJobPosting') }}</span>
-        <button mat-icon-button class="edit-btn" (click)="startEditPosting()" [matTooltip]="t('common.edit')">
-          <mat-icon>edit</mat-icon>
-        </button>
-      </div>
-
-      <!-- 字段网格: Location, Salary / Job type, URL -->
-      <div class="fields">
-        <div class="field"><span class="flabel">{{ t('tracker.dLocation') }}</span><span class="fvalue">{{ detail.location || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dSalary') }}</span><span class="fvalue">{{ detail.salary || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.jobType') }}</span><span class="fvalue">{{ detail.jobType || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.workAuthorization') }}</span><span class="fvalue">{{ detail.workAuthorization || '—' }}</span></div>
-        <div class="field"><span class="flabel">{{ t('tracker.dAppliedDate') }}</span><span class="fvalue">{{ detail.appliedDate || '—' }}</span></div>
-        <div class="field"><span class="flabel">URL</span>
-          <span class="fvalue">
-            @if (detail.link) {
-              <a [href]="detail.link" target="_blank" class="teal-link">{{ t('tracker.dViewPosting') }} <mat-icon>open_in_new</mat-icon></a>
-              <button mat-button class="import-jd-btn" (click)="startEditJdText(); scrollToJd()">
-                <mat-icon>input</mat-icon>{{ t('tracker.dImportJd') }}
-              </button>
-            } @else { — }
-          </span>
-        </div>
-      </div>
-
-      <!-- 2026-10-19:Simplify 风格 —— 无 "About the job" 大标题,JD 正文直接跟字段网格 -->
-      <mat-divider></mat-divider>
-      <section class="about-job">
-        <div class="about-job-edit">
-          <button mat-icon-button (click)="reparseJd()" [matTooltip]="t('tracker.dReparse')"
-                  class="edit-btn" [disabled]="reparsing()">
-            <mat-icon>{{ reparsing() ? 'hourglass_empty' : 'refresh' }}</mat-icon>
-          </button>
-          <button mat-icon-button (click)="jdSummaryEditing() ? cancelEditJdSummary() : startEditJdSummary()"
-                  [matTooltip]="t('common.edit')" class="edit-btn">
-            <mat-icon>{{ jdSummaryEditing() ? 'close' : 'edit' }}</mat-icon>
-          </button>
-        </div>
-        @if (jdSummaryEditing()) {
-          <textarea class="plain-area" rows="8" [(ngModel)]="jdSummaryDraft"
-                    [placeholder]="t('tracker.dJdSummary')"></textarea>
-          <div class="cl-actions save-row">
-            <button mat-flat-button color="primary" (click)="saveJdSummary()"
-                    [disabled]="jdSummarySaving()">
-              @if (jdSummarySaving()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
-              {{ t('common.save') }}
-            </button>
-            <button mat-button (click)="cancelEditJdSummary()">{{ t('common.cancel') }}</button>
-          </div>
-        } @else {
-          <div class="about-job-body">
-          <!-- Job Description -->
-          <div class="jd-subhead">{{ t('tracker.dJobDescHeader') }}</div>
-          @if (richBlocks(jdSummaryDisplay()).length > 0) {
-            @for (b of richBlocks(jdSummaryDisplay()); track $index) {
-              @if (b.kind === 'ul') {
-                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
-              } @else {
-                <p>{{ b.items[0] }}</p>
-              }
-            }
-          } @else {
-            <p class="dim">{{ t('tracker.dNoJd') }}</p>
-          }
-          <!-- Qualifications -->
-          @if (detail.requirements) {
-            <div class="jd-subhead">{{ t('tracker.dQualifications') }}</div>
-            @for (b of richBlocks(detail.requirements); track $index) {
-              @if (b.kind === 'ul') {
-                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
-              } @else {
-                <p>{{ b.items[0] }}</p>
-              }
-            }
-          }
-          <!-- Additional Information -->
-          @if (detail.benefits) {
-            <div class="jd-subhead">{{ t('tracker.dAdditionalInfo') }}</div>
-            @for (b of richBlocks(detail.benefits); track $index) {
-              @if (b.kind === 'ul') {
-                <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
-              } @else {
-                <p>{{ b.items[0] }}</p>
-              }
-            }
-          }
-          </div>
-
-        }
-      </section>
-
-      <!-- 公司介绍:LinkedIn "About the company" 侧边栏 —— 独立成节 -->
-      @if (detail.companyDescription) {
-        <mat-divider></mat-divider>
-        <section class="about-job">
-          <div class="jd-subhead" style="margin-top:0">{{ t('tracker.companyDescription') }}</div>
-          @for (b of richBlocks(detail.companyDescription); track $index) {
-            @if (b.kind === 'ul') {
-              <ul class="jd-list">@for (li of b.items; track $index) { <li>{{ li }}</li> }</ul>
-            } @else {
-              <p>{{ b.items[0] }}</p>
-            }
-          }
-        </section>
-      }
-
-      <!-- 公司情报 -->
-      @if (company()?.profile) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dCompanyIntel') }} · {{ company()?.name }}</span></div>
-          <p class="pre">{{ company()?.profile }}</p>
-          @if (company()?.website) {
-            <a [href]="company()!.website!" target="_blank" rel="noopener noreferrer" class="src-link">
-              <mat-icon>public</mat-icon>{{ company()!.website }}
-            </a>
-          }
-        </section>
-      }
-
-
-      @if ((detail.rounds?.length ?? 0) > 0) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dRounds') }}</span></div>
-          <ul class="rounds">
-            @for (r of detail.rounds ?? []; track r.id) {
-              <li>
-                <strong>{{ tn('tracker.dRoundN', r.order) }}</strong>
-                @if (r.stage) { <span class="tag">{{ r.stage }}</span> }
-                @if (r.scheduledDate) { <span>{{ r.scheduledDate | date: 'yyyy-MM-dd' }}</span> }
-                @if (r.format) { <span class="tag">{{ r.format }}</span> }
-                @if (r.interviewers) { <span class="tag">{{ r.interviewers }}</span> }
-                @if (r.outcome && r.outcome !== 'Pending') {
-                  <span class="tag" [class.outcome-pass]="r.outcome === 'Passed'"
-                        [class.outcome-fail]="r.outcome === 'Failed'">{{ outcomeLabel(r.outcome) }}</span>
-                }
-                @if (r.notes) { <p class="pre">{{ r.notes }}</p> }
-              </li>
-            }
-          </ul>
-        </section>
-      }
-
-      @if (app.link) {
-        <mat-divider></mat-divider>
-        <section>
-          <div class="sec-head"><span>{{ t('tracker.dJobLink') }}</span></div>
-          <a [href]="app.link" target="_blank" rel="noopener noreferrer" class="link">
-            {{ app.link }}
-          </a>
-        </section>
-      }
-      </div><!-- /.main-col -->
-
-      <!-- ★ Simplify 真站:右侧边栏 -->
-      <div class="side-col">
-        <!-- Application Status 卡片 -->
-        <div class="status-card">
-          <h3>{{ t('tracker.dAppStatus') }}</h3>
-          <select class="status-select" [value]="detail.status" (change)="quickChangeStatus($event)">
-            @for (s of statusOrder; track s) {
-              <option [value]="s" [selected]="s === detail.status">{{ statusLabel(s) }}</option>
-            }
-          </select>
-          <div class="timeline">
-            @for (s of statusOrder; track s) {
-              <div class="tl-item" [class.done]="isStatusDone(s)">
-                <span class="tl-dot"></span>
-                <span class="tl-name">{{ statusLabel(s) }}</span>
-                @if (statusDate(s)) {
-                  <span class="tl-date">{{ statusDate(s) }}</span>
-                }
-              </div>
-            }
-          </div>
-        </div>
-
-        <!-- Notes 卡片(可编辑) -->
-        <div class="notes-card">
-          <h3 class="nc-head">
-            <span>{{ t('tracker.dNotes') }}</span>
-            <button mat-icon-button class="edit-btn" (click)="notesEditing() ? cancelEditNotes() : startEditNotes()"
-                    [matTooltip]="t('common.edit')">
-              <mat-icon>{{ notesEditing() ? 'close' : 'edit' }}</mat-icon>
-            </button>
-          </h3>
-          @if (notesEditing()) {
-            <textarea class="plain-area" rows="6" [(ngModel)]="notesDraft"
-                      [placeholder]="t('tracker.dNotes')"></textarea>
-            <div class="cl-actions save-row">
-              <button mat-flat-button color="primary" (click)="saveNotes()"
-                      [disabled]="notesSaving()">{{ t('common.save') }}</button>
-              <button mat-button (click)="cancelEditNotes()">{{ t('common.cancel') }}</button>
-            </div>
-          } @else {
-            <p class="pre">{{ detail.notes || '—' }}</p>
-          }
-        </div>
-      </div><!-- /.side-col -->
-      </div><!-- /.two-col -->
-      }
-
-      @else if (detailTab() === 'documents') {
-        <div class="tab-body">
-      <!-- 简历区:投递版本优先,没有则引用基础简历(不复制) -->
-      <section class="cl-section">
-        <div class="sec-head">
-          <mat-icon>description</mat-icon>
-          <span>{{ t('tracker.dResume') }}</span>
-          @if (appResumeKind() === 'tailored') {
-            <span class="cl-status cl-generated">{{ t('tracker.dResumeTailored') }}</span>
-          } @else if (appResumeKind() === 'base') {
-            <span class="cl-status cl-draft">{{ t('tracker.dResumeBase') }}</span>
-          }
-          <span class="doc-actions">
-            <button mat-button (click)="tailoredFile.click()">
-              <mat-icon>upload_file</mat-icon>{{ t('tracker.dResumeUploadTailored') }}
-            </button>
-            <input #tailoredFile type="file" hidden accept=".pdf"
-                   (change)="uploadTailoredResume($event)">
-            @if (appResumeKind() === 'tailored') {
-              <button mat-button (click)="removeTailoredResume()">
-                <mat-icon>delete_outline</mat-icon>{{ t('common.delete') }}
-              </button>
-            }
-          </span>
-        </div>
-        <!-- 文件名 -->
-        @if (resumeFileName()) {
-          <div class="doc-filename">
-            <mat-icon>picture_as_pdf</mat-icon>
-            <span>{{ resumeFileName() }}</span>
-          </div>
-          <!-- PDF 查看器:单页显示,滚动翻页 -->
-          @if (resumePdfRawUrl()) {
-            <app-pdf-content-viewer [pdfUrl]="resumePdfRawUrl()"></app-pdf-content-viewer>
-          }
-        } @else {
-          <p class="field-hint">{{ t('tracker.dResumeHint') }}</p>
-          <p class="dim">{{ t('tracker.dNoResume') }}</p>
-        }
-      </section>
-      <section class="cl-section">
-        <div class="sec-head">
-          <mat-icon>description</mat-icon>
-          <span>{{ t('tracker.dCoverLetter') }}</span>
-          @if (cl(); as c) {
-            <span class="cl-status" [class]="'cl-' + c.status.toLowerCase()">{{ clStatusLabel(c.status) }}</span>
-          }
-          <span class="fold-len">
-            @if (cl(); as c) { {{ tn('tracker.dClChars', c.content.length) }} }
-          </span>
-        </div>
-
-        <!-- 缺 JD 黄色提示条 -->
-        @if (clReadiness(); as rd) {
-          @if (rd.missingHint) {
-            <div class="warn-banner">
-              <mat-icon>warning</mat-icon>
-              <span>{{ rd.missingHint }}</span>
-            </div>
-          }
-          @if (cl()?.isStale) {
-            <div class="warn-banner">
-              <mat-icon>history</mat-icon>
-              <span>{{ tf('tracker.dClStale', { a: cl()?.resumeVersion, b: rd.resumeVersion }) }}</span>
-            </div>
-          }
-        }
-
-        <!-- 生成参数:朴素 textarea -->
-        @if (!clGenerating()) {
-          <textarea class="plain-area" rows="3" [(ngModel)]="clExtra"
-            [placeholder]="t('tracker.dClExtraPh')"></textarea>
-          <p class="field-hint">{{ t('tracker.dClHint') }}</p>
-        }
-
-        <!-- 生成按钮 / 生成中 -->
-        @if (clGenerating()) {
-          <div class="cl-generating">
-            <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-            <p>{{ t('tracker.dClGenerating') }}</p>
-          </div>
-        } @else {
-          <div class="cl-actions">
-            <button mat-flat-button color="primary" class="gen-btn" (click)="generateCoverLetter()"
-              [disabled]="!!clReadiness()?.missingHint">
-              <mat-icon>auto_awesome</mat-icon>
-              {{ (cl()?.content ? t('tracker.dClRegen') : t('tracker.dClGenerate')) }}
-            </button>
-            @if (cl()?.content) {
-              <button mat-button (click)="clEditing.set(!clEditing())">
-                <mat-icon>{{ clEditing() ? 'visibility' : 'edit' }}</mat-icon>
-                {{ clEditing() ? t('tracker.dClPreview') : t('tracker.dClEditMan') }}
-              </button>
-              @if (cl()?.status !== 'Final') {
-                <button mat-button (click)="markCoverLetterFinal()">
-                  <mat-icon>check_circle</mat-icon>{{ t('tracker.dClConfirm') }}
-                </button>
-              }
-              <button mat-button (click)="deleteCoverLetter()">
-                <mat-icon>delete_outline</mat-icon>{{ t('common.delete') }}
-              </button>
-            }
-          </div>
-        }
-
-        <!-- 正文:编辑态 textarea / 预览态只读 -->
-        @if (cl()?.content; as content) {
-          @if (clEditing()) {
-            <textarea class="plain-area" rows="16" [(ngModel)]="clDraft"></textarea>
-            <div class="cl-actions save-row">
-              <button mat-flat-button color="primary" (click)="saveCoverLetter()">{{ t('common.save') }}</button>
-              <button mat-button (click)="cancelEdit()">{{ t('common.cancel') }}</button>
-            </div>
-          } @else {
-            <div class="cl-preview">{{ content }}</div>
-          }
-        } @else if (!clGenerating()) {
-          <p class="cl-empty">{{ t('tracker.dClEmpty') }}</p>
-        }
-      </section>
-        </div>
-      }
-
-      @else if (detailTab() === 'score') {
-        <div class="tab-body score-tab">
-      <!-- 2026-10-19:Simplify 像素级 Resume Score —— 左 JD 卡片 + 右仪表盘/关键词 -->
-      @if (match(); as m) {
-        <div class="score-cols">
-          <!-- 左:Job Description 卡片(关键词高亮) -->
-          <div class="score-jd-card">
-            <div class="score-jd-head">
-              <mat-icon>work</mat-icon>
-              <span>{{ t('tracker.dJobDescHeader') }}</span>
-            </div>
-            <div class="score-jd-body" [innerHTML]="highlightedJd(m)"></div>
-          </div>
-          <!-- 右:仪表盘 + 关键词 -->
-          <div class="score-side">
-            <div class="gauge-wrap">
-              <svg class="gauge" viewBox="0 0 190 190" width="190" height="190">
-                <circle cx="95" cy="95" r="80" fill="none" stroke="#e9ebee" stroke-width="16"/>
-                <circle cx="95" cy="95" r="80" fill="none" stroke="#2bb5d8" stroke-width="16"
-                        stroke-linecap="round" [attr.stroke-dasharray]="gaugeArc(m.score)"
-                        transform="rotate(-90 95 95)"/>
-              </svg>
-              <div class="gauge-center">
-                <span class="gauge-num">{{ m.score }}</span>
-                <span class="gauge-pill" [class]="matchTier(m.score)">{{ matchTierLabel(m.score) }}</span>
-              </div>
-            </div>
-            @if (m.score >= 70) {
-              <div class="score-banner ok">
-                <mat-icon>check_circle</mat-icon>
-                <span>{{ t('tracker.dScoreGreat') }}</span>
-              </div>
-            } @else if (m.score >= 40) {
-              <div class="score-banner warn">
-                <mat-icon>info</mat-icon>
-                <span>{{ t('tracker.dScoreFair') }}</span>
-              </div>
-            }
-            <div class="kw-card">
-              <div class="kw-card-title">{{ tn('tracker.dMissingKw', m.missing.length) }}</div>
-              <div class="kw-pills">
-                @for (k of m.missing; track k) {
-                  <span class="kw-pill miss">{{ k }}</span>
-                }
-                @for (k of m.hit; track k) {
-                  <span class="kw-pill hit">{{ k }}</span>
-                }
-              </div>
-            </div>
-          </div>
-        </div>
-      } @else {
-        <!-- ★ F-08:空态分清缺什么 —— 有 JD 缺简历时不能再说"暂无 JD"。 -->
-        <p class="cl-empty">{{ hasJdForScore() ? t('tracker.dNoResume') : t('tracker.dNoJd') }}</p>
-      }
-        </div>
-      }
-
-      @else if (detailTab() === 'questions') {
-        <div class="tab-body questions-tab">
-          <div class="sec-head">
-            <span>{{ t('tracker.dQuestions') }}</span>
-            <span class="sec-count">{{ appQuestions().length }}</span>
-          </div>
-          <p class="sec-desc">{{ t('tracker.dQuestionsDesc') }}</p>
-
-          @if (appQuestions().length === 0 && !questionAdding()) {
-            <div class="q-empty">
-              <mat-icon>help_outline</mat-icon>
-              <p>{{ t('tracker.dQuestionsEmpty') }}</p>
-            </div>
-          }
-
-          <div class="q-list">
-            @for (q of appQuestions(); track q; let i = $index) {
-              <div class="q-item">
-                <span class="q-num">{{ i + 1 }}</span>
-                <span class="q-text">{{ q }}</span>
-                <button mat-icon-button class="q-del" (click)="removeQuestion(i)"
-                        [matTooltip]="t('common.delete')">
-                  <mat-icon>delete_outline</mat-icon>
-                </button>
-              </div>
-            }
-          </div>
-
-          @if (questionAdding()) {
-            <div class="q-add-form">
-              <mat-form-field appearance="outline" class="full">
-                <mat-label>{{ t('tracker.dQuestionAdd') }}</mat-label>
-                <textarea matInput rows="2" [(ngModel)]="questionDraft"
-                          (keydown.enter)="addQuestion(); $event.preventDefault()"></textarea>
-              </mat-form-field>
-              <div class="q-add-actions">
-                <button mat-flat-button color="primary" (click)="addQuestion()"
-                        [disabled]="!questionDraft.trim()">{{ t('common.add') }}</button>
-                <button mat-button (click)="questionAdding.set(false); questionDraft = ''">{{ t('common.cancel') }}</button>
-              </div>
-            </div>
-          } @else {
-            <button mat-stroked-button (click)="questionAdding.set(true)" class="q-add-btn">
-              <mat-icon>add</mat-icon>{{ t('tracker.dQuestionAdd') }}
-            </button>
-          }
-        </div>
-      }
-
-      @else {
-        <!-- Email/Communications tab -->
-        <!-- 沟通记录:按发生时间倒序的时间线 + 增删改 -->
-        <div class="tab-body comms">
-          <div class="comms-head">
-            <button mat-flat-button color="primary" (click)="startAddComm()">
-              <mat-icon>add</mat-icon>{{ t('tracker.commsAdd') }}
-            </button>
-          </div>
-
-          @if (commsLoading()) {
-            <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-          }
-
-          @if (commEditingId(); as editing) {
-            <div class="comm-form">
-              <div class="row2">
-                <mat-form-field appearance="outline">
-                  <mat-label>{{ t('tracker.commsType') }}</mat-label>
-                  <mat-select [(ngModel)]="commDraft().type">
-                    @for (tp of commTypes; track tp) {
-                      <mat-option [value]="tp">{{ commTypeLabel(tp) }}</mat-option>
-                    }
-                  </mat-select>
-                </mat-form-field>
-                <mat-form-field appearance="outline">
-                  <mat-label>{{ t('tracker.commsOccurredAt') }}</mat-label>
-                  <input matInput type="datetime-local" [(ngModel)]="commDraft().occurredAt">
-                </mat-form-field>
-              </div>
-              <mat-form-field appearance="outline" class="full">
-                <mat-label>{{ t('tracker.commsSubject') }}</mat-label>
-                <input matInput [(ngModel)]="commDraft().subject" [placeholder]="t('tracker.dCommSubjectPh')">
-              </mat-form-field>
-              <div class="row2">
-                <mat-form-field appearance="outline">
-                  <mat-label>{{ t('tracker.commsContact') }}</mat-label>
-                  <input matInput [(ngModel)]="commDraft().contactName" [placeholder]="t('tracker.dCommContactPh')">
-                </mat-form-field>
-                <mat-form-field appearance="outline">
-                  <mat-label>Email</mat-label>
-                  <input matInput [(ngModel)]="commDraft().contactEmail" placeholder="name@company.com">
-                </mat-form-field>
-              </div>
-              <mat-form-field appearance="outline" class="full">
-                <mat-label>{{ t('tracker.commsContent') }}</mat-label>
-                <textarea matInput rows="3" [(ngModel)]="commDraft().content"></textarea>
-              </mat-form-field>
-              <div class="comm-form-actions">
-                <button mat-flat-button color="primary" [disabled]="!commDraft().content.trim()"
-                        (click)="saveComm()">{{ editing ? t('common.save') : t('tracker.commsAdd') }}</button>
-                <button mat-button (click)="cancelComm()">{{ t('common.cancel') }}</button>
-              </div>
-            </div>
-          }
-
-          @if (comms().length === 0 && !commsLoading()) {
-            <p class="comms-empty">{{ t('tracker.commsEmpty') }}</p>
-          }
-
-          <ul class="comm-list">
-            @for (c of comms(); track c.id) {
-              <li class="comm-item">
-                <span class="comm-type" [class]="'ct-' + c.type.toLowerCase()">{{ commTypeLabel(c.type) }}</span>
-                <div class="comm-body">
-                  @if (c.subject) { <div class="comm-subject">{{ c.subject }}</div> }
-                  <div class="comm-content pre">{{ c.content }}</div>
-                  <div class="comm-meta">
-                    @if (c.contactName) { <span>{{ c.contactName }}</span> }
-                    @if (c.contactEmail) { <span>{{ c.contactEmail }}</span> }
-                    <span>{{ c.occurredAt | date: 'yyyy-MM-dd HH:mm' }}</span>
-                  </div>
-                </div>
-                <div class="comm-actions">
-                  <button mat-icon-button [matTooltip]="t('common.edit')" (click)="startEditComm(c)">
-                    <mat-icon>edit</mat-icon>
-                  </button>
-                  <button mat-icon-button class="danger" [matTooltip]="t('common.delete')"
-                          (click)="deleteComm(c)">
-                    <mat-icon>delete_outline</mat-icon>
-                  </button>
-                </div>
-              </li>
-            }
-          </ul>
-        </div>
-      }
-    </mat-dialog-content>
-  `,
-  styles: [`
-    /* ★ Simplify 对齐:头部标题堆叠 */
-    /* ★ Simplify 真站:头部 */
-    h2[mat-dialog-title].detail-header {
-      display: flex; align-items: flex-start; gap: 16px;
-      margin: 0; padding: 24px 32px 20px;
-      border-bottom: 1px solid #ECEEF1;
-    }
-    h2 .title-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-    h2 .main-title { font-size: 20px; font-weight: 700; line-height: 1.3; color: #1A1D23; }
-    h2 .sub-title { font-size: 15px; font-weight: 400; color: #6E7681; }
-    .detail-header .logo-wrap { flex: 0 0 62px; width: 62px; height: 62px; }
-    .detail-header .logo-avatar { width: 62px; height: 62px; border-radius: 12px; font-size: 22px; }
-    .detail-header .logo { width: 62px; height: 62px; border-radius: 12px; }
-    .header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-    .hdr-btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      height: 38px; padding: 0 16px;
-      background: #fff; border: 1px solid #E3E6EA; border-radius: 8px;
-      font-size: 14px; color: #3D4451; cursor: pointer;
-    }
-    .hdr-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #6E7681; }
-    .hdr-btn:hover { background: #F7F8FA; }
-    .hdr-btn.danger { border-color: #EF4444; color: #EF4444; }
-    .hdr-btn.danger mat-icon { color: #EF4444; }
-    .hdr-close {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 38px; height: 38px; border: none; background: none; cursor: pointer;
-      color: #3D4451; border-radius: 8px;
-    }
-    .hdr-close:hover { background: #F7F8FA; }
-    .detail-body { padding: 0 !important; flex: 1 1 auto !important; overflow-y: auto !important; min-height: 0 !important; }
-    /* ★ Simplify 真站:双栏布局 */
-    .two-col { display: flex; min-height: 100%; align-items: stretch; }
-    .main-col { flex: 1; min-width: 0; padding: 24px 32px; }
-    .side-col {
-      flex: 0 0 360px; width: 360px;
-      padding: 24px 32px 24px 0;
-      border-left: 1px solid #ECEEF1;
-      margin-left: 32px; padding-left: 32px;
-    }
-    .status-card {
-      background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;
-      padding: 24px; margin-bottom: 24px;
-    }
-    .status-card h3 { font-size: 16px; font-weight: 700; color: #1A1D23; margin: 0 0 16px; }
-    .status-select {
-      width: 100%; height: 40px; padding: 0 16px;
-      border: 1px solid #E3E6EA; border-radius: 8px;
-      font-size: 14px; color: #1F2937; background: #fff;
-      margin-bottom: 20px; cursor: pointer;
-    }
-    .timeline { position: relative; padding-left: 28px; }
-    .timeline::before {
-      content: ''; position: absolute; left: 9px; top: 8px; bottom: 8px;
-      width: 2px; background: #E3E6EA;
-    }
-    .tl-item { position: relative; padding: 0 0 20px; }
-    .tl-item:last-child { padding-bottom: 0; }
-    .tl-dot {
-      position: absolute; left: -28px; top: 2px;
-      width: 20px; height: 20px; border-radius: 50%;
-      border: 2px solid #D4D9E0; background: #fff;
-    }
-    .tl-item.done .tl-dot { border-color: #2AAED3; }
-    .tl-item.done .tl-dot::after {
-      content: ''; position: absolute; left: 50%; top: 50%;
-      width: 8px; height: 8px; border-radius: 50%; background: #2AAED3;
-      transform: translate(-50%, -50%);
-    }
-    .tl-name { font-size: 14px; font-weight: 600; color: #1F2937; }
-    .tl-item:not(.done) .tl-name { font-weight: 500; color: #6E7681; }
-    .tl-date { font-size: 13px; color: #8A94A6; margin-left: 8px; }
-    .tl-edit { margin-left: 8px; color: #2AAED3; cursor: pointer; font-size: 14px; }
-    .notes-card {
-      background: #fff; border: 1px solid #ECEEF1; border-radius: 12px;
-      padding: 24px;
-    }
-    .notes-card h3 { font-size: 16px; font-weight: 700; color: #1A1D23; margin: 0 0 16px; }
-    .notes-card .nc-head { display: flex; align-items: center; justify-content: space-between; }
-    .tab-body { padding: 24px 32px; box-sizing: border-box; }
-    .tab-body > section:first-child { margin-top: 0; }
-    .top { margin-bottom: 14px; }
-    .chip { font-size: 12px; }
-    .rejection { margin: 6px 0 0; font-size: 13px; color: #c62828; }
-    /* ★ Simplify 对齐:状态 pill (灰色圆角) */
-    .status-pill {
-      display: inline-block; padding: 6px 16px; border-radius: 16px;
-      background: rgba(0,0,0,0.06); font-size: 13px; font-weight: 500;
-      margin-right: 8px; margin-bottom: 4px;
-    }
-    .status-pill.warn { background: #fff3e0; color: #e65100; }
-    /* ★ Simplify 对齐:字段两列,标签小灰字在上 */
-    .fields {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px;
-      margin: 0 0 24px;
-    }
-    .field { display: flex; flex-direction: column; gap: 4px; }
-    .flabel { font-size: 12px; color: rgba(0,0,0,0.45); letter-spacing: 0.2px; }
-    .fvalue { font-size: 14px; line-height: 1.5; }
-    .kw-gap { margin: 0 0 20px; }
-    .kw-gap .flabel { display: block; margin-bottom: 8px; }
-    /* ---- Simplify 视觉:section 统一 ---- */
-    section { margin: 0; padding: 18px 0; }
-    section + section, mat-divider + section { border-top: 1px solid rgba(0,0,0,0.08); }
-    mat-divider { display: none; }
-    .sec-head {
-      display: flex; align-items: center; gap: 6px;
-      margin: 0 0 16px; font-size: 17px; font-weight: 700;
-      color: #1A1D23; letter-spacing: 0;
-    }
-    .sec-head .edit-btn { margin-left: auto; }
-    /* ---- 2026-10-19:Simplify 像素级 Resume Score ---- */
-    .score-tab { padding: 24px 28px; }
-    .score-cols { display: flex; gap: 24px; align-items: flex-start; }
-    .score-jd-card {
-      flex: 1.2; min-width: 0;
-      border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;
-      background: #fff;
-    }
-    .score-jd-head {
-      display: flex; align-items: center; gap: 8px;
-      padding: 14px 20px; background: #f9fafb;
-      border-bottom: 1px solid #e5e7eb;
-      font-size: 15px; font-weight: 700; color: #111827;
-    }
-    .score-jd-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: #6b7280; }
-    .score-jd-body { padding: 20px; font-size: 13.5px; line-height: 1.65; color: #1f2937; max-height: 560px; overflow-y: auto; }
-    .score-jd-body p { margin: 0 0 12px; }
-    .hl-kw {
-      color: #0e7490; background: #cffafe; border-radius: 4px;
-      padding: 1px 6px; font-weight: 600; white-space: nowrap;
-    }
-    .score-side { flex: 1; min-width: 0; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-    .gauge-wrap { position: relative; width: 190px; height: 190px; }
-    .gauge { display: block; }
-    .gauge-center {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-    }
-    .gauge-num { font-size: 52px; font-weight: 800; color: #111827; line-height: 1; }
-    .gauge-pill {
-      font-size: 12px; font-weight: 700; border-radius: 999px; padding: 4px 12px;
-    }
-    .gauge-pill.good { background: #d1fae5; color: #065f46; }
-    .gauge-pill.fair { background: #fde68a; color: #92400e; }
-    .gauge-pill.poor { background: #fecdd3; color: #9f1239; }
-    .score-banner {
-      display: flex; align-items: center; gap: 10px;
-      width: 100%; border-radius: 12px; padding: 14px 18px;
-      font-size: 14px; color: #111827;
-    }
-    .score-banner.ok { background: #d1fae5; }
-    .score-banner.warn { background: #fef3c7; }
-    .score-banner mat-icon { font-size: 24px; width: 24px; height: 24px; flex-shrink: 0; }
-    .score-banner.ok mat-icon { color: #059669; }
-    .score-banner.warn mat-icon { color: #d97706; }
-    .kw-card {
-      width: 100%; border: 1px solid #e5e7eb; border-radius: 12px;
-      padding: 20px; background: #fff;
-    }
-    .kw-card-title { font-size: 15px; font-weight: 700; color: #111827; margin: 0 0 16px; }
-    .kw-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-    .kw-pill {
-      font-size: 13px; font-weight: 500; border-radius: 999px; padding: 6px 14px;
-    }
-    .kw-pill.miss { background: #fecdd3; color: #9f1239; }
-    .kw-pill.hit { background: #d9f7e8; color: #065f46; }
-    .about-job-edit { display: flex; justify-content: flex-end; margin: 0 0 8px; }
-    .about-job-edit .edit-btn { margin: 0; }
-    .about-job .jd-subhead {
-      margin: 22px 0 10px; font-size: 14px; font-weight: 700;
-      color: #1f2937;
-    }
-    .about-job p { margin: 0 0 16px; line-height: 1.7; font-size: 14px; color: #1f2937; }
-    .about-job .jd-list { margin: 0 0 16px; padding-left: 20px; }
-    .about-job .jd-list li { margin: 0 0 8px; line-height: 1.6; font-size: 14px; color: #333; }
-    /* LinkedIn 风格:长描述默认折叠 */
-    .about-job-body.collapsed { max-height: 320px; overflow: hidden; position: relative; }
-    .about-job-body.collapsed::after {
-      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 60px;
-      background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
-      pointer-events: none;
-    }
-    .doc-filename {
-      display: flex; align-items: center; gap: 8px;
-      font-weight: 600; font-size: 14px; margin: 12px 0;
-      color: #1f2937;
-    }
-    .doc-filename mat-icon { color: #d32f2f; }
-    .doc-pdf-viewer {
-      width: 100%; height: 700px; border: 1px solid #e5e7eb;
-      border-radius: 8px; background: #f9fafb;
-    }
-    .more-link {
-      background: none; border: none; padding: 4px 0; cursor: pointer;
-      color: #666; font-size: 14px; font-weight: 500;
-    }
-    .more-link:hover { color: #0A66C2; text-decoration: underline; }
-    .teal-link {
-      color: #0E9FCC; font-weight: 500; text-decoration: none;
-      display: inline-flex; align-items: center; gap: 6px;
-    }
-    .teal-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .teal-link:hover { text-decoration: underline; }
-    .import-jd-btn {
-      margin-left: 8px; font-size: 13px; color: #0E9FCC;
-      padding: 2px 8px; min-width: 0; line-height: 1.5;
-    }
-    .import-jd-btn mat-icon { font-size: 14px; width: 14px; height: 14px; margin-right: 4px; }
-    .jd-body { margin-top: 24px; }
-    .jd-body p { font-size: 14px; color: #3D4451; line-height: 1.57; margin: 0 0 14px; }
-    .jd-body .dim { color: #8A94A6; }
-    section h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.3px; opacity: 0.7; }
-    .pre { margin: 0; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
-    .history { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.9; }
-    .history mat-icon {
-      font-size: 14px; width: 14px; height: 14px;
-      vertical-align: middle; opacity: 0.45;
-    }
-    .history time { margin-left: 8px; opacity: 0.55; font-size: 12px; }
-    .history .note { display: block; opacity: 0.6; font-style: italic; font-size: 12.5px; }
-    .rounds { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.8; }
-    .tag {
-      display: inline-block; margin-left: 6px; padding: 1px 7px;
-      border-radius: 10px; background: rgba(0, 0, 0, 0.06); font-size: 11.5px;
-    }
-    .tag.outcome-pass { background: #e8f5e9; color: #2e7d32; }
-    .tag.outcome-fail { background: #ffebee; color: #c62828; }
-    .link { font-size: 13px; word-break: break-all; color: #303f9f; }
-    /* ---- 匹配分析 ---- */
-    .match-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-    .score {
-      display: flex; align-items: baseline; gap: 2px;
-      padding: 6px 14px; border-radius: 10px; font-weight: 600;
-    }
-    .score-num { font-size: 26px; line-height: 1; }
-    .score-unit { font-size: 12px; }
-    .score.good { background: #e8f5e9; color: #2e7d32; }
-    .score.fair { background: #fff8e1; color: #ef6c00; }
-    .score.poor { background: #ffebee; color: #c62828; }
-    .score-note { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
-    .score-note strong.good { color: #2e7d32; }
-    .score-note strong.fair { color: #ef6c00; }
-    .score-note strong.poor { color: #c62828; }
-    .score-note span { opacity: 0.6; }
-    .kw-group { margin-bottom: 12px; }
-    .kw-title { display: block; font-size: 11.5px; opacity: 0.55; margin-bottom: 6px; }
-    .kw-list { display: flex; flex-wrap: wrap; gap: 6px; }
-    .kw {
-      padding: 2px 9px; border-radius: 11px; font-size: 12px;
-      border: 1px solid transparent;
-    }
-    .kw.miss { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
-    .kw.ok { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
-    .soft-note { margin: 8px 0 0; font-size: 12px; opacity: 0.55; line-height: 1.6; }
-    /* ---- JD 全文折叠 ---- */
-    .fold-head { cursor: default; }
-    .fold-head > span:first-child { display: flex; align-items: center; gap: 6px; }
-    .fold-head:hover { opacity: 1; }
-    .fold-head mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(0,0,0,0.45); }
-    .fold-len { font-size: 11.5px; opacity: 0.45; font-weight: 400; }
-    /* Documents tab 简历区:右侧操作按钮 */
-    .doc-actions { margin-left: auto; display: flex; gap: 4px; align-items: center; }
-    /* Simplify:标题行右侧的小编辑图标 */
-    .edit-btn { width: 26px; height: 26px; line-height: 26px; margin-left: auto; opacity: 0.45; }
-    .edit-btn:hover { opacity: 1; }
-    .edit-btn mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .jd-full { max-height: 340px; overflow-y: auto; padding-right: 6px; }
-    .jd-peek { opacity: 0.65; }
-    .src-link {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 12.5px; color: #303f9f; margin-bottom: 8px;
-    }
-    .src-link mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    /* ---- 求职信 ---- */
-    .cl-status {
-      margin-left: 6px; padding: 1px 8px; border-radius: 10px;
-      font-size: 11px; font-weight: 500;
-    }
-    .cl-status.cl-draft { background: rgba(0,0,0,0.07); }
-    .cl-status.cl-generated { background: #e3f2fd; color: #1565c0; }
-    .cl-status.cl-final { background: #e8f5e9; color: #2e7d32; }
-    .cl-hint {
-      display: flex; align-items: flex-start; gap: 6px;
-      margin: 0 0 10px; padding: 9px 11px; border-radius: 8px;
-      background: #fff8e1; font-size: 12.5px; line-height: 1.6;
-    }
-    .cl-hint.stale { background: #f3e5f5; }
-    .cl-hint mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
-    .cl-extra { width: 100%; margin-bottom: 4px; }
-    .cl-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
-    .cl-actions.save-row { margin-top: 10px; }
-    .cl-generating { margin-top: 8px; }
-    .cl-generating p { margin: 10px 0 0; font-size: 12.5px; opacity: 0.65; }
-    .cl-editor {
-      width: 100%; margin-top: 10px; padding: 12px;
-      font-family: inherit; font-size: 13.5px; line-height: 1.7;
-      border: 1px solid rgba(0,0,0,0.18); border-radius: 8px;
-      resize: vertical; box-sizing: border-box;
-    }
-    .cl-preview {
-      margin-top: 10px; padding: 14px 16px; border-radius: 8px;
-      background: rgba(0,0,0,0.028); font-size: 13.5px; line-height: 1.75;
-      white-space: pre-wrap; word-break: break-word;
-      max-height: 420px; overflow-y: auto;
-    }
-    .cl-empty { margin: 10px 0 0; font-size: 13px; opacity: 0.55; }
-    /* ★ Simplify 对齐:黄色警告条 */
-    .warn-banner {
-      display: flex; align-items: flex-start; gap: 8px;
-      margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
-      background: #fef9e7; border: 1px solid #f9e79f;
-      font-size: 12.5px; line-height: 1.6; color: #7d6608;
-    }
-    .warn-banner mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 1px; }
-    /* ★ Simplify 对齐:朴素 textarea (非 mat-form-field) */
-    .plain-area {
-      width: 100%; box-sizing: border-box;
-      padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.6;
-      border: 1px solid rgba(0,0,0,0.2); border-radius: 8px; resize: vertical;
-      background: #fff; color: inherit;
-    }
-    .plain-area:focus { outline: none; border-color: #1a73e8; }
-    .plain-area::placeholder { color: rgba(0,0,0,0.35); }
-    .field-hint { margin: 6px 0 10px; font-size: 12px; color: rgba(0,0,0,0.45); line-height: 1.5; }
-    .gen-btn { margin: 2px 0 4px; }
-    .gen-btn[disabled] { opacity: 0.5; }
-
-    /* ---- 公司 Logo (Simplify:大圆角方块) ---- */
-    .logo-wrap { position: relative; flex: 0 0 40px; width: 40px; height: 40px; }
-    .logo-avatar {
-      display: flex; align-items: center; justify-content: center;
-      width: 40px; height: 40px; border-radius: 10px;
-      color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
-      text-transform: uppercase; overflow: hidden;
-    }
-    .logo {
-      position: absolute; inset: 0;
-      width: 40px; height: 40px; border-radius: 10px; object-fit: contain;
-      background: #fff;
-    }
-    .detail-logo { margin-right: 0; flex: 0 0 40px; }
-
-    /* ---- 页签 (Simplify:极简,active 下划线) ---- */
-    /* ★ Simplify 真站:5 tab */
-    .tabs {
-      display: flex; gap: 30px; margin: 0; padding: 0 32px;
-      border-bottom: 1px solid #ECEEF1;
-    }
-    .tab {
-      appearance: none; background: none; border: none; cursor: pointer;
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 14px 2px; font-size: 14px; color: #8A94A6;
-      border-bottom: 3px solid transparent; margin-bottom: -1px;
-    }
-    .tab mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .tab:hover { color: #3D4451; }
-    .tab.active { color: #1A1D23; font-weight: 600; border-bottom-color: #1A1D23; }
-    .tab-placeholder {
-      display: flex; flex-direction: column; align-items: center; gap: 12px;
-      padding: 60px 32px; color: #8A94A6;
-    }
-    .tab-placeholder mat-icon { font-size: 48px; width: 48px; height: 48px; opacity: 0.4; }
-    .tab-placeholder p { font-size: 16px; margin: 0; }
-
-    /* ---- 沟通记录 ---- */
-    .comms-head { margin-bottom: 10px; }
-    .comms-empty { font-size: 13px; opacity: 0.55; margin: 4px 0 0; }
-    .comm-form {
-      padding: 12px; margin-bottom: 14px; border-radius: 10px;
-      background: rgba(0,0,0,0.025); border: 1px solid rgba(0,0,0,0.08);
-    }
-    .comm-form mat-form-field { width: 100%; }
-    .comm-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .comm-form .row2 mat-form-field { width: 100%; }
-    .comm-form-actions { display: flex; gap: 8px; }
-    .comm-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-    .comm-item {
-      display: flex; gap: 10px; align-items: flex-start;
-      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08);
-    }
-    .comm-type {
-      flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px;
-      background: rgba(0,0,0,0.06);
-    }
-    .comm-type.ct-email { background: #e3f2fd; color: #1565c0; }
-    .comm-type.ct-call { background: #e8f5e9; color: #2e7d32; }
-    .comm-type.ct-interview { background: #fff3e0; color: #ef6c00; }
-    .comm-type.ct-message { background: #f3e5f5; color: #7b1fa2; }
-    .comm-type.ct-note { background: #eceff1; color: #455a64; }
-    .comm-body { flex: 1; min-width: 0; }
-    .comm-subject { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
-    .comm-content { margin: 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
-    .comm-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 11.5px; opacity: 0.6; }
-    .comm-actions { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
-    .comm-actions .danger { color: #c62828; }
-  `]
-})
-export class ApplicationDetailDialogComponent {
-  readonly app = inject<Application>(MAT_DIALOG_DATA);
-  private readonly api = inject(ApiClient);
-  private readonly trackerApi = inject(TrackerApi);
-  private readonly i18n = inject(I18nService);
-  private readonly dialog = inject(MatDialog);
-  private readonly sanitizer = inject(DomSanitizer);
-  t = (key: string): string => this.i18n.t(key);
-  tn = (key: string, n: string | number | null | undefined): string => this.i18n.tn(key, n);
-  tf = (key: string, params: Record<string, string | number | null | undefined>): string => this.i18n.tf(key, params);
-  private readonly snack = inject(MatSnackBar);
-
-  /**
-   * 服务端全量详情(M1.5)。列表项不带轮次/历史/拒因 —— 之前弹窗直接渲染
-   * 列表项,这些区块其实从未显示过。打开后拉一次详情替换数据源。
-   */
-  readonly full = signal<Application | null>(null);
-
-  /** P0-2:详情加载失败标记 —— 显示"数据可能过期"警告,而不是静默用旧数据。 */
-  readonly loadError = signal(false);
-
-  /** 模板统一读这里:详情没回来前用列表项兜底。 */
-  get detail(): Application { return this.full() ?? this.app; }
-
-  /** 轮次结果中文标签(M1.5 回写后展示)。 */
-  outcomeLabel(o: string): string {
-    return this.i18n.t('outcome.' + o);
-  }
-
-  /**
-   * 从 HttpErrorResponse 里抠出人话错误。
-   * 后端的 ProblemDetails 把说明放在 description(我们的 Error 记录映射过去的)。
-   */
-  private readError(err: unknown): string {
-    const e = err as { error?: { description?: string; detail?: string; title?: string }; message?: string };
-    return e?.error?.description ?? e?.error?.detail ?? e?.error?.title
-      ?? e?.message ?? this.t('tracker.opFailed');
-  }
-
-  /** 公司情报(懒加载 —— 详情弹窗打开后才查一次)。 */
-  readonly company = signal<Company | null>(null);
-
-  /** JD 全文是否展开(默认折叠:40000 字符铺开会淹没弹窗)。 */
-  readonly jdExpanded = signal(false);
-
-  /** 2026-10-19:About the job 是否展开(LinkedIn 风格:长描述默认折叠,点 more 展开)。 */
-  readonly aboutJobExpanded = signal(false);
-
-  /** Documents tab: 简历文件名和 PDF URL（null = 无文件） */
-  readonly resumeFileName = signal<string | null>(null);
-  readonly resumeFileUrl = signal<SafeResourceUrl | null>(null);
-  readonly resumePdfRawUrl = signal<string | null>(null);
-
-  /**
-   * Documents tab: 有效简历来源。
-   * tailored = 本投递的投递版本; base = 引用基础简历(不复制); none = 都没有。
-   */
-  readonly appResumeKind = signal<'base' | 'tailored' | 'none'>('none');
-
-  /**
-   * 有效简历的提取文本(评分用)。来自后端 resume_files.TextContent ——
-   * 有 tailored 时后端返回 tailored 的文本,Resume Score 按投递版本算。
-   */
-  private readonly appResumeText = signal<string | null>(null);
-
-  /** 匹配分析结果。null = 还没算(JD 或简历缺失时保持 null)。 */
-  readonly match = signal<MatchResult | null>(null);
-
-  /** 简历全文(匹配分析的比对基准)。null = 尚未拿到。 */
-  private readonly resumeText = signal<string | null>(null);
-
-  /**
-   * 本投递的有效简历:先拿元信息(kind/fileName/textContent),再拿 PDF 二进制做预览。
-   * kind=tailored → 显示投递版本;kind=base → 引用基础简历(不复制);
-   * kind=none → 提示上传。
-   */
-  private loadAppResume(): void {
-    this.api.get<{ kind: string; fileName: string | null; textContent: string | null }>(
-      `/api/jobs/applications/${this.app.id}/resume`).subscribe({
-      next: (r) => {
-        const kind = r.kind === 'tailored' ? 'tailored' : r.kind === 'base' ? 'base' : 'none';
-        this.appResumeKind.set(kind);
-        this.resumeFileName.set(r.fileName);
-        this.appResumeText.set(r.textContent);
-        this.recomputeMatch();
-        if (kind !== 'none') {
-          this.api.getBlob(`/api/jobs/applications/${this.app.id}/resume-file`).subscribe({
-            next: (blob) => {
-              const url = URL.createObjectURL(blob);
-              this.resumePdfRawUrl.set(url);
-              this.resumeFileUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
-            },
-            error: () => { this.resumePdfRawUrl.set(null); this.resumeFileUrl.set(null); }
-          });
-        } else {
-          this.resumePdfRawUrl.set(null);
-          this.resumeFileUrl.set(null);
-        }
-      },
-      error: () => { this.appResumeKind.set('none'); this.recomputeMatch(); }
-    });
-  }
-
-  /** 上传本投递的 tailored 简历 PDF(文本前端 pdf.js 提取,一起发给后端)。 */
-  async uploadTailoredResume(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
-    try {
-      const text = await extractPdfText(file);
-      const fd = new FormData();
-      fd.append('file', file, file.name);
-      fd.append('textContent', text);
-      this.api.postForm(`/api/jobs/applications/${this.app.id}/resume`, fd).subscribe({
-        next: () => {
-          this.snack.open(this.t('tracker.dResumeUploadOk'), this.t('common.close'), { duration: 2500 });
-          this.loadAppResume();
-        },
-        error: () => this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 })
-      });
-    } catch {
-      this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 });
-    }
-  }
-
-  /** 删除 tailored 版本 —— 回落到基础简历(引用,不复制)。 */
-  removeTailoredResume(): void {
-    if (!confirm(this.t('tracker.dResumeRemoveTailored'))) return;
-    this.api.delete(`/api/jobs/applications/${this.app.id}/resume`).subscribe({
-      next: () => this.loadAppResume(),
-      error: () => this.snack.open(this.t('tracker.dResumeUploadFail'), this.t('common.close'), { duration: 3000 })
-    });
-  }
-
-  // ---------------------------- 求职信 ----------------------------
-
-  /** 当前投递的求职信。null = 尚未生成(不是加载失败)。 */
-  readonly cl = signal<CoverLetterDto | null>(null);
-
-  /** 生成前的输入体检结果 —— 缺简历时按钮直接禁用,不让用户白等。 */
-  readonly clReadiness = signal<CoverLetterReadinessDto | null>(null);
-
-  /** 生成中。LLM 要几十秒,必须有明确态,否则用户会重复点。 */
-  readonly clGenerating = signal(false);
-
-  /** 是否在手动编辑态(与预览态切换)。 */
-  readonly clEditing = signal(false);
-
-  /** 额外要求(双向绑定到 textarea)。 */
-  clExtra = '';
-
-  /** 编辑中的草稿(保存前不落库 —— 用户取消就丢弃)。 */
-  clDraft = '';
-
-  constructor() {
-    // 全量详情:列表项不带轮次/历史/拒因,打开后以服务端为准替换(M1.5)
-    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
-      next: (a) => this.full.set(a),
-      error: () => { this.loadError.set(true); /* P0-2:不再静默,模板显示过期警告 */ }
-    });
-
-    // 公司情报:Application 只带 companyId,要单独查
-    if (this.app.companyId) {
-      this.api.get<Company>(`/api/jobs/companies/${this.app.companyId}`).subscribe({
-        next: (c) => this.company.set(c),
-        error: () => { /* 拿不到公司情报不阻断详情展示 */ }
-      });
-    }
-
-    // 简历全文:从 Profile 服务取(与 AI 练习共用同一份)
-    this.api.get<{ resumeText: string | null }>('/api/jobs/resume-text').subscribe({
-      next: (r) => {
-        this.resumeText.set(r.resumeText);
-        this.recomputeMatch();
-      },
-      error: () => { this.recomputeMatch(); }
-    });
-
-    // 本投递的有效简历(投递版本优先,没有回落基础):Documents tab 展示 + 评分基准
-    this.loadAppResume();
-
-    // 求职信 + 输入体检:详情弹窗打开时各查一次
-    this.loadCoverLetter();
-    this.loadReadiness();
-
-    // 沟通记录:提前拉一次,这样概览页"沟通记录(N)"角标的数字才准
-    this.loadCommunications();
-  }
-
-  // ---------------------------- 求职信方法 ----------------------------
-
-  private loadCoverLetter(): void {
-    this.api.get<CoverLetterDto | null>(`/api/jobs/applications/${this.app.id}/cover-letter`).subscribe({
-      next: (c) => {
-        this.cl.set(c);
-        this.clDraft = c?.content ?? '';
-      },
-      error: () => { /* 读不到不阻断详情展示 */ }
-    });
-  }
-
-  private loadReadiness(): void {
-    this.api.get<CoverLetterReadinessDto>(`/api/jobs/applications/${this.app.id}/cover-letter/readiness`)
-      .subscribe({
-        next: (r) => this.clReadiness.set(r),
-        error: () => { /* 体检失败不阻断 —— 生成时后端还会再校验一次 */ }
-      });
-  }
-
-  /**
-   * AI 生成求职信。
-   *
-   * ⚠️ 已有内容时必须确认覆盖 —— 后端默认 Overwrite=false 兜底,
-   *    前端这一层确认是为了让用户明确知道"手改的内容会被冲掉"。
-   */
-  generateCoverLetter(): void {
-    const hasContent = !!this.cl()?.content;
-    if (hasContent && !confirm(this.t('tracker.dClOverwrite'))) return;
-
-    this.clGenerating.set(true);
-    this.api.post<CoverLetterDto>(
-      `/api/jobs/applications/${this.app.id}/cover-letter/generate`,
-      { extraInstructions: this.clExtra.trim() || null, overwrite: hasContent }
-    ).subscribe({
-      next: (c) => {
-        this.cl.set(c);
-        this.clDraft = c.content;
-        this.clEditing.set(false);
-        this.clGenerating.set(false);
-      },
-      error: (err) => {
-        this.clGenerating.set(false);
-        // 后端的 ProblemDetails.description 已经是人话,直接透出
-        alert(this.readError(err));
-      }
-    });
-  }
-
-  saveCoverLetter(): void {
-    const text = this.clDraft.trim();
-    if (!text) { alert(this.t('tracker.dClEmptyErr')); return; }
-
-    this.api.put<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter`, { content: text })
-      .subscribe({
-        next: (c) => { this.cl.set(c); this.clEditing.set(false); },
-        error: (err) => alert(this.readError(err))
-      });
-  }
-
-  cancelEdit(): void {
-    this.clDraft = this.cl()?.content ?? '';
-    this.clEditing.set(false);
-  }
-
-  markCoverLetterFinal(): void {
-    this.api.post<CoverLetterDto>(`/api/jobs/applications/${this.app.id}/cover-letter/final`)
-      .subscribe({
-        next: (c) => this.cl.set(c),
-        error: (err) => alert(this.readError(err))
-      });
-  }
-
-  deleteCoverLetter(): void {
-    if (!confirm(this.t('tracker.dClDelete'))) return;
-    this.api.delete<void>(`/api/jobs/applications/${this.app.id}/cover-letter`)
-      .subscribe({
-        next: () => { this.cl.set(null); this.clDraft = ''; this.clEditing.set(false); },
-        error: (err) => alert(this.readError(err))
-      });
-  }
-
-  clStatusLabel(s: string): string {
-    switch (s) {
-      case 'Generated': return this.t('tracker.dClStatusGen');
-      case 'Final': return this.t('tracker.dClStatusFinal');
-      default: return this.t('tracker.dClStatusDraft');
-    }
-  }
-
-  /** 是否有可用 JD（与 Overview / 高亮卡同一口径，供评分空态区分缺 JD 还是缺简历）。 */
-  hasJdForScore(): boolean {
-    return !!((this.detail.jdText ?? '').trim() || (this.detail.jdSummary ?? '').trim());
-  }
-
-  /** JD 全文到手或简历到手后重算 —— 两者缺一就不出分。 */
-  private recomputeMatch(): void {
-    // ★ F-08:JD 口径与 Overview 对齐 —— 读最新详情(detail)，JdText 缺失时回落
-    //   JdSummary。旧实现只读列表项的 jdText，只有摘要的投递永远算不出分，
-    //   与 Overview 里明明有 JD 自相矛盾。
-    const jd = (this.detail.jdText ?? '').trim() || (this.detail.jdSummary ?? '').trim();
-    // 投递版本优先:有 tailored 文本就用它,没有才用基础简历
-    const resume = this.appResumeText() ?? this.resumeText();
-    if (!jd || !resume) { this.match.set(null); return; }
-    this.match.set(computeMatch(resume, jd));
-  }
-
-  statusLabel(s: string): string {
-    return this.i18n.t('status.' + s);
-  }
-
-  statusClass(s: string): string {
-    return `st-${(s || '').toLowerCase()}`;
-  }
-
-  /** 匹配分对应的颜色档(与 Simplify 一致:>=70 好,50-69 中,<50 差)。 */
-  matchTier(score: number): string {
-    if (score >= 70) return 'good';
-    if (score >= 50) return 'fair';
-    return 'poor';
-  }
-
-  matchTierLabel(score: number): string {
-    if (score >= 70) return this.t('tracker.dStrongMatch');
-    if (score >= 50) return this.t('tracker.dMedMatch');
-    return this.t('tracker.dWeakMatch');
-  }
-
-  /** 2026-10-19:仪表盘圆弧长度(SVG dasharray)。r=80,周长≈502.65 */
-  gaugeArc(score: number): string {
-    const c = 2 * Math.PI * 80;
-    const v = Math.max(0, Math.min(100, score)) / 100 * c;
-    return `${v.toFixed(1)} ${c.toFixed(1)}`;
-  }
-
-  /** 2026-10-19:Resume Score 左侧 JD 卡片 —— 命中关键词高亮为 teal pill */
-  highlightedJd(m: { hit: string[] }): string {
-    const jd = this.detail?.jdSummary || this.detail?.jdText || '';
-    if (!jd) return '';
-    // 按长度降序,避免短词先替换破坏长词
-    const keys = [...m.hit].sort((a, b) => b.length - a.length);
-    let html = jd.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    for (const k of keys) {
-      if (k.length < 2) continue;
-      const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      html = html.replace(new RegExp(`(${esc})`, 'gi'),
-        '<span class="hl-kw">$1</span>');
-    }
-    // 换行转段落
-    html = html.split(/\n\s*\n/).map(p => `<p>${p.trim().replace(/\n/g, '<br>')}</p>`).join('');
-    return html;
-  }
-
-  // ---------------------------- 公司 Logo / 页签 ----------------------------
-
-  /** 名称首字母头像(Logo 加载失败时的降级展示)。 */
-  companyInitials(name?: string): string {
-    const n = (name ?? '').trim();
-    if (!n) return '?';
-    const parts = n.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  /** 由名称哈希出稳定的彩色背景。 */
-  avatarColor(name?: string): string {
-    const n = (name ?? '?').trim() || '?';
-    let h = 0;
-    for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360;
-    return `hsl(${h}, 52%, 52%)`;
-  }
-
-  /** Logo 加载失败时降级为首字母头像。 */
-  readonly logoBroken = signal(false);
-
-  /** 详情页当前页签。 */
-  readonly detailTab = signal<'overview' | 'documents' | 'score' | 'email' | 'questions' | 'comms'>('overview');
-
-  switchTab(tab: 'overview' | 'documents' | 'score' | 'email' | 'questions' | 'comms'): void {
-    // comms 是旧名,统一映射到 email
-    const t = tab === 'comms' ? 'email' : tab;
-    this.detailTab.set(t as any);
-    if (t === 'email') this.loadCommunications();
-  }
-
-  /* ★ Simplify 真站:头部操作按钮 */
-  readonly dialogRef = inject(MatDialogRef<ApplicationDetailDialogComponent>);
-  private readonly favKey = 'yi-tracker-favorites';
-
-  isFav(): boolean {
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem(this.favKey) ?? '[]');
-      return arr.includes(this.app.id);
-    } catch { return false; }
-  }
-
-  toggleFav(): void {
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem(this.favKey) ?? '[]');
-      const i = arr.indexOf(this.app.id);
-      if (i >= 0) arr.splice(i, 1); else arr.push(this.app.id);
-      localStorage.setItem(this.favKey, JSON.stringify(arr));
-      this.snack.open(this.t(i >= 0 ? 'tracker.unfavorited' : 'tracker.favorited'),
-        this.t('common.close'), { duration: 2000 });
-    } catch { /* ignore */ }
-  }
-
-  doArchive(): void {
-    this.api.post<void>(`/api/jobs/applications/${this.app.id}/archive`, {}).subscribe({
-      next: () => {
-        this.snack.open(this.t('tracker.archived'), this.t('common.close'), { duration: 2000 });
-        this.dialogRef.close(true);
-      },
-      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
-    });
-  }
-
-  doDelete(): void {
-    // ★ F-02:改用全站统一确认弹窗(原生 confirm 会被静默 dismiss);
-    //   删除成功补一条可见反馈,不再关窗无声。
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '360px', panelClass: 'app-confirm', autoFocus: false,
-      data: {
-        title: this.t('common.delete'), body: this.t('tracker.deleteConfirm'),
-        confirmText: this.t('common.delete'), cancelText: this.t('common.cancel'),
-        danger: true,
-      } as ConfirmDialogData,
-    });
-    ref.afterClosed().subscribe((v) => {
-      if (v !== true) return;
-      this.api.delete<void>(`/api/jobs/applications/${this.app.id}`).subscribe({
-        next: () => {
-          this.snack.open(this.t('tracker.deleted'), this.t('common.close'), { duration: 3000 });
-          this.dialogRef.close(true);
-        },
-        error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
-      });
-    });
-  }
-
-  /* ★ Simplify 真站:状态时间线 — 固定 5 阶段,不含 Accepted/Rejected 等 */
-  readonly statusOrder = ['Saved', 'Applied', 'Screen', 'Interview', 'Offer'];
-
-  isStatusDone(s: string): boolean {
-    const order = this.statusOrder;
-    let currentIdx = order.indexOf(this.detail.status);
-    if (currentIdx < 0) {
-      // 当前状态不在 5 阶段内(如 Rejected/Accepted):按 history 取走到的最远阶段
-      const hist = (this.detail as any).history as Array<{ status: string }> | undefined;
-      currentIdx = -1;
-      for (const h of hist ?? []) {
-        const i = order.indexOf(h.status);
-        if (i > currentIdx) currentIdx = i;
-      }
-    }
-    const sIdx = order.indexOf(s);
-    return sIdx >= 0 && sIdx <= currentIdx;
-  }
-
-  statusDate(s: string): string | null {
-    // 从 history 里找该状态的时间
-    const h = (this.detail as any).history;
-    if (!h || !Array.isArray(h)) return null;
-    const item = h.find((x: any) => x.status === s || x.to === s);
-    if (!item) return null;
-    const d = item.at || item.date || item.createdAt;
-    if (!d) return null;
-    try {
-      const dt = new Date(d);
-      return `${dt.getMonth() + 1}/${dt.getDate()}/${String(dt.getFullYear()).slice(2)}`;
-    } catch { return null; }
-  }
-
-  quickChangeStatus(ev: Event): void {
-    const select = ev.target as HTMLSelectElement;
-    const newStatus = select.value;
-    this.api.post<void>(`/api/jobs/applications/${this.app.id}/status`,
-      { status: newStatus }).subscribe({
-      next: () => {
-        this.snack.open(this.t('tracker.statusUpdated'), this.t('common.close'), { duration: 2000 });
-        this.reloadDetail();
-      },
-      error: (e) => this.snack.open(this.readError(e), this.t('common.close'), { duration: 3000 })
-    });
-  }
-
-  private reloadDetail(): void {
-    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
-      next: (app: Application) => this.full.set(app),
-      error: () => this.loadError.set(true)
-    });
-  }
-
-  startEditPosting(): void {
-    // TODO: 内联编辑 Job Posting 字段
-    this.snack.open(this.t('common.comingSoon'), this.t('common.close'), { duration: 2000 });
-  }
-
-  // ---------------------------- 条目编辑(2026-10-08) ----------------------------
-  // 详情弹窗之前是纯只读 —— Notes/JD 全文/JD 摘要都改不了。
-  // 后端早就有 PUT /api/jobs/applications/{id} 和 PUT .../jd,前端只是没暴露。
-
-  /** Notes 编辑态。 */
-  readonly notesEditing = signal(false);
-  notesDraft = '';
-  readonly notesSaving = signal(false);
-
-  /** JD 摘要编辑态。 */
-  readonly jdSummaryEditing = signal(false);
-  /** 2026-10-19:重新解析 JD（用最新后端重跑，修复旧数据）。 */
-  readonly reparsing = signal(false);
-  jdSummaryDraft = '';
-  readonly jdSummarySaving = signal(false);
-
-  /** JD 全文编辑态(走独立的 /jd 端点,不碰其他字段)。 */
-  readonly jdTextEditing = signal(false);
-  jdTextDraft = '';
-  readonly jdTextSaving = signal(false);
-
-  // ---------------------------- 面试问题 (G-07) ----------------------------
-
-  /** 每个申请的自定义面试问题(localStorage,按申请 id 存)。 */
-  readonly appQuestions = signal<string[]>(this.loadAppQuestions());
-  questionDraft = '';
-  readonly questionAdding = signal(false);
-
-  private questionsKey(): string {
-    return `yi-tracker-questions-${this.app.id}`;
-  }
-
-  private loadAppQuestions(): string[] {
-    try {
-      return JSON.parse(localStorage.getItem(this.questionsKey()) || '[]');
-    } catch { return []; }
-  }
-
-  private saveAppQuestions(qs: string[]): void {
-    try { localStorage.setItem(this.questionsKey(), JSON.stringify(qs)); } catch { /* 忽略 */ }
-    this.appQuestions.set(qs);
-  }
-
-  addQuestion(): void {
-    const q = this.questionDraft.trim();
-    if (!q) return;
-    this.saveAppQuestions([...this.appQuestions(), q]);
-    this.questionDraft = '';
-    this.questionAdding.set(false);
-  }
-
-  removeQuestion(idx: number): void {
-    const qs = [...this.appQuestions()];
-    qs.splice(idx, 1);
-    this.saveAppQuestions(qs);
-  }
-
-  startEditNotes(): void {
-    this.notesDraft = this.detail.notes ?? '';
-    this.notesEditing.set(true);
-  }
-
-  cancelEditNotes(): void {
-    this.notesEditing.set(false);
-  }
-
-  saveNotes(): void {
-    const d = this.detail;
-    this.notesSaving.set(true);
-    this.api.put(`/api/jobs/applications/${this.app.id}`, {
-      role: d.role, location: d.location, link: d.link, salary: d.salary,
-      jdSummary: d.jdSummary,
-      notes: this.notesDraft.trim() || null, priority: d.priority,
-      deadline: d.deadline, appliedDate: d.appliedDate,
-    }).subscribe({
-      next: () => {
-        this.notesSaving.set(false);
-        this.notesEditing.set(false);
-        this.refreshDetail();
-        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
-      },
-      error: (err) => {
-        this.notesSaving.set(false);
-        alert(this.readError(err));
-      }
-    });
-  }
-
-  startEditJdSummary(): void {
-    this.jdSummaryDraft = this.detail.jdSummary ?? '';
-    this.jdSummaryEditing.set(true);
-  }
-
-  cancelEditJdSummary(): void {
-    this.jdSummaryEditing.set(false);
-  }
-
-  /** 2026-10-19:用最新后端重新解析 JD，修复旧数据的噪音/去重问题。 */
-  reparseJd(): void {
-    const d = this.detail;
-    const raw = d.jdText?.trim();
-    if (!raw) {
-      // 原文为空时无法重解析，提示用户
-      this.snack.open(this.t('tracker.dNoJdText'), this.t('common.close'), { duration: 3000 });
-      return;
-    }
-    this.reparsing.set(true);
-    this.api.post('/api/jobs/parse-jd', { raw, useAi: false }).subscribe({
-      next: (p: any) => {
-        const upd: any = {};
-        if (p.company) upd.company = p.company;
-        if (p.role) upd.role = p.role;
-        if (p.location) upd.location = p.location;
-        if (p.salary) upd.salary = p.salary;
-        if (p.workMode) upd.workMode = p.workMode;
-        if (p.jobType) upd.jobType = p.jobType;
-        if (p.jdSummary) upd.jdSummary = p.jdSummary;
-        if (p.requirements) upd.requirements = p.requirements;
-        if (p.benefits) upd.benefits = p.benefits;
-        if (p.companyDescription) upd.companyDescription = p.companyDescription;
-        this.api.put(`/api/jobs/applications/${this.app.id}`, upd).subscribe({
-          next: () => {
-            this.reparsing.set(false);
-            this.reloadDetail();
-          },
-          error: () => this.reparsing.set(false)
-        });
-      },
-      error: () => this.reparsing.set(false)
-    });
-  }
-
-  /**
-   * 文本自动分段(2026-10-19):详情页 JD 摘要/公司介绍/任职要求/福利待遇展示用。
-   * 1) 优先按空行分段;2) 无空行时按句子边界切成适读长度的段落。
-   * 返回段落数组,模板用 @for 渲染成 <p>。
-   */
-  paras(text: string | undefined | null): string[] {
-    if (!text) return [];
-    const t = text.trim();
-    if (!t) return [];
-    // 先按空行(一个或多个)分段
-    let parts = t.split(/\n\s*\n/).map(s => s.trim()).filter(s => s.length > 0);
-    if (parts.length <= 1) {
-      // 无空行:按单换行分段
-      parts = t.split(/\n/).map(s => s.trim()).filter(s => s.length > 0);
-    }
-    if (parts.length <= 1) {
-      // 仍是整块:按句子边界切,每段约 2-4 句,避免一屏大段文字
-      const sentences = t.match(/[^.!?。！？]+[.!?。！？]+[""』）)]?/g) ?? [t];
-      const out: string[] = [];
-      let cur = '';
-      for (const s of sentences) {
-        const cand = cur ? cur + ' ' + s.trim() : s.trim();
-        if (cand.length > 420 && cur) { out.push(cur); cur = s.trim(); }
-        else cur = cand;
-      }
-      if (cur) out.push(cur);
-      return out.length > 0 ? out : [t];
-    }
-    return parts;
-  }
-
-  /** 2026-10-19:详情页显示用 JD 摘要 —— 去掉已单独成节的 Qualifications / Additional Information，避免重复 */
-  jdSummaryDisplay(): string {
-    const d = this.detail;
-    if (!d) return '';
-    let t = d.jdSummary || '';
-    if (!t.trim()) return t;
-    // 2026-10-19:如果摘要与 requirements 实质相同(后端提取偏差),直接返回空,避免重复显示
-    const req = (d.requirements || '').trim();
-    if (req) {
-      const reqNorm = req.replace(/[•·▪–—\-*\s]+/g, ' ').trim().toLowerCase();
-      const tNorm = t.replace(/[•·▪–—\-*\s]+/g, ' ').trim().toLowerCase();
-      // 摘要包含 requirements 的核心内容(前 80 字符) → 视为重复,不显示
-      if (tNorm === reqNorm || tNorm.includes(reqNorm.slice(0, 80)) || reqNorm.includes(tNorm.slice(0, 80))) {
-        return '';
-      }
-    }
-    // 有单独的 requirements/benefits 节时，从摘要里切掉对应原文段
-    // 注意:文本可能没有换行(大段 blob)，不用 ^ 行首锚定
-    const cutFrom = (src: string, markers: string[]): string => {
-      let idx = -1;
-      for (const m of markers) {
-        const i = src.search(new RegExp('\\b' + m + '\\b', 'i'));
-        if (i >= 0 && (idx < 0 || i < idx)) idx = i;
-      }
-      return idx >= 0 ? src.slice(0, idx).trim() : src;
-    };
-    if (d.requirements?.trim()) {
-      t = cutFrom(t, ['Qualifications', 'Requirements', '任职要求', '任职资格']);
-    }
-    if (d.benefits?.trim()) {
-      t = cutFrom(t, ['Additional Information', 'Benefits', 'Compensation', '福利', '待遇']);
-    }
-    // 去掉原文里的 "Job Description" 小节标题(我们自己会渲染一个)
-    t = t.replace(/\bJob Description\b/i, '').trim();
-    return t.trim();
-  }
-
-  /** 2026-10-19:LinkedIn 风格富文本分块 —— 段落与列表分开,列表渲染为 <ul> */
-  richBlocks(text: string | undefined | null): { kind: 'p' | 'ul'; items: string[] }[] {    if (!text) return [];
-    const t0 = text.trim();
-    if (!t0) return [];
-    // 无换行的大段文本:按句子切分,避免一屏文字墙
-    // 注意:保护 .NET / ASP.NET / C# 等技术缩写不被句号切断
-    if (!t0.includes('\n') && t0.length > 600) {
-      const PROT = '\u0000';
-      let work = t0
-        .replace(/\.NET\b/gi, PROT + 'DOTNET')
-        .replace(/ASP\.NET\b/gi, 'ASP' + PROT + 'DOTNET')
-        .replace(/\bC#/g, 'C' + PROT + 'SHARP')
-        .replace(/\be\.g\./gi, 'EG' + PROT)
-        .replace(/\bi\.e\./gi, 'IE' + PROT);
-      const sentences = work.match(/[^.!?。！？]+[.!?。！？]+[""』）)]?/g) ?? [work];
-      const restore = (s: string) => s
-        .replace(new RegExp(PROT + 'DOTNET', 'g'), '.NET')
-        .replace(new RegExp('ASP' + PROT + 'DOTNET', 'g'), 'ASP.NET')
-        .replace(new RegExp('C' + PROT + 'SHARP', 'g'), 'C#')
-        .replace(new RegExp('EG' + PROT, 'g'), 'e.g.')
-        .replace(new RegExp('IE' + PROT, 'g'), 'i.e.');
-      const out2: { kind: 'p' | 'ul'; items: string[] }[] = [];
-      let cur2 = '';
-      for (const s of sentences) {
-        const rs = restore(s.trim());
-        const cand = cur2 ? cur2 + ' ' + rs : rs;
-        if (cand.length > 420 && cur2) { out2.push({ kind: 'p', items: [cur2] }); cur2 = rs; }
-        else cur2 = cand;
-      }
-      if (cur2) out2.push({ kind: 'p', items: [cur2] });
-      return out2;
-    }
-    const lines = text.split(/\n/).map(s => s.trim()).filter(s => s.length > 0);
-    if (lines.length === 0) return [];
-    const out: { kind: 'p' | 'ul'; items: string[] }[] = [];
-    let curUl: string[] | null = null;
-    const flushUl = () => { if (curUl && curUl.length > 0) out.push({ kind: 'ul', items: curUl }); curUl = null; };
-    for (const ln of lines) {
-      // bullet: • · - * 或数字编号开头
-      const m = ln.match(/^[•·▪–—\-*]\s*(.+)$/) || ln.match(/^\d+[.)、]\s*(.+)$/);
-      if (m) {
-        if (!curUl) curUl = [];
-        curUl.push(m[1].trim());
-      } else {
-        flushUl();
-        out.push({ kind: 'p', items: [ln] });
-      }
-    }
-    flushUl();
-    // 合并连续的单句段落,避免碎片化(LinkedIn 风格:长描述为段落)
-    const merged: { kind: 'p' | 'ul'; items: string[] }[] = [];
-    for (const b of out) {
-      const last = merged[merged.length - 1];
-      if (b.kind === 'p' && last && last.kind === 'p' && (last.items[0].length + b.items[0].length) < 420) {
-        last.items[0] = last.items[0] + ' ' + b.items[0];
-      } else {
-        merged.push(b);
-      }
-    }
-    return merged;
-  }
-
-  saveJdSummary(): void {
-    const d = this.detail;
-    this.jdSummarySaving.set(true);
-    this.api.put(`/api/jobs/applications/${this.app.id}`, {
-      role: d.role, location: d.location, link: d.link, salary: d.salary,
-      jdSummary: this.jdSummaryDraft.trim() || null, notes: d.notes,
-      priority: d.priority, deadline: d.deadline, appliedDate: d.appliedDate,
-    }).subscribe({
-      next: () => {
-        this.jdSummarySaving.set(false);
-        this.jdSummaryEditing.set(false);
-        this.refreshDetail();
-        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
-      },
-      error: (err) => {
-        this.jdSummarySaving.set(false);
-        alert(this.readError(err));
-      }
-    });
-  }
-
-  startEditJdText(): void {
-    this.jdTextDraft = this.detail.jdText ?? '';
-    this.jdTextEditing.set(true);
-    // 编辑时自动展开全文
-    this.jdExpanded.set(true);
-  }
-
-  /** 1-click JD 导入:打开编辑 + 滚动到 Full JD 区域。 */
-  scrollToJd(): void {
-    setTimeout(() => {
-      const el = document.querySelector('.jd-full-section');
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
-  }
-
-  cancelEditJdText(): void {
-    this.jdTextEditing.set(false);
-  }
-
-  saveJdText(): void {
-    this.jdTextSaving.set(true);
-    this.api.put(`/api/jobs/applications/${this.app.id}/jd`, {
-      jdText: this.jdTextDraft.trim() || null,
-      jdSourceUrl: this.detail.jdSourceUrl ?? null,
-    }).subscribe({
-      next: () => {
-        this.jdTextSaving.set(false);
-        this.jdTextEditing.set(false);
-        this.refreshDetail();
-        this.snack.open(this.t('common.saved'), undefined, { duration: 2000 });
-      },
-      error: (err) => {
-        this.jdTextSaving.set(false);
-        alert(this.readError(err));
-      }
-    });
-  }
-
-  /** 保存后重新拉详情,保证弹窗里显示的是最新数据。 */
-  private refreshDetail(): void {
-    this.api.get<Application>(`/api/jobs/applications/${this.app.id}`).subscribe({
-      next: (a) => this.full.set(a),
-      error: () => { this.loadError.set(true); }
-    });
-  }
-
-  // ---------------------------- 沟通记录 ----------------------------
-
-  readonly comms = signal<Communication[]>([]);
-  readonly commsLoading = signal(false);
-  readonly commEditingId = signal<string | null>(null);
-  readonly commTypes: CommunicationType[] = ['Email', 'Call', 'Interview', 'Message', 'Note'];
-
-  /** 编辑中的草稿(新增态时 commEditingId 为 null)。 */
-  readonly commDraft = signal<{
-    type: CommunicationType; subject: string; content: string;
-    contactName: string; contactEmail: string; occurredAt: string;
-  }>({
-    type: 'Email', subject: '', content: '', contactName: '', contactEmail: '', occurredAt: ''
-  });
-
-  private blankDraft(): {
-    type: CommunicationType; subject: string; content: string;
-    contactName: string; contactEmail: string; occurredAt: string;
-  } {
-    return {
-      type: 'Email', subject: '', content: '', contactName: '', contactEmail: '',
-      occurredAt: this.nowLocalInput()
-    };
-  }
-
-  private loadCommunications(): void {
-    this.commsLoading.set(true);
-    this.trackerApi.listCommunications(this.app.id).subscribe({
-      next: (list) => { this.comms.set(list); this.commsLoading.set(false); },
-      error: () => { this.commsLoading.set(false); }
-    });
-  }
-
-  commTypeLabel(t: CommunicationType): string {
-    switch (t) {
-      case 'Email': return this.t('tracker.commsTypeEmail');
-      case 'Call': return this.t('tracker.commsTypeCall');
-      case 'Interview': return this.t('tracker.commsTypeInterview');
-      case 'Message': return this.t('tracker.commsTypeMessage');
-      case 'Note': return this.t('tracker.commsTypeNote');
-      default: return this.t('tracker.commsUnknown');
-    }
-  }
-
-  startAddComm(): void {
-    this.commEditingId.set(null);
-    this.commDraft.set(this.blankDraft());
-  }
-
-  startEditComm(c: Communication): void {
-    this.commEditingId.set(c.id);
-    this.commDraft.set({
-      type: c.type,
-      subject: c.subject ?? '',
-      content: c.content,
-      contactName: c.contactName ?? '',
-      contactEmail: c.contactEmail ?? '',
-      occurredAt: this.toLocalInput(c.occurredAt)
-    });
-  }
-
-  cancelComm(): void {
-    this.commEditingId.set(null);
-  }
-
-  saveComm(): void {
-    const d = this.commDraft();
-    if (!d.content.trim()) return;
-    const body = {
-      type: d.type,
-      subject: d.subject.trim() || null,
-      content: d.content.trim(),
-      contactName: d.contactName.trim() || null,
-      contactEmail: d.contactEmail.trim() || null,
-      occurredAt: this.fromLocalInput(d.occurredAt)
-    };
-    const editing = this.commEditingId();
-    const req: Observable<unknown> = editing
-      ? this.trackerApi.updateCommunication(this.app.id, editing, body)
-      : this.trackerApi.createCommunication(this.app.id, body);
-    req.subscribe({
-      next: () => {
-        this.commEditingId.set(null);
-        this.loadCommunications();
-        this.snack.open(this.t('tracker.commsSaved'), this.t('common.close'), { duration: 2500 });
-      },
-      error: (err) => alert(this.readError(err))
-    });
-  }
-
-  deleteComm(c: Communication): void {
-    if (!confirm(this.t('tracker.commsConfirmDelete'))) return;
-    this.trackerApi.deleteCommunication(this.app.id, c.id).subscribe({
-      next: () => {
-        this.commEditingId.set(null);
-        this.loadCommunications();
-        this.snack.open(this.t('tracker.commsDeleted'), this.t('common.close'), { duration: 2500 });
-      },
-      error: (err) => alert(this.readError(err))
-    });
-  }
-
-  // ---------------------------- 时间工具 ----------------------------
-
-  /** ISO(含 offset)→ datetime-local 输入值(YYYY-MM-DDTHH:mm,浏览器本地时区)。 */
-  private toLocalInput(iso?: string | null): string {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '';
-    const p = (n: number) => `${n}`.padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-  }
-
-  private nowLocalInput(): string {
-    return this.toLocalInput(new Date().toISOString());
-  }
-
-  /** datetime-local 输入值 → ISO。无 tz 视为浏览器本地时间,交给后端解析。 */
-  private fromLocalInput(v: string): string {
-    if (!v) return new Date().toISOString();
-    const withSec = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v) ? v + ':00' : v;
-    const d = new Date(withSec);
-    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-  }
-}
-
-// ============================================================================
-//  求职信 DTO(与后端 CoverLetterDto / CoverLetterReadinessDto 同字段)
-//
-//  ⚠️ 字段名必须逐字对齐后端的 JSON 输出(ASP.NET 默认 camelCase)。
-//     这里手写而不生成,是因为接口很少变;若要改后端字段,记得同步这里。
-// ============================================================================
-
-/** 求职信。 */
-export interface CoverLetterDto {
-  id: string;
-  applicationId: string;
-  content: string;
-  /** Draft | Generated | Final */
-  status: string;
-  generatedByModel: string | null;
-  /** 生成时所用简历版本。 */
-  resumeVersion: number | null;
-  lastPromptHint: string | null;
-  generatedAt: string | null;
-  updatedAt: string | null;
-  /** 简历已更新到更新版本 → 这封信可能已过期。 */
-  isStale: boolean;
-  currentResumeVersion: number;
-}
-
-/** 生成前的输入体检。 */
-export interface CoverLetterReadinessDto {
-  hasResume: boolean;
-  resumeVersion: number;
-  hasJdText: boolean;
-  hasCompanyProfile: boolean;
-  companyName: string;
-  role: string;
-  /** 有值时说明输入不全(简历缺失是硬阻断,JD/公司情报是建议补)。 */
-  missingHint: string | null;
-}
-
-
-/** ★ 备战计划对话框 (替代原生 confirm)。 */
-@Component({
-  selector: 'app-prep-plan-dialog',
-  standalone: true,
-  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule],
-  template: `
-    <h2 mat-dialog-title>🎯 面试备战计划</h2>
-    <mat-dialog-content>
-      <p><b>{{ data.companyName }}</b> — {{ data.role }}</p>
-      <p>技术关键词 (从 JD 提取):</p>
-      <ul>
-        @for (k of data.keywords; track k) { <li>{{ k }}</li> }
-        @if (data.keywords.length === 0) { <li><i>未识别到关键词</i></li> }
-      </ul>
-      <p>建议准备:</p>
-      <ol>
-        <li>针对每个关键词准备 1 个项目实例</li>
-        <li>在 Tech Stack 里复习相关条目</li>
-        <li>用 AI Practice 做一次模拟问答</li>
-      </ol>
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>稍后</button>
-      <button mat-flat-button color="primary" [mat-dialog-close]="true">去 Playbook 准备</button>
-    </mat-dialog-actions>
-  `
-})
-export class PrepPlanDialogComponent {
-  readonly data = inject(MAT_DIALOG_DATA) as { companyName: string; role: string; keywords: string[] };
 }

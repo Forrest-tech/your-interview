@@ -1,0 +1,190 @@
+/* ★ 票124:素材回收站对话框样式。
+   与全站同一套设计令牌:白卡片、细边框 #e2e8f0、中性灰阶、主蓝 #2563eb
+   (与 material-transfer-dialog 同源)。不引入新设计语言、不引入新颜色。 */
+
+/* ---------- 根容器:撑满弹窗表面 ---------- */
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ---------- 标题栏(与 app-confirm 的头部同构) ---------- */
+.tr-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 14px 16px 12px 18px;
+  border-bottom: 1px solid #f1f5f9;
+  flex: 0 0 auto;
+}
+
+.tr-head-ico {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  color: #2563eb;
+}
+
+.tr-head-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* 标题行里的顶层项计数(与入口徽标同一口径:顶层项数,不是行数总数)。 */
+.tr-head-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #f0f2f7;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.tr-close {
+  color: #64748b;
+}
+
+/* ---------- 内容区 ---------- */
+.tr-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 16px;
+}
+
+/* 加载中 */
+.tr-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 0;
+}
+
+/* 加载失败(与空态严格区分 —— 绝不冒充"回收站是空的") */
+.tr-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 12px;
+  text-align: center;
+}
+
+.tr-error-ico {
+  color: #dc2626;
+  font-size: 22px;
+  width: 22px;
+  height: 22px;
+}
+
+.tr-error-text {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* 空态 */
+.tr-empty {
+  margin: 0;
+  padding: 32px 0;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* ---------- 列表 ---------- */
+.tr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tr-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.tr-item-ico {
+  color: #64748b;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+.tr-item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tr-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  /* 溢出省略(长名不撑破布局) */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tr-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.tr-meta-path {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tr-meta-sep {
+  color: #c3c8d2;
+}
+
+.tr-item-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.tr-hint {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: #f0f2f7;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.tr-restore {
+  flex: 0 0 auto;
+  align-self: center;
+}

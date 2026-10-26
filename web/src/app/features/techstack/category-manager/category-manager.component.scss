@@ -14,7 +14,7 @@
 .warn {
   margin: 0 0 8px;
   font-size: 12.5px;
-  color: #c62828;
+  color: #dc2626;
 }
 
 .cat-list {
@@ -30,7 +30,9 @@
   padding: 8px 10px;
   border-radius: 8px;
 }
-.cat-row:hover { background: rgba(63, 81, 181, 0.05); }
+/* ★ 票123 C-3.2:可点项取统一洗色(原为 `rgba(37, 99, 235, 0.05)`)。 */
+.cat-row:hover { background: var(--hover-wash); }
+.cat-row:active { background: var(--press-wash); }
 
 .cat-name {
   border: none;
@@ -42,12 +44,14 @@
   border-radius: 6px;
   text-align: left;
 }
-.cat-name:hover { background: rgba(63, 81, 181, 0.1); color: #3f51b5; }
+/* ★ 票123 C-3.2:可点项取统一洗色(原为 `rgba(37, 99, 235, 0.1)`)。 */
+.cat-name:hover { background: var(--hover-wash); color: #2563eb; }
+.cat-name:active { background: var(--press-wash); }
 
 .cat-count {
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
-  background: rgba(0, 0, 0, 0.06);
+  color: rgba(15, 23, 42, 0.45);
+  background: rgba(15, 23, 42, 0.06);
   border-radius: 999px;
   padding: 2px 8px;
   min-width: 28px;
@@ -56,14 +60,14 @@
 
 .spacer { flex: 1 1 auto; }
 
-.del-btn { color: rgba(0, 0, 0, 0.45); }
-.del-btn:hover { color: #c62828; background: rgba(198, 40, 40, 0.08); }
+.del-btn { color: rgba(15, 23, 42, 0.45); }
+.del-btn:hover { color: #dc2626; background: rgba(220, 38, 38, 0.08); }
 
 .rename-field { flex: 1 1 auto; }
 
 .empty {
   text-align: center;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(15, 23, 42, 0.4);
   font-size: 13px;
   padding: 24px 0;
 }

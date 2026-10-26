@@ -10,6 +10,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AdminRole, AdminUser } from '../../core/models/api.models';
+import { textLengthError } from '../../core/api/validation-errors.helpers';
 
 export interface AdminUserDialogData {
   mode: 'create' | 'edit';
@@ -60,8 +61,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
       <mat-form-field appearance="outline" class="full">
         <mat-label>{{ t('admin.fieldName') }}</mat-label>
-        <input matInput name="displayName" [(ngModel)]="displayName" autocomplete="off">
+        <input matInput name="displayName" [(ngModel)]="displayName"
+               (ngModelChange)="nameError.set(null)" autocomplete="off">
       </mat-form-field>
+      @if (nameError()) {
+        <div class="field-error" role="alert">{{ nameError() }}</div>
+      }
 
       @if (!isEdit) {
         <mat-form-field appearance="outline" class="full">
@@ -114,9 +119,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     .err {
       display: flex; align-items: center; gap: 6px;
       margin-top: 8px; padding: 8px 12px; border-radius: 6px;
-      background: #fdecea; color: #b3261e; font-size: 13px;
+      background: #fef2f2; color: #dc2626; font-size: 13px;
     }
     .err mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    /* 票106(C5):字段级校验提示(对齐票12/75 .field-error 口径) */
+    .field-error { color: #dc2626; font-size: 12px; margin: -14px 0 10px 2px; }
   `]
 })
 export class AdminUserDialogComponent {
@@ -128,6 +135,14 @@ export class AdminUserDialogComponent {
   readonly isEdit = this.data.mode === 'edit';
   readonly showPwd = signal(false);
   readonly error = signal<string | null>(null);
+  /**
+   * 票106(C5):DisplayName 长度字段级错误。后端上限 200 —— 新建走
+   * AdminCreateUserCommandValidator MaximumLength(200),编辑虽无校验器,
+   * AppUser.DisplayName 的 EF HasMaxLength(200) 同为硬上限(超限落库 500)。
+   * 本弹窗与票75 投递弹窗同构:save 只回传数据、API 在父组件,故只有前端拦截半边。
+   */
+  readonly DISPLAY_NAME_MAX = 200;
+  readonly nameError = signal<string | null>(null);
 
   email = this.data.user?.email ?? '';
   displayName = this.data.user?.displayName ?? '';
@@ -153,6 +168,12 @@ export class AdminUserDialogComponent {
   }
 
   save(): void {
+    // 票106(C5):长度拦截在既有 canSave 校验之前单独亮字段下,不并入表单级 error 区
+    if (textLengthError(this.displayName.trim(), this.DISPLAY_NAME_MAX)) {
+      this.nameError.set(this.i18n.tf('validation.tooLong', { max: this.DISPLAY_NAME_MAX }));
+      return;
+    }
+    this.nameError.set(null);
     if (!this.canSave()) {
       this.error.set(
         this.displayName.trim().length === 0 ? this.t('admin.fieldName')

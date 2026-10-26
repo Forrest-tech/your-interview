@@ -129,6 +129,12 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SessionId", "Sequence");
@@ -218,6 +224,10 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LinkedSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -228,10 +238,6 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LinkedSource")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -412,6 +418,12 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.Property<string>("WordsJson")
                         .HasColumnType("jsonb");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("RecordingId");
 
                     b.ToTable("practice_recording_scores", "assessment");
@@ -500,27 +512,6 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.ToTable("speech_settings", "assessment");
                 });
 
-            modelBuilder.Entity("YourInterview.Services.Assessment.Domain.UserResume", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer");
-
-                    b.HasKey("UserId");
-
-                    b.ToTable("resumes", "assessment");
-                });
-
             modelBuilder.Entity("YourInterview.Services.Assessment.Domain.UserStorageSetting", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -534,6 +525,12 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("UserId");
 

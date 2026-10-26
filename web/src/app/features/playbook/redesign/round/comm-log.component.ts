@@ -6,12 +6,12 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { InterviewDetail } from '../../../../core/models/api.models';
+import { InterviewDetail, InterviewRound } from '../../../../core/models/api.models';
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, CommItem } from '../v2.models';
 import { MaterialsListComponent } from './materials-list.component';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject } from '../v2.helpers';
+import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, sortRoundsByDate } from '../v2.helpers';
 
 /**
  * 沟通记录(2026-10-20 定稿,条目级时间线):
@@ -80,7 +80,7 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject } 
                     <button mat-raised-button color="primary" (click)="createRoundFrom(c)">{{ t('pb.v2.c.createRound') }}</button>
                     @if (matchingRound(c); as mr) {
                       <button mat-stroked-button (click)="syncToRound(c, mr.id)">
-                        {{ fmt('pb.v2.c.syncToRound', { n: mr.order }) }}
+                        {{ fmt('pb.v2.c.syncToRound', { n: mr.no }) }}
                       </button>
                     }
                     <button mat-stroked-button (click)="setStatus(c, 'Ignored')">{{ t('pb.v2.c.park') }}</button>
@@ -95,7 +95,7 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject } 
                   <select class="fld sm" [ngModel]="''" (ngModelChange)="moveToRound(c, $event)">
                     <option value="">{{ t('pb.v2.c.pickRound') }}</option>
                     @for (r of rounds(); track r.id) {
-                      <option [value]="r.id">Round {{ r.order }} · {{ r.stage }}</option>
+                      <option [value]="r.id">Round {{ roundNo(r) }} · {{ r.stage }}</option>
                     }
                   </select>
                 </label>
@@ -121,39 +121,39 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject } 
     .comm { padding: 6px 2px; }
     .thread-head { display: flex; align-items: center; gap: 9px; margin: 16px 0 2px; }
     .thread-subject { font-size: 14px; font-weight: 600; }
-    .thread-count { font-size: 12px; font-weight: 700; color: #475467; background: #eef2f7;
+    .thread-count { font-size: 12px; font-weight: 700; color: #475569; background: #e2e8f0;
                     border-radius: 999px; padding: 1px 9px; }
-    .pending-banner { background: #fdecea; border: 1px solid #f0b8b2; color: #7c1d16;
+    .pending-banner { background: #fef2f2; border: 1px solid #fef2f2; color: #dc2626;
                         border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 12px; }
-    .empty, .hint { font-size: 13px; color: var(--yi-text-muted, #888); }
+    .empty, .hint { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .empty { font-size: 14px; }
-    .citem { border: 1px solid var(--yi-border, #ddd); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
-    .citem.pending { border-color: #e57373; }
+    .citem { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+    .citem.pending { border-color: #fef2f2; }
     .ci-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
     .ci-icon { font-size: 15px; }
     .ci-title { font-size: 14px; font-weight: 600; }
-    .ci-contact, .ci-date { font-size: 13px; color: var(--yi-text-muted, #888); }
-    .pend-tag { font-size: 12px; font-weight: 700; color: #b3261e; border: 1px solid #f0b8b2;
+    .ci-contact, .ci-date { font-size: 13px; color: var(--yi-text-muted, #475569); }
+    .pend-tag { font-size: 12px; font-weight: 700; color: #dc2626; border: 1px solid #fef2f2;
                 border-radius: 999px; padding: 1px 8px; }
-    .done-tag { font-size: 12px; font-weight: 600; color: var(--yi-text-muted, #888);
-                border: 1px solid var(--yi-border, #ccc); border-radius: 999px; padding: 1px 8px; }
+    .done-tag { font-size: 12px; font-weight: 600; color: var(--yi-text-muted, #475569);
+                border: 1px solid var(--yi-border, #e2e8f0); border-radius: 999px; padding: 1px 8px; }
     .spacer { flex: 1; }
     .icon-btn { border: none; background: transparent; cursor: pointer; color: inherit; display: inline-flex; }
-    .icon-btn.danger { color: #b3261e; }
+    .icon-btn.danger { color: #dc2626; }
     .icon-btn mat-icon { font-size: 19px; width: 19px; height: 19px; }
-    .ci-summary { font-size: 13px; color: var(--yi-text-muted, #666); margin: 7px 0 0; }
+    .ci-summary { font-size: 13px; color: var(--yi-text-muted, #475569); margin: 7px 0 0; }
     .ci-body { font-size: 14px; line-height: 1.6; margin: 6px 0 0; white-space: pre-wrap; }
     .ci-full { white-space: pre-wrap; font-size: 14px; line-height: 1.6; font-family: inherit;
-               border-top: 1px dashed var(--yi-border, #ddd); padding-top: 8px; }
-    .mini-btn { border: 1px solid var(--yi-border, #ccc); background: transparent; color: inherit;
+               border-top: 1px dashed var(--yi-border, #e2e8f0); padding-top: 8px; }
+    .mini-btn { border: 1px solid var(--yi-border, #e2e8f0); background: transparent; color: inherit;
                 border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 6px; }
-    .arr-box { border: 1px dashed #e6a23c; border-radius: 10px; padding: 10px 12px; margin-top: 10px;
-               background: color-mix(in srgb, #e6a23c 6%, transparent); }
+    .arr-box { border: 1px dashed #b06a00; border-radius: 10px; padding: 10px 12px; margin-top: 10px;
+               background: color-mix(in srgb, #b06a00 6%, transparent); }
     .arr-title { font-size: 14px; font-weight: 600; }
     .arr-actions { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
     .loose-title { font-size: 16px; font-weight: 600; margin: 18px 0 4px; }
-    .move-row { margin-top: 9px; font-size: 13px; color: var(--yi-text-muted, #777); }
-    .fld.sm { border: 1px solid var(--yi-border, #ccc); border-radius: 7px; padding: 4px 7px;
+    .move-row { margin-top: 9px; font-size: 13px; color: var(--yi-text-muted, #475569); }
+    .fld.sm { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 6px; padding: 4px 7px;
               font-size: 14px; background: transparent; color: inherit; margin-left: 6px; }
   `]
 })
@@ -173,8 +173,12 @@ export class CommLogComponent {
   readonly fullId = signal<string | null>(null);
 
   readonly useJobs = computed(() => !!this.entry().jobApplicationId);
-  readonly rounds = computed(() =>
-    [...(this.entry().rounds ?? [])].sort((a, b) => a.order - b.order));
+  // 票30(REQ-10):与详情页 stepper 同一日期序、同一展示编号
+  readonly rounds = computed(() => sortRoundsByDate(this.entry().rounds ?? []));
+
+  roundNo(r: InterviewRound): number {
+    return roundDisplayNo(this.rounds(), r);
+  }
   readonly entryAssets = computed(() =>
     (this.entry().assets ?? []).filter(a => !a.roundId));
   /** 已关联投递时:没有 Jobs 镜像行的条目级材料(communicationId 未回填的)。 */
@@ -279,12 +283,12 @@ export class CommLogComponent {
     this.fullId.set(this.fullId() === id ? null : id);
   }
 
-  matchingRound(c: CommItem): { id: string; order: number } | null {
+  matchingRound(c: CommItem): { id: string; no: number } | null {
     const stage = c.meta.arrangement?.stage?.toLowerCase();
     if (!stage) return null;
     const hit = this.rounds().find(r => r.stage.toLowerCase().includes(stage)
       || stage.includes(r.stage.toLowerCase()));
-    return hit ? { id: hit.id, order: hit.order } : null;
+    return hit ? { id: hit.id, no: roundDisplayNo(this.rounds(), hit) } : null;
   }
 
   private async persistMeta(c: CommItem, meta: AssetMeta, status?: string): Promise<void> {
@@ -347,7 +351,8 @@ export class CommLogComponent {
         location: round?.location ?? null,
         meetingLink: round?.meetingLink ?? null,
         outcome: round?.outcome ?? 'Pending',
-        feedback: round?.feedback ?? null
+        feedback: round?.feedback ?? null,
+        version: round?.version ?? null
       }).toPromise();
       await this.persistMeta(c, { ...c.meta, handlingStatus: 'Done' }, 'Done');
       this.snack.open(this.t('pb.v2.c.syncedRound'), this.t('common.close'), { duration: 2500 });

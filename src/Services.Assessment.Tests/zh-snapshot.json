@@ -1,0 +1,679 @@
+[
+ {
+  "query": "teenage",
+  "lemma": "teenage",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "十三岁到十九岁的"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "girls",
+  "lemma": "girl",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "女孩, 少女, 女佣"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "are",
+  "lemma": "are",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "be的现在时复数或第二人称单数"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "continuing",
+  "lemma": "continuing",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "继续的, 持续的, 连续的；[法] 继续的, 连续的, 持续的"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "to",
+  "lemma": "to",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "preposition",
+    "zhLines": [
+     "到, 向, 趋于"
+    ]
+   },
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "向前"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "outperform",
+  "lemma": "outperform",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "verb",
+    "zhLines": [
+     "胜过；做得比……好"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "boys",
+  "lemma": "boy",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "男孩；[法] 男孩, 少年, 儿子"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "in",
+  "lemma": "in",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "在...期间, 在...之内, 处于...之中, 从事于, 按照, 穿着；执政者, 交情"
+    ]
+   },
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "在里面的, 在朝的"
+    ]
+   },
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "进入, 朝里, 在里面, 在屋里"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "english",
+  "lemma": "english",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "英语"
+    ]
+   },
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "英文的, 英国人的"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "while",
+  "lemma": "while",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "一会儿, (一段)时间；当...的时候, 虽然；消磨"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "the",
+  "lemma": "the",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "article",
+    "zhLines": [
+     "那"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "gender",
+  "lemma": "gender",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "性；产生"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "gap",
+  "lemma": "gap",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "缝隙, 缺口, 间断, 间距, 通用汇编程序；[计] 通用汇编程序, 图形应用程序, 间距"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "打开缺口, 造成缝隙；豁开"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "achievements",
+  "lemma": "achievement",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "完成, 成就, 功业"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "math",
+  "lemma": "math",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "数学"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "and",
+  "lemma": "and",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "conjunction",
+    "zhLines": [
+     "和, 与；[计] 与"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "science",
+  "lemma": "science",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "科学, 学科, 学问, 自然科学；[医] 科学"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "has",
+  "lemma": "have",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "已经"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "有, 怀有, 拿, 进行"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "almost",
+  "lemma": "almost",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "几乎, 差不多"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "disappeared",
+  "lemma": "disappear",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "verb",
+    "zhLines": [
+     "消失, 不见"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "figures",
+  "lemma": "figure",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "数字, 价格, 图形, 形状"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "描绘, 表示, 演算, 认为；计算, 出现, 估计"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "show",
+  "lemma": "show",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "显示, 表现, 展览, 卖弄, 炫耀, 外观, 演出, 洋相；[计] 显示"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "表示, 显示, 展现, 陈列, 演出, 表明, 指出, 带领；露面, 显现, 演出"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "that",
+  "lemma": "that",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "那, 那个"
+    ]
+   },
+   {
+    "pos": "conjunction",
+    "zhLines": [
+     "以致, 因为"
+    ]
+   },
+   {
+    "pos": "pronoun",
+    "zhLines": [
+     "那"
+    ]
+   },
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "那么, 那样"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "last",
+  "lemma": "last",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "最后, 末尾, 鞋楦头"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "持续, 支持, 维持；使维持, 够...用"
+    ]
+   },
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "最后的, 末尾的, 最近的"
+    ]
+   },
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "最后, 后来"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "year",
+  "lemma": "year",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "年, 年度, 年龄；[经] 年度"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "of",
+  "lemma": "of",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "preposition",
+    "zhLines": [
+     "的, 属于"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "14-year-old",
+  "lemma": null,
+  "matchedVia": null,
+  "tier": null,
+  "blocks": null
+ },
+ {
+  "query": "reached",
+  "lemma": "reach",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "伸出, 延伸, 区域, 范围, 流域, 岬"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "到达, 达到, 伸出, 延伸, 影响；达到, 延伸, 伸出手, 传到"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "at",
+  "lemma": "at",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "在, 向, 对；[计] 地址转换器, 异常传输, 自动订票"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "least",
+  "lemma": "least",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "最少, 最小, 最小限度"
+    ]
+   },
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "最少的, 最小的"
+    ]
+   },
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "最小, 最少"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "expected",
+  "lemma": "expected",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "预期的；预料的"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "level",
+  "lemma": "level",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "水平, 水准, 平地；[计] 级别"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "弄平, 夷平, 使同等, 瞄准, 对准；变平, 拉平"
+    ]
+   },
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "同高的, 平坦的, 齐平的, 水平的"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "compared",
+  "lemma": "compare",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "比较；[计] 比较"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "比较, 比喻, 对照；相比"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "with",
+  "lemma": "with",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "preposition",
+    "zhLines": [
+     "和...在一起, 以, 由于"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "but",
+  "lemma": "but",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "除了；但是；仅仅"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "just",
+  "lemma": "just",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "正直的, 合理的, 正确的, 应得的"
+    ]
+   },
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "刚刚, 正好, 仅仅"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "ahead",
+  "lemma": "ahead",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "adjective",
+    "zhLines": [
+     "领先的, 预先的, 向前的"
+    ]
+   },
+   {
+    "pos": "adverb",
+    "zhLines": [
+     "领先, 预先, 向前, 胜于, 在前面, 在将来"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "difference",
+  "lemma": "difference",
+  "matchedVia": "direct",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "不同, 差异；[计] 差分"
+    ]
+   }
+  ]
+ },
+ {
+  "query": "is",
+  "lemma": "be",
+  "matchedVia": "ecdict-link",
+  "tier": "open",
+  "blocks": [
+   {
+    "pos": "noun",
+    "zhLines": [
+     "[计] 后端, 总线允许"
+    ]
+   },
+   {
+    "pos": "verb",
+    "zhLines": [
+     "是, 表示, 在"
+    ]
+   }
+  ]
+ }
+]

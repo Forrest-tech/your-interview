@@ -66,22 +66,6 @@ public abstract class AnalyticsConsumerBase<TEvent>(AnalyticsDbContext db,
     }
 }
 
-/// <summary>AI 模拟答题完成 → 刷新能力雷达(mock 来源)。</summary>
-public sealed class MockAnswerSubmittedConsumer(AnalyticsDbContext db,
-    ILogger<MockAnswerSubmittedConsumer> logger)
-    : AnalyticsConsumerBase<MockAnswerSubmitted>(db, logger)
-{
-    protected override async Task Handle(MockAnswerSubmitted m, CancellationToken ct)
-    {
-        // MockAnswerSubmitted 只带文本,没有六维分数 —— 分数由 Assessment 打分后写入。
-        // 这里只记录"发生过一次练习"这个事实,供活跃度统计用。
-        // 真正的六维分数由 KnowledgeLevelChanged / 面试分析完成事件带来。
-        Logger.LogInformation("模拟答题提交 MockSession={Session} Question={Q}",
-            m.MockSessionId, m.QuestionId);
-        await Task.CompletedTask;
-    }
-}
-
 /// <summary>技术栈掌握度变化 → 刷新能力雷达(knowledge 来源)+ 主题分布。</summary>
 public sealed class KnowledgeLevelChangedConsumer(AnalyticsDbContext db,
     ILogger<KnowledgeLevelChangedConsumer> logger)
@@ -89,27 +73,96 @@ public sealed class KnowledgeLevelChangedConsumer(AnalyticsDbContext db,
 {
     protected override async Task Handle(KnowledgeLevelChanged m, CancellationToken ct)
     {
-        // 掌握度 0-100 映射到雷达图的一维。等级越高分越高。
-        await UpsertAbilityAsync(m.UserId, "technicalDepth", m.Level, "knowledge", ct);
+        // 票34/REQ-18:等级语义按 MasteryLevelMapping 解释(事件 Level 是枚举 int、
+        // Mastery 是枚举名),不再按 0-100 分直消费 —— 旧口径下 Mastered 恒计 0、
+        // 雷达分恒为枚举 int 原值(0-4)。
+        var (bucket, score) = MasteryLevelMapping.Classify(m.Mastery, m.Level);
+        await UpsertAbilityAsync(m.UserId, "technicalDepth", score, "knowledge", ct);
 
-        // 主题分布:重新统计该主题下的四档数量。
-        // 这里查的是自己库里的最新快照再叠加 —— 因为 Analytics 看不到 Knowledge 的库(也不该看)。
+        // 主题分布:按单条目台账(MasteryItemState)做增量迁移。
+        // 旧实现当日已有行时以原值回写(CONF-AN-3),计数永不迁移 —— 已废除。
+        // 语义:MasteryBreakdown 当日行 = 截至当日消费者已知的全部条目的当前分布,
+        // 故当日行缺失时先从该主题最近一行结转(carry-forward),再叠加本次迁移。
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var bucket = await Db.MasteryBreakdowns.FirstOrDefaultAsync(x =>
-            x.UserId == m.UserId && x.Date == today && x.Topic == m.Topic, ct);
+        var state = await Db.MasteryItemStates.FirstOrDefaultAsync(x =>
+            x.UserId == m.UserId && x.KnowledgeItemId == m.KnowledgeItemId, ct);
 
-        if (bucket is null)
+        if (state is null)
         {
-            Db.MasteryBreakdowns.Add(new MasteryBreakdown(m.UserId, today, m.Topic,
-                total: 1, mastered: m.Level >= 80 ? 1 : 0, learning: m.Level is > 0 and < 80 ? 1 : 0,
-                fresh: m.Level <= 0 ? 1 : 0));
+            // 首次见到这条目:新主题 Total +1 且落入本次桶
+            var row = await GetOrCarryForwardRowAsync(m.UserId, m.Topic, today, ct);
+            ApplyDelta(row, from: null, to: bucket, totalDelta: +1);
+            Db.MasteryItemStates.Add(new MasteryItemState(
+                m.UserId, m.KnowledgeItemId, m.Topic, bucket.ToString()));
+        }
+        else if (state.Topic == m.Topic)
+        {
+            // 同主题等级变化:只迁移桶,Total 不变
+            if (state.Bucket != bucket.ToString())
+            {
+                var row = await GetOrCarryForwardRowAsync(m.UserId, m.Topic, today, ct);
+                ApplyDelta(row, ParseBucket(state.Bucket), bucket, totalDelta: 0);
+                state.Update(m.Topic, bucket.ToString());
+            }
         }
         else
         {
-            // 已有今天的记录 → 按本次事件的等级"移动一格"
-            bucket.Update(bucket.Total, bucket.Mastered, bucket.Learning, bucket.Fresh);
+            // 条目改了主题:旧主题 Total -1 并移出旧桶,新主题 Total +1 并落入新桶
+            var oldRow = await GetOrCarryForwardRowAsync(m.UserId, state.Topic, today, ct);
+            ApplyDelta(oldRow, ParseBucket(state.Bucket), to: null, totalDelta: -1);
+            var newRow = await GetOrCarryForwardRowAsync(m.UserId, m.Topic, today, ct);
+            ApplyDelta(newRow, from: null, bucket, totalDelta: +1);
+            state.Update(m.Topic, bucket.ToString());
         }
     }
+
+    /// <summary>取当日行;没有则以该主题最近一行的计数结转建行,再没有则零行。</summary>
+    private async Task<MasteryBreakdown> GetOrCarryForwardRowAsync(
+        Guid userId, string topic, DateOnly today, CancellationToken ct)
+    {
+        var row = await Db.MasteryBreakdowns.FirstOrDefaultAsync(x =>
+            x.UserId == userId && x.Date == today && x.Topic == topic, ct);
+        if (row is not null) return row;
+
+        var latest = await Db.MasteryBreakdowns
+            .Where(x => x.UserId == userId && x.Topic == topic)
+            .OrderByDescending(x => x.Date)
+            .FirstOrDefaultAsync(ct);
+
+        row = new MasteryBreakdown(userId, today, topic,
+            latest?.Total ?? 0, latest?.Mastered ?? 0, latest?.Learning ?? 0, latest?.Fresh ?? 0);
+        Db.MasteryBreakdowns.Add(row);
+        return row;
+    }
+
+    private static void ApplyDelta(MasteryBreakdown row, MasteryBucket? from, MasteryBucket? to,
+        int totalDelta)
+    {
+        var mastered = row.Mastered;
+        var learning = row.Learning;
+        var fresh = row.Fresh;
+
+        if (from is not null) Adjust(from.Value, -1);
+        if (to is not null) Adjust(to.Value, +1);
+
+        // 计数下限 0:台账与快照若曾被旧版本污染,迁移不得把桶打成负数
+        row.Update(Math.Max(0, row.Total + totalDelta),
+            Math.Max(0, mastered), Math.Max(0, learning), Math.Max(0, fresh));
+        return;
+
+        void Adjust(MasteryBucket b, int d)
+        {
+            switch (b)
+            {
+                case MasteryBucket.Mastered: mastered += d; break;
+                case MasteryBucket.Learning: learning += d; break;
+                default: fresh += d; break;
+            }
+        }
+    }
+
+    private static MasteryBucket ParseBucket(string name)
+        => Enum.TryParse<MasteryBucket>(name, out var b) ? b : MasteryBucket.Fresh;
 }
 
 /// <summary>投递状态流转 → 刷新求职漏斗。</summary>
@@ -167,18 +220,5 @@ public sealed class InterviewAnalysisCompletedConsumer(AnalyticsDbContext db,
 
         Logger.LogInformation("真实面试分析完成 Entry={Entry} 发音={P} 结构={S} 流利={F}",
             m.InterviewSessionId, m.PronunciationScore, m.StructureScore, m.FluencyScore);
-    }
-}
-
-/// <summary>审计事件 → 保留审计流水(合规需要,只记不分析)。</summary>
-public sealed class AuditEventRecordedConsumer(AnalyticsDbContext db,
-    ILogger<AuditEventRecordedConsumer> logger)
-    : AnalyticsConsumerBase<AuditEventRecorded>(db, logger)
-{
-    protected override Task Handle(AuditEventRecorded m, CancellationToken ct)
-    {
-        Logger.LogDebug("审计事件 User={User} Action={Action} Resource={Resource}",
-            m.UserId, m.Action, m.Resource);
-        return Task.CompletedTask;
     }
 }

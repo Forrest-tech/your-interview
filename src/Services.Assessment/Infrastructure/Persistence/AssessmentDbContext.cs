@@ -29,11 +29,6 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
     // ★ 2026-09-25(Forrest):练习类别 —— 素材树按场景过滤的下拉数据源。
     public DbSet<PracticeCategory> Categories => Set<PracticeCategory>();
 
-    // ---- 用户简历正文(2026-09-18:简历匹配分析 + 准备包输入)----
-    // 简历是长文本内容,独立成表,不让内容查询跟着其他配置变重。
-    // (M2.3:原用户级 LLM 凭据表 ai_settings 已收敛到 AiGateway,历史行由迁移搬走后删表)
-    public DbSet<UserResume> Resumes => Set<UserResume>();
-
     // ---- 示范朗读音频缓存(2026-09-16 第三十一轮)----
     // 文本没改就回放上次合成的 MP3,不再重复消耗 Azure TTS 额度。
     public DbSet<PracticeTtsCache> TtsCache => Set<PracticeTtsCache>();
@@ -63,6 +58,12 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
 
             e.HasIndex(x => new { x.UserId, x.StartedAt });
             e.HasIndex(x => x.Status);
+
+            // ★ 修复票 66:软删除过滤器 —— 与 PracticeMaterial(下方)同口径。
+            //   MarkDeleted() 只置 IsDeleted,此前本实体漏配过滤器,已删会话仍能被
+            //   GET/列表/统计读到、删后写路径也照常成功。配上后所有查询默认只看
+            //   未删会话(写路径先查会话→查不到即 404);排查/恢复时 IgnoreQueryFilters()。
+            e.HasQueryFilter(x => !x.IsDeleted);
 
             e.UseXminAsConcurrencyToken();
         });
@@ -101,6 +102,9 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
                 .OnDelete(DeleteBehavior.Cascade);
 
             e.HasIndex(x => new { x.SessionId, x.Sequence });
+            // ★ 票108 A09:题目行补 xmin 并发令牌(PG 系统列,零迁移;票101
+            //   Interviews 题目行同先例)—— answer/score/skip 钉版防串行双写覆盖。
+            e.UseXminAsConcurrencyToken();
         });
 
         b.Entity<DimensionIssue>(e =>
@@ -152,6 +156,10 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.ToTable("practice_categories");
             e.HasKey(x => x.Id);
             e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            // ★ 票87 D2 对齐:快照/存量库该列为 varchar(20),模型此前无长度配置(约定 text)
+            //   致 has-pending 恒报漂移。补 HasMaxLength(20) 使模型=快照=存量库,零 DB 变更;
+            //   取值域封闭(null 或 "techstack",领域层 SetLinkedSource 硬校验),20 永不触顶。
+            e.Property(x => x.LinkedSource).HasMaxLength(20);
 
             // 同一用户内类别名唯一(忽略大小写靠应用层归一化,这里保证精确唯一)
             e.HasIndex(x => new { x.UserId, x.Name }).IsUnique();
@@ -197,6 +205,10 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.Property(x => x.AzureRegion).HasMaxLength(50).IsRequired();
             e.Property(x => x.ReferenceText).HasColumnType("text").IsRequired();
 
+            // ★ 票108 A10:评分行补 xmin 并发令牌(PG 系统列,零迁移;
+            //   票101 J19/I06 子行先例)—— 重评分钉版防串行双写静默覆盖。
+            e.UseXminAsConcurrencyToken();
+
             // 拿不到的维度就是 NULL —— 数据库层也不给它默认值,防止有人偷偷塞 0
             e.Property(x => x.PronScore);
             e.Property(x => x.AccuracyScore);
@@ -221,18 +233,9 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.HasKey(x => x.UserId);
             // 路径用 1000 上限:macOS 的 PATH_MAX 是 1024,深目录也要装得下
             e.Property(x => x.RootPath).HasMaxLength(1000).IsRequired();
-        });
-
-        // 用户简历正文(2026-09-18)
-        b.Entity<UserResume>(e =>
-        {
-            e.ToTable("resumes");
-            // 一人一份主版本 —— 与 ai_settings 同策略
-            e.HasKey(x => x.UserId);
-            // Content 用 text:简历形态差异大(纯文本/Markdown/PDF 提取),
-            // 限长只会造成"保存失败但不知道为什么"。
-            e.Property(x => x.Content).HasColumnType("text").IsRequired();
-            e.Property(x => x.Version).IsRequired();
+            // ★ 票108 A13:设置行补 xmin 并发令牌(PG 系统列,零迁移;J19/I06 先例)
+            //   —— 同属主双页签串行双写曾活体证实静默覆盖(票101 phase1 A13)。
+            e.UseXminAsConcurrencyToken();
         });
 
         // 示范朗读音频缓存(2026-09-16 第三十一轮)
@@ -272,6 +275,12 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
 
     private void MarkNewChildrenAsAdded()
     {
+        // ★ 票69:先 DetectChanges 让子实体状态物化 —— 本钩子跑在 base.SaveChanges
+        //   的变更检测之前,未经检测时新子实体可能尚未被跟踪/状态未定,下面的
+        //   Detached / Modified 修正都会漏掉它(原 Detached 分支失效的原因之一)。
+        //   DetectChanges 在保存流程里本就会执行且幂等,提前跑不改变语义。
+        ChangeTracker.DetectChanges();
+
         // 只处理"聚合内新建的子实体":它们的 Id 是新建的、但导航属性让 EF 认为是已存在。
         // 这里按类型精确处理,比通用反射更可预测(通用方案容易误标 Unchanged 的实体)。
         foreach (var entry in ChangeTracker.Entries<MockQuestion>().ToList())
@@ -280,9 +289,73 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
         foreach (var entry in ChangeTracker.Entries<DimensionIssue>().ToList())
             if (entry.State == EntityState.Detached) entry.State = EntityState.Added;
 
+        // ★ 票69:MockQuestion / DimensionIssue 的 Guid 主键在构造函数里预赋值,
+        //   EF 在「已跟踪的父聚合上新增子实体」时还会把它们误判成 Modified
+        //   (实测状态转储:全新会话加题,两道新题均为 Modified)—— 生成 UPDATE
+        //   命中 0 行 → DbUpdateConcurrencyException → 被全局映射成 409,
+        //   于是「建会话后首加题」恒回并发冲突。上面的 Detached 分支抓不到这种。
+        //   判定口径与 BuildingBlocks.NewChildEntityFixer 一致:直接查库,行不存在
+        //   才是真新建 → 标 Added;行已存在 = 真改字段,保持 Modified(xmin 真冲突
+        //   仍走 UPDATE 0 行 → 409,票07 口径不回退)。只限这两类子实体,
+        //   不套用共享 fixer 的全上下文版 —— PracticeMaterial 等其他实体的
+        //   保存行为不在本票改动面内。
+        FlipModifiedNewChild<MockQuestion>();
+        FlipModifiedNewChild<DimensionIssue>();
+
         // 2026-09-15 第十七轮:PatchScore() 只加子实体而不改聚合根状态,
         // 不显式标 Added 就会被 EF 当成"已存在",不写 INSERT —— 这是本项目踩过的坑。
         foreach (var entry in ChangeTracker.Entries<PracticeRecordingScore>().ToList())
             if (entry.State == EntityState.Detached) entry.State = EntityState.Added;
+    }
+
+    /// <summary>
+    /// 票69:把「被 EF 误判成 Modified 的新子实体」标回 Added。
+    /// 只翻库里确实没有这一行的条目;真被修改的既有实体(RowExists=true)保持 Modified。
+    /// </summary>
+    private void FlipModifiedNewChild<TEntity>() where TEntity : class
+    {
+        foreach (var entry in ChangeTracker.Entries<TEntity>().ToList())
+        {
+            if (entry.State != EntityState.Modified) continue;
+            if (entry.Metadata.FindPrimaryKey() is null) continue;
+
+            var keyProps = entry.Metadata.FindPrimaryKey()!.Properties;
+            if (keyProps.Count != 1 || keyProps[0].ClrType != typeof(Guid)) continue;
+
+            var id = (Guid)entry.Property(keyProps[0].Name).CurrentValue!;
+            if (id == Guid.Empty) continue;
+
+            if (!RowExists(entry.Metadata.GetTableName(),
+                    entry.Metadata.GetSchema() ?? Schema, keyProps[0].Name, id))
+                entry.State = EntityState.Added;
+        }
+    }
+
+    /// <summary>
+    /// 原生 SQL 查行存在性(不经 EF 跟踪,避免递归)。查询失败时按「已存在」处理:
+    /// 宁可维持原状态报并发错,也不要错误地重复 INSERT(同 NewChildEntityFixer 口径)。
+    /// </summary>
+    private bool RowExists(string? table, string schema, string keyColumn, Guid id)
+    {
+        if (table is null) return true;
+        try
+        {
+            var conn = Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                conn.Open();
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SELECT 1 FROM \"{schema}\".\"{table}\" WHERE \"{keyColumn}\" = @id LIMIT 1";
+            var p = cmd.CreateParameter();
+            p.ParameterName = "@id";
+            p.Value = id;
+            cmd.Parameters.Add(p);
+
+            return cmd.ExecuteScalar() is not null;
+        }
+        catch
+        {
+            return true;
+        }
     }
 }

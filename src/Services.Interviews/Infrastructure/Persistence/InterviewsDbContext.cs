@@ -2,6 +2,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using YourInterview.BuildingBlocks.Domain;
 using YourInterview.BuildingBlocks.Persistence;
+using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Interviews.Domain;
 
 namespace YourInterview.Services.Interviews.Infrastructure.Persistence;
@@ -10,9 +11,17 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence;
 /// 实战机经的持久化上下文。
 /// 每个微服务独占一个 PostgreSQL schema("interviews"),服务间不共享表 —— 微服务的核心纪律。
 /// </summary>
-public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> options) : DbContext(options)
+public sealed class InterviewsDbContext(
+    DbContextOptions<InterviewsDbContext> options,
+    ICurrentUser? currentUser = null) : DbContext(options)
 {
     public const string Schema = "interviews";
+
+    /// <summary>
+    /// 当前请求用户(COD-01/票03 全局过滤器用)。无 HTTP 上下文(消费者/后台)时为 null,
+    /// 过滤器 fail-closed 匹配零行 —— 非请求路径必须 IgnoreQueryFilters + 事件 UserId 显式校验。
+    /// </summary>
+    public Guid? CurrentUserId { get; } = currentUser?.UserId;
 
     public DbSet<InterviewEntry> Entries => Set<InterviewEntry>();
     public DbSet<InterviewAsset> Assets => Set<InterviewAsset>();
@@ -29,6 +38,19 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
 
     /// <summary>分析任务台账(发件箱)。派发器与回写端点共用。</summary>
     public DbSet<AnalysisJob> AnalysisJobs => Set<AnalysisJob>();
+
+    // ---- COD-10b/票15:Playbook 本地数据上后端(原 localStorage 孤岛)----
+    /// <summary>STAR 故事库(用户级全局列表,原 pb.starStories)。</summary>
+    public DbSet<StarStory> StarStories => Set<StarStory>();
+
+    /// <summary>历史复盘孤儿键归档(原 pb.debrief.&lt;条目id&gt;,原始 JSON 逐字)。</summary>
+    public DbSet<LegacyDebrief> LegacyDebriefs => Set<LegacyDebrief>();
+
+    /// <summary>历史粘贴材料孤儿键归档(原 pb-pasted-&lt;条目id&gt;,原文逐字)。</summary>
+    public DbSet<LegacyPastedMaterial> LegacyPastedMaterials => Set<LegacyPastedMaterial>();
+
+    /// <summary>轮次提醒(CONF-CAL-2):由轮次排期派生的应用内提醒,唯一键 (RoundId, Kind)。</summary>
+    public DbSet<RoundReminder> RoundReminders => Set<RoundReminder>();
 
     /// <summary>
     /// 给该条目所有未关单的任务排定终态(只改跟踪状态,不落库 ——
@@ -98,9 +120,15 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.HasIndex(x => x.InterviewDate);
             e.HasIndex(x => x.CompanyName);
 
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.UserId).IsRequired();   // COD-01 contract:回填后收紧为非空
             // PostgreSQL 原生 xmin 做乐观并发令牌,不需要额外 rowversion 列
             e.UseXminAsConcurrencyToken();
-            e.HasQueryFilter(x => !x.IsDeleted);
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(InterviewEntry.DebriefJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewEntry.QuestionsToAskJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewEntry.SpeechMetricsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
 
             e.HasMany(x => x.Assets).WithOne().HasForeignKey(a => a.InterviewEntryId)
                 .OnDelete(DeleteBehavior.Cascade);
@@ -150,12 +178,17 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
             // 2026-10-20 详情页 v2:材料元数据(解析字段/摘要/处理状态等),前端约定结构。
             e.Property(x => x.MetaJson).HasColumnType("text");
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(InterviewAsset.TranscriptSegmentsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewAsset.MetaJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             // 2026-10-19:资产按 Round 管理。历史材料 RoundId/Phase 保持 null,不强制回填。
             e.Property(x => x.RoundId);
             e.Property(x => x.Phase).HasConversion<string>().HasMaxLength(10);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.RoundId });
             e.HasIndex(x => x.StoragePath);                       // 巡检按路径反查;软删条目清理孤儿文件也走它
+            // 票101:材料行纳入 xmin 并发令牌(系统列,零迁移)——meta/归属编辑回传钉版。
+            e.UseXminAsConcurrencyToken();
         });
 
         b.Entity<InterviewQuestion>(e =>
@@ -176,8 +209,15 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.Property(x => x.RoundId);
             e.Property(x => x.AskedBy).HasMaxLength(200);
             e.Property(x => x.ReviewJson).HasColumnType("text");
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(InterviewQuestion.ReviewJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewQuestion.WeaknessTagsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewQuestion.FollowUpQuestionsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewQuestion.MissedPointsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Sequence });
+            // 票101:题目行纳入 xmin 并发令牌(系统列,零迁移)——题目编辑/mastery/复盘回传钉版。
+            e.UseXminAsConcurrencyToken();
         });
 
         b.Entity<InterviewWeakness>(e =>
@@ -212,10 +252,18 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             // 2026-10-20 详情页 v2:整轮复盘汇总 + 结构化备考报告。
             e.Property(x => x.ReviewJson).HasColumnType("text");
             e.Property(x => x.PrepReportJson).HasColumnType("text");
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(InterviewRound.PrepQuestionsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewRound.EmailsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewRound.ChecklistJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewRound.ReviewJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(InterviewRound.PrepReportJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.Property(x => x.RecordingUrl).HasMaxLength(2000);
             e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.Order }).IsUnique();
+            // 票101:轮次行纳入 xmin 并发令牌(系统列,零迁移)——轮次编辑/邮件/复盘/备考报告回传钉版。
+            e.UseXminAsConcurrencyToken();
         });
 
         b.Entity<GeneratedMaterial>(e =>
@@ -243,6 +291,9 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.HasKey(x => x.Id);
             e.Property(x => x.DimensionsJson).HasColumnType("text");
             e.Property(x => x.SummaryBulletsJson).HasColumnType("text");
+            // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
+            e.Metadata.FindProperty(nameof(AnalysisSnapshot.DimensionsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
+            e.Metadata.FindProperty(nameof(AnalysisSnapshot.SummaryBulletsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.HasIndex(x => x.InterviewEntryId);
             e.HasIndex(x => new { x.InterviewEntryId, x.CreatedAt });
         });
@@ -266,6 +317,75 @@ public sealed class InterviewsDbContext(DbContextOptions<InterviewsDbContext> op
             e.HasIndex(x => x.IdempotencyKey)
                 .IsUnique()
                 .HasFilter("\"Status\" IN ('Pending', 'Dispatched')");
+        });
+
+        // ---- COD-10b/票15:Playbook 本地数据(票03 归属口径与其它实体一致)----
+
+        b.Entity<StarStory>(e =>
+        {
+            e.ToTable("star_stories");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ClientId).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(500).IsRequired();
+            // S/T/A/R 是段落文本:text 列不限长,长度口径由应用层校验把关
+            // (StarStoryLimits.FieldMax,超限 400 而非落库 500;同 JdText 先例)。
+            e.Property(x => x.Situation).HasColumnType("text");
+            e.Property(x => x.Task).HasColumnType("text");
+            e.Property(x => x.Action).HasColumnType("text");
+            e.Property(x => x.Result).HasColumnType("text");
+            e.Property(x => x.Tags).HasMaxLength(1000);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.ClientId }).IsUnique();
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        b.Entity<LegacyDebrief>(e =>
+        {
+            e.ToTable("legacy_debriefs");
+            e.HasKey(x => x.Id);
+            // 原始 JSON 逐字归档:text 列不限长,上限由导入校验把关。
+            e.Property(x => x.PayloadJson).HasColumnType("text").IsRequired();
+            // 票77:归档键(键后缀原文)—— 去重/唯一性以此为准;EntryId 旧列保留。
+            e.Property(x => x.EntryKey).HasColumnType("text").IsRequired();
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.EntryKey }).IsUnique();
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        b.Entity<LegacyPastedMaterial>(e =>
+        {
+            e.ToTable("legacy_pasted_materials");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Content).HasColumnType("text").IsRequired();
+            // 票77:同 LegacyDebrief —— 归档键 EntryKey。
+            e.Property(x => x.EntryKey).HasColumnType("text").IsRequired();
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.EntryKey }).IsUnique();
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        // ---- CONF-CAL-2:轮次提醒(派生数据,同步口径见 ReminderSync)----
+        b.Entity<RoundReminder>(e =>
+        {
+            e.ToTable("round_reminders");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.EntryId);
+            // 同步 upsert 的收口键:一轮次一类提醒最多一行。
+            e.HasIndex(x => new { x.RoundId, x.Kind }).IsUnique();
+            // 到期列表的主查询形状:按用户 + 状态 + 触发时刻。
+            e.HasIndex(x => new { x.UserId, x.Status, x.RemindAt });
+            e.UseXminAsConcurrencyToken();
+            e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
         });
     }
 }

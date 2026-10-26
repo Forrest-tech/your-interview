@@ -1,0 +1,85 @@
+<!-- ★ 票124:素材回收站对话框。
+     布局对齐全站弹窗语言(与 app-confirm / material-transfer 同构):
+     白卡片圆角 12、标题栏「图标 + 标题 + 右侧关闭」。
+
+     ★ 三态纪律(事故教训,规格 §8.2 / R8):
+       加载中 → 转圈;失败 → loadFailed + 重试;成功且为空 → empty 文案。
+       **加载失败绝不渲染成空态** —— 空态文案只许出现在"确实为空"时。 -->
+<h2 class="tr-head">
+  <mat-icon class="tr-head-ico">restore_from_trash</mat-icon>
+  <span class="tr-head-title">{{ t('practice.trash.title') }}</span>
+  @if (total > 0) {
+    <span class="tr-head-count">{{ total }}</span>
+  }
+  <span class="spacer"></span>
+  <!-- 全部恢复:仅当顶层项 ≥2 时显示(单项时行内已有恢复按钮,不必重复动作)。 -->
+  @if (showRestoreAll) {
+    <button mat-stroked-button class="tr-restore-all"
+            [disabled]="restoringId !== null"
+            (click)="onRestoreAll()">
+      <mat-icon>restore</mat-icon>
+      {{ t('practice.trash.restoreAll') }}
+    </button>
+  }
+  <button mat-icon-button class="tr-close" (click)="onClose()"
+          [attr.aria-label]="t('common.close')" [matTooltip]="t('common.close')">
+    <mat-icon>close</mat-icon>
+  </button>
+</h2>
+
+<div class="tr-body">
+  @if (showLoading) {
+    <div class="tr-loading">
+      <mat-spinner diameter="24"></mat-spinner>
+    </div>
+  } @else if (showError) {
+    <!-- 加载失败:如实报错 + 重试,绝不冒充空态。 -->
+    <div class="tr-error">
+      <mat-icon class="tr-error-ico">error_outline</mat-icon>
+      <p class="tr-error-text">{{ t('practice.trash.loadFailed') }}</p>
+      <button mat-stroked-button (click)="onRetry()">
+        <mat-icon>refresh</mat-icon>
+        {{ t('common.refresh') }}
+      </button>
+    </div>
+  } @else if (showEmpty) {
+    <p class="tr-empty">{{ t('practice.trash.empty') }}</p>
+  } @else {
+    <div class="tr-list">
+      @for (item of items; track item.id) {
+        <div class="tr-item">
+          <mat-icon class="tr-item-ico">{{ view(item).icon }}</mat-icon>
+          <div class="tr-item-main">
+            <div class="tr-item-name" [title]="view(item).name">{{ view(item).name }}</div>
+            <div class="tr-item-meta">
+              @if (view(item).path) {
+                <span class="tr-meta-path" [title]="view(item).path">{{ view(item).path }}</span>
+                <span class="tr-meta-sep">·</span>
+              }
+              <!-- 根项显示类别名;null = 未分类(回落既有键文案)。 -->
+              <span class="tr-meta-cat">{{ view(item).categoryName ?? t('practice.categoryUncategorized') }}</span>
+              <span class="tr-meta-sep">·</span>
+              <span class="tr-meta-time">{{ t('practice.trash.deletedAt') }} {{ view(item).deletedAt }}</span>
+            </div>
+            <div class="tr-item-hints">
+              <!-- 子树提示:仅当 DescendantTotal > 0。 -->
+              @if (view(item).containsItems) {
+                <span class="tr-hint">{{ view(item).containsItems }}</span>
+              }
+              <!-- 录音提示:仅当 RecordingCount > 0。 -->
+              @if (view(item).containsRecordings) {
+                <span class="tr-hint">{{ view(item).containsRecordings }}</span>
+              }
+            </div>
+          </div>
+          <button mat-stroked-button color="primary" class="tr-restore"
+                  [disabled]="restoringId !== null"
+                  (click)="onRestore(item.id)">
+            <mat-icon>restore</mat-icon>
+            {{ t('practice.trash.restore') }}
+          </button>
+        </div>
+      }
+    </div>
+  }
+</div>

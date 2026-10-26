@@ -32,7 +32,10 @@
         </li>
       </ul>
 
-      <p class="brand-foot">{{ t('auth.foot') }}</p>
+      <p class="brand-foot">
+        <span>{{ t('auth.footPersonal') }}</span>
+        <span>{{ t('auth.footLocal') }}</span>
+      </p>
     </div>
   </aside>
 
@@ -91,10 +94,16 @@
           {{ busy() ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
 
-        @if (!humanOk && email && password) {
+        @if (!humanOk) {
           <p class="human-hint">{{ t('auth.humanHint') }}</p>
         }
       </form>
+
+      <!-- ★ ML-FIX-UI(W-UI-5):注册入口 —— 此前登录页无任何注册链接。 -->
+      <p class="switch-link">
+        {{ t('auth.noAccount') }}
+        <a routerLink="/register">{{ t('auth.register') }}</a>
+      </p>
 
       @if (googleEnabled()) {
         <div class="divider"><span>{{ t('auth.or') }}</span></div>
@@ -102,10 +111,10 @@
         <button mat-stroked-button class="full google-btn" type="button"
                 (click)="loginWithGoogle()" [disabled]="busy() || googleBusy()">
           <svg class="g-mark" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.2H12v4.3h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.02.16 3.5 2.7.24.02c2.2-2 3.5-5 3.5-8.6z"/>
-            <path fill="#34A853" d="M12 24c3.2 0 5.9-1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5l-.15.01-3.6 2.8-.05.13C3.5 21.3 7.4 24 12 24z"/>
-            <path fill="#FBBC05" d="M5.3 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.01-.17-3.7-2.8-.12.06A11.9 11.9 0 0 0 0 12c0 1.9.5 3.8 1.4 5.5l3.9-3.1z"/>
-            <path fill="#EA4335" d="M12 4.6c2.2 0 3.7.9 4.5 1.7l3.3-3.2C17.9 1.2 15.2 0 12 0 7.4 0 3.5 2.7 1.4 6.5l3.9 3.1c.9-2.9 3.6-5 6.7-5z"/>
+            <path fill="#2563eb" d="M23.5 12.3c0-.9-.1-1.5-.3-2.2H12v4.3h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.02.16 3.5 2.7.24.02c2.2-2 3.5-5 3.5-8.6z"/>
+            <path fill="#16a34a" d="M12 24c3.2 0 5.9-1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5l-.15.01-3.6 2.8-.05.13C3.5 21.3 7.4 24 12 24z"/>
+            <path fill="#b06a00" d="M5.3 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.01-.17-3.7-2.8-.12.06A11.9 11.9 0 0 0 0 12c0 1.9.5 3.8 1.4 5.5l3.9-3.1z"/>
+            <path fill="#dc2626" d="M12 4.6c2.2 0 3.7.9 4.5 1.7l3.3-3.2C17.9 1.2 15.2 0 12 0 7.4 0 3.5 2.7 1.4 6.5l3.9 3.1c.9-2.9 3.6-5 6.7-5z"/>
           </svg>
           {{ googleBusy() ? t('auth.googleEstablishing') : t('auth.googleSignIn') }}
         </button>

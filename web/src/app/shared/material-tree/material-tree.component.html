@@ -41,10 +41,10 @@
       </button>
     </div>
     <div class="th-row th-tools">
-      <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" (click)="addFolder(null)">
+      <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFolder')" [disabled]="!canEdit" (click)="addFolder(null)">
         <mat-icon>create_new_folder</mat-icon>
       </button>
-      <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFile')" (click)="addFile(null)">
+      <button mat-icon-button class="head-tool" [matTooltip]="t('tree.newFile')" [disabled]="!canEdit" (click)="addFile(null)">
         <mat-icon>note_add</mat-icon>
       </button>
       <!-- ★ 2026-09-23(Forrest 第十二轮):展开/收起改为行业通用的
@@ -62,8 +62,23 @@
         </svg>
       </button>
       <span class="spacer"></span>
+      <!-- ★ 票124:回收站入口 —— 工具行末尾的图标按钮。
+           计数徽标在 trashCount>0 时显示(>99 显示 99+):
+           事故里用户对"135 条已删素材躺在库里"毫无感知,
+           入口必须在有内容时自己说话。 -->
+      <button mat-icon-button class="head-tool head-trash"
+              [matTooltip]="t('practice.trash.title')"
+              [attr.aria-label]="t('practice.trash.title')"
+              (click)="trashOpen.emit()">
+        <mat-icon>restore_from_trash</mat-icon>
+        @if (trashBadge) {
+          <span class="trash-badge">{{ trashBadge }}</span>
+        }
+      </button>
+      <span class="spacer"></span>
       @if (!editable) {
-        <button class="head-act" [matTooltip]="t('practice.editTreeHint')" (click)="editRequest.emit()">
+        <button class="head-act" [matTooltip]="canEdit ? t('practice.editTreeHint') : t('practice.treeReadOnly')"
+                [disabled]="!canEdit" (click)="editRequest.emit()">
           <mat-icon>edit</mat-icon>
         </button>
       } @else {
@@ -79,6 +94,21 @@
     </div>
   </header>
 
+  <!-- ★ ML-FIX-UI(W-UI-2):无编辑权限时的只读说明 —— 门禁必须带原因,
+       不能只把按钮置灰了事。 -->
+  @if (!canEdit) {
+    <p class="tree-readonly">{{ t('practice.treeReadOnly') }}</p>
+  }
+
+  <!-- ★ ML-FIX-UI(W-UI-1):保存失败横幅 —— 失败原因必须看得见,
+       且给重试(走显式保存确认路径)。成功时父级清掉 saveError,横幅自消失。 -->
+  @if (saveError) {
+    <div class="tree-save-error" role="alert">
+      <span class="tree-save-error-text">{{ saveError }}</span>
+      <button type="button" class="tree-save-error-retry" (click)="saveRequest.emit()">{{ t('common.retry') }}</button>
+    </div>
+  }
+
   <!-- 空白落点:拖到这里 = 移到最外层。
        ⚠️ 渲染走 visibleNodes(按类别过滤),数据仍是全量 this.nodes。 -->
   <div class="tree-body"
@@ -87,6 +117,16 @@
        [class.root-drop]="dropMode() === 'root'">
     @if (visibleNodes.length === 0) {
       <p class="tree-empty">{{ emptyHint || t('tree.emptyHint') }}</p>
+      <!-- ★ 票124 §8.4:树空且回收站非空时的回收站指针行。
+           追加在既有 emptyHint **下方**,不改既有 hint 的文本与显示条件;
+           trashCount=0 时本行不渲染,空态与现行完全一致(不变项 #7)。
+           这行是事故的直接修复点:整树被误删后,用户至少还有一条出路。 -->
+      @if (showTrashHint) {
+        <button type="button" class="tree-trash-hint" (click)="trashOpen.emit()">
+          <mat-icon>restore_from_trash</mat-icon>
+          <span>{{ trashHintText }}</span>
+        </button>
+      }
     }
     <ng-container
       [ngTemplateOutlet]="level"

@@ -1,0 +1,21 @@
+{
+ "builder": "build_ecdict_subset.py v2.1 (deterministic gzip, mtime=0)",
+ "source_csv": "/home/hatch/workspace/ticket119-build/ecdict.csv",
+ "source_sha256": "1a6947e04785db63613a92e14903cdae7954f7e84860b10e68e5c7cbb3f9c3cf",
+ "source_rows": 770611,
+ "output": "/home/hatch/workspace/ticket119-build/ecdict-subset-final.tsv.gz",
+ "output_sha256": "4b316045854e8e450f38580675652f263d6160e34b474e908a25de9b6fbe95f1",
+ "output_bytes": 5374836,
+ "columns": [
+  "word",
+  "phonetic",
+  "definition",
+  "translation",
+  "exchange",
+  "collins",
+  "oxford",
+  "tag"
+ ],
+ "rows": 91599,
+ "rows_without_phonetic": 26228
+}

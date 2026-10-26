@@ -1,4 +1,5 @@
 using System.Text;
+using YourInterview.SharedContracts.Analysis;
 
 namespace YourInterview.Analysis.Worker.Analysis;
 

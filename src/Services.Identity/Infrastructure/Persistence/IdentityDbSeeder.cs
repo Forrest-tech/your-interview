@@ -122,6 +122,7 @@ public static class IdentityDbSeeder
         Roles.PowerUser => "高级用户:业务全权限 + 审计只读,无用户管理",
         Roles.User => "普通用户:自己的求职/机经/知识库/模拟数据",
         Roles.Viewer => "只读用户:仅可查看",
+        Roles.Service => "服务账号:仅 Analysis.Worker 回写链路最小权限(机经回写 + Analytics 能力回写)",
         _ => role
     };
 }

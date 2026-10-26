@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Mock — Playbook detail with Rounds Track — 票123 remediation (structural signature)</title>
+<style>
+@font-face{font-family:'Space Grotesk';src:url('fonts/space-grotesk-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Space Grotesk';src:url('fonts/space-grotesk-600.woff2') format('woff2');font-weight:600}
+@font-face{font-family:'Space Grotesk';src:url('fonts/space-grotesk-700.woff2') format('woff2');font-weight:700}
+@font-face{font-family:'Inter';src:url('fonts/inter-400.woff2') format('woff2');font-weight:400}
+@font-face{font-family:'Inter';src:url('fonts/inter-500.woff2') format('woff2');font-weight:500}
+@font-face{font-family:'Inter';src:url('fonts/inter-600.woff2') format('woff2');font-weight:600}
+:root{
+  --midnight:#1B2350; --brand:#2E3A8C; --signal-tint:#E4E7F5; --signal-soft:#C6CDEA;
+  --go:#1B7F4B; --go-tint:#E2F1E8; --stop:#B3261E; --attention:#B06A00; --attention-tint:#FAF0D2;
+  --parked:#68707E; --parked-fill:#EDF0F4; --paper:#F5F6F8; --surface:#fff; --hairline:#E1E4EC;
+  --ink:#1F2430; --ink2:#5B6270; --track:#E2E5EC;
+  --sg:'Space Grotesk',sans-serif; --inter:'Inter',-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--inter);font-size:14px;color:var(--ink);background:var(--paper)}
+.topbar{height:60px;background:var(--midnight);color:#fff;display:flex;align-items:center;padding:0 16px;gap:6px;border-bottom:1px solid #12183A}
+.brand{display:flex;align-items:center;gap:9px;margin-right:14px}
+.brand .mark{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-family:var(--sg);font-weight:700;font-size:13px}
+.brand .name{font-family:var(--sg);font-size:16.5px;font-weight:600}
+.nav{display:flex;gap:2px;align-items:center}
+.nav a{color:#D8DCF2;text-decoration:none;font-size:13.5px;padding:7px 12px;border-radius:999px}
+.nav a.active{background:rgba(255,255,255,.16);color:#fff;font-weight:500}
+.topbar .sp{flex:1}
+.avatar{width:30px;height:30px;border-radius:50%;background:#7986CB;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+.page{max-width:1240px;margin:0 auto;padding:22px 24px 34px;display:grid;grid-template-columns:280px 1fr;gap:22px}
+.rail h4{font-size:13px;font-weight:600;display:flex;gap:7px;align-items:center;margin-bottom:9px}
+.rail .n{background:var(--parked-fill);color:var(--ink2);border-radius:999px;font-size:11.5px;padding:0 7px;font-family:var(--sg)}
+.railitem{border:1px solid #eaecf0;border-radius:12px;padding:10px 12px;margin-bottom:6px}
+.railitem b{font-size:13.5px;display:block}
+.railitem span{color:var(--ink2);font-size:12.5px}
+.railitem.on{background:color-mix(in srgb, var(--brand) 8%, #fff);border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+.back{color:var(--ink);text-decoration:none;font-size:13.5px;font-weight:500;display:inline-block;margin-bottom:12px}
+.card{background:var(--surface);border:1px solid var(--hairline);border-radius:10px;padding:18px 20px}
+.head{display:flex;gap:18px;justify-content:space-between}
+h1{font-family:var(--sg);font-size:24px;font-weight:600;letter-spacing:-.01em}
+.company{color:var(--ink2);font-size:13.5px;margin-top:3px}
+.statuschip{display:inline-flex;margin-top:9px;background:var(--signal-tint);color:var(--brand);border-radius:999px;padding:2.5px 10px;font-size:12px;font-weight:600}
+.nextstep{border:1px solid var(--signal-soft);background:#FBFBFE;border-radius:10px;padding:12px 16px;min-width:262px}
+.nextstep .k{color:var(--brand);font-size:12px;font-weight:600;margin-bottom:4px}
+.nextstep .v{font-family:var(--sg);font-size:16.5px;font-weight:600;line-height:1.35}
+.nextstep .d{color:var(--ink2);font-size:12.5px;margin-top:3px;line-height:1.5}
+.meta{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;border-top:1px solid var(--hairline);margin-top:16px;padding-top:14px}
+.meta .k{font-size:12px;color:var(--ink2);font-weight:500;margin-bottom:3px}
+.meta .v{font-size:13.5px;font-weight:500}
+.meta .v.missing{color:var(--ink2);font-weight:400}
+.boxes{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--hairline);border-radius:6px;margin-top:16px;overflow:hidden}
+.box{padding:12px 14px;border-left:1px solid var(--hairline)}
+.box:first-child{border-left:none}
+.box .k{font-size:12px;color:var(--ink2);font-weight:500;margin-bottom:4px}
+.box .v{font-size:13.5px}
+.box .v.missing{color:var(--ink2)}
+.box a{color:var(--brand);font-size:12.5px;font-weight:500;text-decoration:none;display:inline-block;margin-top:8px}
+.actions{display:flex;gap:10px;margin-top:16px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:8px;border:1px solid var(--hairline);background:var(--surface);color:var(--ink);font-weight:500;font-size:13px;padding:8px 15px;cursor:pointer;font-family:var(--inter)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.tabs{display:flex;gap:22px;border-bottom:1px solid var(--hairline);margin-bottom:6px}
+.tabs span{padding:8px 2px;font-size:13.5px;color:var(--ink2)}
+.tabs span.on{color:var(--brand);font-weight:600;border-bottom:2px solid var(--brand);margin-bottom:-1px}
+
+/* ===== THE ROUNDS TRACK — the stepper grammar rotated into the page =====
+   The Tracker stepper's shipped constants, verbatim (tracker.component.scss
+   .sp-dot/.sp-line): 16px nodes, 2px rail. Reached — completed rounds AND
+   the current one, the stepper's frontier semantics — = brand fill + 4px
+   brand halo; future = hollow (#C3C9D4 border). Rail done span =
+   rgba(46,58,140,.45), pending span = rgba(0,0,0,.12). The current round is
+   distinguished by expansion, not by a special glyph; verdicts live in the
+   fact rows. The add-round node ends the rail. */
+.rtrack{position:relative;margin-top:8px}
+.rtrack::before{content:'';position:absolute;left:7px;top:37px;bottom:26px;width:2px;background:rgba(0,0,0,.12)}
+.rtrack .fill{position:absolute;left:7px;top:37px;width:2px;background:rgba(46,58,140,.45);height:107px}
+.rnode{position:relative;padding:12px 0 16px 36px}
+.rnode .dot{position:absolute;left:0;top:17px;width:16px;height:16px;border-radius:50%;background:var(--brand);border:2px solid var(--brand);box-shadow:0 0 0 4px rgba(46,58,140,.14)}
+.rnode.add .dot{background:var(--surface);border:2px dashed #C3C9D4;box-shadow:none}
+.rhead{display:flex;align-items:center;gap:10px}
+.rhead h3{font-family:var(--sg);font-size:16px;font-weight:600}
+.stagechip{background:var(--signal-tint);color:var(--brand);border-radius:999px;padding:1.5px 9px;font-size:11.5px;font-weight:600}
+.rhead .sp{flex:1}
+.rwhen{text-align:right;color:var(--ink2);font-size:12.5px;line-height:1.5}
+.facts{display:flex;gap:26px;margin-top:7px;flex-wrap:wrap}
+.fact .k{font-size:12px;color:var(--ink2);font-weight:500;margin-right:7px}
+.fact .v{font-size:13px;font-weight:500}
+.fact .v.go{color:var(--go);font-weight:600}
+.textbtn{color:var(--brand);font-size:12.5px;font-weight:500;text-decoration:none}
+.strip{border:1px dashed #B9BECB;border-radius:6px;padding:10px 14px;margin-top:13px;display:flex;gap:10px;align-items:center;font-size:13px}
+.strip .cal{color:var(--brand)}
+.strip .rem{color:var(--ink2)}
+.strip .on{margin-left:auto;color:var(--go);font-weight:600;font-size:12.5px;background:var(--go-tint);border-radius:999px;padding:2px 9px}
+.subtabs{display:flex;gap:20px;border-bottom:1px solid var(--hairline);margin:16px 0 12px}
+.subtabs span{padding:7px 2px;font-size:13px;color:var(--ink2)}
+.subtabs span.on{color:var(--brand);font-weight:600;border-bottom:2px solid var(--brand);margin-bottom:-1px}
+.prep h3{font-family:var(--sg);font-size:15px;font-weight:600}
+.prep p{color:var(--ink2);font-size:13px;line-height:1.55;margin-top:5px;max-width:640px}
+.addcard{border:1px dashed #B9BECB;border-radius:10px;padding:11px 14px;display:inline-block;min-width:300px}
+.addcard .t{font-weight:600;font-size:13.5px}
+.addcard .d{color:var(--ink2);font-size:12.5px;margin-top:2px}
+</style></head>
+<body>
+<header class="topbar">
+  <div class="brand"><div class="mark">Yi</div><div class="name">Your Interview</div></div>
+  <nav class="nav">
+    <a href="#">Dashboard</a><a href="#">Tracker</a><a class="active" href="#">Playbook</a>
+    <a href="#">Tech Stack</a><a href="#">AI Practice</a><a href="#">AI Mock</a><a href="#">Analytics</a><a href="#">Resume</a>
+  </nav>
+  <div class="sp"></div><div class="avatar">S</div>
+</header>
+<main class="page">
+  <aside class="rail">
+    <h4>In progress <span class="n">2</span></h4>
+    <div class="railitem"><b>Mohawk Medbuy</b><span>.NET Developer</span></div>
+    <div class="railitem on"><b>Corpay</b><span>Senior Software Developer</span></div>
+    <h4 style="margin-top:16px">Completed <span class="n">0</span></h4>
+  </aside>
+
+  <div>
+    <a class="back" href="#">‹ Back to list</a>
+    <section class="card">
+      <div class="head">
+        <div>
+          <h1>Senior Software Developer</h1>
+          <div class="company">Corpay</div>
+          <span class="statuschip">In progress</span>
+        </div>
+        <div class="nextstep">
+          <div class="k">Next step</div>
+          <div class="v">Prepare for Round 2</div>
+          <div class="d">Experience round<br>2026-10-28<br>Video</div>
+        </div>
+      </div>
+      <div class="meta">
+        <div><div class="k">Applied</div><div class="v">2026-10-15</div></div>
+        <div><div class="k">Source</div><div class="v missing">Not recorded</div></div>
+        <div><div class="k">Readiness</div><div class="v">0%</div></div>
+        <div><div class="k">Recruiter</div><div class="v missing">Not added</div></div>
+        <div><div class="k">Last contact</div><div class="v missing">No contact yet</div></div>
+      </div>
+      <div class="boxes">
+        <div class="box"><div class="k">JD summary</div><div class="v missing">No JD yet</div><a href="#">Expand</a></div>
+        <div class="box"><div class="k">Company</div><div class="v missing">No company intro yet</div><a href="#">Expand</a></div>
+        <div class="box"><div class="k">Resume used</div><div class="v missing">No resume file linked</div><a href="#">View</a></div>
+        <div class="box"><div class="k">Resume score</div><div class="v missing">Not scored yet</div><a href="#">How is it calculated?</a></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary">+ Add material</button>
+        <button class="btn">AI mock interview</button>
+        <button class="btn">Open job posting</button>
+        <button class="btn" style="padding:8px 10px">⋮</button>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <div class="tabs"><span class="on">Rounds</span><span>Communications</span></div>
+
+      <div class="rtrack">
+        <div class="fill"></div>
+
+        <div class="rnode">
+          <span class="dot"></span>
+          <div class="rhead">
+            <h3>Round 1</h3><span class="stagechip">Technical</span>
+            <div class="sp"></div>
+            <div class="rwhen">2026-10-05<br>Video</div>
+          </div>
+          <div class="facts">
+            <span class="fact"><span class="k">Outcome</span><span class="v go">Passed</span></span>
+            <span class="fact"><span class="k">Materials</span><span class="v">3</span></span>
+            <span class="fact"><span class="k">Interviewers</span><span class="v">Jimmy P.</span></span>
+            <a class="textbtn" href="#" style="align-self:center">View record</a>
+          </div>
+        </div>
+
+        <div class="rnode current">
+          <span class="dot"></span>
+          <div class="rhead">
+            <h3>Round 2</h3><span class="stagechip">Experience</span>
+            <div class="sp"></div>
+            <div class="rwhen">2026-10-28<br>Video</div>
+            <button class="btn">Edit round</button>
+          </div>
+          <div class="facts">
+            <span class="fact"><span class="k">Outcome</span><span class="v">Upcoming</span></span>
+            <span class="fact"><span class="k">Materials</span><span class="v">0</span></span>
+            <span class="fact"><span class="k">Interviewers</span><span class="v">Hajir F., Reza G.</span></span>
+          </div>
+          <div class="strip">
+            <span class="cal">▦</span><span>In the in-app calendar</span>
+            <span class="rem">Reminders: 1 day and 1 hour before</span>
+            <span class="on">Reminders on</span>
+          </div>
+          <div class="subtabs"><span class="on">Prep report</span><span>Interview record</span><span>Save Q&amp;A</span><span>Materials</span></div>
+          <div class="prep">
+            <h3>Prep report</h3>
+            <p>Default framework (no tailored report yet). It follows the interview flow: generate one to tailor it to the JD, question bank and fetched experiences.</p>
+            <div style="margin-top:12px"><button class="btn primary">Generate prep report</button></div>
+          </div>
+        </div>
+
+        <div class="rnode add">
+          <span class="dot"></span>
+          <div class="addcard">
+            <div class="t">+ Add a round (paste invite email)</div>
+            <div class="d">or create one from Communications below</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+</main>
+</body></html>

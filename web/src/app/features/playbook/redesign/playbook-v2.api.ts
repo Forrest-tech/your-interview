@@ -66,7 +66,15 @@ export class PlaybookV2Api {
 
   getTranscript(entryId: string, assetId: string):
     Observable<{ transcriptText: string | null; segmentsJson: string | null }> {
-    return this.api.get(`${this.base(entryId)}/assets/${assetId}/transcript`);
+    // 后端契约是 { fullText, segmentsJson }(InterviewsController.GetTranscript 的 DTO 口径,
+    // Analysis.Worker 也按 fullText 读同一端点,不能改名)—— 在这一层统一映射为
+    // 消费方用的 transcriptText,round-record / materials-list 不感知后端字段名 (COD-06)。
+    return this.api.get<{ fullText: string | null; segmentsJson: string | null }>(
+      `${this.base(entryId)}/assets/${assetId}/transcript`)
+      .pipe(map(r => ({
+        transcriptText: r.fullText ?? null,
+        segmentsJson: r.segmentsJson ?? null
+      })));
   }
 
   audioBlob(entryId: string, assetId: string): Observable<Blob> {
@@ -95,12 +103,12 @@ export class PlaybookV2Api {
     return this.api.delete(`${this.base(entryId)}/rounds/${roundId}`);
   }
 
-  setQuestionReview(entryId: string, questionId: string, reviewJson: string): Observable<unknown> {
-    return this.api.put(`${this.base(entryId)}/questions/${questionId}/review`, { reviewJson });
+  setQuestionReview(entryId: string, questionId: string, reviewJson: string, version?: number | null): Observable<unknown> {
+    return this.api.put(`${this.base(entryId)}/questions/${questionId}/review`, { reviewJson, version: version ?? null });
   }
 
-  setRoundReview(entryId: string, roundId: string, reviewJson: string): Observable<unknown> {
-    return this.api.put(`${this.base(entryId)}/rounds/${roundId}/review`, { reviewJson });
+  setRoundReview(entryId: string, roundId: string, reviewJson: string, version?: number | null): Observable<unknown> {
+    return this.api.put(`${this.base(entryId)}/rounds/${roundId}/review`, { reviewJson, version: version ?? null });
   }
 
   generateRoundReview(entryId: string, roundId: string): Observable<{ reviewJson: string }> {
@@ -144,19 +152,10 @@ export class PlaybookV2Api {
   }
 
   startTranscription(entryId: string, assetId: string): Observable<unknown> {
+    // 资产级路由 (COD-07):后端 POST {id}/assets/{assetId}/transcribe —— 调用方在
+    // 某一轮的录音上点「开始转写」,必须精确转写那一件;条目级 transcription/start
+    // 选的是全条目第一件录音,多轮条目会转错轮次,故不走条目级。
     return this.api.post(`${this.base(entryId)}/assets/${assetId}/transcribe`, {});
-  }
-
-  runAnalysis(entryId: string): Observable<unknown> {
-    return this.api.post(`${this.base(entryId)}/analyze`, {});
-  }
-
-  roundIcsUrl(entryId: string, roundId: string): string {
-    return `${this.base(entryId)}/rounds/${roundId}/ics`;
-  }
-
-  downloadIcs(entryId: string, roundId: string): Observable<Blob> {
-    return this.api.getBlob(this.roundIcsUrl(entryId, roundId));
   }
 
   // ---------------- Tech Stack(Knowledge) ----------------
@@ -214,10 +213,6 @@ export class PlaybookV2Api {
         { betterAnswer: body.betterAnswer });
     }
     return this.api.put(`/api/knowledge/${id}/answer`, { myAnswer: body.answer ?? null });
-  }
-
-  addKnowledgeSource(id: string, body: Record<string, unknown>): Observable<unknown> {
-    return this.api.post(`/api/knowledge/${id}/sources`, body);
   }
 
   // ---------------- 沟通记录(Jobs 同源) ----------------

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using YourInterview.Services.Jobs.Application;
 
 namespace YourInterview.Services.Jobs.Infrastructure.Services;
 
@@ -40,6 +41,15 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
     private static readonly Regex HtmlTag = new(
         @"<[^>]+>", RegexOptions.Compiled);
 
+    /// <summary>
+    /// 票 154 R-154-9：块级标签。抓取文本里小节标题能否成行，不应依赖源码换行 ——
+    /// 块级标签替换为换行（其余标签仍替换为空格），使标题行独立成行、
+    /// 152 的行级模块切除信号更可靠。只改换行产出，不改 RemoveNavLines 与 152 切除的判定口径。
+    /// </summary>
+    private static readonly Regex BlockTag = new(
+        @"</?(h[1-6]|p|div|li|tr|section|article)\b[^>]*>",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex MultiSpace = new(
         @"[ \t\xa0]{2,}", RegexOptions.Compiled);
 
@@ -60,6 +70,13 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
     private static readonly Regex SeparatorsOnly = new(
         @"^[\s|·•\-–—/\\]+$", RegexOptions.Compiled);
 
+    /// <summary>票142:反爬站判定供公司简介抓取腿复用(同一口径,避免两份名单漂移)。</summary>
+    internal static bool IsBlockedHost(string host)
+    {
+        var h = host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;
+        return BlockedHosts.Any(b => h.EndsWith(b, StringComparison.OrdinalIgnoreCase));
+    }
+
     public async Task<string?> FetchPageTextAsync(string url, CancellationToken ct)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -67,9 +84,7 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
         if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
             return null;
 
-        var host = uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
-            ? uri.Host[4..] : uri.Host;
-        if (BlockedHosts.Any(b => host.EndsWith(b, StringComparison.OrdinalIgnoreCase)))
+        if (IsBlockedHost(uri.Host))
             return null;
 
         try
@@ -109,10 +124,15 @@ public sealed class JobPageFetcher(IHttpClientFactory httpFactory) : IJobPageFet
         var mm = MainContent.Match(noScript);
         var content = mm.Success && mm.Groups[2].Value.Length >= 300
             ? mm.Groups[2].Value : noScript;
-        var noTags = HtmlTag.Replace(content, " ");
+        // 票 154 R-154-9：块级标签先换行、其余标签再空格（顺序定死，否则块级也被空格吃掉）。
+        var blockBroken = BlockTag.Replace(content, "\n");
+        var noTags = HtmlTag.Replace(blockBroken, " ");
         var decoded = System.Net.WebUtility.HtmlDecode(noTags);
         var collapsed = MultiSpace.Replace(decoded, " ");
-        var deNav = RemoveNavLines(collapsed);
+        // 票 152 R-152-1：提纯层切除相关文章/博客模块（标签剥离后、RemoveNavLines 之前，
+        // 顺序定死）。信号定义见 RelatedModuleCut，三层共用同一处。
+        var cut = RelatedModuleCut.Cut(collapsed);
+        var deNav = RemoveNavLines(cut);
         var trimmed = MultiNewline.Replace(deNav, "\n\n");
         return trimmed.Trim();
     }

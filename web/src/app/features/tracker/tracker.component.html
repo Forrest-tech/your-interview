@@ -1,4 +1,4 @@
-<div class="page">
+<div class="page content-in">
   <header class="page-head">
     <div>
       <h2>{{ t('nav.tracker') }}</h2>
@@ -6,7 +6,8 @@
     </div>
     <div class="head-actions">
       <!-- ★ Active/Archived 标签页 (Simplify 对等) -->
-      <mat-button-toggle-group [value]="showArchived() ? 'archived' : 'active'"
+      <!-- 票 148：分段控件改 36px 外高（token 34px + 上下 1px 边框），与 Smart paste/+ 钮齐平。 -->
+      <mat-button-toggle-group class="status-tabs" [value]="showArchived() ? 'archived' : 'active'"
                                (change)="showArchived.set($event.value === 'archived'); page.set(1); reload()">
         <mat-button-toggle value="active">{{ t('tracker.active') }}</mat-button-toggle>
         <mat-button-toggle value="archived">{{ t('tracker.archivedTab') }}</mat-button-toggle>
@@ -14,15 +15,18 @@
       <button mat-flat-button color="primary" class="smart-btn" (click)="openSmartAdd()">
         <mat-icon>auto_awesome</mat-icon>{{ t('tracker.smartAdd') }}
       </button>
-      <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.newApp')">
+      <!-- 票 143：+ 钮由 40px mini-fab 改为与 Smart paste 同高 36px 的扁平圆钮（同高、同色、无阴影），与工具栏其余按钮协调。 -->
+      <button mat-mini-fab color="primary" class="add-btn" (click)="openCreate()" [matTooltip]="t('tracker.dlgNew')">
         <mat-icon>add</mat-icon>
       </button>
-      <button mat-icon-button [matMenuTriggerFor]="moreMenu" matTooltip="更多操作">
+      <button mat-icon-button [matMenuTriggerFor]="moreMenu" [matTooltip]="t('tracker.moreActions')"
+[attr.aria-label]="t('tracker.moreActions')">
         <mat-icon>more_vert</mat-icon>
       </button>
       <button mat-icon-button (click)="favOnly.set(!favOnly())"
               [color]="favOnly() ? 'warn' : undefined"
-              matTooltip="只看收藏">
+              [matTooltip]="t('tracker.favOnly')"
+[attr.aria-label]="t('tracker.favOnly')">
         <mat-icon>{{ favOnly() ? 'favorite' : 'favorite_border' }}</mat-icon>
       </button>
       <mat-menu #moreMenu="matMenu">
@@ -33,10 +37,10 @@
           <mat-icon>download</mat-icon>{{ t('tracker.exportCsv') }}
         </button>
         <button mat-menu-item (click)="exportBackup()">
-          <mat-icon>backup</mat-icon>备份
+          <mat-icon>backup</mat-icon>{{ t('tracker.backup') }}
         </button>
         <button mat-menu-item (click)="backupFile.click()">
-          <mat-icon>restore</mat-icon>恢复备份
+          <mat-icon>restore</mat-icon>{{ t('tracker.restoreBackup') }}
         </button>
         <input #backupFile type="file" hidden accept=".json" (change)="importBackup($event)">
         <button mat-menu-item (click)="csvFile.click()">
@@ -55,18 +59,21 @@
     <mat-card class="ghosting-banner">
       <mat-icon>warning</mat-icon>
       <div>
-        <b>{{ ghostingApps().length }} 个申请超过 21 天无更新</b>
+        <b>{{ tn('tracker.ghostingTitle', ghostingApps().length) }}</b>
         <span class="ghosting-list">
           @for (a of ghostingApps().slice(0, 5); track a.id) {
-            <span class="ghosting-item">{{ a.companyName }} · {{ a.role }}</span>
+            <span class="ghosting-item">
+              <span class="ghosting-company">{{ a.companyName }}</span>
+              <span class="ghosting-role">{{ a.role }}</span>
+            </span>
           }
           @if (ghostingApps().length > 5) {
-            <span>等 {{ ghostingApps().length - 5 }} 个…</span>
+            <span>{{ tn('tracker.ghostingMore', ghostingApps().length - 5) }}</span>
           }
         </span>
       </div>
-      <button mat-button (click)="ghostingApps.set([])">忽略</button>
-      <button mat-button (click)="dismissGhostingForever()">不再提示</button>
+      <button mat-button (click)="ghostingApps.set([])">{{ t('tracker.ghostingIgnore') }}</button>
+      <button mat-button (click)="dismissGhostingForever()">{{ t('tracker.ghostingNever') }}</button>
     </mat-card>
   }
 
@@ -84,7 +91,7 @@
       <div class="metric-val">{{ statInterview() }}</div>
       <div class="metric-label">{{ t('dash.interviewing') }}</div>
     </mat-card>
-    <mat-card class="metric highlight">
+    <mat-card class="metric" [class.highlight]="statOffer() > 0">
       <div class="metric-val">{{ statOffer() }}</div>
       <div class="metric-label">{{ t('dash.offer') }}</div>
     </mat-card>
@@ -108,22 +115,14 @@
           <mat-icon matPrefix>search</mat-icon>
           @if (search()) {
             <button mat-icon-button matSuffix type="button" (click)="clearFilters()"
-                    [matTooltip]="t('common.clearFilter')">
+                    [matTooltip]="t('common.clearFilter')"
+[attr.aria-label]="t('common.clearFilter')">
               <mat-icon>close</mat-icon>
             </button>
           }
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="sort">
-          <mat-label>{{ t('tracker.sortLabel') }}</mat-label>
-          <mat-select [ngModel]="sort()" (ngModelChange)="onSortChange($event)" name="sort">
-            <mat-option value="updated">{{ t('tracker.sortUpdated') }}</mat-option>
-            <mat-option value="applied">{{ t('tracker.sortAppliedDesc') }}</mat-option>
-            <mat-option value="appliedAsc">{{ t('tracker.sortAppliedAsc') }}</mat-option>
-            <mat-option value="company">{{ t('tracker.sortCompany') }}</mat-option>
-          </mat-select>
-        </mat-form-field>
-
+        <!-- 票 144：Sort 下拉已移除（用户令：不需要）——排序锁定为当前 sort 信号值（默认 Recently updated），后端 sortBy 参数不变。 -->
         <!-- 视图切换:看板 / 列表(Simplify 模式) -->
         <div class="view-toggle" role="group" [attr.aria-label]="t('tracker.viewMode')">
           <button mat-button type="button" class="view-btn"
@@ -145,14 +144,6 @@
             <mat-icon>account_tree</mat-icon>
           </button>
         </div>
-
-        <!-- 批量选择模式开关:默认关闭,卡片不显示勾选框 -->
-        <button mat-stroked-button type="button" (click)="toggleSelectMode()"
-                [class.active]="selectMode()"
-                [matTooltip]="t('tracker.select')">
-          <mat-icon>{{ selectMode() ? 'close' : 'check_box' }}</mat-icon>
-          {{ selectMode() ? t('common.done') : t('tracker.select') }}
-        </button>
 
         <!-- 列可见性:只在看板视图显示 -->
         @if (viewMode() === 'board') {
@@ -197,44 +188,6 @@
     </mat-card-content>
   </mat-card>
 
-  <!-- ★ 批量操作工具栏:选择模式下出现 -->
-  @if (selectMode()) {
-    <mat-card class="bulk-bar">
-      @if (selectedCount() > 0) {
-        <span class="bulk-count">{{ tn('tracker.bulkSelected', selectedCount()) }}</span>
-        <button mat-stroked-button type="button" (click)="selectAllVisible()">
-          <mat-icon>select_all</mat-icon>{{ t('tracker.selectAll') }}
-        </button>
-        <mat-form-field appearance="outline" class="bulk-status">
-          <mat-label>{{ t('tracker.bulkStatus') }}</mat-label>
-          <mat-select (selectionChange)="bulkSetStatus($event.value); $event.source.value = null"
-                      [placeholder]="t('tracker.bulkStatus')">
-            @for (s of statusOptions; track s) {
-              <mat-option [value]="s">{{ t('status.' + s) }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-        @if (!showArchived()) {
-          <button mat-stroked-button (click)="bulkArchive()">
-            <mat-icon>archive</mat-icon>{{ t('tracker.archive') }}
-          </button>
-        }
-        <button mat-stroked-button color="warn" (click)="bulkDelete()">
-          <mat-icon>delete</mat-icon>{{ t('common.delete') }}
-        </button>
-        <span class="spacer"></span>
-        <button mat-button (click)="clearSelection()">{{ t('tracker.clearSelection') }}</button>
-      } @else {
-        <span class="bulk-count">{{ t('tracker.selectHint') }}</span>
-        <span class="spacer"></span>
-        <button mat-stroked-button type="button" (click)="selectAllVisible()">
-          <mat-icon>select_all</mat-icon>{{ t('tracker.selectAll') }}
-        </button>
-        <button mat-button (click)="toggleSelectMode()">{{ t('common.done') }}</button>
-      }
-    </mat-card>
-  }
-
   @if (loading()) {
     <mat-progress-bar mode="indeterminate"></mat-progress-bar>
   }
@@ -249,17 +202,22 @@
     </mat-card>
   }
 
-  <!-- 看板 -->
-  @if (!loading() && items().length === 0) {
+  <!-- 空态(票 118 / F-2):全页只留一个 —— 看板用这张卡;列表/流程视图各有自己的空态,不再叠加 -->
+  @if (!loading() && items().length === 0 && viewMode() === 'board') {
     <mat-card class="empty-card">
       <mat-icon>inbox</mat-icon>
       <p>{{ t('tracker.empty') }}</p>
       @if (search() || statusFilter()) {
-        <button mat-icon-button (click)="clearFilters()" [matTooltip]="t('common.clearFilter')">
+        <button mat-icon-button (click)="clearFilters()" [matTooltip]="t('common.clearFilter')"
+[attr.aria-label]="t('common.clearFilter')">
           <mat-icon>filter_alt_off</mat-icon>
         </button>
       } @else {
-        <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.firstApp')">
+        <!-- 票123 R-6.2:看板空态卡的图标按钮补可访问名 —— 它已有 tooltip
+             (tracker.firstApp),但 Material 的 tooltip 是 aria-describedby,不是名字。
+             不改视觉、不改行为,纯加法。 -->
+        <button mat-mini-fab color="primary" (click)="openCreate()" [matTooltip]="t('tracker.firstApp')"
+[attr.aria-label]="t('tracker.firstApp')">
           <mat-icon>add</mat-icon>
         </button>
       }
@@ -292,18 +250,10 @@
              (cdkDropListDropped)="onCardDrop($event, col.status)">
           @for (a of col.items; track a.id) {
             <mat-card class="app-card" cdkDrag [cdkDragData]="a"
-                      [class.selected]="isSelected(a.id)"
                       (click)="openDetail(a)"
                       tabindex="0" role="button"
                       [attr.aria-label]="a.companyName + ' ' + a.role"
                       (keydown.enter)="openDetail(a)" (keydown.space)="openDetail(a); $event.preventDefault()">
-              @if (selectMode()) {
-                <mat-checkbox class="select-box" [checked]="isSelected(a.id)"
-                              (change)="toggleSelect(a.id, $event)"
-                              (click)="$event.stopPropagation()"
-                              [attr.aria-label]="t('tracker.bulkSelected')">
-                </mat-checkbox>
-              }
               <span class="logo-wrap">
                 <span class="logo-avatar" [style.background]="avatarColor(a.companyName)">{{ companyInitials(a.companyName) }}</span>
                 @if (a.companyLogoUrl && !logoBrokenCard(a.id)) {
@@ -321,17 +271,36 @@
                     <mat-icon>history</mat-icon>{{ t('tracker.stale') }}
                   </span>
                 }
+                <!-- 票123 R-4:看板卡片补上列表行已有的「等待天数」与 chip 行 ——
+                     卡片信息集 = 列表行信息 − 步进器。 -->
+                @if (daysWaiting(a); as dw) {
+                  <div class="card-wait">{{ tf('tracker.daysInLoop', { n: dw }) }}</div>
+                }
+                @if (isTerminal(a) || needsFollowUp(a)) {
+                  <div class="card-chips">
+                    @if (isTerminal(a)) {
+                      <span class="chip {{ terminalChipClass(a) }}">{{ t('status.' + a.status) }}</span>
+                    }
+                    @if (needsFollowUp(a)) {
+                      <span class="chip attention" [matTooltip]="t('tracker.followupHint')">{{ t('tracker.followup') }}</span>
+                    }
+                  </div>
+                }
               </div>
               <button mat-icon-button class="fav-btn" (click)="toggleFavorite(a.id); $event.stopPropagation()"
-                      [color]="isFavorite(a.id) ? 'warn' : undefined">
+                      [color]="isFavorite(a.id) ? 'warn' : undefined"
+                      [matTooltip]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')"
+                      [attr.aria-label]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')">
                 <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
               </button>
               @if (!showArchived()) {
-                <button mat-icon-button (click)="archive(a, $event)" matTooltip="{{ t('tracker.archive') }}">
+                <button mat-icon-button (click)="archive(a, $event)" [matTooltip]="t('tracker.archive')"
+                        [attr.aria-label]="t('tracker.archive')">
                   <mat-icon>archive</mat-icon>
                 </button>
               } @else {
-                <button mat-icon-button (click)="unarchive(a, $event)" matTooltip="{{ t('tracker.unarchive') }}">
+                <button mat-icon-button (click)="unarchive(a, $event)" [matTooltip]="t('tracker.unarchive')"
+                        [attr.aria-label]="t('tracker.unarchive')">
                   <mat-icon>unarchive</mat-icon>
                 </button>
               }
@@ -339,7 +308,7 @@
           }
 
           @if (col.items.length === 0) {
-            <div class="col-empty">—</div>
+            <div class="col-empty">{{ t('tracker.colEmpty') }}</div>
           }
         </div>
       </section>
@@ -358,13 +327,10 @@
   <div class="list-view" id="status">
     @for (a of displayItems(); track a.id) {
       <div class="list-row" (click)="openDetail(a)" [class.followup]="needsFollowUp(a)"
-           [class.selected]="isSelected(a.id)">
-        @if (selectMode()) {
-          <mat-checkbox class="select-box" [checked]="isSelected(a.id)"
-                        (change)="toggleSelect(a.id, $event)"
-                        (click)="$event.stopPropagation()">
-          </mat-checkbox>
-        }
+           [class.term-offer]="a.status === 'Offer' || a.status === 'Accepted'"
+           [class.term-rejected]="a.status === 'Rejected'"
+           [class.term-ghosted]="a.status === 'Ghosted'"
+           [class.term-withdrawn]="a.status === 'Withdrawn'">
         <div class="lr-logo">
           @if (logoUrl(a) && !logoBrokenCard(a.id)) {
             <img [src]="logoUrl(a)" [alt]="a.companyName"
@@ -395,13 +361,14 @@
               <span class="lr-loc"><mat-icon>place</mat-icon>{{ a.location }}</span>
             }
             @if (daysWaiting(a); as dw) {
-              <span class="lr-wait">{{ dw }}d</span>
+              <span class="lr-wait">{{ tf('tracker.daysInLoop', { n: dw }) }}</span>
             }
           </div>
         </div>
         <div class="lr-pipe">
           @for (s of pipelineStages; track s; let i = $index; let last = $last) {
-            <div class="sp-stage" [class.done]="stageReached(a, s)">
+            <div class="sp-stage" [class.done]="stageReached(a, s)"
+                 [class.current]="stageReached(a, s) && (last || !stageReached(a, pipelineStages[i + 1]))">
               <span class="sp-label">{{ t('status.' + s) }}</span>
               <span class="sp-track">
                 <span class="sp-dot"></span>
@@ -414,19 +381,29 @@
           }
         </div>
         <div class="lr-side" (click)="$event.stopPropagation()">
+          <button mat-icon-button class="fav-btn" (click)="toggleFavorite(a.id); $event.stopPropagation()"
+                  [color]="isFavorite(a.id) ? 'warn' : undefined"
+                  [matTooltip]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')"
+                  [attr.aria-label]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')">
+            <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
+          </button>
           <button mat-stroked-button (click)="prepareInterview(a, $event)"
                   [matTooltip]="t('tracker.prepareInterview')" class="prep-btn">
             <mat-icon>school</mat-icon>{{ t('tracker.prepShort') }}
           </button>
-          <mat-form-field appearance="outline" class="lr-status">
-            <mat-select [ngModel]="a.status" (ngModelChange)="quickChangeStatus(a, $event)"
-                        [attr.aria-label]="t('tracker.changeStatus')"
-                        [placeholder]="t('tracker.status')">
-              @for (s of statusOptions; track s) {
-                <mat-option [value]="s">{{ t('status.' + s) }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
+          <!-- 票 140：状态控件由 56px outlined 输入框改为与 Prep 同款 stroked 按钮 + 菜单——
+               同组件即同高度/圆角/内边距，与左侧行高自然协调；行为不变（点选即 quickChangeStatus）。 -->
+          <button mat-stroked-button class="status-btn" [matMenuTriggerFor]="statusMenu"
+                  (click)="$event.stopPropagation()"
+                  [attr.aria-label]="t('tracker.changeStatus')">
+            {{ t('status.' + a.status) }}
+            <mat-icon>arrow_drop_down</mat-icon>
+          </button>
+          <mat-menu #statusMenu="matMenu">
+            @for (s of statusOptions; track s) {
+              <button mat-menu-item (click)="quickChangeStatus(a, s)">{{ t('status.' + s) }}</button>
+            }
+          </mat-menu>
         </div>
       </div>
     } @empty {
@@ -436,7 +413,15 @@
           <p>{{ t('tracker.noSearchResults') }}</p>
           <button mat-stroked-button (click)="clearFilters()">{{ t('common.clearFilter') }}</button>
         } @else {
-          {{ t('tracker.noResults') }}
+          <!-- 票123 R-6.1:列表视图零态不再是那行裸字 —— 改成看板卡自己的形态:
+               图标 + 标题 + 正文 + 一个能真正打开新建对话框的主行动。
+               CTA 绑 tracker.dlgNew(对话框标题键),文案与标题同源,不可能漂移。 -->
+          <mat-card class="empty-card list-empty-card">
+            <mat-icon>inbox</mat-icon>
+            <p class="empty-title">{{ t('tracker.empty') }}</p>
+            <p class="empty-body">{{ t('tracker.emptyBody') }}</p>
+            <button mat-flat-button color="primary" (click)="openCreate()">{{ t('tracker.dlgNew') }}</button>
+          </mat-card>
         }
       </div>
     }
@@ -459,17 +444,34 @@
                              (flowChart().nodes[e.from].x + 130) + ' 110, ' +
                              (flowChart().nodes[e.to].x - 30) + ' 110, ' +
                              flowChart().nodes[e.to].x + ' 110'"
-                  fill="none" stroke="#90caf9"
+                  fill="none" stroke="#dbeafe"
                   [attr.stroke-width]="e.width" opacity="0.6"/>
           }
-          <!-- 节点 -->
+          <!-- 节点(票73:点击选中阶段 → 下方条带展开该阶段;右上角红徽标 = 该阶段已收藏数)
+
+               ★ 票123 C-2.3:Sankey 节点组原先只可点,键盘完全够不到 ——
+               整个票 73 的功能(选阶段驱动收藏条带)对键盘用户不存在。
+               现在补 tabindex/role/aria-label,并让 Enter/Space 触发同一个
+               selectFlowStage()——沿用本模板既有的 tabindex 模式(:93 / :297)。 -->
           @for (n of flowChart().nodes; track n.status) {
-            <g [attr.transform]="'translate(' + n.x + ', 0)'">
+            <g [attr.transform]="'translate(' + n.x + ', 0)'" class="sankey-node-g"
+               tabindex="0" role="button"
+               [attr.aria-label]="n.label + ' ' + n.count"
+               (click)="selectFlowStage(n.status)"
+               (keydown.enter)="selectFlowStage(n.status)"
+               (keydown.space)="selectFlowStage(n.status); $event.preventDefault()">
               <rect x="0" y="60" width="100" [attr.height]="n.height"
-                    rx="8" class="sankey-node" [class.empty]="n.count === 0"/>
+                    rx="8" class="sankey-node" [class.empty]="n.count === 0"
+                    [class.selected]="flowStage() === n.status"/>
               <text x="50" y="45" text-anchor="middle" class="sankey-label">{{ n.label }}</text>
               <text x="50" [attr.y]="60 + n.height / 2 + 5" text-anchor="middle"
                     class="sankey-count">{{ n.count }}</text>
+              @if (flowFavCount(n.status) > 0) {
+                <g class="sankey-fav-badge">
+                  <circle cx="100" cy="60" r="11"/>
+                  <text x="100" y="65" text-anchor="middle">{{ flowFavCount(n.status) }}</text>
+                </g>
+              }
             </g>
           }
         </svg>
@@ -496,6 +498,28 @@
           </div>
         }
       </div>
+      <!-- ★ 票73:收藏条带 —— 默认「收藏的投递」;选中阶段节点后展开该阶段全部投递 -->
+      <div class="flow-strip" data-testid="flow-fav-strip">
+        <div class="flow-strip-title">
+          {{ flowStage() ? t('status.' + flowStage()) : t('tracker.favStripTitle') }}
+        </div>
+        @for (a of flowStripItems(); track a.id) {
+          <div class="flow-strip-row" (click)="openDetail(a)">
+            <span class="fs-role">{{ a.role }}</span>
+            <span class="fs-company">· {{ a.companyName }}</span>
+            <span class="fs-spacer"></span>
+            <span class="fs-stage">{{ t('status.' + a.status) }}</span>
+            <button mat-icon-button class="fav-btn" (click)="toggleFavorite(a.id); $event.stopPropagation()"
+                    [color]="isFavorite(a.id) ? 'warn' : undefined"
+                    [matTooltip]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')"
+                    [attr.aria-label]="isFavorite(a.id) ? t('tracker.unfavorite') : t('tracker.favorite')">
+              <mat-icon>{{ isFavorite(a.id) ? 'favorite' : 'favorite_border' }}</mat-icon>
+            </button>
+          </div>
+        } @empty {
+          <p class="flow-strip-empty">{{ flowStage() ? t('tracker.favStripStageEmpty') : t('tracker.favStripEmpty') }}</p>
+        }
+      </div>
     } @else {
       <div class="list-empty">{{ t('tracker.noResults') }}</div>
     }
@@ -506,10 +530,14 @@
   @if (totalPages() > 1) {
     <div class="pager">
       <button mat-icon-button [disabled]="page() <= 1" (click)="goPage(page() - 1)"
-              [matTooltip]="t('common.prevPage')">
+              [matTooltip]="t('common.prevPage')"
+[attr.aria-label]="t('common.prevPage')">
         <mat-icon>chevron_left</mat-icon>
       </button>
-      <span class="pager-info">{{ tf('tracker.pager', { p: page(), tp: totalPages(), t: total() }) }}</span>
+      <span class="pager-info">
+        <span>{{ tf('tracker.pagerPage', { p: page(), tp: totalPages() }) }}</span>
+        <span>{{ tf('tracker.pagerTotal', { t: total() }) }}</span>
+      </span>
       <button mat-icon-button [disabled]="page() >= totalPages()" (click)="goPage(page() + 1)"
               [matTooltip]="t('common.nextPage')">
         <mat-icon>chevron_right</mat-icon>

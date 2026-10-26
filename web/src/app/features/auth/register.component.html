@@ -1,0 +1,66 @@
+<div class="register-page">
+  <div class="register-card">
+    <div class="form-head">
+      <h2>{{ t('auth.createAccount') }}</h2>
+      <p>{{ t('auth.registerHint') }}</p>
+    </div>
+
+    @if (busy()) { <mat-progress-bar mode="indeterminate" class="top-bar"></mat-progress-bar> }
+
+    <form (ngSubmit)="submit()" #f="ngForm" class="register-form">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('auth.fieldEmail') }}</mat-label>
+        <input matInput type="email" name="email" [(ngModel)]="email"
+               autocomplete="username" required autofocus
+               placeholder="you@example.com">
+        <mat-icon matPrefix>mail_outline</mat-icon>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('auth.fieldDisplayName') }}</mat-label>
+        <input matInput type="text" name="displayName" [(ngModel)]="displayName"
+               autocomplete="name" required maxlength="200">
+        <mat-icon matPrefix>person_outline</mat-icon>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('auth.fieldPassword') }}</mat-label>
+        <input matInput [type]="hidePassword() ? 'password' : 'text'"
+               name="password" [(ngModel)]="password"
+               autocomplete="new-password" required minlength="12">
+        <mat-icon matPrefix>lock_outline</mat-icon>
+        <button mat-icon-button matSuffix type="button"
+                (click)="hidePassword.set(!hidePassword())" tabindex="-1"
+                [attr.aria-label]="t('auth.togglePassword')">
+          <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
+        <mat-hint>{{ t('auth.passwordHint') }}</mat-hint>
+      </mat-form-field>
+
+      <div class="human-row">
+        <app-human-check [(verified)]="humanOk"></app-human-check>
+      </div>
+
+      @if (error()) {
+        <div class="err" role="alert">
+          <mat-icon>error_outline</mat-icon>
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <button mat-flat-button color="primary" class="full submit"
+              type="submit" [disabled]="busy() || !email || !displayName || !password || !humanOk">
+        {{ busy() ? t('auth.registering') : t('auth.register') }}
+      </button>
+
+      @if (!humanOk) {
+        <p class="human-hint">{{ t('auth.humanHint') }}</p>
+      }
+    </form>
+
+    <p class="switch-link">
+      {{ t('auth.haveAccount') }}
+      <a routerLink="/login">{{ t('auth.signIn') }}</a>
+    </p>
+  </div>
+</div>

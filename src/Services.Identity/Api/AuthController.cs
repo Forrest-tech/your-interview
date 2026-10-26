@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using MediatR;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.BuildingBlocks.Web;
+using YourInterview.Services.Identity.Application;
 using YourInterview.Services.Identity.Application.Abstractions;
 using YourInterview.Services.Identity.Application.Admin;
 using YourInterview.Services.Identity.Application.Auth;
@@ -102,12 +103,12 @@ public sealed class AuthController(ISender sender, ICurrentUser currentUser) : C
         if (userId is null) return Microsoft.AspNetCore.Http.Results.Unauthorized();
 
         var result = await sender.Send(new UpdateProfileCommand(
-            userId.Value, body.DisplayName, body.AvatarUrl, body.PreferredLanguage, body.TimeZone), ct);
+            userId.Value, body.DisplayName, body.AvatarUrl, body.PreferredLanguage, body.TimeZone, body.Version), ct);
         return result.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(result.Value) : result.ToProblemDetails();
     }
 
     public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
-    public sealed record UpdateProfileRequest(string DisplayName, string? AvatarUrl, string? PreferredLanguage, string? TimeZone);
+    public sealed record UpdateProfileRequest(string DisplayName, string? AvatarUrl, string? PreferredLanguage, string? TimeZone, uint? Version = null); // 票101 Version:读时 xmin
 }
 
 /// <summary>
@@ -157,7 +158,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
     public async Task<IResult> UpdateUser(Guid id, [FromBody] AdminUpdateUserBody body, CancellationToken ct)
     {
         var r = await sender.Send(new AdminUpdateUserCommand(id, body.DisplayName, body.IsActive,
-            body.RequirePasswordChange, body.Roles), ct);
+            body.RequirePasswordChange, body.Roles, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -183,9 +184,10 @@ public sealed class AdminController(ISender sender) : ControllerBase
 
     [HttpDelete("users/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminUsersWrite)]
-    public async Task<IResult> DeleteUser(Guid id, CancellationToken ct)
+    public async Task<IResult> DeleteUser(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new AdminDeleteUserCommand(id), ct);
+        var r = await sender.Send(new AdminDeleteUserCommand(id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -213,15 +215,16 @@ public sealed class AdminController(ISender sender) : ControllerBase
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminRolesWrite)]
     public async Task<IResult> UpdateRole(Guid id, [FromBody] AdminUpsertRoleBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new AdminUpsertRoleCommand(id, body.Name, body.Description, body.Permissions), ct);
+        var r = await sender.Send(new AdminUpsertRoleCommand(id, body.Name, body.Description, body.Permissions, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
     [HttpDelete("roles/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminRolesWrite)]
-    public async Task<IResult> DeleteRole(Guid id, CancellationToken ct)
+    public async Task<IResult> DeleteRole(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new AdminDeleteRoleCommand(id), ct);
+        var r = await sender.Send(new AdminDeleteRoleCommand(id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -245,7 +248,7 @@ public sealed class AdminController(ISender sender) : ControllerBase
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
-    public sealed record AdminUpdateUserBody(string DisplayName, bool IsActive, bool RequirePasswordChange, string[] Roles);
+    public sealed record AdminUpdateUserBody(string DisplayName, bool IsActive, bool RequirePasswordChange, string[] Roles, uint? Version = null); // 票101 Version
     public sealed record ResetPasswordBody(string NewPassword);
-    public sealed record AdminUpsertRoleBody(string Name, string? Description, string[] Permissions);
+    public sealed record AdminUpsertRoleBody(string Name, string? Description, string[] Permissions, uint? Version = null); // 票101 Version
 }

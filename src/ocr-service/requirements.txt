@@ -1,0 +1,9 @@
+# Shared OCR service — pinned engine versions (A/B-verified, see
+# ~/workspace/fix-verify/system-audit-20261021/ocr-test/AB-RESULT.md).
+# paddlepaddle 3.3.1 has a OneDNN PIR bug with PP-OCRv6 medium models;
+# the service defaults OCR_ENABLE_MKLDNN=false to work around it.
+paddlepaddle==3.3.1
+paddleocr==3.7.0
+paddlex==3.7.2
+fastapi>=0.110,<1
+uvicorn>=0.29,<1

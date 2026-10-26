@@ -112,7 +112,8 @@ export class AuthService {
       displayName: patch.displayName ?? u.displayName,
       avatarUrl: patch.avatarUrl !== undefined ? patch.avatarUrl : (u.avatarUrl ?? null),
       preferredLanguage: patch.preferredLanguage ?? u.preferredLanguage ?? null,
-      timeZone: patch.timeZone ?? u.timeZone ?? null
+      timeZone: patch.timeZone ?? u.timeZone ?? null,
+      version: u.version ?? null // 票101:读时 xmin 回传,过期后端 409
     };
     return this.api.put<AuthUser>('/api/auth/me', body).pipe(tap((nu) => this.applyProfile(nu)));
   }

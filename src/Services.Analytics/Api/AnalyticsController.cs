@@ -39,6 +39,19 @@ public sealed class AnalyticsController(ISender sender, ICurrentUser currentUser
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 能力趋势(FUN-08/票36)—— 基于 AbilitySnapshots 历史按天聚合(每日取 Max,
+    /// 口径见 AbilityTrendAggregation)。前端「近 30 天变化」区块的数据源;
+    /// 无快照时返回空 series(200),不 404。
+    /// </summary>
+    [HttpGet("ability/trend")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsRead)]
+    public async Task<IResult> AbilityTrend([FromQuery] int days = 30, CancellationToken ct = default)
+    {
+        var r = await sender.Send(new GetAbilityTrendQuery(Me, days), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
     /// <summary>求职漏斗趋势。</summary>
     [HttpGet("pipeline")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsRead)]
@@ -48,14 +61,51 @@ public sealed class AnalyticsController(ISender sender, ICurrentUser currentUser
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
-    /// <summary>写入一条能力快照(内部调用:Assessment 打分后立刻反映到雷达图)。</summary>
+    /// <summary>写入一条能力快照(Assessment 打分后立刻反映到雷达图)。</summary>
+    /// <remarks>
+    /// COD-02:归属默认以当前登录用户(Me)为准,请求体不接受 UserId,
+    /// 杜绝带他人 UserId 替他人写入能力快照(可写型 IDOR)。
+    /// 票56(解法A)可信通道:Worker 服务账号回写走 ?ownerUserId=(与票03 query 形态对齐),
+    /// 仅当 JWT 带 perm claim analytics.writeback 时 honoured;判定见 AbilityOwnership。
+    /// </remarks>
     [HttpPost("ability")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsWrite)]
-    public async Task<IResult> RecordAbility([FromBody] RecordAbilityBody body, CancellationToken ct)
+    public async Task<IResult> RecordAbility(
+        [FromBody] RecordAbilityBody body,
+        [FromQuery] Guid? ownerUserId = null,
+        CancellationToken ct = default)
     {
+        var callerPermissions = User.FindAll(CustomClaims.Permission).Select(c => c.Value);
+        var owner = AbilityOwnership.Resolve(Me, callerPermissions, ownerUserId);
         var r = await sender.Send(new RecordAbilityCommand(
-            body.UserId ?? Me, body.Dimension, body.Score, body.Source ?? "mock"), ct);
+            owner, body.Dimension, body.Score, body.Source ?? "mock"), ct);
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 投影对账(票34/REQ-18,只读):经 Knowledge API 拉真源,与本地 Mastery 投影
+    /// + knowledge 来源 technicalDepth 逐项比对,返回差异清单。Pipeline 为逐日增量
+    /// 口径不在可比范围,报告中单列说明。
+    /// </summary>
+    [HttpGet("reconcile")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsRead)]
+    public async Task<IResult> Reconcile(CancellationToken ct = default)
+    {
+        var r = await sender.Send(new ReconcileProjectionQuery(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 投影重建(票34/REQ-18):以 Knowledge 真源全量重建当前用户的 Mastery 投影
+    /// (分布 + 单条目台账 + knowledge 来源 technicalDepth)。可重复执行、幂等;
+    /// 真源不可达时失败且不改动投影。
+    /// </summary>
+    [HttpPost("rebuild")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AnalyticsWrite)]
+    public async Task<IResult> Rebuild(CancellationToken ct = default)
+    {
+        var r = await sender.Send(new RebuildProjectionCommand(Me), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
     /// <summary>清空当前用户的读模型(重建/排障用)。</summary>
@@ -68,4 +118,4 @@ public sealed class AnalyticsController(ISender sender, ICurrentUser currentUser
     }
 }
 
-public sealed record RecordAbilityBody(Guid? UserId, string Dimension, int Score, string? Source);
+public sealed record RecordAbilityBody(string Dimension, int Score, string? Source);

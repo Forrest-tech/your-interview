@@ -8,7 +8,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { ApiClient } from '../../core/api/api-client';
+import { InterviewsApiService } from '../../core/api/interviews-api.service';
+import { JobsApiService } from '../../core/api/jobs-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
   Application, Company, InterviewDetail, InterviewEntry, InterviewRound, Paged
@@ -19,7 +20,8 @@ import { PlaybookV2Api } from './redesign/playbook-v2.api';
 import { RoundReview, safeJson } from './redesign/v2.models';
 import { IntakePanelComponent, IntakeType } from './redesign/intake/intake-panel.component';
 import {
-  entryEndKey, entryResultOutcome, htmlToPlainText, makeV2Fmt, makeV2T
+  entryEndKey, entryResultOutcome, entryStatusBadgeKey, formatLabel, htmlToPlainText, latestPrepInputAsset, makeV2Fmt, makeV2T,
+  PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, resolveActionDoneState, resolveScoreJd, roundDisplayNo, scoreTierKey, sortRoundsByDate
 } from './redesign/v2.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
 import { CommLogComponent } from './redesign/round/comm-log.component';
@@ -59,7 +61,8 @@ export class PlaybookDetailComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
-  private readonly api = inject(ApiClient);
+  private readonly interviewsApi = inject(InterviewsApiService);
+  private readonly jobsApi = inject(JobsApiService);
   private readonly v2 = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
   readonly i18n = inject(I18nService);
@@ -70,19 +73,20 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly entry = signal<InterviewDetail | null>(null);
 
   // ---------------- 左侧条目导航(2026-10-21 定稿第八节) ----------------
-  // 分组判定与列表页同一套:v2.helpers 的 entryResultOutcome / entryEndKey,
-  // 两处不许各写一份。导航只是切换路由(/playbook/:id),不整页刷新。
+  // 分组判定与列表页同一套:只消费后端 outcome 经 v2.helpers 的
+  // entryResultOutcome 映射(票05/ARC-14 单一事实源),不判读 result 原文。
+  // 导航只是切换路由(/playbook/:id),不整页刷新。
   readonly navEntries = signal<InterviewEntry[]>([]);
   readonly navCompletedOpen = signal(false);
   readonly navActive = computed(() =>
-    this.navEntries().filter(e => entryResultOutcome(e.result) === null));
+    this.navEntries().filter(e => entryResultOutcome(e.outcome) === null));
   readonly navCompleted = computed(() =>
     this.navEntries()
-      .filter(e => entryResultOutcome(e.result) !== null)
+      .filter(e => entryResultOutcome(e.outcome) !== null)
       .sort((a, b) => entryEndKey(b).localeCompare(entryEndKey(a))));
   private navLoaded = false;
 
-  navOutcome(e: InterviewEntry) { return entryResultOutcome(e.result); }
+  navOutcome(e: InterviewEntry) { return entryResultOutcome(e.outcome); }
 
   goEntry(entryId: string): void {
     if (entryId === this.id()) return;
@@ -95,8 +99,9 @@ export class PlaybookDetailComponent implements OnDestroy {
       const size = 200;
       const acc: InterviewEntry[] = [];
       for (let page = 1; page <= 10; page++) {
-        const p = await this.api.get<Paged<InterviewEntry>>('/api/interviews',
-          { page, pageSize: size }).toPromise();
+        const p = await this.interviewsApi.getEntries({
+          page, pageSize: size
+        }).toPromise();
         const items = p?.items ?? [];
         acc.push(...items);
         if (acc.length >= (p?.total ?? acc.length) || items.length === 0) break;
@@ -104,7 +109,7 @@ export class PlaybookDetailComponent implements OnDestroy {
       this.navEntries.set(acc);
       // 当前条目在 Completed 组时默认展开该组,否则高亮看不见
       const cur = acc.find(e => e.id === this.id());
-      if (cur && entryResultOutcome(cur.result) !== null) this.navCompletedOpen.set(true);
+      if (cur && entryResultOutcome(cur.outcome) !== null) this.navCompletedOpen.set(true);
     } catch { /* 导航拉不到不阻断详情页 */ }
   }
   readonly application = signal<Application | null>(null);
@@ -120,12 +125,17 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   readonly pageTab = signal<'rounds' | 'comm'>('rounds');
   readonly selectedRoundId = signal<string | null>(null);
+  /** 票159：统一入口“保存并生成”的单次生成请求（透传给轮次卡，token 递增）。 */
+  readonly prepGenRequest = signal<{ roundId: string; token: number } | null>(null);
+  private prepGenToken = 0;
   readonly pendingComm = signal(0);
   readonly expandedCell = signal<'jd' | 'company' | 'resume' | 'score' | null>(null);
   readonly editingBasic = signal(false);
   readonly confirmDelete = signal(false);
   readonly newActionTitle = signal('');
   readonly debriefDraft = signal('');
+  // 票 166：Review & to-dos 区块暂隐藏（隐藏不是删除：数据模型、saveDebrief()、debriefJson、i18n 键一律保留；恢复时改回 false 即一处恢复）。
+  readonly hideReviewTodos = true;
 
   readonly intake = viewChild(IntakePanelComponent);
 
@@ -135,8 +145,14 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly bResult = signal('');
   readonly bNotes = signal('');
 
-  readonly rounds = computed(() =>
-    [...(this.entry()?.rounds ?? [])].sort((a, b) => a.order - b.order));
+  // 票30(REQ-10):展示顺序 = 日期序(有日期升序在前、无日期按创建序在后),
+  // 存储 order 只作创建序代理与数据关联键,不再直接决定展示顺序/编号。
+  readonly rounds = computed(() => sortRoundsByDate(this.entry()?.rounds ?? []));
+
+  /** 展示编号:轮次在日期序中的位置(与 stepper 的 $index+1 同一口径)。 */
+  roundNo(r: InterviewRound): number {
+    return roundDisplayNo(this.rounds(), r);
+  }
 
   /**
    * 最近一封邮件(同一条记录同时供 Recruiter 与「最近联系」取数):
@@ -193,12 +209,14 @@ export class PlaybookDetailComponent implements OnDestroy {
    * Tracker 的分数不是落库字段 resumeScore,而是详情打开时用「有效简历文本
    * (投递版优先)+ JD(全文优先、回落摘要)」喂共享 computeMatch 现算的;
    * 这里用完全相同的输入与同一函数(core/match/resume-match),所以同值。
-   * 输入缺任一(JD 或简历文本)→ 与 Tracker 一样不出分,显示 “—”。
+   * 输入缺任一(JD 或简历文本)→ 与 Tracker 一样不出分,显示 Not scored yet。
+   * 票 173: JD 输入走 resolveScoreJd —— 前两项与 Tracker 逐字一致(关联正常时
+   * 分值一字不动),后两项回落条目 JD:旧实现只读投递 JD,投递未关联/关联失效/
+   * JD 字段为空时,四格条明明展示着条目 JD 却算不出分,与 Score 页对不上。
+   * 简历输入不动(有效简历文本 → 基础简历文本,与 Tracker 同口径)。
    */
   readonly resumeMatch = computed<MatchResult | null>(() => {
-    const app = this.application();
-    if (!app) return null;
-    const jd = (app.jdText ?? '').trim() || (app.jdSummary ?? '').trim();
+    const jd = resolveScoreJd(this.application(), this.entry());
     const resume = this.resumeFile()?.textContent ?? this.baseResumeText();
     if (!jd || !resume) return null;
     return computeMatch(resume, jd);
@@ -206,19 +224,94 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   readonly resumeScore = computed(() => this.resumeMatch()?.score ?? null);
 
+  /** 票 173:分数档位标签键(与 Tracker 圆环标签同阈值同文案),无分时为 null。 */
+  readonly resumeTier = computed(() => {
+    const s = this.resumeScore();
+    return s == null ? null : scoreTierKey(s);
+  });
+
+  /**
+   * 票164:详情卡绑定的选中轮。
+   * 回落链:显式选中 → 当前轮 → 末轮。选中 id 为空或已失效(轮被删)时
+   * 立即回落当前轮,不等默认选中 effect 纠正,首渲染即是当前轮、无闪变。
+   */
   readonly selectedRound = computed(() => {
     const rs = this.rounds();
     if (!rs.length) return null;
-    return rs.find(r => r.id === this.selectedRoundId()) ?? rs[rs.length - 1];
+    return rs.find(r => r.id === this.selectedRoundId())
+      ?? rs.find(r => r.id === this.currentRoundId())
+      ?? rs[rs.length - 1];
   });
 
+  /** 票164:点选时间线单元即选中该轮,下方详情卡随之切换。 */
+  selectRound(id: string): void {
+    if (this.selectedRoundId() !== id) this.selectedRoundId.set(id);
+  }
+
+  // ── 票164:轮次选择 ─────────────────────────────────────────────
+  // 「当前轮」定义沿用票123 R-9:最早的一个「日期在未来且没有结果」的轮,
+  // 若不存在(全都有结果或都已过期),当前轮 = 最后一轮。当前轮只决定
+  // 默认选中,不再决定详情卡(详情卡跟随用户点选)。
+
+  /**
+   * 某轮是否算「已完成」(当前轮判据)。
+   * 有记录结果,或日期已过 —— 二者之一即成立。
+   */
+  roundIsDone(r: InterviewRound): boolean {
+    if (r.outcome && r.outcome !== 'Pending' && r.outcome !== '') return true;
+    return this.roundDatePassed(r);
+  }
+
+  /** 该轮的日期是否已过(没有日期则不算过)。 */
+  private roundDatePassed(r: InterviewRound): boolean {
+    if (!r.scheduledDate) return false;
+    const d = new Date(r.scheduledDate);
+    if (Number.isNaN(d.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() < today.getTime();
+  }
+
+  /**
+   * 当前轮 = 最早的一个「日期在未来且没有结果」的轮。
+   * 若不存在(全都有结果或都已过期),当前轮 = 最后一轮。
+   */
+  readonly currentRoundId = computed<string | null>(() => {
+    const rs = this.rounds();
+    if (!rs.length) return null;
+    const future = rs.find(r => !this.roundIsDone(r) && !this.roundDatePassed(r));
+    return (future ?? rs[rs.length - 1]).id;
+  });
+
+  /** 某轮的材料数(与轮次工作卡的口径一致:按 roundId 归属)。 */
+  roundAssetsCount(r: InterviewRound): number {
+    return (this.entry()?.assets ?? []).filter(a => a.roundId === r.id).length;
+  }
+
+  /** 结果文案(与轮次工作卡同一套取值)。 */
+  outcomeLabel(o: string): string {
+    switch (o) {
+      case 'Pending': return this.t('pb.v2.r.ocPending');
+      case 'Passed': return this.t('outcome.Passed');
+      case 'Failed': return this.t('outcome.Failed');
+      case 'Cancelled': return this.t('pb.v2.r.ocCancelled');
+      default: return o;
+    }
+  }
+
+  /** 面试形式文案(共用 v2.helpers 的 formatLabel)。 */
+  formatLabel(v: string | null | undefined): string {
+    return formatLabel(this.t, v);
+  }
+
+  // 票80:头部徽章与分组共用同一事实源 —— 只经 e.outcome 取键
+  // (entryStatusBadgeKey → entryResultOutcome),不再判读 result 原文、
+  // 分析状态(Analyzed)或默认 Completed 兜底。
   readonly statusText = computed(() => {
     const e = this.entry();
     if (!e) return '';
-    if (e.result) return e.result;
-    if (this.rounds().some(r => r.outcome === 'Pending')) return this.t('pb.v2.d.statusProgress');
-    if ((e.status as string) === 'Analyzed') return this.t('pb.v2.d.statusDone');
-    return e.result ?? this.t('pb.v2.d.statusDone');
+    return this.t(entryStatusBadgeKey(e.outcome));
   });
 
   readonly readiness = computed(() => {
@@ -241,32 +334,38 @@ export class PlaybookDetailComponent implements OnDestroy {
     return Math.min(100, s);
   });
 
-  /** 下一步建议:按"最该做的一件事"排序,避免把待办一股脑堆给用户。 */
+  /** 下一步建议:按"最该做的一件事"排序,避免把待办一股脑堆给用户。
+   *  票123 R-3:返回结构化 { title, lines[] } —— 标题是主句,其余事实各占一行弱化文字,
+   *  不再把标签与值串在中点上(原 nextPrep 的「备考 Round {n} · {stage}(日期)」写法)。 */
   readonly nextStep = computed(() => {
     const e = this.entry();
     if (!e) return null;
     if (this.pendingComm() > 0) {
-      return { text: this.fmt('pb.v2.d.nextPendingComm', { n: this.pendingComm() }) };
+      return { title: this.fmt('pb.v2.d.nextPendingComm', { n: this.pendingComm() }), lines: [] as string[] };
     }
     const today = new Date().toISOString().slice(0, 10);
     const upcoming = this.rounds().find(r =>
       r.outcome === 'Pending' && (!r.scheduledDate || r.scheduledDate >= today));
     if (upcoming) {
-      return {
-        text: this.fmt('pb.v2.d.nextPrep', { n: upcoming.order, stage: upcoming.stage }) +
-          (upcoming.scheduledDate ? `(${upcoming.scheduledDate}${upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''})` : '')
-      };
+      const lines: string[] = [
+        this.fmt('pb.v2.d.nextPrepStage', { stage: upcoming.stage })
+      ];
+      if (upcoming.scheduledDate) {
+        lines.push(upcoming.scheduledDate + (upcoming.scheduledTime ? ' ' + upcoming.scheduledTime : ''));
+      }
+      if (upcoming.format) lines.push(formatLabel(this.t, upcoming.format));
+      return { title: this.fmt('pb.v2.d.nextPrepTitle', { n: this.roundNo(upcoming) }), lines };
     }
     const unreviewed = [...this.rounds()].reverse()
       .find(r => r.outcome !== 'Pending' && !r.reviewJson);
     if (unreviewed) {
-      return { text: this.fmt('pb.v2.d.nextReview', { n: unreviewed.order }) };
+      return { title: this.fmt('pb.v2.d.nextReview', { n: this.roundNo(unreviewed) }), lines: [] as string[] };
     }
     const app = this.application();
     if (app?.nextFollowUpAt && app.nextFollowUpAt.slice(0, 10) <= today) {
-      return { text: this.t('pb.v2.d.nextFollow') };
+      return { title: this.t('pb.v2.d.nextFollow'), lines: [] as string[] };
     }
-    return { text: this.t('pb.v2.d.nextIdle') };
+    return { title: this.t('pb.v2.d.nextIdle'), lines: [] as string[] };
   });
 
   constructor() {
@@ -279,12 +378,14 @@ export class PlaybookDetailComponent implements OnDestroy {
         if (!this.navLoaded) { this.navLoaded = true; void this.loadNav(); }
       }
     });
-    // 首次加载后选默认轮次:第一个未开始的,否则最近一轮。
+    // 票164:首次加载后选默认轮次:当前轮(与旧详情卡默认一致),否则最近一轮。
+    // 选中 id 失效(轮被删)时同样纠正;selectedRound 回落链保证纠正前也不闪变。
     effect(() => {
       const rs = this.rounds();
       if (rs.length && !rs.some(r => r.id === this.selectedRoundId())) {
+        const cur = this.currentRoundId();
         const pending = rs.find(r => r.outcome === 'Pending');
-        this.selectedRoundId.set((pending ?? rs[rs.length - 1]).id);
+        this.selectedRoundId.set(cur ?? (pending ?? rs[rs.length - 1]).id);
       }
     }, { allowSignalWrites: true });
   }
@@ -293,7 +394,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     this.loading.set(true);
     this.loadError.set(null);
     try {
-      const e = await this.api.get<InterviewDetail>(`/api/interviews/${this.id()}`).toPromise();
+      const e = await this.interviewsApi.getEntry(this.id()).toPromise();
       if (!e) throw new Error('empty');
       this.entry.set(e);
       this.debriefDraft.set(parseDebrief(e.debriefJson));
@@ -312,7 +413,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   }
 
   private loadApplication(appId: string): void {
-    this.api.get<Application>(`/api/jobs/applications/${appId}`).subscribe({
+    this.jobsApi.getApplication(appId).subscribe({
       next: app => {
         this.application.set(app);
         if (app.companyId) this.loadCompanyProfile(app.companyId);
@@ -325,7 +426,7 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   /** Jobs Company 情报(Profile):与 Tracker 详情里单独查 Company 的口径一致。 */
   private loadCompanyProfile(companyId: string): void {
-    this.api.get<Company>(`/api/jobs/companies/${companyId}`).subscribe({
+    this.jobsApi.getCompany(companyId).subscribe({
       next: c => this.companyProfileText.set(c?.profile ?? null),
       error: () => undefined
     });
@@ -333,7 +434,7 @@ export class PlaybookDetailComponent implements OnDestroy {
 
   /** 基础简历全文(Tracker 同源:/api/jobs/resume-text)。 */
   private loadBaseResumeText(): void {
-    this.api.get<{ resumeText: string | null }>('/api/jobs/resume-text').subscribe({
+    this.jobsApi.getResumeText().subscribe({
       next: r => this.baseResumeText.set(r?.resumeText ?? null),
       error: () => undefined
     });
@@ -347,8 +448,7 @@ export class PlaybookDetailComponent implements OnDestroy {
    * 时全文展示),并按 Tracker 同法取 resume-file 二进制在展开面板内嵌预览。
    */
   private loadResumeFile(appId: string): void {
-    this.api.get<{ kind?: string; fileName?: string | null; textContent?: string | null }>(
-      `/api/jobs/applications/${appId}/resume`)
+    this.jobsApi.getApplicationResume(appId)
       .subscribe({
         next: r => {
           const kind = r?.kind === 'tailored' || r?.kind === 'base' ? r.kind : 'none';
@@ -357,7 +457,7 @@ export class PlaybookDetailComponent implements OnDestroy {
             : null);
           this.setResumePdfUrl(null);
           if (kind !== 'none') {
-            this.api.getBlob(`/api/jobs/applications/${appId}/resume-file`).subscribe({
+            this.jobsApi.getApplicationResumeFile(appId).subscribe({
               next: blob => this.setResumePdfUrl(URL.createObjectURL(blob)),
               error: () => this.setResumePdfUrl(null)
             });
@@ -394,7 +494,7 @@ export class PlaybookDetailComponent implements OnDestroy {
       // 不用服务端 search 先过滤:search 是原文包含匹配,公司名只要差一个空格/
       // 标点(条目手填 vs Tracker 抓取)候选就会被滤掉,归一化匹配无从谈起。
       // 拉最近 50 条在客户端做归一化匹配(恰好 1 条才回填)。
-      const page = await this.api.get<Paged<Application>>('/api/jobs/applications', {
+      const page = await this.jobsApi.getApplications<Application>({
         page: 1, pageSize: 50
       }).toPromise();
       const hits = (page?.items ?? []).filter(a =>
@@ -407,8 +507,7 @@ export class PlaybookDetailComponent implements OnDestroy {
       this.loadBaseResumeText();
       void this.refreshPendingComm(app.id);
       try {
-        await this.api.post(`/api/interviews/${e.id}/link-application`,
-          { jobApplicationId: app.id }).toPromise();
+        await this.interviewsApi.linkApplication(e.id, app.id).toPromise();
         this.entry.set({ ...e, jobApplicationId: app.id });
       } catch { /* 回填失败不影响本次展示;下次打开会重新匹配 */ }
     } catch { /* 匹配失败保持未关联,不阻塞页面 */ }
@@ -439,6 +538,53 @@ export class PlaybookDetailComponent implements OnDestroy {
   openIntake(type: IntakeType = 'email', roundId?: string): void {
     this.intake()?.openPanel(type, roundId);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /** 票159：Prep 页读回区“编辑输入” / “添加输入”——打开统一对话框并预填。 */
+  openPrepInput(roundId: string, purpose: 'experiences' | 'resume', assetId: string | null, text: string): void {
+    this.intake()?.openPrepInput(purpose, roundId, text, assetId ?? undefined);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /**
+   * 票159：统一入口“保存并生成”跳转。先刷新（新资产必须已在 entry 内），再分两路：
+   * - 目标轮就是当前详情卡展示的轮：切到轮次页签，把 token 透传给轮次卡 →
+   *   轮次卡切到 Prep 页签 → 备考报告触发一次生成（失败提示留在 Prep 页）；
+   * - 目标轮不是当前展示轮：直接以该轮当前归档原文调一次生成，
+   *   成功后刷新并提示，失败以 snackbar 提示（无 Prep 页可落失败提示）。
+   * 注意：详情卡绑定的是 selectedRound（票164 点选机制），故“当前展示轮”以
+   * selectedRound 为准；原 159 基线无点选时以 currentRound 为准，164 落地后收敛至此
+   * （currentRound 计算属性已随 164 的轨道拆除一并删除，本方法不再引用它）。
+   */
+  async onPrepGenerate(ev: { roundId: string }): Promise<void> {
+    await this.onChildChanged();
+    this.pageTab.set('rounds');
+    const entry = this.entry();
+    if (!entry) return;
+    if (this.selectedRound()?.id === ev.roundId) {
+      this.prepGenRequest.set({ roundId: ev.roundId, token: ++this.prepGenToken });
+      return;
+    }
+    const exp = latestPrepInputAsset(entry.assets ?? [], ev.roundId, PREP_INPUT_EXPERIENCES);
+    const res = latestPrepInputAsset(entry.assets ?? [], ev.roundId, PREP_INPUT_RESUME);
+    try {
+      const expText = exp
+        ? await this.v2.getTranscript(entry.id, exp.id).toPromise().then(t => t?.transcriptText ?? '').catch(() => '')
+        : '';
+      const resText = res
+        ? await this.v2.getTranscript(entry.id, res.id).toPromise().then(t => t?.transcriptText ?? '').catch(() => '')
+        : '';
+      await this.v2.generatePrepReport(entry.id, ev.roundId, {
+        jdText: entry.jdText ?? null,
+        resumeText: resText.trim() || null,
+        experiences: expText.trim() || null,
+        language: this.i18n.lang()
+      }).toPromise();
+      this.snack.open(this.t('pb.v2.p.generatedOk'), this.t('common.close'), { duration: 2500 });
+      await this.onChildChanged();
+    } catch (e) {
+      this.snack.open(this.fmt('pb.v2.p.generateFailed', { msg: e instanceof Error ? e.message : this.t('pb.v2.rec.unknownError') }), this.t('common.close'), { duration: 4000 });
+    }
   }
 
   goMock(): void {
@@ -486,7 +632,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     const e = this.entry();
     if (!e) return;
     try {
-      await this.api.put(`/api/interviews/${e.id}`, {
+      await this.interviewsApi.updateEntry(e.id, {
         companyName: this.bCompany(),
         role: this.bRole(),
         companyProfile: e.companyProfile ?? null,
@@ -500,7 +646,8 @@ export class PlaybookDetailComponent implements OnDestroy {
         result: this.bResult() || null,
         notes: this.bNotes() || null,
         questionsToAskJson: e.questionsToAskJson ?? null,
-        debriefJson: e.debriefJson ?? null
+        debriefJson: e.debriefJson ?? null,
+        version: e.version ?? null
       }).toPromise();
       this.editingBasic.set(false);
       this.snack.open(this.t('pb.v2.d.saved'), this.t('common.close'), { duration: 2000 });
@@ -513,7 +660,7 @@ export class PlaybookDetailComponent implements OnDestroy {
   async deleteEntry(): Promise<void> {
     if (!this.confirmDelete()) { this.confirmDelete.set(true); return; }
     try {
-      await this.api.delete(`/api/interviews/${this.id()}`).toPromise();
+      await this.interviewsApi.deleteEntry(this.id(), this.entry()?.version ?? null).toPromise();
       void this.router.navigate(['/playbook']);
     } catch {
       this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 });
@@ -526,7 +673,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     const title = this.newActionTitle().trim();
     if (!title) return;
     try {
-      await this.api.post(`/api/interviews/${this.id()}/actions`, { title }).toPromise();
+      await this.interviewsApi.createAction(this.id(), title).toPromise();
       this.newActionTitle.set('');
       await this.load();
     } catch {
@@ -534,15 +681,37 @@ export class PlaybookDetailComponent implements OnDestroy {
     }
   }
 
-  async toggleAction(actionId: string): Promise<void> {
-    await this.api.put(`/api/interviews/${this.id()}/actions/${actionId}/toggle`, {}).toPromise()
-      .catch(() => undefined);
+  async toggleAction(actionId: string, ev?: Event): Promise<void> {
+    const action = this.entry()?.actions?.find(a => a.id === actionId);
+    if (!action) return;
+    const beforeDone = action.isDone;
+    let failed = false;
+    try {
+      await this.interviewsApi.updateAction(this.id(), actionId, !beforeDone).toPromise();
+    } catch {
+      failed = true;
+      this.snack.open(this.t('pb.v2.d.toggleFailed'), this.t('common.close'), { duration: 3000 });
+    }
     await this.load();
+    if (failed) {
+      // 票116 F-H1:点击已由浏览器原生翻转 checkbox DOM,而失败后 load() 载回的
+      // isDone 与点前同值,[checked] 单向绑定不会重写 DOM —— 显式按回读后的
+      // 服务端真值回写该 checkbox,使勾选态/标签(done 类同源真值)/服务端三方一致。
+      const box = ev?.target as HTMLInputElement | null;
+      if (box) box.checked = resolveActionDoneState(this.entry()?.actions, actionId, beforeDone);
+    }
   }
 
   async deleteAction(actionId: string): Promise<void> {
-    await this.api.delete(`/api/interviews/${this.id()}/actions/${actionId}`).toPromise()
-      .catch(() => undefined);
+    // 票116 O-H4(票80 同项):改前 .catch(() => undefined) 静默吞错,删除失败
+    // 用户无感、列表与服务端真值可不一致。对齐票12/75 族与本文件 deleteEntry
+    // 先例:失败 snack 明示(pb.v2.d.deleteFailed 既有键),成败都 load() 以
+    // 服务端真值刷新;成功路径(请求→load)逐字守恒。
+    try {
+      await this.interviewsApi.deleteAction(this.id(), actionId).toPromise();
+    } catch {
+      this.snack.open(this.t('pb.v2.d.deleteFailed'), this.t('common.close'), { duration: 3000 });
+    }
     await this.load();
   }
 
@@ -550,7 +719,7 @@ export class PlaybookDetailComponent implements OnDestroy {
     const e = this.entry();
     if (!e) return;
     try {
-      await this.api.put(`/api/interviews/${e.id}`, {
+      await this.interviewsApi.updateEntry(e.id, {
         companyName: e.companyName,
         role: e.role,
         companyProfile: e.companyProfile ?? null,
@@ -564,7 +733,8 @@ export class PlaybookDetailComponent implements OnDestroy {
         result: e.result ?? null,
         notes: e.notes ?? null,
         questionsToAskJson: e.questionsToAskJson ?? null,
-        debriefJson: JSON.stringify({ text: this.debriefDraft() })
+        debriefJson: JSON.stringify({ text: this.debriefDraft() }),
+        version: e.version ?? null
       }).toPromise();
       this.snack.open(this.t('pb.v2.d.debriefSaved'), this.t('common.close'), { duration: 2000 });
     } catch {

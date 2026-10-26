@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using YourInterview.BuildingBlocks.Web;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Jobs.Application;
@@ -13,10 +14,10 @@ namespace YourInterview.Services.Jobs.Api;
 [Route("api/jobs")]
 [Authorize]
 [Produces("application/json")]
-public sealed class JobsController(ISender sender, ICurrentUser currentUser) : ControllerBase
+public sealed class JobsController(ISender sender, ICurrentUser currentUser, ILogger<JobsController> logger) : ControllerBase
 {
-    /// <summary>当前用户。简历是用户级资产(有 UserId),公司/投递是单租户空间(无 UserId)。</summary>
-    private Guid Me => currentUser.UserId ?? Guid.Empty;
+    /// <summary>当前用户(COD-01/票03):公司/投递/沟通均已按 UserId 隔离,未登录直接 401,不再回落 Guid.Empty。</summary>
+    private Guid Me => currentUser.RequireUserId();
 
     // ---------- 公司 ----------
 
@@ -24,7 +25,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> ListCompanies([FromQuery] string? search, [FromQuery] bool includeBlacklisted = false, CancellationToken ct = default)
     {
-        var r = await sender.Send(new ListCompaniesQuery(search, includeBlacklisted), ct);
+        var r = await sender.Send(new ListCompaniesQuery(Me, search, includeBlacklisted), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -32,7 +33,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> GetCompany(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new GetCompanyQuery(id), ct);
+        var r = await sender.Send(new GetCompanyQuery(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -40,7 +41,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> CreateCompany([FromBody] CreateCompanyCommand command, CancellationToken ct)
     {
-        var r = await sender.Send(command, ct);
+        var r = await sender.Send(command with { UserId = Me }, ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/companies/{r.Value}", new { id = r.Value })
             : r.ToProblemDetails();
@@ -50,8 +51,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateCompany(Guid id, [FromBody] UpdateCompanyBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateCompanyCommand(id, body.Name, body.Website, body.Industry,
-            body.Location, body.LogoUrl, body.Notes, body.CompanyType, body.EmployeeCount, body.IsBlacklisted), ct);
+        var r = await sender.Send(new UpdateCompanyCommand(Me, id, body.Name, body.Website, body.Industry,
+            body.Location, body.LogoUrl, body.Notes, body.CompanyType, body.EmployeeCount, body.IsBlacklisted, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -63,15 +64,63 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetCompanyProfile(Guid id, [FromBody] CompanyProfileBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetCompanyProfileCommand(id, body.Profile, body.ProfileSourcesJson), ct);
+        var r = await sender.Send(new SetCompanyProfileCommand(Me, id, body.Profile, body.ProfileSourcesJson, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
-    [HttpDelete("companies/{id:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
-    public async Task<IResult> DeleteCompany(Guid id, CancellationToken ct)
+    /// <summary>
+    /// 票142 R-142-11:网上抓取公司简介(只取数、不写库)。
+    /// 取数端点只接受公司 id,不接受任意 URL 入参(防 SSRF);返回候选文本 + 来源 URL,
+    /// 或 notFound + 实际尝试过的腿。前端进编辑草稿,用户确认后走现有 PUT profile 保存。
+    /// </summary>
+    [HttpPost("companies/{id:guid}/fetch-profile")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> FetchCompanyProfile(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteCompanyCommand(id), ct);
+        var r = await sender.Send(new FetchCompanyProfileQuery(Me, id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 票 150:批量回填公司 logo(§2.3 甲 + §8 U-150-1 组合)。
+    /// 幂等,只处理 LogoUrl 为空的公司;先清洗存量 s2 默认图标,再按 §2.2 顺序回填。
+    /// 批量写全库公司数据,超出单家编辑的写语义,故要求 AdminSystemWrite。
+    /// 本端点不接受任何 id/URL 入参,天然免疫任意 URL 注入(A-150-10 注记)。
+    /// 执行规模待 U-150-5 的 Mac 只读盘点三数报回后确认,代码先行落地。
+    /// </summary>
+    [HttpPost("companies/backfill-logos")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.AdminSystemWrite)]
+    public async Task<IResult> BackfillLogos(CancellationToken ct)
+    {
+        var r = await sender.Send(new BackfillLogosCommand(Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 票 150:按公司显式触发 logo 刷新(§2.3 乙)。
+    /// 路由 {id:guid} 约束:把任意 URL 当 id 传时路由即不匹配(404)、不发生任何
+    /// 站外抓取,满足 A-150-10 的“任意 URL 拒绝”口径(批量端点无入参,天然免疫)。
+    /// 权限与公司编辑同口径(JobsWrite)。
+    /// </summary>
+    [HttpPost("companies/{id:guid}/refresh-logo")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> RefreshLogo(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new RefreshLogoCommand(Me, id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    // 票68(用户裁决 B,2026-10-23):本控制器全部 DELETE 端点统一 JobsWrite 口径。
+    // 默认 User 角色没有 JobsDelete(只有 PowerUser/Admin),删自己的数据是普通用户
+    // 日常操作,原 JobsDelete 口径下恒 403。归属隔离由各 Handler 按 UserId 校验
+    // (他人数据回 404),不靠权限点把关 —— 同 DeleteCoverLetter 先例。JobsDelete
+    // 权限点本身保留,PowerUser/Admin 发放不变。
+    [HttpDelete("companies/{id:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> DeleteCompany(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
+    {
+        var r = await sender.Send(new DeleteCompanyCommand(Me, id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -84,7 +133,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         [FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] bool? archived = null,
         CancellationToken ct = default)
     {
-        var r = await sender.Send(new ListApplicationsQuery(search, status, priority, companyId, sortBy, page, pageSize, archived), ct);
+        var r = await sender.Send(new ListApplicationsQuery(Me, search, status, priority, companyId, sortBy, page, pageSize, archived), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -92,7 +141,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> GetApplication(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new GetApplicationQuery(id), ct);
+        var r = await sender.Send(new GetApplicationQuery(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -100,7 +149,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> CreateApplication([FromBody] CreateApplicationCommand command, CancellationToken ct)
     {
-        var r = await sender.Send(command, ct);
+        var r = await sender.Send(command with { UserId = Me }, ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{r.Value}", new { id = r.Value })
             : r.ToProblemDetails();
@@ -110,10 +159,10 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateApplication(Guid id, [FromBody] UpdateApplicationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateApplicationCommand(id, body.Role, body.Location, body.Link,
+        var r = await sender.Send(new UpdateApplicationCommand(Me, id, body.Role, body.Location, body.Link,
             body.Salary, body.WorkMode, body.Source, body.JdSummary, body.Notes, body.Priority, body.Deadline,
             body.AppliedDate, body.CompanyDescription, body.WorkAuthorization, null,
-            body.Requirements, body.Benefits), ct);
+            body.Requirements, body.Benefits, body.JdText, body.Version, body.SectionsJson), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -126,7 +175,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetJdContent(Guid id, [FromBody] JdContentBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetJdContentCommand(id, body.JdText, body.JdSourceUrl), ct);
+        var r = await sender.Send(new SetJdContentCommand(Me, id, body.JdText, body.JdSourceUrl, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -135,15 +184,16 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> ChangeStatus(Guid id, [FromBody] ChangeStatusBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ChangeApplicationStatusCommand(id, body.Status, body.Note, body.RejectionReason), ct);
+        var r = await sender.Send(new ChangeApplicationStatusCommand(Me, id, body.Status, body.Note, body.RejectionReason), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
     [HttpDelete("applications/{id:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
-    public async Task<IResult> DeleteApplication(Guid id, CancellationToken ct)
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> DeleteApplication(Guid id, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
-        var r = await sender.Send(new DeleteApplicationCommand(id), ct);
+        var r = await sender.Send(new DeleteApplicationCommand(Me, id, ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -152,7 +202,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> ArchiveApplication(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new ArchiveApplicationCommand(id), ct);
+        var r = await sender.Send(new ArchiveApplicationCommand(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -161,7 +211,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UnarchiveApplication(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new UnarchiveApplicationCommand(id), ct);
+        var r = await sender.Send(new UnarchiveApplicationCommand(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -170,7 +220,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetAnalysis(Guid id, [FromBody] AnalysisBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetApplicationAnalysisCommand(id, body.ResumeScore, body.PassRateEstimate, body.MatchKeywords), ct);
+        var r = await sender.Send(new SetApplicationAnalysisCommand(Me, id, body.ResumeScore, body.PassRateEstimate, body.MatchKeywords, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -179,7 +229,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SetOutreach(Guid id, [FromBody] OutreachBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetOutreachCommand(id, body.PosterName, body.NeedsConnectFirst, body.Message), ct);
+        var r = await sender.Send(new SetOutreachCommand(Me, id, body.PosterName, body.NeedsConnectFirst, body.Message, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -187,7 +237,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> MarkOutreachSent(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new MarkOutreachSentCommand(id), ct);
+        var r = await sender.Send(new MarkOutreachSentCommand(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -195,7 +245,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> ScheduleFollowUp(Guid id, [FromBody] FollowUpBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new ScheduleFollowUpCommand(id, body.At), ct);
+        var r = await sender.Send(new ScheduleFollowUpCommand(Me, id, body.At, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -205,7 +255,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> AddRound(Guid id, [FromBody] AddRoundBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new AddInterviewRoundCommand(id, body.Stage, body.ScheduledDate,
+        var r = await sender.Send(new AddInterviewRoundCommand(Me, id, body.Stage, body.ScheduledDate,
             body.Interviewer, body.Format, body.Notes), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{id}/rounds/{r.Value}", new { id = r.Value })
@@ -216,8 +266,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateRound(Guid id, Guid roundId, [FromBody] UpdateRoundBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateInterviewRoundCommand(id, roundId, body.Stage, body.ScheduledDate,
-            body.Interviewer, body.Format, body.Outcome, body.Notes), ct);
+        var r = await sender.Send(new UpdateInterviewRoundCommand(Me, id, roundId, body.Stage, body.ScheduledDate,
+            body.Interviewer, body.Format, body.Outcome, body.Notes, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -227,7 +277,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> Stats(CancellationToken ct)
     {
-        var r = await sender.Send(new GetTrackerStatsQuery(), ct);
+        var r = await sender.Send(new GetTrackerStatsQuery(Me), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -235,7 +285,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> ActionCenter([FromQuery] int followUpDays = 7, [FromQuery] int deadlineDays = 14, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetActionCenterQuery(followUpDays, deadlineDays), ct);
+        var r = await sender.Send(new GetActionCenterQuery(Me, followUpDays, deadlineDays), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -243,7 +293,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> FollowUps([FromQuery] int days = 7, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetUpcomingFollowUpsQuery(days), ct);
+        var r = await sender.Send(new GetUpcomingFollowUpsQuery(Me, days), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -251,7 +301,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> Deadlines([FromQuery] int days = 14, CancellationToken ct = default)
     {
-        var r = await sender.Send(new GetDeadlinesQuery(days), ct);
+        var r = await sender.Send(new GetDeadlinesQuery(Me, days), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -260,7 +310,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> BulkImport([FromBody] BulkImportApplicationsCommand command, CancellationToken ct)
     {
-        var r = await sender.Send(command, ct);
+        var r = await sender.Send(command with { UserId = Me }, ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -281,6 +331,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     /// <summary>
     /// 2026-10-19:LinkedIn 职位页自动抓取 —— 用用户登录态抓页面 HTML，
     /// 转结构化文本后走规则解析，bullet 结构完整保留。
+    /// 票47(COD-20):失败统一 502 ProblemDetails(code 区分需要登录/一般失败),
+    /// 不再 200 + 异常原文;成功路径响应体不变。
     /// </summary>
     [HttpPost("fetch-linkedin")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
@@ -289,15 +341,27 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         [FromServices] Application.LinkedInFetcher fetcher,
         CancellationToken ct)
     {
+        var url = body.Url?.Trim() ?? string.Empty;
+        if (!url.Contains("linkedin.com/jobs/view/"))
+            return Microsoft.AspNetCore.Http.Results.Problem(
+                title: "Not a LinkedIn job URL",
+                detail: "Only LinkedIn job page URLs (linkedin.com/jobs/view/...) can be fetched.",
+                statusCode: Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest,
+                extensions: new Dictionary<string, object?>
+                    { ["code"] = Application.LinkedInFetchFailure.NotLinkedInJobUrlCode });
+
         try
         {
-            var url = body.Url?.Trim() ?? string.Empty;
-            if (!url.Contains("linkedin.com/jobs/view/"))
-                return Microsoft.AspNetCore.Http.Results.BadRequest(new { error = "not_linkedin_job_url" });
-
             var (ok, html, err) = await fetcher.FetchJobHtmlAsync(url, ct);
             if (!ok)
-                return Microsoft.AspNetCore.Http.Results.Ok(new { ok = false, error = err });
+            {
+                // 票47(COD-20):失败不再 200 + 原文 —— 统一 502 ProblemDetails;
+                // fetcher 的原始 err(含异常原文)只进服务端日志,绝不下发。
+                var failKind = Application.LinkedInFetchFailure.Classify(err);
+                if (failKind == Application.LinkedInFetchFailure.Kind.FetchFailed)
+                    logger.LogWarning("LinkedIn 抓取失败: {Url} 原始错误: {Error}", url, err);
+                return FetchProblem(failKind);
+            }
 
             // HTML → 规则解析（保留 bullet）
             var kind = Application.JdPasteParser.DetectKind(html!);
@@ -326,10 +390,21 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         }
         catch (Exception ex)
         {
-            // 2026-10-19:确保永不返回 500，前端显示友好错误
-            return Microsoft.AspNetCore.Http.Results.Ok(new { ok = false, error = "fetch_error: " + ex.Message });
+            // 票47(COD-20):异常原文只进日志;对前端统一 502 ProblemDetails
+            // (改前为 200 + "fetch_error: " + ex.Message,内部细节外泄且监控无感)。
+            logger.LogWarning(ex, "LinkedIn 抓取异常: {Url}", url);
+            return FetchProblem(Application.LinkedInFetchFailure.Kind.FetchFailed);
         }
     }
+
+    /// <summary>票47(COD-20):抓取失败的统一 ProblemDetails 出口(502 + code 扩展,前端按 code 分流提示)。</summary>
+    private static IResult FetchProblem(Application.LinkedInFetchFailure.Kind kind)
+        => Microsoft.AspNetCore.Http.Results.Problem(
+            title: Application.LinkedInFetchFailure.TitleFor(kind),
+            detail: Application.LinkedInFetchFailure.DetailFor(kind),
+            statusCode: Application.LinkedInFetchFailure.StatusCode,
+            extensions: new Dictionary<string, object?>
+                { ["code"] = Application.LinkedInFetchFailure.CodeFor(kind) });
 
     /// <summary>
     /// 一键建档:把(用户改过的)解析结果落成公司与投递记录。
@@ -339,10 +414,11 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SmartAddApplication([FromBody] SmartAddApplicationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SmartAddApplicationCommand(body.Company, body.Role, body.Location,
+        var r = await sender.Send(new SmartAddApplicationCommand(Me, body.Company, body.Role, body.Location,
             body.Salary, body.WorkMode, body.JobType, body.JdSummary, body.MatchKeywords, body.Priority,
             body.Link, body.JdText, body.Source, body.Status, body.Deadline,
-            body.CompanyDescription, body.WorkAuthorization, body.Requirements, body.Benefits), ct);
+            body.CompanyDescription, body.WorkAuthorization, body.Requirements, body.Benefits, body.LogoUrl,
+            body.SectionsJson), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(r.Value)
             : r.ToProblemDetails();
@@ -364,29 +440,35 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> LinkInvite(Guid id, [FromBody] LinkInviteBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new LinkInviteCommand(id, body.Stage, body.ScheduledDate,
+        var r = await sender.Send(new LinkInviteCommand(Me, id, body.Stage, body.ScheduledDate,
             body.Interviewer, body.Format, body.Notes), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
     public sealed record UpdateCompanyBody(string Name, string? Website, string? Industry, string? Location,
-        string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted);
+        string? LogoUrl, string? Notes, string CompanyType, int? EmployeeCount, bool IsBlacklisted,
+        uint? Version = null); // 票101:读时 xmin 回传钉版
     public sealed record UpdateApplicationBody(string Role, string? Location, string? Link, string? Salary,
         string? WorkMode, string? Source, string? JdSummary, string? Notes, string? Priority, DateOnly? Deadline,
         DateOnly? AppliedDate, string? CompanyDescription, string? WorkAuthorization,
-        string? Requirements = null, string? Benefits = null);
+        string? Requirements = null, string? Benefits = null,
+        // FUN-02:编辑负载补齐 JD 全文。不带该字段 (null) 时后端保持原值,见 UpdateApplicationCommand。
+        string? JdText = null,
+        uint? Version = null, // 票101:同 UpdateCompanyBody
+        // 票 154:小节列表 JSON。不带 (null) 时后端保持原值；非 null 时重算投影。
+        string? SectionsJson = null);
     public sealed record ChangeStatusBody(string Status, string? Note, string? RejectionReason);
     /// <summary>JD 全文提交。空串由领域方法归一为 null。</summary>
-    public sealed record JdContentBody(string? JdText, string? JdSourceUrl);
+    public sealed record JdContentBody(string? JdText, string? JdSourceUrl, uint? Version = null); // 票101 Version:同上
 
     /// <summary>公司情报提交。ProfileSourcesJson 是来源 URL 的 JSON 数组字符串。</summary>
-    public sealed record CompanyProfileBody(string? Profile, string? ProfileSourcesJson);
-    public sealed record AnalysisBody(int? ResumeScore, string? PassRateEstimate, string? MatchKeywords);
-    public sealed record OutreachBody(string? PosterName, bool NeedsConnectFirst, string? Message);
-    public sealed record FollowUpBody(DateTimeOffset? At);
+    public sealed record CompanyProfileBody(string? Profile, string? ProfileSourcesJson, uint? Version = null); // 票101
+    public sealed record AnalysisBody(int? ResumeScore, string? PassRateEstimate, string? MatchKeywords, uint? Version = null); // 票101
+    public sealed record OutreachBody(string? PosterName, bool NeedsConnectFirst, string? Message, uint? Version = null); // 票101
+    public sealed record FollowUpBody(DateTimeOffset? At, uint? Version = null); // 票101
     public sealed record AddRoundBody(string Stage, DateOnly? ScheduledDate, string? Interviewer, string? Format, string? Notes);
     public sealed record UpdateRoundBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
-        string? Format, string Outcome, string? Notes);
+        string? Format, string Outcome, string? Notes, uint? Version = null); // 票101:轮次行 xmin
 
     // ---- 智能粘贴请求体 ----
 
@@ -400,7 +482,11 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         string? JdSummary, string? MatchKeywords, string? Priority, string? Link,
         string? JdText, string? Source, string? Status, DateOnly? Deadline = null,
         string? CompanyDescription = null, string? WorkAuthorization = null,
-        string? Requirements = null, string? Benefits = null);
+        string? Requirements = null, string? Benefits = null,
+        // 票 150:解析到的真实 logo(li-logo),落库前曾在此边界丢失。
+        string? LogoUrl = null,
+        // 票 154:对话框确认后的小节列表 JSON（非 null 时后端重算投影）。
+        string? SectionsJson = null);
 
     public sealed record LinkInviteBody(string? Stage, DateOnly? ScheduledDate, string? Interviewer,
         string? Format, string? Notes);
@@ -426,6 +512,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
               {
                   resumeText = string.IsNullOrEmpty(r.Value.Content) ? null : r.Value.Content,
                   version = r.Value.Version,
+                  rowVersion = r.Value.RowVersion,
                   updatedAt = r.Value.UpdatedAt
               })
             : r.ToProblemDetails();
@@ -436,7 +523,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SaveResumeText([FromBody] ResumeTextBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SaveResumeCommand(Me, body.ResumeText ?? string.Empty), ct);
+        var r = await sender.Send(new SaveResumeCommand(Me, body.ResumeText ?? string.Empty, body.RowVersion), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(new { version = r.Value.Version, updatedAt = r.Value.UpdatedAt })
             : r.ToProblemDetails();
@@ -444,7 +531,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
 
     /// <summary>清空简历(回到未设置状态)。</summary>
     [HttpDelete("resume-text")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteResumeText(CancellationToken ct)
     {
         var r = await sender.Send(new DeleteResumeCommand(Me), ct);
@@ -469,7 +556,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     [RequestSizeLimit(12 * 1024 * 1024)]
     public async Task<IResult> UploadResumeFile(
-        IFormFile file, [FromForm] string? textContent, CancellationToken ct)
+        IFormFile file, [FromForm] string? textContent, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
         if (file is null || file.Length == 0)
             return Microsoft.AspNetCore.Http.Results.Problem(title: "没有收到文件",
@@ -481,7 +569,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         await using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);
         var r = await sender.Send(new SaveResumeFileCommand(Me, null, file.FileName,
-            file.ContentType, ms.ToArray(), textContent ?? string.Empty), ct);
+            file.ContentType, ms.ToArray(), textContent ?? string.Empty,
+            ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         if (!r.IsSuccess) return r.ToProblemDetails();
 
         // 文本同步进 resumes 表 —— 求职信生成/匹配分析的老链路继续走文本,不碰 PDF。
@@ -525,7 +614,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
 
     /// <summary>删除基础简历 PDF(文本记录不动 —— /resume 页的"清空"才清文本)。</summary>
     [HttpDelete("resume-file")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteResumeFile(CancellationToken ct)
     {
         var r = await sender.Send(new DeleteResumeFileCommand(Me, null), ct);
@@ -533,8 +622,10 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     }
 
     /// <summary>
-    /// 某条投递的有效简历元信息。kind=tailored(投递版本) / base(引用基础) / none(都没有)。
-    /// textContent 供 Resume Score 按投递版本算分 —— 有 tailored 就用 tailored 的文本。
+    /// 某条投递的有效简历元信息。kind=tailored(投递版本) / base(引用基础文件) /
+    /// text(REQ-05 回落:主简历只有文本版) / none(都没有)。
+    /// textContent 供 Resume Score 按投递版本算分 —— 有 tailored 就用 tailored 的文本;
+    /// kind=text 时为文本简历正文,fileName/size 为 null(无文件可下载)。
     /// </summary>
     [HttpGet("applications/{applicationId:guid}/resume")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
@@ -543,12 +634,13 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         var r = await sender.Send(new GetEffectiveResumeQuery(Me, applicationId), ct);
         if (!r.IsSuccess) return r.ToProblemDetails();
         var v = r.Value;
+        var rawText = v.File?.TextContent ?? v.TextContent;
         return Microsoft.AspNetCore.Http.Results.Ok(new
         {
             kind = v.Kind,
             fileName = v.File?.FileName,
             size = v.File?.Size,
-            textContent = string.IsNullOrWhiteSpace(v.File?.TextContent) ? null : v.File.TextContent
+            textContent = string.IsNullOrWhiteSpace(rawText) ? null : rawText
         });
     }
 
@@ -575,7 +667,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     [RequestSizeLimit(12 * 1024 * 1024)]
     public async Task<IResult> UploadApplicationResume(Guid applicationId,
-        IFormFile file, [FromForm] string? textContent, CancellationToken ct)
+        IFormFile file, [FromForm] string? textContent, CancellationToken ct,
+        [FromHeader(Name = "If-Match")] string? ifMatch = null)
     {
         if (file is null || file.Length == 0)
             return Microsoft.AspNetCore.Http.Results.Problem(title: "没有收到文件",
@@ -587,7 +680,8 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
         await using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);
         var r = await sender.Send(new SaveResumeFileCommand(Me, applicationId, file.FileName,
-            file.ContentType, ms.ToArray(), textContent ?? string.Empty), ct);
+            file.ContentType, ms.ToArray(), textContent ?? string.Empty,
+            ConcurrencyPin.ParseIfMatch(ifMatch)), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Ok(new { fileName = r.Value.FileName, size = r.Value.Size })
             : r.ToProblemDetails();
@@ -595,7 +689,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
 
     /// <summary>删除某条投递的 tailored 简历 —— 删完回落到基础简历(引用,不复制)。</summary>
     [HttpDelete("applications/{applicationId:guid}/resume")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteApplicationResume(Guid applicationId, CancellationToken ct)
     {
         var r = await sender.Send(new DeleteResumeFileCommand(Me, applicationId), ct);
@@ -634,7 +728,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> SaveCoverLetter(Guid applicationId, [FromBody] CoverLetterBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SaveCoverLetterCommand(applicationId, Me, body.Content ?? string.Empty), ct);
+        var r = await sender.Send(new SaveCoverLetterCommand(applicationId, Me, body.Content ?? string.Empty, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -665,7 +759,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteCoverLetter(Guid applicationId, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteCoverLetterCommand(applicationId), ct);
+        var r = await sender.Send(new DeleteCoverLetterCommand(applicationId, Me), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
@@ -693,12 +787,12 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateAnswerTemplate(Guid id, [FromBody] AnswerTemplateBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateAnswerTemplateCommand(id, Me, body.Category, body.Question, body.Answer), ct);
+        var r = await sender.Send(new UpdateAnswerTemplateCommand(id, Me, body.Category, body.Question, body.Answer, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
     [HttpDelete("answer-templates/{id:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteAnswerTemplate(Guid id, CancellationToken ct)
     {
         var r = await sender.Send(new DeleteAnswerTemplateCommand(id, Me), ct);
@@ -711,7 +805,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
     public async Task<IResult> ListCommunications(Guid id, CancellationToken ct)
     {
-        var r = await sender.Send(new ListCommunicationsQuery(id), ct);
+        var r = await sender.Send(new ListCommunicationsQuery(Me, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
@@ -719,7 +813,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> CreateCommunication(Guid id, [FromBody] CommunicationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new CreateCommunicationCommand(id, body.Type, body.Subject, body.Content,
+        var r = await sender.Send(new CreateCommunicationCommand(Me, id, body.Type, body.Subject, body.Content,
             body.ContactName, body.ContactEmail, body.OccurredAt, body.MetaJson, body.HandlingStatus), ct);
         return r.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{id}/communications/{r.Value}", new { id = r.Value })
@@ -732,7 +826,7 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     public async Task<IResult> SetCommunicationMeta(Guid id, Guid commId,
         [FromBody] CommunicationMetaBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new SetCommunicationMetaCommand(commId, id,
+        var r = await sender.Send(new SetCommunicationMetaCommand(Me, commId, id,
             body.MetaJson, body.HandlingStatus), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
@@ -741,34 +835,124 @@ public sealed class JobsController(ISender sender, ICurrentUser currentUser) : C
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> UpdateCommunication(Guid id, Guid commId, [FromBody] CommunicationBody body, CancellationToken ct)
     {
-        var r = await sender.Send(new UpdateCommunicationCommand(commId, id, body.Type, body.Subject, body.Content,
-            body.ContactName, body.ContactEmail, body.OccurredAt), ct);
+        var r = await sender.Send(new UpdateCommunicationCommand(Me, commId, id, body.Type, body.Subject, body.Content,
+            body.ContactName, body.ContactEmail, body.OccurredAt, body.Version), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
     [HttpDelete("applications/{id:guid}/communications/{commId:guid}")]
-    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsDelete)]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
     public async Task<IResult> DeleteCommunication(Guid id, Guid commId, CancellationToken ct)
     {
-        var r = await sender.Send(new DeleteCommunicationCommand(commId, id), ct);
+        var r = await sender.Send(new DeleteCommunicationCommand(Me, commId, id), ct);
         return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
     }
 
-    public sealed record AnswerTemplateBody(string Category, string Question, string Answer);
+    // ---------- COD-10a/票14:Tracker 收藏与按投递自备问题(原 localStorage 上后端) ----------
+
+    /// <summary>当前用户的全部收藏(列表与详情共用同一读路径,前端单一数据源)。</summary>
+    [HttpGet("favorites")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ListFavorites(CancellationToken ct)
+    {
+        var r = await sender.Send(new ListFavoritesQuery(Me), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>加收藏(幂等)。</summary>
+    [HttpPut("favorites/{applicationId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> AddFavorite(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new AddFavoriteCommand(Me, applicationId), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>取消收藏(幂等)。</summary>
+    [HttpDelete("favorites/{applicationId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> RemoveFavorite(Guid applicationId, CancellationToken ct)
+    {
+        var r = await sender.Send(new RemoveFavoriteCommand(Me, applicationId), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一次性导入本地收藏(localStorage yi-tracker-favorites)。幂等,返回对账
+    /// { imported, total } —— 重复导入 imported=0、total 不变。
+    /// </summary>
+    [HttpPost("favorites/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> ImportFavorites([FromBody] ImportFavoritesBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ImportFavoritesCommand(Me, body.ApplicationIds ?? []), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>某条投递的自备问题(按 SortOrder 升序)。</summary>
+    [HttpGet("applications/{id:guid}/questions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsRead)]
+    public async Task<IResult> ListApplicationQuestions(Guid id, CancellationToken ct)
+    {
+        var r = await sender.Send(new ListApplicationQuestionsQuery(Me, id), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>给某条投递加一条自备问题。</summary>
+    [HttpPost("applications/{id:guid}/questions")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> AddApplicationQuestion(Guid id, [FromBody] ApplicationQuestionBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new AddApplicationQuestionCommand(Me, id, body.Text ?? string.Empty), ct);
+        return r.IsSuccess
+            ? Microsoft.AspNetCore.Http.Results.Created($"/api/jobs/applications/{id}/questions/{r.Value}", new { id = r.Value })
+            : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 删某条投递的一条自备问题。权限用 JobsWrite 而非 JobsDelete:默认 User 角色
+    /// 没有 JobsDelete(只有 PowerUser/Admin),删自己的备考问题是普通用户日常操作 ——
+    /// 与 DeleteCoverLetter 用 JobsWrite 的先例同口径。
+    /// </summary>
+    [HttpDelete("applications/{id:guid}/questions/{questionId:guid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> DeleteApplicationQuestion(Guid id, Guid questionId, CancellationToken ct)
+    {
+        var r = await sender.Send(new DeleteApplicationQuestionCommand(Me, id, questionId), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.NoContent() : r.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 一次性导入某条投递的本地自备问题(yi-tracker-questions-{id})。幂等(按正文去重),
+    /// 返回对账 { imported, total }。
+    /// </summary>
+    [HttpPost("applications/{id:guid}/questions/import")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.JobsWrite)]
+    public async Task<IResult> ImportApplicationQuestions(Guid id, [FromBody] ImportQuestionsBody body, CancellationToken ct)
+    {
+        var r = await sender.Send(new ImportApplicationQuestionsCommand(Me, id, body.Questions ?? []), ct);
+        return r.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    public sealed record ImportFavoritesBody(Guid[]? ApplicationIds);
+    public sealed record ApplicationQuestionBody(string? Text);
+    public sealed record ImportQuestionsBody(string[]? Questions);
+
+    public sealed record AnswerTemplateBody(string Category, string Question, string Answer, uint? Version = null); // 票101
 
     public sealed record CommunicationBody(string Type, string? Subject, string Content,
         string? ContactName, string? ContactEmail, DateTimeOffset OccurredAt,
-        string? MetaJson = null, string? HandlingStatus = null);
+        string? MetaJson = null, string? HandlingStatus = null, uint? Version = null); // 票101 Version:读时 xmin
 
     public sealed record CommunicationMetaBody(string? MetaJson = null, string? HandlingStatus = null);
 
 }
 
 /// <summary>简历正文提交。空串由 Handler 归一为"清空"。</summary>
-public sealed record ResumeTextBody(string? ResumeText);
+public sealed record ResumeTextBody(string? ResumeText, uint? RowVersion = null); // 票101 RowVersion:读时 xmin
 
 /// <summary>求职信人工保存体。</summary>
-public sealed record CoverLetterBody(string? Content);
+public sealed record CoverLetterBody(string? Content, uint? Version = null); // 票101
 
 /// <summary>求职信生成体。Overwrite=false 时已有内容不会被覆盖。</summary>
 public sealed record GenerateCoverLetterBody(string? ExtraInstructions, bool Overwrite = false);

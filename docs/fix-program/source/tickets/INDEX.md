@@ -1,0 +1,66 @@
+# 修复工程票据索引（源：AUDIT.md 55 条；执行序 = triage：S1→S2→S3→S4→纯重构）
+
+- 01 [COD-04 轮次保存部分字段更新不再清数据](01-cod-04-round-partial-update.md) — COD-04 | S1 | Interviews 后端 | Blocked by: None (can start immediately)
+- 02 [REQ-01+COD-14 迁移守卫与启动失败不再假健康](02-req-01-cod-14-migration-guard.md) — REQ-01, COD-14 | S1 | Assessment + 全服务启动 (BuildingBlocks/Program.cs) | Blocked by: None (can start immediately)
+- 03 [COD-01 三服务用户隔离（模型级，方案先行）](03-cod-01-user-isolation.md) — COD-01 | S1 | Interviews/Knowledge/Jobs 后端 | Blocked by: 01 (Interviews 区域串行)
+- 04 [REQ-02+ARC-07 结果回写同源（轮次主数据与结构化 outcome）](04-req-02-arc-07-outcome-writeback.md) — REQ-02, ARC-07 | S2 | Interviews↔Jobs 事件 + SharedContracts | Blocked by: 03
+- 05 [ARC-14 结果判读单一事实源](05-arc-14-outcome-mapping-single-source.md) — ARC-14 | S3 | Interviews DTO + Playbook 前端 | Blocked by: 04
+- 06 [COD-02 Analytics ability 禁止替他人写入](06-cod-02-analytics-ability-idor.md) — COD-02 | S2 | Analytics 后端 | Blocked by: None (can start immediately)
+- 07 [COD-05 并发冲突映射 409](07-cod-05-concurrency-409.md) — COD-05 | S2 | BuildingBlocks 全局异常管线 | Blocked by: 02 (ServiceDefaults 串行)
+- 08 [COD-06+COD-07 转写契约对齐（字段名与转写入口）](08-cod-06-07-transcript-contract.md) — COD-06, COD-07 | S2 | Playbook 前端 + Interviews 契约 | Blocked by: None (can start immediately)
+- 09 [FUN-02 Tracker 建单/编辑 JD 不再丢（附带 workMode 等全量 PUT 误清）](09-fun-02-tracker-jd-payload.md) — FUN-02 | S2 | Tracker 前端 | Blocked by: None (can start immediately)
+- 10 [FUN-03 Prep 打开既有条目不重复新建](10-fun-03-prep-dedupe.md) — FUN-03 | S2 | Interviews 后端 + Tracker 前端 | Blocked by: None (can start immediately)
+- 11 [FUN-04 JD 长文本保存不再 500](11-fun-04-jdtext-column.md) — FUN-04 | S2 | Jobs 后端 | Blocked by: None (can start immediately)
+- 12 [FUN-05 Tech Stack 新建必填口径对齐](12-fun-05-knowledge-question-required.md) — FUN-05 | S2 | Tech Stack 前端 (+Knowledge 校验提示) | Blocked by: None (can start immediately)
+- 13 [FUN-06 AI Mock 模式文案三语修复](13-fun-06-mock-i18n-keys.md) — FUN-06 | S2 | 前端 i18n + Mock 组件 | Blocked by: None (can start immediately)
+- 14 [COD-10a Tracker 收藏与自备问题上后端（Jobs）](14-cod-10a-jobs-localstorage.md) — COD-10 (Jobs 面) | S2 | Jobs 后端 + Tracker 前端 | Blocked by: 03 (Jobs 区域串行)
+- 15 [COD-10b Playbook 本地数据上后端（Interviews）](15-cod-10b-interviews-localstorage.md) — COD-10 (Interviews 面) | S2 | Interviews 后端 + Playbook 前端 | Blocked by: 03 (Interviews 区域串行)
+- 16 [COD-10c Tech Stack 分类与复习记录上后端（Knowledge）](16-cod-10c-knowledge-localstorage.md) — COD-10 (Knowledge 面) | S2 | Knowledge 后端 + Tech Stack 前端 | Blocked by: 03 (Knowledge 区域串行)
+- 17 [ARC-04 主简历单一真源（删 Assessment 副本）](17-arc-04-resume-single-source.md) — ARC-04 | S2 | Assessment + Jobs 简历面 | Blocked by: 02 (Assessment 区域串行)
+- 18 [ARC-09 JWT 与 Kestrel 上限收进 ServiceDefaults](18-arc-09-jwt-service-defaults.md) — ARC-09 | S2 | BuildingBlocks + 全服务 Program.cs | Blocked by: 07 (ServiceDefaults 串行)
+- 19 [ARC-06 Interviews JSON 大字段强类型适配层](19-arc-06-json-fields-adapter.md) — ARC-06 | S2 | Interviews 后端 | Blocked by: 01, 03 (聚合/隔离串行后)
+- 20 [COD-03 DeleteCoverLetter 补归属校验](20-cod-03-coverletter-ownership.md) — COD-03 | S3 | Jobs 后端 | Blocked by: None (can start immediately)
+- 21 [COD-08 待办勾选接真实端点且不吞错](21-cod-08-toggle-action.md) — COD-08 | S3 | Playbook 前端 | Blocked by: None (can start immediately)
+- 22 [COD-09 补齐 AddRoundDetails 迁移三件套并删手工脚本](22-cod-09-migration-designer.md) — COD-09 | S3 | Interviews 迁移 | Blocked by: None (can start immediately)
+- 23 [COD-12 ListSessions 空 Issues 不再 500](23-cod-12-listsessions-guard.md) — COD-12 | S3 | Assessment 后端 | Blocked by: None (can start immediately)
+- 24 [COD-13 AttachAsset 坏 JSON 返回 400](24-cod-13-attachasset-400.md) — COD-13 | S3 | Interviews 后端/全局映射 | Blocked by: None (can start immediately)
+- 25 [COD-15 Assessment 写操作改挂写权限](25-cod-15-assessment-permissions.md) — COD-15 | S3 | Assessment + Identity 权限种子 | Blocked by: None (can start immediately)
+- 26 [REQ-05 Documents 文本简历回落](26-req-05-resume-text-fallback.md) — REQ-05 | S3 | Jobs 后端 + Tracker 抽屉 | Blocked by: None (can start immediately)
+- 27 [REQ-08 无数据不列弱项/Best](27-req-08-weakest-guard.md) — REQ-08 | S3 | Dashboard + Analytics 前端 | Blocked by: None (can start immediately)
+- 28 [ARC-08a SmartParseRules 特征测试先行](28-arc-08a-smartparse-tests.md) — ARC-08 (解析器面) | S2 | Jobs 测试 | Blocked by: None (can start immediately)
+- 29 [REQ-09 Smart paste 解析形态缺口修复](29-req-09-smartparse-forms.md) — REQ-09 | S3 | Jobs 后端 SmartParseRules | Blocked by: 28
+- 30 [REQ-10 轮次按日期序与默认提示](30-req-10-round-order-defaults.md) — REQ-10 | S3 | Playbook 前端 (+Interviews 默认口径) | Blocked by: None (can start immediately)
+- 31 [REQ-11 Tracker 批量面板改细工具条](31-req-11-bulk-toolbar.md) — REQ-11 | S3 | Tracker 前端 | Blocked by: 09 (Tracker 前端串行)
+- 32 [REQ-15 抽屉 Overview 补 Work mode 展示](32-req-15-drawer-workmode.md) — REQ-15 | S3 | Tracker 前端 | Blocked by: 09 (Tracker 前端串行)
+- 33 [REQ-16+REQ-17 七模块+Tracker/日历现状定稿补齐](33-req-16-17-module-specs.md) — REQ-16, REQ-17 | S2/S3 | 文档 replica/ | Blocked by: None (can start immediately)
+- 34 [REQ-18 Analytics 投影对账与缺失消费者补齐](34-req-18-analytics-reconcile.md) — REQ-18 | S3 | Analytics 后端 | Blocked by: None (can start immediately)
+- 35 [FUN-07 硬编码中文与后端中文消息清扫](35-fun-07-i18n-hardcoded-sweep.md) — FUN-07 | S3 | 全前端 + Jobs 解析消息 | Blocked by: 29 (SmartParse 串行)
+- 36 [FUN-08 Analytics 趋势接口落地（兼 COD-21 分析面）](36-fun-08-trend-endpoint.md) — FUN-08, COD-21 (Analytics 面) | S3 | Analytics 后端 + 前端 | Blocked by: 06 (Analytics 串行)
+- 37 [FUN-10 文本简历可见可编辑](37-fun-10-resume-text-edit.md) — FUN-10 | S3 | Resume 前端 | Blocked by: None (can start immediately)
+- 38 [ARC-10 AiGateway 客户端单一 adapter](38-arc-10-aigateway-client-dedup.md) — ARC-10 | S3 | BuildingBlocks/SharedContracts + Jobs/Interviews | Blocked by: 03 (后端区域串行后)
+- 39 [ARC-12 文件存储单一 adapter](39-arc-12-file-storage-adapter.md) — ARC-12 | S3 | BuildingBlocks + Assessment/Interviews | Blocked by: None (can start immediately)
+- 40 [ARC-15 契约与 Worker 同构副本合一](40-arc-15-sharedcontracts-worker.md) — ARC-15 | S3 | SharedContracts + Analysis.Worker | Blocked by: None (can start immediately)
+- 41 [ARC-16 Playbook 旧代实现下线](41-arc-16-playbook-legacy-removal.md) — ARC-16 | S3 | Playbook 前端 | Blocked by: 08, 21, 30 (Playbook 前端串行后)
+- 42 [ARC-11 前端 API 层收敛](42-arc-11-frontend-api-layer.md) — ARC-11 | S3 | 全前端 | Blocked by: 41 (旧代下线后)
+- 43 [ARC-13 i18n 机制收敛为一套](43-arc-13-i18n-consolidation.md) — ARC-13 | S3 | 全前端 i18n | Blocked by: 13, 35 (文案修复后)
+- 44 [REQ-12 页签标题](44-req-12-page-title.md) — REQ-12 | S4 | 前端基础 | Blocked by: None (can start immediately)
+- 45 [REQ-14 原生 confirm/prompt 全量替换](45-req-14-native-dialogs.md) — REQ-14 | S4 | Tracker + Tech Stack 前端 | Blocked by: 31, 32 (Tracker 前端串行后)
+- 46 [COD-17 死代码清理](46-cod-17-dead-code.md) — COD-17 | S4 | Interviews 后端 + Playbook 前端 | Blocked by: None (can start immediately)
+- 47 [COD-20 FetchLinkedIn 错误口径统一](47-cod-20-linkedin-error.md) — COD-20 | S4 | Jobs 后端 | Blocked by: None (can start immediately)
+- 48 [COD-21 Mock 试探式调用删除](48-cod-21-mock-next-question.md) — COD-21 (Mock 面) | S4 | Mock 前端 | Blocked by: None (can start immediately)
+- 49 [ARC-17 删除模板网关项目](49-arc-17-template-gateway.md) — ARC-17 | S4 | 解决方案 | Blocked by: None (can start immediately)
+- 50 [ARC-18 CORS 策略单一口径](50-arc-18-cors-unify.md) — ARC-18 | S4 | BuildingBlocks + 网关配置 | Blocked by: 18 (ServiceDefaults 串行)
+- 51 [ARC-03 后端 Handler 按子域拆分（纯重构）](51-arc-03-handler-split.md) — ARC-03 | S2(重构批) | 后端 Application 层 | Blocked by: 19, 38, 39 (后端各票落定后)
+- 52 [ARC-01 Tracker 组件拆分（纯重构）](52-arc-01-tracker-split.md) — ARC-01 | S2(重构批) | Tracker 前端 | Blocked by: 42, 45 (Tracker 前端各票落定后)
+- 53 [ARC-02 AI Practice 组件拆分（纯重构）](53-arc-02-aipractice-split.md) — ARC-02 | S2(重构批) | AI Practice 前端 | Blocked by: 43 (i18n 收敛后)
+- 54 [ARC-08b Handler 层测试补强](54-arc-08b-handler-tests.md) — ARC-08 (其余面) | S2(重构批) | 后端测试 | Blocked by: 51 (拆分后)
+- 57 [OCR 入口会议时间抽取（跟进票）](57-ocr-meeting-time-extract.md) — 跟进（非 55 正单） | Playbook 入口前端 intake-panel | Blocked by: None
+- 58 [Legacy adapter 英文受控词精确匹配（跟进票）](58-legacy-adapter-controlled-words.md) — 跟进（非 55 正单） | Jobs EventConsumers | Blocked by: 09
+- 59 [共享 OCR 服务 + Playbook 入口切换（平台能力）](59-shared-ocr-service.md) — 平台票（非 55 正单） | src/ocr-service + 网关 + intake | Blocked by: None
+- 60 [本地 OCR 文本头部适配（跟进票）](60-ocr-header-adaptation.md) — 跟进（平台票流） | Playbook intake | Blocked by: 59（已落地）
+- 61 [Tech Stack 详情编辑清空 Question（跟进票）](61-techstack-detail-edit-clears-question.md) — 跟进（非 55 正单） | Tech Stack 前端 + Knowledge 后端核查 | Blocked by: 12（已落地）
+- 62 [SmartAdd 四长文本列扩 text（跟进票）](62-smartadd-longtext-columns.md) — 跟进（非 55 正单） | Jobs 后端 | Blocked by: 14
+- 63 [Mock FullMock→FullLoop 提交值（跟进票）](63-mock-fullmock-fullloop.md) — 跟进（非 55 正单） | Mock 前端 + Assessment 后端 | Blocked by: 13（已落地）
+- 64 [ARC-08c 前端 Jest 接入 + helpers 首批 spec](64-arc-08c-frontend-jest.md) — ARC-08 批次 | web 测试基建 | Blocked by: None
+- 65 [ARC-08d 后端关键模块覆盖 ≥80% + ratchet](65-arc-08d-backend-key-module-coverage.md) — ARC-08 批次 | 后端测试 | Blocked by: 28
+- 66 [Assessment 已删会话 GET 仍可读回（跟进票）](66-assessment-getsession-softdelete.md) — 跟进（非 55 正单） | Assessment 后端读路径 | Blocked by: 63（已落地）

@@ -16,7 +16,8 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of } from 'rxjs';
 
-import { ApiClient } from '../../core/api/api-client';
+import { AdminApiService } from '../../core/api/admin-api.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { AuthService } from '../../core/auth/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
@@ -53,7 +54,7 @@ import { AdminUserDialogComponent, AdminUserForm } from './admin-user-dialog.com
   styleUrl: './admin.component.scss'
 })
 export class AdminComponent implements OnInit {
-  private readonly api = inject(ApiClient);
+  private readonly adminApi = inject(AdminApiService);
   private readonly auth = inject(AuthService);
   private readonly i18n = inject(I18nService);
   private readonly dialog = inject(MatDialog);
@@ -158,7 +159,7 @@ export class AdminComponent implements OnInit {
   // ============================ 统计 ============================
 
   loadStats(): void {
-    this.api.get<AdminStats>('/api/admin/stats')
+    this.adminApi.getStats()
       .pipe(catchError(() => of(null)))
       .subscribe((s) => this.stats.set(s));
   }
@@ -169,7 +170,7 @@ export class AdminComponent implements OnInit {
     this.usersLoading.set(true);
     this.usersError.set(null);
 
-    this.api.get<Paged<AdminUser>>('/api/admin/users', {
+    this.adminApi.getUsers({
       page: this.userPage(),
       pageSize: this.userPageSize(),
       search: this.userSearch().trim(),
@@ -227,7 +228,7 @@ export class AdminComponent implements OnInit {
     });
     ref.afterClosed().subscribe((form?: AdminUserForm | null) => {
       if (!form) return;
-      this.api.post<{ id: string }>('/api/admin/users', form).subscribe({
+      this.adminApi.createUser(form).subscribe({
         next: () => {
           this.notify(this.t('admin.created'));
           this.usersLoaded = false;
@@ -246,11 +247,12 @@ export class AdminComponent implements OnInit {
     });
     ref.afterClosed().subscribe((form?: AdminUserForm | null) => {
       if (!form) return;
-      this.api.put<void>(`/api/admin/users/${u.id}`, {
+      this.adminApi.updateUser(u.id, {
         displayName: form.displayName,
         isActive: form.isActive,
         requirePasswordChange: form.requirePasswordChange,
-        roles: form.roles
+        roles: form.roles,
+        version: u.version ?? null // 票101
       }).subscribe({
         next: () => {
           this.notify(this.t('admin.saved'));
@@ -262,25 +264,45 @@ export class AdminComponent implements OnInit {
     });
   }
 
+  /** 票45 REQ-14:站内确认弹窗(全站 ConfirmDialog,F-02 标准)替代原生 confirm;
+   *  true 才执行,取消/Esc/点遮罩一律不执行(与原生 confirm 的 false 同义)。 */
+  private confirmDlg(body: string, danger: boolean): Promise<boolean> {
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '360px', panelClass: 'app-confirm', autoFocus: false,
+      data: {
+        title: danger ? this.t('common.delete') : this.t('common.confirmTitle'),
+        body,
+        confirmText: danger ? this.t('common.delete') : this.t('common.confirm'),
+        cancelText: this.t('common.cancel'),
+        danger,
+      } as ConfirmDialogData,
+    });
+    return new Promise((resolve) => ref.afterClosed().subscribe((v) => resolve(v === true)));
+  }
+
   /** 启用/停用:整体更新语义,把当前字段一起回传。 */
   toggleActive(u: AdminUser, ev?: Event): void {
     ev?.stopPropagation();
     const next = !u.isActive;
-    if (!confirm(this.tn(next ? 'admin.confirmActivate' : 'admin.confirmDeactivate', u.email))) return;
+    void this.confirmDlg(this.tn(next ? 'admin.confirmActivate' : 'admin.confirmDeactivate', u.email), false)
+      .then((ok) => {
+        if (!ok) return;
 
-    this.api.put<void>(`/api/admin/users/${u.id}`, {
-      displayName: u.displayName,
-      isActive: next,
-      requirePasswordChange: u.mustChangePassword,
-      roles: [...(u.roles ?? [])]
-    }).subscribe({
-      next: () => {
-        this.notify(next ? this.t('admin.activated') : this.t('admin.deactivated'));
-        this.loadUsers();
-        this.loadStats();
-      },
-      error: (e: Error) => this.notify(e.message, true)
-    });
+        this.adminApi.updateUser(u.id, {
+          displayName: u.displayName,
+          isActive: next,
+          requirePasswordChange: u.mustChangePassword,
+          roles: [...(u.roles ?? [])],
+          version: u.version ?? null // 票101
+        }).subscribe({
+          next: () => {
+            this.notify(next ? this.t('admin.activated') : this.t('admin.deactivated'));
+            this.loadUsers();
+            this.loadStats();
+          },
+          error: (e: Error) => this.notify(e.message, true)
+        });
+      });
   }
 
   resetPassword(u: AdminUser, ev?: Event): void {
@@ -291,7 +313,7 @@ export class AdminComponent implements OnInit {
     });
     ref.afterClosed().subscribe((pw?: string | null) => {
       if (!pw) return;
-      this.api.post<void>(`/api/admin/users/${u.id}/reset-password`, { newPassword: pw })
+      this.adminApi.resetPassword(u.id, pw)
         .subscribe({
           next: () => this.notify(this.t('admin.pwdReset')),
           error: (e: Error) => this.notify(e.message, true)
@@ -301,7 +323,7 @@ export class AdminComponent implements OnInit {
 
   unlock(u: AdminUser, ev?: Event): void {
     ev?.stopPropagation();
-    this.api.post<void>(`/api/admin/users/${u.id}/unlock`, {}).subscribe({
+    this.adminApi.unlockUser(u.id).subscribe({
       next: () => {
         this.notify(this.t('admin.unlocked'));
         this.loadUsers();
@@ -313,15 +335,17 @@ export class AdminComponent implements OnInit {
 
   deleteUser(u: AdminUser, ev?: Event): void {
     ev?.stopPropagation();
-    if (!confirm(this.tn('admin.confirmDelete', u.email))) return;
+    void this.confirmDlg(this.tn('admin.confirmDelete', u.email), true).then((ok) => {
+      if (!ok) return;
 
-    this.api.delete<void>(`/api/admin/users/${u.id}`).subscribe({
-      next: () => {
-        this.notify(this.t('admin.deleted'));
-        this.loadUsers();
-        this.loadStats();
-      },
-      error: (e: Error) => this.notify(e.message, true)
+      this.adminApi.deleteUser(u.id, u.version ?? null).subscribe({
+        next: () => {
+          this.notify(this.t('admin.deleted'));
+          this.loadUsers();
+          this.loadStats();
+        },
+        error: (e: Error) => this.notify(e.message, true)
+      });
     });
   }
 
@@ -331,7 +355,7 @@ export class AdminComponent implements OnInit {
     this.rolesLoading.set(true);
     this.rolesError.set(null);
 
-    this.api.get<AdminRole[]>('/api/admin/roles').subscribe({
+    this.adminApi.getRoles().subscribe({
       next: (list) => {
         this.roles.set(list ?? []);
         this.rolesLoading.set(false);
@@ -346,7 +370,7 @@ export class AdminComponent implements OnInit {
   }
 
   loadPermissions(): void {
-    this.api.get<AdminPermission[]>('/api/admin/permissions')
+    this.adminApi.getPermissions()
       .pipe(catchError(() => of([])))
       .subscribe((list) => this.permissions.set(list ?? []));
   }
@@ -368,7 +392,7 @@ export class AdminComponent implements OnInit {
     });
     ref.afterClosed().subscribe((form?: AdminRoleForm | null) => {
       if (!form) return;
-      this.api.post<{ id: string }>('/api/admin/roles', form).subscribe({
+      this.adminApi.createRole(form).subscribe({
         next: () => {
           this.notify(this.t('admin.roleSaved'));
           this.loadRoles();
@@ -387,7 +411,7 @@ export class AdminComponent implements OnInit {
     });
     ref.afterClosed().subscribe((form?: AdminRoleForm | null) => {
       if (!form) return;
-      this.api.put<void>(`/api/admin/roles/${r.id}`, form).subscribe({
+      this.adminApi.updateRole(r.id, { ...form, version: r.version ?? null }).subscribe({
         next: () => {
           this.notify(this.t('admin.roleSaved'));
           this.loadRoles();
@@ -403,15 +427,17 @@ export class AdminComponent implements OnInit {
       this.notify(this.t('admin.systemRoleReadonly'), true);
       return;
     }
-    if (!confirm(this.tn('admin.confirmDeleteRole', r.name))) return;
+    void this.confirmDlg(this.tn('admin.confirmDeleteRole', r.name), true).then((ok) => {
+      if (!ok) return;
 
-    this.api.delete<void>(`/api/admin/roles/${r.id}`).subscribe({
-      next: () => {
-        this.notify(this.t('admin.roleDeleted'));
-        this.loadRoles();
-        this.loadStats();
-      },
-      error: (e: Error) => this.notify(e.message, true)
+      this.adminApi.deleteRole(r.id, r.version ?? null).subscribe({
+        next: () => {
+          this.notify(this.t('admin.roleDeleted'));
+          this.loadRoles();
+          this.loadStats();
+        },
+        error: (e: Error) => this.notify(e.message, true)
+      });
     });
   }
 
@@ -421,7 +447,7 @@ export class AdminComponent implements OnInit {
     this.logsLoading.set(true);
     this.logsError.set(null);
 
-    this.api.get<Paged<AuditLog>>('/api/admin/audit', {
+    this.adminApi.getAudit({
       page: this.logPage(),
       pageSize: this.logPageSize(),
       action: this.logAction().trim(),
@@ -447,7 +473,7 @@ export class AdminComponent implements OnInit {
 
   loadActors(): void {
     if (this.actorsLoaded) return;
-    this.api.get<Paged<AdminUser>>('/api/admin/users', { page: 1, pageSize: 200 })
+    this.adminApi.getUsers({ page: 1, pageSize: 200 })
       .pipe(catchError(() => of(null)))
       .subscribe((r) => {
         this.actorOptions.set(r?.items ?? []);

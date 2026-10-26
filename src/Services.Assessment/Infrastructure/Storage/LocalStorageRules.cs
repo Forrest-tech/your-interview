@@ -114,13 +114,16 @@ public static class LocalStorageRules
         {
             return (false, "没有写入权限,请换一个目录。");
         }
-        catch (IOException ex)
+        catch (IOException)
         {
-            return (false, "目录创建/写入失败:" + ex.Message);
+            // ★ 票117:不再拼接 ex.Message —— OS 异常原文(含文件系统路径/系统
+            // 错误文本)会经存储设置状态对外;改固定文案,与上方
+            // UnauthorizedAccessException 分支的既有固定文案同型。
+            return (false, "目录创建/写入失败,请换一个目录或检查权限后重试。");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return (false, "目录不可用:" + ex.Message);
+            return (false, "目录不可用,请换一个目录或检查权限后重试。");
         }
     }
 

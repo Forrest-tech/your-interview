@@ -1,8 +1,6 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using YourInterview.BuildingBlocks.Ai;
 using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.BuildingBlocks.Security;
@@ -32,14 +30,8 @@ builder.AddServiceDefaults(ServiceName, services =>
     // 地址优先取配置 AiGateway:BaseUrl(容器内 http://aigateway:8080/),
     // 宿主机直跑时回落到 5268。
     services.AddHttpContextAccessor();
-    services.AddHttpClient<IAiGatewayClient, AiGatewayClient>(http =>
-    {
-        var baseUrl = builder.Configuration["AiGateway:BaseUrl"] ?? "http://127.0.0.1:5268/";
-        http.BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/");
-        // 生成是长请求:LLM 输出 300-400 词通常 20-60 秒。
-        // 给到 3 分钟 —— 短于上游真实耗时会让用户看到"超时"而其实已经成功了。
-        http.Timeout = TimeSpan.FromMinutes(3);
-    });
+    // 票38:注册口径下沉 BuildingBlocks.AddAiGatewayClient(回落 5268、超时 3 分钟,原口径不变)。
+    services.AddAiGatewayClient(builder.Configuration["AiGateway:BaseUrl"]);
 
     // ---------- 招聘页面抓取(Smart paste 粘贴链接链路) ----------
     // 浏览器 UA:很多 ATS 站点对默认 HttpClient UA 返回 403。
@@ -53,8 +45,29 @@ builder.AddServiceDefaults(ServiceName, services =>
     services.AddSingleton<YourInterview.Services.Jobs.Infrastructure.Services.IJobPageFetcher,
         YourInterview.Services.Jobs.Infrastructure.Services.JobPageFetcher>();
 
+    // 票142 R-142-11:公司简介抓取(Wikipedia + 官网 About)。
+    // 描述性 UA(Wikimedia 规范要求可识别的 UA,不冒充浏览器);单腿 15 秒由抓取器内 CTS 控制。
+    services.AddHttpClient(YourInterview.Services.Jobs.Infrastructure.Services.CompanyProfileFetcher.ClientName, http =>
+    {
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("your-interview/1.0 (company-profile-fetch)");
+        http.Timeout = TimeSpan.FromSeconds(20);
+    });
+    services.AddSingleton<YourInterview.Services.Jobs.Infrastructure.Services.ICompanyProfileFetcher,
+        YourInterview.Services.Jobs.Infrastructure.Services.CompanyProfileFetcher>();
+
     // 2026-10-19:LinkedIn 职位页抓取(Playwright，带用户登录态)
     services.AddSingleton<YourInterview.Services.Jobs.Application.LinkedInFetcher>();
+
+    // 票 150:公司 logo 取数 —— 禁自动重定向(3xx 即失败,防重定向绕过 SSRF 校验),
+    // 超时 20 秒与 JobPageFetcher 同口径;取数失败一律返回 null 不抛异常。
+    services.AddHttpClient(YourInterview.Services.Jobs.Infrastructure.Services.CompanyLogoFetcherOptions.ClientName, http =>
+    {
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        http.Timeout = TimeSpan.FromSeconds(20);
+    }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+    services.AddScoped<YourInterview.Services.Jobs.Infrastructure.Services.ICompanyLogoFetcher,
+        YourInterview.Services.Jobs.Infrastructure.Services.CompanyLogoFetcher>();
 
     services.AddSingleton(TimeProvider.System);
     services.AddHealthChecks().AddDbContextCheck<JobsDbContext>("postgres");
@@ -64,6 +77,8 @@ builder.AddServiceDefaults(ServiceName, services =>
     {
         // M1.5:实战机经条目上填了结果 → 回写 Tracker 轮次 Outcome(被拒自动转 Rejected)
         x.AddConsumer<InterviewOutcomeRecordedConsumer>();
+        // 票114:实战机经轮次排期落库 → 回写 Tracker 投影排期 + 推进投递状态(CONF-DASH-1)
+        x.AddConsumer<InterviewRoundScheduledConsumer>();
     });
 });
 
@@ -74,29 +89,12 @@ builder.AddServiceDefaults(ServiceName, services =>
 builder.Services.AddCurrentUser();
 
 // ---------- JWT 认证(校验 Identity 签发的令牌,只验签不查库) ----------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKey = jwtSection["SigningKey"]
-    ?? throw new InvalidOperationException(
-        "缺少 Jwt:SigningKey 配置。请在本地 appsettings.Development.json 或环境变量 Jwt__SigningKey 中配置" +
-        "(需与 Services.Identity 签发的密钥一致,至少 32 字符)。");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"] ?? "your-interview.identity",
-            ValidAudience = jwtSection["Audience"] ?? "your-interview.api",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromSeconds(30),
-            RoleClaimType = System.Security.Claims.ClaimTypes.Role
-        };
-    });
+// 校验参数唯一定义在 ServiceDefaults(ARC-09/票18);本服务旧有的 issuer/audience 兜底已并入统一口径。
+// RequireHttpsMetadata 为本服务保留项,经 configure 回调设置(无 Authority 配置,实际不拉 OIDC 元数据)。
+builder.Services.AddJwtAuthentication(builder.Configuration, options =>
+{
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+});
 
 builder.Services.AddAuthorization(options =>
 {
@@ -124,8 +122,8 @@ var app = builder.Build();
 app.UseServiceDefaults(ServiceName);
 app.MapControllers();
 
-try { await JobsDbSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, app.Logger); }
-catch (Exception ex) { app.Logger.LogError(ex, "Jobs 数据库初始化失败 —— 服务继续启动"); }
+// COD-14/票02:迁移失败即启动失败(fail-fast,共享处置见 ServiceDefaults)—— 不再带病启动假健康
+await app.RunStartupMigrationsOrFailAsync(ServiceName, JobsDbSeeder.MigrateAndSeedAsync);
 
 app.Run();
 

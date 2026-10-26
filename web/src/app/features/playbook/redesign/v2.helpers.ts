@@ -391,3 +391,29 @@ export function shortEmailTitle(subject?: string | null): string {
   s = s.trim();
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
+
+/**
+ * 票215：从邮件正文提取第一个会议链接 —— 只认 Teams / Zoom / Google Meet 三家域名，
+ * 其余链接一律不认（防把岗位链接、退订链接等当成会议链接）；取不到返回 null，
+ * 调用方按缺省处理（不渲染、不占位、不编造）。末尾标点（句点、右括号等）不属于链接。
+ */
+export function extractMeetingLink(text?: string | null): string | null {
+  if (!text) return null;
+  const candidates = text.match(/https?:\/\/[^\s<>"'\])]+/g) ?? [];
+  for (const raw of candidates) {
+    const url = raw.replace(/[.,;:!?'"')\]}>，。；：！？、]+$/, '');
+    let host = '';
+    try {
+      host = new URL(url).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    const isTeams = host === 'teams.microsoft.com' || host.endsWith('.teams.microsoft.com')
+      || host === 'teams.live.com' || host.endsWith('.teams.live.com');
+    const isZoom = host === 'zoom.us' || host.endsWith('.zoom.us')
+      || host === 'zoom.com' || host.endsWith('.zoom.com');
+    const isMeet = host === 'meet.google.com' || host.endsWith('.meet.google.com');
+    if (isTeams || isZoom || isMeet) return url;
+  }
+  return null;
+}

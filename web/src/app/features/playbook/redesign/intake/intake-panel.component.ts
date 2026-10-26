@@ -15,7 +15,7 @@ import { PracticeApi } from '../../../../core/api/practice-api.service';
 import { OcrApiService } from '../../../../core/api/ocr-api.service';
 import { AssetMeta, TranscriptSegment } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, roundDisplayNo, sortRoundsByDate, type PrepInputPurpose } from '../v2.helpers';
+import { derivePhase, extractMeetingLink, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, roundDisplayNo, sortRoundsByDate, type PrepInputPurpose } from '../v2.helpers';
 import { textLengthError } from '../../../../core/api/validation-errors.helpers';
 
 export type IntakeType = 'email' | 'transcript' | 'note' | 'experiences' | 'resume';
@@ -1185,6 +1185,11 @@ export class IntakePanelComponent {
 
       const meta = this.buildMeta(shotId);
       const raw = this.text();
+      // 票215：单封粘贴的会议链接随 meta 入库（仅 email 类型；取不到则缺省）。
+      if (this.type() === 'email') {
+        const link = extractMeetingLink(raw);
+        if (link) meta.meetingLink = link;
+      }
       const kind = this.type() === 'email' ? 'Text'
         : this.type() === 'transcript' ? 'Transcript' : 'Notes';
       const fileName = this.autoFileName(raw);
@@ -1285,6 +1290,8 @@ export class IntakePanelComponent {
       subject: card.subject || undefined,
       from: card.from || undefined,
       interviewAt: card.when || undefined,
+      // 票215：批量卡片的会议链接取自 OCR 全文（card.body）；取不到则缺省。
+      meetingLink: extractMeetingLink(card.body) ?? undefined,
       format: card.format || undefined,
       dedupeKey: dedupeKey(card.from, card.date, card.subject),
       threadKey: normalizeThreadSubject(card.subject).key || undefined

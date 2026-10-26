@@ -9,7 +9,7 @@
  * 特征测试锁现状,不改被测函数行为。
  */
 import { describe, expect, it } from '@jest/globals';
-import { entryResultOutcome, formatEnteredDate, formatInterviewHeadTime, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, scoreTierKey, shortEmailTitle } from './v2.helpers';
+import { entryResultOutcome, extractMeetingLink, formatEnteredDate, formatInterviewHeadTime, isPrepInputPurpose, latestPrepInputAsset, PREP_INPUT_EXPERIENCES, PREP_INPUT_RESUME, prepInputPurposeOf, resolveActionDoneState, resolveRoundNodeStatus, resolveScoreJd, scoreTierKey, shortEmailTitle } from './v2.helpers';
 
 describe('entryResultOutcome(枚举全值,源码 switch 逐值)', () => {
   // [枚举-终局] Rejected -> rejected
@@ -318,5 +318,33 @@ describe('票210 formatInterviewHeadTime(收起态右上时间)', () => {
     expect(formatInterviewHeadTime(null)).toBe('');
     expect(formatInterviewHeadTime('garbage')).toBe('garbage');
     expect(formatInterviewHeadTime('2026-13-01 13:00')).toBe('2026-13-01 13:00');
+  });
+});
+
+describe('票215 extractMeetingLink(取第一个会议链接，夹具全合成)', () => {
+  it('Teams 链接 + 句末句点 -> 去句点返回链接', () => {
+    expect(extractMeetingLink('Join here: https://teams.microsoft.com/l/meetup-join/test-meeting.'))
+      .toBe('https://teams.microsoft.com/l/meetup-join/test-meeting');
+  });
+  it('Zoom 与 Meet 链接各取其一', () => {
+    expect(extractMeetingLink('Link: https://zoom.us/j/123456789'))
+      .toBe('https://zoom.us/j/123456789');
+    expect(extractMeetingLink('Link: https://meet.google.com/abc-defg-hij'))
+      .toBe('https://meet.google.com/abc-defg-hij');
+  });
+  it('先出现非会议链接、后出现会议链接 -> 取第一个会议链接', () => {
+    expect(extractMeetingLink('See https://example.com/jobs/1 and join https://teams.live.com/meet/test'))
+      .toBe('https://teams.live.com/meet/test');
+  });
+  it('子域名 Zoom 链接照认、括号包裹的链接去右括号', () => {
+    expect(extractMeetingLink('Join (https://company.zoom.us/j/987654321)'))
+      .toBe('https://company.zoom.us/j/987654321');
+  });
+  it('只有非会议链接或空值 -> null', () => {
+    expect(extractMeetingLink('See https://example.com/jobs/1')).toBeNull();
+    expect(extractMeetingLink('no links here')).toBeNull();
+    expect(extractMeetingLink('')).toBeNull();
+    expect(extractMeetingLink(null)).toBeNull();
+    expect(extractMeetingLink(undefined)).toBeNull();
   });
 });

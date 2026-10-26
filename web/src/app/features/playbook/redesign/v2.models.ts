@@ -29,6 +29,8 @@ export interface AssetMeta {
   date?: string;
   /** 提取到的面试时间(ISO 或 yyyy-MM-dd HH:mm)。 */
   interviewAt?: string;
+  /** 票215：解析出的会议链接（Teams / Zoom / Google Meet，取第一个；无则缺省）。 */
+  meetingLink?: string;
   interviewers?: string[];
   format?: string;
   /** 来源场景:email 邮件 / call 电话 / recording 录音 / note 备注。 */

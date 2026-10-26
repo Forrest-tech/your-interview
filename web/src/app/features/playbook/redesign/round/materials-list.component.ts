@@ -12,7 +12,7 @@ import {
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { AssetMeta, TranscriptSegment, safeJson } from '../v2.models';
 import { I18nService } from '../../../../core/i18n/i18n.service';
-import { derivePhase, formatInterviewHeadTime, formatLabel, isAudioAsset, isPrepInputPurpose, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, shortEmailTitle } from '../v2.helpers';
+import { derivePhase, extractMeetingLink, formatInterviewHeadTime, formatLabel, isAudioAsset, isPrepInputPurpose, joinNames, makeV2Fmt, makeV2T, normalizeThreadSubject, roundDisplayNo, shortEmailTitle } from '../v2.helpers';
 import { segmentEmailBody, EmailBodySegmentation } from '../email-body-segments';
 
 /** 票165：邮件卡挂载即取的全文状态（仅邮件 kind；id → 取数状态）。 */
@@ -40,9 +40,11 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
         @if (isEmailAsset(a)) {
           <article class="mat email-card" data-testid="material-item">
             <!-- 票210：方案 B 摘要展开型 —— 收起态一行卡片，点头部展开见完整邮件内容；
-                 轮次归属（Belongs to 下拉框与 Round 锚定行）按用户令整段删除；
-                 会议链接无解析字段（AssetMeta 无 meetingLink），加入会议 chip 与 Meeting 行
-                 本票不渲染、不占位，提取能力另立后续票。 -->
+                 轮次归属（Belongs to 下拉框与 Round 锚定行）按用户令整段删除。
+                 票215：会议链接已解析（AssetMeta.meetingLink + 读侧派生兜底），有真实链接时
+                 头部行右侧渲染 Join meeting 芯片；芯片是头部按钮的兄弟元素（不是 button 的
+                 子元素），点击直达会议、不触发展开/收起。 -->
+            <div class="eh-row">
             <button type="button" class="email-head" (click)="toggleEmail(a.id)"
                     [attr.aria-expanded]="emailOpenId() === a.id">
               <span class="avatar">{{ senderInitial(a) }}</span>
@@ -59,6 +61,11 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
               }
               <span class="chev" [class.open]="emailOpenId() === a.id">›</span>
             </button>
+              @if (meetingLinkOf(a); as link) {
+                <a class="join-chip" [href]="link" target="_blank" rel="noopener"
+                   [attr.aria-label]="t('pb.br.countdown.join')">{{ t('pb.br.countdown.join') }}</a>
+              }
+            </div>
 
             @if (emailOpenId() === a.id) {
             <div class="email-open">
@@ -74,6 +81,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                   @if (m.interviewAt) { <div class="prow"><dt>{{ t('pb.v2.m.fWhen') }}</dt><dd>{{ m.interviewAt }}</dd></div> }
                   @if (m.format) { <div class="prow"><dt>{{ t('pb.v2.m.fFormat') }}</dt><dd>{{ formatLabel(t, m.format) }}</dd></div> }
                   @if (interviewersOf(a)) { <div class="prow"><dt>{{ t('pb.v2.m.fInterviewers') }}</dt><dd>{{ interviewersOf(a) }}</dd></div> }
+                  @if (meetingLinkOf(a); as link) { <div class="prow"><dt>{{ t('pb.v2.r.meetingLink') }}</dt><dd><a [href]="link" target="_blank" rel="noopener">{{ t('pb.v2.r.openLink') }}</a></dd></div> }
                 </dl>
               }
 
@@ -236,6 +244,13 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
     .email-head { display: flex; gap: 10px; align-items: flex-start; width: 100%;
                   border: none; background: transparent; color: inherit; cursor: pointer;
                   padding: 0; text-align: left; font: inherit; }
+    /* 票215：收起态行 —— 头部按钮 + Join 芯片同一行；芯片是按钮的兄弟元素。 */
+    .eh-row { display: flex; gap: 8px; align-items: center; }
+    .eh-row .email-head { flex: 1 1 auto; min-width: 0; width: auto; }
+    .join-chip { flex-shrink: 0; font-size: 12px; font-weight: 700; white-space: nowrap;
+                 color: var(--yi-accent, #2563eb); background: var(--yi-accent-tint, #eff6ff);
+                 border-radius: 999px; padding: 4px 10px; text-decoration: none; }
+    .join-chip:hover { text-decoration: underline; }
     .avatar { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
               background: var(--yi-accent-tint, #eff6ff); color: var(--yi-accent, #2563eb);
               display: inline-flex; align-items: center; justify-content: center;
@@ -397,6 +412,16 @@ export class MaterialsListComponent {
     const m = this.metaOf(a);
     if (m?.interviewers?.length) return this.joinNamesOf(m.interviewers);
     return m?.arrangement?.interviewers || null;
+  }
+
+  /** 票215：会议链接 —— 存储字段 meetingLink 优先；存量旧邮件以 165 挂载已取的全文
+   *  纯函数派生兜底（读侧派生，不写存储、不批量改写）；两者皆无为 null（芯片与
+   *  Meeting 行都不渲染）。全文尚在加载时派生为空，取到后自动出现。 */
+  meetingLinkOf(a: InterviewAsset): string | null {
+    const m = this.metaOf(a);
+    if (m?.meetingLink) return m.meetingLink;
+    const text = this.emailBodies().get(a.id)?.text;
+    return text ? extractMeetingLink(text) : null;
   }
 
   /** 票210：该邮件所在 thread 的封数（单封为 1，不渲染 pill）。 */

@@ -318,6 +318,70 @@ public sealed class GenerateRoundReviewCommandHandler(InterviewsDbContext db, IA
     private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];
 }
 
+/// <summary>
+/// 票227：抽取结果的会议元数据过滤（纯函数，公开静态以便测试直接断言——Interviews 程序集无 InternalsVisibleTo）。
+/// 判定对象是抽取出的“题目”本身：纯会议元数据（会议链接/会议号/密码/拨入号/Join 参会指令）或提问人
+/// 为会议标识（Join 等）时返回 true（应丢弃）；真实题目一律返回 false。
+/// 只认结构性物流标识，不因单个词误杀真实提问——“Have you used Zoom meetings before?”、
+/// “How do I join the team?”、无问号的中文真实提问均须通过。
+/// </summary>
+public static class QuestionExtractFilter
+{
+    // 会议平台域名：题目含此类链接即为会议元数据（文档/代码链接不在此列）。
+    private static readonly string[] MeetingHosts =
+        ["teams.microsoft.com", "teams.live.com", "zoom.us", "meet.google.com",
+         "webex.com", "gotomeeting.com", "chime.aws", "skype.com", "whereby.com"];
+
+    // 强物流标识：出现即为会议元数据（会议号/密码/拨入/参会链接类，不含通用问句）。
+    // 注意：“passcode”不作裸子串命中——“How do you handle passcodes in production?”是真实安全提问，
+    // 只有“Passcode: 000000”这类标签+取值形态才算物流；故 passcode 走第 3b 条正则，不进本表。
+    private static readonly string[] LogisticsMarkers =
+        ["meeting id", "meeting passcode", "dial-in", "dial in",
+         "会议号", "会议密码", "参会密码", "入会密码", "电话拨入", "参会链接", "会议链接", "join link"];
+
+    public static bool IsMeetingMetadata(string question, string? askedBy)
+    {
+        var q = question.Trim();
+        if (q.Length == 0) return false;
+
+        // 1）提问人是会议标识而非真人：精确为 Join/加入会议（含后缀），或提问人本身含链接。
+        var asker = (askedBy ?? "").Trim();
+        if (asker.Length > 0)
+        {
+            var lowerAsker = asker.ToLowerInvariant();
+            if (lowerAsker is "join" or "加入会议" || lowerAsker.StartsWith("加入会议")) return true;
+            if (lowerAsker.StartsWith("join ", StringComparison.Ordinal) &&
+                (lowerAsker.Contains("meeting") || lowerAsker.Contains("teams") ||
+                 lowerAsker.Contains("zoom") || lowerAsker.Contains("会议"))) return true;
+            if (asker.Contains("http://", StringComparison.OrdinalIgnoreCase) ||
+                asker.Contains("https://", StringComparison.OrdinalIgnoreCase)) return true;
+        }
+
+        var lower = q.ToLowerInvariant();
+
+        // 2）题目含会议平台链接。MatchCollection 是非泛型枚举，须显式写 Match，否则 m 被推断为 object。
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(q, @"https?://[^\s]+"))
+        {
+            var url = m.Value.ToLowerInvariant();
+            if (MeetingHosts.Any(h => url.Contains(h))) return true;
+        }
+
+        // 3）强物流标识。
+        if (LogisticsMarkers.Any(m => lower.Contains(m))) return true;
+
+        // 3b）passcode 仅标签+取值形态算物流（“Passcode: 000000”/“passcode 123456”）；
+        // 裸词出现在真实提问中（如 passcode 安全策略）不得误杀。
+        if (System.Text.RegularExpressions.Regex.IsMatch(lower, @"passcode\s*[:：]\s*\d") ||
+            System.Text.RegularExpressions.Regex.IsMatch(lower, @"passcode\s+\d{4,}")) return true;
+
+        // 4）以 Join 开头的参会指令（“Join Microsoft Teams Meeting”类）；“How do I join …”等问句不在此列。
+        if (System.Text.RegularExpressions.Regex.IsMatch(q, @"^\s*join\b.*(meeting|teams|zoom|会议)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return true;
+
+        return false;
+    }
+}
+
 /// <summary>从本轮转写抽取问答对 → 生成本轮题目(提问人逐人标注)。</summary>
 public sealed record ExtractRoundQuestionsCommand(Guid UserId, Guid EntryId, Guid RoundId) : IRequest<Result<int>>;
 
@@ -345,7 +409,7 @@ public sealed class ExtractRoundQuestionsCommandHandler(InterviewsDbContext db, 
             var prompt =
                 $"下面是 {e.CompanyName} {e.Role} Round {round.Order}({round.Stage})的面试转写,面试官:{round.Interviewers}。\n" +
                 "抽取全部问答对,只输出 JSON 数组:[{\"question\":\"面试官原话\",\"answer\":\"候选人回答原话\",\"askedBy\":\"提问人真名,分不清写 面试官 1/面试官 2\",\"category\":\"Technical|SystemDesign|Behavioral|Coding|Culture|Other\"}]\n" +
-                "闲聊寒暄不要抽。转写:\n" + (transcript.Length > 12000 ? transcript[..12000] : transcript);
+                "闲聊寒暄不要抽。会议邀约/会议元数据（Join、会议链接、会议号、密码、时间地点、参会方式）不要抽，只抽面试官向候选人提出的真实问题。转写:\n" + (transcript.Length > 12000 ? transcript[..12000] : transcript);
             var completion = await ai.CompleteAsync("round-qa-extract", prompt,
                 "只输出 JSON 数组,不要其它文字。", 0.2, 6000, ct);
             extracted = ParseExtracted(completion.Text);
@@ -360,6 +424,8 @@ public sealed class ExtractRoundQuestionsCommandHandler(InterviewsDbContext db, 
         foreach (var (question, answer, askedBy, category) in extracted)
         {
             if (string.IsNullOrWhiteSpace(question)) continue;
+            // 票227：抽取后统一过滤（AI 与规则两路同过）——纯会议元数据不得成题。
+            if (QuestionExtractFilter.IsMeetingMetadata(question, askedBy)) continue;
             var cat = Enum.TryParse<QuestionCategory>(category, true, out var c) ? c : QuestionCategory.Technical;
             e.AddQuestion(question.Trim(), answer, cat, 3, round.Id, askedBy);
             created++;

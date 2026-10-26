@@ -332,12 +332,12 @@ export class RoundCardComponent implements OnInit {
   }
 
   constructor() {
-    // 轮次切换时按阶段选默认页签:未开始 → 备考;已结束 → 实录。
+    // 票179：轮次切换时页签保持不变（不再按阶段重置为备考/实录）；
+    // 只关闭编辑表单——编辑字段按轮次填充，带到另一轮会显示旧轮次的值。
     effect(() => {
       const r = this.round();
       if (r.id !== this.tabRoundId) {
         this.tabRoundId = r.id;
-        this.tab.set(r.outcome === 'Pending' ? 'prep' : 'record');
         this.editing.set(false);
       }
     }, { allowSignalWrites: true });

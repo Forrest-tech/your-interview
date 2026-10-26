@@ -38,12 +38,15 @@ import { I18nService } from '../i18n/i18n.service';
   styles: [`
     .qa-zoom { display: inline-flex; align-items: center; gap: 5px; }
     .qa-zoom-label { font-size: 11px; color: var(--yi-text-muted, #475569); margin-right: 2px; }
+    /* 票211：−/+ 不要框——border 与背景底色一并去掉，任何状态下都不再出现方框；
+       36×36 点击区保留（只不画框），悬停只加深图标颜色，不铺底色块；.zpct 与下载/星火花不动。 */
     .zbtn { display: inline-flex; align-items: center; justify-content: center;
-            width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--yi-border, #e2e8f0);
-            background: #ffffff; color: var(--yi-text-muted, #475569); font-size: 19px; line-height: 1; cursor: pointer;
-            transition: background .15s ease, border-color .15s ease, color .15s ease; }
-    .zbtn:hover { background: #f6f8fb; border-color: var(--yi-border, #e2e8f0); color: var(--yi-text, #0f172a); }
-    .zbtn:disabled { opacity: .4; cursor: default; }
+            width: 36px; height: 36px; border: none; background: transparent;
+            color: var(--yi-text-muted, #475569); font-size: 19px; line-height: 1; cursor: pointer;
+            transition: color .15s ease; }
+    .zbtn:hover { background: transparent; border: none; color: var(--yi-text, #0f172a); }
+    .zbtn:active { background: transparent; border: none; }
+    .zbtn:disabled { opacity: .4; cursor: default; background: transparent; border: none; }
     .zpct { min-width: 52px; text-align: center; font-size: 12px; font-weight: 700;
             border: 1px solid var(--yi-border, #e2e8f0); border-radius: 7px; padding: 4px 4px;
             background: transparent; color: inherit; cursor: text; }

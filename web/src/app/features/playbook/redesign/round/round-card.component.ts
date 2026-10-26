@@ -182,7 +182,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
     </section>
   `,
   styles: [`
-    .card { padding: 2px 2px 0; margin-top: 14px; }
+    .card { padding: 2px 2px 0; margin-top: 6px; /* 票192:14px → 6px，收紧节点行与详情卡之间的空白 */ }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     /* 票177:右上角铅笔图标按钮，与 AI practice 的 .ch-edit 看齐（36px 白底细边框圆角方框）。 */
     .rc-icon-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
@@ -220,7 +220,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
            font-size: 14px; background: transparent; color: inherit; }
     .field-error { color: #dc2626; font-size: 12px; }
     .row { display: flex; gap: 8px; align-items: center; }
-    .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e2e8f0); margin: 14px 0 10px; flex-wrap: wrap; }
+    .rtabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--yi-border, #e2e8f0); margin: 8px 0 10px; flex-wrap: wrap; /* 票192:上边距 14px → 8px，下边距与页签内边距不动 */ }
     .rtab { border: none; background: transparent; color: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
             padding: 8px 13px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; }
     .rtab.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; }

@@ -53,17 +53,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
           @if (round().format) { <span class="rc-meta-line">{{ formatLabel(t, round().format) }}</span> }
         </span>
         <span class="spacer"></span>
-        @if (tab() === 'record') {
-          <!-- 票191：实录页功能收进卡片右上角一行（图标按钮，复用 .rc-icon-btn；Text size 原样保留）。 -->
-          <app-qa-zoom></app-qa-zoom>
-          <button type="button" class="rc-icon-btn" (click)="openRecordExport()"
-                  [title]="t('pb.v2.r.exportRecord')" [attr.aria-label]="t('pb.v2.r.exportRecord')"><mat-icon>download</mat-icon></button>
-          @if (recordComp(); as rc) {
-            <button type="button" class="rc-icon-btn" (click)="rc.generateReview()" [disabled]="rc.busy()"
-                    [title]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"
-                    [attr.aria-label]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"><mat-icon>analytics</mat-icon></button>
-          }
-        }
+        <!-- 票206：record 三功能已移至下方 record 页签内容区顶部的 .rec-head 行（与 Prep 页头同一落点），此处不再渲染，避免与 Prep 页头位置不一致。 -->
         <!-- 票188:铅笔按钮已上移至父级页签行最右侧（viewChild 接线），此处不再渲染，避免重复。 -->
       </div>
       <div class="rc-outcome">
@@ -158,6 +148,20 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
                            (generateConsumed)="generateConsumed.emit()" />
         }
         @case ('record') {
+          <!-- 票206：record 三功能行，与 Prep 页头（.prep-head/.ph-actions）同一落点：页签内容区顶部右上角，padding 照 .prep 同款 4px 2px（行顶距页签行底边与右偏移与 Prep 页头一字相同）、组内 gap 8px、行高由 36px 方框按钮定；Text size 用 compact 版（与 Prep 一致：无“字号”名、保留百分比数字），Export 与逐题分析复用 .rc-icon-btn（196 基准）；逐题分析仍是 analytics，不换成 Prep 的 auto_awesome（功能不同，只统一位置与样式）。 -->
+          <div class="rec-head">
+            <span class="spacer"></span>
+            <div class="rec-actions">
+              <app-qa-zoom [compact]="true"></app-qa-zoom>
+              <button type="button" class="rc-icon-btn" (click)="openRecordExport()"
+                      [title]="t('pb.v2.r.exportRecord')" [attr.aria-label]="t('pb.v2.r.exportRecord')"><mat-icon>download</mat-icon></button>
+              @if (recordComp(); as rc) {
+                <button type="button" class="rc-icon-btn" (click)="rc.generateReview()" [disabled]="rc.busy()"
+                        [title]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"
+                        [attr.aria-label]="rc.roundReview() ? t('pb.v2.rec.regenerateAnalysis') : t('pb.v2.rec.generateAnalysis')"><mat-icon>analytics</mat-icon></button>
+              }
+            </div>
+          </div>
           <app-round-record [entry]="entry()" [round]="round()" (changed)="changed.emit()" />
         }
         @case ('qa') {
@@ -184,6 +188,9 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   styles: [`
     .card { padding: 2px 2px 0; margin-top: 6px; /* 票192:14px → 6px，收紧节点行与详情卡之间的空白 */ }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    /* 票206：record 页签内容区顶部三功能行，与 Prep 页头（.prep-head/.ph-actions）同几何：组内 gap 8px、整组可换行，行高由 36px 方框按钮定，与 Prep 行同高；padding 4px 2px 照 .prep 同款，使行顶距页签行底边（10px 页签下边距 + 4px）与右偏移（卡片 2px + 自身 2px）与 Prep 页头一字相同；360px 下整组可落行不溢出。 */
+    .rec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 2px; }
+    .rec-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     /* 票177:右上角铅笔图标按钮，与 AI practice 的 .ch-edit 看齐（36px 白底细边框圆角方框）。 */
     .rc-icon-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
                    width: 36px; height: 36px; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px;

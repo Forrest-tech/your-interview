@@ -3075,6 +3075,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'pb.v2.m.bodyFailed': { zh: '(原文读取失败)', en: '(Failed to read content)', fr: '(Échec de lecture du contenu)' },
   'pb.v2.m.fileLoadFailed': { zh: '文件加载失败(可能已丢失)', en: 'Failed to load file (may be lost)', fr: 'Échec du chargement (fichier peut-être perdu)' },
   'pb.v2.m.shotLoadFailed': { zh: '截图加载失败', en: 'Failed to load screenshot', fr: 'Échec du chargement de la capture' },
+  'pb.v2.m.shotZoom': { zh: '截图缩放', en: 'Screenshot zoom', fr: 'Zoom de la capture' },
   'pb.v2.m.movedToRound': { zh: '已移入所选轮次', en: 'Moved to the selected round', fr: 'Déplacé vers le tour choisi' },
   'pb.v2.m.movedToComm': { zh: '已移到沟通记录', en: 'Moved to Communications', fr: 'Déplacé vers les communications' },
   'pb.v2.m.reassignFailed': { zh: '改归属失败', en: 'Reassignment failed', fr: 'Échec du changement de rattachement' },

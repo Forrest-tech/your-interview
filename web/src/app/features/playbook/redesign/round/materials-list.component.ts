@@ -5,7 +5,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { EmailShotDialogComponent } from './email-shot-dialog.component';
 import {
   InterviewAsset, InterviewRound
 } from '../../../../core/models/api.models';
@@ -29,7 +31,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
 @Component({
   selector: 'app-materials-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatDialogModule],
   template: `
     @if (!displayGroups().length) {
       <p class="empty">{{ t('pb.v2.m.empty') }}</p>
@@ -43,7 +45,9 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                  轮次归属（Belongs to 下拉框与 Round 锚定行）按用户令整段删除。
                  票215：会议链接已解析（AssetMeta.meetingLink + 读侧派生兜底），有真实链接时
                  头部行右侧渲染 Join meeting 芯片；芯片是头部按钮的兄弟元素（不是 button 的
-                 子元素），点击直达会议、不触发展开/收起。 -->
+                 子元素），点击直达会议、不触发展开/收起。
+                 票225：截图不再卡片内 inline 展开（推翻 210 的 inline 选择，用户新指令），
+                 点 View screenshot 改开 MatDialog 弹窗看大图，弹窗内带 −/百分比/＋ 缩放。 -->
             <div class="eh-row">
             <button type="button" class="email-head" (click)="toggleEmail(a)"
                     [attr.aria-expanded]="emailOpenId() === a.id">
@@ -115,11 +119,8 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                     <span class="shot-title">{{ t('pb.v2.m.shotTitle') }}</span>
                     <span class="shot-sub">{{ t('pb.v2.m.shotSub') }}</span>
                   </span>
-                  <button type="button" class="mini-btn" (click)="loadShot(a)">{{ shotFor() === a.id && shotUrl() ? t('pb.v2.d.collapse') : t('pb.v2.m.viewShot') }}</button>
+                  <button type="button" class="mini-btn" (click)="openShotDialog(a)">{{ t('pb.v2.m.viewShot') }}</button>
                 </div>
-                @if (shotUrl() && shotFor() === a.id) {
-                  <img [src]="shotUrl()" class="shot-img" [alt]="t('pb.v2.m.imgAltShot')">
-                }
               </div>
             }
             @if (a.integrityStatus === 'Missing') { <span class="lost">{{ t('pb.v2.m.fileLost') }}</span> }
@@ -324,6 +325,7 @@ export class MaterialsListComponent {
 
   private readonly api = inject(PlaybookV2Api);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18nService);
   readonly t = makeV2T(this.i18n);
   readonly fmt = makeV2Fmt(this.i18n);
@@ -582,6 +584,27 @@ export class MaterialsListComponent {
     if (this.shotFor() === a.id && this.shotUrl()) { this.shotUrl.set(null); return; }
     this.api.audioBlob(this.entryId(), shotId).subscribe({
       next: blob => { this.shotUrl.set(URL.createObjectURL(blob)); this.shotFor.set(a.id); },
+      error: () => this.snack.open(this.t('pb.v2.m.shotLoadFailed'), this.t('common.close'), { duration: 3000 })
+    });
+  }
+
+  /** 票 225：邮件截图改弹窗看大图（199 MatDialog 模式；Esc / 点遮罩按默认关闭）。
+   * 弹窗内缩放是本地状态；对象 URL 在弹窗关闭后 revoke，不留泄漏。
+   * 非邮件分支仍走 loadShot 的卡片内展开，本方法只供邮件分支调用。 */
+  openShotDialog(a: InterviewAsset): void {
+    const shotId = this.metaOf(a)?.screenshotAssetId;
+    if (!shotId) return;
+    this.api.audioBlob(this.entryId(), shotId).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const ref = this.dialog.open(EmailShotDialogComponent, {
+          data: { url },
+          width: 'min(900px, calc(100vw - 16px))',
+          maxWidth: 'calc(100vw - 16px)',
+          maxHeight: '92vh',
+        });
+        ref.afterClosed().subscribe(() => URL.revokeObjectURL(url));
+      },
       error: () => this.snack.open(this.t('pb.v2.m.shotLoadFailed'), this.t('common.close'), { duration: 3000 })
     });
   }

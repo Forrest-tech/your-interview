@@ -49,24 +49,6 @@ public class DictionaryDataTests
     }
 
     [Fact]
-    public void StartupBudget_LoadUnder2s_MemoryUnder320MB()
-    {
-        GC.Collect();
-        var before = GC.GetTotalMemory(forceFullCollection: true);
-        var sw = Stopwatch.StartNew();
-        var store = OpenLayerStore.LoadFromEmbeddedResources();
-        sw.Stop();
-        var after = GC.GetTotalMemory(forceFullCollection: false);
-        Assert.True(sw.ElapsedMilliseconds < 2_000,
-            $"开放层载入耗时 {sw.ElapsedMilliseconds} ms,超 §9 预算 2000 ms");
-        var deltaMb = (after - before) / 1024.0 / 1024.0;
-        // 内存预算 2026-10-23 经 Forrest 裁定由 250 MB 调整为 320 MB(票 129 段一):
-        // CI 实测噪声带 263–300 MB 与词典数据量无关,属环境敏感测量(票 119 偏差 D-9)。
-        Assert.True(deltaMb < 320, $"词典模块常驻增量 {deltaMb:F1} MB,超 §9 预算 320 MB");
-        Assert.True(store.Ecdict.Count > 0);
-    }
-
-    [Fact]
     public void StateC_Disappeared_OpenLayerShape()
     {
         // §8 状态 C 核心断言:WordNet 动词结构 + ECDICT 中文行 + 词形标注 + Tier 1 发音
@@ -143,6 +125,36 @@ public class DictionaryDataTests
                 Assert.Equal(expectedBlocks[i].Zh, r.PosBlocks[i].ZhLines);
             }
         }
+    }
+}
+
+/// <summary>
+/// 票 238 并行隔离:StartupBudget 预算测试的独立宿主类。
+/// 原属 DictionaryDataTests(与类内 Lazy 共享 store 的兄弟测试同集合);CI 两次再红均败于内存臂
+/// (218 run 342.0 MB / 233 run 365.6 MB,皆 line 65):进程级堆度量下,并发建 store 的分配可计入
+/// 本例 delta。独立类内无兄弟 Lazy store;CI 全量 run 排除本例、改由隔离单跑步骤单独跑。
+/// 测试本体冻结(票 130 红线):方法体、2000 ms / 320 MB 预算数字、断言语义一字未动;
+/// 本类仍在 DictionaryDataTests.cs 内,TB5_StartupBudgetTest_BodyAndNumbersUntouched
+/// 全文命中三处原文不受影响。
+/// </summary>
+public class DictionaryStartupBudgetTests
+{
+    [Fact]
+    public void StartupBudget_LoadUnder2s_MemoryUnder320MB()
+    {
+        GC.Collect();
+        var before = GC.GetTotalMemory(forceFullCollection: true);
+        var sw = Stopwatch.StartNew();
+        var store = OpenLayerStore.LoadFromEmbeddedResources();
+        sw.Stop();
+        var after = GC.GetTotalMemory(forceFullCollection: false);
+        Assert.True(sw.ElapsedMilliseconds < 2_000,
+            $"开放层载入耗时 {sw.ElapsedMilliseconds} ms,超 §9 预算 2000 ms");
+        var deltaMb = (after - before) / 1024.0 / 1024.0;
+        // 内存预算 2026-10-23 经 Forrest 裁定由 250 MB 调整为 320 MB(票 129 段一):
+        // CI 实测噪声带 263–300 MB 与词典数据量无关,属环境敏感测量(票 119 偏差 D-9)。
+        Assert.True(deltaMb < 320, $"词典模块常驻增量 {deltaMb:F1} MB,超 §9 预算 320 MB");
+        Assert.True(store.Ecdict.Count > 0);
     }
 }
 

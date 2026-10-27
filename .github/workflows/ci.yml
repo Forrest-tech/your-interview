@@ -126,11 +126,33 @@ jobs:
             Services.Analytics.Tests \
             BuildingBlocks.Tests \
             Analysis.Worker.Tests; do
-            dotnet test "src/$p" -c Debug --no-build --nologo \
-              /p:CollectCoverage=true \
-              /p:CoverletOutputFormat=opencover \
-              /p:CoverletOutput="$PWD/coverage/$p/"
+            case "$p" in
+              Services.Assessment.Tests)
+                # 票 238:StartupBudget 已拆独立类 DictionaryStartupBudgetTests,全量 run 排除本例,
+                # 改由下方隔离单跑步骤单独跑,避免并发建 store 计入进程级堆 delta;
+                # 本体(2000ms/320MB/断言)零改动,Load 路径覆盖由其余四例经 Lazy 真 store 承担。
+                dotnet test "src/$p" -c Debug --no-build --nologo \
+                  --filter "FullyQualifiedName!=YourInterview.Services.Assessment.Tests.DictionaryStartupBudgetTests.StartupBudget_LoadUnder2s_MemoryUnder320MB" \
+                  /p:CollectCoverage=true \
+                  /p:CoverletOutputFormat=opencover \
+                  /p:CoverletOutput="$PWD/coverage/$p/"
+                ;;
+              *)
+                dotnet test "src/$p" -c Debug --no-build --nologo \
+                  /p:CollectCoverage=true \
+                  /p:CoverletOutputFormat=opencover \
+                  /p:CoverletOutput="$PWD/coverage/$p/"
+                ;;
+            esac
           done
+
+      - name: StartupBudget 隔离单跑(票 238:独立类 + CI 单独跑)
+        run: |
+          set -euo pipefail
+          # 单独进程、仅跑本例,无并行兄弟测试建 store 污染堆度量;不采集覆盖率,
+          # 覆盖率口径仍以全量 run 为准(不覆盖/不改写 coverage/Services.Assessment.Tests/)。
+          dotnet test "src/Services.Assessment.Tests" -c Debug --no-build --nologo \
+            --filter "FullyQualifiedName=YourInterview.Services.Assessment.Tests.DictionaryStartupBudgetTests.StartupBudget_LoadUnder2s_MemoryUnder320MB"
 
       - name: 合并覆盖率 + 门(只升不降)
         run: |

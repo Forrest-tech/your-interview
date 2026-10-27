@@ -52,6 +52,22 @@ public sealed class InterviewsDbContext(
     /// <summary>轮次提醒(CONF-CAL-2):由轮次排期派生的应用内提醒,唯一键 (RoundId, Kind)。</summary>
     public DbSet<RoundReminder> RoundReminders => Set<RoundReminder>();
 
+    // ---- 票 240:邮箱直连导入(方案 §3/§5.4,全部归属 Interviews 服务)----
+    /// <summary>邮箱连接：一行 = 一个邮箱账号的授权（refresh token 只存加密密文）。</summary>
+    public DbSet<MailboxConnection> MailboxConnections => Set<MailboxConnection>();
+
+    /// <summary>条目级邮箱匹配规则：一行 = 一个条目的三张表 + 排除列表。</summary>
+    public DbSet<MailMatchRule> MailMatchRules => Set<MailMatchRule>();
+
+    /// <summary>往来人→条目映射：用户级唯一键 (UserId, SenderEmailLower)。</summary>
+    public DbSet<MailContactMap> MailContactMaps => Set<MailContactMap>();
+
+    /// <summary>待确认队列：弱信号与歧义只进队列、永不自动落库。</summary>
+    public DbSet<MailboxPendingItem> MailboxPendingItems => Set<MailboxPendingItem>();
+
+    /// <summary>导入记录：append-only 审计，去重键唯一约束。</summary>
+    public DbSet<MailboxImportRecord> MailboxImportRecords => Set<MailboxImportRecord>();
+
     /// <summary>
     /// 给该条目所有未关单的任务排定终态(只改跟踪状态,不落库 ——
     /// 由调用方随后的 SaveChangesAsync 与业务变更**同一事务**提交)。
@@ -386,6 +402,91 @@ public sealed class InterviewsDbContext(
             e.HasIndex(x => new { x.UserId, x.Status, x.RemindAt });
             e.UseXminAsConcurrencyToken();
             e.HasQueryFilter(x => !x.IsDeleted && x.UserId == CurrentUserId);
+        });
+
+        // ---- 票 240:邮箱直连导入 ----
+        b.Entity<MailboxConnection>(e =>
+        {
+            e.ToTable("mailbox_connections");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.AccountEmail).HasMaxLength(320).IsRequired();
+            e.Property(x => x.Scope).HasMaxLength(1000).IsRequired();
+            // 加密密文长度不定:text 列不限长。
+            e.Property(x => x.EncryptedRefreshToken).HasColumnType("text").IsRequired();
+            e.Property(x => x.Cursor).HasColumnType("text");
+            e.Property(x => x.Provider).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.Status });
+            e.HasQueryFilter(x => x.UserId == CurrentUserId);
+        });
+
+        b.Entity<MailMatchRule>(e =>
+        {
+            e.ToTable("mail_match_rules");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.EntryId).IsRequired();
+            e.Property(x => x.DomainsJson).HasColumnType("text").IsRequired();
+            e.Property(x => x.ContactsJson).HasColumnType("text").IsRequired();
+            e.Property(x => x.KeywordsJson).HasColumnType("text").IsRequired();
+            e.Property(x => x.ExclusionsJson).HasColumnType("text").IsRequired();
+            e.HasIndex(x => new { x.UserId, x.EntryId }).IsUnique();
+            e.HasQueryFilter(x => x.UserId == CurrentUserId);
+        });
+
+        b.Entity<MailContactMap>(e =>
+        {
+            e.ToTable("mail_contact_maps");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.SenderEmailLower).HasMaxLength(320).IsRequired();
+            e.Property(x => x.EntryId).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.SenderEmailLower }).IsUnique();
+            e.HasQueryFilter(x => x.UserId == CurrentUserId);
+        });
+
+        b.Entity<MailboxPendingItem>(e =>
+        {
+            e.ToTable("mailbox_pending_items");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.Provider).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.AccountEmail).HasMaxLength(320).IsRequired();
+            e.Property(x => x.ProviderMessageId).HasMaxLength(500).IsRequired();
+            e.Property(x => x.ProviderThreadId).HasMaxLength(500);
+            e.Property(x => x.FromEmail).HasMaxLength(320).IsRequired();
+            e.Property(x => x.FromName).HasMaxLength(500);
+            e.Property(x => x.Subject).HasMaxLength(2000).IsRequired();
+            e.Property(x => x.Signal).HasMaxLength(50).IsRequired();
+            e.Property(x => x.MatchedRule).HasMaxLength(500).IsRequired();
+            e.Property(x => x.CandidateEntryIdsJson).HasColumnType("text");
+            e.Property(x => x.Snippet).HasColumnType("text");
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => new { x.UserId, x.Status, x.CreatedAt });
+            e.HasIndex(x => new { x.UserId, x.Provider, x.ProviderMessageId });
+            e.HasQueryFilter(x => x.UserId == CurrentUserId);
+        });
+
+        b.Entity<MailboxImportRecord>(e =>
+        {
+            e.ToTable("mailbox_import_records");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.EntryId).IsRequired();
+            e.Property(x => x.Provider).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.AccountEmail).HasMaxLength(320).IsRequired();
+            e.Property(x => x.ProviderMessageId).HasMaxLength(500).IsRequired();
+            e.Property(x => x.ProviderThreadId).HasMaxLength(500);
+            e.Property(x => x.MatchedRule).HasMaxLength(500).IsRequired();
+            e.Property(x => x.RawMimeSha256).HasMaxLength(64).IsRequired();
+            e.Property(x => x.CursorSnapshot).HasColumnType("text");
+            // 去重键（方案 §3.3）：刷新命中已存在键即跳过，不覆盖、不更新。
+            e.HasIndex(x => new { x.UserId, x.Provider, x.AccountEmail, x.ProviderMessageId }).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.EntryId, x.ImportedAt });
+            e.HasIndex(x => x.AssetId);
+            e.HasQueryFilter(x => x.UserId == CurrentUserId);
         });
     }
 }

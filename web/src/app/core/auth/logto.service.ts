@@ -20,6 +20,13 @@ export interface LogtoAuthConfig {
   clientId: string;
   redirectUri: string;
   audience: string;
+  /**
+   * 票251 B7：Console 里 API resource 上定义的业务 scope，必须写 Permissions.* 的
+   * 点值（例如 interviews.write），绝不能写 C# 常量名（InterviewsWrite）——后端
+   * claims 门按点值精确匹配，常量名匹配不上就是零权限。归属见 SETUP.md §3：
+   * scope 定义归 Console，点值清单归环境配置，本文件只负责原样带上。
+   */
+  apiScopes: string[];
 }
 
 export interface LogtoTokenResponse {
@@ -44,7 +51,8 @@ export function logtoConfig(): LogtoAuthConfig | null {
     endpoint: l.endpoint.replace(/\/$/, ''),
     clientId: l.clientId,
     redirectUri: l.redirectUri || `${window.location.origin}/auth/logto/callback`,
-    audience: l.audience || ''
+    audience: l.audience || '',
+    apiScopes: l.apiScopes ?? []
   };
 }
 
@@ -75,16 +83,19 @@ export async function codeChallenge(verifier: string): Promise<string> {
  * 授权 URL。first_screen=register 直接打开 Logto 的注册表单（官方 first screen 参数），
  * 不是前端自己画注册页；resource 带上 API resource identifier 时，换回的 access token
  * 才带业务 scope（claims 门的权限载体就靠它，空 audience 时不发该参数）。
+ * 票251 B7：scope 必须带上 apiScopes —— 授权时不请求的 scope，换到的 token 里
+ * 就是空串，claims 门给零权限，批过的用户也会被当 pending 打回登录页。
  */
 export function buildAuthorizeUrl(
   cfg: LogtoAuthConfig,
   opts: { state: string; codeChallenge: string; firstScreen: 'sign_in' | 'register' }
 ): string {
+  const scope = ['openid profile email offline_access', ...(cfg.apiScopes ?? [])].join(' ');
   const q = new URLSearchParams({
     client_id: cfg.clientId,
     redirect_uri: cfg.redirectUri,
     response_type: 'code',
-    scope: 'openid profile email offline_access',
+    scope,
     code_challenge: opts.codeChallenge,
     code_challenge_method: 'S256',
     state: opts.state,
@@ -94,7 +105,12 @@ export function buildAuthorizeUrl(
   return `${cfg.endpoint}/oidc/auth?${q.toString()}`;
 }
 
-/** token 端点请求体（code 换取与 refresh 共用形状，grant_type 区分）。 */
+/**
+ * token 端点请求体（code 换取与 refresh 共用形状，grant_type 区分）。
+ * 票251 B6：按 RFC 8707，换 token 时必须重复 resource —— 不带它时 Logto 只发
+ * 默认受众的不透明 token（非 JWT），后端无法 JWT 校验，/me 直接 401。
+ * audience 非空时两 grant 都带 resource；空 audience 时不发（与 authorize 一致）。
+ */
 export function buildTokenBody(
   cfg: LogtoAuthConfig,
   grant: { grant_type: 'authorization_code'; code: string; codeVerifier: string } |
@@ -111,6 +127,7 @@ export function buildTokenBody(
   } else {
     body.set('refresh_token', grant.refreshToken);
   }
+  if (cfg.audience) body.set('resource', cfg.audience);
   return body;
 }
 

@@ -3,7 +3,9 @@
 > 收敛日操作：各服务 `Logto__RejectOldIssuer=true` + 重启；旧 Identity `Auth:IssuanceEnabled=false`
 > + 重启 Identity（停发）。回滚时把两处翻回并重启（见 ROLLBACK.md）。
 > 前置：`Logto:Audience` 必须已配成 Console 里建的 API resource identifier（未配时
-> 双轨期 audience 不校验，上线清单要求配上后恢复校验）。
+> 双轨期 audience 不校验，上线清单要求配上后恢复校验）。同 resource 上的 scope 必须
+> 是 `Permissions.*` 点值（如 `interviews.write`，不是 C# 常量名），且前端
+> `logto.apiScopes` 与 Console 定义一致（票251 B7；归属见 SETUP.md §3）。
 
 ## 逐服务核查表（每行都要打勾并记实测结果）
 

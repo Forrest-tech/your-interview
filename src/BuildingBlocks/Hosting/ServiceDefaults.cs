@@ -326,8 +326,9 @@ public static class ServiceDefaults
             })
             .AddJwtBearer(LogtoSchemeSelector.LogtoScheme, options =>
             {
-                // 发现地址 = issuer + /.well-known/openid-configuration(Logto issuer 自带 /oidc 后缀)。
-                options.MetadataAddress = logto.Issuer.TrimEnd('/') + "/.well-known/openid-configuration";
+                // 发现地址 = 归一化 issuer + /.well-known/openid-configuration
+                // (票251 B5:归一化保证裸 endpoint 也补 /oidc,发现地址恒为 {endpoint}/oidc/.well-known/...)。
+                options.MetadataAddress = LogtoIssuerNormalizer.Normalize(logto.Issuer) + "/.well-known/openid-configuration";
                 // http issuer(本地开发)不强制 HTTPS 元数据;https issuer 保持默认强制。
                 options.RequireHttpsMetadata = logto.Issuer.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
                 options.TokenValidationParameters = LogtoTokenValidation.Build(logto);

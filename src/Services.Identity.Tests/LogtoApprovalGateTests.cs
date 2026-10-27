@@ -105,15 +105,16 @@ public class LogtoApprovalGateTests
         }
     }
 
+    // 票251 B4:User() 不再带 verified 参数 —— 1.45.0 用户对象无邮箱验证字段。
     private static LogtoUserDto User(string id, bool suspended, string? approval,
         DateTimeOffset? created = null, DateTimeOffset? updated = null,
-        bool verified = false, string? legacyId = null, string email = "u@example.com")
+        string? legacyId = null, string email = "u@example.com")
     {
         var cd = new JsonObject();
         if (approval is not null) cd["approval"] = approval;
         if (legacyId is not null) cd["legacyUserId"] = legacyId;
         return new LogtoUserDto(id, suspended, cd, created ?? DateTimeOffset.UtcNow, email,
-            verified, updated ?? DateTimeOffset.UtcNow);
+            updated ?? DateTimeOffset.UtcNow);
     }
 
     private static LogtoApprovalGate Gate(FakeClient client, FakeStore store, FakeAudit audit,
@@ -247,8 +248,8 @@ public class LogtoApprovalGateTests
     public async Task SuspensionStatus_Transitions()
     {
         var client = new FakeClient();
-        client.Users["p1"] = User("p1", false, "pending", updated: T1, verified: true);
-        client.Users["p2"] = User("p2", false, "approved", updated: T1, verified: true);
+        client.Users["p1"] = User("p1", false, "pending", updated: T1);
+        client.Users["p2"] = User("p2", false, "approved", updated: T1);
         var gate = Gate(client, new FakeStore(), new FakeAudit());
 
         (await gate.HandleSuspensionStatusUpdatedAsync("p1", false, default))
@@ -260,21 +261,20 @@ public class LogtoApprovalGateTests
             .Should().Be(LogtoGateOutcome.MirrorSynced);
     }
 
-    [Fact] // 取消停用但邮箱未验证 → 镜像保持 pending(UnverifiedHeld),绝不批准
-    public async Task SuspensionStatus_UnverifiedHeld()
+    [Fact] // 票251 B4:取消停用 pending 用户 = 管理员批准,直接翻 approved ——
+    // 旧 UnverifiedHeld 分支已删除(1.45.0 用户对象无邮箱验证字段,旧分支恒成立)。
+    public async Task SuspensionStatus_PendingUnsuspend_ApprovesDirectly()
     {
         var client = new FakeClient();
-        client.Users["u1"] = User("u1", false, "pending", updated: T1, verified: false);
+        client.Users["u1"] = User("u1", false, "pending", updated: T1);
         var store = new FakeStore();
-        var audit = new FakeAudit();
-        var gate = Gate(client, store, audit);
+        var gate = Gate(client, store, new FakeAudit());
 
         (await gate.HandleSuspensionStatusUpdatedAsync("u1", false, default))
-            .Should().Be(LogtoGateOutcome.UnverifiedHeld);
-        client.Users["u1"].CustomData["approval"]?.GetValue<string>().Should().Be("pending");
-        store.Rows["u1"].Approval.Should().Be("pending");
+            .Should().Be(LogtoGateOutcome.Approved);
+        client.Users["u1"].CustomData["approval"]?.GetValue<string>().Should().Be("approved");
+        store.Rows["u1"].Approval.Should().Be("approved");
         store.Rows["u1"].IsSuspended.Should().BeFalse();
-        audit.Rows.Should().ContainSingle(r => r.Action == "logto.approval.unsuspend.unverified");
     }
 
     [Fact] // 排序水位:镜像 LastEventAt 更新 → 延迟/重发的旧取消停用事件被忽略
@@ -282,7 +282,7 @@ public class LogtoApprovalGateTests
     {
         var client = new FakeClient();
         // fresh 现态是“已停用”(更新的停用),但 payload 说取消停用 —— fresh 赢。
-        client.Users["s1"] = User("s1", true, "pending", updated: T1, verified: true);
+        client.Users["s1"] = User("s1", true, "pending", updated: T1);
         var store = new FakeStore();
         store.Rows["s1"] = new LogtoMirrorRow("s1", Guid.NewGuid(), "u@example.com", "pending", true, false, T2);
         var gate = Gate(client, store, new FakeAudit());
@@ -293,11 +293,11 @@ public class LogtoApprovalGateTests
         client.CustomDataCalls.Should().Be(0);
     }
 
-    [Fact] // fresh 赢过 payload:payload 说停用、fresh 说未停用且已验证 → 仍批准
+    [Fact] // fresh 赢过 payload:payload 说停用、fresh 说未停用 → 仍批准
     public async Task SuspensionStatus_FreshStateBeatsPayload()
     {
         var client = new FakeClient();
-        client.Users["f1"] = User("f1", false, "pending", updated: T1, verified: true);
+        client.Users["f1"] = User("f1", false, "pending", updated: T1);
         var gate = Gate(client, new FakeStore(), new FakeAudit());
 
         (await gate.HandleSuspensionStatusUpdatedAsync("f1", true, default))
@@ -310,7 +310,7 @@ public class LogtoApprovalGateTests
     {
         var legacy = Guid.NewGuid();
         var client = new FakeClient();
-        client.Users["u2"] = User("u2", false, "approved", updated: T1, verified: true, legacyId: legacy.ToString());
+        client.Users["u2"] = User("u2", false, "approved", updated: T1, legacyId: legacy.ToString());
         var store = new FakeStore();
         store.Rows["u2"] = new LogtoMirrorRow("u2", legacy, "u@example.com", "approved", true, false, T0);
         store.OldUsers[legacy] = (true, false); // 旧侧停用中(此前 Console 停用双侧一致)
@@ -326,36 +326,35 @@ public class LogtoApprovalGateTests
         actions.Should().NotContain(a => a.Contains("u2"));
     }
 
-    [Fact] // round-9(b) out-of-order 翻转:管理员先取消停用(未验证,镜像 pending 未停用),
-    // 用户随后完成验证 → 数据更新事件直接翻 approved,无需第二次管理员操作
+    [Fact] // 票251 B4 改写 round-9(b):取消停用事件丢失、镜像 pending 未停用,
+    // 数据更新事件到达 → 直接翻 approved,无需第二次管理员操作
     public async Task DataUpdated_OutOfOrderFlip_NoSecondAdminAction()
     {
         var legacy = Guid.NewGuid();
         var client = new FakeClient();
-        client.Users["v1"] = User("v1", false, "pending", updated: T2, verified: true, legacyId: legacy.ToString());
+        client.Users["v1"] = User("v1", false, "pending", updated: T2, legacyId: legacy.ToString());
         var store = new FakeStore();
         store.Rows["v1"] = new LogtoMirrorRow("v1", legacy, "u@example.com", "pending", false, false, T1);
         var audit = new FakeAudit();
         var gate = Gate(client, store, audit);
 
         (await gate.HandleUserDataUpdatedAsync("v1", default))
-            .Should().Be(LogtoGateOutcome.VerificationApproved);
+            .Should().Be(LogtoGateOutcome.DataUpdatedFlip);
         client.Users["v1"].CustomData["approval"]?.GetValue<string>().Should().Be("approved");
         store.Rows["v1"].Approval.Should().Be("approved");
         audit.Rows.Should().ContainSingle(r => r.Action == "logto.approval.data-updated.flip");
     }
 
-    [Fact] // 数据更新事件不翻转的情形:仍停用 / 未验证 / 非 pending 一律 NoAction
-    public async Task DataUpdated_NoFlip_WhenSuspendedOrUnverifiedOrNotPending()
+    [Fact] // 数据更新事件不翻转的情形:仍停用 / 非 pending 一律 NoAction
+    // (票251 B4:pending + 未停用现在翻转,见 OutOfOrderFlip 测试,不再列入 NoFlip)
+    public async Task DataUpdated_NoFlip_WhenSuspendedOrNotPending()
     {
         var client = new FakeClient();
-        client.Users["d1"] = User("d1", true, "pending", verified: true);
-        client.Users["d2"] = User("d2", false, "pending", verified: false);
-        client.Users["d3"] = User("d3", false, "approved", verified: true);
+        client.Users["d1"] = User("d1", true, "pending");
+        client.Users["d3"] = User("d3", false, "approved");
         var gate = Gate(client, new FakeStore(), new FakeAudit());
 
         (await gate.HandleUserDataUpdatedAsync("d1", default)).Should().Be(LogtoGateOutcome.NoAction);
-        (await gate.HandleUserDataUpdatedAsync("d2", default)).Should().Be(LogtoGateOutcome.NoAction);
         (await gate.HandleUserDataUpdatedAsync("d3", default)).Should().Be(LogtoGateOutcome.NoAction);
     }
 
@@ -439,7 +438,7 @@ public class LogtoApprovalGateTests
     {
         var legacy = Guid.NewGuid();
         var client = new FakeClient();
-        client.Users["c1"] = User("c1", false, "pending", updated: T1, verified: true, legacyId: legacy.ToString());
+        client.Users["c1"] = User("c1", false, "pending", updated: T1, legacyId: legacy.ToString());
         var store = new FakeStore();
         store.Rows["c1"] = new LogtoMirrorRow("c1", legacy, "u@example.com", "pending", true, false, T0);
         var gate = Gate(client, store, new FakeAudit());
@@ -455,7 +454,7 @@ public class LogtoApprovalGateTests
         var taskA = gate.HandleSuspensionStatusUpdatedAsync("c1", false, default);
         await entered.Task; // A 已读到未停用现态、卡在写 customData 处
         // 管理员重新停用:Logto 现态翻成停用(U3)
-        client.Users["c1"] = User("c1", true, "pending", updated: T2, verified: true, legacyId: legacy.ToString());
+        client.Users["c1"] = User("c1", true, "pending", updated: T2, legacyId: legacy.ToString());
         var taskB = gate.HandleSuspensionStatusUpdatedAsync("c1", true, default);
         await Task.Delay(200); // 让 B 到达用户锁(无锁实现下 B 在此窗口内跑完)
         release.TrySetResult();
@@ -505,7 +504,7 @@ public class LogtoApprovalGateTests
     {
         var client = new FakeClient();
         var now = DateTimeOffset.UtcNow;
-        client.Users["s-pending-active"] = User("s-pending-active", false, "pending", now, verified: true);
+        client.Users["s-pending-active"] = User("s-pending-active", false, "pending", now);
         client.Users["s-unmarked-active"] = User("s-unmarked-active", false, null, now);
         client.Users["s-unmarked-suspended"] = User("s-unmarked-suspended", true, null, now);
         client.Users["s-approved"] = User("s-approved", false, "approved", now);
@@ -535,13 +534,13 @@ public class LogtoApprovalGateTests
     {
         var legacy = Guid.NewGuid();
         var client = new FakeClient();
-        client.Users["vf1"] = User("vf1", false, "pending", T0.AddDays(1), verified: true, legacyId: legacy.ToString());
+        client.Users["vf1"] = User("vf1", false, "pending", T0.AddDays(1), legacyId: legacy.ToString());
         var store = new FakeStore();
         store.Rows["vf1"] = new LogtoMirrorRow("vf1", legacy, "u@example.com", "pending", false, false, T1);
         var gate = Gate(client, store, new FakeAudit(), launchedAt: T0);
 
         var actions = await gate.ReconcileAsync(default);
-        actions.Should().ContainSingle(a => a == "verified-flip:vf1");
+        actions.Should().ContainSingle(a => a == "approved-flip:vf1");
         client.Users["vf1"].CustomData["approval"]?.GetValue<string>().Should().Be("approved");
         store.Rows["vf1"].Approval.Should().Be("approved");
     }

@@ -19,8 +19,10 @@ namespace YourInterview.Services.Identity.Api;
 /// Logto Console。旧 /admin 页面在切换期只读(前端 logtoCutover 开关),
 /// 收敛后随旧 Identity 一起退役,Console 即停用路径。
 /// approve 与 unlock 是干净分开的两个动作:unlock 只解封、不改审批标记,
-/// 且拒绝 pending 用户(pending 必须走 approve);approve 只接受已验证邮箱,
-/// 未验证一律 409(未验证邮箱绝不能登录,无条件)。
+/// 且拒绝 pending 用户(pending 必须走 approve);approve 接受一切 pending 用户
+/// (票251 B4:1.45.0 的用户对象没有邮箱验证字段,旧“未验证一律 409”门在实测里
+/// 恒成立、挡住了每一次批准,故删除;邮箱验证由 Console 的 sign-in experience
+/// 设置在 hosted 注册流程里强制,见 SETUP.md §6)。
 /// </summary>
 [ApiController]
 [Route("api/admin/logto")]
@@ -47,8 +49,7 @@ public sealed class LogtoAdminController(
         var approval = GetApproval(user);
         if (approval is "approved" or "migrated") return Results.Ok(new { status = "already-approved", approval });
         if (approval != "pending") return Results.Conflict(new { error = $"该用户审批态为 {approval ?? "(空)"},不是 pending,无法批准" });
-        if (!user.EmailVerified)
-            return Results.Json(new { error = "邮箱未验证,不能批准(验证完成后可再批准,或等验证完成自动翻转)" }, statusCode: 409);
+        // 票251 B4:此处不再查邮箱验证 —— 1.45.0 用户对象无此字段,旧 409 门恒成立。
         try
         {
             await client.SuspendUserAsync(logtoUserId, false, ct);
@@ -119,7 +120,7 @@ public sealed class LogtoAdminController(
         {
             logtoUserId = user.Id,
             primaryEmail = user.PrimaryEmail,
-            emailVerified = user.EmailVerified,
+            // 票251 B4:emailVerified 字段已删 —— 1.45.0 用户对象无此字段,不得再输出一个恒假的值。
             isSuspended = user.IsSuspended,
             approval = GetApproval(user),
             mirror = row is null ? null : new

@@ -43,6 +43,24 @@ public class LogtoDualSchemeTests
             .Should().Be(LogtoSchemeSelector.LogtoScheme);
     }
 
+    [Fact] // 票251 B5:配置写裸 endpoint(缺 /oidc)时,Logto token 仍路由到 Logto ——
+    // 旧代码只去尾斜杠,裸值与 token 的 /oidc issuer 比对不上,会静默落到 Legacy 而全 401。
+    public void LogtoIssuer_BareEndpoint_NormalizedToOidc()
+    {
+        LogtoSchemeSelector.SelectScheme(Token(LogtoIssuer), "http://localhost:3001", false)
+            .Should().Be(LogtoSchemeSelector.LogtoScheme);
+        LogtoIssuerNormalizer.Normalize("http://localhost:3001").Should().Be(LogtoIssuer);
+        LogtoIssuerNormalizer.Normalize("http://localhost:3001/oidc/").Should().Be(LogtoIssuer);
+        LogtoIssuerNormalizer.Normalize("").Should().Be("");
+    }
+
+    [Fact] // 票251 B5:校验参数的 ValidIssuer 同样归一化(裸配置不得让 JWT 校验比对裸值)
+    public void LogtoTokenValidation_BareIssuer_Normalized()
+    {
+        LogtoTokenValidation.Build(new LogtoOptions { Issuer = "http://localhost:3001" })
+            .ValidIssuer.Should().Be(LogtoIssuer);
+    }
+
     [Fact] // issuer 尾斜杠归一化(配置写没写 /oidc/ 都一样)
     public void LogtoIssuer_TrailingSlash_Normalized()
     {

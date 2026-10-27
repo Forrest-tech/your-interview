@@ -15,7 +15,8 @@ const CFG = {
   endpoint: 'http://localhost:3001',
   clientId: 'test-client',
   redirectUri: 'http://localhost:4200/auth/logto/callback',
-  audience: 'api'
+  audience: 'api',
+  apiScopes: ['interviews.write', 'jobs.read']
 };
 
 describe('票241 Logto PKCE', () => {
@@ -54,6 +55,20 @@ describe('票241 Logto PKCE', () => {
     expect(q.get('resource')).toBe('api');
   });
 
+  it('票251 B7：授权 scope 必须带上 apiScopes（点值），否则换到的 token 业务 scope 为空', () => {
+    const url = new URL(buildAuthorizeUrl(CFG, {
+      state: 's1', codeChallenge: 'c1', firstScreen: 'sign_in'
+    }));
+    const scope = url.searchParams.get('scope') ?? '';
+    expect(scope).toContain('interviews.write');
+    expect(scope).toContain('jobs.read');
+    expect(scope).toContain('openid');
+    const bare = new URL(buildAuthorizeUrl({ ...CFG, apiScopes: [] }, {
+      state: 's1', codeChallenge: 'c1', firstScreen: 'sign_in'
+    }));
+    expect(bare.searchParams.get('scope')).not.toContain('interviews.write');
+  });
+
   it('授权 URL：audience 为空时不发 resource（token 里就没有业务 scope，调用方应知晓）', () => {
     const url = new URL(buildAuthorizeUrl({ ...CFG, audience: '' }, {
       state: 's1', codeChallenge: 'c1', firstScreen: 'sign_in'
@@ -73,5 +88,14 @@ describe('票241 Logto PKCE', () => {
     expect(refresh.get('grant_type')).toBe('refresh_token');
     expect(refresh.get('refresh_token')).toBe('r1');
     expect(refresh.has('code')).toBe(false);
+  });
+
+  it('票251 B6：token 体必须重复 resource（RFC 8707），否则只发不透明 token', () => {
+    const code = buildTokenBody(CFG, { grant_type: 'authorization_code', code: 'abc', codeVerifier: 'v1' });
+    expect(code.get('resource')).toBe('api');
+    const refresh = buildTokenBody(CFG, { grant_type: 'refresh_token', refreshToken: 'r1' });
+    expect(refresh.get('resource')).toBe('api');
+    const noAudience = buildTokenBody({ ...CFG, audience: '' }, { grant_type: 'authorization_code', code: 'abc', codeVerifier: 'v1' });
+    expect(noAudience.has('resource')).toBe(false);
   });
 });

@@ -18,7 +18,11 @@ public sealed class LogtoOptions
 {
     public const string SectionName = "Logto";
 
-    /// <summary>Logto OIDC issuer,例如 http://localhost:3001/oidc。空 = 未启用双轨。</summary>
+    /// <summary>
+    /// Logto OIDC issuer,必须写 /oidc 形式,例如 http://localhost:3001/oidc。空 = 未启用双轨。
+    /// 票251 B5:Logto 的真实 issuer 就是 {endpoint}/oidc;配裸 endpoint 时代码会归一化补
+    /// /oidc(见 LogtoIssuerNormalizer),绝不能再让裸值静默地把 Logto token 路由到旧校验。
+    /// </summary>
     public string Issuer { get; set; } = string.Empty;
 
     /// <summary>Logto access token 的 audience(配成 Logto 里建的 API resource identifier)。</summary>
@@ -68,7 +72,7 @@ public static class LogtoSchemeSelector
         // scheme 下验过,收敛等于没收。
         if (rejectOldIssuer) return LogtoScheme;
         var iss = Normalize(token.Issuer);
-        if (!string.IsNullOrEmpty(iss) && string.Equals(iss, Normalize(logtoIssuer), StringComparison.Ordinal))
+        if (!string.IsNullOrEmpty(iss) && string.Equals(iss, LogtoIssuerNormalizer.Normalize(logtoIssuer), StringComparison.Ordinal))
             return LogtoScheme;
         return LegacyScheme;
     }
@@ -90,13 +94,29 @@ public static class LogtoSchemeSelector
     private static string Normalize(string? issuer) => (issuer ?? string.Empty).Trim().TrimEnd('/');
 }
 
+/// <summary>
+/// 票251 B5:Logto issuer 归一化。Logto 的真实 issuer 恒为 {endpoint}/oidc;
+/// 配置若写裸 endpoint(例如 http://localhost:3001),必须补 /oidc —— 否则
+/// MetadataAddress、ValidIssuer、选择器比较三处会同时错位,Logto token 被
+/// 静默路由到旧发行方校验而全 401。已带 /oidc(任意大小写、带尾斜杠)时原样不动。
+/// </summary>
+public static class LogtoIssuerNormalizer
+{
+    public static string Normalize(string? issuer)
+    {
+        var v = (issuer ?? string.Empty).Trim().TrimEnd('/');
+        if (string.IsNullOrEmpty(v)) return v;
+        return v.EndsWith("/oidc", StringComparison.OrdinalIgnoreCase) ? v : v + "/oidc";
+    }
+}
+
 /// <summary>Logto 校验参数(Logto scheme 专用:issuer + audience + 签名 + 有效期;密钥走 JWKS)。</summary>
 public static class LogtoTokenValidation
 {
     public static TokenValidationParameters Build(LogtoOptions options) => new()
     {
         ValidateIssuer = true,
-        ValidIssuer = options.Issuer,
+        ValidIssuer = LogtoIssuerNormalizer.Normalize(options.Issuer),
         ValidateAudience = !string.IsNullOrWhiteSpace(options.Audience),
         ValidAudience = string.IsNullOrWhiteSpace(options.Audience) ? null : options.Audience,
         ValidateLifetime = true,

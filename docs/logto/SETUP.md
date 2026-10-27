@@ -3,6 +3,9 @@
 > 版本锁定：`ghcr.io/logto-io/logto:1.45.0`（compose 已锁定，绝不用 `:latest`）。
 > 凭据只进本机 `.env`（与 `ADMIN_PASSWORD` 同 pattern），绝不入库、绝不进工单与聊天记录。
 > 本手册的操作顺序就是割接顺序：先 M2M 与审批门，后迁移，最后开注册。
+> 票251 修正（2026-10-27 沙盒实测，Logto 1.45.0）：本手册 §2/§3/§5/§6/§7/§10 已按
+> 实测行为改写——Management API indicator、用户日期类型、custom-data 体、邮箱验证
+> 字段不存在、issuer 的 /oidc 后缀、token 换取 resource、授权 scope 点值，见各节标注。
 
 ## 0. 部署前确认（Day-0 门，缺一不开工）
 
@@ -43,6 +46,14 @@ python3 scripts/logto-migrate/setup-m2m.py
 
 脚本无法唯一确定角色时会自动中止并打印候选清单，改走 Console 手工指派（应用 → Roles →
 选带 Logto 图标的管理角色），再重跑验收。临时 M2M 应用验收通过后即可删除。
+- **Management API indicator（票251 B1）**：token 换取的 `resource` 必须是租户的
+  Management API indicator，默认租户为 `https://default.logto.app/api`，绝不能写
+  `{Logto:Endpoint}/api`（1.45.0 对后者回 400 `oidc.invalid_target`）。配置项
+  `Logto:Management:ManagementApiResource`，留空即默认；非默认租户用
+  `LOGTO_MGMT_RESOURCE` 环境变量覆盖 setup-m2m.py 的验收 token。
+- **建应用不回 secret（票251）**：1.45.0 的 `POST /api/applications` 只回 id，
+  secret 须事后经 `POST /api/applications/{id}/secrets` 另取（脚本已如此做，
+  或查 Logto 库行）；建应用响应缺 secret 不是失败，不要重跑建应用。
 
 ## 3. Sign-in experience 与 API resource（Console 内配置）
 
@@ -52,7 +63,17 @@ python3 scripts/logto-migrate/setup-m2m.py
   机制是 Security 板块维护的 custom blocklist，把一次性域名作为条目加进去；验收时对着这张
   自定义清单核对，不要去找原生开关。
 - API resource：新建一个代表本应用后端的 resource，identifier 填进各服务的
-  `Logto:Audience`；在其上定义与现有 `Permissions.*` 一一同名的 scope。
+  `Logto:Audience`；在其上定义与现有 `Permissions.*` 一一对应的 scope，**scope 字
+  符串必须是点值（例如 `interviews.write`），绝不能写 C# 常量名（`InterviewsWrite`）**。
+  **归属（票251 B7，显式定）**：scope 的定义归 Logto Console；点值清单归前端环
+  境配置 `logto.apiScopes`；后端 claims 门是匹配方，按点值与 `Permissions.All` 的
+  VALUES 精确匹配，未知 scope 忽略。任何一方改了点值，另外两方必须同步改。
+  前端授权时必须带上这些 scope、换 token 时必须重复 `resource`（票251 B6/B7）：
+  授权时不带 scope 则换到的 token scope 为空，门授予零权限，登录后被当作待审批。
+- **Issuer 必须写 /oidc 形式（票251 B5）**：Logto 的真实 issuer 是
+  `{endpoint}/oidc`，配置 `Logto:Issuer` 一律写带 `/oidc` 的完整值；代码会对裸
+  endpoint 做归一化兜底（`LogtoIssuerNormalizer`），但文档与配置示例永远用 /oidc
+  形式——裸值曾静默把 Logto token 路由到 Legacy 校验而全 401。
 - 角色：建与现有角色同名的 Logto 角色（Admin / PowerUser / User / Viewer），每个角色授予
   对应 scope 集合。Service 角色不走 Logto，仍走现有服务间凭证。
 - 品牌：logo 与主色按现有品牌对齐（基础对齐即可，精细化二期）。
@@ -61,7 +82,8 @@ python3 scripts/logto-migrate/setup-m2m.py
 
 - 接入选定的 SMTP 通道（自有邮箱 SMTP / SendGrid / Mailgun / AWS SES 任一），发件域名与 Day-0 结论一致。
 - 实测：注册一个测试邮箱，确认验证邮件到达、点链接后账号进入待审批（不是直接可用）。
-  未验证邮箱不能登录是 Logto 自身 + 审批门双层保证（见 §6）。
+  邮箱验证由 Logto hosted 注册流程强制（sign-in experience 须开邮箱验证，见 §6）；
+  审批门不再独立查验证字段——1.45.0 用户对象根本没有验证字段（见 §6.2）。
 
 ## 5. Webhook 与 Custom JWT（审批门接线）
 
@@ -71,7 +93,7 @@ python3 scripts/logto-migrate/setup-m2m.py
 |---|---|---|
 | `POST /api/webhooks/logto/user-created` | `User.Created` | 接收端 `Services.Identity`（`LogtoWebhookController`），签名验签（`logto-signature-sha-256`，HMAC-SHA256 hex），不走 JWT |
 | `POST /api/webhooks/logto/suspension-status-updated` | `User.SuspensionStatus.Updated` | 同上；payload 的 `isSuspended` 只作 presence 校验，处理器一律以 fresh GET 为准 |
-| `POST /api/webhooks/logto/user-data-updated` | `User.Data.Updated` | 验证完成翻转的事件路（无专用验证事件，见 §6.2） |
+| `POST /api/webhooks/logto/user-data-updated` | `User.Data.Updated` | 取消停用事件丢失时的补翻路（无专用验证事件，见 §6.2） |
 | `POST /api/webhooks/logto/user-deleted` | `User.Deleted` | 删号快传：镜像置 deleted + 旧侧停用，扫表存在检查仍是兜底 |
 
 - YARP 路由：`identity-webhooks`（`Path: /api/webhooks/{**catch-all}` → identity，Order 0，
@@ -90,6 +112,10 @@ python3 scripts/logto-migrate/setup-m2m.py
   故单把 key 泄露即可伪造任意事件类型（含 User.Deleted → R2 驳回邮件）；hook 重建后
   新 key 未及时入列时，该 hook 先 401、R2 邮件等扫表兜底。轮换纪律：新 key 及时入列、
   stale key 及时移除、改配置后重启 Identity。单测：`LogtoWebhookMultiKeyTests`。
+- **SSRF  allowlist（票251，compose/部署注记，不是产品 bug 修复）**：Logto 的 SSRF
+  守卫会拦截解析到私有 IP 的 webhook 投递目标；Mac compose 必须设
+  `SSRF_ALLOWED_ADDRESSES`（或等价 allowlist），否则 Logto → identity:8080 的
+  容器间投递会被拦截，四个端点全收不到事件。沙盒实测中同理需放行 127.0.0.1。
 - 投递语义：接收端只有置停用 + 打 `pending` 标记 + 写镜像行三步都成功才回 2xx；
   任一步失败回 5xx，投递方按其策略有限次重试（重试次数不写死——Logto 公开文档未给
   出固定次数，设计不依赖具体次数：快速 2xx + 幂等 + 扫表兜底）。
@@ -129,7 +155,7 @@ python3 scripts/logto-migrate/setup-m2m.py
 - 批准：管理员在 Console 取消停用 = 批准；或调同步端点
   `POST /api/admin/logto/users/{logtoUserId}/approve`（`admin.users.write`，两步都成功才回成功）。
   批准事件（`User.SuspensionStatus.Updated`）到达时，接收端重查 Logto 现态并按
-  §6.1 的排序规则应用；未验证邮箱的账号即使被取消停用，镜像也保持未批准（见 §6.2）。
+  §6.1 的排序规则应用；取消停用 pending 账号即批准（见 §6.2）。
 - 驳回 / 搁置：保持停用 = 搁置；删除账号 = 驳回（通知按 Day-0 结论）。
 - 邀请制（并存路径）：Console 关掉公开注册（"Enable user registration" OFF），
   管理员发 magic link 邀请：one-time token，默认 600 秒（10 分钟），`expiresIn` 可延长
@@ -147,26 +173,30 @@ python3 scripts/logto-migrate/setup-m2m.py
 水位守卫、再由 last-writer-wins 决定镜像态；回归测试
 `SuspensionStatus_ConcurrentSuspendUnsuspend_MirrorMatchesLogto` 覆盖该剧本。
 
-### 6.2 批准必须验证邮箱（round-3 决议）
+### 6.2 邮箱验证：hosted 注册流程强制，审批门不再独立查字段（票251 B4，改写 round-3）
 
-取消停用一个未验证邮箱的账号时，镜像保持未批准（`pending`），应用侧 claims 门继续
-零权限——“未验证邮箱不能登录”无条件成立。同步批准端点对未验证账号直接回 409，
-不静默批准。邮箱验证状态取自 Logto 用户记录（`primaryEmailVerified` 等字段多形态解析，
-见 `LogtoManagementClient`；字段名以 Console 实测为准，门是最终兜底）。
-**验证状态来源口径（round-8）**：Management API `GET /api/users/{id}` 的用户对象是
-第一来源；若该对象不带验证字段，则退到“构造验证”（hosted 注册流程本身强制验证）；
-试点时必须确认实际适用的是哪一来源并记入部署清单。
-**验证完成翻转的两条路条件不同，绝不能合并**：事件路（`User.Data.Updated`）在
-pending + 现态已验证 + 现态未停用时翻转（事件本身就是“验证刚完成”的证据，且现态
-未停用说明管理员批准已发生）；扫表路只在镜像已记录该次取消停用（镜像 `IsSuspended=false`）
-的前提下翻转——镜像仍显示停用，说明取消停用事件根本没到，属于无归因，走 fail-closed
-重停用，不翻转。Logto 没有专用验证事件，`User.Data.Updated` 检查与扫表就是全部触发器。
+**round-3 决议已作废**：Logto 1.45.0 的 Management API 用户对象根本没有
+`primaryEmailVerified`/`emailVerified`/`isEmailVerified` 字段（沙盒实测：用户 JSON
+无此键，源码亦无）。旧代码的“未验证 → 409/保持 pending”门因此恒成立，拦下了
+**每一次**批准——不是拦下了未验证账号。票251 已删除该门：同步批准端点不再回
+409（无验证字段可查），取消停用 pending 账号即批准。**不要**为恢复该门而编造
+字段名或“构造验证”状态——构造的状态不是 Logto 的事实。
+**现行规则**：邮箱验证由托管注册流程强制——部署时必须在 Console 的 sign-in
+experience 里亲眼确认邮箱验证已开（这是部署要求，不是代码检查）；审批只取决于
+管理员动作（Console 取消停用，或同步批准端点）。托管流程之外建号（如直接调
+Management API 建号）若跳过验证，审批门不会替你补查——部署清单必须记下这条边界。
+**补翻的两条路条件不同，绝不能合并**：事件路（`User.Data.Updated`）在
+pending + 现态未停用时翻转（现态未停用说明管理员批准已发生，数据更新事件只是
+取消停用事件丢失时的补翻触发器）；扫表路只在镜像已记录该次取消停用
+（镜像 `IsSuspended=false`）的前提下翻转——镜像仍显示停用，说明取消停用事件
+根本没到，属于无归因，走 fail-closed 重停用，不翻转。Logto 没有专用验证事件，
+`User.Data.Updated` 检查与扫表就是全部触发器。
 
 ### 6.3 扫表（每 15 分钟，Identity 内后台任务，失败只记日志不终止）
 
 | Pass | 范围 | 规则 |
 |---|---|---|
-| Pass 1 审批标记 | `ApprovalLaunchAt` 之后创建的用户 | 缺标记且不在映射表 → 置停用 + 打 `pending` + 镜像行 + 审计；`pending` 但未停用 → 先看镜像是否已记录该次取消停用：已记录 + 现态已验证 → 扫表翻转批准（见 §6.2 两条路），否则**无归因记录即视为无管理员操作，fail-closed 重新置停用 + 审计 + 告警日志**（见 §6.4）；`approved`/`migrated` 不动 |
+| Pass 1 审批标记 | `ApprovalLaunchAt` 之后创建的用户 | 缺标记且不在映射表 → 置停用 + 打 `pending` + 镜像行 + 审计；`pending` 但未停用 → 先看镜像是否已记录该次取消停用：已记录 → 扫表翻转批准（见 §6.2 两条路），否则**无归因记录即视为无管理员操作，fail-closed 重新置停用 + 审计 + 告警日志**（见 §6.4）；`approved`/`migrated` 不动 |
 | Pass 2 已映射但 pending 纠正 | 镜像行 `approval=pending` 且其 `LegacyUserId` 在旧 users 表里存在 | 标记纠为 `migrated`（customData + 镜像）；停用处理看来源标记：`SuspendedByGate=true`（门/扫表执行的误停）→ 解除停用 + 审计；否则视为管理员操作 → 只修标记，不碰停用态 |
 | Pass 3/4 停用态与双写对账 | 全部镜像行（含上线前用户，不受 `ApprovalLaunchAt` 限制） | 逐行重查 Logto 现态：镜像 `IsSuspended` 与 Logto 不一致 → 同步镜像 + 审计（丢了的停用事件就此纠正）；Logto 侧用户已不存在 → 镜像置 `deleted` + 旧侧停用 + 审计（删号兜底；快传是 `User.Deleted` 事件）；旧 users 行存在时再比对旧 `IsActive`：旧启用 + Logto 停用 → 停用旧账号 + 审计（补齐 crashed disable）；旧停用 + Logto 未停用 → 停用 Logto 侧 + 审计（不自动启用旧账号，fail-closed；管理员重做一次启用即可）。**对账范围只覆盖有旧侧行的用户**（round-13）：Logto-only 用户的停用态只由 Logto + 镜像对账管，不碰旧侧（也没有旧行可写） |
 
@@ -202,8 +232,9 @@ pending + 现态已验证 + 现态未停用时翻转（事件本身就是“验�
   `ForwardDefaultSelector` 按 issuer 分流。选择器先读**未验证的 JWT payload 里的 `iss`**
   （仅用于路由，不作信任依据——伪造 `iss` 只会把 token 误路由到另一个 scheme，
   那个 scheme 的完整签名/发行方/有效期校验随后仍会拒绝它），再由分流到的 scheme 做
-  完整校验：Logto scheme 走 OIDC discovery（完整路径 `<issuer>/.well-known/openid-configuration`，
-  JWKS 自动获取）；旧 scheme 走原对称密钥。
+  完整校验：Logto scheme 走 OIDC discovery（完整路径
+  `<归一化后 issuer>/.well-known/openid-configuration`，即 `{endpoint}/oidc/.well-known/...`，
+  JWKS 自动获取；配置写裸 endpoint 时代码自动补 `/oidc`，见票251 B5）；旧 scheme 走原对称密钥。
 - **未配 `Logto:Issuer` 时行为与票241 之前一字不变**（单 scheme 旧口径，门不启用）。
 - **共享门（唯一实现，禁 per-service 分支）**：`LogtoClaimsGate`（BuildingBlocks，
   `IClaimsTransformation`，`ServiceDefaults.AddJwtAuthentication` 统一注册，
@@ -278,7 +309,8 @@ pending + 现态已验证 + 现态未停用时翻转（事件本身就是“验�
 - 日常管理用 Logto Admin Console（3002，localhost + 隧道）：列表、搜索、新建、停用/恢复、
   删除、改角色、查用户审计日志。
 - 同步管理端点（`[Authorize]` + `admin.users.*` policy，与旧 `/admin` 同口径）：
-  - `POST /api/admin/logto/users/{logtoUserId}/approve`：批准（未验证邮箱回 409；两步都成功才回成功）。
+  - `POST /api/admin/logto/users/{logtoUserId}/approve`：批准（票251 B4：无验证门，
+    1.45.0 无验证字段可查；两步都成功才回成功）。
   - `POST /api/admin/logto/users/{logtoUserId}/reset-password`：重置密码（Management API
     `PATCH /users/:id/password`）。
   - `POST /api/admin/logto/users/{logtoUserId}/unlock`：解锁 = 取消停用且不改批准标记；

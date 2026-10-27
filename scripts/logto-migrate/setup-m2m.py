@@ -65,13 +65,20 @@ def main():
                   "如需新 secret,请在 Console 里重新生成;脚本不自动轮换已存在的 secret。")
             return
 
+    # 票251:1.45.0 的 POST /api/applications 不返回 secret —— secret 必须事后
+    # 经 POST /api/applications/{id}/secrets 另取(或查 DB 行),建应用响应只有 id。
     status, created = api(args.endpoint, admin_token, "POST", "/applications",
                           {"name": args.app_name, "type": "MachineToMachine"})
     if status not in (200, 201):
         fail(f"建 M2M 应用失败 HTTP {status} {created.get('_error', '')}")
-    app_id, secret = created.get("id"), created.get("secret")
-    if not app_id or not secret:
-        fail("建应用响应缺 id/secret")
+    app_id = created.get("id")
+    if not app_id:
+        fail("建应用响应缺 id")
+    status, sec = api(args.endpoint, admin_token, "POST", f"/applications/{app_id}/secrets", {})
+    secret = sec.get("secret") if isinstance(sec, dict) else None
+    if status not in (200, 201) or not secret:
+        fail("建应用后取 secret 失败:请在 Console → 该应用 → Secrets 里取一次"
+             "(脚本对已存在应用不自动轮换 secret,重跑只会提示已存在)。")
     print(f"[setup-m2m] 已建 M2M 应用 id={app_id}")
 
     status, roles = api(args.endpoint, admin_token, "GET", "/roles?type=MachineToMachine&page=1&page_size=100")
@@ -103,7 +110,9 @@ def main():
         "grant_type=client_credentials"
         f"&client_id={urllib.parse.quote(app_id)}"
         f"&client_secret={urllib.parse.quote(secret)}"
-        f"&resource={urllib.parse.quote(args.endpoint.rstrip('/') + '/api')}"
+        # 票251:resource 必须是租户 Management API indicator,不是 {endpoint}/api
+        # (1.45.0 对后者回 400 oidc.invalid_target);可用 LOGTO_MGMT_RESOURCE 覆盖。
+        f"&resource={urllib.parse.quote(os.environ.get('LOGTO_MGMT_RESOURCE', 'https://default.logto.app/api'))}"
         "&scope=all"
     ).encode()
     req = urllib.request.Request(

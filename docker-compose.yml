@@ -37,6 +37,8 @@ x-service-env: &service-env
   # ★ 票241 双轨期:Logto 发行方(空 = 单轨旧口径)。配上后各服务同时接受
   # 旧 Identity 与 Logto 两个发行方;Logto__Audience 配成 Console 里建的
   # API resource identifier,未配时双轨期 audience 不校验(上线清单要求配上)。
+  # 票251 B5:Logto__Issuer 必须写带 /oidc 的完整值(如 http://localhost:3001/oidc);
+  # 写裸 endpoint 时代码会归一化兜底,但配置示例永远用 /oidc 形式。
   Logto__Issuer: "${LOGTO_ISSUER:-}"
   Logto__Audience: "${LOGTO_AUDIENCE:-}"
   # 票241 收敛开关:灰度期 false(双 scheme 并存);收敛日置 true(选择器只走 Logto,

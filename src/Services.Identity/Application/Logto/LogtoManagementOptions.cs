@@ -18,6 +18,14 @@ public sealed class LogtoManagementOptions
     /// <summary>Logto 核心地址,例如 http://localhost:3001(容器内用服务名,见 compose)。</summary>
     public string Endpoint { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 票251 B1:Management API 的 resource indicator。Logto 1.45.0 只认租户内置的
+    /// Management API indicator(默认租户即 https://default.logto.app/api)，由 Endpoint
+    /// 派生的 {Endpoint}/api 会被回 400 oidc.invalid_target —— 绝不能再那样拼。
+    /// 只有租户非默认时才改配本项；空 = 用默认值。
+    /// </summary>
+    public string ManagementApiResource { get; set; } = "https://default.logto.app/api";
+
     /// <summary>Machine-to-Machine 应用的 client id(需在 Console 给它 Management API 权限)。</summary>
     public string M2mClientId { get; set; } = string.Empty;
 

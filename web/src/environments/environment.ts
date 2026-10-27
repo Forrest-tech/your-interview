@@ -20,12 +20,17 @@ export const environment = {
   //   clientId 并把 enabled 改 true，前端才出现 Logto 登录/注册入口。
   //   audience = Console 里建的 API resource identifier（access token 的 scope
   //   载体就靠它；空则不发 resource 参数，token 里就没有业务 scope）。
+  //   apiScopes = 同一 API resource 上定义的业务 scope 清单，必须写 Permissions.*
+  //   的点值（例如 interviews.write），绝不能写 C# 常量名（InterviewsWrite）——
+  //   后端 claims 门按点值精确匹配，常量名匹配不上就是零权限（票251 B7；
+  //   归属：scope 定义归 Console，点值清单归本配置，见 docs/logto/SETUP.md §3）。
   //   redirectUri 为空时自动取当前 origin + '/auth/logto/callback'。
   logto: {
     enabled: false,
     endpoint: '',
     clientId: '',
     audience: '',
+    apiScopes: [] as string[],
     redirectUri: ''
   },
 

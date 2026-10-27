@@ -18,10 +18,10 @@ public enum LogtoGateOutcome
     Gated,
     /// <summary>待审批用户被取消停用且邮箱已验证,标记置 approved。</summary>
     Approved,
-    /// <summary>取消停用但邮箱未验证:镜像保持 pending,等验证完成后再翻转(见数据更新事件)。</summary>
-    UnverifiedHeld,
-    /// <summary>验证完成事件/扫表把 pending 翻成 approved(管理员早已取消停用,无需第二次操作)。</summary>
-    VerificationApproved,
+    // 票251 B4:UnverifiedHeld 已删除 —— Logto 1.45.0 的 Management API 用户对象没有邮箱验证
+    // 字段,旧分支“未验证则保持 pending”在实测里恒成立、挡住了每一次批准,故删除该状态。
+    /// <summary>数据更新事件/扫表把 pending 翻成 approved(取消停用事件丢失时的补翻,见类注释第 6 条)。</summary>
+    DataUpdatedFlip,
     /// <summary>镜像按 Logto 现态同步,审批标记不动(停用事件方向)。</summary>
     MirrorSynced,
     /// <summary>延迟/重发的旧事件被排序水位挡下,无动作。</summary>
@@ -86,12 +86,16 @@ public interface ILogtoSweepAudit
 ///      一律视为无管理员记录 —— fail-closed 重新置停用 + 告警(ERROR 日志)。
 ///      例外只有一种:镜像已记录了该次取消停用(镜像 IsSuspended=false),
 ///      说明接收端见过这次解封事件,扫表才敢把它当作管理员批准。
-///   6. 验证翻转分两条路,语义不同(不要合并):
-///      · 事件路(User.Data.Updated):pending + 现态已验证 + 现态未停用 →
-///        直接翻 approved —— 事件本身就是“验证刚完成”的证据,且现态未停用
-///        即管理员早已批准,验证是唯一 blocker(即 round-7 的 out-of-order 分支)。
-///      · 扫表路:只有镜像已记录取消停用(IsSuspended=false)且现态已验证 +
-///        未停用时才翻;镜像仍显示停用 = 解封事件根本没到,无法归因,
+///   6. 票251 B4 批准规则(旧“验证翻转”已废):Logto 1.45.0 的 Management API
+///      用户对象没有邮箱验证字段,沙盒实测已证实 —— 门不再以任何验证字段为批准条件。
+///      邮箱验证只由 Console 的 sign-in experience 设置在 hosted 注册流程里强制
+///      (SETUP.md §6 的部署要求,不是代码检查);批准与否只由管理员动作决定:
+///      批准端点、或取消停用 pending 用户,都直接翻 approved。
+///      补翻分两条路,语义不同(不要合并):
+///      · 事件路(User.Data.Updated):pending + 现态未停用 → 直接翻 approved ——
+///        数据更新证明了解封,但取消停用事件本身丢失,故补翻,无需第二次管理员操作。
+///      · 扫表路:只有镜像已记录取消停用(IsSuspended=false)且现态未停用时才翻;
+///        镜像仍显示停用 = 解封事件根本没到,无法归因,
 ///        走 fail-closed 重置停用(管理员再点一次批准即恢复)。
 ///   7. Pass 1 与 Pass 2 看似相反实则集合不交:Pass 1 管未映射新用户
 ///      (pending 未停用 → 重置停用);Pass 2 管已映射的 legacy 用户
@@ -227,30 +231,21 @@ public sealed class LogtoApprovalGate(
         }
 
         // 取消停用方向:先按审批规则定标记,再做解锁双写。
+        // 票251 B4:取消停用 pending 用户 = 管理员批准,直接翻 approved —— 不再查一个
+        // 1.45.0 里不存在的邮箱验证字段。邮箱验证由 Console 的 sign-in experience
+        // 设置在 hosted 注册流程里强制(见 SETUP.md §6);批准与否只由管理员动作决定。
         LogtoGateOutcome outcome;
         if (approval == "pending")
         {
-            if (!user.EmailVerified)
-            {
-                await mappings.UpsertRowAsync(new LogtoMirrorRow(logtoUserId, legacyId,
-                    user.PrimaryEmail ?? row?.Email ?? string.Empty,
-                    "pending", false, false, user.UpdatedAt), ct);
-                await audit.WriteAsync("logto.approval.unsuspend.unverified", logtoUserId,
-                    "管理员取消停用但邮箱未验证,镜像保持 pending,验证完成后自动翻 approved", ct);
-                outcome = LogtoGateOutcome.UnverifiedHeld;
-            }
-            else
-            {
-                var customData = Clone(user.CustomData);
-                customData[ApprovalField] = "approved";
-                customData[LegacyIdField] ??= legacyId.ToString();
-                await client.SetCustomDataAsync(logtoUserId, customData, ct);
-                await mappings.UpsertRowAsync(new LogtoMirrorRow(logtoUserId, legacyId,
-                    user.PrimaryEmail ?? row?.Email ?? string.Empty,
-                    "approved", false, false, user.UpdatedAt), ct);
-                logger.LogInformation("Logto 用户 {UserId} 被取消停用,pending → approved", logtoUserId);
-                outcome = LogtoGateOutcome.Approved;
-            }
+            var customData = Clone(user.CustomData);
+            customData[ApprovalField] = "approved";
+            customData[LegacyIdField] ??= legacyId.ToString();
+            await client.SetCustomDataAsync(logtoUserId, customData, ct);
+            await mappings.UpsertRowAsync(new LogtoMirrorRow(logtoUserId, legacyId,
+                user.PrimaryEmail ?? row?.Email ?? string.Empty,
+                "approved", false, false, user.UpdatedAt), ct);
+            logger.LogInformation("Logto 用户 {UserId} 被取消停用,pending → approved", logtoUserId);
+            outcome = LogtoGateOutcome.Approved;
         }
         else
         {
@@ -283,9 +278,10 @@ public sealed class LogtoApprovalGate(
     {
         var user = await client.GetUserAsync(logtoUserId, ct);
         if (user is null) return LogtoGateOutcome.NoAction;
-        // 事件路翻转条件(见类注释第 6 条):pending + 现态已验证 + 现态未停用。
-        // 现态未停用即管理员早已批准,验证是唯一 blocker —— 无需第二次管理员操作。
-        if (GetApproval(user) != "pending" || !user.EmailVerified || user.IsSuspended)
+        // 事件路翻转条件(见类注释第 6 条):pending + 现态未停用。
+        // 现态未停用即取消停用事件本身丢失、但数据更新证明了解封 —— 直接补翻,
+        // 无需第二次管理员操作。票251 B4:不再查不存在的邮箱验证字段。
+        if (GetApproval(user) != "pending" || user.IsSuspended)
             return LogtoGateOutcome.NoAction;
         var row = await mappings.GetRowByLogtoIdAsync(logtoUserId, ct);
         var legacyId = row?.LegacyUserId ?? ParseLegacyId(user) ?? Guid.NewGuid();
@@ -297,8 +293,8 @@ public sealed class LogtoApprovalGate(
             user.PrimaryEmail ?? row?.Email ?? string.Empty,
             "approved", false, false, user.UpdatedAt), ct);
         await audit.WriteAsync("logto.approval.data-updated.flip", logtoUserId,
-            "验证完成事件:pending → approved(管理员早已取消停用)", ct);
-        return LogtoGateOutcome.VerificationApproved;
+            "数据更新事件:pending 未停用 → approved(取消停用事件丢失时的补翻)", ct);
+        return LogtoGateOutcome.DataUpdatedFlip;
     }
 
     // ================= 接收端:User.Deleted(删号快传;扫表存在检查是兜底) =================
@@ -437,13 +433,12 @@ public sealed class LogtoApprovalGate(
                         continue;
                     }
                     // pending 但未停用:先看镜像是否记录过这次解封。
-                    if (rowsByLogto.TryGetValue(user.Id, out var mrow) && !mrow.IsSuspended
-                        && user.EmailVerified)
+                    if (rowsByLogto.TryGetValue(user.Id, out var mrow) && !mrow.IsSuspended)
                     {
-                        // 镜像已记录取消停用 + 现态已验证 → 验证翻转(扫表路,见类注释第 6 条)。
-                        await ApproveAsync(user, mrow, "logto.approval.sweep.verified-flip",
-                            "扫表:pending 未停用且镜像已记录解封、现态已验证 → approved", ct);
-                        actions.Add($"verified-flip:{user.Id}");
+                        // 镜像已记录取消停用 → 扫表翻转(扫表路,见类注释第 6 条;票251 B4:不再查验证字段)。
+                        await ApproveAsync(user, mrow, "logto.approval.sweep.approved-flip",
+                            "扫表:pending 未停用且镜像已记录解封 → approved", ct);
+                        actions.Add($"approved-flip:{user.Id}");
                         acted.Add(user.Id);
                         continue;
                     }
@@ -559,12 +554,12 @@ public sealed class LogtoApprovalGate(
             }
             if (row.Approval == "deleted") continue; // 已标记,等 Logto 侧重建(不自动复活)
 
-            // 扫表路验证翻转(镜像已记录解封 + 现态已验证 + 现态未停用)。
-            if (row.Approval == "pending" && !row.IsSuspended && user.EmailVerified && !user.IsSuspended)
+            // 扫表路翻转(镜像已记录解封 + 现态未停用;票251 B4:不再查验证字段)。
+            if (row.Approval == "pending" && !row.IsSuspended && !user.IsSuspended)
             {
-                await ApproveAsync(user, row, "logto.approval.sweep.verified-flip",
-                    "扫表:pending 镜像已记录解封、现态已验证 → approved", ct);
-                actions.Add($"verified-flip:{row.LogtoUserId}");
+                await ApproveAsync(user, row, "logto.approval.sweep.approved-flip",
+                    "扫表:pending 镜像已记录解封 → approved", ct);
+                actions.Add($"approved-flip:{row.LogtoUserId}");
                 acted.Add(row.LogtoUserId);
                 continue;
             }

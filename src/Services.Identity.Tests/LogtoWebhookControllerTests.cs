@@ -95,7 +95,7 @@ public sealed class LogtoWebhookControllerTests
         client.GetUserAsync("u1", Arg.Any<CancellationToken>()).Returns(
             new LogtoUserDto("u1", false,
                 new JsonObject { ["approval"] = "migrated", ["legacyUserId"] = legacy.ToString() },
-                DateTimeOffset.UtcNow, "u@test.local", true, DateTimeOffset.UtcNow));
+                DateTimeOffset.UtcNow, "u@test.local", DateTimeOffset.UtcNow));
         var c = Controller(client, store, audit, MultiKeyOptions());
         var body = Encoding.UTF8.GetBytes("""{"event":"User.Created","data":{"id":"u1"}}""");
         SetRequest(c, body, SignWith("key-hook-deleted", body));
@@ -179,7 +179,7 @@ public sealed class LogtoWebhookControllerTests
         client.GetUserAsync("u1", Arg.Any<CancellationToken>()).Returns(
             new LogtoUserDto("u1", false,
                 new JsonObject { ["approval"] = "migrated", ["legacyUserId"] = legacy.ToString() },
-                DateTimeOffset.UtcNow, "u@test.local", true, DateTimeOffset.UtcNow));
+                DateTimeOffset.UtcNow, "u@test.local", DateTimeOffset.UtcNow));
         var c = Controller(client, store, audit);
         var body = Encoding.UTF8.GetBytes("""{"event":"User.Created","data":{"id":"u1"}}""");
         SetRequest(c, body, Sign(body));

@@ -204,6 +204,72 @@
   flex: 1;
 }
 
+/* ---------- OAuth 凭据卡（票 245） ---------- */
+
+.oauth-provider {
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.oauth-provider:last-of-type {
+  border-bottom: none;
+}
+
+.oauth-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.oauth-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.oauth-source {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.oauth-field {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.oauth-field > span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.oauth-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.oauth-note {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
+}
+
+.oauth-warn {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #991b1b;
+}
+
 /* ---------- 审计行 ---------- */
 
 .imp-row {

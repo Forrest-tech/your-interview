@@ -113,6 +113,35 @@ public sealed class MailboxController(
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>票 245：OAuth 凭据卡读（Secret 永不回显，只给 secretSaved / secretUnreadable 状态位）。</summary>
+    [HttpGet("mailbox/oauth-settings")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> GetOAuthSettings(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetMailboxOAuthSettingsQuery(), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>票 245：OAuth 凭据卡保存（Secret 写-only：留空 = 沿用已存密文，首次保存必填）。</summary>
+    [HttpPut("mailbox/oauth-settings")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> SaveOAuthSettings([FromBody] SaveOAuthSettingsBody body,
+        CancellationToken ct)
+    {
+        var r = await sender.Send(new SaveMailboxOAuthSettingsCommand(
+            body.Provider, body.ClientId, body.ClientSecret, body.RedirectUri), ct);
+        return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>票 245：OAuth 凭据卡清除（删 DB 行，恢复环境变量兜底；不解密、不碰连接）。</summary>
+    [HttpDelete("mailbox/oauth-settings/{provider}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public async Task<IResult> ClearOAuthSettings(string provider, CancellationToken ct)
+    {
+        var r = await sender.Send(new ClearMailboxOAuthSettingsCommand(provider), ct);
+        return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
+    }
+
     /// <summary>条目级匹配规则读（条目详情页邮箱匹配区用；设置页绝不放规则）。</summary>
     [HttpGet("{entryId:guid}/mail-match-rules")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
@@ -145,3 +174,7 @@ public sealed record ConfirmPendingBody(Guid? EntryId = null);
 /// <summary>PUT /{entryId}/mail-match-rules body：四张表（逗号分隔由前端拆成数组）。</summary>
 public sealed record UpdateRulesBody(
     List<string>? Domains, List<string>? Contacts, List<string>? Keywords, List<string>? Exclusions);
+
+/// <summary>PUT /mailbox/oauth-settings body：Secret 留空 = 沿用已存密文（首次保存必填）。</summary>
+public sealed record SaveOAuthSettingsBody(
+    string Provider, string ClientId, string? ClientSecret, string RedirectUri);

@@ -5,7 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 
 import {
-  InterviewsApiService, MailboxConnectionDto, MailboxPendingDto,
+  InterviewsApiService, MailboxConnectionDto, MailboxOAuthSettingsDto, MailboxPendingDto,
   MailboxImportDto, RefreshMailboxResult
 } from '../../core/api/interviews-api.service';
 import { InterviewEntry } from '../../core/models/api.models';
@@ -22,6 +22,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
  * 本页只管“连接”：连接状态、连接/断开/重连、全部刷新、待确认队列、导入审计。
  * 匹配规则绝不在此页 —— 规则随条目走，只在条目详情页的邮箱匹配区维护（方案 §2.3）。
  * 只读声明：本功能只读邮件，不发信、不删改、不标已读（后端 scope 即只读）。
+ * 票 245：页首新增 OAuth 凭据卡（部署级，每 provider 一区；Secret 写-only 永不回显）。
  */
 @Component({
   selector: 'app-mailbox-setting',
@@ -48,6 +49,12 @@ export class MailboxSettingComponent implements OnDestroy {
   readonly refreshing = signal(false);
   readonly refreshResult = signal<RefreshMailboxResult | null>(null);
   readonly busy = signal(false);
+  /** 票 245：OAuth 凭据卡行（Secret 永不下发，只给状态位）。 */
+  readonly oauthSettings = signal<MailboxOAuthSettingsDto[]>([]);
+  /** 票 245：OAuth 凭据卡保存/清除进行中的 provider（按钮防重）。 */
+  readonly oauthSaving = signal<string | null>(null);
+  /** 票 245：每 provider 的编辑态（Secret 留空 = 沿用已存密文）。 */
+  readonly oauthForms = signal<Record<string, { clientId: string; secret: string; redirectUri: string }>>({});
   /** 歧义待确认项当前展开的条目选择（pendingId → 选中的 entryId）。 */
   readonly pendingChoice = signal<Record<string, string>>({});
 
@@ -84,6 +91,7 @@ export class MailboxSettingComponent implements OnDestroy {
       next: (list) => this.connections.set(list),
       error: (err) => this.error.set(errMsg(err))
     });
+    this.loadOAuthSettings();
     this.api.getMailboxPending().subscribe({
       next: (list) => this.pending.set(list),
       error: () => { /* 待确认队列失败不阻塞连接卡 */ }
@@ -91,6 +99,70 @@ export class MailboxSettingComponent implements OnDestroy {
     this.api.getMailboxImports().subscribe({
       next: (list) => this.imports.set(list.slice(0, 20)),
       error: () => { /* 审计列表失败不阻塞连接卡 */ }
+    });
+  }
+
+  /** 票 245：OAuth 凭据卡读（表单以服务端值为准初始化，Secret 永不回填）。 */
+  loadOAuthSettings(): void {
+    this.api.getMailboxOAuthSettings().subscribe({
+      next: (list) => {
+        this.oauthSettings.set(list);
+        const forms: Record<string, { clientId: string; secret: string; redirectUri: string }> = {};
+        for (const s of list) {
+          forms[s.provider] = { clientId: s.clientId, secret: '', redirectUri: s.redirectUri };
+        }
+        this.oauthForms.set(forms);
+      },
+      error: (err) => this.error.set(errMsg(err))
+    });
+  }
+
+  oauthForm(provider: string): { clientId: string; secret: string; redirectUri: string } {
+    return this.oauthForms()[provider] ?? { clientId: '', secret: '', redirectUri: '' };
+  }
+
+  setOAuthField(provider: string, field: 'clientId' | 'secret' | 'redirectUri', value: string): void {
+    const cur = this.oauthForm(provider);
+    this.oauthForms.set({ ...this.oauthForms(), [provider]: { ...cur, [field]: value } });
+  }
+
+  /** 票 245：保存单 provider 凭据（Secret 留空 = 沿用；首次保存无 Secret 时后端会拒）。 */
+  saveOAuth(provider: string): void {
+    const form = this.oauthForm(provider);
+    const saved = this.oauthSettings().find((s) => s.provider === provider);
+    if (!form.clientId.trim() || !form.redirectUri.trim()
+      || (!saved?.secretSaved && !form.secret.trim())) {
+      this.error.set(this.t('mailbox.oauthRequired'));
+      return;
+    }
+    this.error.set(null);
+    this.oauthSaving.set(provider);
+    this.api.saveMailboxOAuthSettings({
+      provider,
+      clientId: form.clientId.trim(),
+      clientSecret: form.secret.trim() ? form.secret : null,
+      redirectUri: form.redirectUri.trim()
+    }).subscribe({
+      next: () => {
+        this.oauthSaving.set(null);
+        this.notice.set(this.t('mailbox.oauthSaved'));
+        this.loadOAuthSettings();
+      },
+      error: (err) => { this.oauthSaving.set(null); this.error.set(errMsg(err)); }
+    });
+  }
+
+  /** 票 245：清除单 provider 凭据（删 DB 行，恢复环境变量兜底）。 */
+  clearOAuth(provider: string): void {
+    this.error.set(null);
+    this.oauthSaving.set(provider);
+    this.api.clearMailboxOAuthSettings(provider).subscribe({
+      next: () => {
+        this.oauthSaving.set(null);
+        this.notice.set(this.t('mailbox.oauthCleared'));
+        this.loadOAuthSettings();
+      },
+      error: (err) => { this.oauthSaving.set(null); this.error.set(errMsg(err)); }
     });
   }
 

@@ -937,6 +937,42 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.ToTable("mailbox_import_records", "interviews");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.MailboxOAuthCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("EncryptedClientSecret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider")
+                        .IsUnique();
+
+                    b.ToTable("mailbox_oauth_credentials", "interviews");
+                });
+
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.MailboxPendingItem", b =>
                 {
                     b.Property<Guid>("Id")

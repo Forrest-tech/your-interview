@@ -1734,6 +1734,35 @@ const DICT: Record<string, Record<Lang, string>> = {
   'mailbox.saveRules': { zh: '保存规则', en: 'Save rules', fr: 'Enregistrer les règles' },
   'mailbox.saving': { zh: '保存中…', en: 'Saving…', fr: 'Enregistrement…' },
   'mailbox.rulesSaved': { zh: '匹配规则已保存。', en: 'Match rules saved.', fr: 'Règles enregistrées.' },
+  'mailbox.oauthTitle': { zh: 'OAuth 凭据', en: 'OAuth credentials', fr: 'Identifiants OAuth' },
+  'mailbox.oauthDesc': {
+    zh: '连接邮箱前先填好 OAuth 应用凭据。保存后本页的值优先于服务端环境变量；Secret 只写不回显，保存后不再显示原文。',
+    en: 'Fill in your OAuth app credentials before connecting a mailbox. Saved values take precedence over server environment variables; the secret is write-only and is never shown again after saving.',
+    fr: 'Renseignez les identifiants de votre application OAuth avant de connecter une boîte mail. Les valeurs enregistrées priment sur les variables d’environnement du serveur ; le secret est en écriture seule et n’est jamais réaffiché après l’enregistrement.'
+  },
+  'mailbox.oauthClientId': { zh: 'Client ID', en: 'Client ID', fr: 'ID client' },
+  'mailbox.oauthClientSecret': { zh: 'Client Secret', en: 'Client Secret', fr: 'Secret client' },
+  'mailbox.oauthSecretPlaceholder': { zh: '首次保存必填', en: 'Required on first save', fr: 'Requis au premier enregistrement' },
+  'mailbox.oauthSecretSavedHint': { zh: '已保存，留空表示沿用', en: 'Saved — leave blank to keep', fr: 'Enregistré — laisser vide pour conserver' },
+  'mailbox.oauthRedirectUri': { zh: 'Redirect URI', en: 'Redirect URI', fr: 'URI de redirection' },
+  'mailbox.oauthRedirectNote': {
+    zh: '后端实际发送的回调地址，须与 OAuth 应用登记一字一致，否则授权会失败。',
+    en: 'The exact callback address the backend will send; it must match your OAuth app registration exactly, or authorization will fail.',
+    fr: 'L’adresse de rappel exacte envoyée par le backend ; elle doit correspondre exactement à l’enregistrement de votre application OAuth, sinon l’autorisation échouera.'
+  },
+  'mailbox.oauthSourceSaved': { zh: '使用已保存的值', en: 'Using saved values', fr: 'Valeurs enregistrées utilisées' },
+  'mailbox.oauthSourceEnv': { zh: '使用环境变量', en: 'Using environment values', fr: 'Variables d’environnement utilisées' },
+  'mailbox.oauthSave': { zh: '保存凭据', en: 'Save credentials', fr: 'Enregistrer les identifiants' },
+  'mailbox.oauthSaved': { zh: '凭据已保存。', en: 'Credentials saved.', fr: 'Identifiants enregistrés.' },
+  'mailbox.oauthClear': { zh: '清除，恢复环境变量', en: 'Clear, use environment values', fr: 'Effacer, revenir aux variables d’environnement' },
+  'mailbox.oauthCleared': { zh: '已清除，恢复环境变量。', en: 'Cleared, using environment values.', fr: 'Effacés, variables d’environnement utilisées.' },
+  'mailbox.oauthRequired': { zh: '请填写 Client ID 与 Redirect URI（首次保存还须填写 Client Secret）。', en: 'Please fill in Client ID and Redirect URI (and Client Secret on first save).', fr: 'Veuillez renseigner l’ID client et l’URI de redirection (et le secret client au premier enregistrement).' },
+  'mailbox.oauthSecretUnreadable': { zh: '已保存的凭据无法解密，请清除后重新保存。', en: 'Saved credentials cannot be decrypted; clear and save again.', fr: 'Les identifiants enregistrés ne peuvent pas être déchiffrés ; effacez-les et enregistrez-les à nouveau.' },
+  'mailbox.oauthEnvNote': {
+    zh: '未填写时沿用服务端环境变量（MAILBOX_GOOGLE_ / MICROSOFT_…），已有部署不受影响。',
+    en: 'When left blank, server environment variables (MAILBOX_GOOGLE_ / MICROSOFT_…) are used; existing deployments are unaffected.',
+    fr: 'Si rien n’est renseigné, les variables d’environnement du serveur (MAILBOX_GOOGLE_ / MICROSOFT_…) sont utilisées ; les déploiements existants ne sont pas affectés.'
+  },
   // 2026-09-16(Forrest 本轮第 6 条):设置页不再负责"选朗读引擎" ——
   // 引擎选择已归到练习页的 TTS 弹窗,本页只管 Azure 凭据。
   'setting.subtitle': {

@@ -145,6 +145,23 @@ export class InterviewsApiService {
   updateMailMatchRules(entryId: string, body: MailMatchRulesDto): Observable<MailMatchRulesDto> {
     return this.api.put<MailMatchRulesDto>(`${InterviewsApiService.BASE}/${entryId}/mail-match-rules`, body);
   }
+
+  // ---------------- 票 245：邮箱 OAuth 凭据卡 ----------------
+
+  /** OAuth 凭据卡读（Secret 永不下发，只给状态位）。 */
+  getMailboxOAuthSettings(): Observable<MailboxOAuthSettingsDto[]> {
+    return this.api.get<MailboxOAuthSettingsDto[]>(`${InterviewsApiService.BASE}/mailbox/oauth-settings`);
+  }
+
+  /** OAuth 凭据卡保存（Secret 留空 = 沿用已存密文，首次保存必填）。 */
+  saveMailboxOAuthSettings(body: SaveMailboxOAuthSettingsBody): Observable<MailboxOAuthSettingsDto> {
+    return this.api.put<MailboxOAuthSettingsDto>(`${InterviewsApiService.BASE}/mailbox/oauth-settings`, body);
+  }
+
+  /** OAuth 凭据卡清除（删 DB 行，恢复环境变量兜底）。 */
+  clearMailboxOAuthSettings(provider: string): Observable<void> {
+    return this.api.delete<void>(`${InterviewsApiService.BASE}/mailbox/oauth-settings/${provider}`);
+  }
 }
 
 /** 票 240：邮箱连接行（refresh token 永不下发，只给状态）。 */
@@ -157,6 +174,24 @@ export interface MailboxConnectionDto {
   connectedAt: string;
   lastRefreshAt: string | null;
   hasCursor: boolean;
+}
+
+/** 票 245：OAuth 凭据卡行（Secret 永不下发，只给状态位）。 */
+export interface MailboxOAuthSettingsDto {
+  provider: string;
+  source: string;
+  clientId: string;
+  redirectUri: string;
+  secretSaved: boolean;
+  secretUnreadable: boolean;
+}
+
+/** 票 245：OAuth 凭据卡保存体（Secret 留空 = 沿用已存密文）。 */
+export interface SaveMailboxOAuthSettingsBody {
+  provider: string;
+  clientId: string;
+  clientSecret: string | null;
+  redirectUri: string;
 }
 
 /** 票 240：手动刷新结果条（三数 + 失败说明 + 状态旗）。 */

@@ -60,6 +60,7 @@ builder.Services.AddDataProtection()
 builder.Services.AddHttpClient<GmailMailboxProvider>();
 builder.Services.AddHttpClient<GraphMailboxProvider>();
 builder.Services.AddSingleton<MailboxProtection>();
+builder.Services.AddScoped<MailboxOAuthResolver>();
 builder.Services.AddSingleton<IMailboxProviderFactory, MailboxProviderFactory>();
 
 // ---------- 消息总线:转写完成 → 触发分析流水线 ----------

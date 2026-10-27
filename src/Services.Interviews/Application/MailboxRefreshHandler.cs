@@ -30,6 +30,7 @@ public sealed class RefreshMailboxCommandHandler(
     InterviewsDbContext db,
     IMailboxProviderFactory providers,
     MailboxProtection protection,
+    MailboxOAuthResolver oauth,
     IOptions<MailboxOptions> options)
     : IRequestHandler<RefreshMailboxCommand, Result<RefreshMailboxResult>>
 {
@@ -42,7 +43,7 @@ public sealed class RefreshMailboxCommandHandler(
         try
         {
             (conn, provider, access) = await MailboxImportHelper.GetActiveAccessAsync(
-                db, providers, protection, opts, request.UserId, ct);
+                db, providers, protection, oauth, request.UserId, ct);
         }
         catch (MailboxRateLimitedException ex)
         {
@@ -289,18 +290,17 @@ public static class MailboxImportHelper
     /// <summary>取当前 Active 连接 + 换 access token（新 refresh token 回落时轮换并落库，由调用方 SaveChanges）。</summary>
     public static async Task<(MailboxConnection? Conn, IMailboxProvider? Provider, string? Access)>
         GetActiveAccessAsync(InterviewsDbContext db, IMailboxProviderFactory providers,
-            MailboxProtection protection, MailboxOptions opts, Guid userId, CancellationToken ct)
+            MailboxProtection protection, MailboxOAuthResolver oauth, Guid userId, CancellationToken ct)
     {
         var conn = await db.MailboxConnections
             .FirstOrDefaultAsync(c => c.UserId == userId && c.Status == MailboxConnectionStatus.Active, ct);
         if (conn is null) return (null, null, null);
         var provider = providers.Get(conn.Provider);
-        var (clientId, clientSecret) = conn.Provider switch
-        {
-            MailboxProvider.Gmail => (opts.Google.ClientId, opts.Google.ClientSecret),
-            MailboxProvider.Graph => (opts.Microsoft.ClientId, opts.Microsoft.ClientSecret),
-            _ => (string.Empty, string.Empty)
-        };
+        // 票 245：刷新换 token 也走唯一解析口径；解析失败（如已保存 Secret 无法解密）→ 需重新处理，
+        // 不改连接状态（token 本身未必失效，坏的是凭据配置）。
+        var resolved = await oauth.ResolveAsync(conn.Provider, ct);
+        if (!resolved.IsSuccess) return (conn, null, null);
+        var (clientId, clientSecret, _, _) = resolved.Value;
         string refresh;
         try { refresh = protection.UnprotectRefreshToken(conn.EncryptedRefreshToken); }
         catch { conn.MarkInvalid(); await db.SaveChangesAsync(ct); return (conn, null, null); }

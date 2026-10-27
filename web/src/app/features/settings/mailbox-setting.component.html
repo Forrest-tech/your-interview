@@ -13,6 +13,62 @@
     <p class="sp-error">{{ error() }}</p>
   }
 
+  <!-- 票 245：OAuth 凭据卡（部署级，每 provider 一区；Secret 写-only 永不回显） -->
+  <section class="sp-card">
+    <h2 class="sp-card-title">
+      <mat-icon>key</mat-icon>
+      <span>{{ t('mailbox.oauthTitle') }}</span>
+    </h2>
+    <p class="sp-card-desc">{{ t('mailbox.oauthDesc') }}</p>
+
+    @for (s of oauthSettings(); track s.provider) {
+      <div class="oauth-provider">
+        <div class="oauth-head">
+          <span class="oauth-name">{{ s.provider === 'Graph' ? 'Outlook' : s.provider }}</span>
+          <span class="oauth-source">{{ s.source === 'saved' ? t('mailbox.oauthSourceSaved') : t('mailbox.oauthSourceEnv') }}</span>
+        </div>
+        <label class="oauth-field">
+          <span>{{ t('mailbox.oauthClientId') }}</span>
+          <input type="text" autocomplete="off"
+                 [ngModel]="oauthForm(s.provider).clientId"
+                 (ngModelChange)="setOAuthField(s.provider, 'clientId', $event)">
+        </label>
+        <label class="oauth-field">
+          <span>{{ t('mailbox.oauthClientSecret') }}</span>
+          <input type="password" autocomplete="new-password"
+                 [placeholder]="s.secretSaved ? t('mailbox.oauthSecretSavedHint') : t('mailbox.oauthSecretPlaceholder')"
+                 [ngModel]="oauthForm(s.provider).secret"
+                 (ngModelChange)="setOAuthField(s.provider, 'secret', $event)">
+        </label>
+        @if (s.secretUnreadable) {
+          <p class="oauth-warn">{{ t('mailbox.oauthSecretUnreadable') }}</p>
+        }
+        <label class="oauth-field">
+          <span>{{ t('mailbox.oauthRedirectUri') }}</span>
+          <input type="text" autocomplete="off"
+                 [ngModel]="oauthForm(s.provider).redirectUri"
+                 (ngModelChange)="setOAuthField(s.provider, 'redirectUri', $event)">
+        </label>
+        <p class="oauth-note">{{ t('mailbox.oauthRedirectNote') }}</p>
+        <div class="act-row">
+          <button mat-raised-button color="primary"
+                  [disabled]="oauthSaving() === s.provider"
+                  (click)="saveOAuth(s.provider)">
+            {{ t('mailbox.oauthSave') }}
+          </button>
+          @if (s.secretSaved) {
+            <button mat-stroked-button
+                    [disabled]="oauthSaving() === s.provider"
+                    (click)="clearOAuth(s.provider)">
+              {{ t('mailbox.oauthClear') }}
+            </button>
+          }
+        </div>
+      </div>
+    }
+    <p class="oauth-note">{{ t('mailbox.oauthEnvNote') }}</p>
+  </section>
+
   <!-- 连接卡 -->
   <section class="sp-card">
     <h2 class="sp-card-title">

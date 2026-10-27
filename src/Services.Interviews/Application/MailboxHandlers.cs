@@ -32,28 +32,26 @@ public sealed record ConnectMailboxCommand(Guid UserId, string Provider) : IRequ
 public sealed class ConnectMailboxCommandHandler(
     IMailboxProviderFactory providers,
     MailboxProtection protection,
-    IOptions<MailboxOptions> options)
+    MailboxOAuthResolver oauth)
     : IRequestHandler<ConnectMailboxCommand, Result<string>>
 {
-    public Task<Result<string>> Handle(ConnectMailboxCommand request, CancellationToken ct)
+    public async Task<Result<string>> Handle(ConnectMailboxCommand request, CancellationToken ct)
     {
         if (!Enum.TryParse<MailboxProvider>(request.Provider, ignoreCase: true, out var kind))
-            return Task.FromResult(Result.Failure<string>(Error.Validation("Mailbox.Provider", "邮箱类型无效")));
+            return Result.Failure<string>(Error.Validation("Mailbox.Provider", "邮箱类型无效"));
         if (kind == MailboxProvider.Imap)
-            return Task.FromResult(Result.Failure<string>(Error.Validation("Mailbox.Provider",
-                "IMAP 兜底尚未落地（票 240 剩余项），本轮仅支持 Gmail / Outlook。")));
-        var opts = options.Value;
-        var (clientId, redirectUri) = kind switch
-        {
-            MailboxProvider.Gmail => (opts.Google.ClientId, opts.Google.RedirectUri),
-            _ => (opts.Microsoft.ClientId, opts.Microsoft.RedirectUri)
-        };
+            return Result.Failure<string>(Error.Validation("Mailbox.Provider",
+                "IMAP 兜底尚未落地（票 240 剩余项），本轮仅支持 Gmail / Outlook。"));
+        // 票 245：凭据唯一解析口径（DB 三元组整组优先、env 兜底，绝不混用）。
+        var resolved = await oauth.ResolveAsync(kind, ct);
+        if (!resolved.IsSuccess) return Result.Failure<string>(resolved.Error);
+        var (clientId, _, redirectUri, _) = resolved.Value;
         if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(redirectUri))
-            return Task.FromResult(Result.Failure<string>(Error.Validation("Mailbox.NotConfigured",
-                $"未配置 {kind} 的 OAuth 凭据（Mailbox:{kind}:ClientId / RedirectUri），请先在配置中填写。")));
+            return Result.Failure<string>(Error.Validation("Mailbox.NotConfigured",
+                $"未配置 {kind} 的 OAuth 凭据，请先在 Mailbox 页的 OAuth 凭据卡中填写。"));
         var state = protection.CreateState(request.UserId, kind);
         var url = providers.Get(kind).GetAuthorizationUrl(clientId, redirectUri, state);
-        return Task.FromResult(Result.Success(url));
+        return Result.Success(url);
     }
 }
 
@@ -64,7 +62,7 @@ public sealed class MailboxCallbackCommandHandler(
     InterviewsDbContext db,
     IMailboxProviderFactory providers,
     MailboxProtection protection,
-    IOptions<MailboxOptions> options)
+    MailboxOAuthResolver oauth)
     : IRequestHandler<MailboxCallbackCommand, Result<string>>
 {
     public async Task<Result<string>> Handle(MailboxCallbackCommand request, CancellationToken ct)
@@ -75,12 +73,10 @@ public sealed class MailboxCallbackCommandHandler(
         var (userId, kind) = validated.Value;
         if (kind == MailboxProvider.Imap)
             return Result.Failure<string>(Error.Validation("Mailbox.Provider", "IMAP 兜底尚未落地。"));
-        var opts = options.Value;
-        var (clientId, clientSecret, redirectUri) = kind switch
-        {
-            MailboxProvider.Gmail => (opts.Google.ClientId, opts.Google.ClientSecret, opts.Google.RedirectUri),
-            _ => (opts.Microsoft.ClientId, opts.Microsoft.ClientSecret, opts.Microsoft.RedirectUri)
-        };
+        // 票 245：凭据唯一解析口径（与 Connect 同一组值换 token，绝不各自读配置）。
+        var resolved = await oauth.ResolveAsync(kind, ct);
+        if (!resolved.IsSuccess) return Result.Failure<string>(resolved.Error);
+        var (clientId, clientSecret, redirectUri, _) = resolved.Value;
         var provider = providers.Get(kind);
         MailboxTokens tokens;
         try
@@ -120,7 +116,7 @@ public sealed class DisconnectMailboxCommandHandler(
     InterviewsDbContext db,
     IMailboxProviderFactory providers,
     MailboxProtection protection,
-    IOptions<MailboxOptions> options)
+    MailboxOAuthResolver oauth)
     : IRequestHandler<DisconnectMailboxCommand, Result>
 {
     public async Task<Result> Handle(DisconnectMailboxCommand request, CancellationToken ct)
@@ -131,15 +127,14 @@ public sealed class DisconnectMailboxCommandHandler(
         try
         {
             var refresh = protection.UnprotectRefreshToken(conn.EncryptedRefreshToken);
-            var opts = options.Value;
-            var (clientId, clientSecret) = conn.Provider switch
+            // 票 245：撤销也走唯一解析口径；解析失败则跳过撤销（删行即断开）。
+            var resolved = await oauth.ResolveAsync(conn.Provider, ct);
+            if (resolved.IsSuccess)
             {
-                MailboxProvider.Gmail => (opts.Google.ClientId, opts.Google.ClientSecret),
-                MailboxProvider.Graph => (opts.Microsoft.ClientId, opts.Microsoft.ClientSecret),
-                _ => (string.Empty, string.Empty)
-            };
-            if (clientId.Length > 0)
-                await providers.Get(conn.Provider).RevokeAsync(clientId, clientSecret, refresh, ct);
+                var (clientId, clientSecret, _, _) = resolved.Value;
+                if (clientId.Length > 0)
+                    await providers.Get(conn.Provider).RevokeAsync(clientId, clientSecret, refresh, ct);
+            }
         }
         catch { /* 撤销尽力而为：删行即断开 */ }
         db.MailboxConnections.Remove(conn);
@@ -241,6 +236,7 @@ public sealed class ConfirmMailboxPendingCommandHandler(
     InterviewsDbContext db,
     IMailboxProviderFactory providers,
     MailboxProtection protection,
+    MailboxOAuthResolver oauth,
     IOptions<MailboxOptions> options)
     : IRequestHandler<ConfirmMailboxPendingCommand, Result<Guid>>
 {
@@ -257,7 +253,7 @@ public sealed class ConfirmMailboxPendingCommandHandler(
             .FirstOrDefaultAsync(e => e.Id == entryId.Value && e.UserId == request.UserId, ct);
         if (entry is null) return Result.Failure<Guid>(Error.NotFound("面试条目"));
         var (conn, provider, access) = await MailboxImportHelper.GetActiveAccessAsync(
-            db, providers, protection, options.Value, request.UserId, ct);
+            db, providers, protection, oauth, request.UserId, ct);
         if (conn is null || provider is null || access is null)
             return Result.Failure<Guid>(Error.Unauthorized("邮箱连接已失效，请重新连接。"));
         var message = await provider.GetMessageAsync(access, pending.ProviderMessageId, ct);

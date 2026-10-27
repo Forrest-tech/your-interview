@@ -68,6 +68,10 @@ public sealed class InterviewsDbContext(
     /// <summary>导入记录：append-only 审计，去重键唯一约束。</summary>
     public DbSet<MailboxImportRecord> MailboxImportRecords => Set<MailboxImportRecord>();
 
+    // ---- 票 245：邮箱 OAuth 应用凭据卡（部署级，非用户级）----
+    /// <summary>邮箱 OAuth 应用凭据：一行 = 一个 provider 的整组三元组，不挂 UserId、无用户过滤器。</summary>
+    public DbSet<MailboxOAuthCredential> MailboxOAuthCredentials => Set<MailboxOAuthCredential>();
+
     /// <summary>
     /// 给该条目所有未关单的任务排定终态(只改跟踪状态,不落库 ——
     /// 由调用方随后的 SaveChangesAsync 与业务变更**同一事务**提交)。
@@ -487,6 +491,20 @@ public sealed class InterviewsDbContext(
             e.HasIndex(x => new { x.UserId, x.EntryId, x.ImportedAt });
             e.HasIndex(x => x.AssetId);
             e.HasQueryFilter(x => x.UserId == CurrentUserId);
+        });
+
+        b.Entity<MailboxOAuthCredential>(e =>
+        {
+            e.ToTable("mailbox_oauth_credentials");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Provider).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.ClientId).HasMaxLength(500).IsRequired();
+            // 加密密文长度不定：text 列不限长。
+            e.Property(x => x.EncryptedClientSecret).HasColumnType("text").IsRequired();
+            e.Property(x => x.RedirectUri).HasMaxLength(2000).IsRequired();
+            e.Property(x => x.UpdatedAt).IsRequired();
+            // 部署级：一行 = 一个 provider，无 UserId、故意不设用户过滤器。
+            e.HasIndex(x => x.Provider).IsUnique();
         });
     }
 }

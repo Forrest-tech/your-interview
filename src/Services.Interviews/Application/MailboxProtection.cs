@@ -15,10 +15,16 @@ public sealed class MailboxProtection(IDataProtectionProvider provider)
 {
     private readonly IDataProtector _tokenProtector = provider.CreateProtector("mailbox-refresh-token-v1");
     private readonly IDataProtector _stateProtector = provider.CreateProtector("mailbox-oauth-state-v1");
+    private readonly IDataProtector _oauthSecretProtector = provider.CreateProtector("mailbox-oauth-secret-v1");
 
     public string ProtectRefreshToken(string refreshToken) => _tokenProtector.Protect(refreshToken);
 
     public string UnprotectRefreshToken(string protectedToken) => _tokenProtector.Unprotect(protectedToken);
+
+    /// <summary>票 245：OAuth client secret 加解密（独立 purpose，与 refresh token 隔离）。</summary>
+    public string ProtectClientSecret(string clientSecret) => _oauthSecretProtector.Protect(clientSecret);
+
+    public string UnprotectClientSecret(string protectedSecret) => _oauthSecretProtector.Unprotect(protectedSecret);
 
     public string CreateState(Guid userId, MailboxProvider provider)
     {

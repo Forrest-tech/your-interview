@@ -1092,9 +1092,11 @@
   @if (dict.state(); as dictState) {
     <app-dictionary-card [state]="dictState"
                          [shadow]="dict.shadow.view()"
+                         [playStatus]="dict.playStatus()"
                          (closeRequested)="dict.close(true)"
                          (retryRequested)="dict.retry()"
                          (playRequested)="dict.play($event)"
+                         (retryPlayRequested)="dict.retryPlay()"
                          (shadowAction)="dict.shadowAction($event)"
                          (layoutChanged)="refreshDictPopupPosition()"></app-dictionary-card>
   }

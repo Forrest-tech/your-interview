@@ -361,11 +361,18 @@ public class DictionaryTicket128Tests
                     EcRow("murmed", "", "", "", "0:murm")),
                 WordNetJsonl(WnEntry("murm", ("v", [("to murm", null)]))));
             var svc = BuildService(store, packDir: null, coreDir: coreDir).Service;
-            // 本形三层全无 → 回落既有整链 → 词元录音（跟读票127 依赖，不许取消）
-            var pron = Pron(svc, "murmed", "us");
-            Assert.True(pron.Available);
-            Assert.Equal("commons", pron.Kind);
-            Assert.Equal("c128m00", pron.Key);
+            // 票254 D1 迁移：词元回落从默认 pronounce 移至 Shadow 面（humanOnly）。
+            // 默认 Main 面（本夹具无合成器）→ 本形无人声即诚实不可用，绝不借词元录音。
+            var main = Pron(svc, "murmed", "us");
+            Assert.False(main.Available);
+            Assert.Null(main.Kind);
+            Assert.Null(main.Key);
+            // Shadow 面保留跟读票127 的回落语义：本形三层全无 → 词元录音。
+            var shadow = svc.PronounceAsync("murmed", "us", CancellationToken.None, humanOnly: true)
+                .GetAwaiter().GetResult();
+            Assert.True(shadow.Available);
+            Assert.Equal("commons", shadow.Kind);
+            Assert.Equal("c128m00", shadow.Key);
             // 本形词元全无 → 耗尽
             var none = Pron(svc, "murmed", "uk");
             Assert.False(none.Available);
@@ -381,12 +388,14 @@ public class DictionaryTicket128Tests
         var (svc, root) = Tb5H1Service();
         try
         {
-            // 以屈折形查词的主端点 map 走未对齐基线：Tier 0 本形键无 → 词元词头 oxford key，
-            // 不得被 pronounce 的投影模式污染成核心包本形 key。
+            // 票254 D1 迁移：以屈折形查词的主端点 map 不再走词元回落基线——
+            // 本形有核心包录音（c128b01，TB5_1 之形）→ map 即本形那条，不再是词元词头 oxford key；
+            // 词元卡本身的词头 key 不变。
             var r = svc.Lookup("blinted")!;
             Assert.Equal("blint", r.Lemma);
-            Assert.Equal("oxford", r.Audio["us"].Kind);
-            Assert.Equal("blint__us_1.mp3", r.Audio["us"].Key);
+            Assert.True(r.Audio["us"].Available);
+            Assert.Equal("commons", r.Audio["us"].Kind);
+            Assert.Equal("c128b01", r.Audio["us"].Key);
             var direct = svc.Lookup("blint")!;
             Assert.Equal("blint__us_1.mp3", direct.Audio["us"].Key);
         }
@@ -452,10 +461,12 @@ public class DictionaryTicket128Tests
                 form.EnumerateObject().Select(p => p.Name).OrderBy(n => n).ToArray());
             Assert.True(form.GetProperty("audio").GetProperty("us").GetBoolean());
             Assert.False(form.GetProperty("audio").GetProperty("uk").GetBoolean());
-            // 基线对照：剥掉 forms[].audio 后与票128 之前的响应形状逐字段一致
+            // 基线对照：剥掉 forms[].audio 后与票128 之前的响应形状逐字段一致，
+            // 唯 forms 一项按票254 P6 标签并集更新（牛津“过去式”+ ECDICT“过去分词”同文合并，
+            // ECDICT 独有的现在分词进入并集；其余字段与基线逐字一致）。
             var stripped = StripFormsAudio(doc.RootElement);
             const string baseline = """
-                {"query":"glorp","lemma":"glorp","matchedVia":"direct","tier":"oxford","phonetics":{"uk":"/ɡlɔːp/","us":"/ɡlɔːp/"},"posBlocks":[{"pos":"verb","label":"动词","senses":[{"defEn":"to vanish suddenly","glossZh":"突然消失","example":{"en":"It glorped.","zh":"它突然消失了。"}}],"foldedCount":0,"zhLines":[]}],"forms":[{"label":"过去式","text":"glorped"}],"audio":{"us":{"kind":"oxford","key":"glorp__us_1.mp3","available":true},"uk":{"available":false}},"attribution":{"source":"Oxford Advanced Learner's Dictionary 10 (local pack)"}}
+                {"query":"glorp","lemma":"glorp","matchedVia":"direct","tier":"oxford","phonetics":{"uk":"/ɡlɔːp/","us":"/ɡlɔːp/"},"posBlocks":[{"pos":"verb","label":"动词","senses":[{"defEn":"to vanish suddenly","glossZh":"突然消失","example":{"en":"It glorped.","zh":"它突然消失了。"}}],"foldedCount":0,"zhLines":[]}],"forms":[{"label":"过去式/过去分词","text":"glorped"},{"label":"现在分词","text":"glorping"}],"audio":{"us":{"kind":"oxford","key":"glorp__us_1.mp3","available":true},"uk":{"available":false}},"attribution":{"source":"Oxford Advanced Learner's Dictionary 10 (local pack)"}}
                 """;
             Assert.Equal(
                 JsonSerializer.Serialize(JsonDocument.Parse(baseline).RootElement),

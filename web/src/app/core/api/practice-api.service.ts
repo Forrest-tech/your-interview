@@ -482,15 +482,27 @@ export class PracticeApi {
       `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}`);
   }
 
-  /** 发音链单点解析(票126 §8.2):只供卡内播放入口;链耗尽回 {available:false}。 */
-  pronounceDictionaryWord(word: string, accent: 'us' | 'uk'): Observable<DictionaryPronounceDto> {
+  /** 发音链单点解析(票254 §4):只供卡内播放入口;链耗尽回 {available:false}。 */
+  pronounceDictionaryWord(
+    word: string, accent: 'us' | 'uk',
+    opts: { excludeKeys?: string[]; humanOnly?: boolean } = {},
+  ): Observable<DictionaryPronounceDto> {
+    const params = [`accent=${accent}`];
+    if (opts.excludeKeys?.length)
+      params.push(`excludeKeys=${encodeURIComponent(opts.excludeKeys.join(','))}`);
+    if (opts.humanOnly) params.push('humanOnly=true');
     return this.api.get<DictionaryPronounceDto>(
-      `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}/pronounce?accent=${accent}`);
+      `${PracticeApi.BASE}/dictionary/${encodeURIComponent(word)}/pronounce?${params.join('&')}`);
   }
 
   /** 词典音频流:走 ApiClient 附鉴权头拿 Blob(同 fetchRecordingAudio 口径),调用方转 ObjectURL 播放。 */
-  fetchDictionaryAudio(key: string): Observable<Blob> {
-    return this.api.getBlob(`${PracticeApi.BASE}/dictionary/audio/${encodeURIComponent(key)}`);
+  fetchDictionaryAudio(key: string, word?: string, accent?: 'us' | 'uk'): Observable<Blob> {
+    // 票254 §1:word/accent 仅供合成键 serve-time 物化校验；真人键后端忽略两参数。
+    const params = [];
+    if (word !== undefined) params.push(`word=${encodeURIComponent(word)}`);
+    if (accent !== undefined) params.push(`accent=${accent}`);
+    const qs = params.length ? `?${params.join('&')}` : '';
+    return this.api.getBlob(`${PracticeApi.BASE}/dictionary/audio/${encodeURIComponent(key)}${qs}`);
   }
 
   deleteRecording(recordingId: string, version?: number | null): Observable<void> {
@@ -706,8 +718,8 @@ export class PracticeApi {
 /** 示范朗读合成结果:音频字节 + 是否来自本地缓存(诚实来源标记)。 */
 /** 票119 词典卡 DTO(后端 schema v2,GET /dictionary/{word})。 */
 export interface DictionaryAudioOptionDto {
-  /** 票126 §8.1:呈现 kind 只余真人录音两档;无真人录音时后端省略此字段(available=false)。 */
-  kind?: 'oxford' | 'commons' | null;
+  /** 票254 起 kind 含带标注合成档;无可用音频时后端省略此字段(available=false)。 */
+  kind?: 'oxford' | 'commons' | 'synthetic' | null;
   key?: string | null;
   available: boolean;
 }
@@ -732,6 +744,8 @@ export interface DictionaryCardDto {
   matchedVia: string;
   tier: 'oxford' | 'open';
   phonetics: { uk?: string | null; us?: string | null };
+  /** 票254 P3:所点词形本形音标（仅词形卡有；词元卡为 null）。 */
+  formPhonetics?: { uk?: string | null; us?: string | null } | null;
   posBlocks: DictionaryPosBlockDto[];
   /** 票128:逐词形音频可用性(additive;旧后端无此字段,前端按缺失处理——无钮)。 */
   forms: { label: string; text: string; audio?: { us: boolean; uk: boolean } }[];
@@ -740,8 +754,8 @@ export interface DictionaryCardDto {
 }
 
 export interface DictionaryPronounceDto {
-  /** 票126 §8.2:链耗尽 → available=false 且无 kind/key(端点回 200,不再有 device/neural 兜底)。 */
-  kind?: 'oxford' | 'commons' | null;
+  /** 票254 §4:链耗尽 → available=false 且无 kind/key(端点回 200);kind 含带标注合成档。 */
+  kind?: 'oxford' | 'commons' | 'synthetic' | null;
   key?: string | null;
   available: boolean;
 }

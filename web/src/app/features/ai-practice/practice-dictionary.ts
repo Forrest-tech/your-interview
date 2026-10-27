@@ -3,8 +3,8 @@ import { firstValueFrom } from 'rxjs';
 import { Howl } from 'howler';
 import type { AiPracticeComponent } from './ai-practice.component';
 import {
-  DictAccent, DictCardState, PassageToken, errorStatusOf, isRovingKey, lookupKeyOf,
-  nextRovingIndex, tokenizePassage,
+  DictAccent, DictCardState, DictPlayStatus, IDLE_DICT_PLAY_STATUS, PassageToken, errorStatusOf,
+  isRovingKey, lookupKeyOf, nextRovingIndex, tokenizePassage,
 } from './dictionary.helpers';
 import { DictionaryShadowSession, DictShadowAction } from './dictionary-shadow';
 import type { DictPlayRequest } from './dictionary-card.component';
@@ -37,7 +37,8 @@ export class PracticeDictionary {
    * 依赖以闭包注入 —— 方法缺失的替身宿主下调用即抛,被会话内 try/catch 归 F-S7,不伤查词主链。
    */
   readonly shadow = new DictionaryShadowSession({
-    pronounce: (word, accent) => this.host.practiceApi.pronounceDictionaryWord(word, accent),
+    // 票254 §4.4:跟读走 Shadow 面（真人层 1–6，绝不合成）；会话逻辑本身不动。
+    pronounce: (word, accent) => this.host.practiceApi.pronounceDictionaryWord(word, accent, { humanOnly: true }),
     fetchAudio: (key) => this.host.practiceApi.fetchDictionaryAudio(key),
     // ⚠️ 惰性代理:本类在宿主字段初始化序上早于 recorder/practiceApi 的 inject,
     // 构造期直取必为 undefined —— 全部依赖一律闭包延迟到调用时求值(查词主链同例)。
@@ -91,6 +92,16 @@ export class PracticeDictionary {
 
   /** 当前词卡状态;null = 未开卡。 */
   readonly state = signal<DictCardState | null>(null);
+  /**
+   * 票254 §4:卡内播放状态（卡组件 [playStatus] 输入源）。
+   * idle = 无进行中/失败播放（playedKind/playedAccent 记录最近一次成功播放，
+   * 供合成标签切换）；synthesizing = 回落合成进行中；error = 可见失败 + 可重试。
+   */
+  readonly playStatus = signal<DictPlayStatus>(IDLE_DICT_PLAY_STATUS);
+  /** 最近一次开卡的触发词原文（保大小写；displayForm 用，不作查词键）。 */
+  private lastDisplayForm = '';
+  /** 播放代际（每次 pronounceAndPlay/开卡/关卡递增；Howl 异步错误据此丢弃过期回调）。 */
+  private playSeq = 0;
   /** 开卡对应的词序(触发词);-1 = 未开卡。 */
   readonly openWordIndex = signal(-1);
   /** roving tabindex 停靠的词序(区内仅此词 tabindex=0)。 */
@@ -123,6 +134,8 @@ export class PracticeDictionary {
     this.shadow.teardown();
     this.cancelPendingMount();
     this.popupMounted = false;
+    this.playSeq++;
+    this.playStatus.set(IDLE_DICT_PLAY_STATUS);
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -166,6 +179,9 @@ export class PracticeDictionary {
   ): Promise<void> {
     const key = lookupKeyOf(token.text);
     const seq = ++this.requestSeq;
+    this.playSeq++;
+    this.playStatus.set(IDLE_DICT_PLAY_STATUS);
+    this.lastDisplayForm = token.text;
     this.triggerEl = el;
     this.openWordIndex.set(token.wordIndex);
     this.roving.set(token.wordIndex);
@@ -206,7 +222,8 @@ export class PracticeDictionary {
       const dto = await firstValueFrom(this.host.practiceApi.lookupDictionaryWord(key));
       if (seq !== this.requestSeq) return;
       this.markLookedUp(key, dto.lemma);
-      this.state.set({ status: 'ok', query: key, card: dto });
+      // 票254 P3:ok 态携带所点词形原文（displayForm），卡词头据此原样显示。
+      this.state.set({ status: 'ok', query: key, card: dto, displayForm: this.lastDisplayForm });
       this.shadow.attachCard(dto);
     } catch (err) {
       if (seq !== this.requestSeq) return;
@@ -281,6 +298,8 @@ export class PracticeDictionary {
     // 票130 §6.3:待挂出态被关闭 → 计时器作废、永不挂出(取消事件)。
     this.cancelPendingMount();
     this.popupMounted = false;
+    this.playSeq++;
+    this.playStatus.set(IDLE_DICT_PLAY_STATUS);
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -296,6 +315,8 @@ export class PracticeDictionary {
     this.shadow.teardown();
     this.cancelPendingMount();
     this.popupMounted = false;
+    this.playSeq++;
+    this.playStatus.set(IDLE_DICT_PLAY_STATUS);
     this.requestSeq++;
     this.state.set(null);
     this.openWordIndex.set(-1);
@@ -307,8 +328,21 @@ export class PracticeDictionary {
   retry(): void {
     const st = this.state();
     if (!st) return;
-    const token: PassageToken = { kind: 'word', text: st.query, wordIndex: this.openWordIndex() };
+    // 票254 P3:重试沿用上次所点词形原文（否则小写 query 会丢句首大写等原貌）。
+    const token: PassageToken = {
+      kind: 'word',
+      text: this.lastDisplayForm || st.query,
+      wordIndex: this.openWordIndex(),
+    };
     void this.open(token, this.triggerEl, { keepCurrentCardUntilSettle: true });
+  }
+
+  /** 播放失败重试（卡组件 retryPlayRequested）：以已失败键全集作排除重发 pronounce。 */
+  retryPlay(): void {
+    const ps = this.playStatus();
+    if (ps.phase !== 'error' || !ps.word || !ps.accent) return;
+    void this.pronounceAndPlay(
+      ps.word, ps.accent, ps.targetType ?? 'accent', ps.targetForm ?? undefined, ps.failedKeys);
   }
 
   /**
@@ -348,38 +382,113 @@ export class PracticeDictionary {
     const st = this.state();
     if (!st) return;
     if (req.target === 'accent') {
-      const word = st.status === 'ok' ? st.card.lemma : st.query;
-      void this.pronounceAndPlay(word, req.accent);
+      // 票254 P3:口音钮播所点词形（query），不再播词元——词元卡上 query 即词元，行为不变。
+      void this.pronounceAndPlay(st.query, req.accent, 'accent');
     } else {
-      void this.pronounceAndPlay(req.text, req.accent);
+      void this.pronounceAndPlay(req.text, req.accent, 'form', req.text);
     }
   }
 
   /**
-   * pronounce 端点解析真人录音链 → 有 key 取流播。
-   * 票126 §8.1/§8.2(S-2):链耗尽(available=false)或端点失败 → 无发音,就此静默,
-   * 绝不回退任何机器发音(设备 TTS 档已整级移除)。
+   * 票254 §4:pronounce 解析 Main 面 → 有 key 取流播；取流失败 → 一次自动回落
+   * （pronounce-with-exclusion，合成键永不可排除，合成键失败不自动回落）；
+   * 首次 pronounce 即失败（无失败键可排除）→ 可见 error 态，永不静默。
+   * 每次调用至多一次自动回落；手动重试（retryPlay）是新调用，带全集排除重发。
    */
-  private async pronounceAndPlay(word: string, accent: DictAccent): Promise<void> {
+  private async pronounceAndPlay(
+    word: string, accent: DictAccent, targetType: 'accent' | 'form',
+    targetForm?: string, initialExcludeKeys: string[] = [],
+  ): Promise<void> {
+    const playToken = ++this.playSeq;
+    const failedKeys: string[] = [...initialExcludeKeys];
+    const base: DictPlayStatus = {
+      phase: 'idle', targetType, targetAccent: accent, targetForm: targetForm ?? null,
+      word, accent, failedKeys: [...failedKeys], playedKind: null, playedAccent: null,
+    };
+    this.playStatus.set(base);
+    const fail = (): void => {
+      if (playToken !== this.playSeq) return;
+      this.playStatus.set({ ...base, phase: 'error', failedKeys: [...failedKeys] });
+    };
+    let dto;
     try {
-      const dto = await firstValueFrom(
-        this.host.practiceApi.pronounceDictionaryWord(word, accent),
+      dto = await firstValueFrom(
+        this.host.practiceApi.pronounceDictionaryWord(
+          word, accent, failedKeys.length ? { excludeKeys: failedKeys } : {}),
       );
-      if (dto.available && dto.key) await this.playKey(dto.key);
     } catch {
-      /* 端点失败 → 无发音(卡面状态文案已说明,不另行兜底) */
+      fail(); // 首次 pronounce 即失败：无失败键可排除 → 可见失败，永不静默。
+      return;
     }
+    if (playToken !== this.playSeq) return;
+    if (!dto.available || !dto.key) {
+      fail();
+      return;
+    }
+    if (await this.playKey(dto.key, word, accent, playToken)) {
+      if (playToken !== this.playSeq) return;
+      this.playStatus.set({
+        ...base, phase: 'idle', failedKeys: [...failedKeys],
+        playedKind: dto.kind ?? null, playedAccent: accent,
+      });
+      return;
+    }
+    // 取流失败 → §4.2 自动回落：合成键失败无回落意义（排除集拦不住合成层），直接可见失败。
+    if (playToken !== this.playSeq) return;
+    failedKeys.push(dto.key);
+    if (dto.kind === 'synthetic') {
+      fail();
+      return;
+    }
+    this.playStatus.set({ ...base, phase: 'synthesizing', failedKeys: [...failedKeys] });
+    let dto2;
+    try {
+      dto2 = await firstValueFrom(
+        this.host.practiceApi.pronounceDictionaryWord(word, accent, { excludeKeys: failedKeys }),
+      );
+    } catch {
+      fail();
+      return;
+    }
+    if (playToken !== this.playSeq) return;
+    if (!dto2.available || !dto2.key) {
+      fail();
+      return;
+    }
+    if (await this.playKey(dto2.key, word, accent, playToken)) {
+      if (playToken !== this.playSeq) return;
+      this.playStatus.set({
+        ...base, phase: 'idle', failedKeys: [...failedKeys],
+        playedKind: dto2.kind ?? null, playedAccent: accent,
+      });
+      return;
+    }
+    failedKeys.push(dto2.key);
+    fail();
   }
 
-  private async playKey(key: string): Promise<boolean> {
+  private async playKey(key: string, word: string, accent: DictAccent, playToken: number): Promise<boolean> {
     try {
-      const blob = await firstValueFrom(this.host.practiceApi.fetchDictionaryAudio(key));
+      const blob = await firstValueFrom(
+        this.host.practiceApi.fetchDictionaryAudio(key, word, accent));
       if (!blob || blob.size === 0) return false;
       if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
       this.objectUrl = URL.createObjectURL(blob);
       this.howl?.unload();
-      this.howl = new Howl({ src: [this.objectUrl], format: ['mp3'] });
-      this.howl.play();
+      const howl = new Howl({ src: [this.objectUrl], format: ['mp3'] });
+      // Howl 解码错误是异步的：仅当本次播放仍是当前播放时才翻为可见失败（供手动重试）。
+      const markFailed = (): void => {
+        if (playToken !== this.playSeq) return;
+        const cur = this.playStatus();
+        if (cur.word !== word || cur.accent !== accent) return;
+        this.playStatus.set({
+          ...cur, phase: 'error', failedKeys: [...new Set([...cur.failedKeys, key])],
+        });
+      };
+      howl.on('loaderror', markFailed);
+      howl.on('playerror', markFailed);
+      this.howl = howl;
+      howl.play();
       return true;
     } catch {
       return false;

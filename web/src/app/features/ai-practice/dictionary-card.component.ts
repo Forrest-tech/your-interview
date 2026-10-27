@@ -6,9 +6,9 @@ import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { I18nService } from '../../core/i18n/i18n.service';
 import {
-  DictAccent, DictCardState, accentButtonVisible, cardHasAnyAudio as cardHasAnyAudioOf,
-  foldView, formPlayable, lemmaRoleLabels, loadDictAccent, saveDictAccent,
-  tabEnabled as tabEnabledOf,
+  DictAccent, DictCardState, DictPlayStatus, accentButtonVisible, blockHasChinese as blockHasChineseOf,
+  cardHasAnyAudio as cardHasAnyAudioOf, displayHeadword, foldView, formPlayable, lemmaRoleLabels,
+  loadDictAccent, saveDictAccent, tabEnabled as tabEnabledOf,
 } from './dictionary.helpers';
 import {
   DictShadowAction, DictShadowView, shadowErrorLabelKey, shadowSettleFocusSelectors,
@@ -75,7 +75,7 @@ export type DictPlayRequest =
         @case ('ok') {
           @if (card(); as c) {
             <div class="dict-head-row">
-              <span class="dict-headword">{{ c.lemma }}</span>
+              <span class="dict-headword">{{ headword() }}</span>
               @if (roleNote(c); as note) {
                 <span class="dict-lemma-note">{{ note }}</span>
               }
@@ -93,8 +93,11 @@ export type DictPlayRequest =
                             [attr.aria-label]="!tabEnabled(c, acc) ? noAudioLabel(acc) : (acc === 'us' ? t('dict.accentUs') : t('dict.accentUk'))">
                       {{ acc === 'us' ? 'US' : 'UK' }}
                     </button>
-                    @if (phoneticOf(c, acc); as ipa) {
-                      <span class="dict-ipa">{{ ipa }}</span>
+                    @if (phoneticOf(c, acc); as ph) {
+                      <span class="dict-ipa">{{ ph.text }}</span>
+                      @if (ph.lemmaFallback) {
+                        <span class="dict-lemma-ipa">{{ t('dict.lemmaIpa') }}</span>
+                      }
                     }
                     @if (accentVisible(c, acc)) {
                       <button type="button" class="dict-play-btn"
@@ -102,9 +105,21 @@ export type DictPlayRequest =
                               [attr.aria-label]="acc === 'us' ? t('dict.playUs') : t('dict.playUk')">
                         <mat-icon>volume_up</mat-icon>
                       </button>
+                      @if (showSyntheticTag(c, acc)) {
+                        <span class="dict-synth-tag">{{ t('dict.audioSynthetic') }}</span>
+                      }
                     }
                   </span>
                 }
+              }
+              @if (playSynthesizingForAccent()) {
+                <span class="dict-play-state">{{ t('dict.synthesising') }}</span>
+              }
+              @if (playErrorForAccent()) {
+                <span class="dict-play-error">{{ t('dict.playFailed') }}</span>
+                <button type="button" class="dict-play-retry" (click)="retryPlayRequested.emit()">
+                  {{ t('dict.retry') }}
+                </button>
               }
               @if (!cardHasAnyAudio(c)) {
                 <span class="dict-noaudio">{{ t('dict.noAudio') }}</span>
@@ -278,6 +293,9 @@ export type DictPlayRequest =
             @for (block of c.posBlocks; track block.pos; let bi = $index) {
               <div class="dict-pos-block">
                 <div class="dict-pos-label">{{ block.label }}</div>
+                @for (line of block.zhLines; track $index) {
+                  <p class="dict-zh">{{ line }}</p>
+                }
                 <ol class="dict-senses" [id]="'dict-senses-' + bi">
                   @for (sense of visibleSenses(block, bi); track $index) {
                     <li class="dict-sense">
@@ -311,8 +329,8 @@ export type DictPlayRequest =
                     {{ t('dict.fewerSenses') }}
                   </button>
                 }
-                @for (line of block.zhLines; track $index) {
-                  <p class="dict-zh">{{ line }}</p>
+                @if (!blockHasChinese(block)) {
+                  <p class="dict-zh">{{ t('dict.noChineseMeaning') }}</p>
                 }
               </div>
             }
@@ -323,11 +341,23 @@ export type DictPlayRequest =
                   <span class="dict-form">
                     <span class="dict-form-label">{{ form.label }}</span>
                     <span class="dict-form-text">{{ form.text }}</span>
+                    @if (isClickedForm(c, form)) {
+                      <span class="dict-clicked-marker">{{ t('dict.clickedForm') }}</span>
+                    }
                     @if (formHasAudio(form)) {
                       <button type="button" class="dict-play-btn dict-play-sm"
                               (click)="playRequested.emit({ target: 'form', text: form.text, accent: accent() })"
                               [attr.aria-label]="tf('dict.playForm', { form: form.text })">
                         <mat-icon>volume_up</mat-icon>
+                      </button>
+                    }
+                    @if (playSynthesizingForForm(form.text)) {
+                      <span class="dict-play-state">{{ t('dict.synthesising') }}</span>
+                    }
+                    @if (playErrorForForm(form.text)) {
+                      <span class="dict-play-error">{{ t('dict.playFailed') }}</span>
+                      <button type="button" class="dict-play-retry" (click)="retryPlayRequested.emit()">
+                        {{ t('dict.retry') }}
                       </button>
                     }
                   </span>
@@ -400,6 +430,18 @@ export type DictPlayRequest =
     .dict-accent-tag[disabled] { opacity: .55; cursor: not-allowed; }
     .dict-phon-active .dict-accent-tag { background: var(--signal-tint); color: var(--brand); border-color: var(--signal-soft); }
     .dict-ipa { font-size: 15px; color: var(--ink); }
+    .dict-lemma-ipa { font-size: 12px; color: var(--ink-2); }
+    .dict-synth-tag, .dict-clicked-marker {
+      font-size: 11px; font-weight: 600; color: var(--brand);
+      background: var(--signal-tint); border-radius: 6px; padding: 2px 8px;
+    }
+    .dict-play-state { font-size: 13px; color: var(--ink-2); }
+    .dict-play-error { font-size: 13px; color: var(--ink-2); }
+    .dict-play-retry {
+      border: 1px solid var(--hairline); background: var(--surface); color: var(--brand);
+      border-radius: 8px; padding: 3px 10px; cursor: pointer; font-size: 12.5px;
+    }
+    .dict-play-retry:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
     .dict-noaudio { font-size: 13px; color: var(--ink-2); }
     .dict-shadow { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
     .dict-shadow-head { display: flex; align-items: baseline; gap: 8px; }
@@ -469,9 +511,13 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
   @Input({ required: true }) state!: DictCardState;
   /** 票127 跟读区视图(null = 不渲染:无美音真人录音/解析中/非 ok 卡)。 */
   @Input() shadow: DictShadowView | null = null;
+  /** 票254 §4:宿主播放状态（合成标签/进行态/失败重试的唯一来源；null = 无播放活动）。 */
+  @Input() playStatus: DictPlayStatus | null = null;
   @Output() closeRequested = new EventEmitter<void>();
   @Output() retryRequested = new EventEmitter<void>();
   @Output() playRequested = new EventEmitter<DictPlayRequest>();
+  /** 票254 §4:播放失败重试（宿主以失败键全集作排除重发 pronounce）。 */
+  @Output() retryPlayRequested = new EventEmitter<void>();
   /** 票127 跟读动作回抛(会话状态机在宿主侧 DictionaryShadowSession)。 */
   @Output() shadowAction = new EventEmitter<DictShadowAction>();
   /** 卡高变化(折叠展开/收起)→ 宿主据此让浮层按真实高度重选位序(§6.3 完整可见)。 */
@@ -500,11 +546,70 @@ export class DictionaryCardComponent implements AfterViewInit, OnChanges {
   }
 
   protected dialogLabel(): string {
-    return this.state.status === 'ok' ? this.state.card.lemma : this.state.query;
+    return this.state.status === 'ok' ? this.headword() : this.state.query;
   }
 
-  protected phoneticOf(c: NonNullable<ReturnType<typeof this.card>>, acc: DictAccent): string | null {
-    return acc === 'us' ? c.phonetics.us ?? null : c.phonetics.uk ?? null;
+  /** 票254 P3:词头 = 所点词形原样（小写后等于词元时显示词元原样）。 */
+  protected headword(): string {
+    if (this.state.status !== 'ok') return this.state.query;
+    return displayHeadword(this.state.displayForm, this.state.card.lemma);
+  }
+
+  /**
+   * 票254 P3:音标 = 所点词形本形音标（formPhonetics）；缺失时回落词元音标并标“原形音标”。
+   * 词元卡（query === lemma）无 formPhonetics，恒走词元音标、无回落标注。
+   */
+  protected phoneticOf(
+    c: NonNullable<ReturnType<typeof this.card>>, acc: DictAccent,
+  ): { text: string; lemmaFallback: boolean } | null {
+    const isFormCard = c.query !== c.lemma;
+    if (isFormCard) {
+      const formIpa = acc === 'us' ? c.formPhonetics?.us ?? null : c.formPhonetics?.uk ?? null;
+      if (formIpa) return { text: formIpa, lemmaFallback: false };
+    }
+    const lemmaIpa = acc === 'us' ? c.phonetics.us ?? null : c.phonetics.uk ?? null;
+    return lemmaIpa ? { text: lemmaIpa, lemmaFallback: isFormCard } : null;
+  }
+
+  /** 票254 §4:合成标签 = lookup 即合成，或本次回落合成成功播出（playedKind 切换）。 */
+  protected showSyntheticTag(c: NonNullable<ReturnType<typeof this.card>>, acc: DictAccent): boolean {
+    if (c.audio[acc]?.kind === 'synthetic') return true;
+    const ps = this.playStatus;
+    return !!ps && ps.playedKind === 'synthetic' && ps.playedAccent === acc;
+  }
+
+  protected playSynthesizingForAccent(): boolean {
+    const ps = this.playStatus;
+    return !!ps && ps.phase === 'synthesizing' && ps.targetType === 'accent';
+  }
+
+  protected playErrorForAccent(): boolean {
+    const ps = this.playStatus;
+    return !!ps && ps.phase === 'error' && ps.targetType === 'accent';
+  }
+
+  protected playSynthesizingForForm(formText: string): boolean {
+    const ps = this.playStatus;
+    return !!ps && ps.phase === 'synthesizing' && ps.targetType === 'form' && ps.targetForm === formText;
+  }
+
+  protected playErrorForForm(formText: string): boolean {
+    const ps = this.playStatus;
+    return !!ps && ps.phase === 'error' && ps.targetType === 'form' && ps.targetForm === formText;
+  }
+
+  /** 票254 P3:词形行里标出本次所点的词形（大小写不敏感比对）。 */
+  protected isClickedForm(
+    c: NonNullable<ReturnType<typeof this.card>>, form: { text: string },
+  ): boolean {
+    return form.text.toLowerCase() === c.query.toLowerCase();
+  }
+
+  /** 票254 P6：块有无中文（ZhLines 或任一义项 GlossZh）；全无 → 显式“暂无中文释义”行。 */
+  protected blockHasChinese(block: {
+    zhLines: string[]; senses: { glossZh?: string | null }[];
+  }): boolean {
+    return blockHasChineseOf(block);
   }
 
   protected accentVisible(c: NonNullable<ReturnType<typeof this.card>>, acc: DictAccent): boolean {

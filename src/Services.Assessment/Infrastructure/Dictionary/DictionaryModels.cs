@@ -11,6 +11,13 @@ public sealed class DictionaryLookupResponse
     /// <summary>oxford | open</summary>
     public required string Tier { get; init; }
     public required PhoneticsDto Phonetics { get; init; }
+    /// <summary>
+    /// 票254 §3：所点词形的音标（仅词形卡，q != lemma 时填充；词元卡为 null，
+    /// 前端回落词元音标并标注“原形音标”，保证词元卡与基线字节一致）。
+    /// 解析序：牛津词形 Phon → 音频索引该词形 Ipa → null（ECDICT phonetic 属于词条词，
+    /// 绝不用于词形）。
+    /// </summary>
+    public PhoneticsDto? FormPhonetics { get; init; }
     public required List<PosBlockDto> PosBlocks { get; init; }
     public required List<FormDto> Forms { get; init; }
     public required Dictionary<string, AudioOptionDto> Audio { get; init; }
@@ -67,13 +74,13 @@ public sealed class FormAudioDto
 public sealed class AudioOptionDto
 {
     /// <summary>
-    /// oxford | commons（票126 §8.1：呈现 kind 只余真人录音两档）；
-    /// 无真人录音时为 null（序列化省略），以 Available=false 表达（票126 §8.2）。
+    /// oxford | commons | synthetic（票254：合成层加入呈现 kind，须带“AI 朗读”标注，
+    /// 绝不冒充真人录音）；无可用音频时为 null（序列化省略），以 Available=false 表达。
     /// </summary>
     public string? Kind { get; init; }
     /// <summary>音频端点的不透明 key；无真人录音时无。</summary>
     public string? Key { get; init; }
-    /// <summary>true = 有真人录音可播；false = 该口音无真人录音（前端不渲染播放钮，票126 §8.3/§8.4）。</summary>
+    /// <summary>true = 有音频可播（真人录音或标注的合成音频）；false = 该口音无音频（前端不渲染播放钮）。</summary>
     public required bool Available { get; init; }
 }
 
@@ -86,7 +93,7 @@ public sealed class AttributionDto
 
 public sealed class PronounceResponse
 {
-    /// <summary>oxford | commons（票126 §8.1）；链耗尽时为 null（序列化省略）。</summary>
+    /// <summary>oxford | commons | synthetic（票254：合成层加入）；链耗尽时为 null（序列化省略）。</summary>
     public string? Kind { get; init; }
     public string? Key { get; init; }
     /// <summary>

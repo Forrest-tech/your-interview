@@ -159,7 +159,8 @@ describe('TJ-131-3（页签放行 ≠ 词元钮出现）', () => {
   it('模板判别：词元播放钮仍由 accentVisible 门控，不跟随 tabEnabled', () => {
     const card = readSrc('dictionary-card.component.ts');
     const lemmaBtn = card.slice(
-      card.indexOf("@if (phoneticOf(c, acc); as ipa)"),
+      // 票254:phoneticOf 现回 { text, lemmaFallback }，模板变量随之改名（渲染门控意图不变）。
+      card.indexOf("@if (phoneticOf(c, acc); as ph)"),
       card.indexOf('dict-play-btn'),
     );
     expect(lemmaBtn).toContain('@if (accentVisible(c, acc))');
@@ -178,7 +179,8 @@ describe('TJ-131-4（音标行渲染条件跟随新判据）', () => {
 
   it('IPA 文本本身仍由 phoneticOf 渲染（与音频判据无关）', () => {
     const card = readSrc('dictionary-card.component.ts');
-    expect(card).toContain('@if (phoneticOf(c, acc); as ipa)');
+    // 票254:phoneticOf 现回 { text, lemmaFallback }，模板变量随之改名（IPA 仍由 phoneticOf 渲染）。
+    expect(card).toContain('@if (phoneticOf(c, acc); as ph)');
   });
 });
 

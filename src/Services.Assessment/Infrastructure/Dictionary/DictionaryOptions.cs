@@ -19,6 +19,20 @@ public sealed class DictionaryOptions
     public NeuralTtsOptions NeuralTts { get; set; } = new();
 
     /// <summary>
+    /// 票254 D7：合成层总开关（Dictionary:SynthesisEnabled，默认 true）。
+    /// false = 跳过合成层（step 7），无真人录音时诚实无钮，不做任何合成调用。
+    /// </summary>
+    public bool SynthesisEnabled { get; set; } = true;
+
+    /// <summary>
+    /// 票254 D6：合成后端显式选择（Dictionary:SynthesisProvider）。
+    /// 空或 "azure" = Azure 神经语音（默认）；"neuraltts" = Dictionary:NeuralTts 端点。
+    /// NeuralTts 永远不是自动兜底：只有显式配成 "neuraltts" 才走该端点；
+    /// Azure 未配置且未显式配 NeuralTts 时，合成不可用（无钮，不静默切换）。
+    /// </summary>
+    public string SynthesisProvider { get; set; } = "";
+
+    /// <summary>
     /// 数据根目录解析：PackDir 已配置时取其父目录（dict-data/ 布局：oxford/、audio-core/、
     /// audio-cache/ 同级）；否则用当前工作目录下的 dict-data/。
     /// </summary>

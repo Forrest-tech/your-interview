@@ -36,9 +36,12 @@ public sealed class AudioResolver
         public string SourceUrl { get; set; } = "";
         public string License { get; set; } = "";
         public string Kind { get; set; } = "commons";
+        /// <summary>票254 §1：合成条目的 TTS 缓存键（text|voice|speed|language），与音频缓存登记并列记录。</summary>
+        public string TtsKey { get; set; } = "";
     }
 
     private readonly long _cacheCapBytes;
+    private readonly YourInterview.Services.Assessment.Application.SpeechSynthesizer? _synthesizer;
 
     public AudioResolver(
         Lazy<OpenLayerStore> open,
@@ -47,7 +50,8 @@ public sealed class AudioResolver
         IHttpClientFactory httpFactory,
         TimeProvider clock,
         long cacheCapBytes = CacheCapBytes,
-        ILogger<AudioResolver>? logger = null)
+        ILogger<AudioResolver>? logger = null,
+        YourInterview.Services.Assessment.Application.SpeechSynthesizer? synthesizer = null)
     {
         _open = open.Value;
         _oxford = oxford;
@@ -56,6 +60,7 @@ public sealed class AudioResolver
         _clock = clock;
         _cacheCapBytes = cacheCapBytes;
         _logger = logger ?? NullLogger<AudioResolver>.Instance;
+        _synthesizer = synthesizer;
     }
 
     // ---------- 核心包（构建期 manifest 驱动） ----------
@@ -147,10 +152,132 @@ public sealed class AudioResolver
         return _indexByMp3Name.TryGetValue(mp3Name, out var hit) ? hit : null;
     }
 
+    // ---------- 票254 合成键（确定性、无碰撞、可校验） ----------
+
+    /// <summary>
+    /// 票254 §1：合成键 = neural-{word-slug}-{accent}.mp3（.mp3 后缀沿既有 neural- 形态，
+    /// 使缓存查找 key == 文件名）。word-slug 为单射：小写后 [a-z0-9] 直通，其余字符一律
+    /// 转义为 -u{hex}-（hex 为码点小写十六进制），字面连字符自身也被转义，故不同词永不
+    /// 碰撞（“a'b”→ a-u27-b；字面含 -u27- 的词转义后含 -u2d-，绝不与上者相同）。
+    /// </summary>
+    public static string SyntheticKeyFor(string word, string accent)
+    {
+        var sb = new StringBuilder();
+        foreach (var ch in (word ?? "").ToLowerInvariant())
+        {
+            if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) sb.Append(ch);
+            else sb.Append("-u").Append(((int)ch).ToString("x")).Append('-');
+        }
+        if (sb.Length == 0) sb.Append("empty");
+        return $"neural-{sb}-{accent}.mp3";
+    }
+
+    public static string SlugWord(string word)
+    {
+        var key = SyntheticKeyFor(word, "us");
+        return key["neural-".Length..^".us.mp3".Length];
+    }
+
+    public static bool IsSyntheticKey(string key) =>
+        key.StartsWith("neural-", StringComparison.Ordinal)
+        && key.EndsWith(".mp3", StringComparison.Ordinal)
+        && OxfordPackStore.IsBareFileName(key);
+
+    /// <summary>票254 D6：合成后端是否为显式配置的 NeuralTts（其它一切值 = Azure）。</summary>
+    public bool IsNeuralTtsProvider =>
+        string.Equals(_options.SynthesisProvider?.Trim(), "neuraltts", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 票254 §1：Main 面是否可提供带标注的合成能力（仅能力广告，不调合成）。
+    /// NeuralTts：须显式 provider + Enabled + Endpoint；Azure：须注入 synthesizer。
+    /// 密钥缺失不在此预判——lookup 保持廉价同步，缺密钥在播放时走可见失败。
+    /// </summary>
+    public bool IsSynthesisAvailable =>
+        _options.SynthesisEnabled
+        && (IsNeuralTtsProvider
+            ? _options.NeuralTts.Enabled && !string.IsNullOrWhiteSpace(_options.NeuralTts.Endpoint)
+            : _synthesizer is not null);
+
+    /// <summary>
+    /// 票254 §1：合成字节唯一落盘口（serve-time 物化）。调用方（控制器）须先校验
+    /// key == SyntheticKeyFor(word, accent)，不一致不写（防缓存投毒：错词音频顶替正词键）。
+    /// 缓存已存在 → 直接返回（不重调合成）；合成失败 → null（端点回 404，前端走 §4.2 可见失败）。
+    /// </summary>
+    public async Task<string?> MaterializeSyntheticAsync(string key, string word, string accent,
+        Guid userId, CancellationToken ct)
+    {
+        if (!IsSyntheticKey(key)) return null;
+        var cacheDir = _options.ResolveAudioCacheDir();
+        var path = Path.Combine(cacheDir, key);
+        if (File.Exists(path))
+        {
+            TouchCacheEntry(key);
+            return path;
+        }
+        if (!_options.SynthesisEnabled) return null;
+
+        byte[]? bytes;
+        string voice;
+        string language;
+        if (IsNeuralTtsProvider)
+        {
+            bytes = await SynthesizeNeuralBytesAsync(word, ct);
+            voice = _options.NeuralTts.Voice;
+            language = "";
+            if (bytes is null) return null;
+            return WriteSyntheticFile(key, bytes, "neural-tts", $"{word}|{voice}|1.0|{language}");
+        }
+
+        if (_synthesizer is null) return null;
+        // Q2 注：UK 音色名 en-GB-SoniaNeural 为实现期取值，Mac 验收时确认（§6 step 4b：
+        // 若该音色不可用，改走 Azure 默认 en-GB 音色并记注，不阻塞交付）。
+        // 必须显式传音色：DefaultVoiceFor 对 en-GB 无分支会落回 en-US 音色，
+        // 与 xml:lang=en-GB 错配会被 Azure 拒绝（法语案同因）。
+        (voice, language) = accent == "uk" ? ("en-GB-SoniaNeural", "en-GB") : ("en-US-AriaNeural", "en-US");
+        try
+        {
+            bytes = await _synthesizer.SynthesizeAsync(word, voice, 1.0, userId, ct, language);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Dictionary Azure synthesis failed for {Word} ({Accent})", word, accent);
+            return null;
+        }
+        if (bytes is null || bytes.Length == 0) return null;
+        return WriteSyntheticFile(key, bytes, "azure-tts", $"{word}|{voice}|1.0|{language}");
+    }
+
+    private string? WriteSyntheticFile(string key, byte[] bytes, string source, string ttsKey)
+    {
+        try
+        {
+            var cacheDir = _options.ResolveAudioCacheDir();
+            var path = Path.Combine(cacheDir, key);
+            Directory.CreateDirectory(cacheDir);
+            File.WriteAllBytes(path, bytes);
+            RegisterCacheEntry(key, bytes.Length, source, "", "synthetic", ttsKey);
+            EvictIfNeeded(protectedKey: key);
+            return path;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Dictionary synthetic cache write failed for {Key}", key);
+            return null;
+        }
+    }
+
     // ---------- 音频端点主入口 ----------
 
     /// <summary>key 命中任一层 → 返回文件全路径；全落空 → null（端点回 404，前端回落下一档）。</summary>
-    public async Task<string?> GetAudioFileAsync(string key, CancellationToken ct)
+    public Task<string?> GetAudioFileAsync(string key, CancellationToken ct) =>
+        GetAudioFileAsync(key, ct, Guid.Empty, null, null);
+
+    /// <summary>
+    /// 带合成物化参数的重载：word/accent 仅在合成键缓存未命中时用于 serve-time 物化，
+    /// 且须与 key 一致（不一致 → null；控制器对显式不一致回 400）。
+    /// </summary>
+    public async Task<string?> GetAudioFileAsync(string key, CancellationToken ct,
+        Guid userId, string? word, string? accent)
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 200) return null;
 
@@ -169,12 +296,20 @@ public sealed class AudioResolver
         if (!OxfordPackStore.IsBareFileName(key)) return null;
         var cacheDir = _options.ResolveAudioCacheDir();
 
-        // 3) 懒缓存已有文件
+        // 3) 懒缓存已有文件（含已物化的合成文件：无参数即可 serve）
         var cachePath = Path.Combine(cacheDir, key);
         if (File.Exists(cachePath))
         {
             TouchCacheEntry(key);
             return cachePath;
+        }
+
+        // 3b) 票254 §1：合成键 serve-time 物化（在索引拉取之前拦截，避免与索引文件名混淆）
+        if (IsSyntheticKey(key))
+        {
+            if (word is null || accent is null) return null;
+            if (!string.Equals(key, SyntheticKeyFor(word, accent), StringComparison.Ordinal)) return null;
+            return await MaterializeSyntheticAsync(key, word, accent, userId, ct);
         }
 
         // 4) 按 audio-index 懒拉取（3s 超时，SPEC §2.1 第 3 级）
@@ -203,7 +338,7 @@ public sealed class AudioResolver
 
     // ---------- Tier 2 神经 TTS（配置启用时，SPEC §2.1 第 4 级） ----------
 
-    /// <summary>合成并发入懒缓存（kind=neural 标记）；未启用/失败 → null。</summary>
+    /// <summary>合成并发入懒缓存（kind=neural 标记）；未启用/失败 → null。票254 前的旧形态保留（呈现层不用）。</summary>
     public async Task<string?> SynthesizeNeuralAsync(string word, CancellationToken ct)
     {
         var tts = _options.NeuralTts;
@@ -218,6 +353,20 @@ public sealed class AudioResolver
             TouchCacheEntry(key);
             return key;
         }
+        var bytes = await SynthesizeNeuralBytesAsync(word, ct);
+        if (bytes is null) return null;
+        Directory.CreateDirectory(cacheDir);
+        await File.WriteAllBytesAsync(path, bytes, ct);
+        RegisterCacheEntry(key, bytes.Length, tts.Endpoint, "neural-tts", "neural");
+        EvictIfNeeded(protectedKey: key);
+        return key;
+    }
+
+    /// <summary>票254：NeuralTts 纯字节合成（供确定性合成键物化复用；落盘与登记由调用方按 §1 规则做）。</summary>
+    private async Task<byte[]?> SynthesizeNeuralBytesAsync(string word, CancellationToken ct)
+    {
+        var tts = _options.NeuralTts;
+        if (!tts.Enabled || string.IsNullOrWhiteSpace(tts.Endpoint)) return null;
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -230,12 +379,7 @@ public sealed class AudioResolver
             using var resp = await client.SendAsync(req, cts.Token);
             if (!resp.IsSuccessStatusCode) return null;
             var bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token);
-            if (bytes.Length == 0) return null;
-            Directory.CreateDirectory(cacheDir);
-            await File.WriteAllBytesAsync(path, bytes, ct);
-            RegisterCacheEntry(key, bytes.Length, tts.Endpoint, "neural-tts", "neural");
-            EvictIfNeeded(protectedKey: key);
-            return key;
+            return bytes.Length == 0 ? null : bytes;
         }
         catch (Exception)
         {
@@ -276,7 +420,8 @@ public sealed class AudioResolver
         catch (Exception) { /* 账本写失败不阻塞播音 */ }
     }
 
-    private void RegisterCacheEntry(string key, long bytes, string sourceUrl, string license, string kind)
+    private void RegisterCacheEntry(string key, long bytes, string sourceUrl, string license, string kind,
+        string ttsKey = "")
     {
         lock (_lock)
         {
@@ -287,6 +432,7 @@ public sealed class AudioResolver
                 SourceUrl = sourceUrl,
                 License = license,
                 Kind = kind,
+                TtsKey = ttsKey,
             };
             SaveCacheIndex();
         }

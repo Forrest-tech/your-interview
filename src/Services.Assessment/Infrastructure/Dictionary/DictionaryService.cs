@@ -62,22 +62,33 @@ public sealed class DictionaryService
     }
 
     /// <summary>
-    /// 发音链单点解析（票126 §8.1/§8.2  supersede 119 §4.3 注）：只供卡内播放入口；
-    /// 链耗尽 → Available=false（无 kind、无 key），不用 404、更不以 device/neural 兜底。
-    /// 神经 TTS 配置（Dictionary:NeuralTts）本票不动，但 pronounce 呈现不消费其合成结果（S-2）。
+    /// 发音链单点解析（票254 §4，取代票126 S-2 与票128 §7 的 pronounce 语义）：
+    /// 只供卡内播放入口；默认 Main 面（本形真人层 + 带标注合成层），
+    /// humanOnly=true 时为 Shadow 面（本形→词元真人层 1–6，绝不合成）。
+    /// excludeKeys：逗号分隔的本次请求排除键（§4.2 回落重试用；仅当次请求有效；
+    /// 合成键永不可排除）。链耗尽 → Available=false（无 kind、无 key），端点仍回 200。
     /// </summary>
-    public Task<PronounceResponse> PronounceAsync(string word, string accent, CancellationToken ct)
+    public Task<PronounceResponse> PronounceAsync(string word, string accent, CancellationToken ct,
+        string? excludeKeys = null, bool humanOnly = false)
     {
         var q = NormalizeQuery(word);
         if (q.Length == 0) return Task.FromResult(new PronounceResponse { Available = false });
         accent = accent == "uk" ? "uk" : "us";
         var lemma = ResolveLemma(q)?.Lemma ?? q;
-        // 票128 §7：pronounce 是「本形投影全程优先」模式的唯一开启方（且仅 q ≠ lemma 时生效，
-        // 开关内部再核一次）；主端点 audio map 走公开 ResolveAudio、永不开此模式（TB-5⑤）。
-        var option = ResolveAudio(lemma, q, accent, formProjectionFirst: true);
+        var option = ResolvePlayable(q, lemma, accent,
+            humanOnly ? DictionaryAudioSurface.Shadow : DictionaryAudioSurface.Main,
+            ParseExcludeKeys(excludeKeys));
         return Task.FromResult(option is { Available: true, Key: not null }
             ? new PronounceResponse { Kind = option.Kind, Key = option.Key, Available = true }
             : new PronounceResponse { Available = false });
+    }
+
+    private static IReadOnlySet<string>? ParseExcludeKeys(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var set = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                     .Where(s => s.Length > 0).ToHashSet(StringComparer.Ordinal);
+        return set.Count == 0 ? null : set;
     }
 
     // ---------- 归一化（§4.1，顺序固定） ----------
@@ -87,43 +98,58 @@ public sealed class DictionaryService
 
     public sealed record ResolvedLemma(string Lemma, string MatchedVia);
 
-    public ResolvedLemma? ResolveLemma(string q)
+    /// <summary>
+    /// 票254 P4：归元候选全表（去重、保序）。阶段顺序与旧 ResolveLemma 的首命中顺序逐字一致，
+    /// 因此 ResolveLemma = 首候选，行为不变；中文回落链（开放路、牛津补丁）按此表顺序取首个
+    /// 有 ECDICT 译义的候选。连字符内层候选统一记 hyphen-head（与旧 via 口径一致）。
+    /// </summary>
+    internal IReadOnlyList<(string Word, string Via)> ResolveLemmaCandidates(string q)
     {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var list = new List<(string Word, string Via)>();
+        void Add(string? word, string via)
+        {
+            if (!string.IsNullOrEmpty(word) && seen.Add(word))
+                list.Add((word, via));
+        }
         // 第 3 步的前置：Tier 0 在席先查牛津桩（牛津自带归元）
         if (_oxford.IsPresent)
         {
             var target = _oxford.RedirectTarget(q);
             if (target is not null && target != q && HasAny(target))
-                return new ResolvedLemma(target, "redirect");
+                Add(target, "redirect");
         }
         // 第 1 步：整词键（结构层直命中）
         if (Open.WordNet.ContainsKey(q) || _oxford.GetEntry(q) is not null)
-            return new ResolvedLemma(q, "direct");
+            Add(q, "direct");
         // 第 2 步：连字符复合 → 首段重试
         var hyphen = q.IndexOf('-');
         if (hyphen > 0)
-        {
-            var head = q[..hyphen];
-            var inner = ResolveLemma(head);
-            if (inner is not null)
-                return new ResolvedLemma(inner.Lemma, "hyphen-head");
-        }
+            foreach (var (inner, _) in ResolveLemmaCandidates(q[..hyphen]))
+                Add(inner, "hyphen-head");
         // 第 3 步：屈折归元（ECDICT 0: 链接 → WordNet .exc → Morphy 规则）
         if (Open.LemmaByForm.TryGetValue(q, out var byLink) && HasAny(byLink))
-            return new ResolvedLemma(byLink, "ecdict-link");
+            Add(byLink, "ecdict-link");
         if (Open.Exceptions.TryGetValue(q, out var excLemmas))
-        {
             foreach (var lemma in excLemmas)
                 if (HasAny(lemma))
-                    return new ResolvedLemma(lemma, "exc");
-        }
+                    Add(lemma, "exc");
         foreach (var candidate in Morphy.GenerateCandidates(q))
             if (HasAny(candidate))
-                return new ResolvedLemma(candidate, "morphy");
-        // ECDICT 独有词（功能词等）：整词即词元
-        if (Open.Ecdict.ContainsKey(q))
-            return new ResolvedLemma(q, "direct");
-        return null;
+                Add(candidate, "morphy");
+        // ECDICT 独有词（功能词等）：整词即词元（旧流程仅在前面全落空时到此步，
+        // 故只在表仍空时补——否则会抢占 morphy 等更早阶段的首命中）
+        if (list.Count == 0 && Open.Ecdict.ContainsKey(q))
+            Add(q, "direct");
+        return list;
+    }
+
+    public ResolvedLemma? ResolveLemma(string q)
+    {
+        var candidates = ResolveLemmaCandidates(q);
+        return candidates.Count == 0
+            ? null
+            : new ResolvedLemma(candidates[0].Word, candidates[0].Via);
     }
 
     private bool HasAny(string word) =>
@@ -150,6 +176,8 @@ public sealed class DictionaryService
 
     private DictionaryLookupResponse BuildOxfordResponse(string q, string lemma, string via, OxfordEntry entry)
     {
+        // 票254 P4/P6：中文回落与牛津补丁共用归元候选表。
+        var candidates = ResolveLemmaCandidates(q).Select(c => c.Word).ToList();
         var blocks = new List<PosBlockDto>();
         foreach (var block in entry.PosBlocks)
         {
@@ -161,22 +189,30 @@ public sealed class DictionaryService
                     ? new ExampleDto { En = s.Examples[0].En, Zh = s.Examples[0].Zh }
                     : null,
             }).ToList();
+            // P6：任一义项缺中文才补；补丁只取该词性段，逐义项 GlossZh 永不改写、不复制进 ZhLines。
+            var zhLines = senses.Any(s => string.IsNullOrWhiteSpace(s.GlossZh))
+                ? SupplementZhLines(NormalizePosName(block.Pos), candidates)
+                : new List<string>();
             blocks.Add(new PosBlockDto
             {
                 Pos = NormalizePosName(block.Pos),
                 Label = PosLabel(block.Pos),
                 Senses = senses,
                 FoldedCount = Math.Max(0, senses.Count - 2),
-                ZhLines = [],
+                ZhLines = zhLines,
             });
         }
 
-        // 票126 §9.2：牛津包词形 label 经映射表出（neg/short/rareshortform 等英文码不得透传）
-        var forms = MergeForms(entry.Forms.Select(f => (FormLabelOf(f.Label), f.Text)));
-        if (forms.Count == 0)
-            forms = EcdictForms(lemma); // P1：开放层只补牛津缺失的词形
+        // 票254 P6：词形标签并集——牛津标签与 ECDICT exchange 标签同文合并（/ 拼合），
+        // 取代旧「牛津有则全用牛津、无则全用 ECDICT」的二选一（purchases 曾只标第三人称单数）。
+        // 票126 §9.2：牛津包词形 label 经映射表出（neg/short/rareshortform 等英文码不得透传）。
+        var forms = MergeForms(entry.Forms.Select(f => (FormLabelOf(f.Label), f.Text))
+            .Concat(EcdictFormPairs(lemma)));
 
         var audio = BuildAudioMap(lemma, q);
+        // 票254 P6 归因：牛津路此前从不产 ZhLines，非空 ⟺ 本票补丁产出，故可据此推导来源行；
+        // 未补丁的牛津卡来源行保持原样，不新增 DTO 字段。
+        var supplemented = blocks.Any(b => b.ZhLines.Count > 0);
         return new DictionaryLookupResponse
         {
             Query = q,
@@ -184,21 +220,84 @@ public sealed class DictionaryService
             MatchedVia = via,
             Tier = "oxford",
             Phonetics = entry.Phonetics,
+            FormPhonetics = ResolveFormPhonetics(q, lemma, entry),
             PosBlocks = blocks,
             Forms = forms,
             Audio = audio,
             Attribution = new AttributionDto
             {
-                Source = "Oxford Advanced Learner's Dictionary 10 (local pack)",
+                Source = supplemented
+                    ? "Oxford Advanced Learner's Dictionary 10 (local pack) · ECDICT"
+                    : "Oxford Advanced Learner's Dictionary 10 (local pack)",
                 AudioSource = AudioSourceNote(audio, selfKind: "oxford"),
             },
         };
+    }
+
+    /// <summary>票254 P6：取首个有该词性中文段的候选的 ECDICT 译义段（仅该词性）；全无 → 空（不补）。</summary>
+    private List<string> SupplementZhLines(string normalizedPos, IReadOnlyList<string> candidates)
+    {
+        var posKey = normalizedPos switch
+        {
+            "noun" => "n", "verb" => "v", "adjective" => "a", "adverb" => "r",
+            _ => normalizedPos,
+        };
+        foreach (var cand in candidates)
+        {
+            if (!Open.Ecdict.TryGetValue(cand, out var e)) continue;
+            var segs = ParseZhSegments(e.Translation)
+                .Where(s => s.PosKey == posKey).Select(s => s.Text).ToList();
+            if (segs.Count > 0) return [string.Join("；", segs)];
+        }
+        return [];
+    }
+
+    /// <summary>
+    /// 票254 P3：词形本形音标。词元卡（q == lemma）返回 null（前端用词元音标原样）。
+    /// 来源序：牛津词形 Phon → audio-index 该形 Ipa（与 OpenPhonetics 同口音偏好）；
+    /// ECDICT phonetic 永不用（它属于词条词，不属于所点词形）。
+    /// </summary>
+    private PhoneticsDto? ResolveFormPhonetics(string q, string lemma, OxfordEntry entry)
+    {
+        if (q == lemma) return null;
+        var form = entry.Forms.FirstOrDefault(f => f.Text == q);
+        string? uk = form is null ? null : PhonOf(form, "uk");
+        string? us = form is null ? null : PhonOf(form, "us");
+        if (Open.AudioIndex.TryGetValue(q, out var recs))
+        {
+            uk ??= recs.Where(r => r.Accent == "uk" && !string.IsNullOrEmpty(r.Ipa))
+                       .OrderBy(r => r.File.StartsWith("En-uk-", StringComparison.Ordinal) ? 0 : 1)
+                       .Select(r => r.Ipa).FirstOrDefault();
+            us ??= recs.Where(r => r.Accent == "us" && !string.IsNullOrEmpty(r.Ipa))
+                       .OrderBy(r => r.File.StartsWith("En-us-", StringComparison.Ordinal) ? 0 : 1)
+                       .Select(r => r.Ipa).FirstOrDefault();
+        }
+        return uk is null && us is null ? null : new PhoneticsDto { Uk = uk, Us = us };
+
+        static string? PhonOf(OxfordForm f, string accent)
+        {
+            if (f.Phon.TryGetValue(accent, out var p) && !string.IsNullOrWhiteSpace(p)) return p;
+            var kv = f.Phon.FirstOrDefault(kv => string.Equals(kv.Key, accent, StringComparison.OrdinalIgnoreCase));
+            return string.IsNullOrWhiteSpace(kv.Value) ? null : kv.Value;
+        }
     }
 
     private DictionaryLookupResponse BuildOpenResponse(string q, string lemma, string via, OxfordEntry? oxSupplement)
     {
         Open.Ecdict.TryGetValue(lemma, out var ecdict);
         var zhSegments = ParseZhSegments(ecdict?.Translation);
+        // 票254 P4：词元译义为空时按归元候选表顺序取首个有译义的候选（常见于词元本身为屈折形）；
+        // 仍全空则后续分组自然为空，不虚构。现有 POS 归组逻辑对替换后的段表原样生效。
+        if (zhSegments.Count == 0)
+        {
+            foreach (var (cand, _) in ResolveLemmaCandidates(q))
+            {
+                if (cand == lemma) continue;
+                if (!Open.Ecdict.TryGetValue(cand, out var alt)) continue;
+                var altSegs = ParseZhSegments(alt.Translation);
+                if (altSegs.Count > 0) { zhSegments = altSegs; break; }
+            }
+        }
         var blocks = new List<PosBlockDto>();
 
         if (Open.WordNet.TryGetValue(lemma, out var wn))
@@ -306,7 +405,8 @@ public sealed class DictionaryService
 
     // ---------- 词形（P6：由词元 exchange 生成；同文合并标签） ----------
 
-    public List<FormDto> EcdictForms(string lemma)
+    /// <summary>票254 P6：ECDICT exchange 原始词形对（未合并），供牛津标签并集与开放路共用。</summary>
+    public List<(string Label, string Text)> EcdictFormPairs(string lemma)
     {
         if (!Open.Ecdict.TryGetValue(lemma, out var entry)) return [];
         var order = new[] { "p", "d", "3", "i", "s", "r", "t" };
@@ -322,8 +422,10 @@ public sealed class DictionaryService
                 if (c == code && target != lemma)
                     raw.Add((labels[code], target));
         }
-        return MergeForms(raw);
+        return raw;
     }
+
+    public List<FormDto> EcdictForms(string lemma) => MergeForms(EcdictFormPairs(lemma));
 
     public static List<FormDto> MergeForms(IEnumerable<(string Label, string Text)> forms)
     {
@@ -343,52 +445,71 @@ public sealed class DictionaryService
 
     private Dictionary<string, AudioOptionDto> BuildAudioMap(string lemma, string queriedForm) => new()
     {
-        ["us"] = ResolveAudio(lemma, queriedForm, "us"),
-        ["uk"] = ResolveAudio(lemma, queriedForm, "uk"),
+        ["us"] = ResolvePlayable(queriedForm, lemma, "us", DictionaryAudioSurface.Main),
+        ["uk"] = ResolvePlayable(queriedForm, lemma, "uk", DictionaryAudioSurface.Main),
     };
 
+    /// <summary>旧公开名保留：现为 Main 面解析（票254 D1 取代词元回落；词元回落只在 Shadow 面）。</summary>
     public AudioOptionDto ResolveAudio(string lemma, string queriedForm, string accent) =>
-        ResolveAudio(lemma, queriedForm, accent, formProjectionFirst: false);
+        ResolvePlayable(queriedForm, lemma, accent, DictionaryAudioSurface.Main);
 
-    private AudioOptionDto ResolveAudio(string lemma, string queriedForm, string accent, bool formProjectionFirst)
+    /// <summary>
+    /// 票254 §1：发音解析面。调用方选面，服务端绝不从词形推断面——
+    /// Main（卡面主按钮 + pronounce 默认）：本形真人层 1–3 + 第 7 层带标注合成（仅本形合成）；
+    /// Shadow（跟读）：真人层 1–6（本形三层 + 词元三层），永不合成。
+    /// </summary>
+    public enum DictionaryAudioSurface { Main, Shadow }
+
+    /// <summary>
+    /// 票254 §1/§4：发音解析唯一入口（D2）。excludeKeys：本次请求排除的人声键，逐层适用；
+    /// 合成键永不可排除（第 7 层不查排除集）。验收反例（panel 绑定）：本形无人声、
+    /// 词元有人声时，Main 必须返回合成键，绝不返回词元键（以测试证明）。
+    /// </summary>
+    public AudioOptionDto ResolvePlayable(string queriedForm, string lemma, string accent,
+        DictionaryAudioSurface surface, IReadOnlySet<string>? excludeKeys = null)
     {
-        // 票128 §7（D4 本形投影全程优先）：仅 pronounce 在 q ≠ lemma 时开启此模式——
-        // 先按 §4.1 判定链同序同条件把本形投影三层走完，任一层命中即返回本形录音；
-        // 本形全落空才进下方既有整链（词元回落保留，跟读票127 的回落语义靠它）。
-        // 主端点 BuildAudioMap 走公开重载（模式关），输出与基线逐字一致。
-        if (formProjectionFirst && queriedForm != lemma)
+        bool Excluded(string? key) => key is not null && excludeKeys is not null && excludeKeys.Contains(key);
+        // q == lemma 时牛津词头录音即本形录音（投影段只查 Forms，不含词头，须先查）；
+        // q != lemma 时词头录音不属于本形，绝不查（票128 D2 在 Main 面同样适用）。
+        if (queriedForm == lemma)
         {
-            var projected = ResolveFormProjection(lemma, queriedForm, accent);
-            if (projected is not null) return projected;
+            var head = _oxford.GetEntry(lemma);
+            if (head is not null && head.Audio.TryGetValue(accent, out var hk)
+                && _oxford.AudioFileExists(hk) && !Excluded(hk))
+                return new AudioOptionDto { Kind = "oxford", Key = hk, Available = true };
         }
-        // 1) Tier 0 牛津录音（所点屈折形优先于词元）
+        // 1–3) 本形真人层（票128 投影段，逐层适用排除）
+        var form = ResolveFormProjection(lemma, queriedForm, accent, excludeKeys);
+        if (form is not null)
+            return form;
+        if (surface == DictionaryAudioSurface.Main)
+        {
+            // 7) 带标注合成（本形合成；能力广告见 AudioResolver.IsSynthesisAvailable——
+            // 查找期不调合成、不查密钥；物化只在音频端点 serve-time 发生）
+            if (_audio.IsSynthesisAvailable)
+                return new AudioOptionDto
+                {
+                    Kind = "synthetic",
+                    Key = AudioResolver.SyntheticKeyFor(queriedForm, accent),
+                    Available = true,
+                };
+            return new AudioOptionDto { Kind = null, Key = null, Available = false };
+        }
+        // Shadow 4–6) 词元真人层（逐层适用排除；永不合成）
         var entry = _oxford.GetEntry(lemma);
-        if (entry is not null)
-        {
-            string? fileKey = null;
-            if (queriedForm != lemma)
-            {
-                var form = entry.Forms.FirstOrDefault(f => f.Text == queriedForm);
-                if (form is not null && form.AudioKey.TryGetValue(accent, out var fk))
-                    fileKey = fk;
-            }
-            if (fileKey is null && entry.Audio.TryGetValue(accent, out var ek))
-                fileKey = ek;
-            if (fileKey is not null && _oxford.AudioFileExists(fileKey))
-                return new AudioOptionDto { Kind = "oxford", Key = fileKey, Available = true };
-        }
-        // 2) Tier 1 核心包
-        var core = _audio.ResolveCore(lemma, accent)
-            ?? (queriedForm != lemma ? _audio.ResolveCore(queriedForm, accent) : null);
-        if (core is not null)
+        if (entry is not null && entry.Audio.TryGetValue(accent, out var ek)
+            && _oxford.AudioFileExists(ek) && !Excluded(ek))
+            return new AudioOptionDto { Kind = "oxford", Key = ek, Available = true };
+        var core = _audio.ResolveCore(lemma, accent);
+        if (core is not null && !Excluded(core.Value.Key))
             return new AudioOptionDto { Kind = "commons", Key = core.Value.Key, Available = true };
-        // 3) Tier 1 懒缓存（audio-index 命中即可，端点负责拉取落盘）
-        var rec = PickIndexRec(lemma, accent) ?? (queriedForm != lemma ? PickIndexRec(queriedForm, accent) : null);
+        var rec = PickIndexRec(lemma, accent);
         if (rec is not null)
-            return new AudioOptionDto { Kind = "commons", Key = AudioResolver.Mp3FileName(rec), Available = true };
-        // 票126 §8.1（S-2 关掉机器兜底）：链到此为止。
-        // Tier 2 神经 TTS 配置项不动，但词典呈现不消费（呈现 kind 只余 oxford/commons）；
-        // Tier 3 设备 TTS 整级移除。耗尽即无发音：Available=false、无 kind、无 key（§8.2）。
+        {
+            var indexKey = AudioResolver.Mp3FileName(rec);
+            if (!Excluded(indexKey))
+                return new AudioOptionDto { Kind = "commons", Key = indexKey, Available = true };
+        }
         return new AudioOptionDto { Kind = null, Key = null, Available = false };
     }
 
@@ -410,21 +531,28 @@ public sealed class DictionaryService
     /// 不许平行再写一份。命中 → 该条录音的呈现；全落空 → null。
     /// 全程只读内存结构与文件存在性，零网络（§4.4）。
     /// </summary>
-    private AudioOptionDto? ResolveFormProjection(string lemma, string formText, string accent)
+    private AudioOptionDto? ResolveFormProjection(string lemma, string formText, string accent,
+        IReadOnlySet<string>? excludeKeys = null)
     {
+        bool Excluded(string? key) => key is not null && excludeKeys is not null && excludeKeys.Contains(key);
         var entry = _oxford.GetEntry(lemma);
         if (entry is not null)
         {
             var form = entry.Forms.FirstOrDefault(f => f.Text == formText);
-            if (form is not null && form.AudioKey.TryGetValue(accent, out var fk) && _oxford.AudioFileExists(fk))
+            if (form is not null && form.AudioKey.TryGetValue(accent, out var fk) && _oxford.AudioFileExists(fk)
+                && !Excluded(fk))
                 return new AudioOptionDto { Kind = "oxford", Key = fk, Available = true };
         }
         var core = _audio.ResolveCore(formText, accent);
-        if (core is not null)
+        if (core is not null && !Excluded(core.Value.Key))
             return new AudioOptionDto { Kind = "commons", Key = core.Value.Key, Available = true };
         var rec = PickIndexRec(formText, accent);
         if (rec is not null)
-            return new AudioOptionDto { Kind = "commons", Key = AudioResolver.Mp3FileName(rec), Available = true };
+        {
+            var key = AudioResolver.Mp3FileName(rec);
+            if (!Excluded(key))
+                return new AudioOptionDto { Kind = "commons", Key = key, Available = true };
+        }
         return null;
     }
 
@@ -479,6 +607,7 @@ public sealed class DictionaryService
                 {
                     "oxford" => "Oxford Advanced Learner's Dictionary 10 (local pack)",
                     "commons" => "Wikimedia Commons",
+                    "synthetic" => "AI 朗读",
                     _ => null,
                 };
             }

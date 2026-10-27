@@ -54,9 +54,12 @@ public class DictionaryMergeTests
             Assert.Equal("牛津义一", block.Senses[0].GlossZh);
             Assert.Equal("Oxford example.", block.Senses[0].Example?.En);
             Assert.Equal(1, block.FoldedCount); // 3 条,呈现上限 2 → 折叠 1
-            Assert.Empty(block.ZhLines); // 牛津中文随义项,不走 ECDICT 中文行
+            // 票254 P6 迁移：义项二、三缺 GlossZh → 动词块补 ECDICT 动词段“消失不见”；
+            // 义项一自带 GlossZh 永不改写（上断言仍钉“牛津义一”），结构仍纯牛津。
+            Assert.Equal(["消失不见"], block.ZhLines);
             Assert.Equal("/ˈɡlɔːp/", r.Phonetics.Uk);
             Assert.Contains("Oxford", r.Attribution.Source);
+            Assert.Contains("ECDICT", r.Attribution.Source);
         }
         finally { Directory.Delete(root, recursive: true); }
     }
@@ -69,9 +72,13 @@ public class DictionaryMergeTests
         {
             var svc = BuildService(Store(), OxfordPack(root, withAudio: false)).Service;
             var r = svc.Lookup("glorp")!;
-            var form = Assert.Single(r.Forms);
-            Assert.Equal("glorped", form.Text);
-            Assert.Equal("过去式/过去分词", form.Label);
+            // 票254 P6 迁移：词形行不再“牛津独占”——牛津与 ECDICT 取并集，同文标签合并。
+            // glorped：牛津两标签已合并；glorps/glorping：仅 ECDICT 有，进入并集。
+            Assert.Equal(3, r.Forms.Count);
+            var glorped = Assert.Single(r.Forms, f => f.Text == "glorped");
+            Assert.Equal("过去式/过去分词", glorped.Label);
+            Assert.Equal("第三人称单数", Assert.Single(r.Forms, f => f.Text == "glorps").Label);
+            Assert.Equal("现在分词", Assert.Single(r.Forms, f => f.Text == "glorping").Label);
         }
         finally { Directory.Delete(root, recursive: true); }
     }

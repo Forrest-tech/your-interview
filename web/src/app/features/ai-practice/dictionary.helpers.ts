@@ -163,9 +163,9 @@ export function isRovingKey(key: string): boolean {
     || key === 'ArrowUp' || key === 'Home' || key === 'End';
 }
 
-/** 与后端 schema 对齐的音频选项(单个口音;票126 §8.1:kind 只余真人录音两档,无录音时为 null)。 */
+/** 与后端 schema 对齐的音频选项(单个口音;票254 起 kind 含带标注合成档，available 含合成能力)。 */
 export interface DictAudioOption {
-  kind?: 'oxford' | 'commons' | null;
+  kind?: 'oxford' | 'commons' | 'synthetic' | null;
   key?: string | null;
   available: boolean;
 }
@@ -173,7 +173,45 @@ export interface DictAudioOption {
 export type DictAccent = 'us' | 'uk';
 
 /**
- * 口音播放钮渲染判定:available(有真人录音)的口音才渲染播放钮。
+ * 票254 §4 卡内播放状态（PracticeDictionary.playStatus 的值类型，卡组件只读）。
+ * playedKind/playedAccent 记录最近一次成功播放，供合成标签切换（回落合成后钮旁出“AI 朗读”）。
+ */
+export interface DictPlayStatus {
+  phase: 'idle' | 'synthesizing' | 'error';
+  targetType: 'accent' | 'form' | null;
+  targetAccent: DictAccent | null;
+  targetForm: string | null;
+  word: string | null;
+  accent: DictAccent | null;
+  failedKeys: string[];
+  playedKind: 'oxford' | 'commons' | 'synthetic' | null;
+  playedAccent: DictAccent | null;
+}
+
+export const IDLE_DICT_PLAY_STATUS: DictPlayStatus = {
+  phase: 'idle', targetType: null, targetAccent: null, targetForm: null,
+  word: null, accent: null, failedKeys: [], playedKind: null, playedAccent: null,
+};
+
+/**
+ * 票254 P3 词头显示规则：所点词形小写后等于词元 → 显示词元原样（句首大写点击不再变体）；
+ * 否则显示所点词形原文（大小写原样）。纯函数，Jest 钉住。
+ */
+export function displayHeadword(displayForm: string, lemma: string): string {
+  return displayForm.toLowerCase() === lemma.toLowerCase() ? lemma : displayForm;
+}
+
+/** 票254 P6：词性块有无中文——ZhLines 任一非空，或任一义项有 GlossZh。 */
+export function blockHasChinese(block: {
+  zhLines: string[];
+  senses: { glossZh?: string | null }[];
+}): boolean {
+  return block.zhLines.length > 0
+    || block.senses.some((s) => !!s.glossZh && s.glossZh.trim().length > 0);
+}
+
+/**
+ * 口音播放钮渲染判定:available（真人录音或带标注合成能力）的口音才渲染播放钮。
  * 两口音都不可用 → 不渲染任何播放钮,卡上只出「暂无发音」状态文案(票126 §8.3,S-2)。
  */
 export function accentButtonVisible(
@@ -304,7 +342,7 @@ export function dictPopupGeometry(input: DictPopupGeometryInput): DictPopupGeome
 /** 词典卡状态机(组件与卡共用):加载 / 命中 / 负结果 / 网络失败。 */
 export type DictCardState =
   | { status: 'loading'; query: string }
-  | { status: 'ok'; query: string; card: DictCardData }
+  | { status: 'ok'; query: string; card: DictCardData; displayForm: string }
   | { status: 'notfound'; query: string }
   | { status: 'error'; query: string };
 
@@ -315,6 +353,8 @@ export interface DictCardData {
   matchedVia: string;
   tier: 'oxford' | 'open';
   phonetics: { uk?: string | null; us?: string | null };
+  /** 票254 P3:所点词形本形音标（仅词形卡有；词元卡为 null，前端回落词元音标并标“原形音标”）。 */
+  formPhonetics?: { uk?: string | null; us?: string | null } | null;
   posBlocks: {
     pos: string;
     label: string;

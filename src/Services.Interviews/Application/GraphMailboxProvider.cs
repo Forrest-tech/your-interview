@@ -126,6 +126,19 @@ public sealed class GraphMailboxProvider(HttpClient http) : IMailboxProvider
         return parsed with { RawMimeBase64Url = raw };
     }
 
+    public async Task<string?> GetAccountEmailAsync(string accessToken, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, $"{GraphBase}/me?$select=mail,userPrincipalName");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var resp = await http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        var root = doc.RootElement;
+        return root.TryGetProperty("mail", out var m) && !string.IsNullOrEmpty(m.GetString())
+            ? m.GetString()
+            : root.TryGetProperty("userPrincipalName", out var u) ? u.GetString() : null;
+    }
+
     public async Task<byte[]?> GetAttachmentBytesAsync(string accessToken, string providerMessageId,
         string providerAttachmentId, CancellationToken ct)
     {
@@ -141,7 +154,7 @@ public sealed class GraphMailboxProvider(HttpClient http) : IMailboxProvider
     }
 
     /// <summary>整组拉取：conversationId eq（Graph 的 conversation 等价于 Gmail thread）。</summary>
-    public async Task<IReadOnlyList<MailboxMessage>> GetConversationAsync(string accessToken, string conversationId,
+    public async Task<IReadOnlyList<MailboxMessage>> GetThreadAsync(string accessToken, string conversationId,
         CancellationToken ct)
     {
         var list = new List<MailboxMessage>();
@@ -192,7 +205,8 @@ public sealed class GraphMailboxProvider(HttpClient http) : IMailboxProvider
         catch { return null; }
     }
 
-    private static MailboxMessage? ParseGraphMessage(JsonElement root)
+    /// <summary>票 240：公开静态以便测试直接断言（227 同款先例；程序集无 InternalsVisibleTo）。</summary>
+    public static MailboxMessage? ParseGraphMessage(JsonElement root)
     {
         var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
         if (id is null) return null;

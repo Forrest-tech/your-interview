@@ -146,6 +146,16 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
         return full with { RawMimeBase64Url = raw };
     }
 
+    public async Task<string?> GetAccountEmailAsync(string accessToken, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, "https://openidconnect.googleapis.com/v1/userinfo");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var resp = await http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.TryGetProperty("email", out var e) ? e.GetString() : null;
+    }
+
     public async Task<byte[]?> GetAttachmentBytesAsync(string accessToken, string providerMessageId,
         string providerAttachmentId, CancellationToken ct)
     {
@@ -220,7 +230,8 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
         return doc.RootElement.TryGetProperty("raw", out var raw) ? raw.GetString() : null;
     }
 
-    private static MailboxMessage? ParseFullMessage(JsonElement root)
+    /// <summary>票 240：公开静态以便测试直接断言（227 同款先例；程序集无 InternalsVisibleTo）。</summary>
+    public static MailboxMessage? ParseFullMessage(JsonElement root)
     {
         var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
         if (id is null) return null;

@@ -79,7 +79,17 @@ python3 scripts/logto-migrate/setup-m2m.py
 - 投递 URL（compose 内 Logto 容器视角）：`http://identity:8080/api/webhooks/logto/user-created`
   与 `http://identity:8080/api/webhooks/logto/suspension-status-updated`（docker DNS 直达；
   若 Logto 在 compose 外，则改走网关 `http://<gateway-host>:5200/api/webhooks/logto/...`）。
-- 签名密钥：Console webhook 详情页的 Signing Key → `.env` 的 `LOGTO_WEBHOOK_SIGNING_KEY`。
+- 签名密钥（票252 B8-A）：Logto 1.45.0 每个 hook 自动生成不同的 Signing Key 且拒收
+  客户端指定（PATCH signingKey → 422），所以 Identity 验签持 key **列表**而非一把 key：
+  四个 hook 的详情页 Signing Key 分别填 `.env` 的 `LOGTO_WEBHOOK_SIGNING_KEY_0…_3`
+  （compose 映射为 `Logto__Management__WebhookSigningKeys__0…_3`）；验签逐 key 试
+  HMAC-SHA256 hex + 恒时比较，任一通过即放行，全不通过仍 401。
+  **显式规则：列表非空时全量取代单 key**——迁移到列表时必须把四个 hook 的 key 都列入，
+  漏列的 hook 会 401；列表全空时回落到旧单 key `LOGTO_WEBHOOK_SIGNING_KEY`，旧部署
+  不改配置仍能工作。**Panel 接受的残留（不埋）：逐 key 试不绑定 key 与事件类型，
+  故单把 key 泄露即可伪造任意事件类型（含 User.Deleted → R2 驳回邮件）；hook 重建后
+  新 key 未及时入列时，该 hook 先 401、R2 邮件等扫表兜底。轮换纪律：新 key 及时入列、
+  stale key 及时移除、改配置后重启 Identity。单测：`LogtoWebhookMultiKeyTests`。
 - 投递语义：接收端只有置停用 + 打 `pending` 标记 + 写镜像行三步都成功才回 2xx；
   任一步失败回 5xx，投递方按其策略有限次重试（重试次数不写死——Logto 公开文档未给
   出固定次数，设计不依赖具体次数：快速 2xx + 幂等 + 扫表兜底）。
@@ -327,6 +337,8 @@ pending + 现态已验证 + 现态未停用时翻转（事件本身就是“验�
 - 只放 compose `.env`（gitignored），绝不硬编码、绝不入库。
 - 轮换：M2M secret 在 Console 重新生成 → 更新 `.env` → 重启 Identity；
   webhook 签名密钥在 Console webhook 设置里重新生成 → 更新 `.env` → 重启 Identity；
+  （票252：hook 重建会生成新 key，须把新 key 填入 `LOGTO_WEBHOOK_SIGNING_KEY_<序号>`
+  对应位并移除旧 key，列表未更新期间该 hook 的投递先 401、R2 邮件等扫表兜底）；
   轮换窗口由 Logto 投递有限次重试 + 接收端 503 语义 + 扫表兜底覆盖。
 - 信任边界：`customData.approval` 只允许服务端写——Management API key 持有者（Identity 后端）
   与 Console 管理员；最终用户经任何公开接口（sign-in experience、用户自助 API）都写不到

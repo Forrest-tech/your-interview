@@ -63,6 +63,10 @@
   `IsActive=false`（单测 `Import_ReimportSet_PendingAndSuspended_AllInactive`）：☐。
 - [ ] 坏签名 webhook 被拒（round-15：坏签名/缺签名一律 401 且门不执行；
   单测 `LogtoWebhookControllerTests`，含合法签名正向对照）：☐。
+- [ ] 多 key 验签（票252 B8-A，收敛前核查）：四个 hook 的 Signing Key 全数列入
+  `LOGTO_WEBHOOK_SIGNING_KEY_0…_3`（列表非空时全量取代单 key，漏列的 hook 会 401）；
+  四个端点各发一通真实投递，全部 2xx 而非 401（单测 `LogtoWebhookMultiKeyTests` +
+  `LogtoWebhookControllerTests` 多 key 用例）：☐。
 - [ ] 邀请制端到端（round-15，实测）：发邀请 → 验证 → 待审批 → 批准 → 登录，全程通
   （邀请制本身不等同于批准；需真实 SMTP + Console 操作，沙盒无法代测）：☐。
 - [ ] 停用双写失败注入（round-15：Logto 侧停用调用失败 → 旧侧不提交 + 明示错误 +

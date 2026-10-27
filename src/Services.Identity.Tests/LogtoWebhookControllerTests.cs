@@ -45,10 +45,15 @@ public sealed class LogtoWebhookControllerTests
 
     private static LogtoWebhookController Controller(
         ILogtoManagementClient client, ILogtoMappingStore store, ILogtoSweepAudit audit)
+        => Controller(client, store, audit, ConfiguredOptions());
+
+    private static LogtoWebhookController Controller(
+        ILogtoManagementClient client, ILogtoMappingStore store, ILogtoSweepAudit audit,
+        LogtoManagementOptions options)
     {
         var gate = new LogtoApprovalGate(client, store, audit,
-            Options.Create(ConfiguredOptions()), NullLogger<LogtoApprovalGate>.Instance);
-        return new LogtoWebhookController(gate, Options.Create(ConfiguredOptions()), new LogtoGateHealth());
+            Options.Create(options), NullLogger<LogtoApprovalGate>.Instance);
+        return new LogtoWebhookController(gate, Options.Create(options), new LogtoGateHealth());
     }
 
     private static void SetRequest(LogtoWebhookController c, byte[] body, string? signature)
@@ -63,6 +68,78 @@ public sealed class LogtoWebhookControllerTests
     {
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(SigningKey));
         return Convert.ToHexString(hmac.ComputeHash(body)).ToLowerInvariant();
+    }
+
+    private static string SignWith(string key, byte[] body)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
+        return Convert.ToHexString(hmac.ComputeHash(body)).ToLowerInvariant();
+    }
+
+    private static LogtoManagementOptions MultiKeyOptions() => new()
+    {
+        Endpoint = "http://logto:3001",
+        M2mClientId = "test-m2m",
+        M2mClientSecret = "test-secret",
+        WebhookSigningKeys = ["key-hook-created", "key-hook-deleted"],
+    };
+
+    // 票252(B8-A):控制器层 —— 列表中第二个 hook 的 key 签名也能放行(此前单 key 下必 401)
+    [Fact]
+    public async Task UserCreated_SignedBySecondListKey_ReachesGate_ReturnsOk()
+    {
+        var client = Substitute.For<ILogtoManagementClient>();
+        var store = Substitute.For<ILogtoMappingStore>();
+        var audit = Substitute.For<ILogtoSweepAudit>();
+        var legacy = Guid.NewGuid();
+        client.GetUserAsync("u1", Arg.Any<CancellationToken>()).Returns(
+            new LogtoUserDto("u1", false,
+                new JsonObject { ["approval"] = "migrated", ["legacyUserId"] = legacy.ToString() },
+                DateTimeOffset.UtcNow, "u@test.local", true, DateTimeOffset.UtcNow));
+        var c = Controller(client, store, audit, MultiKeyOptions());
+        var body = Encoding.UTF8.GetBytes("""{"event":"User.Created","data":{"id":"u1"}}""");
+        SetRequest(c, body, SignWith("key-hook-deleted", body));
+
+        var result = await c.UserCreated(default);
+
+        result.Should().BeOfType<OkResult>();
+        await client.Received(1).GetUserAsync("u1", Arg.Any<CancellationToken>());
+    }
+
+    // 票252(B8-A):列表中任一 key 都不匹配 → 401,门不执行
+    [Fact]
+    public async Task UserCreated_SignedByUnknownKey_Unauthorized_AndGateNeverRuns()
+    {
+        var client = Substitute.For<ILogtoManagementClient>();
+        var store = Substitute.For<ILogtoMappingStore>();
+        var audit = Substitute.For<ILogtoSweepAudit>();
+        var c = Controller(client, store, audit, MultiKeyOptions());
+        var body = Encoding.UTF8.GetBytes("""{"event":"User.Created","data":{"id":"u1"}}""");
+        SetRequest(c, body, SignWith("key-unknown", body));
+
+        var result = await c.UserCreated(default);
+
+        result.Should().BeOfType<UnauthorizedObjectResult>();
+        await client.DidNotReceiveWithAnyArgs().GetUserAsync(default!, default);
+    }
+
+    // 票252(B8-A):列表与单 key 全空 → WebhookConfigured 为假,接收端 503(投递方重发)
+    [Fact]
+    public async Task UserCreated_NoKeysConfigured_ReturnsServiceUnavailable()
+    {
+        var c = Controller(Substitute.For<ILogtoManagementClient>(),
+            Substitute.For<ILogtoMappingStore>(), Substitute.For<ILogtoSweepAudit>(),
+            new LogtoManagementOptions
+            {
+                Endpoint = "http://logto:3001",
+                M2mClientId = "test-m2m",
+                M2mClientSecret = "test-secret",
+            });
+        SetRequest(c, Encoding.UTF8.GetBytes("""{"event":"User.Created","data":{"id":"u1"}}"""), "deadbeef");
+
+        var result = await c.UserCreated(default);
+
+        result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(503);
     }
 
     [Fact] // round-15(1):坏签名 → 401,门不执行

@@ -133,7 +133,9 @@ public sealed class LogtoWebhookController(
         await Request.Body.CopyToAsync(ms, ct);
         var raw = ms.ToArray();
         var signature = Request.Headers[LogtoWebhookSignature.HeaderName].FirstOrDefault();
-        if (!LogtoWebhookSignature.Verify(options.Value.WebhookSigningKey, raw, signature))
+        // 票252(B8-A):逐 key 试,任一 hook 的 key 通过即放行(单 key 旧配置由
+        // EffectiveWebhookSigningKeys 回落为单元素列表,行为与票241 一致)。
+        if (!LogtoWebhookSignature.VerifyAny(options.Value.EffectiveWebhookSigningKeys(), raw, signature))
             return (false, [], Unauthorized(new { error = "webhook 签名校验失败" }));
         // 验签通过即记一次 webhook 心跳(健康端点据此判断断流;失败投递不记)。
         health.RecordWebhookReceived();

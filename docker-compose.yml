@@ -132,6 +132,13 @@ services:
       Logto__Management__M2mClientId: "${LOGTO_M2M_CLIENT_ID:-}"
       Logto__Management__M2mClientSecret: "${LOGTO_M2M_CLIENT_SECRET:-}"
       Logto__Management__WebhookSigningKey: "${LOGTO_WEBHOOK_SIGNING_KEY:-}"
+      # ★ 票252(B8-A):Logto 每 hook 一把签名 key,单 key 只够一个 hook;四个 hook
+      # 须用索引形列表,列全各 hook 的 key(列表非空时全量取代上行单 key,漏列的
+      # hook 会 401;空项自动忽略)。填法:.env 里写 LOGTO_WEBHOOK_SIGNING_KEY_0/_1/_2/_3。
+      Logto__Management__WebhookSigningKeys__0: "${LOGTO_WEBHOOK_SIGNING_KEY_0:-}"
+      Logto__Management__WebhookSigningKeys__1: "${LOGTO_WEBHOOK_SIGNING_KEY_1:-}"
+      Logto__Management__WebhookSigningKeys__2: "${LOGTO_WEBHOOK_SIGNING_KEY_2:-}"
+      Logto__Management__WebhookSigningKeys__3: "${LOGTO_WEBHOOK_SIGNING_KEY_3:-}"
       Logto__Management__GateLaunchedAt: "${LOGTO_GATE_LAUNCHED_AT:-}"
       # 票241 旧 Identity 发行开关(Auth 节):灰度开始时 LegacyRegistrationEnabled=false
       # (旧 POST /api/auth/register 服务端 410);收敛日 IssuanceEnabled=false

@@ -29,6 +29,12 @@ public sealed class Ticket249LogoTests
     [InlineData("Škoda", "skoda")]
     [InlineData("Müller", "muller")]
     [InlineData("Łódź", "lodz")]
+    [InlineData("Café", "cafe")]
+    [InlineData("Beyoncé", "beyonce")]
+    [InlineData("São Paulo", "saopaulo")]
+    [InlineData("Žilina", "zilina")]
+    // æ 在上游 NFD 下不分解、被 /[^a-z\d]/ 剔除,故此处同样丢掉(不是 ae):
+    [InlineData("Æsop", "sop")]
     [InlineData("F#", "f")]
     [InlineData("Node.js", "nodedotjs")]
     [InlineData("Ferrari N.V.", "ferrarindotvdot")]

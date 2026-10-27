@@ -6,6 +6,7 @@ using YourInterview.BuildingBlocks.Hosting;
 using YourInterview.BuildingBlocks.Persistence;
 using YourInterview.Services.Identity.Application.Abstractions;
 using YourInterview.Services.Identity.Application.Auth;
+using YourInterview.Services.Identity.Application.Logto;
 using YourInterview.Services.Identity.Infrastructure.Persistence;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Identity.Infrastructure.Services;
@@ -55,6 +56,16 @@ builder.AddServiceDefaults(ServiceName, services =>
     services.Configure<GoogleOAuthOptions>(builder.Configuration.GetSection(GoogleOAuthOptions.SectionName));
     services.AddScoped<GoogleOAuthService>();
     services.AddHttpClient(GoogleOAuthService.HttpClientName);
+
+    // ---------- 票241:Logto 审批门(未配凭据时控制器回 503、扫表不启动,旧登录一字不动) ----------
+    services.Configure<LogtoManagementOptions>(
+        builder.Configuration.GetSection(LogtoManagementOptions.SectionName));
+    services.AddHttpClient(LogtoManagementClient.HttpClientName);
+    services.AddScoped<ILogtoManagementClient, LogtoManagementClient>();
+    services.AddScoped<ILogtoMappingStore, LogtoMappingStore>();
+    services.AddScoped<ILogtoSweepAudit, LogtoSweepAudit>();
+    services.AddScoped<LogtoApprovalGate>();
+    services.AddHostedService<LogtoApprovalReconciliationService>();
 
     // ---------- JWT 认证 ----------
     // 校验参数唯一定义在 ServiceDefaults(ARC-09/票18):其 Issuer/Audience 兜底串与 JwtOptions

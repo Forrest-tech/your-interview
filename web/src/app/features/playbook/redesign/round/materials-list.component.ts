@@ -37,7 +37,101 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
       <p class="empty">{{ t('pb.v2.m.empty') }}</p>
     }
     @for (g of displayGroups(); track g.key) {
-      <!-- 票210：邮件组头移除（原主题全称 + 封数正是用户指出的信息过载处），thread 数改由各邮件卡右上 pill 承载；非邮件组本就无组头，不受影响。 -->
+      <!-- 票210组头移除口径不变；票236：多封组改渲染 thread 容器（见容器分支注释），单封组仍无组头、仍走旧 email-card；“2 in thread” pill 随旧单卡头行取消（单封组本就不渲染）。 -->
+      @if (g.items.length > 1) {
+        <!-- 票236：真实邮件式 thread 容器 —— 同 threadKey 只渲染一个容器（容器头 + 消息栏 + 展开体），
+             组内各封按收件日正序（displayGroups 已排）；点容器头开合整组，点开后最新一封默认全展开，
+             旧封默认收起为一行栏、点栏内联展开/收起；不做 Expand all/Collapse all。
+             字段归属全部封级：容器头只放归一化主题 + 封数 + 最新一封发件人/收件日（最新封有链接时附芯片），
+             interviewAt/format/Received/Category/截图区一律只在各封展开体内。 -->
+        <section class="thread" data-testid="material-thread">
+          <div class="th-row">
+            <button type="button" class="thread-head" (click)="toggleThread(g)"
+                    [attr.aria-expanded]="isThreadOpen(g)">
+              <span class="th-subject">{{ g.subject }}</span>
+              <span class="th-count">{{ fmt('pb.v2.c.threadCount', { n: g.items.length }) }}</span>
+              <span class="th-latest">{{ latestLabel(g) }}</span>
+              <span class="chev" [class.open]="isThreadOpen(g)">›</span>
+            </button>
+            @if (meetingLinkOf(latestOf(g)); as link) {
+              <a class="join-chip" [href]="link" target="_blank" rel="noopener"
+                 [attr.aria-label]="t('pb.br.countdown.join')">{{ t('pb.br.countdown.join') }}</a>
+            }
+          </div>
+          @if (isThreadOpen(g)) {
+            <div class="th-msgs">
+              @for (a of g.items; track a.id) {
+                <div class="th-msg">
+                  <button type="button" class="msg-bar" (click)="toggleMessage(a)"
+                          [attr.aria-expanded]="isMessageOpen(a)">
+                    <span class="avatar sm">{{ senderInitial(a) }}</span>
+                    @if (senderName(a)) { <span class="msg-from">{{ senderName(a) }}</span> }
+                    <span class="msg-date">{{ displayDate(a) }}</span>
+                    <span class="msg-title">{{ shortTitle(a) }}</span>
+                    <span class="chev" [class.open]="isMessageOpen(a)">›</span>
+                  </button>
+                  @if (isMessageOpen(a)) {
+                    <div class="msg-open">
+                      <div class="eo-sender">
+                        <span class="avatar sm">{{ senderInitial(a) }}</span>
+                        @if (senderName(a)) { <span class="eo-from">{{ senderName(a) }}</span> }
+                        <span class="eo-recv">{{ t('pb.v2.m.fReceived') }} {{ displayDate(a) }}</span>
+                        @if (metaOf(a)?.category) { <span class="cat-pill">{{ categoryLabel(metaOf(a)!.category!) }}</span> }
+                      </div>
+                      <div class="eo-title">{{ shortTitle(a) }}</div>
+                      @if (metaOf(a); as m) {
+                        <dl class="parsed2">
+                          @if (m.interviewAt) { <div class="prow"><dt>{{ t('pb.v2.m.fWhen') }}</dt><dd>{{ m.interviewAt }}</dd></div> }
+                          @if (m.format) { <div class="prow"><dt>{{ t('pb.v2.m.fFormat') }}</dt><dd>{{ formatLabel(t, m.format) }}</dd></div> }
+                          @if (interviewersOf(a)) { <div class="prow"><dt>{{ t('pb.v2.m.fInterviewers') }}</dt><dd>{{ interviewersOf(a) }}</dd></div> }
+                          @if (meetingLinkOf(a); as link) { <div class="prow"><dt>{{ t('pb.v2.r.meetingLink') }}</dt><dd><a [href]="link" target="_blank" rel="noopener">{{ t('pb.v2.r.openLink') }}</a></dd></div> }
+                        </dl>
+                      }
+                      @if (bodyState(a); as eb) {
+                        @if (eb.loading) { <p class="body-loading">{{ t('pb.v2.d.loading') }}</p> }
+                        @else if (eb.error) { <p class="body-loading">{{ t('pb.v2.m.bodyFailed') }}</p> }
+                        @else if (!eb.text || !eb.seg) { <p class="body-loading">{{ t('pb.v2.m.noBody') }}</p> }
+                        @else if (eb.seg.fallback) { <pre class="body-text-full">{{ eb.text }}</pre> }
+                        @else {
+                          <div class="timeline">
+                            @for (s of eb.seg.timeline; track $index) {
+                              <div class="tl-node">
+                                <span class="tl-dot"></span>
+                                <div class="tl-main">
+                                  <div class="tl-meta">{{ s.dateTime }} · {{ s.meetingCard ? t('pb.v2.m.meetingCard') : s.sender }}</div>
+                                  <pre class="tl-body">{{ s.body }}</pre>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                          @for (r of eb.seg.remainder; track $index) {
+                            <pre class="tl-rest">{{ r.body }}</pre>
+                          }
+                        }
+                      } @else {
+                        <!-- 票236：正文区兜底（与单卡同款 bodyState 机制，不另设第二套）—— entry 缺失时渲染 loading 态，取数到后自动进终态分支。 -->
+                        <p class="body-loading">{{ t('pb.v2.d.loading') }}</p>
+                      }
+                      @if (metaOf(a)?.screenshotAssetId) {
+                        <div class="shot-box">
+                          <div class="shot-head">
+                            <span class="shot-titles">
+                              <span class="shot-title">{{ t('pb.v2.m.shotTitle') }}</span>
+                              <span class="shot-sub">{{ t('pb.v2.m.shotSub') }}</span>
+                            </span>
+                            <button type="button" class="mini-btn" (click)="openShotDialog(a)">{{ t('pb.v2.m.viewShot') }}</button>
+                          </div>
+                        </div>
+                      }
+                      @if (a.integrityStatus === 'Missing') { <span class="lost">{{ t('pb.v2.m.fileLost') }}</span> }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </section>
+      } @else {
       @for (a of g.items; track a.id) {
         @if (isEmailAsset(a)) {
           <article class="mat email-card" data-testid="material-item">
@@ -47,10 +141,11 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                  头部行右侧渲染 Join meeting 芯片；芯片是头部按钮的兄弟元素（不是 button 的
                  子元素），点击直达会议、不触发展开/收起。
                  票225：截图不再卡片内 inline 展开（推翻 210 的 inline 选择，用户新指令），
-                 点 View screenshot 改开 MatDialog 弹窗看大图，弹窗内带 −/百分比/＋ 缩放。 -->
+                 点 View screenshot 改开 MatDialog 弹窗看大图，弹窗内带 −/百分比/＋ 缩放。
+                 票236：多封组不再走此单卡分支，改走 thread 容器；单封组此分支渲染一字不动。 -->
             <div class="eh-row">
-            <button type="button" class="email-head" (click)="toggleEmail(a)"
-                    [attr.aria-expanded]="emailOpenId() === a.id">
+            <button type="button" class="email-head" (click)="toggleMessage(a)"
+                    [attr.aria-expanded]="isMessageOpen(a)">
               <span class="avatar">{{ senderInitial(a) }}</span>
               <span class="eh-main">
                 <span class="eh-top">
@@ -60,10 +155,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                 <span class="eh-title">{{ shortTitle(a) }}</span>
                 @if (metaOf(a)?.format) { <span class="eh-format">{{ formatLabel(t, metaOf(a)!.format) }}</span> }
               </span>
-              @if (threadSize(a) > 1) {
-                <span class="thread-count">{{ fmt('pb.v2.c.threadCount', { n: threadSize(a) }) }}</span>
-              }
-              <span class="chev" [class.open]="emailOpenId() === a.id">›</span>
+              <span class="chev" [class.open]="isMessageOpen(a)">›</span>
             </button>
               @if (meetingLinkOf(a); as link) {
                 <a class="join-chip" [href]="link" target="_blank" rel="noopener"
@@ -71,7 +163,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
               }
             </div>
 
-            @if (emailOpenId() === a.id) {
+            @if (isMessageOpen(a)) {
             <div class="email-open">
               <div class="eo-sender">
                 <span class="avatar sm">{{ senderInitial(a) }}</span>
@@ -89,7 +181,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                 </dl>
               }
 
-            @if (emailBodies().get(a.id); as eb) {
+            @if (bodyState(a); as eb) {
               @if (eb.loading) { <p class="body-loading">{{ t('pb.v2.d.loading') }}</p> }
               @else if (eb.error) { <p class="body-loading">{{ t('pb.v2.m.bodyFailed') }}</p> }
               @else if (!eb.text || !eb.seg) { <p class="body-loading">{{ t('pb.v2.m.noBody') }}</p> }
@@ -110,6 +202,10 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                   <pre class="tl-rest">{{ r.body }}</pre>
                 }
               }
+            } @else {
+              <!-- 票236：正文区兜底 —— entry 缺失时不再留空白 void，直接渲染 loading 态；
+                   bodyState 已在读数时触发 ensureEmailBody，取数到后自动进终态分支。 -->
+              <p class="body-loading">{{ t('pb.v2.d.loading') }}</p>
             }
 
             @if (metaOf(a)?.screenshotAssetId) {
@@ -202,6 +298,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
           </article>
         }
       }
+      }
     }
   `,
   styles: [`
@@ -267,6 +364,29 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
             transition: transform .15s; align-self: center; }
     .chev.open { transform: rotate(90deg); }
     .email-open { margin-top: 10px; border-top: 1px dashed var(--yi-border, #e2e8f0); padding-top: 10px; }
+    /* 票236：真实邮件式 thread 容器 —— 容器头（主题 + 封数 + 最新一封信息 + chevron）与消息栏
+       均 flex-wrap + min-width:0 + ellipsis，360px 下不溢出；消息栏与展开体之间用虚线分隔。 */
+    .thread { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+    .th-row { display: flex; gap: 8px; align-items: center; }
+    .th-row .thread-head { flex: 1 1 auto; min-width: 0; width: auto; }
+    .thread-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+                   border: none; background: transparent; color: inherit; cursor: pointer;
+                   padding: 0; text-align: left; font: inherit; }
+    .th-subject { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .th-count { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #475569; background: #e2e8f0;
+                border-radius: 999px; padding: 1px 9px; white-space: nowrap; }
+    .th-latest { font-size: 13px; color: var(--yi-text-muted, #475569); overflow: hidden;
+                 text-overflow: ellipsis; white-space: nowrap; }
+    .th-msgs { margin-top: 10px; border-top: 1px dashed var(--yi-border, #e2e8f0); padding-top: 4px; }
+    .th-msg + .th-msg { border-top: 1px dashed var(--yi-border, #e2e8f0); margin-top: 8px; padding-top: 8px; }
+    .msg-bar { display: flex; gap: 8px; align-items: center; width: 100%; flex-wrap: wrap;
+               border: none; background: transparent; color: inherit; cursor: pointer;
+               padding: 0; text-align: left; font: inherit; }
+    .msg-from { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .msg-date { flex-shrink: 0; font-size: 13px; color: var(--yi-text-muted, #475569); }
+    .msg-title { flex: 1 1 auto; min-width: 0; font-size: 14px; overflow: hidden;
+                 text-overflow: ellipsis; white-space: nowrap; }
+    .msg-open { margin-top: 10px; border-top: 1px dashed var(--yi-border, #e2e8f0); padding-top: 10px; }
     .eo-sender { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .eo-from { font-size: 14px; font-weight: 600; }
     .eo-recv { font-size: 13px; color: var(--yi-text-muted, #475569); }
@@ -331,8 +451,10 @@ export class MaterialsListComponent {
   readonly fmt = makeV2Fmt(this.i18n);
 
   readonly expandedId = signal<string | null>(null);
-  /** 票210：邮件卡展开态（单张展开，与非邮件正文 expandedId 分开，避免互相顶掉）。 */
-  readonly emailOpenId = signal<string | null>(null);
+  /** 票236：开合模型 —— thread 容器开合（组 key 集合）+ 封级开合（资产 id 集合）；
+   * 单封组亦用封级集合，取代旧单 emailOpenId；点开 thread 时最新一封自动进封级集合（默认全展开）。 */
+  readonly openThreads = signal(new Set<string>());
+  readonly openMessages = signal(new Set<string>());
   readonly bodyText = signal('');
   readonly bodySegs = signal<TranscriptSegment[]>([]);
   private readonly fileUrls = signal(new Map<string, string>());
@@ -388,6 +510,20 @@ export class MaterialsListComponent {
     });
   }
 
+  /**
+   * 票236：正文区渲染时保证 —— 模板 body 区读此方法而非直接读 map；entry
+   * 缺失时当场触发 ensureEmailBody（单点幂等，fetchedEmailIds 守卫重复调用），
+   * 并返回新建的 loading 条目，字段行与截图区之间永不出现空白 void 态。
+   * 取数到后信号更新，视图自动进 loading / bodyFailed / noBody / fallback
+   * 全文 / 时间线终态分支；终态语义一字不动。
+   */
+  bodyState(a: InterviewAsset): EmailBodyState | null {
+    const eb = this.emailBodies().get(a.id);
+    if (eb) return eb;
+    this.ensureEmailBody(a);
+    return this.emailBodies().get(a.id) ?? null;
+  }
+
   metaOf(a: InterviewAsset): AssetMeta | null {
     return safeJson<AssetMeta>(a.metaJson);
   }
@@ -408,12 +544,51 @@ export class MaterialsListComponent {
     return this.metaOf(a)?.subject || a.fileName;
   }
 
-  /** 票210：邮件卡展开态开关。票217：展开时补取正文（effect 未覆盖到的卡，展开即有条目，至少 loading 态）。 */
-  toggleEmail(a: InterviewAsset): void {
-    const id = a.id;
-    const opening = this.emailOpenId() !== id;
-    this.emailOpenId.set(opening ? id : null);
-    if (opening) this.ensureEmailBody(a);
+  /** 票236：thread 容器开合 —— 点开时最新一封默认进封级集合（全展开）并补取正文；
+   * 收起时清掉组内各封的封级开合，下次点开恢复默认（最新展开、旧封收起）。 */
+  toggleThread(g: { key: string; items: InterviewAsset[] }): void {
+    const threads = new Set(this.openThreads());
+    const msgs = new Set(this.openMessages());
+    if (threads.has(g.key)) {
+      threads.delete(g.key);
+      for (const a of g.items) msgs.delete(a.id);
+    } else {
+      threads.add(g.key);
+      const latest = this.latestOf(g);
+      msgs.add(latest.id);
+      this.ensureEmailBody(latest);
+    }
+    this.openThreads.set(threads);
+    this.openMessages.set(msgs);
+  }
+
+  /** 票236：封级开合（单封组头行与 thread 内消息栏共用）。票217：展开时补取正文（effect 未覆盖到的卡，展开即有条目，至少 loading 态）。 */
+  toggleMessage(a: InterviewAsset): void {
+    const msgs = new Set(this.openMessages());
+    if (msgs.has(a.id)) { msgs.delete(a.id); }
+    else { msgs.add(a.id); this.ensureEmailBody(a); }
+    this.openMessages.set(msgs);
+  }
+
+  isThreadOpen(g: { key: string }): boolean {
+    return this.openThreads().has(g.key);
+  }
+
+  isMessageOpen(a: InterviewAsset): boolean {
+    return this.openMessages().has(a.id);
+  }
+
+  /** 票236：组内最新一封（displayGroups 已按收件日正序，末位即最新）。 */
+  latestOf(g: { items: InterviewAsset[] }): InterviewAsset {
+    return g.items[g.items.length - 1];
+  }
+
+  /** 票236：容器头最新一封信息 —— 发件人 + 收件日，有发件人才带“·”分隔。 */
+  latestLabel(g: { items: InterviewAsset[] }): string {
+    const latest = this.latestOf(g);
+    const from = this.senderName(latest);
+    const date = this.displayDate(latest);
+    return from ? from + ' · ' + date : date;
   }
 
   /** 票210：提炼短标题（原主题全文不当标题）。 */
@@ -455,12 +630,6 @@ export class MaterialsListComponent {
     return text ? extractMeetingLink(text) : null;
   }
 
-  /** 票210：该邮件所在 thread 的封数（单封为 1，不渲染 pill）。 */
-  threadSize(a: InterviewAsset): number {
-    const g = this.displayGroups().find(g => g.items.some(x => x.id === a.id));
-    return g ? g.items.length : 0;
-  }
-
   /** 票165：时间线顶部 round 锚定（无归属轮次时无锚定，不编造）。 */
   roundAnchor(a: InterviewAsset): { no: number; stage: string; date: string; phase: string } | null {
     if (!a.roundId) return null;
@@ -477,10 +646,11 @@ export class MaterialsListComponent {
   }
 
   /**
-   * 票165：列表层展示分组（只影响展示，底层仍是单条资产）。
+   * 票165：列表层展示分组（只影响展示，底层仍是单条资产；分组键一字不动）。
    * 截图去重在先：被任一邮件 screenshotAssetId 引用的资产不单独渲染；
-   * 邮件按 threadKey（无则主题归一化兜底，comm-log 同口径）分组，组内按日期正序、
-   * 多封组带组头（归一化主题 + 封数）、单封组无组头；非邮件资产原序单条。
+   * 邮件按 threadKey（无则主题归一化兜底，comm-log 同口径）分组，组内按日期正序；
+   * 票236：渲染层多封组走 thread 容器、单封组走旧 email-card（210 组头移除口径不变）。
+   * 非邮件资产原序单条。
    */
   readonly displayGroups = computed(() => {
     const referenced = new Set<string>();

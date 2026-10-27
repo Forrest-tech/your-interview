@@ -189,7 +189,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
     </section>
   `,
   styles: [`
-    .card { padding: 2px 2px 0; margin-top: 6px; /* 票192:14px → 6px，收紧节点行与详情卡之间的空白 */ }
+    .card { padding: 2px 2px 0; margin-top: 5px; /* 票192:14px → 6px，收紧节点行与详情卡之间的空白；票 233：6px → 5px，对称微调——下面间距链合计：rexpand 0 + card 5 + card 内边距 2 + 空 rc-outcome 边距 7 + rtabs 8 = 22px，与上面（18px 内边距 + 4px 行上边距）相等 */ }
     .rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     /* 票206：record 页签内容区顶部三功能行，与 Prep 页头（.prep-head/.ph-actions）同几何：组内 gap 8px、整组可换行，行高由 36px 方框按钮定，与 Prep 行同高；padding 4px 2px 照 .prep 同款，使行顶距页签行底边（10px 页签下边距 + 4px）与右偏移（卡片 2px + 自身 2px）与 Prep 页头一字相同；360px 下整组可落行不溢出。 */
     .rec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 2px; }

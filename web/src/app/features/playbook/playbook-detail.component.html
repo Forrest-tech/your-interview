@@ -212,9 +212,47 @@
 
     <!-- 下区:轮次工作区(页签 + stepper + Round + 复盘与待办,单一边框容器) -->
     <section class="zone zone-work">
-      <!-- 票 231 重启：上排页签已去掉（Rounds tab 删除、Communications 移入卡片内下排末位）；卡片头行只剩 spacer + 三按钮 + 编辑铅笔。 -->
+      <!-- 票 233：轨道行已上移至卡片头行内（见行内注释），与按钮组同行齐平。 -->
       <nav class="page-tabs">
-        <span class="spacer"></span>
+        @if (rounds().length) {
+          <!-- 票 233：轮次轨道行上移至此，与功能按钮组同处一行带（左为轨道、右为按钮组），两者顶边齐平；滚动容器与行内结构一字不动，135 轨道内部不动。卡片头行 = 轨道 + 三按钮 + 编辑铅笔。 -->
+          <div class="rtrack-scroll" data-testid="round-track">
+            <div class="rtrack-row">
+              @for (r of rounds(); track r.id) {
+                <!-- 票214 方案 C：相邻节点间的极简圆点线（细线 + 小圆点），只在非首节点前渲染；
+                     颜色认左侧轮 roundIsDone（已有结果或日期已过）为真则绿、否则灰；纯装饰，不可聚焦。 -->
+                @if (!$first) {
+                  <span class="rconn" [class.done]="roundIsDone(rounds()[$index - 1])" aria-hidden="true"></span>
+                }
+                <button type="button" class="rnode"
+                        [class.selected]="r.id === selectedRoundId()"
+                        [attr.aria-pressed]="r.id === selectedRoundId()"
+                        (click)="selectRound(r.id)">
+                  <span class="rhead">
+                    <span class="rlabel">{{ fmt('pb.v2.r.roundLabel', { n: roundNo(r) }) }}</span>
+                    <span class="stagechip">{{ r.stage }}</span>
+                  </span>
+                  <span class="rwhen">{{ r.scheduledDate ?? t('pb.v2.d.dateTbd') }}</span>
+                  <span class="rstate">
+                    <span class="st" [ngClass]="roundNodeStatus(r).cls">{{ t(roundNodeStatus(r).key) }}</span>
+                    @if (roundScore(r) != null) {
+                      <span class="sk">{{ t('pb.v2.r.overall') }}</span>
+                      <span class="sv">{{ roundScore(r) }}</span>
+                    }
+                  </span>
+                </button>
+              }
+
+              <!-- 票 185：轨道行末「加一轮」暂隐藏（隐藏不是删除，入口由触发行新按钮承接）。 -->
+              @if (!hideTrackAddRound) {
+                <!-- 「加一轮」收为行末紧凑按钮:行为与旧宽卡一致(开 intake 面板) -->
+                <button type="button" class="radd" (click)="openIntake('email')">
+                  {{ t('pb.v2.d.addRound') }}
+                </button>
+              }
+            </div>
+          </div>
+        }
         <!-- 票 232：三按钮整组由 Back to list 行移至此（卡片头行右侧、编辑铅笔左侧；三行按钮原文一字不动，顺序/接线/tooltip/aria-label 全保留）。本行只在 entry 下渲染，与旧 Back 行 @if (entry()) 门控等价。 -->
         <div class="zone-actions">
           <button mat-icon-button [matTooltip]="t('pb.v2.d.addMaterial')" [attr.aria-label]="t('pb.v2.d.addMaterial')" (click)="openIntake('email')"><mat-icon>upload_file</mat-icon></button>
@@ -237,45 +275,8 @@
         }
 
         <!-- ④ 轮次选择(票164:紧凑可选单元横向排列;点选即切换下方详情卡) -->
+        <!-- 票 233：轨道行已上移至卡片头行（见上）；此处只剩详情卡。 -->
         @if (rounds().length) {
-          <div class="rtrack" data-testid="round-track">
-            <div class="rtrack-scroll">
-              <div class="rtrack-row">
-                @for (r of rounds(); track r.id) {
-                  <!-- 票214 方案 C：相邻节点间的极简圆点线（细线 + 小圆点），只在非首节点前渲染；
-                       颜色认左侧轮 roundIsDone（已有结果或日期已过）为真则绿、否则灰；纯装饰，不可聚焦。 -->
-                  @if (!$first) {
-                    <span class="rconn" [class.done]="roundIsDone(rounds()[$index - 1])" aria-hidden="true"></span>
-                  }
-                  <button type="button" class="rnode"
-                          [class.selected]="r.id === selectedRoundId()"
-                          [attr.aria-pressed]="r.id === selectedRoundId()"
-                          (click)="selectRound(r.id)">
-                    <span class="rhead">
-                      <span class="rlabel">{{ fmt('pb.v2.r.roundLabel', { n: roundNo(r) }) }}</span>
-                      <span class="stagechip">{{ r.stage }}</span>
-                    </span>
-                    <span class="rwhen">{{ r.scheduledDate ?? t('pb.v2.d.dateTbd') }}</span>
-                    <span class="rstate">
-                      <span class="st" [ngClass]="roundNodeStatus(r).cls">{{ t(roundNodeStatus(r).key) }}</span>
-                      @if (roundScore(r) != null) {
-                        <span class="sk">{{ t('pb.v2.r.overall') }}</span>
-                        <span class="sv">{{ roundScore(r) }}</span>
-                      }
-                    </span>
-                  </button>
-                }
-
-                <!-- 票 185：轨道行末「加一轮」暂隐藏（隐藏不是删除，入口由触发行新按钮承接）。 -->
-                @if (!hideTrackAddRound) {
-                  <!-- 「加一轮」收为行末紧凑按钮:行为与旧宽卡一致(开 intake 面板) -->
-                  <button type="button" class="radd" (click)="openIntake('email')">
-                    {{ t('pb.v2.d.addRound') }}
-                  </button>
-                }
-              </div>
-            </div>
-
             <!-- 选中轮详情卡:轨道下方全宽展开,绑定选中轮。
                  ★ 票123 C-4.3:展开用 var(--dur)/var(--ease) 淡入一次。 -->
             @if (selectedRound(); as sr) {
@@ -290,7 +291,6 @@
                                 (pendingCount)="onCommPending($event)" />
               </div>
             }
-          </div>
         } @else {
           <p class="state">{{ t('pb.v2.d.noRounds') }}</p>
         }

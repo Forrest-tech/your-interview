@@ -137,7 +137,8 @@
   padding: 18px;
 }
 .zone-work { margin-top: 22px; }
-.zone-work .page-tabs { margin-top: 0; }
+/* 票 233：共享行顶边 = 卡片内边距 18px + 本行上边距 4px = 22px，恰与改前按钮顶边位置一致（改前为 18px 内边距 + 44px 行内居中 4px）；轨道顶与按钮顶同线。 */
+.zone-work .page-tabs { margin-top: 4px; }
 
 .back { margin-bottom: 6px; }
 /* 票 202：Back to list 行（票 232 起只剩返回链接，三按钮已移至卡片头行右侧；行与卡片间距沿用 .back 原 6px）。 */
@@ -310,10 +311,15 @@
 .page-tabs {
   display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; min-height: 44px;
   /* 票231重启：上排页签行下方的分隔线去掉（上排页签已删）。 */
+  /* 票 233：行内顶对齐——轨道顶边与按钮组顶边同一水平线。 */
+  align-items: flex-start;
 }
+/* 票 233：卡片头行内的轨道滚动容器——占剩余宽度、可缩小、内部横向滚动，按钮组永不被挤压。 */
+.page-tabs .rtrack-scroll { flex: 1 1 auto; min-width: 0; }
 /* 票 232：卡片头行内的按钮组——整组不压缩（flex: 0 0 auto，内部 gap 8px 不拆散），窄屏整组换行至下一行；
-   行内垂直居中与铅笔同款（align-self: center，行高下限 44px 内的留白与铅笔一致）。 */
-.page-tabs .zone-actions { flex: 0 0 auto; margin: 0; align-self: center; }
+   行内垂直居中与铅笔同款（align-self: center，行高下限 44px 内的留白与铅笔一致）。
+   票 233：顶对齐改为 flex-start，与轨道顶边同线。 */
+.page-tabs .zone-actions { flex: 0 0 auto; margin: 0; align-self: flex-start; }
 .ptab {
   border: none; background: transparent; color: var(--yi-text-muted, #475569); cursor: pointer;
   font-size: 16px; font-weight: 600; padding: 9px 15px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
@@ -321,8 +327,9 @@
   &.on { border-bottom-color: var(--yi-accent, #2563eb); font-weight: 700; color: var(--yi-text, #0f172a); }
 }
 /* 票188:页签行最右侧铅笔按钮，视觉照详情卡 .rc-icon-btn（票177）原样；
-   票192:align-self: center + 行高下限 44px，按钮在行内上下居中、上下各约 3px 留白。 */
-.ptab-edit { flex: 0 0 auto; align-self: center; display: inline-flex; align-items: center; justify-content: center;
+   票192:align-self: center + 行高下限 44px，按钮在行内上下居中、上下各约 3px 留白。
+   票 233：顶对齐改为 flex-start，与轨道顶边同线。 */
+.ptab-edit { flex: 0 0 auto; align-self: flex-start; display: inline-flex; align-items: center; justify-content: center;
              width: 36px; height: 36px; border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px;
              background: #ffffff; color: var(--yi-text-muted, #475569); cursor: pointer;
              transition: background .15s ease, border-color .15s ease, color .15s ease; }
@@ -341,11 +348,8 @@
 }
 
 /* ---------- ④ 轮次选择(票164:紧凑可选单元横向排列;点选即切换下方详情卡) ---------- */
-.rtrack {
-  position: relative;
-  margin-top: 8px;
-  min-width: 0;
-}
+/* 票 233：.rtrack 包裹层已随轨道行上移删除（滚动容器现为卡片头行直属子项，见 .page-tabs .rtrack-scroll）；
+   滚动/行/节点规则均为顶层，一字未动。 */
 
 /* 横向滚动容器:内容超宽时横向滚动,未超宽不出现滚动条。 */
 .rtrack-scroll {
@@ -402,9 +406,10 @@
 }
 
 /* ★ 票123 C-4.3:选中轮详情卡用 var(--dur)/var(--ease) 淡入一次。
-   票192:上边距 16px → 8px，收紧节点行与详情卡之间的空白（与 .card、.rtabs 两处同改，合计 46px → 24px）。 */
+   票192:上边距 16px → 8px，收紧节点行与详情卡之间的空白（与 .card、.rtabs 两处同改，合计 46px → 24px）。
+   票 233：上边距 8px → 0（轨道已与按钮组同行，详情卡紧贴共享行；下面间距链见 .card 注释）。 */
 .rexpand {
-  margin-top: 8px;
+  margin-top: 0;
   animation: contentIn var(--dur) var(--ease);
 }
 

@@ -103,7 +103,8 @@ public sealed class LogtoApprovalGate(
     ILogtoMappingStore mappings,
     ILogtoSweepAudit audit,
     IOptions<LogtoManagementOptions> options,
-    ILogger<LogtoApprovalGate> logger)
+    ILogger<LogtoApprovalGate> logger,
+    IRejectionNotifier? rejectionNotifier = null)
 {
     private const string ApprovalField = "approval";
     private const string LegacyIdField = "legacyUserId";
@@ -112,6 +113,8 @@ public sealed class LogtoApprovalGate(
     /// round-13:悬停事件按用户串行化。门实例是 scoped(每请求一个),实例锁跨请求无效,
     /// 故用进程级静态字典锁:同一用户的 suspend/un-suspend 事件绝不同时跑 ——
     /// 否则两者可能都通过 updatedAt 水位检查,最后写者胜出,把镜像定在错误态。
+    /// 票248:删号处理同样走这把锁 —— 否则两路并发删除可能同时读到 pending
+    /// 都发驳回邮件,重投递去重只在串行时成立。
     /// 锁只包悬停处理器(User.Created 与 Data.Updated 按现态幂等,无此风险)。
     /// 条目不回收(用户量有界、单条目极小);锁内绝不调扫表,只做一次事件处理。
     /// </summary>
@@ -302,9 +305,58 @@ public sealed class LogtoApprovalGate(
 
     public async Task<LogtoGateOutcome> HandleUserDeletedAsync(string logtoUserId, CancellationToken ct)
     {
+        // 票248:删号按用户串行化(见 SuspensionLocks 注释),否则并发删除可能双发。
+        var userLock = SuspensionLocks.GetOrAdd(logtoUserId, static _ => new SemaphoreSlim(1, 1));
+        await userLock.WaitAsync(ct);
+        try { return await HandleUserDeletedCoreAsync(logtoUserId, ct); }
+        finally { userLock.Release(); }
+    }
+
+    private async Task<LogtoGateOutcome> HandleUserDeletedCoreAsync(string logtoUserId, CancellationToken ct)
+    {
         var row = await mappings.GetRowByLogtoIdAsync(logtoUserId, ct);
         if (row is null) return LogtoGateOutcome.NoAction;
+        // 票248 R2:处理开始即捕获收件地址 + pending 态 —— 删除落定后镜像翻成
+        // deleted、Logto 侧用户已不存在,两者都不可恢复,先捕获后翻转。
+        var wasPending = row.Approval == "pending";
+        var recipient = row.Email;
         await MarkDeletedAsync(row, "logto.approval.deleted", "Logto 删号事件", ct);
+        if (!wasPending) return LogtoGateOutcome.MirrorSynced;
+        // 幂等:重投递读到的行已是 deleted,wasPending 为 false,直接跳过 —— 绝不双发。
+        if (string.IsNullOrWhiteSpace(recipient))
+        {
+            logger.LogWarning("Logto 删号驳回邮件跳过:用户 {UserId} 镜像行无邮箱", logtoUserId);
+            return LogtoGateOutcome.MirrorSynced;
+        }
+        if (rejectionNotifier is null) return LogtoGateOutcome.MirrorSynced;
+        // 失败语义:发信失败绝不阻塞删除回执(控制器仍 2xx),记日志 + 审计。
+        // 审计写本身也绝不能抛回控制器,故各包一层自己的 try/catch。
+        try
+        {
+            await rejectionNotifier.SendRejectionAsync(recipient, ct);
+            try
+            {
+                await audit.WriteAsync("logto.approval.rejection-email.sent", logtoUserId,
+                    $"驳回邮件已发往 {recipient}", ct);
+            }
+            catch (Exception auditEx)
+            {
+                logger.LogWarning(auditEx, "驳回邮件已发但审计写失败:用户 {UserId}", logtoUserId);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "驳回邮件发送失败:用户 {UserId},删除回执不受影响", logtoUserId);
+            try
+            {
+                await audit.WriteAsync("logto.approval.rejection-email.failed", logtoUserId,
+                    $"驳回邮件发送失败({ex.GetType().Name}):{ex.Message}", ct);
+            }
+            catch (Exception auditEx)
+            {
+                logger.LogWarning(auditEx, "驳回邮件失败审计写失败:用户 {UserId}", logtoUserId);
+            }
+        }
         return LogtoGateOutcome.MirrorSynced;
     }
 

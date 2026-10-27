@@ -72,6 +72,10 @@ builder.AddServiceDefaults(ServiceName, services =>
     services.AddScoped<LogtoApprovalGate>();
     services.AddHostedService<LogtoApprovalReconciliationService>();
 
+    // ---------- 票248:驳回通知发信器(应用侧 SMTP;未配时停用态,不阻塞删号) ----------
+    services.Configure<RejectionEmailOptions>(builder.Configuration.GetSection(RejectionEmailOptions.SectionName));
+    services.AddScoped<IRejectionNotifier, SmtpRejectionNotifier>();
+
     // ---------- JWT 认证 ----------
     // 校验参数唯一定义在 ServiceDefaults(ARC-09/票18):其 Issuer/Audience 兜底串与 JwtOptions
     // 类默认值逐字相同,校验结果与旧 JwtOptions 绑定等价;签发侧(上方 Configure<JwtOptions>)不动。

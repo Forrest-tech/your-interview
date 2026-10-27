@@ -7,8 +7,8 @@
 ## 0. 部署前确认（Day-0 门，缺一不开工）
 
 - [ ] SMTP 通道与发件域名已定（Logto 验证邮件就靠它；配错则新用户卡在验证）。
-- [ ] 驳回通知细节已定（通知与否、文案、通道）；待审批列表入口 = Logto Console（见 §6）。
-- [ ] `/admin` 页去留已定（割接期只读；割接后下线或二期改薄代理，不在一天计划内）。
+- [x] 驳回通知细节已定（票248 R2：User.Deleted webhook 驱动邮件；仅镜像行 pending 的删除发信，approved/migrated 删除不发；Console 删除与 API 删除都走 User.Deleted，全覆盖，无新管理 UI、无新端点；文案中性 outcome-only、不含内部原因、含重申 statement；通道为应用侧发信器经 Day-0 SMTP 之邮件）；待审批列表入口 = Logto Console（见 §6）。
+- [x] `/admin` 页去留已定（票248 A4：割接期只读；收敛时写面退役，统计/审计视图只读保留并带口径标注；用户/角色管理走 Logto Console + 同步端点；角色浏览走 Console。执行在收敛时，不在现在；执行标准见 CONVERGENCE-CHECKLIST.md）。
 
 ## 1. 起服务与首管理员（防首占）
 

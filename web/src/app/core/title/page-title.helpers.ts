@@ -13,7 +13,8 @@ export const PRODUCT_NAME = 'Your Interview';
 /** 路由前缀 → i18n 键。顺序无关,命中取最长前缀。 */
 export const ROUTE_TITLE_KEYS: ReadonlyArray<readonly [prefix: string, key: string]> = [
   ['/playbook/calendar', 'pb.cal.title'],
-  ['/settings/ai', 'setting.title'],
+  ['/settings/voice', 'setting.voiceTitle'],
+  ['/settings/llm', 'ai.pageTitle'],
   ['/settings/profile', 'account.profile'],
   ['/settings', 'settings.title'],
   ['/dashboard', 'nav.dashboard'],

@@ -138,17 +138,8 @@ export class ShellComponent {
     try { localStorage.setItem('ui.navCollapsed.shellSubnav', next ? '1' : '0'); } catch { /* ignore */ }
   }
 
-  goProfile(): void {
-    this.router.navigate(['/settings/profile']);
-  }
-
   goSettings(): void {
     this.router.navigate(['/settings']);
-  }
-
-  /** 票 240：“我的”下拉直达配置邮箱页（与 API key 配置页平行）。 */
-  goMailbox(): void {
-    this.router.navigate(['/settings/mail']);
   }
 
   goAdmin(): void {

@@ -460,9 +460,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** 前往 AI / Azure 设置页(任务书第三节指定的跳转链路)。 */
+  /** 前往语音设置页（票 244：TTS 凭据自旧 AI 设置页拆至 /settings/voice）。 */
   goAiSetting(): void {
-    this.router.navigateByUrl('/settings/ai');
+    this.router.navigateByUrl('/settings/voice');
   }
 
   // ⚠️ 2026-09-16(Forrest 第 4 条):底部"提交 AI 评分"按钮已删除 ——

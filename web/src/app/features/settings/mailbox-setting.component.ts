@@ -17,7 +17,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 /**
- * 票 240：邮箱配置页 —— 与 API key 配置页（/settings/ai）平行，挂在设置中心左导航。
+ * 票 240：邮箱配置页 —— 与 LLM 配置页（/settings/llm）平行，挂在设置中心左导航。
  *
  * 本页只管“连接”：连接状态、连接/断开/重连、全部刷新、待确认队列、导入审计。
  * 匹配规则绝不在此页 —— 规则随条目走，只在条目详情页的邮箱匹配区维护（方案 §2.3）。

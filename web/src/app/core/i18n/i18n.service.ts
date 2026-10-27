@@ -1539,10 +1539,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   'lang.en': { zh: 'English', en: 'English', fr: 'English' },
   'lang.fr': { zh: 'Français', en: 'Français', fr: 'Français' },
 
-  // ---------- AI 语音设置页(/settings/ai，票 146 前为 /account/ai-setting) ----------
+  // ---------- 语音 / LLM 设置页（票 244 自旧 /settings/ai 拆分；票 146 前为 /account/ai-setting） ----------
   // 2026-09-16(Forrest 第 6 条):该页原写死中文,与网站语言脱节。
   // 现全部接入 i18n,顶栏切语言时本页同步变化。
   // ---------- LLM 设置(面试前准备包,2026-09-18) ----------
+  // 票 244：LLM 设置页标题（自旧 AI 语音设置页拆分）。
+  'ai.pageTitle': { zh: 'LLM 设置', en: 'LLM Settings', fr: 'Paramètres LLM' },
   'ai.credTitle': { zh: '大模型 (LLM) 凭据', en: 'LLM Credentials', fr: 'Identifiants LLM' },
   'ai.credDesc': {
     zh: '面试前准备包用这里配置的模型生成预测问题、关注点与反问建议。Key 只存服务端,绝不下发浏览器。',
@@ -1638,7 +1640,8 @@ const DICT: Record<string, Record<Lang, string>> = {
     fr: 'Aucune clé de recherche — les sources externes activées seront marquées « non configuré » au lieu de simuler une récupération.'
   },
   'setting.back': { zh: '返回 AI 面试练习', en: 'Back to AI Practice', fr: 'Retour à la pratique IA' },
-  'setting.title': { zh: 'AI 语音设置', en: 'AI Voice Settings', fr: 'Paramètres vocaux IA' },
+  // 票 244：语音设置页标题（自旧 AI 语音设置页拆分；旧 setting.title 退役）。
+  'setting.voiceTitle': { zh: '语音设置', en: 'Voice Settings', fr: 'Paramètres vocaux' },
   // 票 146：头像菜单 Settings 项 + 设置中心页签标题（三语键）。
   'settings.title': { zh: '设置', en: 'Settings', fr: 'Paramètres' },
   // 票 240：邮箱直连导入（三语键齐全；本页只管连接，规则在条目详情页维护）。

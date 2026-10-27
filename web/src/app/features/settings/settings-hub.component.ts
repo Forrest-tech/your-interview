@@ -10,6 +10,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
  * 与 GitHub 式文字导航冲突）。导航项为静态配置。
  * Admin 不并入本中心（用户 2026-10-25 拍板：Admin 保留在头像菜单），
  * 故本导航目前只有个人设置两节；新增节须单独立项后追加配置。
+ * 票 244：旧 AI 语音设置页拆为 Voice / LLM 两页，顺序为 My Account、Voice、LLM、Mailbox。
  */
 interface SettingsNavItem {
   path: string;
@@ -19,8 +20,9 @@ interface SettingsNavItem {
 
 const NAV_ITEMS: readonly SettingsNavItem[] = [
   { path: '/settings/profile', labelKey: 'account.profile', icon: 'person' },
-  { path: '/settings/ai', labelKey: 'setting.title', icon: 'smart_toy' },
-  // 票 240：配置邮箱页与 API key 配置页平行（同一设置中心左导航）。
+  { path: '/settings/voice', labelKey: 'setting.voiceTitle', icon: 'mic' },
+  { path: '/settings/llm', labelKey: 'ai.pageTitle', icon: 'smart_toy' },
+  // 票 240：配置邮箱页与 LLM 配置页平行（同一设置中心左导航）。
   { path: '/settings/mail', labelKey: 'mailbox.title', icon: 'mail' }
 ];
 

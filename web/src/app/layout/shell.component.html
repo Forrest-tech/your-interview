@@ -72,16 +72,10 @@
       </div>
     </div>
     <mat-divider></mat-divider>
-    <button mat-menu-item (click)="goProfile()">
-      <mat-icon>person</mat-icon><span>{{ t('account.profile') }}</span>
-    </button>
-    <!-- 票 146：头像菜单新增 Settings 项（My Account 之后、Admin 之前）。 -->
+    <!-- 票 244：头像菜单只留 Settings（设置中心入口）+ Admin + Sign out；
+         My Account / Mailbox 快捷已删，设置中心左导航为唯一分节导航。 -->
     <button mat-menu-item (click)="goSettings()">
       <mat-icon>settings</mat-icon><span>{{ t('settings.title') }}</span>
-    </button>
-    <!-- 票 240：“我的”下拉新增配置邮箱项（直达 /settings/mail，与 API key 配置页平行）。 -->
-    <button mat-menu-item (click)="goMailbox()">
-      <mat-icon>mail</mat-icon><span>{{ t('mailbox.title') }}</span>
     </button>
     @if (auth.can('admin.users.read')) {
       <button mat-menu-item (click)="goAdmin()">

@@ -89,7 +89,8 @@ export const routes: Routes = [
           import('./features/admin/admin.component').then((m) => m.AdminComponent)
       },
       {
-        // 票 146：GitHub 式设置中心 —— /settings 父路由 + 两节子路由。
+        // 票 146：GitHub 式设置中心 —— /settings 父路由 + 子路由。
+        // 票 244：旧 /settings/ai 拆为 voice / llm 两页；旧 URL 全部重定向，不 404。
         // 旧 URL（/profile、/account/ai-setting）全部重定向到新 URL，任何旧入口不 404。
         path: 'settings',
         loadComponent: () =>
@@ -102,12 +103,20 @@ export const routes: Routes = [
               import('./features/profile/profile.component').then((m) => m.ProfileComponent)
           },
           {
-            path: 'ai',
+            // 票 244：语音设置页（Azure Speech 凭据 + 语音教程 + 发音评测说明）。
+            path: 'voice',
             loadComponent: () =>
-              import('./features/ai-setting/ai-setting.component').then((m) => m.AiSettingComponent)
+              import('./features/settings/voice-setting.component').then((m) => m.VoiceSettingComponent)
           },
           {
-            // 票 240：配置邮箱页，与 API key 配置页平行。
+            // 票 244：LLM 设置页（LLM 凭据 + 备考数据源）。
+            path: 'llm',
+            loadComponent: () =>
+              import('./features/settings/llm-setting.component').then((m) => m.LlmSettingComponent)
+          },
+          { path: 'ai', pathMatch: 'full', redirectTo: 'llm' },
+          {
+            // 票 240：配置邮箱页，与 LLM 配置页平行。
             path: 'mail',
             loadComponent: () =>
               import('./features/settings/mailbox-setting.component').then((m) => m.MailboxSettingComponent)
@@ -115,7 +124,7 @@ export const routes: Routes = [
         ]
       },
       { path: 'profile', redirectTo: 'settings/profile' },
-      { path: 'account/ai-setting', redirectTo: 'settings/ai' },
+      { path: 'account/ai-setting', redirectTo: 'settings/llm' },
       {
         path: 'resume',
         loadComponent: () =>

@@ -1,87 +1,15 @@
-<!-- AI / Azure 语音设置
+<!-- LLM 设置（票 244：自旧 AI 语音设置页拆分，LLM 凭据 + 备考数据源）。 -->
      2026-09-15 第六轮新增:为 /practice「TTS 引擎 → 前往配置 ↗」提供真实落点。
      ⚠️ 诚实原则:后端密钥托管接口未实现 = 直说,不做假成功提示。 -->
 <div class="setting-page">
 
   <!-- 票 146：收进设置中心后删“Back to AI Practice”回链，导航由左导航承担。 -->
   <header class="sp-head">
-    <h1>{{ t('setting.title') }}</h1>
-    <p class="sp-sub">{{ t('setting.subtitle') }}</p>
+    <h1>{{ t('ai.pageTitle') }}</h1>
+    <p class="sp-sub">{{ t('ai.credDesc') }}</p>
   </header>
 
 
-
-  <!-- Azure 凭据配置 -->
-  <section class="sp-card">
-    <h2 class="sp-card-title">
-      <mat-icon>key</mat-icon>
-      <span>{{ t('setting.credTitle') }}</span>
-    </h2>
-
-    <p class="sp-card-desc">{{ t('setting.credDesc') }}</p>
-
-    <div class="form-grid">
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>{{ t('setting.keyLabel') }}</mat-label>
-        <input matInput type="password" autocomplete="off" spellcheck="false"
-               [ngModel]="azureKey()"
-               (ngModelChange)="onKeyInput($event)"
-               [placeholder]="t('setting.keyPlaceholder')">
-        <mat-hint>{{ t('setting.keyHint') }}</mat-hint>
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>{{ t('setting.regionLabel') }}</mat-label>
-        <mat-select [ngModel]="region()" (ngModelChange)="onRegionChange($event)">
-          @for (r of regions; track r) {
-            <mat-option [value]="r">{{ r }}</mat-option>
-          }
-        </mat-select>
-        <mat-hint>{{ t('setting.regionHint') }}</mat-hint>
-      </mat-form-field>
-    </div>
-
-    <div class="act-row">
-      <!-- 2026-09-16(Forrest 第 1 条):先测试,通过了才允许保存。 -->
-      <button mat-stroked-button
-              [disabled]="!keyFilled() || testing() || busy()"
-              (click)="testKey()">
-        <mat-icon>wifi_tethering</mat-icon>
-        <span>{{ testing() ? t('setting.testing') : t('setting.test') }}</span>
-      </button>
-
-      <button mat-flat-button color="primary"
-              [disabled]="!canSave()"
-              [matTooltip]="canSave() ? '' : t('setting.testFirst')"
-              (click)="saveKey()">
-        <mat-icon>save</mat-icon>
-        <span>{{ t('setting.save') }}</span>
-      </button>
-
-      @if (keyFilled()) {
-        <span class="key-preview">{{ t('setting.keyPreview') }}{{ keyMasked() }}</span>
-      }
-
-      @if (savedHint()) {
-        <span class="saved-hint" [class.err]="savedHintKind() === 'err'">{{ savedHint() }}</span>
-      }
-    </div>
-
-    <!-- 服务端已保存的凭据状态(不显示明文)
-         2026-09-16(Forrest 本轮第 2 条):
-           · 文案改为"你有有效的 key: <掩码>,可以尽情享受 Azure Speech 服务。"
-           · 字体用正式衬线体("律师字体")—— 见 SCSS 的 .remote-line.serif -->
-    <p class="remote-line" [class.on]="remoteStatus()?.hasKey"
-       [class.serif]="remoteStatus()?.hasKey">
-      @if (remoteStatus()?.hasKey) {
-        <mat-icon>check_circle</mat-icon>
-        <span>{{ t('setting.validKeyPrefix') }} <strong>{{ remoteMasked() }}</strong>{{ t('setting.validKeySuffix') }}</span>
-      } @else {
-        <mat-icon>info_outline</mat-icon>
-        <span>{{ t('setting.noKey') }}</span>
-      }
-    </p>
-  </section>
 
   <!-- LLM 配置(2026-09-18:面试前准备包)
        与上面 Azure 凭据卡片同构:先测试 → 通过才解锁保存 → 保存后回填掩码。
@@ -203,7 +131,6 @@
       <li>{{ t('ai.note3') }}</li>
     </ul>
   </section>
-
   <!-- 备考数据源(2026-10-21):生成备考报告时按公司+岗位自动匹配抓取,
        取代旧的"点按钮跳外链"。开关存 AiGateway 用户级配置,跟随账号。 -->
   <section class="sp-card" data-testid="prep-sources-card">
@@ -269,63 +196,4 @@
       }
     </p>
   </section>
-
-  <!-- 配置教程(2026-09-16 Forrest:参考他提供的截图,给 Speech Key 页补上教程)
-       ⚠️ 内容以微软官方为准 —— 这里只复述通用步骤,不编造价格细节。 -->
-  <section class="sp-card tut-card">
-    <h2 class="sp-card-title">
-      <mat-icon>menu_book</mat-icon>
-      <span>{{ t('setting.tutTitle') }}</span>
-    </h2>
-
-    <p class="tut-intro">{{ t('setting.tutIntro') }}</p>
-
-    <ul class="tut-notes">
-      <li>{{ t('setting.tutNote1') }}</li>
-      <li>{{ t('setting.tutNote2') }}</li>
-      <li>{{ t('setting.tutNote3') }}</li>
-    </ul>
-
-    <h3 class="tut-sub">{{ t('setting.tutStepsTitle') }}</h3>
-    <ol class="tut-steps">
-      <li>{{ t('setting.tutStep1') }}</li>
-      <li>{{ t('setting.tutStep2') }}</li>
-      <li>{{ t('setting.tutStep3') }}</li>
-      <li>{{ t('setting.tutStep4') }}</li>
-      <li>{{ t('setting.tutStep5') }}</li>
-      <li>{{ t('setting.tutStep6') }}</li>
-    </ol>
-
-    <h3 class="tut-sub">{{ t('setting.tutDocsTitle') }}</h3>
-    <ul class="tut-docs">
-      <li>
-        <a [href]="pricingUrl" target="_blank" rel="noopener noreferrer">
-          <mat-icon>open_in_new</mat-icon>
-          <span>Azure AI Speech pricing</span>
-          <span class="tut-doc-note">— {{ t('setting.tutDocPricing') }}</span>
-        </a>
-      </li>
-      <li>
-        <a [href]="keysDocUrl" target="_blank" rel="noopener noreferrer">
-          <mat-icon>open_in_new</mat-icon>
-          <span>Keys and Endpoint</span>
-          <span class="tut-doc-note">— {{ t('setting.tutDocKeys') }}</span>
-        </a>
-      </li>
-    </ul>
-  </section>
-
-  <!-- 发音评测说明 -->
-  <section class="sp-card">
-    <h2 class="sp-card-title">
-      <mat-icon>fact_check</mat-icon>
-      <span>{{ t('setting.assessTitle') }}</span>
-    </h2>
-    <ul class="fact-list">
-      <li>{{ t('setting.assess1') }}</li>
-      <li>{{ t('setting.assess2') }}</li>
-      <li>{{ t('setting.assess3') }}</li>
-    </ul>
-  </section>
-
 </div>

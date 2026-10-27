@@ -8,13 +8,18 @@
 // Console 创建的账号或字段形态差异导致的全体拒登。
 //
 // 字段读取做了多形态兼容(脚本上下文在不同 Logto 版本/配置下字段位置有差异):
-//   customData: data.user.customData / data.customData / context.user.customData
-//   roles: data.user.roles / data.roles / token.roles(字符串或 {name} 对象数组)
+//   customData: context.user.customData(Logto 1.45.0 实测) / data.user.customData / data.customData
+//   roles: context.user.roles(Logto 1.45.0 实测,{name} 对象数组) / data.user.roles / data.roles / token.roles
 // 上线前必须在 Console 测试页跑通三组样本(pending → 拒发;approved → 放行带声明;
 // migrated → 放行带声明),字段名以测试页实测为准,不要猜。
+// 票 257:1.45.0 的 worker 只传 {token, context, environmentVariables},data 是
+// undefined——旧版只解构 {token, data} 时脚本恒返回 {},claims 与 pending 拒绝全丢。
+// 另注意:worker 把 api 作为参数注入({ ...payload, api }),不是全局变量——
+// 旧脚本只写裸 `api` 时 typeof 恒为 undefined,拒绝被静默跳过(claims 却正常,
+// 这正是 live token 实测暴露的第二处形态差)。故 api 必须随参数解构。
 
-const getCustomJwtClaims = async ({ token, data }) => {
-  const user = data?.user ?? data ?? {};
+const getCustomJwtClaims = async ({ token, context, data, api }) => {
+  const user = context?.user ?? data?.user ?? data ?? {};
   const customData = user?.customData ?? data?.customData ?? {};
 
   const approval = customData?.approval;

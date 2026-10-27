@@ -192,6 +192,9 @@ jobs:
         working-directory: web
         run: npx tsc --noEmit
 
+      - name: Custom JWT 回归 harness(票 257,node --test)
+        run: node --test docs/logto/custom-jwt.test.js
+
       - name: ng build
         working-directory: web
         # pdfjs-dist 是 CommonJS 会产生 optimization bailout warning —— warning 不算红

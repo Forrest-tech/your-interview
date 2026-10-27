@@ -156,6 +156,13 @@ python3 scripts/logto-migrate/setup-m2m.py
 - 上线前必须在 Console 的测试页跑通三组样本：pending → 拒发；approved → 放行带声明；
   migrated → 放行带声明。脚本上下文的字段名若与实测不符，以测试页为准修正脚本，
   不要猜（`roles`/`customData` 的读取已做多形态兼容，见脚本注释）。
+- 票 257 教训（硬规矩）：PUT 201 + round-trip GET 只能证明脚本存进去了，不能证明它
+  工作——1.45.0 的 worker 只传 `{token, context, environmentVariables}`，旧脚本解构
+  `{token, data}` 时恒返回 `{}`，claims 与 pending 拒绝全丢，却在 PUT 成功的外表下
+  漏网。另：worker 把 `api` 作调用参数注入（`{ ...payload, api }`），不是全局变量——
+  只写裸 `api` 时 typeof 恒为 undefined，拒绝被静默跳过（claims 却正常，极易漏网）。
+  部署后必须跑测试页三样本 + live token 检查；脚本另有随仓回归 harness
+  `docs/logto/custom-jwt.test.js`（`node --test`，CI 前端 job 内跑），改脚本先跑它。
 
 ## 6. 审批流（默认开启）与扫表
 

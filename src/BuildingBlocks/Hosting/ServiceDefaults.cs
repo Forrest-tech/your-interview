@@ -14,6 +14,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 using MediatR;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,6 +25,7 @@ using Serilog;
 using Serilog.Events;
 using YourInterview.BuildingBlocks.Behaviors;
 using YourInterview.BuildingBlocks.Persistence;
+using YourInterview.BuildingBlocks.Security;
 
 namespace YourInterview.BuildingBlocks.Hosting;
 
@@ -250,7 +252,7 @@ public static class ServiceDefaults
                 "缺少 Jwt:SigningKey 配置。请在本地 appsettings.Development.json 或环境变量 Jwt__SigningKey 中配置" +
                 "(需与 Services.Identity 签发的密钥一致,至少 32 字符)。");
 
-        return new TokenValidationParameters
+        var parameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
@@ -264,6 +266,35 @@ public static class ServiceDefaults
             // Jobs/Identity 旧显式值;其余五服务未显式设时框架默认同为 ClaimTypes.Role —— 等值显式化。
             RoleClaimType = ClaimTypes.Role
         };
+
+        // 票241 双轨期(PLAN §4.4.6 首选:单 scheme 多发行方 allowlist):
+        // 配了 Logto:Issuer 才进双轨,未配时上面单发行方口径一字不变。
+        // 收敛日 = 旧 Identity 停发新 token + 服务侧不再需要旧发行方;
+        // 该日之后旧 token 被拒绝是因为旧发行方不再签发且 allowlist 收敛,
+        // 不是因为本分支改了旧 token 的校验规则。
+        var logtoIssuer = configuration["Logto:Issuer"];
+        if (!string.IsNullOrWhiteSpace(logtoIssuer))
+        {
+            parameters.ValidIssuers = [parameters.ValidIssuer, logtoIssuer];
+            parameters.IssuerSigningKeyResolver = new MultiIssuerSigningKeyResolver(
+                (SymmetricSecurityKey)parameters.IssuerSigningKey!,
+                parameters.ValidIssuer, logtoIssuer).Resolve;
+            var logtoAudience = configuration["Logto:Audience"];
+            if (!string.IsNullOrWhiteSpace(logtoAudience))
+            {
+                parameters.ValidAudiences = [parameters.ValidAudience, logtoAudience];
+            }
+            else
+            {
+                // 双轨期 audience 未配时不校验 audience:Logto access token 的 aud
+                // 取决于 Console 里建的 API resource,没配就没法列 allowlist。
+                // 上线清单(docs/logto/SETUP.md)要求配 Logto:Audience 后恢复校验;
+                // 校验 issuer + 签名 + 有效期三项仍在,不是“放行所有 token”。
+                parameters.ValidateAudience = false;
+            }
+        }
+
+        return parameters;
     }
 
     /// <summary>
@@ -284,6 +315,8 @@ public static class ServiceDefaults
                 options.TokenValidationParameters = BuildTokenValidationParameters(configuration);
                 configure?.Invoke(options);
             });
+        // 票241:Logto 角色 → perm 声明转换(无 perm 声明的 token 才展开,旧 token 原样)。
+        services.AddScoped<IClaimsTransformation, LogtoRoleClaimsTransformation>();
         return services;
     }
 

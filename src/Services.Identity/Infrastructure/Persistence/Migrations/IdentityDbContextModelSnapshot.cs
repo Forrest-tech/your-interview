@@ -193,6 +193,31 @@ namespace YourInterview.Services.Identity.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_logs", "identity");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Identity.Domain.LogtoUserMapping", b =>
+                {
+                    b.Property<string>("LogtoUserId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<Guid>("LegacyUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("LogtoUserId");
+
+                    b.HasIndex("LegacyUserId")
+                        .IsUnique();
+
+                    b.ToTable("logto_user_mappings", "identity");
+                });
+
             modelBuilder.Entity("YourInterview.Services.Identity.Domain.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")

@@ -17,6 +17,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<LogtoUserMapping> LogtoUserMappings => Set<LogtoUserMapping>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -93,6 +94,16 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             e.Property(x => x.UserAgent).HasMaxLength(512);
             e.HasIndex(x => new { x.UserId, x.OccurredAt });
             e.HasIndex(x => x.OccurredAt);
+        });
+
+        // 票241:Guid ↔ Logto ID 迁移映射表(identity schema)。
+        b.Entity<LogtoUserMapping>(e =>
+        {
+            e.ToTable("logto_user_mappings");
+            e.HasKey(x => x.LogtoUserId);
+            e.Property(x => x.LogtoUserId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            e.HasIndex(x => x.LegacyUserId).IsUnique();
         });
     }
 }

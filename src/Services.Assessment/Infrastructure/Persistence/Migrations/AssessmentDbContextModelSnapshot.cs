@@ -344,6 +344,9 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.Property<bool?>("IsShadow")
                         .HasColumnType("boolean");
 
+                    b.Property<double?>("LaneShiftSec")
+                        .HasColumnType("double precision");
+
                     b.Property<Guid>("MaterialId")
                         .HasColumnType("uuid");
 
@@ -360,8 +363,20 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<double?>("TakeRate")
+                        .HasColumnType("double precision");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("VoiceContentType")
+                        .HasColumnType("text");
+
+                    b.Property<long?>("VoiceSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("VoiceStoragePath")
+                        .HasColumnType("text");
 
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()

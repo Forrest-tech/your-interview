@@ -673,6 +673,13 @@
                 </div>
                 <span class="hi-time">{{ fmtDuration(row.durationSec) }}</span>
                 <span class="spacer"></span>
+                <!-- 票259 S2：人声轨上传失败时，行上只重传人声轨（绝不重传混音）。 -->
+                @if (shadow.voiceTrackFailedFor() === row.serverId) {
+                  <button class="hi-retry" [matTooltip]="t('practice.shadow.retryVoice')"
+                          (click)="$event.stopPropagation(); shadow.retryVoiceTrack(row)">
+                    <mat-icon>cloud_upload</mat-icon>
+                  </button>
+                }
                 <button class="hi-del" [matTooltip]="t('practice.discardTake')"
                         (click)="$event.stopPropagation(); shadow.removeShadowRow(row)">
                   <mat-icon>delete_outline</mat-icon>
@@ -716,6 +723,13 @@
                       <mat-icon>{{ shadow.shadowPlayingId() === row.id ? 'pause' : 'play_arrow' }}</mat-icon>
                       <span>{{ t('practice.shadow.playTogether') }}</span>
                     </button>
+                    <!-- 票259 S2：人声轨上传失败时，展开区也可只重传人声轨。 -->
+                    @if (shadow.voiceTrackFailedFor() === row.serverId) {
+                      <button class="btn-mini" (click)="shadow.retryVoiceTrack(row)">
+                        <mat-icon>cloud_upload</mat-icon>
+                        <span>{{ t('practice.shadow.retryVoice') }}</span>
+                      </button>
+                    }
                     <button class="btn-mini" [class.on]="shadow.shadowSolo() === 'voice'"
                             [disabled]="shadow.shadowVoiceMissing()"
                             (click)="shadow.toggleShadowSolo('voice')">

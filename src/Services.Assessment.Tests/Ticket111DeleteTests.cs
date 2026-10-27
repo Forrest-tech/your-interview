@@ -166,6 +166,8 @@ public sealed class Ticket111DeleteTests : IAsyncLifetime
         public string DefaultRoot => "/tmp/t111";
         public Task<string> SaveAsync(Guid u, Guid r, string e, Stream c, CancellationToken ct)
             => throw new NotSupportedException();
+        public Task<string> SaveVoiceTrackAsync(Guid u, Guid r, string e, Stream c, CancellationToken ct)
+            => throw new NotSupportedException();
         public Task<Stream?> OpenReadAsync(Guid u, string p, CancellationToken ct)
             => throw new NotSupportedException();
         public Task<bool> DeleteAsync(Guid u, string p, CancellationToken ct)

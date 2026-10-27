@@ -25,7 +25,17 @@ public sealed record RecordingDto(
     //   DELETE recordings/{id} 时 If-Match 回传钉版用。
     uint? Version = null,
     // ★ 票258 S1:服务端跟读标识。前端只见 bool,不见 NULL(NULL 映射为 false)。
-    bool IsShadow = false);
+    bool IsShadow = false,
+    // ★ 票259 S2:人声轨存在标识（VoiceStoragePath 非空）+ 双轨对齐参数。
+    //   NULL = 非跟读行或 S2 之前录的旧行；列表渲染据此决定是否可取人声轨，
+    //   不再每行多一次请求。
+    bool HasVoiceTrack = false,
+    double? TakeRate = null,
+    double? LaneShiftSec = null);
+
+/// <summary>票 259(S3-S2)：人声轨上传/读取结果（行 + 文件三元组 + 对齐参数）。</summary>
+public sealed record VoiceTrackDto(Guid RecordingId, string ContentType, long SizeBytes,
+    double? TakeRate, double? LaneShiftSec);
 
 /// <summary>
 /// 发音评分结果。

@@ -143,6 +143,19 @@ export interface RecordingDto {
   version?: number | null;
   /** ★ 票258 S1:服务端跟读标识(缺省 = 历史行/非跟读,按 false 处理)。 */
   isShadow?: boolean;
+  /** ★ 票259 S2:人声轨存在 + 双轨对齐参数（NULL = 非跟读行或旧行）。 */
+  hasVoiceTrack?: boolean;
+  takeRate?: number | null;
+  laneShiftSec?: number | null;
+}
+
+/** 票259 S2：人声轨上传结果（行 + 文件三元组 + 对齐参数）。 */
+export interface VoiceTrackDto {
+  recordingId: string;
+  contentType: string;
+  sizeBytes: number;
+  takeRate?: number | null;
+  laneShiftSec?: number | null;
 }
 
 // ---------- LLM 设置(2026-09-18 新增;M2.3 起收敛到 AiGateway:/api/ai/*) ----------
@@ -477,6 +490,28 @@ export class PracticeApi {
    */
   fetchRecordingAudio(recordingId: string): Observable<Blob> {
     return this.api.getBlob(`${PracticeApi.BASE}/recordings/${recordingId}/audio`);
+  }
+
+  /**
+   * 票259 S2：上传/覆盖一条录音的人声轨（跟读跨设备：人声跟人走）。
+   * 对齐参数缺省不传 = 保留服务端既有值（重传不带参数时不抹对齐）。
+   */
+  uploadVoiceTrack(recordingId: string, blob: Blob, fileName: string,
+    contentType: string, takeRate?: number, laneShiftSec?: number): Observable<VoiceTrackDto> {
+    const fd = new FormData();
+    fd.append('file', blob, fileName);
+    if (takeRate !== undefined) fd.append('takeRate', String(takeRate));
+    if (laneShiftSec !== undefined) fd.append('laneShiftSec', String(laneShiftSec));
+    return this.api.postForm<VoiceTrackDto>(
+      `${PracticeApi.BASE}/recordings/${recordingId}/voice-track`, fd);
+  }
+
+  /**
+   * 票259 S2：取一条录音的人声轨（另一设备打开时取回人声）。
+   * 无人声轨时后端回 404，调用方回落 S1 降级态，绝不抛到界面当 500。
+   */
+  fetchVoiceTrack(recordingId: string): Observable<Blob> {
+    return this.api.getBlob(`${PracticeApi.BASE}/recordings/${recordingId}/voice-track`);
   }
 
   // ---------- 票119 词典(点词查词典) ----------

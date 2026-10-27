@@ -22,6 +22,16 @@ public interface IAudioStore
     Task<string> SaveAsync(Guid userId, Guid recordingId, string extension,
         Stream content, CancellationToken ct);
 
+    /// <summary>
+    /// 票 259(S3-S2)：把**人声轨**写盘,返回相对路径。
+    /// 文件名与混音轨区分：`{recordingId}-voice.{ext}`（SaveAsync 的
+    /// `{recordingId}.{ext}` 与之同扩展名时会撞名 —— 人声轨绝不能复用
+    /// SaveAsync，否则同扩展名的混音会被人声覆盖）。根目录解析、原子写盘
+    /// 与 SaveAsync 完全一致；读/删走相对路径，不用改。
+    /// </summary>
+    Task<string> SaveVoiceTrackAsync(Guid userId, Guid recordingId, string extension,
+        Stream content, CancellationToken ct);
+
     /// <summary>打开音频读取流。文件不存在返回 null(不抛)。</summary>
     Task<Stream?> OpenReadAsync(Guid userId, string relativePath, CancellationToken ct);
 
@@ -129,7 +139,18 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
         return new StorageRoots(_defaultRoot, desired, _defaultRoot, false, reason);
     }
 
-    public async Task<string> SaveAsync(Guid userId, Guid recordingId, string extension,
+    public Task<string> SaveAsync(Guid userId, Guid recordingId, string extension,
+        Stream content, CancellationToken ct)
+        => SaveInternalAsync(userId, recordingId.ToString("N") + "." + extension.TrimStart('.'),
+            content, ct);
+
+    /// <summary>票 259(S3-S2)：人声轨与混音轨文件名区分（见接口注）。</summary>
+    public Task<string> SaveVoiceTrackAsync(Guid userId, Guid recordingId, string extension,
+        Stream content, CancellationToken ct)
+        => SaveInternalAsync(userId, recordingId.ToString("N") + "-voice." + extension.TrimStart('.'),
+            content, ct);
+
+    private async Task<string> SaveInternalAsync(Guid userId, string fileName,
         Stream content, CancellationToken ct)
     {
         var roots = await ResolveRootsAsync(userId, ct);
@@ -140,7 +161,6 @@ public sealed class LocalAudioStore(IConfiguration config, IServiceScopeFactory 
         var now = DateTimeOffset.UtcNow;
         var userPart = userId.ToString("N")[..8];
         var relDir = Path.Combine(userPart, now.Year.ToString("D4"), now.Month.ToString("D2"));
-        var fileName = recordingId.ToString("N") + "." + extension.TrimStart('.');
         var relative = Path.Combine(relDir, fileName);
 
         var absolute = Path.Combine(roots.ActiveRoot, relative);

@@ -605,6 +605,46 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     }
 
     /// <summary>
+    /// 票 259(S3-S2)：上传/覆盖一条录音的人声轨（跟读跨设备：人声跟人走）。
+    /// 行归属口径与混音读/删一致：非本人行 = 404。重传整体覆盖（最后写入胜出）。
+    /// </summary>
+    [HttpPost("recordings/{id:guid}/voice-track")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    [RequestSizeLimit(26 * 1024 * 1024)]
+    public async Task<IResult> UploadVoiceTrack(Guid id,
+        [FromForm] double? takeRate, [FromForm] double? laneShiftSec,
+        IFormFile file, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        if (file is null || file.Length == 0)
+            return Results.Problem(title: "没有收到音频", detail: "请先录音再上传。",
+                statusCode: StatusCodes.Status400BadRequest);
+
+        await using var stream = file.OpenReadStream();
+        var result = await sender.Send(new UploadVoiceTrackCommand(userId, id, file.FileName,
+            file.ContentType, stream, takeRate, laneShiftSec), ct);
+
+        return result.IsSuccess ? Results.Ok(result.Value) : result.ToProblemDetails();
+    }
+
+    /// <summary>
+    /// 票 259(S3-S2)：取一条录音的人声轨（另一设备打开时取回人声）。
+    /// 无人声轨 → 404，调用方回落 S1 降级态（本设备无此人声道），绝不 500。
+    /// </summary>
+    [HttpGet("recordings/{id:guid}/voice-track")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
+    public async Task<IResult> GetVoiceTrack(Guid id, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new GetVoiceTrackQuery(userId, id), ct);
+        if (!result.IsSuccess) return result.ToProblemDetails();
+
+        var (stream, contentType, fileName) = result.Value;
+        // 与混音回放一致：enableRangeProcessing 让浏览器音频控件能拖动进度条。
+        return Results.File(stream, contentType, fileName, enableRangeProcessing: true);
+    }
+
+    /// <summary>
     /// 取已缓存的评分 —— **不调 Azure**。
     /// 前端打开录音列表时先打这个:命中就不必再花额度重评。
     /// </summary>

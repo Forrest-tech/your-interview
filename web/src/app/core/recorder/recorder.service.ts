@@ -34,6 +34,10 @@ export interface Recording {
   version?: number | null;
   /** ★ 票258 S1:服务端跟读标识(缺省 = 历史行/非跟读,按 false 处理)。 */
   isShadow?: boolean;
+  /** ★ 票259 S2:人声轨存在 + 双轨对齐参数（NULL = 非跟读行或旧行）。 */
+  hasVoiceTrack?: boolean;
+  takeRate?: number | null;
+  laneShiftSec?: number | null;
 }
 
 /** Azure 发音评估结果(与后端返回结构对齐)。 */
@@ -548,7 +552,11 @@ export class RecorderService {
       error: null,
       version: d.version ?? null,
       // ★ 票258 S1:服务端跟读标识透传(缺省 false = 历史行/非跟读)。
-      isShadow: d.isShadow ?? false
+      isShadow: d.isShadow ?? false,
+      // ★ 票259 S2:人声轨存在 + 对齐参数透传（列表渲染据此决定是否可取人声轨）。
+      hasVoiceTrack: d.hasVoiceTrack ?? false,
+      takeRate: d.takeRate ?? null,
+      laneShiftSec: d.laneShiftSec ?? null
     };
   }
 

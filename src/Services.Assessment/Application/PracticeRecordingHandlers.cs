@@ -95,7 +95,11 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
             scoreVersions is not null && scoreVersions.TryGetValue(x.Id, out var v) ? v : null),
         recordingVersions is not null && recordingVersions.TryGetValue(x.Id, out var rv) ? rv : null,
         // ★ 票258 S1:NULL(历史行)映射为 false,前端只见 bool。
-        x.IsShadow ?? false);
+        x.IsShadow ?? false,
+        // ★ 票259 S2:人声轨存在 = VoiceStoragePath 非空；对齐参数原样透传（NULL 保持 NULL）。
+        !string.IsNullOrWhiteSpace(x.VoiceStoragePath),
+        x.TakeRate,
+        x.LaneShiftSec);
 
     internal static IReadOnlyList<WordScoreDto> DeserializeWords(string? json)
     {
@@ -183,7 +187,9 @@ public sealed class SaveRecordingCommandHandler(AssessmentDbContext db, IAudioSt
     /// 从 MIME 猜扩展名。
     /// 浏览器录的是 audio/webm;opus,但也要能吃下别处传来的 wav/mp3。
     /// </summary>
-    private static string GuessExtension(string? contentType, string? fileName)
+    /// 票 259(S3-S2)：人声轨上传复用同一 MIME→扩展名映射（分叉映射会让
+    /// 混音与人声轨的扩展名口径不一致）。
+    internal static string GuessExtension(string? contentType, string? fileName)
     {
         var ct = (contentType ?? string.Empty).ToLowerInvariant();
         if (ct.Contains("webm")) return "webm";
@@ -280,6 +286,17 @@ public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudio
                     rec.Id, path);
         }
 
+        // ①b 票 259(S3-S2)：人声轨同删（混音先删、人声后删，任一删失败只记
+        //     Warning、行仍删 —— 与混音既有口径一致，不立新口径）。
+        var voicePath = rec.VoiceStoragePath;
+        if (!string.IsNullOrWhiteSpace(voicePath))
+        {
+            var voiceGone = await store.DeleteAsync(r.UserId, voicePath, ct);
+            if (!voiceGone)
+                logger.LogWarning("录音 {RecordingId} 的人声轨删除失败,留下孤儿文件 {Path};数据库行仍将删除",
+                    rec.Id, voicePath);
+        }
+
         // ② 再硬删数据库行(不走 MarkDeleted,直接 Remove)
         db.Recordings.Remove(rec);
         await db.SaveChangesAsync(ct);
@@ -288,6 +305,134 @@ public sealed class DeleteRecordingCommandHandler(AssessmentDbContext db, IAudio
             r.RecordingId, fileGone ? "已删" : "删除失败/孤儿");
 
         return Result.Success();
+    }
+}
+
+/// <summary>
+/// 票 259(S3-S2)：上传/覆盖一条录音的人声轨（跟读跨设备：人声跟人走）。
+/// </summary>
+/// <remarks>
+/// 安全顺序（绑定，P18 copy-then-verify-then-delete）：
+///   ① 新文件落盘（`{recordingId}-voice.{ext}`，与混音轨文件名区分）；
+///   ② 回读校验新文件 size &gt; 0（校验失败 → 直接失败，旧文件与行一字不动）；
+///   ③ 行挂接新人声轨并落库；
+///   ④ 删旧文件（旧路径与新路径相同 = 同月同扩展名原地覆盖 → 不删，
+///      否则会把刚写的新文件删掉）。删旧失败只记 Warning，行已是新轨，
+///      旧文件成孤儿（与混音删文件的既有口径一致）。
+/// 并发口径（Q5）：最后写入胜出 —— 整 blob 替换，无部分写入、无钉版。
+///   重传不带 takeRate/laneShiftSec 时保留既有对齐参数（AttachVoiceTrack 语义）。
+/// </remarks>
+public sealed record UploadVoiceTrackCommand(Guid UserId, Guid RecordingId, string? FileName,
+    string ContentType, Stream Audio, double? TakeRate = null, double? LaneShiftSec = null)
+    : MediatR.IRequest<Result<VoiceTrackDto>>;
+
+public sealed class UploadVoiceTrackCommandHandler(AssessmentDbContext db, IAudioStore store,
+    ILogger<UploadVoiceTrackCommandHandler> logger)
+    : MediatR.IRequestHandler<UploadVoiceTrackCommand, Result<VoiceTrackDto>>
+{
+    // 与混音上传同一上限：不为新轨另立口径（计划 §3.1）。
+    private const long MaxBytes = 25 * 1024 * 1024;
+
+    public async Task<Result<VoiceTrackDto>> Handle(UploadVoiceTrackCommand r, CancellationToken ct)
+    {
+        if (!store.IsConfigured)
+            return Result.Failure<VoiceTrackDto>(Error.Unexpected(
+                "音频存储未配置(Storage:RootDirectory)。"));
+
+        // 行必须属于我 —— 非本人行按「不存在」处理（与混音读/删同一口径：404，绝不 403）。
+        var rec = await db.Recordings
+            .FirstOrDefaultAsync(x => x.Id == r.RecordingId && x.UserId == r.UserId && !x.IsDeleted, ct);
+        if (rec is null) return Result.Failure<VoiceTrackDto>(Error.NotFound("录音"));
+
+        var effectiveType = (r.ContentType ?? string.Empty).Trim();
+        if (!effectiveType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<VoiceTrackDto>(Error.Validation("Recording.NotAudio",
+                "人声轨必须是音频文件。"));
+
+        var buffered = new MemoryStream();
+        await r.Audio.CopyToAsync(buffered, ct);
+        if (buffered.Length == 0)
+            return Result.Failure<VoiceTrackDto>(Error.Validation("Recording.Empty", "录音内容为空。"));
+        if (buffered.Length > MaxBytes)
+            return Result.Failure<VoiceTrackDto>(Error.Validation("Recording.TooLarge",
+                $"录音 {buffered.Length / 1024.0 / 1024.0:F1}MB 超过 {MaxBytes / 1024 / 1024}MB 上限。"));
+
+        // ① 新文件落盘（与混音轨文件名区分，见 IAudioStore.SaveVoiceTrackAsync 注）。
+        buffered.Position = 0;
+        var ext = SaveRecordingCommandHandler.GuessExtension(effectiveType, r.FileName);
+        var newPath = await store.SaveVoiceTrackAsync(r.UserId, rec.Id, ext, buffered, ct);
+
+        // ② 回读校验：新文件必须真实存在且 size > 0，否则旧轨与行一字不动。
+        var persistedOk = false;
+        var verify = await store.OpenReadAsync(r.UserId, newPath, ct);
+        if (verify is not null)
+        {
+            await using (verify)
+            {
+                if (verify.CanSeek) persistedOk = verify.Length > 0;
+                else
+                {
+                    var drain = new MemoryStream();
+                    await verify.CopyToAsync(drain, ct);
+                    persistedOk = drain.Length > 0;
+                }
+            }
+        }
+        if (!persistedOk)
+        {
+            logger.LogWarning("人声轨 {RecordingId} 写入后回读校验失败（新路径 {Path}），旧轨未动",
+                rec.Id, newPath);
+            return Result.Failure<VoiceTrackDto>(Error.Unexpected("人声轨写入后校验失败，请重试。"));
+        }
+
+        // ③ 行挂接新人声轨并落库（对齐参数缺省则保留既有值）。
+        var oldPath = rec.VoiceStoragePath;
+        rec.AttachVoiceTrack(newPath, effectiveType, buffered.Length, r.TakeRate, r.LaneShiftSec);
+        await db.SaveChangesAsync(ct);
+
+        // ④ 删旧文件（路径相同 = 原地覆盖，不删；删失败只记 Warning，行已是新轨）。
+        if (!string.IsNullOrWhiteSpace(oldPath)
+            && !string.Equals(oldPath, newPath, StringComparison.Ordinal))
+        {
+            var oldGone = await store.DeleteAsync(r.UserId, oldPath, ct);
+            if (!oldGone)
+                logger.LogWarning("录音 {RecordingId} 的旧人声轨删除失败，留下孤儿文件 {Path}；行已指向新轨",
+                    rec.Id, oldPath);
+        }
+
+        return Result.Success(new VoiceTrackDto(rec.Id, effectiveType, buffered.Length,
+            rec.TakeRate, rec.LaneShiftSec));
+    }
+}
+
+/// <summary>票 259(S3-S2)：取一条录音的人声轨音频流（另一设备打开时取回人声）。</summary>
+/// <remarks>
+/// 无人声轨（旧行 / 仅混音行）→ NotFound（404），调用方回落 S1 降级态，
+/// 绝不 500。行归属口径与混音读一致：非本人行 = 不存在（404，不 403）。
+/// </remarks>
+public sealed record GetVoiceTrackQuery(Guid UserId, Guid RecordingId)
+    : MediatR.IRequest<Result<(Stream Audio, string ContentType, string FileName)>>;
+
+public sealed class GetVoiceTrackQueryHandler(AssessmentDbContext db, IAudioStore store)
+    : MediatR.IRequestHandler<GetVoiceTrackQuery, Result<(Stream, string, string)>>
+{
+    public async Task<Result<(Stream, string, string)>> Handle(GetVoiceTrackQuery r, CancellationToken ct)
+    {
+        var rec = await db.Recordings.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == r.RecordingId && x.UserId == r.UserId && !x.IsDeleted, ct);
+        if (rec is null) return Result.Failure<(Stream, string, string)>(Error.NotFound("录音"));
+
+        if (string.IsNullOrWhiteSpace(rec.VoiceStoragePath))
+            return Result.Failure<(Stream, string, string)>(Error.NotFound("人声轨"));
+
+        var s = await store.OpenReadAsync(r.UserId, rec.VoiceStoragePath, ct);
+        if (s is null)
+            return Result.Failure<(Stream, string, string)>(Error.NotFound("人声轨文件"));
+
+        var ext = Path.GetExtension(rec.VoiceStoragePath).TrimStart('.');
+        var contentType = string.IsNullOrWhiteSpace(rec.VoiceContentType)
+            ? "audio/webm" : rec.VoiceContentType;
+        return Result.Success((s, contentType, $"recording-{rec.Id:N}-voice.{ext}"));
     }
 }
 

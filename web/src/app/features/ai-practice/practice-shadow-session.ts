@@ -106,13 +106,14 @@ export function isShadowRow(serverIsShadow: boolean | undefined, hasLocalLink: b
 /**
  * ★ 票258 S1：无本地链接的服务端跟读行（另一设备上的 1x 混音行）。
  * 这类行只有服务端混音可播：kind 恒为 'mix'（dual 行无 Submit，不可能
- * 经服务端来）、mixStatus 'done'、rate 缺省 1（take 率元数据是 S2 的
- * TakeRate 列，S1 尚无从得知）、localTakeId 为空串（无本地 take）。
- * 展开时 meta 为 null → 人声道走既有降级态（“本设备无此人声道”+
- * solo 禁用），混音经服务端取回播放；不新增降级文案。
+ * 经服务端来）、mixStatus 'done'、localTakeId 为空串（无本地 take）。
+ * ★ 票259 S2：take 率取服务端 TakeRate 列（缺省 1 = S1 之前录的旧行，
+ * 无对齐参数）；展开时 meta 为 null → 人声道先试取服务端人声轨，
+ * 取不到才走既有降级态（“本设备无此人声道”+ solo 禁用），混音经服务端
+ * 取回播放；不新增降级文案。
  */
 export function serverOnlyShadowRows(
-  recordings: Pick<Recording, 'id' | 'createdAt' | 'duration' | 'isShadow'>[],
+  recordings: Pick<Recording, 'id' | 'createdAt' | 'duration' | 'isShadow' | 'takeRate'>[],
   linkedIds: ReadonlySet<string>,
 ): ShadowRowView[] {
   const rows: ShadowRowView[] = [];
@@ -125,7 +126,7 @@ export function serverOnlyShadowRows(
       serverId: r.id,
       createdAt: r.createdAt,
       durationSec: r.duration,
-      rate: 1,
+      rate: r.takeRate ?? 1,
       kind: 'mix',
       mixStatus: 'done',
       uploaded: true,
@@ -221,6 +222,8 @@ export class PracticeShadowSession {
   readonly shadowMixProgress = signal(0);
   /** P29g：Stop 写失败标志（写进内存退路而非 IndexedDB 时置位）。 */
   readonly shadowStorageFailed = signal(false);
+  /** 票259 S2：人声轨上传失败的服务端行 id（仅该行显示“重试传人声”）。 */
+  readonly voiceTrackFailedFor = signal<string | null>(null);
 
   // ---------- 列表与展开 ----------
   private readonly shadowMeta = signal<Map<string, ShadowTakeRecord>>(new Map());
@@ -347,6 +350,8 @@ export class PracticeShadowSession {
   private expandedRefEl: HTMLAudioElement | null = null;
   private expandedMixEl: HTMLAudioElement | null = null;
   private fetchedAudio = new Map<string, string>();
+  /** 票259 S2：会话内已取回的人声轨 blob（按服务端行 id 缓存，免重复下载）。 */
+  private fetchedVoiceBlobs = new Map<string, Blob>();
 
   // ---------- 模式 ----------
   async toggleShadowMode(): Promise<void> {
@@ -948,6 +953,8 @@ export class PracticeShadowSession {
     this.shadowMixStatus.set('uploading');
     const metaBefore = await this.storeRecord(pending.localTakeId);
     if (metaBefore) await putShadowTake({ ...metaBefore, pendingUpload: true });
+    // ★ 票259 S2：人声 blob 取自提交前记录（重键后键已变，事后取不到旧键）。
+    const pendingVoiceBlob = metaBefore?.voiceBlob ?? null;
     try {
       const dto = await firstValueFrom(
         this.host.practiceApi.uploadRecording(
@@ -988,6 +995,13 @@ export class PracticeShadowSession {
         if (cur) await putShadowTake({ ...cur, serverId: dto.id, pendingUpload: true });
         this.shadowError.set(this.host.t('practice.shadow.rekeyFailed'));
       }
+      // ★ 票259 S2：混音行已落库 → 跟传人声轨（人声跟人走）。
+      //   人声失败不影响混音行：行留在 S1 态（混音 + 降级人声道），仅置
+      //   失败标志 + toast，行上的重试钮只重传人声轨、绝不重传混音。
+      if (pendingVoiceBlob && pendingVoiceBlob.size > 0) {
+        await this.uploadVoiceTrackFor(dto.id, pending.localTakeId,
+          pendingVoiceBlob, pending.rate, pending.laneShiftSec);
+      }
       this.shadowPending.set(null);
       this.shadowMixStatus.set('done');
       this.host.toast(this.host.t('practice.shadow.submitted'));
@@ -1004,6 +1018,50 @@ export class PracticeShadowSession {
     } finally {
       this.host.cdr.detectChanges();
     }
+  }
+
+  /**
+   * 票259 S2：上传一条已落库跟读行的人声轨（提交时跟传 + 行重试共用）。
+   * 成功后校验-丢弃：服务端 GET 回读 size > 0 才删本地 voiceBlob
+   * （copy-then-verify-then-delete；peaks/F0 保留，即时渲染不受影响；
+   * 校验失败则保留本地 blob，人声仍可用）。上传失败 → 置失败标志 +
+   * toast，混音行本身不受影响；重试只重传人声轨。
+   * @returns 上传是否成功（校验失败仍算成功：服务端已有声轨）。
+   */
+  private async uploadVoiceTrackFor(serverId: string, localTakeId: string,
+    voiceBlob: Blob, rate: number, laneShiftSec: number): Promise<boolean> {
+    const mime = voiceBlob.type || 'audio/webm';
+    try {
+      await firstValueFrom(this.host.practiceApi.uploadVoiceTrack(serverId, voiceBlob,
+        `shadow-voice-${Date.now()}.${extOf(mime)}`, mime, rate, laneShiftSec));
+    } catch {
+      this.voiceTrackFailedFor.set(serverId);
+      this.host.toast(this.host.t('practice.shadow.voiceUploadFailed'));
+      return false;
+    }
+    if (this.voiceTrackFailedFor() === serverId) this.voiceTrackFailedFor.set(null);
+    try {
+      const verify = await firstValueFrom(this.host.practiceApi.fetchVoiceTrack(serverId));
+      if (verify.size > 0) {
+        this.fetchedVoiceBlobs.set(serverId, verify);
+        const rec = await this.storeRecord(serverId) ?? await this.storeRecord(localTakeId);
+        if (rec) await putShadowTake({ ...rec, voiceBlob: null });
+        await this.refreshShadowMeta();
+      }
+    } catch {
+      // 校验取回失败：本地 blob 保留（不删），展开时仍可从服务端取回。
+    }
+    return true;
+  }
+
+  /** 票259 S2：人声轨上传重试（只重传人声轨，绝不重传混音）。 */
+  async retryVoiceTrack(row: ShadowRowView): Promise<void> {
+    if (!row.serverId || !row.localTakeId) return;
+    const rec = await this.storeRecord(row.serverId) ?? await this.storeRecord(row.localTakeId);
+    const voiceBlob = rec?.voiceBlob ?? null;
+    if (!voiceBlob || voiceBlob.size === 0) return;
+    await this.uploadVoiceTrackFor(row.serverId, row.localTakeId,
+      voiceBlob, row.rate, rec?.laneShiftSec ?? 0);
   }
 
   async discardShadowPending(): Promise<void> {
@@ -1160,8 +1218,31 @@ export class PracticeShadowSession {
         voiceBlob = null;
       }
     }
+    // ★ 票259 S2：人声道仍缺失且行已落库 → 试取服务端人声轨（另一设备打开）。
+    //   取到则解码供声轨用；404/失败 → 保持既有降级态（文案一字不变）。
+    let fetchedVoiceDec: { data: ArrayLike<number>; sampleRate: number } | null = null;
+    if ((!voiceBlob || voiceBlob.size === 0) && row.serverId) {
+      try {
+        const cached = this.fetchedVoiceBlobs.get(row.serverId);
+        const blob = cached ??
+          await firstValueFrom(this.host.practiceApi.fetchVoiceTrack(row.serverId));
+        if (!cached) this.fetchedVoiceBlobs.set(row.serverId, blob);
+        if (blob.size > 0) {
+          const dec = await this.decodeAudio(blob);
+          if (dec) {
+            voiceBlob = blob;
+            fetchedVoiceDec = dec;
+          }
+        }
+      } catch {
+        // 取不到人声轨 = 降级态（旧行/仅混音行），不报错。
+      }
+    }
     this.shadowVoiceMissing.set(!voiceBlob || voiceBlob.size === 0);
-    this.shadowExpandedPeaks.set(meta?.peaks ?? []);
+    // 峰值：本地缓存优先（丢弃后仍保留）；无缓存则用取回人声的解码结果。
+    this.shadowExpandedPeaks.set(
+      meta?.peaks?.length ? meta.peaks :
+        fetchedVoiceDec ? bucketPeaks(fetchedVoiceDec.data, fetchedVoiceDec.sampleRate) : []);
     // 参考：缓存优先（与 take 的 refKey 一致）；缺失 = 参考 lane 不可用态。
     // ★ 票258 S1：meta 为 null 的服务端-only 行（无本地 take）不得借用
     //   上一行残留的 this.refBlob——仅当 meta 存在且 refKey 命中时才回落。

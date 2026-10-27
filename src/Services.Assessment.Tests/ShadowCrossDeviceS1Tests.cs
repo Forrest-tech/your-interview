@@ -164,6 +164,9 @@ public sealed class ShadowCrossDeviceS1Tests : IAsyncLifetime
         public Task<string> SaveAsync(Guid userId, Guid recordingId, string extension,
             Stream content, CancellationToken ct)
             => Task.FromResult($"{userId}/{recordingId}.{extension}");
+        public Task<string> SaveVoiceTrackAsync(Guid userId, Guid recordingId, string extension,
+            Stream content, CancellationToken ct)
+            => Task.FromResult($"{userId}/{recordingId}-voice.{extension}");
         public Task<Stream?> OpenReadAsync(Guid userId, string relativePath, CancellationToken ct)
             => Task.FromResult<Stream?>(null);
         public Task<bool> DeleteAsync(Guid userId, string relativePath, CancellationToken ct)

@@ -266,6 +266,18 @@ public sealed class PracticeRecording
     /// NULL = S1 之前录的历史行(未知),DTO 映射为 false,过滤时按非跟读处理。
     /// </summary>
     public bool? IsShadow { get; private set; }
+
+    // ---- 票 259(S3-S2)：跨设备跟读 — 人声轨文件三元组 + 双轨对齐参数 ----
+    /// <summary>人声轨相对路径（NULL = 无人声轨；旧行与仅混音行均为 NULL）。</summary>
+    public string? VoiceStoragePath { get; private set; }
+    /// <summary>人声轨 ContentType（audio/*；与文件一同写入）。</summary>
+    public string? VoiceContentType { get; private set; }
+    /// <summary>人声轨字节数（写时校验 &gt; 0 的依据）。</summary>
+    public long? VoiceSizeBytes { get; private set; }
+    /// <summary>跟读倍速（take 率；NULL = 非跟读行或旧行）。</summary>
+    public double? TakeRate { get; private set; }
+    /// <summary>墙钟 laneShift（秒；NULL = 非跟读行或旧行）。</summary>
+    public double? LaneShiftSec { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public bool IsDeleted { get; private set; }
 
@@ -273,6 +285,22 @@ public sealed class PracticeRecording
     public PracticeRecordingScore? Score { get; private set; }
 
     public void AttachScore(PracticeRecordingScore score) => Score = score;
+
+    /// <summary>
+    /// 票 259(S3-S2)：挂接/覆盖人声轨。路径/类型/字节数总是整体覆盖；
+    /// 倍速与 laneShift 仅当调用方传值时覆盖（缺省保留既有值——首次上传写，
+    /// 重传不带参数时不抹掉旧对齐参数）。调用方须先完成安全顺序：
+    /// 新文件落盘并校验 size &gt; 0 后才调用本方法、再删旧文件。
+    /// </summary>
+    public void AttachVoiceTrack(string path, string contentType, long sizeBytes,
+        double? takeRate, double? laneShiftSec)
+    {
+        VoiceStoragePath = path;
+        VoiceContentType = contentType;
+        VoiceSizeBytes = sizeBytes;
+        if (takeRate.HasValue) TakeRate = takeRate.Value;
+        if (laneShiftSec.HasValue) LaneShiftSec = laneShiftSec.Value;
+    }
 
     /// <summary>重新评分时替换旧结果(可重跑是硬要求)。</summary>
     public void ReplaceScore(PracticeRecordingScore score)

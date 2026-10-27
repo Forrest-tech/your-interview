@@ -154,6 +154,15 @@ services:
       #   interviews 上传写盘,Worker 从同一位置读文件跑转写/分析。
       #   数据库只存相对路径,两个服务各自锚定自己的根(容器内路径一致即可)。
       INTERVIEW_STORAGE_DIR: /app/storage/interviews
+      # ★ 票 240：邮箱直连导入 OAuth（空 = 未配置，连接端点会明确报错；
+      #   真实值由部署方填环境变量，绝不进 git；RedirectUri 须与云端登记一字一致）。
+      Mailbox__Google__ClientId: "${MAILBOX_GOOGLE_CLIENT_ID:-}"
+      Mailbox__Google__ClientSecret: "${MAILBOX_GOOGLE_CLIENT_SECRET:-}"
+      Mailbox__Google__RedirectUri: "${MAILBOX_GOOGLE_REDIRECT_URI:-}"
+      Mailbox__Microsoft__ClientId: "${MAILBOX_MICROSOFT_CLIENT_ID:-}"
+      Mailbox__Microsoft__ClientSecret: "${MAILBOX_MICROSOFT_CLIENT_SECRET:-}"
+      Mailbox__Microsoft__RedirectUri: "${MAILBOX_MICROSOFT_REDIRECT_URI:-}"
+      Mailbox__FrontendBaseUrl: "${MAILBOX_FRONTEND_BASE_URL:-http://localhost:4200}"
     volumes:
       - interview-recordings:/app/storage/interviews
     depends_on: *service-deps

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using YourInterview.BuildingBlocks.Ai;
@@ -43,6 +44,25 @@ builder.Services.AddHealthChecks().AddDbContextCheck<InterviewsDbContext>("postg
 builder.Services.AddHttpContextAccessor();
 // 票38:注册口径下沉 BuildingBlocks.AddAiGatewayClient(回落 5268、超时 3 分钟,原口径不变)。
 builder.Services.AddAiGatewayClient(builder.Configuration["AiGateway:BaseUrl"]);
+
+// ---------- 票 240：邮箱直连导入(OAuth 只读、token 加密存储、手动刷新) ----------
+// Secret 一律走配置（appsettings 空占位 + 环境变量注入），绝不硬编码、不进日志。
+builder.Services.Configure<MailboxOptions>(builder.Configuration.GetSection(MailboxOptions.Section));
+var mailboxKeysDir = builder.Configuration["Mailbox:DataProtectionKeysDir"];
+if (string.IsNullOrWhiteSpace(mailboxKeysDir))
+{
+    var storageDir = Environment.GetEnvironmentVariable("INTERVIEW_STORAGE_DIR");
+    if (string.IsNullOrWhiteSpace(storageDir)) storageDir = "/app/storage/interviews";
+    mailboxKeysDir = Path.Combine(storageDir, "mailbox-keys");
+}
+Directory.CreateDirectory(mailboxKeysDir);
+builder.Services.AddDataProtection()
+    .SetApplicationName("your-interview")
+    .PersistKeysToFileSystem(new DirectoryInfo(mailboxKeysDir));
+builder.Services.AddHttpClient<GmailMailboxProvider>();
+builder.Services.AddHttpClient<GraphMailboxProvider>();
+builder.Services.AddSingleton<MailboxProtection>();
+builder.Services.AddSingleton<IMailboxProviderFactory, MailboxProviderFactory>();
 
 // ---------- 消息总线:转写完成 → 触发分析流水线 ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration, x =>

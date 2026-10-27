@@ -3536,3 +3536,65 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 }
 .custom-q-banner mat-icon { color: #2563eb; }
 .custom-q-banner span { flex: 1; }
+
+/* 票 250：跟读模式（与既有胶囊/列表色系一致：参考蓝、活声绿）。 */
+.shadow-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid #dbeafe; background: #fff; color: #2563eb; cursor: pointer;
+}
+.shadow-toggle.on { background: #2563eb; color: #fff; border-color: #2563eb; }
+.shadow-panel {
+  margin-top: 12px; padding: 12px 14px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+}
+.shadow-hint, .shadow-alert {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 13px; color: #475569; margin-bottom: 10px;
+}
+.shadow-hint mat-icon { color: #2563eb; font-size: 18px; width: 18px; height: 18px; }
+.shadow-alert { color: #92400e; }
+.shadow-alert.is-error { color: #b91c1c; }
+.shadow-alert mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.shadow-rate-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.shadow-rate-label { font-size: 13px; color: #475569; margin-right: 4px; }
+.shadow-rate-btn {
+  padding: 4px 10px; border-radius: 999px; border: 1px solid #cbd5e1;
+  background: #fff; color: #334155; font-size: 13px; cursor: pointer;
+}
+.shadow-rate-btn.on { background: #2563eb; color: #fff; border-color: #2563eb; }
+.shadow-rate-btn:disabled { opacity: 0.5; cursor: default; }
+.shadow-start-btn, .shadow-stop-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 999px; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 500; margin-left: 8px;
+}
+.shadow-start-btn { background: #16a34a; color: #fff; }
+.shadow-stop-btn { background: #dc2626; color: #fff; }
+.shadow-lanes { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.shadow-lane { display: flex; align-items: center; gap: 10px; }
+.shadow-lane-label { width: 64px; flex-shrink: 0; font-size: 13px; color: #475569; }
+.shadow-track {
+  position: relative; flex: 1; height: 44px; display: flex; align-items: flex-end; gap: 2px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 6px;
+  overflow: hidden; cursor: pointer;
+}
+.shadow-bar { flex: 1; min-width: 2px; background: #93c5fd; border-radius: 2px 2px 0 0; }
+.shadow-bar.voice { background: #86efac; }
+.shadow-playhead {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: #dc2626; pointer-events: none;
+}
+.shadow-pitch { display: flex; gap: 20px; font-size: 13px; color: #334155; margin: 4px 0 2px 74px; }
+.shadow-pending {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px;
+  font-size: 13px; color: #334155;
+}
+.shadow-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  background: #dbeafe; color: #1d4ed8; font-size: 12px; font-weight: 500;
+}
+.shadow-expanded { padding: 10px 12px 12px; border-top: 1px solid #f1f5f9; }
+.shadow-expanded-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.shadow-expanded-actions .btn-mini.on { background: #dbeafe; color: #1d4ed8; }
+.shadow-lane-empty { font-size: 13px; color: #92400e; margin: 0; }
+.shadow-item { cursor: pointer; }

@@ -154,6 +154,14 @@ export class RecorderService {
   /** 已从后端载入过的素材 id —— 避免同一素材反复拉取。 */
   private loadedMaterials = new Set<string>();
 
+  /**
+   * 该素材的服务端录音列表是否已载入（供跟读扫除门禁，P14）：
+   * 只有成功载入过的素材，其服务端 id 集合才是扫除可信的依据。
+   */
+  hasLoadedRecordings(materialId: string): boolean {
+    return this.loadedMaterials.has(materialId);
+  }
+
   // 2026-09-15 第八轮:已删除 backendAvailable 字段。
   // 以前它用来"失败一次就不再试后端,直接走模拟",现在没有模拟了,
   // 所以每次评分都真实请求,失败如实报错,不再有静默降级状态。
@@ -463,6 +471,9 @@ export class RecorderService {
         // 拉不到就说清:历史录音在服务端,后端没起时看不到
         this.persistError.set(String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 200));
         this.loading.set(false);
+        // 首拉失败不得记为已加载：否则跟读扫除会凭空集合删已链接行，
+        // 且重选素材也不会再重试拉取。删标记，下次重选重拉。
+        this.loadedMaterials.delete(materialId);
       }
     });
   }

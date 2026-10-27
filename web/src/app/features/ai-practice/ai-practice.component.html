@@ -369,6 +369,15 @@
 
             <!-- 未配 Azure Key → 置灰不可播;点它会直接展开上面的配置浮层
                  (见 speak():没配 Key 时先展开设置,再 return)。 -->
+            <!-- 票 250：跟读模式切换（播放/录音控件附近，见 PLAN-PATCHED3 §0-1）。 -->
+            <button class="shadow-toggle" [class.on]="shadow.shadowMode()"
+                    (click)="shadow.toggleShadowMode()"
+                    [matTooltip]="shadow.shadowMode() ? t('practice.shadow.toggleOn') : t('practice.shadow.toggleOff')"
+                    [attr.aria-pressed]="shadow.shadowMode()"
+                    data-testid="shadow-toggle">
+              <mat-icon>record_voice_over</mat-icon>
+            </button>
+
             <button class="play-round" [class.is-off]="!azureReady()"
                     (click)="speak()"
                     [matTooltip]="azureReady()
@@ -454,6 +463,121 @@
           </div>
 
         </div>
+
+        <!-- 票 250：跟读面板（仅跟读模式在席；倍速录制中锁定，见 PLAN-PATCHED3 §2）。 -->
+        @if (shadow.shadowMode()) {
+          <div class="shadow-panel" data-testid="shadow-panel">
+            <div class="shadow-hint" role="note">
+              <mat-icon>headphones</mat-icon>
+              <span>{{ t('practice.shadow.headphonesHint') }}</span>
+            </div>
+
+            @if (shadow.shadowAecWarning()) {
+              <div class="shadow-alert" role="alert">
+                <mat-icon>warning_amber</mat-icon>
+                <span>{{ t('practice.shadow.aecWarning') }}</span>
+              </div>
+            }
+
+            <div class="shadow-rate-row">
+              <span class="shadow-rate-label">{{ t('practice.shadow.rate') }}</span>
+              @for (r of shadow.shadowRates; track r) {
+                <button class="shadow-rate-btn" [class.on]="shadow.shadowRate() === r"
+                        [disabled]="shadow.shadowRecording()"
+                        (click)="shadow.setShadowRate(r)">
+                  <span>{{ r }}x</span>
+                </button>
+              }
+              @if (shadow.shadowRecording()) {
+                <button class="shadow-stop-btn" (click)="shadow.stopShadow()"
+                        data-testid="shadow-stop">
+                  <mat-icon>stop</mat-icon>
+                  <span>{{ t('practice.shadow.stop') }}</span>
+                </button>
+              } @else {
+                <button class="shadow-start-btn" (click)="shadow.startShadow()"
+                        data-testid="shadow-start">
+                  <mat-icon>mic</mat-icon>
+                  <span>{{ t('practice.shadow.start') }}</span>
+                </button>
+              }
+            </div>
+
+            @if (shadow.shadowRecording()) {
+              <div class="shadow-live" data-testid="shadow-live">
+                <div class="shadow-lane">
+                  <span class="shadow-lane-label">{{ t('practice.shadow.liveRef') }}</span>
+                  <div class="shadow-track">
+                    @for (p of shadow.shadowRefPeaks(); track $index) {
+                      <span class="shadow-bar" [style.height.%]="p.v"></span>
+                    }
+                    <span class="shadow-playhead"
+                          [style.left.%]="shadow.shadowAxisLength() > 0 ? (shadow.shadowPlayhead() / shadow.shadowAxisLength() * 100) : 0"></span>
+                  </div>
+                </div>
+                <div class="shadow-lane">
+                  <span class="shadow-lane-label">{{ t('practice.shadow.liveVoice') }}</span>
+                  <div class="shadow-track">
+                    @for (p of shadow.shadowLivePeaks(); track $index) {
+                      <span class="shadow-bar voice" [style.height.%]="p.v"></span>
+                    }
+                    <span class="shadow-playhead"
+                          [style.left.%]="shadow.shadowAxisLength() > 0 ? (shadow.shadowPlayhead() / shadow.shadowAxisLength() * 100) : 0"></span>
+                  </div>
+                </div>
+                <div class="shadow-pitch" data-testid="shadow-pitch">
+                  <span>{{ t('practice.shadow.pitchVoice') }}: {{ shadow.shadowPitchVoice() === null ? '—' : shadow.shadowPitchVoice() }} Hz</span>
+                  <span>{{ t('practice.shadow.pitchRef') }}: {{ shadow.shadowPitchRef() === null ? '—' : shadow.shadowPitchRef() }} Hz</span>
+                </div>
+              </div>
+            }
+
+            @if (shadow.shadowError()) {
+              <div class="shadow-alert is-error" role="alert">
+                <mat-icon>error_outline</mat-icon>
+                <span>{{ shadow.shadowError() }}</span>
+              </div>
+            }
+
+            @if (shadow.shadowPending(); as sp) {
+              <div class="shadow-pending" data-testid="shadow-pending">
+                <span class="shadow-badge">{{ t('practice.shadow.shadowBadge') }}</span>
+                <span>{{ fmtDuration(sp.durationSec) }} · {{ sp.rate }}x</span>
+                @if (shadow.shadowMixStatus() === 'rendering') {
+                  <mat-progress-bar mode="determinate" [value]="shadow.shadowMixProgress()"></mat-progress-bar>
+                  <span>{{ t('practice.shadow.mixRendering') }} {{ shadow.shadowMixProgress() }}%</span>
+                  <button class="btn-mini" (click)="shadow.cancelShadowMix()">
+                    <span>{{ t('common.cancel') }}</span>
+                  </button>
+                } @else if (shadow.shadowMixStatus() === 'failed') {
+                  @if (sp.kind === 'mix') {
+                    <button class="btn-mini" (click)="shadow.retryShadowMix()">
+                      <span>{{ t('practice.shadow.retryMix') }}</span>
+                    </button>
+                  }
+                }
+                @if (shadow.shadowStorageFailed()) {
+                  <button class="btn-mini" (click)="shadow.retryShadowWrite()">
+                    <span>{{ t('practice.shadow.retryWrite') }}</span>
+                  </button>
+                }
+                <!-- 票 250 P29b：Submit 只属于 mix 行；dual 行无 pending 态、无提交。 -->
+                @if (sp.kind === 'mix') {
+                  <button class="btn-primary"
+                          [disabled]="shadow.shadowMixStatus() === 'rendering' || shadow.shadowMixStatus() === 'uploading'"
+                          (click)="shadow.submitShadowPending()">
+                    <mat-icon>check</mat-icon>
+                    <span>{{ t('practice.shadow.submit') }}</span>
+                  </button>
+                }
+                <button class="btn-mini danger" (click)="shadow.discardShadowPending()">
+                  <mat-icon>delete_outline</mat-icon>
+                  <span>{{ t('practice.shadow.discard') }}</span>
+                </button>
+              </div>
+            }
+          </div>
+        }
         </div><!-- /.practice-box-border -->
 
         <!-- ①-5 卡片底部导航控制栏:两端对齐 -->
@@ -519,15 +643,111 @@
         <div class="hist-head">
           <mat-icon class="hh-icon">graphic_eq</mat-icon>
           <h3>{{ t('practice.recHistory') }}</h3>
-          <span class="hh-count">({{ myRecordings().length }})</span>
+          <!-- 票 250：跟读模式只计跟读行，常规模式只计非跟读行（P24）。 -->
+          <span class="hh-count">({{ shadow.shadowMode() ? shadow.shadowRows().length : shadow.nonShadowRecordings().length }})</span>
+          @if (shadow.shadowMode()) {
+            <span class="shadow-badge">{{ t('practice.shadow.shadowBadge') }}</span>
+          }
         </div>
 
-        @if (!myRecordings().length) {
+        <!-- 票 250：跟读列表（仅跟读模式在席；无评分钮、无评分列，见 PLAN-PATCHED3 §7）。 -->
+        @if (shadow.shadowMode()) {
+          @if (!shadow.shadowRows().length) {
+            <p class="hist-empty">{{ t('practice.shadow.shadowEmpty') }}</p>
+          } @else {
+            @for (row of shadow.shadowRows(); track row.key) {
+              <div class="hist-item shadow-item" [class.active]="shadow.shadowExpandedId() === row.id"
+                   (click)="shadow.expandShadowRow(row)"
+                   tabindex="0"
+                   (keyup.enter)="shadow.expandShadowRow(row)"
+                   data-testid="shadow-row">
+                <button class="hi-play" (click)="$event.stopPropagation(); shadow.toggleShadowPlay(row)"
+                        [matTooltip]="shadow.shadowPlayingId() === row.id ? t('practice.stop') : t('practice.shadow.playTogether')">
+                  <mat-icon>{{ shadow.shadowPlayingId() === row.id ? 'pause' : 'play_arrow' }}</mat-icon>
+                </button>
+                <span class="hi-idx">{{ t('practice.shadow.shadowBadge') }} #{{ $index + 1 }}</span>
+                <span class="hi-meta">{{ fmtDuration(row.durationSec) }} · {{ row.rate }}x</span>
+                <div class="track hi-track" (click)="$event.stopPropagation(); shadow.seekShadowLane(row, $event)">
+                  <div class="track-bg"></div>
+                  <div class="track-fill" [style.width.%]="shadow.shadowPlayingId() === row.id ? (shadow.shadowPlayhead() / row.durationSec * 100) : 0"></div>
+                </div>
+                <span class="hi-time">{{ fmtDuration(row.durationSec) }}</span>
+                <span class="spacer"></span>
+                <button class="hi-del" [matTooltip]="t('practice.discardTake')"
+                        (click)="$event.stopPropagation(); shadow.removeShadowRow(row)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+
+              @if (shadow.shadowExpandedId() === row.id) {
+                <section class="shadow-expanded" data-testid="shadow-expanded">
+                  <div class="shadow-lanes">
+                    <div class="shadow-lane">
+                      <span class="shadow-lane-label">{{ t('practice.shadow.liveRef') }}</span>
+                      @if (shadow.shadowRefMissing()) {
+                        <p class="shadow-lane-empty">{{ t('practice.shadow.refUnavailable') }}</p>
+                      } @else {
+                        <div class="shadow-track" (click)="shadow.seekShadowLane(row, $event)">
+                          @for (p of shadow.shadowRefPeaks(); track $index) {
+                            <span class="shadow-bar" [style.height.%]="p.v"></span>
+                          }
+                          <span class="shadow-playhead"
+                                [style.left.%]="shadow.shadowExpandedAxis() > 0 ? (shadow.shadowPlayhead() / shadow.shadowExpandedAxis() * 100) : 0"></span>
+                        </div>
+                      }
+                    </div>
+                    <div class="shadow-lane">
+                      <span class="shadow-lane-label">{{ t('practice.shadow.liveVoice') }}</span>
+                      @if (shadow.shadowVoiceMissing()) {
+                        <p class="shadow-lane-empty">{{ t('practice.shadow.voiceUnavailable') }}</p>
+                      } @else {
+                        <div class="shadow-track" (click)="shadow.seekShadowLane(row, $event)">
+                          @for (p of shadow.shadowExpandedPeaks(); track $index) {
+                            <span class="shadow-bar voice" [style.height.%]="p.v"></span>
+                          }
+                          <span class="shadow-playhead"
+                                [style.left.%]="shadow.shadowExpandedAxis() > 0 ? (shadow.shadowPlayhead() / shadow.shadowExpandedAxis() * 100) : 0"></span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                  <div class="shadow-expanded-actions">
+                    <button class="btn-mini" (click)="shadow.toggleShadowPlay(row)">
+                      <mat-icon>{{ shadow.shadowPlayingId() === row.id ? 'pause' : 'play_arrow' }}</mat-icon>
+                      <span>{{ t('practice.shadow.playTogether') }}</span>
+                    </button>
+                    <button class="btn-mini" [class.on]="shadow.shadowSolo() === 'voice'"
+                            [disabled]="shadow.shadowVoiceMissing()"
+                            (click)="shadow.toggleShadowSolo('voice')">
+                      <span>{{ t('practice.shadow.soloVoice') }}</span>
+                    </button>
+                    <button class="btn-mini" [class.on]="shadow.shadowSolo() === 'reference'"
+                            [disabled]="shadow.shadowRefMissing()"
+                            (click)="shadow.toggleShadowSolo('reference')">
+                      <span>{{ t('practice.shadow.soloRef') }}</span>
+                    </button>
+                    <button class="btn-mini" [class.on]="shadow.shadowSolo() === 'together'"
+                            (click)="shadow.setShadowSoloTogether()">
+                      <span>{{ t('practice.shadow.together') }}</span>
+                    </button>
+                    <span class="shadow-rate-label">{{ t('practice.shadow.reviewRate') }}</span>
+                    @for (r of shadow.shadowRates; track r) {
+                      <button class="shadow-rate-btn" [class.on]="shadow.shadowReviewRate() === r"
+                              (click)="shadow.setReviewRate(r)">
+                        <span>{{ r }}x</span>
+                      </button>
+                    }
+                  </div>
+                </section>
+              }
+            }
+          }
+        } @else if (!shadow.nonShadowRecordings().length) {
           <p class="hist-empty">{{ t('practice.noRecordings') }}</p>
         } @else {
           <!-- ②-2 单条录音:横向通栏
                播放键 → Take #n + 时间/时长 → 进度条 → AI 评分 → 查看报告 → 删除 -->
-          @for (r of myRecordings(); track r.id) {
+          @for (r of shadow.nonShadowRecordings(); track r.id) {
             <div class="hist-item" [class.active]="activeTakeId() === r.id"
                  [class.grading]="r.grading"
                  (click)="toggleTakeReport(r.id)"

@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, HostListener, OnDestroy, OnInit, TemplateRef, ViewChild, ViewContainerRef, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, HostListener, NgZone, OnDestroy, OnInit, TemplateRef, ViewChild, ViewContainerRef, computed, effect, inject, signal } from '@angular/core';
 import { Overlay, OverlayRef } from '@angular/cdk/overlay';
 import { TemplatePortal } from '@angular/cdk/portal';
 import { Howler } from 'howler';
@@ -27,6 +27,7 @@ import { Recording, RecordingScore, RecorderService } from '../../core/recorder/
 import { PracticeMaterialTree } from './practice-material-tree';
 import { PracticeTtsPlayer } from './practice-tts-player';
 import { PracticeGradingSession } from './practice-grading-session';
+import { PracticeShadowSession } from './practice-shadow-session';
 import { clampFocusIndex, hasSeekableFiller, wordClickAction } from './word-click.helpers';
 import { PracticeDictionary } from './practice-dictionary';
 import { DictionaryCardComponent } from './dictionary-card.component';
@@ -75,7 +76,10 @@ function readZoomFromStorage(): number {
 export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly tree = new PracticeMaterialTree(this);
   readonly tts = new PracticeTtsPlayer(this);
-  readonly grading = new PracticeGradingSession(this);  readonly recError = this.grading.recError;
+  readonly grading = new PracticeGradingSession(this);
+  /** 票 250：跟读模式会话（状态机与音频逻辑全在委托类，组件只作暴露）。 */
+  readonly shadow = new PracticeShadowSession(this);
+  readonly recError = this.grading.recError;
   /** 票119 篇章点词词典(状态机/发音链全在委托类)。 */
   readonly dict = new PracticeDictionary(this);
 
@@ -265,6 +269,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   // ★ 2026-09-20(Forrest):Howler 的事件回调在 Angular 之外触发,
   //   必须手动 detectChanges 才能让模板看到最新的位置/状态。
   readonly cdr = inject(ChangeDetectorRef);
+  /** 票 250：跟读采集的 MediaRecorder onstop 回调需经 NgZone 回到 Angular（同 RecorderService 的 Zone 陷阱）。 */
+  readonly ngZone = inject(NgZone);
   readonly selectedId = signal<string | null>(null);
 
   /** 编辑态正文(仅编辑模式下可改)。 */
@@ -690,6 +696,7 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
       this.tts.ttsUrl = null;
     }
     this.grading.stopPlayback();
+    this.shadow.destroy();
     document.removeEventListener('scroll', this.dictScrollHandler, true);
     this.closeDictPopup();
     this.dict.destroy();
@@ -719,6 +726,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     // 换素材 → 拉该素材的历史录音(2026-09-15 第十七轮:录音已落库)。
     // 按素材懒加载,同一个素材只拉一次。
     this.recorder.loadForMaterial(n.id);
+    // 票 250：换素材 → 跟读会话切素材（停跟读回放、清展开/待提交信号、重拉跟读 meta）。
+    this.shadow.onMaterialChange();
     const text = n.content ?? '';
     this.saved.set(text);
     this.draft.set(text);

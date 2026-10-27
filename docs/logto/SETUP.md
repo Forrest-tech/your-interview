@@ -39,6 +39,10 @@ docker compose up -d logto
 
 ```bash
 # 1) 先在 Console → Applications 建一个临时 M2M 应用，取其 token（唯一需要人工的一步）
+#    注意：临时应用建好后须先在 Console 里给它指派 Management API 角色（该应用 →
+#    Roles → 选带 Logto 图标的管理角色），否则它的 token 调 Management API 回 403，
+#    setup-m2m.py 会在取应用列表处失败（沙盒实测 run-console2；沙盒里曾用 DB 直写
+#    applications_roles 行走捷径，Mac 上绝不要动库，只走 Console 指派）。
 export LOGTO_ENDPOINT=http://localhost:3001 LOGTO_ADMIN_TOKEN=<临时 M2M token>
 python3 scripts/logto-migrate/setup-m2m.py
 # 脚本建专用应用、指派管理角色、用新凭据调一次 GET /api/users 验收，打印 .env 两行。
@@ -76,6 +80,15 @@ python3 scripts/logto-migrate/setup-m2m.py
   形式——裸值曾静默把 Logto token 路由到 Legacy 校验而全 401。
 - 角色：建与现有角色同名的 Logto 角色（Admin / PowerUser / User / Viewer），每个角色授予
   对应 scope 集合。Service 角色不走 Logto，仍走现有服务间凭证。
+- **顺序（沙盒实测 2026-10-27）**：先建 SMTP 连接器（§4），再在 sign-in experience 里开
+  邮箱验证——反过来会 400 `sign_in_experiences.enabled_connector_not_found`
+  （“Enabled Email connector not found”），因为验证需要一个已存在的邮件连接器。
+- **批准后必须给用户授角色（沙盒实测 2026-10-27）**：Logto 只把用户已有角色的 scope
+  放进 token——光批准（取消停用 + approval=approved）不够。未授角色的用户登录后 token
+  的 scope 为空，`/me` 权限为空，前端按待审批打回登录页（即使镜像行已是 approved）。
+  批准流程里必须含一步“给该用户授对应角色”（Console → 用户 → Roles，或 Management
+  API `POST /users/{id}/roles`）；本沙盒验证：授 User 角色后重登录，token scope 与
+  `/me` 权限均为该角色的 10 个点值，Dashboard 正常进入。
 - 品牌：logo 与主色按现有品牌对齐（基础对齐即可，精细化二期）。
 
 ## 4. SMTP 连接器与验证邮件实测

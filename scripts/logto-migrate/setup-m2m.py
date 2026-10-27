@@ -74,10 +74,22 @@ def main():
     app_id = created.get("id")
     if not app_id:
         fail("建应用响应缺 id")
-    status, sec = api(args.endpoint, admin_token, "POST", f"/applications/{app_id}/secrets", {})
-    secret = sec.get("secret") if isinstance(sec, dict) else None
+    # 票251修正后沙盒实测（run-console2）：1.45.0 的 POST /api/applications/{id}/secrets
+    # 要求 body 带 name（空体 {} 回 400 guard.invalid_input），且建应用时已自动生成
+    # 一个 "Default secret"，重名再建回 422 secret_name_exists。因此用应用名派生的
+    # 专属 secret 名建一个新的 secret，响应里即带 secret 值；不要用 {}、不要重建
+    # "Default secret"。若此步回 422，说明该应用已有同名 secret，先在 Console 里删
+    # 应用重跑，不要改脚本去猜已有 secret 的值（API 不回显已有 secret）。
+    status, sec = api(args.endpoint, admin_token, "POST", f"/applications/{app_id}/secrets",
+                      {"name": f"{args.app_name}-secret"})
+    # 沙盒实测：1.45.0 回的 secret 值字段名是 value，不是 secret（旧代码读 secret
+    # 恒为空，误报失败；兼容两种键名，优先 value）。
+    secret = None
+    if isinstance(sec, dict):
+        secret = sec.get("value") or sec.get("secret")
     if status not in (200, 201) or not secret:
-        fail("建应用后取 secret 失败:请在 Console → 该应用 → Secrets 里取一次"
+        fail(f"建应用后取 secret 失败 HTTP {status} {sec.get('_error', '') if isinstance(sec, dict) else ''}:"
+             "请在 Console → 该应用 → Secrets 里取一次"
              "(脚本对已存在应用不自动轮换 secret,重跑只会提示已存在)。")
     print(f"[setup-m2m] 已建 M2M 应用 id={app_id}")
 

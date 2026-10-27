@@ -2,7 +2,9 @@ using YourInterview.BuildingBlocks.Security;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using YourInterview.BuildingBlocks.Results;
+using YourInterview.Services.Identity.Application.Logto;
 using YourInterview.Services.Identity.Domain;
 using YourInterview.Services.Identity.Infrastructure.Persistence;
 using YourInterview.Services.Identity.Infrastructure.Security;
@@ -33,6 +35,23 @@ public sealed record AdminUserQuery(string? Search, string? Role, bool? IsActive
 
 public sealed record AdminCreateUserCommand(string Email, string DisplayName, string Password, string[] Roles)
     : IRequest<Result<Guid>>;
+
+/// <summary>
+/// 票241:回滚重导命令 —— 把 Logto-only 用户按映射表 Guid 在旧库重建。
+/// Guid 由调用方(回滚脚本/管理端)按映射行原样传入,本 handler 绝不重 mint。
+/// </summary>
+public sealed record AdminImportLogtoUserCommand(Guid LegacyUserId, string LogtoUserId, string Email, string DisplayName,
+    bool LogtoSuspended, string? LogtoApproval)
+    : IRequest<Result<Guid>>
+{
+    /// <summary>
+    /// 票241 round-13 回滚映射:只有 approved/migrated 且未停用才导为启用;
+    /// pending 或已停用一律导为停用(回滚后管理员再按正常流程批准/解封,
+    /// 绝不能把待审批或已停用的 Logto 用户导成启用账号)。
+    /// </summary>
+    public static bool MapIsActive(string? approval, bool suspended) =>
+        !suspended && approval is "approved" or "migrated";
+}
 
 public sealed record AdminUpdateUserCommand(Guid UserId, string DisplayName, bool IsActive, bool RequirePasswordChange, string[] Roles, uint? Version = null)
     : IRequest<Result>; // 票101 Version:读时 xmin
@@ -194,11 +213,19 @@ public sealed class AdminUserQueryHandler(IdentityDbContext db)
 }
 
 public sealed class AdminCreateUserCommandHandler(
-    IdentityDbContext db, IPasswordHasher hasher, ICurrentUser currentUser)
+    IdentityDbContext db, IPasswordHasher hasher, ICurrentUser currentUser,
+    IOptions<LegacyAuthOptions> legacyAuth)
     : IRequestHandler<AdminCreateUserCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(AdminCreateUserCommand request, CancellationToken ct)
     {
+        // 票241 round-10 灰度期建号封口:灰度期起点(LegacyRegistrationEnabled=false)
+        // 之后,旧管理端不再新建账号 —— 否则会出现“迁移快照之后、Logto 之外”的
+        // 账号,既不在映射表里、又不走审批流。新增一律走 Logto 审批流。
+        // 回滚时开关翻回 true,旧端建号随之恢复(与回滚语义一致)。
+        if (!legacyAuth.Value.LegacyRegistrationEnabled)
+            return Result.Failure<Guid>(Error.Conflict("Admin.LegacyCreationClosed",
+                "灰度期旧管理端不再新建账号,请走 Logto 注册与审批流"));
         var email = AppUser.Normalize(request.Email);
         if (await db.Users.AnyAsync(u => u.Email == email, ct))
             return Result.Failure<Guid>(Error.Conflict("Auth.EmailTaken", "该邮箱已存在"));
@@ -227,7 +254,61 @@ public sealed class AdminCreateUserCommandHandler(
     }
 }
 
-public sealed class AdminUpdateUserCommandHandler(IdentityDbContext db, ICurrentUser currentUser)
+/// <summary>
+/// 票241:回滚重导 —— Logto-only 用户按映射表 Guid 重建旧账号。
+///   · Guid 精确复用(绝不重 mint):灰度期业务数据按此 Guid 记账,重 mint 即孤儿数据;
+///   · 密码无法重导(Logto 不暴露哈希):置不可登录随机哈希 + MustChangePassword,
+///     管理员用已有重置端点发临时密码、运维侧通知用户(不新建密码端点);
+///   · 角色为空:管理员在旧管理端按正常流程补授(回滚后旧管理端即恢复全部职能);
+///   · 启用态按 Logto 现态映射(MapIsActive):pending/已停用 → 停用,只有
+///     approved/migrated 且未停用才启用;
+///   · 镜像行若已存在(门写过)则不动,若缺失则补一行 approval=migrated ——
+///     停用态随后由扫表 Pass 3 按 Logto 现态纠正,本处不猜。
+/// </summary>
+public sealed class AdminImportLogtoUserCommandHandler(
+    IdentityDbContext db, IPasswordHasher hasher, ICurrentUser currentUser)
+    : IRequestHandler<AdminImportLogtoUserCommand, Result<Guid>>
+{
+    public async Task<Result<Guid>> Handle(AdminImportLogtoUserCommand request, CancellationToken ct)
+    {
+        if (await db.Users.AnyAsync(u => u.Id == request.LegacyUserId, ct))
+            return Result.Failure<Guid>(Error.Conflict("Auth.IdTaken", "该 Guid 已有旧账号,无需重导"));
+        var email = AppUser.Normalize(request.Email);
+        if (await db.Users.AnyAsync(u => u.Email == email, ct))
+            return Result.Failure<Guid>(Error.Conflict("Auth.EmailTaken", "该邮箱已存在"));
+
+        var user = new AppUser(request.LegacyUserId, email, request.DisplayName,
+            hasher.Hash(Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")));
+        user.RequirePasswordChange();
+        // round-13:按 Logto 现态定旧侧启用态(pending/已停用 → 停用,见 MapIsActive)。
+        if (!AdminImportLogtoUserCommand.MapIsActive(request.LogtoApproval, request.LogtoSuspended))
+            user.Deactivate();
+        db.Users.Add(user);
+
+        // 镜像行:门在灰度期一般已写过(只补缺失);LogtoUserId 必须来自回滚导出文件里的真值,
+        // 绝不能填空占位 —— 空主键行会在扫表存在检查里被误判为已删。
+        var existingMirror = await db.LogtoUserMappings
+            .FirstOrDefaultAsync(m => m.LegacyUserId == request.LegacyUserId, ct);
+        if (existingMirror is null)
+        {
+            if (await db.LogtoUserMappings.AnyAsync(m => m.LogtoUserId == request.LogtoUserId, ct))
+                return Result.Failure<Guid>(Error.Conflict("Auth.LogtoIdTaken", "该 Logto ID 已有映射行"));
+            db.LogtoUserMappings.Add(new LogtoUserMapping(
+                request.LogtoUserId, request.LegacyUserId, email, "migrated", false));
+        }
+
+        AdminAudit.Write(db, currentUser, "admin.user.logto-imported", "AppUser",
+            user.Id.ToString(), $"email: {email}; rollback re-import under mapping Guid");
+        await db.SaveChangesAsync(ct);
+        return Result.Success(user.Id);
+    }
+}
+
+public sealed class AdminUpdateUserCommandHandler(
+    IdentityDbContext db,
+    ICurrentUser currentUser,
+    ILogtoManagementClient logto,
+    IOptions<LogtoManagementOptions> logtoOptions)
     : IRequestHandler<AdminUpdateUserCommand, Result>
 {
     public async Task<Result> Handle(AdminUpdateUserCommand request, CancellationToken ct)
@@ -239,6 +320,17 @@ public sealed class AdminUpdateUserCommandHandler(IdentityDbContext db, ICurrent
         var user = await db.Users.Include(u => u.Roles)
             .FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
         if (user is null) return Result.Failure(Error.NotFound("用户"));
+
+        // 票241 round-3/4/5 + round-15(3):已映射用户的启用/停用走双写,不是拒绝。
+        // round-9 的拒绝规则只覆盖 delete / reset-password / unlock 三个端点,停用
+        // 从未被决定为拒绝 —— 旧管理端仍是合法停用入口,但必须与 Logto 同步,
+        // 否则两边一分叉,用户就半停用(门按镜像拒绝、旧 token 按旧侧放行)。
+        // 顺序是关键:全部守卫通过后,先调 Logto,成功才改旧侧;Logto 失败 →
+        // 旧侧绝不提交 + 明示错误 + 失败审计行(审计单独 SaveChanges,只存审计行)。
+        // 角色/显示名编辑不在此列(不翻转 IsActive 就不触 Logto)。
+        var mapping = request.IsActive != user.IsActive
+            ? await db.LogtoUserMappings.FirstOrDefaultAsync(m => m.LegacyUserId == user.Id, ct)
+            : null;
 
         ConcurrencyPin.Pin(db, user, request.Version); // 票101:旧版本保存 → 409
 
@@ -267,6 +359,34 @@ public sealed class AdminUpdateUserCommandHandler(IdentityDbContext db, ICurrent
             && await AdminGuard.ActiveAdminCountAsync(db, ct) <= 1)
             return Result.Failure(Error.Conflict("Admin.LastAdmin", "系统必须保留至少一个启用状态的管理员"));
 
+        // 双写第一步(Logto 先行,旧侧后行):守卫已全部通过,此时 Logto 失败
+        // 仍可干净回滚 —— 旧侧实体尚未改动,只要不 SaveChanges 就等于没提交。
+        if (mapping is not null)
+        {
+            if (!logtoOptions.Value.ManagementConfigured)
+            {
+                AdminAudit.Write(db, currentUser, "admin.user.logto-sync-failed", "AppUser",
+                    user.Id.ToString(), $"target: {user.Email}; active: {request.IsActive}; " +
+                    "reason: Logto Management 未配置,双写无法执行,旧侧未提交");
+                await db.SaveChangesAsync(ct); // 只存审计行,用户行未改动
+                return Result.Failure(Error.Conflict("Admin.LogtoNotConfigured",
+                    "已映射用户启用/停用需同步 Logto,但 Management 凭据未配置,旧侧未提交"));
+            }
+            try
+            {
+                await logto.SuspendUserAsync(mapping.LogtoUserId, !request.IsActive, ct);
+            }
+            catch (Exception ex)
+            {
+                AdminAudit.Write(db, currentUser, "admin.user.logto-sync-failed", "AppUser",
+                    user.Id.ToString(), $"target: {user.Email}; active: {request.IsActive}; " +
+                    $"reason: {ex.GetType().Name}: {ex.Message}");
+                await db.SaveChangesAsync(ct); // 只存审计行,用户行未改动
+                return Result.Failure(Error.Conflict("Admin.LogtoSyncFailed",
+                    $"Logto 同步失败,旧侧未提交,请重试(原因:{ex.Message})"));
+            }
+        }
+
         user.Rename(request.DisplayName);
 
         if (request.IsActive && !user.IsActive) user.Activate();
@@ -277,11 +397,39 @@ public sealed class AdminUpdateUserCommandHandler(IdentityDbContext db, ICurrent
 
         user.ReplaceRoles(roles.Select(r => r.Id));
 
+        if (mapping is not null)
+            // 批准标记不动(停用/启用不改批准态);SuspendedByGate=false —— 这是管理员
+            // 动作,不是门/扫表的动作;LastEventAt 传 null 由 Sync 保留原水位,随后到达的
+            // 本次停用事件自带更新的 updatedAt,水位守卫放行且结果一致(幂等)。
+            mapping.Sync(mapping.Approval, !request.IsActive, suspendedByGate: false, lastEventAt: null);
+
         AdminAudit.Write(db, currentUser, "admin.user.updated", "AppUser", user.Id.ToString(),
             $"target: {user.Email}; active: {request.IsActive}; " +
-            $"requirePasswordChange: {request.RequirePasswordChange}; roles: {string.Join(", ", wanted)}");
+            $"requirePasswordChange: {request.RequirePasswordChange}; roles: {string.Join(", ", wanted)}" +
+            (mapping is not null ? "; logto synced" : string.Empty));
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // 票101:乐观并发冲突必须原样抛出(控制器据此回 409),绝不能被下面的
+            // 通用补偿吞成 Failure —— 否则旧版本保存会静默变成“失败”而非 409。
+            throw;
+        }
+        catch (Exception)
+        {
+            // 旧侧提交恰好失败、Logto 已改:尽力补偿性反向调用,把 Logto 侧推回原态,
+            // 再明示错误;残差仍有 §6.3 Pass 3/4 在 15 分钟内对账纠正并审计。
+            if (mapping is not null)
+            {
+                try { await logto.SuspendUserAsync(mapping.LogtoUserId, request.IsActive, ct); }
+                catch { /* 补偿失败也只能明示错误,扫表兜底 */ }
+            }
+            return Result.Failure(Error.Conflict("Admin.SaveFailed",
+                "旧侧保存失败,已尝试回滚 Logto 侧,请核对两边状态后重试"));
+        }
         return Result.Success();
     }
 }
@@ -294,6 +442,12 @@ public sealed class AdminResetPasswordCommandHandler(
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
         if (user is null) return Result.Failure(Error.NotFound("用户"));
+
+        // 票241 round-9:已映射用户的密码只在 Logto 侧有效,旧端重置改不到登录密码,
+        // 静默成功会误导管理员 —— 一律拒绝,走 /api/admin/logto/users/{id}/reset-password。
+        if (await db.LogtoUserMappings.AnyAsync(m => m.LegacyUserId == user.Id, ct))
+            return Result.Failure(Error.Conflict("Admin.MappedUser",
+                "已迁移用户请走 Logto 管理端重置密码,旧管理端不再处理"));
 
         user.ChangePassword(hasher.Hash(request.NewPassword));
         user.RequirePasswordChange();
@@ -318,6 +472,12 @@ public sealed class AdminUnlockUserCommandHandler(IdentityDbContext db, ICurrent
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
         if (user is null) return Result.Failure(Error.NotFound("用户"));
 
+        // 票241 round-10:解锁的映射块与删除/重置同规则 —— 已映射用户的旧侧解锁
+        // 不再是 policy fallback,一律拒绝(走 Logto 管理端 unlock / Console 解封)。
+        if (await db.LogtoUserMappings.AnyAsync(m => m.LegacyUserId == user.Id, ct))
+            return Result.Failure(Error.Conflict("Admin.MappedUser",
+                "已迁移用户请走 Logto 管理端解锁,旧管理端不再处理"));
+
         user.Unlock();
 
         AdminAudit.Write(db, currentUser, "admin.user.unlocked", "AppUser", user.Id.ToString(),
@@ -335,6 +495,11 @@ public sealed class AdminDeleteUserCommandHandler(IdentityDbContext db, ICurrent
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
         if (user is null) return Result.Failure(Error.NotFound("用户"));
+
+        // 票241 round-9:已映射用户不在旧管理端删除(Logto Console/Management API 专管)。
+        if (await db.LogtoUserMappings.AnyAsync(m => m.LegacyUserId == user.Id, ct))
+            return Result.Failure(Error.Conflict("Admin.MappedUser",
+                "已迁移用户请在 Logto Console 删除,旧管理端不再处理"));
 
         if (currentUser.UserId == request.UserId)
             return Result.Failure(Error.Conflict("Admin.SelfDelete", "不能删除自己的账号"));

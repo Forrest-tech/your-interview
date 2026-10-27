@@ -267,32 +267,10 @@ public static class ServiceDefaults
             RoleClaimType = ClaimTypes.Role
         };
 
-        // 票241 双轨期(PLAN §4.4.6 首选:单 scheme 多发行方 allowlist):
-        // 配了 Logto:Issuer 才进双轨,未配时上面单发行方口径一字不变。
-        // 收敛日 = 旧 Identity 停发新 token + 服务侧不再需要旧发行方;
-        // 该日之后旧 token 被拒绝是因为旧发行方不再签发且 allowlist 收敛,
-        // 不是因为本分支改了旧 token 的校验规则。
-        var logtoIssuer = configuration["Logto:Issuer"];
-        if (!string.IsNullOrWhiteSpace(logtoIssuer))
-        {
-            parameters.ValidIssuers = [parameters.ValidIssuer, logtoIssuer];
-            parameters.IssuerSigningKeyResolver = new MultiIssuerSigningKeyResolver(
-                (SymmetricSecurityKey)parameters.IssuerSigningKey!,
-                parameters.ValidIssuer, logtoIssuer).Resolve;
-            var logtoAudience = configuration["Logto:Audience"];
-            if (!string.IsNullOrWhiteSpace(logtoAudience))
-            {
-                parameters.ValidAudiences = [parameters.ValidAudience, logtoAudience];
-            }
-            else
-            {
-                // 双轨期 audience 未配时不校验 audience:Logto access token 的 aud
-                // 取决于 Console 里建的 API resource,没配就没法列 allowlist。
-                // 上线清单(docs/logto/SETUP.md)要求配 Logto:Audience 后恢复校验;
-                // 校验 issuer + 签名 + 有效期三项仍在,不是“放行所有 token”。
-                parameters.ValidateAudience = false;
-            }
-        }
+        // 票241 修订:本函数永远只返回票18 旧单发行方口径。双轨期的 Logto
+        // scheme 另有 LogtoTokenValidation.Build(见 AddJwtAuthentication),
+        // 单 scheme 多发行方 allowlist 已废弃(一个 JwtBearer scheme 只有一个
+        // metadata 文档/一套密钥,ValidIssuers  alone 拉不到两家 JWKS)。
 
         return parameters;
     }
@@ -309,14 +287,61 @@ public static class ServiceDefaults
         Action<JwtBearerOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
+        services.Configure<LogtoOptions>(configuration.GetSection(LogtoOptions.SectionName));
+        var logto = configuration.GetSection(LogtoOptions.SectionName).Get<LogtoOptions>() ?? new LogtoOptions();
+
+        if (!logto.Enabled)
+        {
+            // 双轨关闭:与票241 之前一字不变的单 scheme 旧口径 + 空镜像读(门直接返回)。
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = BuildTokenValidationParameters(configuration);
+                    configure?.Invoke(options);
+                });
+            services.AddScoped<ILogtoMirrorReader, NullMirrorReader>();
+            services.AddScoped<IClaimsTransformation, LogtoClaimsGate>();
+            return services;
+        }
+
+        // 票241 双轨:双 scheme + AddPolicyScheme 选择器(唯一路由机制,不做顺序回落)。
+        // 选择器按未验证 payload 的 iss 路由,选中 scheme 再做完整校验。
+        // 镜像读是跨 schema 直查(七服务共用同一 yourinterview 库,键名各异故取首个非空连接串);
+        // 未配连接串时启动即失败 —— 门缺了事实源绝不能带病运行。
+        var connectionString = configuration.GetSection("ConnectionStrings").GetChildren()
+            .Select(c => c.Value).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException(
+                "已配 Logto:Issuer 但未找到 ConnectionStrings,共享审批门无法读取映射表,拒绝启动。");
+
+        services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = LogtoSchemeSelector.PolicyScheme;
+                options.DefaultChallengeScheme = LogtoSchemeSelector.PolicyScheme;
+                options.DefaultForbidScheme = LogtoSchemeSelector.PolicyScheme;
+            })
+            .AddPolicyScheme(LogtoSchemeSelector.PolicyScheme, "LogtoOrLegacy", options =>
+            {
+                options.ForwardDefaultSelector = ctx => LogtoSchemeSelector.SelectScheme(ctx, logto);
+            })
+            .AddJwtBearer(LogtoSchemeSelector.LogtoScheme, options =>
+            {
+                // 发现地址 = issuer + /.well-known/openid-configuration(Logto issuer 自带 /oidc 后缀)。
+                options.MetadataAddress = logto.Issuer.TrimEnd('/') + "/.well-known/openid-configuration";
+                // http issuer(本地开发)不强制 HTTPS 元数据;https issuer 保持默认强制。
+                options.RequireHttpsMetadata = logto.Issuer.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+                options.TokenValidationParameters = LogtoTokenValidation.Build(logto);
+                configure?.Invoke(options);
+            })
+            .AddJwtBearer(LogtoSchemeSelector.LegacyScheme, options =>
             {
                 options.TokenValidationParameters = BuildTokenValidationParameters(configuration);
                 configure?.Invoke(options);
             });
-        // 票241:Logto 角色 → perm 声明转换(无 perm 声明的 token 才展开,旧 token 原样)。
-        services.AddScoped<IClaimsTransformation, LogtoRoleClaimsTransformation>();
+        // 各服务的 configure 回调(如 Identity 的 401/403 Events、Jobs 的 RequireHttpsMetadata)
+        // 对两个 scheme 各跑一次,两边口径一致。
+        services.AddScoped<ILogtoMirrorReader>(_ => new EfLogtoMirrorReader(connectionString!));
+        services.AddScoped<IClaimsTransformation, LogtoClaimsGate>();
         return services;
     }
 

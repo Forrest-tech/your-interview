@@ -154,6 +154,10 @@ def main():
     ap.add_argument("--out", default="", help="导出文件路径(默认 ./logto-export-<ts>.csv,操作员本机目录)")
     ap.add_argument("--encrypt", action="store_true", help="导出物用 openssl AES-256-CBC 加密,口令来自 LOGTO_EXPORT_PASSPHRASE")
     ap.add_argument("--keep-export", action="store_true", help="导入成功后保留明文导出(默认删除)")
+    ap.add_argument("--argon2id-algorithm", default="Argon2id",
+                    help="试点确认用:$argon2id$ 前缀对应的 passwordAlgorithm(默认 Argon2id;"
+                    "官方文档只明确列出原生 Argon2 与 MD5/SHA1/SHA256/Bcrypt/Legacy,"
+                    "若试点 dry run 证明 Logto 接受的值不是 Argon2id,用本参数调整,无需改代码)")
     ap.add_argument("--webhook-paused", action="store_true",
                     help="确认已在 Console 暂停 User.Created webhook 订阅(非 dry-run 必填)")
     args = ap.parse_args()
@@ -210,7 +214,7 @@ def main():
         email = u["Email"]
         phc = u["PasswordHash"]
         if phc.startswith("$argon2id$"):
-            algo = "Argon2id"
+            algo = args.argon2id_algorithm
         elif phc.startswith("$argon2i$"):
             algo = "Argon2i"
         else:

@@ -1,8 +1,11 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Identity.Application.Admin;
 using YourInterview.Services.Identity.Application.Auth;
+using YourInterview.Services.Identity.Application.Logto;
 using YourInterview.Services.Identity.Domain;
 using YourInterview.Services.Identity.Infrastructure.Persistence;
 using Xunit;
@@ -133,12 +136,15 @@ public sealed class Ticket101ConcurrencyTests : IAsyncLifetime
         v.Should().BeGreaterThan(0u);
         var cu = new StubCurrentUser(admin);
 
+        // 票241:双写 handler 的新依赖(本票用户未映射,双写路径不触发,仅补构造参数)。
+        var logto = Substitute.For<ILogtoManagementClient>();
+        var logtoOptions = Options.Create(new LogtoManagementOptions());
         await using (var dbA = NewDb())
-            (await new AdminUpdateUserCommandHandler(dbA, cu).Handle(
+            (await new AdminUpdateUserCommandHandler(dbA, cu, logto, logtoOptions).Handle(
                 new AdminUpdateUserCommand(target, "A Target", true, false, [], v), default))
                 .IsSuccess.Should().BeTrue();
         await using var dbB = NewDb();
-        var act = () => new AdminUpdateUserCommandHandler(dbB, cu).Handle(
+        var act = () => new AdminUpdateUserCommandHandler(dbB, cu, logto, logtoOptions).Handle(
             new AdminUpdateUserCommand(target, "B Target", true, false, [], v), default);
         await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
 

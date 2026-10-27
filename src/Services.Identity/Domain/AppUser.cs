@@ -26,6 +26,18 @@ public sealed class AppUser : AuditableAggregateRoot
         LastPasswordChangedAt = DateTimeOffset.UtcNow;
     }
 
+    /// <summary>
+    /// 票241 回滚重导专用:按指定 Guid 建号。Id 是基类 protected init,
+    /// 派生构造器内赋值合法(对象构造期),编译器会验 —— 若未来基类改口径,
+    /// 本构造器编译失败即是最早的信号,不要绕过去改基类。
+    /// 正常建号绝不走本构造器(Guid 由基类默认值生成)。
+    /// </summary>
+    public AppUser(Guid id, string email, string displayName, string passwordHash, string? avatarUrl = null)
+        : this(email, displayName, passwordHash, avatarUrl)
+    {
+        Id = id;
+    }
+
     public string Email { get; private set; } = string.Empty;
     public string DisplayName { get; private set; } = string.Empty;
     public string PasswordHash { get; private set; } = string.Empty;

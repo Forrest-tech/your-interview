@@ -60,7 +60,12 @@ builder.AddServiceDefaults(ServiceName, services =>
     // ---------- 票241:Logto 审批门(未配凭据时控制器回 503、扫表不启动,旧登录一字不动) ----------
     services.Configure<LogtoManagementOptions>(
         builder.Configuration.GetSection(LogtoManagementOptions.SectionName));
-    services.AddHttpClient(LogtoManagementClient.HttpClientName);
+    services.Configure<LegacyAuthOptions>(builder.Configuration.GetSection(LegacyAuthOptions.SectionName));
+    services.AddSingleton<LogtoGateHealth>();
+    // Management 客户端 10 秒超时:挂住的调用要快速失败成 5xx 走投递方重发,
+    // 不能拖着 webhook 连接(投递方重试次数有限,慢 handler 等于丢事件)。
+    services.AddHttpClient(LogtoManagementClient.HttpClientName)
+        .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
     services.AddScoped<ILogtoManagementClient, LogtoManagementClient>();
     services.AddScoped<ILogtoMappingStore, LogtoMappingStore>();
     services.AddScoped<ILogtoSweepAudit, LogtoSweepAudit>();

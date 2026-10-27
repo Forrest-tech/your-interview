@@ -6,19 +6,28 @@ using Microsoft.Extensions.Options;
 
 namespace YourInterview.Services.Identity.Application.Logto;
 
-/// <summary>Logto Management API 用户快照(只取审批门与扫表需要的字段)。</summary>
+/// <summary>
+/// Logto Management API 用户快照(只取审批门与扫表需要的字段)。
+/// EmailVerified:Management API 用户对象的邮箱验证字段名未在官方文档摘录里完全确认,
+/// 故防御性多字段解析(primaryEmailVerified/emailVerified/isEmailVerified 任一 true 即验证);
+/// 若对象根本不带验证字段,则以“ hosted 注册强制验证”作构造性兜底(部署清单里试点确认)。
+/// UpdatedAt:悬停事件排序水位(见 LogtoApprovalGate),缺失时取 MinValue(永不过滤)。
+/// </summary>
 public sealed record LogtoUserDto(
     string Id,
     bool IsSuspended,
     JsonObject CustomData,
     DateTimeOffset CreatedAt,
-    string? PrimaryEmail);
+    string? PrimaryEmail,
+    bool EmailVerified = false,
+    DateTimeOffset UpdatedAt = default);
 
 public interface ILogtoManagementClient
 {
     Task<LogtoUserDto?> GetUserAsync(string userId, CancellationToken ct);
     Task SuspendUserAsync(string userId, bool suspended, CancellationToken ct);
     Task SetCustomDataAsync(string userId, JsonObject customData, CancellationToken ct);
+    Task ResetPasswordAsync(string userId, string newPassword, CancellationToken ct);
     Task<IReadOnlyList<LogtoUserDto>> ListUsersAsync(int page, int pageSize, CancellationToken ct);
 }
 
@@ -106,6 +115,14 @@ public sealed class LogtoManagementClient : ILogtoManagementClient
         resp.EnsureSuccessStatusCode();
     }
 
+    public async Task ResetPasswordAsync(string userId, string newPassword, CancellationToken ct)
+    {
+        using var req = await RequestAsync(HttpMethod.Patch, $"/users/{Uri.EscapeDataString(userId)}/password", ct);
+        req.Content = JsonContent.Create(new { password = newPassword });
+        using var resp = await _http.SendAsync(req, ct);
+        resp.EnsureSuccessStatusCode();
+    }
+
     public async Task<IReadOnlyList<LogtoUserDto>> ListUsersAsync(int page, int pageSize, CancellationToken ct)
     {
         using var req = await RequestAsync(HttpMethod.Get, $"/users?page={page}&page_size={pageSize}", ct);
@@ -122,12 +139,18 @@ public sealed class LogtoManagementClient : ILogtoManagementClient
         var customData = el.TryGetProperty("customData", out var cd) && cd.ValueKind == JsonValueKind.Object
             ? JsonNode.Parse(cd.GetRawText())!.AsObject()
             : new JsonObject();
+        // 邮箱验证字段名未完全确认:三个候选名任一 true 即验证;全缺失 = false(构造性兜底见 DTO 注释)。
+        var verified = new[] { "primaryEmailVerified", "emailVerified", "isEmailVerified" }
+            .Any(name => el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True);
         return new LogtoUserDto(
             el.GetProperty("id").GetString()!,
             el.TryGetProperty("isSuspended", out var s) && s.GetBoolean(),
             customData,
             el.TryGetProperty("createdAt", out var c) && DateTimeOffset.TryParse(c.GetString(), out var d)
                 ? d : DateTimeOffset.MinValue,
-            el.TryGetProperty("primaryEmail", out var e) ? e.GetString() : null);
+            el.TryGetProperty("primaryEmail", out var e) ? e.GetString() : null,
+            verified,
+            el.TryGetProperty("updatedAt", out var u) && DateTimeOffset.TryParse(u.GetString(), out var upd)
+                ? upd : DateTimeOffset.MinValue);
     }
 }

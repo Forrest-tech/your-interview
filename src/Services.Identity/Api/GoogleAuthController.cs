@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.Services.Identity.Application.Auth;
+using YourInterview.Services.Identity.Application.Logto;
 using YourInterview.Services.Identity.Domain;
 using YourInterview.Services.Identity.Infrastructure.Persistence;
 using YourInterview.Services.Identity.Infrastructure.Security;
@@ -17,6 +19,8 @@ namespace YourInterview.Services.Identity.Api;
 ///   用户点同意 → Google 302 → /callback?code&state
 ///   后端换身份 → 邮箱找不到就建号(默认 User 角色)→ 发自家 JWT
 ///   → 302 回前端 /login#access_token=…(fragment 不进服务器日志)
+///   票241 灰度期起点:LegacyRegistrationEnabled=false 时不再自动建号,
+///   新 Google 身份一律走 Logto Google 连接器 + 审批流。
 ///
 /// 所有失败路径都重定向回登录页带 googleError 参数 —— 中间没有可登录的会话,
 /// 返回 500 白页对用户毫无意义。
@@ -30,6 +34,7 @@ public sealed class GoogleAuthController(
     IPasswordHasher hasher,
     AuthResponseBuilder authBuilder,
     ICurrentUser currentUser,
+    IOptions<LegacyAuthOptions> legacyAuth,
     ILogger<GoogleAuthController> logger) : ControllerBase
 {
     private const string StateCookie = "yi.g_state";
@@ -113,6 +118,12 @@ public sealed class GoogleAuthController(
 
         if (user is null)
         {
+            // 票241 灰度期起点:旧回调不再自动建号 —— 自动建号是第二扇旁门
+            // (无审批直接发自家 JWT)。新 Google 身份走 Logto Google 连接器 +
+            // 审批流;已有账号不受影响(上方的 IsActive 检查之后直接登录)。
+            if (!legacyAuth.Value.LegacyRegistrationEnabled)
+                return FailToLogin("新用户请使用 Logto 注册(含 Google 登录与管理员审批)", returnTo);
+
             // Google 账号首次登录:自动注册。密码置为不可登录的随机哈希
             // —— 密码哈希列非空,但随机盐值永远校验不过,密码登录对这类账号天然关闭。
             user = new AppUser(email,

@@ -38,9 +38,14 @@ python3 scripts/logto-migrate/export-logto-users.py \
 # 2) 逐条查旧库 users 表：无对应 Guid 行的才是真 Logto-only（镜像行本身不能判定，
 #    门也给新注册写行）。有对应行的说明已是迁移用户，跳过。
 # 3) 对每条真 Logto-only，调回迁端点（admin.users.write）按 legacyUserId 重建：
-#    POST /api/admin/users/import-logto
-#      {"legacyUserId": "<镜像 Guid>", "email": "<邮箱>", "displayName": "<显示名>"}
+#    POST /api/admin/logto/users/import
+#      {"legacyUserId": "<镜像 Guid>", "logtoUserId": "<Logto 用户 id,必填且必须是导出文件里的真值>",
+#       "email": "<邮箱>", "displayName": "<显示名>"}
 #    端点建账号时 MustChangePassword=true、密码置为不可登录的随机哈希。
+#    logtoUserId 绝不能留空占位：空主键行会被扫表存在检查误判为“Logto 侧已删号”。
+#    批准映射（round-13）：端点先查 Logto 现态再定旧侧启用态 —— pending 或 suspended
+#    的重导为 IsActive=false，只有 approved 且未停用才导为启用；重导集是上线后在
+#    Logto 创建的全部用户（灰度期 + 收敛后注册者），不只收敛前。
 # 4) 重置密码邮件机制（决议：现有端点 + 运营通知，不新增 forgot-password 端点）：
 #    管理员调现有 POST /api/admin/users/{id}/reset-password 设临时密码，
 #    再由运营经已有邮箱渠道把临时密码通知用户（应用内无 SMTP 发信器，
@@ -53,6 +58,11 @@ python3 scripts/logto-migrate/export-logto-users.py \
 - [ ] 灰度期该用户名下产生的业务行仍按该 Guid 归属（抽查一行业务记录的归属字段）。
 - [ ] 回迁账号经“临时密码登录 → 强制改密 → 正常登录”全通。
 - [ ] 行数核对：导出候选数 = 已有旧行跳过数 + 回迁成功数 + 失败清单数。
+- [ ] 批准映射断言：收敛时仍 pending 或 suspended 的用户重导后旧侧 `IsActive=false`；
+  approved 且未停用的用户重导后 `IsActive=true`（单测 `Import_ReimportSet_PendingAndSuspended_AllInactive`
+  已覆盖映射函数，演练里抽查两类各一例）。
+- [ ] 演练范围切分（round-15）：收敛前回滚演练只含“前端登录入口指回旧 Identity”
+  且 Logto 数据不动（不重导、不翻开关）；重导 + 开关翻回只属于收敛后演练。
 
 ## 沙盒 drill 能证明什么、不能证明什么
 

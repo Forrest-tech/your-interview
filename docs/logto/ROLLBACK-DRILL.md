@@ -3,6 +3,20 @@
 > 顺序铁律：**先种灰度期业务数据，再回滚**。不先种数据，回迁与连续性断言全部空转，
 > 演练通过等于没练。本手册在沙盒 compose 环境跑（能起 docker 的环境）；
 > 沙盒能证明什么、不能证明什么见 ROLLBACK.md 末节。
+>
+> 范围切分（round-15）：本手册分两段 —— A 段是**收敛前回滚演练**（只指回登录入口，
+> Logto 数据不动，不重导）；B 段是**收敛后回滚演练**（含重导 + 开关翻回）。
+> 两段不要混着练：A 段练完 Logto 侧必须原样，B 段才动重导。
+
+## A 段 — 收敛前回滚演练（灰度期，Logto 还不是唯一发行方）
+
+1. 前端登录入口指回旧 Identity（演练环境用直连旧 `/api/auth/login` 代替前端点击）。
+2. 断言：旧登录 → 200，业务接口 → 200；旧 token 仍被接受（双 scheme 下旧 issuer 未下线）。
+3. 断言：Logto 侧数据不动 —— 种子用户的 Logto 账号仍存在、镜像行 `Approval`/`IsSuspended`
+   与演练前一致；**本段不做任何重导**（重导只属于 B 段）。
+4. 恢复：登录入口指回 Logto（为 B 段准备），确认 Logto 登录仍通。
+
+## B 段 — 收敛后回滚演练（以下原 Step 0–3）
 
 ## 前置
 
@@ -42,9 +56,11 @@
    python3 scripts/logto-migrate/export-logto-users.py \
      --since "$LOGTO_GATE_LAUNCHED_AT" --out ./drill-logto-only.json
    # 确认 drill-only@example.com 在导出里，且旧库 users 表无对应 Guid 行
-   curl -s -X POST http://localhost:5200/api/admin/users/import-logto \
+   # 注意：真实路径是 /api/admin/logto/users/import（不是旧文档误写的
+   # /api/admin/users/import-logto），且 logtoUserId 必填、必须是导出里的真值。
+   curl -s -X POST http://localhost:5200/api/admin/logto/users/import \
      -H "Authorization: Bearer <管理员旧 token>" -H 'Content-Type: application/json' \
-     -d '{"legacyUserId": "<Step 0 的 LegacyUserId>", "email": "drill-only@example.com", "displayName": "Drill User"}'
+     -d '{"legacyUserId": "<Step 0 的 LegacyUserId>", "logtoUserId": "<导出里的 Logto id>", "email": "drill-only@example.com", "displayName": "Drill User"}'
    # → 201，id == Step 0 的 LegacyUserId（一字不差，否则演练失败）
    curl -s -X POST http://localhost:5200/api/admin/users/<id>/reset-password \
      -H "Authorization: Bearer <管理员旧 token>" -H 'Content-Type: application/json' \
@@ -59,5 +75,8 @@
 - [ ] 回迁账号“临时密码登录 → 强制改密 → 正常登录”全通。
 - [ ] 行数核对：导出候选数 = 已有旧行跳过数 + 回迁成功数 + 失败清单数。
 - [ ] 旧 token 在回滚后重新被接受（双 scheme 已重挂旧 issuer）。
+- [ ] 批准映射断言（round-14）：另取一个收敛时仍 pending（或 suspended）的 Logto 用户
+  走重导，断言旧侧 `IsActive=false`；approved 且未停用的 Step 0 用户断言 `IsActive=true`。
+  只练 approved 用户等于没练映射分支。
 
 任一断言失败即演练失败：先修代码/配置再重练，不要把“写清了”当“练过了”。

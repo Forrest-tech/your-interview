@@ -10,7 +10,9 @@ namespace YourInterview.Services.Identity.Api;
 /// 票241:Logto 会话的 /me(与旧 /api/auth/me 并行,双轨期专用)。
 /// 旧 /me 按 Guid 查本地 users 表 —— Logto 新用户在本地没有行,会 404;
 /// 本端点直接用 token 里的声明组装同一 UserProfile 结构(角色与权限点
-/// 由 LogtoRoleClaimsTransformation 在鉴权时展开),前端会话建立不依赖本地行。
+/// 由共享门 LogtoClaimsGate 在鉴权时按镜像 + scope 展开),前端会话建立不依赖本地行。
+/// 待审批用户:门把 NameIdentifier 翻译成业务 Guid 但不给 perm,本端点返回
+/// 200 + 空权限 —— 前端据此显示待审批态,绝不进 dashboard(见前端回调处理)。
 /// 迁移用户同时有本地行:新旧两条 /me 返回的权限一致(同一映射表)。
 /// </summary>
 [ApiController]

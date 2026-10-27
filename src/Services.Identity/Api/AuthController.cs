@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using MediatR;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.BuildingBlocks.Web;
@@ -8,6 +9,7 @@ using YourInterview.Services.Identity.Application;
 using YourInterview.Services.Identity.Application.Abstractions;
 using YourInterview.Services.Identity.Application.Admin;
 using YourInterview.Services.Identity.Application.Auth;
+using YourInterview.Services.Identity.Application.Logto;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.SharedContracts.Security;
 
@@ -22,9 +24,15 @@ namespace YourInterview.Services.Identity.Api;
 [ApiController]
 [Route("api/auth")]
 [Produces("application/json")]
-public sealed class AuthController(ISender sender, ICurrentUser currentUser) : ControllerBase
+public sealed class AuthController(
+    ISender sender, ICurrentUser currentUser, IOptions<LegacyAuthOptions> legacyAuth) : ControllerBase
 {
-    /// <summary>注册新用户(默认 User 角色)。</summary>
+    /// <summary>
+    /// 注册新用户(默认 User 角色)。
+    /// 票241 灰度期起点:LegacyRegistrationEnabled=false 时服务端直接回 410
+    /// (指向 Logto 注册)—— 旧注册签发即登录、无验证无审批,灰度期留着它
+    /// 等于给审批门开旁门,藏前端入口是不够的。
+    /// </summary>
     [HttpPost("register")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResult), StatusCodes.Status201Created)]
@@ -32,29 +40,45 @@ public sealed class AuthController(ISender sender, ICurrentUser currentUser) : C
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IResult> Register([FromBody] RegisterUserCommand command, CancellationToken ct)
     {
+        if (!legacyAuth.Value.LegacyRegistrationEnabled)
+            return Microsoft.AspNetCore.Http.Results.Problem(
+                statusCode: StatusCodes.Status410Gone, title: "旧注册通道已关闭",
+                detail: "请使用 Logto 注册(邮箱验证 + 管理员审批后方可登录)。");
         var result = await sender.Send(command, ct);
         return result.IsSuccess
             ? Microsoft.AspNetCore.Http.Results.Created("/api/auth/me", result.Value)
             : result.ToProblemDetails();
     }
 
-    /// <summary>登录,返回 access token + refresh token。</summary>
+    /// <summary>
+    /// 登录,返回 access token + refresh token。
+    /// 票241 收敛日:IssuanceEnabled=false 时回 410,用户下次刷新时被迫走
+    /// Logto 重登录(不是全量踢下线);回滚时翻回 true + Identity 重启即恢复签发。
+    /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IResult> Login([FromBody] LoginCommand command, CancellationToken ct)
     {
+        if (!legacyAuth.Value.IssuanceEnabled)
+            return Microsoft.AspNetCore.Http.Results.Problem(
+                statusCode: StatusCodes.Status410Gone, title: "旧登录签发已关闭",
+                detail: "请使用 Logto 登录(旧账号已迁移,密码不变)。");
         var cmd = command with { Device = command.Device ?? Request.Headers.UserAgent.FirstOrDefault() };
         var result = await sender.Send(cmd, ct);
         return result.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(result.Value) : result.ToProblemDetails();
     }
 
-    /// <summary>用刷新令牌换取新的访问令牌(轮转 + 复用检测)。</summary>
+    /// <summary>用刷新令牌换取新的访问令牌(轮转 + 复用检测)。收敛日同 login 回 410。</summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
     public async Task<IResult> Refresh([FromBody] RefreshTokenCommand command, CancellationToken ct)
     {
+        if (!legacyAuth.Value.IssuanceEnabled)
+            return Microsoft.AspNetCore.Http.Results.Problem(
+                statusCode: StatusCodes.Status410Gone, title: "旧刷新签发已关闭",
+                detail: "请使用 Logto 登录(旧账号已迁移,密码不变)。");
         var result = await sender.Send(command, ct);
         return result.IsSuccess ? Microsoft.AspNetCore.Http.Results.Ok(result.Value) : result.ToProblemDetails();
     }

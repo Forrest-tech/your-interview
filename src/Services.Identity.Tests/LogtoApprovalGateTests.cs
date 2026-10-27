@@ -73,7 +73,7 @@ public class LogtoApprovalGateTests
     private static LogtoApprovalGate Gate(FakeClient client, FakeStore store, FakeAudit audit,
         DateTimeOffset? launchedAt = null) =>
         new(client, store, audit,
-            Options.Create(new LogtoManagementOptions { GateLaunchedAt = launchedAt }),
+            Options.Create(new LogtoManagementOptions { GateLaunchedAt = launchedAt?.ToString("o") ?? string.Empty }),
             NullLogger<LogtoApprovalGate>.Instance);
 
     [Fact] // 强制 guard:映射表里的迁移用户 —— 不置停用、不打标、不调 Management 写接口

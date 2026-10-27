@@ -24,10 +24,11 @@ public sealed class LogtoManagementOptions
     public int SweepIntervalMinutes { get; set; } = 15;
 
     /// <summary>
-    /// 审批流上线时间(UTC):扫表只看此时间之后创建的用户。未配时默认全量
-    /// (fail-closed:上线前在 Logto 里建的测试账号也会被门一次,管理员批准即可)。
+    /// 审批流上线时间(ISO UTC 字符串,例 2026-10-28T00:00:00Z):扫表只看此时间之后创建的用户。
+    /// 空或非法 = 全量(fail-closed:上线前在 Logto 里建的测试账号也会被门一次,管理员批准即可)。
+    /// 用字符串而不用 DateTimeOffset?,是避免 compose 空环境变量在配置绑定期抛错拖垮 Identity 启动。
     /// </summary>
-    public DateTimeOffset? GateLaunchedAt { get; set; }
+    public string GateLaunchedAt { get; set; } = string.Empty;
 
     public bool ManagementConfigured =>
         !string.IsNullOrWhiteSpace(Endpoint)

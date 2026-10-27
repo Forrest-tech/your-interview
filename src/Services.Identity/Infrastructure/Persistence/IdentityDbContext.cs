@@ -96,13 +96,14 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             e.HasIndex(x => x.OccurredAt);
         });
 
-        // 票241:Guid ↔ Logto ID 迁移映射表(identity schema)。
+        // 票241:Guid ↔ Logto ID 迁移映射表 + 审批门镜像(identity schema,单数表名)。
         b.Entity<LogtoUserMapping>(e =>
         {
-            e.ToTable("logto_user_mappings");
+            e.ToTable("logto_user_mapping");
             e.HasKey(x => x.LogtoUserId);
             e.Property(x => x.LogtoUserId).HasMaxLength(64).IsRequired();
             e.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            e.Property(x => x.Approval).HasMaxLength(32).IsRequired();
             e.HasIndex(x => x.LegacyUserId).IsUnique();
         });
     }

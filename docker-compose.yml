@@ -34,6 +34,14 @@ x-service-env: &service-env
   # JWT 签名密钥: 从 .env 注入（已在 .gitignore）。六个服务必须用同一个值,
   # 否则 Identity 签的令牌其它服务验不过。
   Jwt__SigningKey: "${JWT_SIGNING_KEY:-}"
+  # ★ 票241 双轨期:Logto 发行方(空 = 单轨旧口径)。配上后各服务同时接受
+  # 旧 Identity 与 Logto 两个发行方;Logto__Audience 配成 Console 里建的
+  # API resource identifier,未配时双轨期 audience 不校验(上线清单要求配上)。
+  Logto__Issuer: "${LOGTO_ISSUER:-}"
+  Logto__Audience: "${LOGTO_AUDIENCE:-}"
+  # 票241 收敛开关:灰度期 false(双 scheme 并存);收敛日置 true(选择器只走 Logto,
+  # 旧 token 一律 401)。回滚时翻回 false 并重启各服务。
+  Logto__RejectOldIssuer: "${LOGTO_REJECT_OLD_ISSUER:-false}"
 
 x-service-build: &service-build
   context: .
@@ -77,6 +85,9 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # ★ 票241:Logto 自有库(只在数据卷首次初始化时执行;已有 pgdata 的
+      # 旧卷需手动补一次 CREATE DATABASE logto,见 docs/logto/SETUP.md)。
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # 容器里没有 pg_isready 之外的依赖,直接探;必须等它 healthy 其它服务才起
       test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres} -d yourinterview"]
@@ -115,6 +126,18 @@ services:
       Seed__AdminPassword: "${ADMIN_PASSWORD:-}"
       # 演示数据密码; 留空则跳过演示数据播种
       Seed__DemoPassword: "${DEMO_PASSWORD:-}"
+      # ★ 票241:Logto 审批门(只 Identity 需要;容器内 Logto 服务名直连)。
+      # 凭据来自 .env,compose 文件里只留空占位,真实值绝不进库。
+      Logto__Management__Endpoint: "${LOGTO_MANAGEMENT_ENDPOINT:-http://logto:3001}"
+      Logto__Management__M2mClientId: "${LOGTO_M2M_CLIENT_ID:-}"
+      Logto__Management__M2mClientSecret: "${LOGTO_M2M_CLIENT_SECRET:-}"
+      Logto__Management__WebhookSigningKey: "${LOGTO_WEBHOOK_SIGNING_KEY:-}"
+      Logto__Management__GateLaunchedAt: "${LOGTO_GATE_LAUNCHED_AT:-}"
+      # 票241 旧 Identity 发行开关(Auth 节):灰度开始时 LegacyRegistrationEnabled=false
+      # (旧 POST /api/auth/register 服务端 410);收敛日 IssuanceEnabled=false
+      # (旧登录/刷新 410,停发);收敛后回滚时把 IssuanceEnabled 翻回 true 并重启 Identity。
+      Auth__LegacyRegistrationEnabled: "${LEGACY_REGISTRATION_ENABLED:-true}"
+      Auth__IssuanceEnabled: "${AUTH_ISSUANCE_ENABLED:-true}"
     depends_on: *service-deps
     healthcheck: *service-health
 
@@ -326,6 +349,29 @@ services:
       analytics:
         condition: service_healthy
     healthcheck: *service-health
+
+  # ★ 票241:Logto 会员身份源(自托管,MPL-2.0)。
+  # 版本必须锁定具体号,绝不用 :latest 跑生产(升级前先在沙盒 compose 验证)。
+  # 核心(3001,OIDC + sign-in experience)与 Admin Console(3002)同容器;
+  # 认证流浏览器直连 Logto,不走 YARP(网关改动为零,各服务直接向 JWKS 校验)。
+  # SMTP 连接器、sign-in experience、webhook、M2M 应用全部在 Console 里配,
+  # 步骤见 docs/logto/SETUP.md;凭据只进 .env,绝不写进本文件。
+  logto:
+    image: ghcr.io/logto-io/logto:1.45.0
+    container_name: yourinterview-logto
+    restart: unless-stopped
+    environment:
+      DB_URL: "postgres://postgres:${PG_PASSWORD:-postgres}@postgres:5432/logto"
+      ENDPOINT: "${LOGTO_ENDPOINT:-http://localhost:3001}"
+      ADMIN_ENDPOINT: "${LOGTO_ADMIN_ENDPOINT:-http://localhost:3002}"
+    ports:
+      - "3001:3001"
+      # 票241:Console 只绑 localhost(自托管 OSS 无协作者邀请功能,管理面 = 首次
+      # onboarding 创建的唯一管理员账号;远程访问走 SSH 隧道或 VPN,绝不开公网端口)。
+      - "127.0.0.1:3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # 后台分析服务: 没有 HTTP 端点, 不需要暴露端口, 也不做 healthcheck。
   # 它消费 RabbitMQ 里的分析请求 → 调 Azure Speech 转写 → 六维诊断 → 回写 Interviews。

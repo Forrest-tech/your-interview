@@ -115,7 +115,10 @@ public sealed class LogtoApprovalGate(
     {
         var actions = new List<string>();
         var migrated = await mappings.GetAllMigratedIdsAsync(ct);
-        var launchedAt = options.Value.GateLaunchedAt ?? DateTimeOffset.MinValue;
+        var launchedAt = DateTimeOffset.TryParse(options.Value.GateLaunchedAt,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed : DateTimeOffset.MinValue;
 
         var page = 1;
         const int pageSize = 100;

@@ -12,8 +12,8 @@ using YourInterview.Services.Identity.Infrastructure.Persistence;
 namespace YourInterview.Services.Identity.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(IdentityDbContext))]
-    [Migration("20261027055217_AddLogtoUserMappings")]
-    partial class AddLogtoUserMappings
+    [Migration("20261027061356_AddLogtoUserMapping")]
+    partial class AddLogtoUserMapping
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -202,6 +202,11 @@ namespace YourInterview.Services.Identity.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("Approval")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -210,15 +215,27 @@ namespace YourInterview.Services.Identity.Infrastructure.Persistence.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
+                    b.Property<bool>("IsSuspended")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("LastEventAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("LegacyUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("SuspendedByGate")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("LogtoUserId");
 
                     b.HasIndex("LegacyUserId")
                         .IsUnique();
 
-                    b.ToTable("logto_user_mappings", "identity");
+                    b.ToTable("logto_user_mapping", "identity");
                 });
 
             modelBuilder.Entity("YourInterview.Services.Identity.Domain.RefreshToken", b =>

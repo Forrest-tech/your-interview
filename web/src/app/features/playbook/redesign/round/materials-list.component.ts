@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -478,6 +479,7 @@ export class MaterialsListComponent implements OnDestroy {
   private readonly api = inject(PlaybookV2Api);
   private readonly interviewsApi = inject(InterviewsApiService);
   private readonly snack = inject(MatSnackBar);
+  private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18nService);
 
@@ -498,7 +500,7 @@ export class MaterialsListComponent implements OnDestroy {
       next: (r) => {
         this.mailRefreshing.set(false);
         this.mailRefreshResult.set(r);
-        if (r.needsReconnect) this.snack.open(this.i18n.t('mailbox.needsReconnect'), undefined, { duration: 5000 });
+        if (r.needsReconnect) this.snack.open(this.i18n.t('mailbox.needsReconnect'), this.i18n.t('mailbox.reconnect'), { duration: 5000 }).onAction().subscribe(() => void this.router.navigate(['/settings/mail']));
         else if (r.rateLimited) this.snack.open(this.i18n.t('mailbox.rateLimited'), undefined, { duration: 5000 });
         else if (r.failed > 0 && r.failedReasons.length > 0) this.snack.open(r.failedReasons.join('；'), undefined, { duration: 8000 });
         // 刷新成功后触发详情页重载（新资产 + “新导入”标记随 fresh 数据回来）。

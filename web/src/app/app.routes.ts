@@ -99,6 +99,12 @@ export const routes: Routes = [
             path: 'ai',
             loadComponent: () =>
               import('./features/ai-setting/ai-setting.component').then((m) => m.AiSettingComponent)
+          },
+          {
+            // 票 240：配置邮箱页，与 API key 配置页平行。
+            path: 'mail',
+            loadComponent: () =>
+              import('./features/settings/mailbox-setting.component').then((m) => m.MailboxSettingComponent)
           }
         ]
       },

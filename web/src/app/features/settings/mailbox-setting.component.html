@@ -1,0 +1,149 @@
+<!-- 票 240：邮箱配置页 —— 与 API key 配置页平行；本页只管连接，不管匹配规则。 -->
+<div class="setting-page">
+
+  <header class="sp-head">
+    <h1>{{ t('mailbox.title') }}</h1>
+    <p class="sp-sub">{{ t('mailbox.subtitle') }}</p>
+  </header>
+
+  @if (notice()) {
+    <p class="sp-notice">{{ notice() }}</p>
+  }
+  @if (error()) {
+    <p class="sp-error">{{ error() }}</p>
+  }
+
+  <!-- 连接卡 -->
+  <section class="sp-card">
+    <h2 class="sp-card-title">
+      <mat-icon>mail</mat-icon>
+      <span>{{ t('mailbox.connectTitle') }}</span>
+    </h2>
+    <p class="sp-card-desc">{{ t('mailbox.readonlyNote') }}</p>
+
+    @if (connections().length === 0) {
+      <p class="sp-empty">{{ t('mailbox.noConnection') }}</p>
+    } @else {
+      @for (c of connections(); track c.id) {
+        <div class="conn-row">
+          <mat-icon class="conn-icon">mail</mat-icon>
+          <div class="conn-info">
+            <div class="conn-account">{{ c.accountEmail }}</div>
+            <div class="conn-meta">{{ c.provider }} · {{ t('mailbox.status.' + c.status) }}
+              @if (c.lastRefreshAt) { · {{ t('mailbox.lastRefresh') }} {{ c.lastRefreshAt | date:'short' }} }
+            </div>
+          </div>
+          @if (c.status === 'Active') {
+            <button mat-stroked-button (click)="disconnect(c.id)">
+              {{ t('mailbox.disconnect') }}
+            </button>
+          } @else if (c.status === 'Invalid') {
+            <button mat-stroked-button color="warn" (click)="connect(c.provider)">
+              {{ t('mailbox.reconnect') }}
+            </button>
+          }
+        </div>
+      }
+    }
+
+    <div class="act-row">
+      <button mat-stroked-button [disabled]="busy()" (click)="connect('Gmail')">
+        <mat-icon>mail</mat-icon><span>{{ t('mailbox.connectGmail') }}</span>
+      </button>
+      <button mat-stroked-button [disabled]="busy()" (click)="connect('Graph')">
+        <mat-icon>mail</mat-icon><span>{{ t('mailbox.connectOutlook') }}</span>
+      </button>
+      <button mat-raised-button color="primary"
+              [disabled]="refreshing() || !activeConnection()"
+              [matTooltip]="t('mailbox.refreshHint')"
+              (click)="refreshAll()">
+        <mat-icon>refresh</mat-icon>
+        <span>{{ refreshing() ? t('mailbox.refreshing') : t('mailbox.refreshAll') }}</span>
+      </button>
+      @if (refreshing()) {
+        <button mat-stroked-button (click)="cancelRefresh()">
+          {{ t('mailbox.cancel') }}
+        </button>
+      }
+    </div>
+
+    @if (refreshResult(); as r) {
+      <p class="sp-result">
+        @if (r.added === 0 && r.pending === 0 && r.skippedDuplicates === 0 && r.failed === 0) {
+          {{ t('mailbox.noNewMail') }}
+        } @else {
+          {{ resultLine(r) }}
+        }
+      </p>
+    }
+  </section>
+
+  <!-- 待确认队列 -->
+  <section class="sp-card">
+    <h2 class="sp-card-title">
+      <mat-icon>mark_email_unread</mat-icon>
+      <span>{{ t('mailbox.pendingTitle') }}</span>
+    </h2>
+    <p class="sp-card-desc">{{ t('mailbox.pendingDesc') }}</p>
+
+    @if (pending().length === 0) {
+      <p class="sp-empty">{{ t('mailbox.pendingEmpty') }}</p>
+    } @else {
+      @for (p of pending(); track p.id) {
+        <div class="pend-row">
+          <div class="pend-head">
+            <span class="pend-from">{{ p.fromName || p.fromEmail }}</span>
+            <span class="pend-date">{{ p.receivedAt | date:'short' }}</span>
+          </div>
+          <div class="pend-subject">{{ p.subject }}</div>
+          <div class="pend-rule">{{ p.matchedRule }}</div>
+          @if (p.snippet) {
+            <div class="pend-snippet">{{ p.snippet }}</div>
+          }
+          <div class="pend-act">
+            @if (!p.entryId) {
+              <mat-form-field appearance="outline" class="pend-select">
+                <mat-label>{{ t('mailbox.pickEntry') }}</mat-label>
+                <mat-select [ngModel]="pendingChoice()[p.id] ?? ''"
+                            (ngModelChange)="setPendingChoice(p.id, $event)">
+                  @for (e of entries(); track e.id) {
+                    <mat-option [value]="e.id">{{ entryLabel(e) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+            <button mat-stroked-button color="primary" (click)="confirmPending(p)">
+              {{ t('mailbox.confirm') }}
+            </button>
+            <button mat-stroked-button (click)="ignorePending(p)">
+              {{ t('mailbox.ignore') }}
+            </button>
+          </div>
+        </div>
+      }
+    }
+  </section>
+
+  <!-- 导入审计 -->
+  <section class="sp-card">
+    <h2 class="sp-card-title">
+      <mat-icon>history</mat-icon>
+      <span>{{ t('mailbox.importsTitle') }}</span>
+    </h2>
+    @if (imports().length === 0) {
+      <p class="sp-empty">{{ t('mailbox.importsEmpty') }}</p>
+    } @else {
+      @for (imp of imports(); track imp.id) {
+        <div class="imp-row">
+          <span class="imp-provider">{{ imp.provider }}</span>
+          <span class="imp-rule">{{ imp.matchedRule }}</span>
+          @if (imp.isNew) {
+            <span class="imp-new">{{ t('mailbox.newImport') }}</span>
+          }
+          <span class="imp-date">{{ imp.importedAt | date:'short' }}</span>
+        </div>
+      }
+    }
+  </section>
+
+</div>

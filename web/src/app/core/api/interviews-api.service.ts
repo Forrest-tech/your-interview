@@ -96,4 +96,119 @@ export class InterviewsApiService {
   createPrepPlan<T = PrepPlanResult>(entryId: string, roundId: string, body: unknown): Observable<T> {
     return this.api.post<T>(`${InterviewsApiService.BASE}/${entryId}/rounds/${roundId}/prep-plan`, body);
   }
+
+  // ---------------- 票 240：邮箱直连导入 ----------------
+
+  /** 发起邮箱连接：返回授权跳转 URL（前端直接跳转）。 */
+  connectMailbox(provider: string): Observable<{ authUrl: string }> {
+    return this.api.post<{ authUrl: string }>(`${InterviewsApiService.BASE}/mailbox/connect`, { provider });
+  }
+
+  getMailboxConnections(): Observable<MailboxConnectionDto[]> {
+    return this.api.get<MailboxConnectionDto[]>(`${InterviewsApiService.BASE}/mailbox/connections`);
+  }
+
+  disconnectMailbox(id: string): Observable<void> {
+    return this.api.delete<void>(`${InterviewsApiService.BASE}/mailbox/connections/${id}`);
+  }
+
+  /** 手动刷新：entryId 缺省 = 全部条目规则；否则仅该条目规则。 */
+  refreshMailbox(entryId?: string | null): Observable<RefreshMailboxResult> {
+    return this.api.post<RefreshMailboxResult>(`${InterviewsApiService.BASE}/mailbox/refresh`,
+      { entryId: entryId ?? null });
+  }
+
+  getMailboxPending(entryId?: string | null): Observable<MailboxPendingDto[]> {
+    return this.api.get<MailboxPendingDto[]>(`${InterviewsApiService.BASE}/mailbox/pending`,
+      entryId ? { entryId } : undefined);
+  }
+
+  confirmMailboxPending(id: string, entryId?: string | null): Observable<{ assetId: string }> {
+    return this.api.post<{ assetId: string }>(
+      `${InterviewsApiService.BASE}/mailbox/pending/${id}/confirm`, { entryId: entryId ?? null });
+  }
+
+  ignoreMailboxPending(id: string): Observable<void> {
+    return this.api.post<void>(`${InterviewsApiService.BASE}/mailbox/pending/${id}/ignore`, {});
+  }
+
+  getMailboxImports(entryId?: string | null): Observable<MailboxImportDto[]> {
+    return this.api.get<MailboxImportDto[]>(`${InterviewsApiService.BASE}/mailbox/imports`,
+      entryId ? { entryId } : undefined);
+  }
+
+  /** 条目级匹配规则读（条目详情页邮箱匹配区用；设置页绝不放规则）。 */
+  getMailMatchRules(entryId: string): Observable<MailMatchRulesDto> {
+    return this.api.get<MailMatchRulesDto>(`${InterviewsApiService.BASE}/${entryId}/mail-match-rules`);
+  }
+
+  updateMailMatchRules(entryId: string, body: MailMatchRulesDto): Observable<MailMatchRulesDto> {
+    return this.api.put<MailMatchRulesDto>(`${InterviewsApiService.BASE}/${entryId}/mail-match-rules`, body);
+  }
+}
+
+/** 票 240：邮箱连接行（refresh token 永不下发，只给状态）。 */
+export interface MailboxConnectionDto {
+  id: string;
+  provider: string;
+  accountEmail: string;
+  scope: string;
+  status: string;
+  connectedAt: string;
+  lastRefreshAt: string | null;
+  hasCursor: boolean;
+}
+
+/** 票 240：手动刷新结果条（三数 + 失败说明 + 状态旗）。 */
+export interface RefreshMailboxResult {
+  added: number;
+  pending: number;
+  skippedDuplicates: number;
+  failed: number;
+  failedReasons: string[];
+  cancelled: boolean;
+  rateLimited: boolean;
+  needsReconnect: boolean;
+  cursorAdvanced: boolean;
+}
+
+/** 票 240：待确认队列行（不含原文；确认时后端重取）。 */
+export interface MailboxPendingDto {
+  id: string;
+  provider: string;
+  accountEmail: string;
+  fromEmail: string;
+  fromName: string | null;
+  subject: string;
+  receivedAt: string;
+  signal: string;
+  matchedRule: string;
+  entryId: string | null;
+  candidateEntryIds: string[];
+  snippet: string | null;
+  status: string;
+  createdAt: string;
+}
+
+/** 票 240：导入审计行。 */
+export interface MailboxImportDto {
+  id: string;
+  entryId: string;
+  assetId: string | null;
+  provider: string;
+  accountEmail: string;
+  providerMessageId: string;
+  matchedRule: string;
+  rawMimeBytes: number;
+  isNew: boolean;
+  importedAt: string;
+}
+
+/** 票 240：条目级匹配规则（域名 / 往来人 / 关键词 / 排除列表）。 */
+export interface MailMatchRulesDto {
+  entryId: string;
+  domains: string[];
+  contacts: string[];
+  keywords: string[];
+  exclusions: string[];
 }

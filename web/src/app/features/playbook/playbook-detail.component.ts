@@ -160,6 +160,71 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly prepGenRequest = signal<{ roundId: string; token: number } | null>(null);
   private prepGenToken = 0;
   readonly pendingComm = signal(0);
+
+  // ---------------- 票 240：条目级邮箱匹配规则（方案 §2.3：规则随条目走，只在此处维护） ----------------
+  // 懒取：点开匹配区时才取；保存为逗号分隔三输入 + 排除列表可删。设置页绝不放规则。
+  readonly mailRulesOpen = signal(false);
+  readonly mailRules = signal<import('../../core/api/interviews-api.service').MailMatchRulesDto | null>(null);
+  readonly mailRulesFor = signal<string | null>(null);
+  readonly mailRulesSaving = signal(false);
+  readonly mailRulesDomains = signal('');
+  readonly mailRulesContacts = signal('');
+  readonly mailRulesKeywords = signal('');
+
+  toggleMailRules(): void {
+    const next = !this.mailRulesOpen();
+    this.mailRulesOpen.set(next);
+    if (next && this.mailRulesFor() !== this.id()) {
+      this.mailRulesFor.set(this.id());
+      this.interviewsApi.getMailMatchRules(this.id()).subscribe({
+        next: (r) => {
+          this.mailRules.set(r);
+          this.mailRulesDomains.set(r.domains.join(', '));
+          this.mailRulesContacts.set(r.contacts.join(', '));
+          this.mailRulesKeywords.set(r.keywords.join(', '));
+        },
+        error: () => { /* 规则取数失败时展开空表单，用户仍可填写保存 */ }
+      });
+    }
+  }
+
+  saveMailRules(): void {
+    const split = (s: string): string[] =>
+      s.split(',').map((x) => x.trim().toLowerCase()).filter((x) => x.length > 0);
+    const current = this.mailRules();
+    this.mailRulesSaving.set(true);
+    this.interviewsApi.updateMailMatchRules(this.id(), {
+      entryId: this.id(),
+      domains: [...new Set(split(this.mailRulesDomains()))],
+      contacts: [...new Set(split(this.mailRulesContacts()))],
+      keywords: [...new Set(split(this.mailRulesKeywords()))],
+      exclusions: current?.exclusions ?? []
+    }).subscribe({
+      next: (r) => {
+        this.mailRules.set(r);
+        this.mailRulesSaving.set(false);
+        this.snack.open(this.i18n.t('mailbox.rulesSaved'), undefined, { duration: 3000 });
+      },
+      error: (err) => {
+        this.mailRulesSaving.set(false);
+        const e = err as { error?: { detail?: string }; message?: string };
+        this.snack.open(e?.error?.detail || e?.message || '保存失败', undefined, { duration: 5000 });
+      }
+    });
+  }
+
+  removeMailExclusion(excluded: string): void {
+    const current = this.mailRules();
+    if (!current) return;
+    this.interviewsApi.updateMailMatchRules(this.id(), {
+      ...current,
+      exclusions: current.exclusions.filter((x) => x !== excluded)
+    }).subscribe({
+      next: (r) => this.mailRules.set(r),
+      error: () => { /* 排除删除失败不阻塞页面 */ }
+    });
+  }
+
   readonly expandedCell = signal<'jd' | 'company' | 'resume' | 'score' | null>(null);
   readonly editingBasic = signal(false);
   readonly confirmDelete = signal(false);

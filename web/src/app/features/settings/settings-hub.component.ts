@@ -19,7 +19,9 @@ interface SettingsNavItem {
 
 const NAV_ITEMS: readonly SettingsNavItem[] = [
   { path: '/settings/profile', labelKey: 'account.profile', icon: 'person' },
-  { path: '/settings/ai', labelKey: 'setting.title', icon: 'smart_toy' }
+  { path: '/settings/ai', labelKey: 'setting.title', icon: 'smart_toy' },
+  // 票 240：配置邮箱页与 API key 配置页平行（同一设置中心左导航）。
+  { path: '/settings/mail', labelKey: 'mailbox.title', icon: 'mail' }
 ];
 
 @Component({

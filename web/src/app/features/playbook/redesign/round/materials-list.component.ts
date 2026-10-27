@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Output, computed, effect, inject, input, signal
+  Component, EventEmitter, OnDestroy, Output, computed, effect, inject, input, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -7,6 +7,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Subscription } from 'rxjs';
+import {
+  InterviewsApiService, RefreshMailboxResult
+} from '../../../../core/api/interviews-api.service';
 import { EmailShotDialogComponent } from './email-shot-dialog.component';
 import {
   InterviewAsset, InterviewRound
@@ -33,6 +37,25 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
   standalone: true,
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatDialogModule],
   template: `
+    <!-- 票240：条目级邮箱刷新入口（主入口在设置页；此处为条目级快捷入口，仅刷本条目规则）。 -->
+    <div class="mail-refresh">
+      <button type="button" class="mini-btn" [disabled]="mailRefreshing()" (click)="refreshFromMailbox()">
+        <mat-icon>refresh</mat-icon>
+        <span>{{ mailRefreshing() ? t('mailbox.refreshing') : t('mailbox.refresh') }}</span>
+      </button>
+      @if (mailRefreshing()) {
+        <button type="button" class="mini-btn" (click)="cancelMailboxRefresh()">{{ t('mailbox.cancel') }}</button>
+      }
+      @if (mailRefreshResult(); as r) {
+        <span class="mail-result">
+          @if (r.added === 0 && r.pending === 0 && r.skippedDuplicates === 0 && r.failed === 0) {
+            {{ t('mailbox.noNewMail') }}
+          } @else {
+            {{ mailResultLine(r) }}
+          }
+        </span>
+      }
+    </div>
     @if (!displayGroups().length) {
       <p class="empty">{{ t('pb.v2.m.empty') }}</p>
     }
@@ -68,6 +91,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                     @if (senderName(a)) { <span class="msg-from">{{ senderName(a) }}</span> }
                     <span class="msg-date">{{ displayDate(a) }}</span>
                     <span class="msg-title">{{ shortTitle(a) }}</span>
+                    @if (metaOf(a)?.mailboxNew) { <span class="new-pill">{{ t('mailbox.newImport') }}</span> }
                     <span class="chev" [class.open]="isMessageOpen(a)">›</span>
                   </button>
                   @if (isMessageOpen(a)) {
@@ -153,6 +177,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                   <span class="eh-time">{{ headTime(a) }}</span>
                 </span>
                 <span class="eh-title">{{ shortTitle(a) }}</span>
+                @if (metaOf(a)?.mailboxNew) { <span class="new-pill">{{ t('mailbox.newImport') }}</span> }
                 @if (metaOf(a)?.format) { <span class="eh-format">{{ formatLabel(t, metaOf(a)!.format) }}</span> }
               </span>
               <span class="chev" [class.open]="isMessageOpen(a)">›</span>
@@ -303,6 +328,13 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
   `,
   styles: [`
     .empty { font-size: 14px; color: var(--yi-text-muted, #475569); padding: 10px 0; }
+    /* 票240：条目级刷新行 + “新导入”标记。 */
+    .mail-refresh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 6px; }
+    .mail-refresh .mini-btn { display: inline-flex; align-items: center; gap: 5px; }
+    .mail-refresh .mini-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .mail-result { font-size: 13px; color: var(--yi-text-muted, #475569); }
+    .new-pill { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px;
+                background: #dbeafe; color: #1d4ed8; white-space: nowrap; }
     .mat { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
     .mat-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
     .kind-chip { font-size: 12px; font-weight: 700; border: 1px solid var(--yi-border, #e2e8f0);
@@ -430,7 +462,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
     }
   `]
 })
-export class MaterialsListComponent {
+export class MaterialsListComponent implements OnDestroy {
   readonly entryId = input.required<string>();
   // 票189：用户令去掉材料卡红色删除图标（先隐藏不删除：remove() 逻辑、后端 deleteAsset、i18n 键保留；恢复只改开关）。
   readonly hideMatDelete = true;
@@ -444,9 +476,57 @@ export class MaterialsListComponent {
   @Output() readonly changed = new EventEmitter<void>();
 
   private readonly api = inject(PlaybookV2Api);
+  private readonly interviewsApi = inject(InterviewsApiService);
   private readonly snack = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18nService);
+
+  /** 票240：条目级刷新状态（取消 = 退订请求，后端按已落库部分保留、cursor 不推进）。 */
+  readonly mailRefreshing = signal(false);
+  readonly mailRefreshResult = signal<RefreshMailboxResult | null>(null);
+  private mailRefreshSub: Subscription | null = null;
+
+  ngOnDestroy(): void {
+    this.mailRefreshSub?.unsubscribe();
+  }
+
+  refreshFromMailbox(): void {
+    this.mailRefreshResult.set(null);
+    this.mailRefreshing.set(true);
+    this.mailRefreshSub?.unsubscribe();
+    this.mailRefreshSub = this.interviewsApi.refreshMailbox(this.entryId()).subscribe({
+      next: (r) => {
+        this.mailRefreshing.set(false);
+        this.mailRefreshResult.set(r);
+        if (r.needsReconnect) this.snack.open(this.i18n.t('mailbox.needsReconnect'), undefined, { duration: 5000 });
+        else if (r.rateLimited) this.snack.open(this.i18n.t('mailbox.rateLimited'), undefined, { duration: 5000 });
+        else if (r.failed > 0 && r.failedReasons.length > 0) this.snack.open(r.failedReasons.join('；'), undefined, { duration: 8000 });
+        // 刷新成功后触发详情页重载（新资产 + “新导入”标记随 fresh 数据回来）。
+        this.changed.emit();
+      },
+      error: (err) => {
+        this.mailRefreshing.set(false);
+        const e = err as { error?: { detail?: string }; message?: string };
+        this.snack.open(e?.error?.detail || e?.message || '刷新失败', undefined, { duration: 5000 });
+      }
+    });
+  }
+
+  cancelMailboxRefresh(): void {
+    this.mailRefreshSub?.unsubscribe();
+    this.mailRefreshSub = null;
+    this.mailRefreshing.set(false);
+    this.changed.emit();
+  }
+
+  /** 刷新结果条：新增 N 封 · 待确认 M 封 · 跳过重复 K 封（失败另行 snack 提示）。 */
+  mailResultLine(r: RefreshMailboxResult): string {
+    return this.i18n.t('mailbox.resultLine')
+      .replace('{added}', String(r.added))
+      .replace('{pending}', String(r.pending))
+      .replace('{skipped}', String(r.skippedDuplicates))
+      .replace('{failed}', String(r.failed));
+  }
   readonly t = makeV2T(this.i18n);
   readonly fmt = makeV2Fmt(this.i18n);
 

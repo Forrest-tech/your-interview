@@ -1,0 +1,245 @@
+/* 票 240：邮箱配置页 —— 与 AI 设置页同款 .setting-page / .sp-card 骨架。 */
+
+.setting-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 22px 20px 48px;
+}
+
+.sp-head {
+  margin-bottom: 18px;
+}
+
+.sp-head h1 {
+  margin: 0 0 6px;
+  font-size: 21px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.sp-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #64748b;
+}
+
+.sp-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.sp-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.sp-card-title mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  color: #2563eb;
+}
+
+.sp-card-desc {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #64748b;
+}
+
+.sp-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.sp-notice {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  font-size: 13px;
+  color: #065f46;
+}
+
+.sp-error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  font-size: 13px;
+  color: #991b1b;
+}
+
+.sp-result {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.act-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* ---------- 连接行 ---------- */
+
+.conn-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.conn-row:last-of-type {
+  border-bottom: none;
+}
+
+.conn-icon {
+  color: #2563eb;
+}
+
+.conn-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conn-account {
+  font-size: 14px;
+  font-weight: 500;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conn-meta {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* ---------- 待确认行 ---------- */
+
+.pend-row {
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pend-row:last-child {
+  border-bottom: none;
+}
+
+.pend-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pend-from {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pend-date {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.pend-subject {
+  margin-top: 2px;
+  font-size: 13px;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pend-rule {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #2563eb;
+}
+
+.pend-snippet {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pend-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.pend-select {
+  min-width: 260px;
+  flex: 1;
+}
+
+/* ---------- 审计行 ---------- */
+
+.imp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #334155;
+}
+
+.imp-row:last-child {
+  border-bottom: none;
+}
+
+.imp-provider {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.imp-rule {
+  flex: 1;
+  min-width: 120px;
+}
+
+.imp-new {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 12px;
+}
+
+.imp-date {
+  font-size: 12px;
+  color: #94a3b8;
+}

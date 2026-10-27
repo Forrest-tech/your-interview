@@ -146,6 +146,11 @@ export class ShellComponent {
     this.router.navigate(['/settings']);
   }
 
+  /** 票 240：“我的”下拉直达配置邮箱页（与 API key 配置页平行）。 */
+  goMailbox(): void {
+    this.router.navigate(['/settings/mail']);
+  }
+
   goAdmin(): void {
     this.router.navigate(['/admin']);
   }

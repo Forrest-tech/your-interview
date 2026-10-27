@@ -295,6 +295,50 @@
           <p class="state">{{ t('pb.v2.d.noRounds') }}</p>
         }
 
+        <!-- 票 240：邮箱匹配规则区（紧凑，默认收起；规则随条目走，只在此处维护）。 -->
+        <section class="mail-rules">
+          <button type="button" class="mr-head" (click)="toggleMailRules()"
+                  [attr.aria-expanded]="mailRulesOpen()">
+            <mat-icon>mail</mat-icon>
+            <span>{{ t('mailbox.rulesTitle') }}</span>
+            <span class="chev" [class.open]="mailRulesOpen()">›</span>
+          </button>
+          @if (mailRulesOpen()) {
+            <div class="mr-body">
+              <p class="mr-note">{{ t('mailbox.rulesNote') }}</p>
+              <label class="mr-field">
+                <span>{{ t('mailbox.rulesDomains') }}</span>
+                <input type="text" [ngModel]="mailRulesDomains()" (ngModelChange)="mailRulesDomains.set($event)"
+                       [placeholder]="t('mailbox.rulesDomainsHint')">
+              </label>
+              <label class="mr-field">
+                <span>{{ t('mailbox.rulesContacts') }}</span>
+                <input type="text" [ngModel]="mailRulesContacts()" (ngModelChange)="mailRulesContacts.set($event)"
+                       [placeholder]="t('mailbox.rulesContactsHint')">
+              </label>
+              <label class="mr-field">
+                <span>{{ t('mailbox.rulesKeywords') }}</span>
+                <input type="text" [ngModel]="mailRulesKeywords()" (ngModelChange)="mailRulesKeywords.set($event)"
+                       [placeholder]="t('mailbox.rulesKeywordsHint')">
+              </label>
+              @if (mailRules()?.exclusions?.length) {
+                <div class="mr-excl">
+                  <span class="mr-excl-title">{{ t('mailbox.rulesExclusions') }}</span>
+                  @for (ex of mailRules()!.exclusions; track ex) {
+                    <span class="mr-chip">{{ ex }}
+                      <button type="button" class="mr-x" (click)="removeMailExclusion(ex)"
+                              [attr.aria-label]="t('mailbox.removeExclusion')">×</button>
+                    </span>
+                  }
+                </div>
+              }
+              <button type="button" class="mr-save" [disabled]="mailRulesSaving()" (click)="saveMailRules()">
+                {{ mailRulesSaving() ? t('mailbox.saving') : t('mailbox.saveRules') }}
+              </button>
+            </div>
+          }
+        </section>
+
         <!-- ⑤ 复盘与待办(与 Round 同一区块,内部分隔线区分) -->
         <!-- 票 166：Review & to-dos 暂隐藏；weak-list 是另一功能，保留渲染；无短板且隐藏开启时整卡不渲染，不留空框。 -->
         @if (!hideReviewTodos || e.weaknesses?.length) {

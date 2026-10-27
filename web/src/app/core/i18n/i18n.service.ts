@@ -1639,6 +1639,99 @@ const DICT: Record<string, Record<Lang, string>> = {
   'setting.title': { zh: 'AI 语音设置', en: 'AI Voice Settings', fr: 'Paramètres vocaux IA' },
   // 票 146：头像菜单 Settings 项 + 设置中心页签标题（三语键）。
   'settings.title': { zh: '设置', en: 'Settings', fr: 'Paramètres' },
+  // 票 240：邮箱直连导入（三语键齐全；本页只管连接，规则在条目详情页维护）。
+  'mailbox.title': { zh: '配置邮箱', en: 'Mailbox', fr: 'Boîte mail' },
+  'mailbox.subtitle': {
+    zh: '连接你的邮箱后，可从邮箱直接导入往来邮件（只读：不发信、不删改、不标已读）。匹配规则在各面试条目详情页维护。',
+    en: 'After connecting your mailbox, you can import correspondence directly from email (read-only: never sends, edits, or marks as read). Match rules live on each interview entry detail page.',
+    fr: 'Après avoir connecté votre boîte mail, vous pouvez importer vos échanges directement (lecture seule : jamais d’envoi, de modification ni de marquage comme lu). Les règles de correspondance se gèrent sur chaque fiche d’entretien.'
+  },
+  'mailbox.connectTitle': { zh: '邮箱连接', en: 'Mailbox connection', fr: 'Connexion de la boîte mail' },
+  'mailbox.readonlyNote': {
+    zh: '本功能只读你的邮件，不会发信、不会删改、不会标已读。授权可随时断开，断开后已导入的邮件保留。',
+    en: 'This feature only reads your mail — it never sends, edits, or marks messages as read. You can disconnect anytime; already imported mail stays.',
+    fr: 'Cette fonction ne fait que lire vos mails — jamais d’envoi, de modification ni de marquage comme lu. Vous pouvez vous déconnecter à tout moment ; les mails déjà importés sont conservés.'
+  },
+  'mailbox.noConnection': { zh: '尚未连接任何邮箱。', en: 'No mailbox connected yet.', fr: 'Aucune boîte mail connectée.' },
+  'mailbox.connectGmail': { zh: '连接 Gmail', en: 'Connect Gmail', fr: 'Connecter Gmail' },
+  'mailbox.connectOutlook': { zh: '连接 Outlook', en: 'Connect Outlook', fr: 'Connecter Outlook' },
+  'mailbox.disconnect': { zh: '断开', en: 'Disconnect', fr: 'Déconnecter' },
+  'mailbox.reconnect': { zh: '重新连接', en: 'Reconnect', fr: 'Reconnecter' },
+  'mailbox.refreshAll': { zh: '从邮箱刷新', en: 'Refresh from mailbox', fr: 'Actualiser depuis la boîte mail' },
+  'mailbox.refresh': { zh: '从邮箱刷新', en: 'Refresh from mailbox', fr: 'Actualiser depuis la boîte mail' },
+  'mailbox.refreshing': { zh: '刷新中…', en: 'Refreshing…', fr: 'Actualisation…' },
+  'mailbox.refreshHint': {
+    zh: '按本条目规则从邮箱拉取新邮件（强信号自动导入，弱信号进待确认队列）。',
+    en: 'Pull new mail for this entry’s rules (strong signals import automatically, weak signals go to the review queue).',
+    fr: 'Récupérer les nouveaux mails selon les règles de cette fiche (les signaux forts s’importent automatiquement, les faibles passent en file de vérification).'
+  },
+  'mailbox.cancel': { zh: '取消', en: 'Cancel', fr: 'Annuler' },
+  'mailbox.refreshCancelled': {
+    zh: '刷新已取消：已导入的保留，游标未推进。',
+    en: 'Refresh cancelled: already imported mail stays, cursor not advanced.',
+    fr: 'Actualisation annulée : les mails déjà importés sont conservés, le curseur n’a pas avancé.'
+  },
+  'mailbox.noNewMail': { zh: '没有新邮件', en: 'No new mail', fr: 'Aucun nouveau mail' },
+  'mailbox.resultLine': {
+    zh: '新增 {added} 封 · 待确认 {pending} 封 · 跳过重复 {skipped} 封 · 失败 {failed} 封',
+    en: 'Added {added} · Pending review {pending} · Skipped duplicates {skipped} · Failed {failed}',
+    fr: 'Ajoutés {added} · À vérifier {pending} · Doublons ignorés {skipped} · Échecs {failed}'
+  },
+  'mailbox.needsReconnect': {
+    zh: '邮箱连接已失效，请重新连接。',
+    en: 'Mailbox connection expired, please reconnect.',
+    fr: 'Connexion expirée, veuillez vous reconnecter.'
+  },
+  'mailbox.rateLimited': {
+    zh: '邮箱限流，请稍后重试（游标未推进）。',
+    en: 'Mailbox rate limited, please retry later (cursor not advanced).',
+    fr: 'Boîte mail limitée, réessayez plus tard (curseur non avancé).'
+  },
+  'mailbox.connected': { zh: '邮箱已连接。', en: 'Mailbox connected.', fr: 'Boîte mail connectée.' },
+  'mailbox.connectedAs': { zh: '邮箱已连接：{account}', en: 'Mailbox connected: {account}', fr: 'Boîte mail connectée : {account}' },
+  'mailbox.connectFailed': {
+    zh: '邮箱连接失败，请重试（若反复失败，请检查 OAuth 应用配置）。',
+    en: 'Mailbox connection failed, please retry (if it keeps failing, check the OAuth app configuration).',
+    fr: 'Échec de connexion, veuillez réessayer (si cela persiste, vérifiez la configuration de l’application OAuth).'
+  },
+  'mailbox.disconnected': { zh: '已断开邮箱连接。', en: 'Mailbox disconnected.', fr: 'Boîte mail déconnectée.' },
+  'mailbox.lastRefresh': { zh: '上次刷新', en: 'Last refresh', fr: 'Dernier rafraîchissement' },
+  'mailbox.status.Active': { zh: '已连接', en: 'Connected', fr: 'Connectée' },
+  'mailbox.status.Inactive': { zh: '已切换', en: 'Switched', fr: 'Remplacée' },
+  'mailbox.status.Invalid': { zh: '授权失效', en: 'Authorization expired', fr: 'Autorisation expirée' },
+  'mailbox.pendingTitle': { zh: '待确认队列', en: 'Review queue', fr: 'File de vérification' },
+  'mailbox.pendingDesc': {
+    zh: '弱信号（主题/正文含公司名、招聘平台通知）与多条目歧义只进队列、永不自动落库；确认时选条目并记往来人映射，忽略时发件地址记入该条目排除列表。',
+    en: 'Weak signals (company name in subject/body, platform notifications) and ambiguous multi-entry matches only queue here — never auto-imported. Confirming picks the entry and remembers the sender mapping; ignoring adds the sender to that entry’s exclusion list.',
+    fr: 'Les signaux faibles (nom de l’entreprise dans l’objet ou le corps, notifications de plateformes) et les cas ambigus restent ici — jamais importés automatiquement. Confirmer choisit la fiche et mémorise l’expéditeur ; ignorer ajoute l’expéditeur à la liste d’exclusion de la fiche.'
+  },
+  'mailbox.pendingEmpty': { zh: '暂无待确认邮件。', en: 'No mail pending review.', fr: 'Aucun mail en attente.' },
+  'mailbox.pickEntry': { zh: '选择归档条目', en: 'Pick an entry', fr: 'Choisir une fiche' },
+  'mailbox.pickEntryFirst': { zh: '请先选择要归档的面试条目。', en: 'Please pick an interview entry first.', fr: 'Veuillez d’abord choisir une fiche d’entretien.' },
+  'mailbox.confirm': { zh: '确认导入', en: 'Confirm import', fr: 'Confirmer l’import' },
+  'mailbox.ignore': { zh: '忽略', en: 'Ignore', fr: 'Ignorer' },
+  'mailbox.confirmed': { zh: '已确认导入。', en: 'Import confirmed.', fr: 'Import confirmé.' },
+  'mailbox.ignored': { zh: '已忽略。', en: 'Ignored.', fr: 'Ignoré.' },
+  'mailbox.importsTitle': { zh: '导入记录', en: 'Import history', fr: 'Historique d’import' },
+  'mailbox.importsEmpty': { zh: '暂无导入记录。', en: 'No imports yet.', fr: 'Aucun import pour le moment.' },
+  'mailbox.newImport': { zh: '新导入', en: 'New import', fr: 'Nouvel import' },
+  'mailbox.rulesTitle': { zh: '邮箱匹配规则', en: 'Mailbox match rules', fr: 'Règles de correspondance mail' },
+  'mailbox.rulesNote': {
+    zh: '强信号（公司域、已知往来人）自动导入；弱信号只进待确认队列。域名填公司域（如 corpay.com），多值用逗号分隔。',
+    en: 'Strong signals (company domain, known contacts) import automatically; weak signals only queue for review. Domains are company domains (e.g. corpay.com); separate multiple values with commas.',
+    fr: 'Les signaux forts (domaine de l’entreprise, contacts connus) s’importent automatiquement ; les faibles passent en file de vérification. Les domaines sont ceux de l’entreprise (ex. corpay.com) ; séparez les valeurs par des virgules.'
+  },
+  'mailbox.rulesDomains': { zh: '公司域名', en: 'Company domains', fr: 'Domaines de l’entreprise' },
+  'mailbox.rulesDomainsHint': { zh: '如：corpay.com, example.com', en: 'e.g. corpay.com, example.com', fr: 'ex. corpay.com, example.com' },
+  'mailbox.rulesContacts': { zh: '已知往来人邮箱', en: 'Known contact emails', fr: 'E-mails de contacts connus' },
+  'mailbox.rulesContactsHint': { zh: '用户确认过的 recruiter / 面试官地址', en: 'Confirmed recruiter / interviewer addresses', fr: 'Adresses de recruteurs / intervieweurs confirmés' },
+  'mailbox.rulesKeywords': { zh: '公司名关键词', en: 'Company name keywords', fr: 'Mots-clés du nom de l’entreprise' },
+  'mailbox.rulesKeywordsHint': { zh: '主题或正文含关键词 → 待确认队列', en: 'Keyword in subject/body → review queue', fr: 'Mot-clé dans l’objet ou le corps → file de vérification' },
+  'mailbox.rulesExclusions': { zh: '排除列表', en: 'Exclusion list', fr: 'Liste d’exclusion' },
+  'mailbox.removeExclusion': { zh: '移除排除', en: 'Remove exclusion', fr: 'Retirer de l’exclusion' },
+  'mailbox.saveRules': { zh: '保存规则', en: 'Save rules', fr: 'Enregistrer les règles' },
+  'mailbox.saving': { zh: '保存中…', en: 'Saving…', fr: 'Enregistrement…' },
+  'mailbox.rulesSaved': { zh: '匹配规则已保存。', en: 'Match rules saved.', fr: 'Règles enregistrées.' },
   // 2026-09-16(Forrest 本轮第 6 条):设置页不再负责"选朗读引擎" ——
   // 引擎选择已归到练习页的 TTS 弹窗,本页只管 Azure 凭据。
   'setting.subtitle': {

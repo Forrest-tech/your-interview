@@ -62,6 +62,20 @@ export interface AssetMeta {
   /** 票159 备考输入 purpose 标签：'prep-input-experiences' 面经 / 'prep-input-resume' 简历要点。
    *  仅 kind=Notes 的备考输入资产携带；值域见 redesign/v2.helpers.ts 的 PREP_INPUT_* 常量。 */
   purpose?: string;
+  /** 票240 邮箱直连导入标记：本资产由邮箱导入（非粘贴/上传）。 */
+  mailboxImport?: boolean;
+  /** 票240 “新导入”标记：本轮刷新导入的资产打标，下轮同范围刷新开始时清掉。 */
+  mailboxNew?: boolean;
+  /** 票240 导入来源 provider：Gmail / Graph。 */
+  mailboxProvider?: string;
+  /** 票240 provider 侧 message id（去重键组成部分）。 */
+  mailboxMessageId?: string;
+  /** 票240 原文落盘相对路径（mail-attachments/{assetId}/raw.eml）。 */
+  rawPath?: string;
+  /** 票240 已落盘附件数（超限只记名的不计入）。 */
+  attachmentCount?: number;
+  /** 票240 超限未落盘的附件名（只记名，按需拉取）。 */
+  oversizedAttachments?: string[];
 }
 
 /** 逐题分析的单个维度。 */

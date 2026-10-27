@@ -62,18 +62,11 @@
   </aside>
 
   <div class="page-main">
-  <!-- 票 202：三按钮由卡片内顶端移至卡片顶边线上方、Back to list 行右侧（顺序/接线/tooltip/样式与 196 一字不动）。 -->
+  <!-- 票 232：三按钮已由 Back to list 行移至卡片头行右侧（编辑铅笔左侧），本行只剩 Back 链接。 -->
   <div class="back-row">
   <a mat-button class="back" routerLink="/playbook">
     <mat-icon>arrow_back</mat-icon> {{ t('pb.v2.d.back') }}
   </a>
-  @if (entry()) {
-    <div class="zone-actions">
-      <button mat-icon-button [matTooltip]="t('pb.v2.d.addMaterial')" [attr.aria-label]="t('pb.v2.d.addMaterial')" (click)="openIntake('email')"><mat-icon>upload_file</mat-icon></button>
-      <button mat-icon-button [matTooltip]="t('pb.v2.d.addRoundTip')" [attr.aria-label]="t('pb.v2.d.addRoundTip')" (click)="openIntake('email', undefined, true)"><mat-icon>playlist_add</mat-icon></button>
-      <button mat-icon-button [matTooltip]="t('pb.v2.d.mock')" [attr.aria-label]="t('pb.v2.d.mock')" (click)="goMock()"><mat-icon>record_voice_over</mat-icon></button>
-    </div>
-  }
   </div>
 
   @if (loading() && !entry()) {
@@ -84,7 +77,7 @@
   }
   @if (entry(); as e) {
 
-    <!-- 上区:条目信息(头 + 四格条,单一边框容器；按钮行已于票 202 移至卡片线上 Back to list 行) -->
+    <!-- 上区:条目信息(头 + 四格条,单一边框容器；按钮行已于票 232 移至卡片头行右侧) -->
     <section class="zone zone-entry">
       <!-- ① 条目头 -->
       <header class="ehead" data-testid="entry-header">
@@ -230,8 +223,14 @@
             <span class="red-dot" data-testid="comm-red-dot">{{ pendingComm() }}</span>
           }
         </button>
+        <span class="spacer"></span>
+        <!-- 票 232：三按钮整组由 Back to list 行移至此（卡片头行右侧、编辑铅笔左侧；三行按钮原文一字不动，顺序/接线/tooltip/aria-label 全保留）。本行只在 entry 下渲染，与旧 Back 行 @if (entry()) 门控等价。 -->
+        <div class="zone-actions">
+          <button mat-icon-button [matTooltip]="t('pb.v2.d.addMaterial')" [attr.aria-label]="t('pb.v2.d.addMaterial')" (click)="openIntake('email')"><mat-icon>upload_file</mat-icon></button>
+          <button mat-icon-button [matTooltip]="t('pb.v2.d.addRoundTip')" [attr.aria-label]="t('pb.v2.d.addRoundTip')" (click)="openIntake('email', undefined, true)"><mat-icon>playlist_add</mat-icon></button>
+          <button mat-icon-button [matTooltip]="t('pb.v2.d.mock')" [attr.aria-label]="t('pb.v2.d.mock')" (click)="goMock()"><mat-icon>record_voice_over</mat-icon></button>
+        </div>
         @if (selectedRound()) {
-          <span class="spacer"></span>
           <!-- 票188:详情卡铅笔按钮上移至此（原在详情卡 .rc-head；跨组件 viewChild 接线，功能与编辑态图标与今天一致）。 -->
           <button type="button" class="ptab-edit" [attr.aria-label]="t('pb.v2.r.editRound')" (click)="roundCard()?.toggleEdit()">
             <mat-icon>{{ roundCard()?.editing() ? 'close' : 'edit' }}</mat-icon>

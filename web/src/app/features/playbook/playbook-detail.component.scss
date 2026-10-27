@@ -140,10 +140,9 @@
 .zone-work .page-tabs { margin-top: 0; }
 
 .back { margin-bottom: 6px; }
-/* 票 202：Back to list 行（左为返回链接、右为三按钮，整行位于卡片顶边线上方；行与卡片间距沿用 .back 原 6px）。 */
+/* 票 202：Back to list 行（票 232 起只剩返回链接，三按钮已移至卡片头行右侧；行与卡片间距沿用 .back 原 6px）。 */
 .back-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 .back-row .back { margin-bottom: 0; }
-.back-row .zone-actions { flex: 0 0 auto; margin: 0; }
 .state { color: var(--yi-text-muted, #475569); font-size: 14px; padding: 22px 0; }
 .state.err { color: #dc2626; }
 .spacer { flex: 1; }
@@ -196,7 +195,7 @@
 .strip-foot { border-top: 1px solid var(--yi-border); padding: 10px 16px 12px; }
 /* 票 185：触发行双按钮横排（窄屏自动换行不断溢出）。 */
 .intake-head { margin: 18px 0 10px; display: flex; flex-wrap: wrap; gap: 8px; }
-/* 票 196：图标行（右对齐，gap 8px；三方框按钮 + 间距 124px，窄屏不溢出；票 202 起位于卡片线上 Back to list 行右侧）。
+/* 票 196：图标行（右对齐，gap 8px；三方框按钮 + 间距 124px，窄屏不溢出；票 232 起位于卡片头行右侧、编辑铅笔左侧）。
    容器视觉照 .ptab-edit（票 188，照详情卡 .rc-icon-btn 票 177 原样）原文复制，不做跨组件共享类抽取；
    另补 padding: 0 一行——mat-icon-button 默认内边距会把 19px 图标挤出 36px 框，此行只为框住图标，不改约定数值。 */
 .zone-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 0 0 10px; }
@@ -309,9 +308,12 @@
    票192:行高下限 44px——行高须大于 36px 的铅笔按钮，按钮在行内才有上下留白、真正居中，
    而不是贴住底线；页签仍 stretch 撑满行高，下划线与容器底线重合关系一字不动。 */
 .page-tabs {
-  display: flex; gap: 8px; margin-top: 20px; min-height: 44px;
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; min-height: 44px;
   border-bottom: 1.5px solid var(--yi-border, #e2e8f0);
 }
+/* 票 232：卡片头行内的按钮组——整组不压缩（flex: 0 0 auto，内部 gap 8px 不拆散），窄屏整组换行至下一行；
+   行内垂直居中与铅笔同款（align-self: center，行高下限 44px 内的留白与铅笔一致）。 */
+.page-tabs .zone-actions { flex: 0 0 auto; margin: 0; align-self: center; }
 .ptab {
   border: none; background: transparent; color: var(--yi-text-muted, #475569); cursor: pointer;
   font-size: 16px; font-weight: 600; padding: 9px 15px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;

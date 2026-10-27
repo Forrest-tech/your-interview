@@ -37,6 +37,7 @@ import { ApplicationDialogComponent } from './application-dialog.component';
 import { ApplicationDetailDialogComponent } from './application-detail-dialog.component';
 import { initialDrawerWidth } from './detail-drawer-width';
 import { PrepPlanDialogComponent } from './prep-plan-dialog.component';
+import { BackfillReportDialogComponent } from './backfill-report-dialog.component';
 import {
   favCountsByStatus, favoriteItems, itemsAtStatus, nextFlowStageSelection
 } from './tracker-flow-favorites.helpers';
@@ -565,6 +566,8 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
    * 票 150 续：批量回填全部空 logo 公司 —— 调用 150 已落地的 backfill-logos 端点。
    * 此前该端点全仓零调用方，只能走裸 API 调用，这是“logo 一直没补上”的直接缺口。
    * 端点本身幂等（只处理空值、单家失败不中断整批）；跑完 reload()，新 logo 即在列表显示。
+   * 票 249 C3-reporting：跑完若有跳过 / 失败 / 待消歧公司名，计数条带“查看明细”
+   * 动作（6 秒），点开对话框分三类列名；三类皆空时只显示计数条（4 秒）。
    */
   backfillLogos(): void {
     if (this.backfillingLogos()) return;
@@ -573,9 +576,22 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
       next: (r) => {
         this.backfillingLogos.set(false);
         this.reload();
-        this.snack.open(this.tf('tracker.backfillLogosDone', {
+        const msg = this.tf('tracker.backfillLogosDone', {
           success: r.success, skipped: r.skipped, failed: r.failed, cleaned: r.cleaned,
-        }), this.t('common.close'), { duration: 4000 });
+        });
+        const skipped = r.skippedCompanies ?? [];
+        const failedNames = r.failedCompanies ?? [];
+        const ambiguous = r.ambiguousCompanies ?? [];
+        if (skipped.length > 0 || failedNames.length > 0 || ambiguous.length > 0) {
+          this.snack.open(msg, this.t('tracker.backfillViewDetails'), { duration: 6000 })
+            .onAction().subscribe(() => {
+              this.dialog.open(BackfillReportDialogComponent, {
+                data: { skipped, failed: failedNames, ambiguous },
+              });
+            });
+        } else {
+          this.snack.open(msg, this.t('common.close'), { duration: 4000 });
+        }
       },
       error: () => {
         this.backfillingLogos.set(false);

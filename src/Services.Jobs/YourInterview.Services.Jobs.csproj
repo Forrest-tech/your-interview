@@ -5,6 +5,12 @@
     <InternalsVisibleTo Include="YourInterview.Services.Jobs.Tests" />
   </ItemGroup>
 
+  <!-- 票249 R1:内置开源 logo 数据(EmbeddedResource 随程序集发布;Content 侧排除,避免重复项)。 -->
+  <ItemGroup>
+    <EmbeddedResource Include="Infrastructure\LogoData\*.json" />
+    <Content Remove="Infrastructure\LogoData\*.json" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />

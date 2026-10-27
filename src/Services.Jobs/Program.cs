@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using YourInterview.BuildingBlocks.Ai;
@@ -58,16 +60,64 @@ builder.AddServiceDefaults(ServiceName, services =>
     // 2026-10-19:LinkedIn 职位页抓取(Playwright，带用户登录态)
     services.AddSingleton<YourInterview.Services.Jobs.Application.LinkedInFetcher>();
 
-    // 票 150:公司 logo 取数 —— 禁自动重定向(3xx 即失败,防重定向绕过 SSRF 校验),
-    // 超时 20 秒与 JobPageFetcher 同口径;取数失败一律返回 null 不抛异常。
+    // 票 150:公司 logo 取数 —— 禁自动重定向(3xx 由抓取循环手动判定跟随,
+    // 防重定向绕过 SSRF 校验),超时 20 秒与 JobPageFetcher 同口径;取数失败一律返回 null 不抛异常。
+    // 票 249:底层再加 resolve-then-fetch pinning —— ConnectCallback 内解析 host
+    // 并全量校验地址(任一内网/保留 IP 即拒),只连校验过的公网 IP,杜绝解析与
+    // 连接之间的 DNS 重绑定;SNI/证书校验仍以原始 host 为准,不受 pinning 影响。
     services.AddHttpClient(YourInterview.Services.Jobs.Infrastructure.Services.CompanyLogoFetcherOptions.ClientName, http =>
     {
         http.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         http.Timeout = TimeSpan.FromSeconds(20);
-    }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+    }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        ConnectCallback = async (context, ct) =>
+        {
+            var host = context.DnsEndPoint.Host;
+            IPAddress[] addresses;
+            if (IPAddress.TryParse(host, out var literal))
+            {
+                if (YourInterview.Services.Jobs.Application.CompanyLogoRules.IsPrivateOrReservedIp(literal))
+                    throw new InvalidOperationException("票249:SSRF 拒绝内网字面 IP");
+                addresses = [literal];
+            }
+            else
+            {
+                addresses = await Dns.GetHostAddressesAsync(host, ct);
+                if (addresses.Length == 0
+                    || addresses.Any(YourInterview.Services.Jobs.Application.CompanyLogoRules.IsPrivateOrReservedIp))
+                    throw new InvalidOperationException("票249:SSRF 拒绝非公网解析结果");
+            }
+            var socket = new Socket(addresses[0].AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            try
+            {
+                await socket.ConnectAsync(new IPEndPoint(addresses[0], context.DnsEndPoint.Port), ct);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+            return new NetworkStream(socket, ownsSocket: true);
+        },
+    });
     services.AddScoped<YourInterview.Services.Jobs.Infrastructure.Services.ICompanyLogoFetcher,
         YourInterview.Services.Jobs.Infrastructure.Services.CompanyLogoFetcher>();
+
+    // 票 249 R1:本地开源 logo 层(EmbeddedResource,懒加载一次,单例)。
+    services.AddSingleton<YourInterview.Services.Jobs.Infrastructure.Services.ILocalLogoCatalog,
+        YourInterview.Services.Jobs.Infrastructure.Services.LocalLogoCatalog>();
+
+    // 票 249 R2:Wikidata 域名解析(描述性 UA,遵循 Wikimedia 礼仪,不冒充浏览器)。
+    services.AddHttpClient(YourInterview.Services.Jobs.Infrastructure.Services.WikidataDomainResolverOptions.ClientName, http =>
+    {
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("your-interview/1.0 (company-logo-domain-resolution)");
+        http.Timeout = TimeSpan.FromSeconds(20);
+    });
+    services.AddScoped<YourInterview.Services.Jobs.Infrastructure.Services.IWikidataDomainResolver,
+        YourInterview.Services.Jobs.Infrastructure.Services.WikidataDomainResolver>();
 
     services.AddSingleton(TimeProvider.System);
     services.AddHealthChecks().AddDbContextCheck<JobsDbContext>("postgres");

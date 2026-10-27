@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace YourInterview.Services.Jobs.Application;
@@ -227,5 +229,257 @@ public static class CompanyLogoRules
         }
         if (addresses.Length == 0) return false;
         return addresses.All(a => !IsPrivateOrReservedIp(a));
+    }
+
+    // ---------------- 票 249:Simple Icons titleToSlug 移植 ----------------
+
+    /// <summary>
+    /// Simple Icons sdk.mjs 的 titleToSlug 原样移植:小写 → 字符替换
+    /// (+→plus、.→dot、&→and、đ→d、ħ→h、ı→i、ĸ→k、ŀ→l、ł→l、ß→ss、ŧ→t、ø→o)
+    /// → NFD 分解 → 只留 a-z0-9。顺序与上游一致(先替换后分解,ø/ß 这类
+    /// 不分解的字符才不会被范围规则误删)。显式 slug 的图标(如 F#→fsharp)
+    /// 不走本函数,查表时以数据文件里的 slug 为准。
+    /// </summary>
+    private static readonly Dictionary<char, string> TitleSlugReplacements = new()
+    {
+        ['+'] = "plus", ['.'] = "dot", ['&'] = "and",
+        ['đ'] = "d", ['ħ'] = "h", ['ı'] = "i", ['ĸ'] = "k",
+        ['ŀ'] = "l", ['ł'] = "l", ['ß'] = "ss", ['ŧ'] = "t", ['ø'] = "o",
+    };
+
+    public static string TitleToSlug(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+        var lowered = title.Trim().ToLowerInvariant();
+        var replaced = new StringBuilder(lowered.Length);
+        foreach (var ch in lowered)
+            replaced.Append(TitleSlugReplacements.TryGetValue(ch, out var rep) ? rep : ch.ToString());
+        var decomposed = replaced.ToString().Normalize(NormalizationForm.FormD);
+        var slug = new StringBuilder(decomposed.Length);
+        foreach (var ch in decomposed)
+        {
+            // 只留 ASCII a-z0-9:NFD 后的组合附加符号与非 ASCII 字母一并去掉,
+            // 与上游 /[^a-z\d]/v 范围规则同口径。
+            if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) slug.Append(ch);
+        }
+        return slug.ToString();
+    }
+
+    // ---------------- 票 249:registrable-domain 与重定向判定(纯函数) ----------------
+
+    /// <summary>
+    /// 多段公共后缀(小表,覆盖常见国家/地区二段后缀;未列出的默认按末两段计)。
+    /// eTLD+1 判定只用于“是否同一注册域”,不做完整 PSL。
+    /// </summary>
+    private static readonly string[] MultiLabelSuffixes =
+    [
+        "co.uk", "org.uk", "ac.uk", "gov.uk", "co.jp", "ne.jp", "or.jp", "ac.jp", "go.jp",
+        "com.au", "net.au", "org.au", "co.nz", "com.br", "com.cn", "com.tw", "co.in",
+        "co.za", "com.mx", "com.ar", "com.co", "com.pl", "com.tr", "com.sg", "com.hk",
+        "com.my", "co.id", "co.th", "com.vn", "com.ph", "com.pk", "co.il", "com.eg",
+        "com.sa", "com.ae", "co.ke", "co.ng", "com.pe", "com.ve", "com.ec", "com.gt",
+        "com.uy", "com.py", "com.bo", "com.do", "com.sv", "com.hn", "com.ni", "com.cr",
+        "com.pa", "co.kr", "com.es", "nom.es", "org.es", "com.pt", "com.gr", "com.ru",
+        "com.ua", "com.kz", "com.by", "co.ua", "com.hr", "com.rs", "com.si", "com.sk",
+        "com.hu", "com.ro", "com.bg", "com.lt", "com.lv", "com.ee", "com.fi", "com.no",
+        "com.se", "com.dk", "com.is", "com.ie",
+    ];
+
+    /// <summary>
+    /// 取 host 的 registrable-domain(eTLD+1):IP 与单段 host 原样返回;
+    /// 多段公共后缀 host 取末三段,否则取末两段;统一小写、去尾点。
+    /// </summary>
+    public static string? GetRegistrableDomain(string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host)) return null;
+        var h = host.Trim().TrimEnd('.').ToLowerInvariant();
+        if (h.Length == 0) return null;
+        if (IPAddress.TryParse(h, out _)) return h;
+        var labels = h.Split('.');
+        if (labels.Length == 1) return h;
+        foreach (var suffix in MultiLabelSuffixes)
+        {
+            var suffixLabels = suffix.Split('.').Length;
+            if (labels.Length > suffixLabels
+                && h.EndsWith("." + suffix, StringComparison.Ordinal))
+                return string.Join(".", labels[^3..]);
+        }
+        return string.Join(".", labels[^2..]);
+    }
+
+    /// <summary>
+    /// 重定向放行判定(纯函数,供抓取循环与单测共用):返回跟随后的绝对地址,
+    /// 不放行返回 null。放行条件三选一:①同 host;②同一 registrable-domain
+    /// ( naked→www 即属此列,exact-host 读法修不了它);③s2→gstatic 专用
+    /// 豁口——链起于 www.google.com 的 /s2/favicons 且目标 host 恰好是
+    /// t1/t2.gstatic.com(host-exact,禁 suffix 匹配花招,如 evil-t1.gstatic.com
+    /// 一律拒绝)。其他情形(跨域、非 http(s)、缺 Location)一律 null。
+    /// </summary>
+    public static string? TryResolveRedirectUri(string currentUrl, string? locationHeader)
+    {
+        if (string.IsNullOrWhiteSpace(currentUrl) || string.IsNullOrWhiteSpace(locationHeader)) return null;
+        if (!Uri.TryCreate(currentUrl, UriKind.Absolute, out var current)) return null;
+        if (current.Scheme != Uri.UriSchemeHttp && current.Scheme != Uri.UriSchemeHttps) return null;
+        if (!Uri.TryCreate(current, locationHeader.Trim(), out var next)) return null;
+        if (next.Scheme != Uri.UriSchemeHttp && next.Scheme != Uri.UriSchemeHttps) return null;
+        var currentHost = current.Host.ToLowerInvariant();
+        var nextHost = next.Host.ToLowerInvariant();
+        if (nextHost == currentHost) return next.ToString();
+        var currentDomain = GetRegistrableDomain(currentHost);
+        var nextDomain = GetRegistrableDomain(nextHost);
+        if (currentDomain is not null && currentDomain == nextDomain) return next.ToString();
+        if (currentHost == "www.google.com"
+            && current.AbsolutePath.StartsWith("/s2/favicons", StringComparison.OrdinalIgnoreCase)
+            && (nextHost == "t1.gstatic.com" || nextHost == "t2.gstatic.com"))
+            return next.ToString();
+        return null;
+    }
+
+    // ---------------- 票 249:图片尺寸嗅探与最优挑选(纯函数) ----------------
+
+    /// <summary>抓取到的候选图标:Url 为存储值;IsSvg 为分辨率无关;未知尺寸为 null。</summary>
+    public sealed record LogoCandidate(string Url, bool IsSvg, int? Width, int? Height)
+    {
+        /// <summary>已知尺寸取短边,未知尺寸记 -1(排在已知小图之后、但仍是候选)。</summary>
+        public int QualityScore => IsSvg ? int.MaxValue
+            : Width is { } w && Height is { } h ? Math.Min(w, h) : -1;
+    }
+
+    /// <summary>
+    /// 从图片字节嗅探格式与尺寸:SVG(媒体类型或内容 &lt;svg)分辨率无关;
+    /// PNG/GIF/ICO/JPEG/BMP/WebP 读文件头尺寸;无法识别返回未知尺寸。
+    /// 一律 defensive:任何解析异常都落回未知,绝不抛。
+    /// </summary>
+    public static (bool IsSvg, int? Width, int? Height) TryGetImageDimensions(byte[] bytes, string? mediaType)
+    {
+        // 媒体类型即判,不读体(调用方已保证体非空;空体 + svg 类型亦判为 SVG)。
+        if (!string.IsNullOrWhiteSpace(mediaType)
+            && mediaType.Contains("svg", StringComparison.OrdinalIgnoreCase))
+            return (true, null, null);
+        if (bytes is null || bytes.Length == 0) return (false, null, null);
+        // 内容嗅探:去 BOM/空白后 <svg,或 <?xml ... <svg(限前 1KB)
+        try
+        {
+            var head = System.Text.Encoding.ASCII.GetString(bytes, 0, Math.Min(bytes.Length, 1024)).TrimStart();
+            if (head.StartsWith("<svg", StringComparison.OrdinalIgnoreCase)) return (true, null, null);
+            if (head.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase)
+                && head.Contains("<svg", StringComparison.OrdinalIgnoreCase)) return (true, null, null);
+        }
+        catch
+        {
+            return (false, null, null);
+        }
+        try
+        {
+            // PNG:8 字节签名 + IHDR,宽高为 BE uint32 @16/@20
+            if (bytes.Length >= 24
+                && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+            {
+                var w = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+                var h = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+                if (w > 0 && h > 0) return (false, w, h);
+                return (false, null, null);
+            }
+            // GIF:GIF87a/GIF89a,宽高为 LE uint16 @6/@8
+            if (bytes.Length >= 10
+                && bytes[0] == (byte)'G' && bytes[1] == (byte)'I' && bytes[2] == (byte)'F')
+            {
+                var w = bytes[6] | (bytes[7] << 8);
+                var h = bytes[8] | (bytes[9] << 8);
+                if (w > 0 && h > 0) return (false, w, h);
+                return (false, null, null);
+            }
+            // ICO:00 00 01 00 + 首表项,宽高字节(0=256)@6/@7
+            if (bytes.Length >= 8 && bytes[0] == 0 && bytes[1] == 0 && bytes[2] == 1 && bytes[3] == 0)
+            {
+                var count = bytes[4] | (bytes[5] << 8);
+                if (count > 0 && bytes.Length >= 8)
+                {
+                    var w = bytes[6] == 0 ? 256 : bytes[6];
+                    var h = bytes[7] == 0 ? 256 : bytes[7];
+                    return (false, w, h);
+                }
+                return (false, null, null);
+            }
+            // JPEG:扫 marker 找 SOF0/SOF1/SOF2,高 BE uint16 @+5、宽 @+7
+            if (bytes.Length >= 4 && bytes[0] == 0xFF && bytes[1] == 0xD8)
+            {
+                var i = 2;
+                while (i + 9 < bytes.Length)
+                {
+                    if (bytes[i] != 0xFF) break;
+                    var marker = bytes[i + 1];
+                    if (marker == 0xD9 || marker == 0xDA) break;
+                    if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8)) { i += 2; continue; }
+                    var len = (bytes[i + 2] << 8) | bytes[i + 3];
+                    if (len < 2 || i + 2 + len > bytes.Length) break;
+                    if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2)
+                    {
+                        var h = (bytes[i + 5] << 8) | bytes[i + 6];
+                        var w = (bytes[i + 7] << 8) | bytes[i + 8];
+                        if (w > 0 && h > 0) return (false, w, h);
+                        return (false, null, null);
+                    }
+                    i += 2 + len;
+                }
+                return (false, null, null);
+            }
+            // BMP:"BM" + LE int32 @18/@22
+            if (bytes.Length >= 26 && bytes[0] == (byte)'B' && bytes[1] == (byte)'M')
+            {
+                var w = BitConverter.ToInt32(bytes, 18);
+                var h = Math.Abs(BitConverter.ToInt32(bytes, 22));
+                if (w > 0 && h > 0) return (false, w, h);
+                return (false, null, null);
+            }
+            // WebP:"RIFF....WEBP":VP8X(宽高 24bit LE @24/@27,各+1);
+            // VP8L(14bit @21);VP8(14bit @26/@28)
+            if (bytes.Length >= 12
+                && bytes[0] == (byte)'R' && bytes[1] == (byte)'I' && bytes[2] == (byte)'F' && bytes[3] == (byte)'F'
+                && bytes[8] == (byte)'W' && bytes[9] == (byte)'E' && bytes[10] == (byte)'B' && bytes[11] == (byte)'P')
+            {
+                if (bytes.Length >= 30 && bytes[12] == (byte)'V' && bytes[13] == (byte)'P' && bytes[14] == (byte)'8' && bytes[15] == (byte)'X')
+                {
+                    var w = (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16)) + 1;
+                    var h = (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16)) + 1;
+                    if (w > 0 && h > 0) return (false, w, h);
+                }
+                if (bytes.Length >= 25 && bytes[12] == (byte)'V' && bytes[13] == (byte)'P' && bytes[14] == (byte)'8' && bytes[15] == (byte)'L')
+                {
+                    var v = bytes[21] | (bytes[22] << 8) | (bytes[23] << 16) | (bytes[24] << 24);
+                    var w = (v & 0x3FFF) + 1;
+                    var h = ((v >> 14) & 0x3FFF) + 1;
+                    if (w > 0 && h > 0) return (false, w, h);
+                }
+                if (bytes.Length >= 30 && bytes[12] == (byte)'V' && bytes[13] == (byte)'P' && bytes[14] == (byte)'8' && bytes[15] == (byte)' ')
+                {
+                    var w = ((bytes[26] | (bytes[27] << 8)) & 0x3FFF) + 1;
+                    var h = ((bytes[28] | (bytes[29] << 8)) & 0x3FFF) + 1;
+                    if (w > 0 && h > 0) return (false, w, h);
+                }
+                return (false, null, null);
+            }
+        }
+        catch
+        {
+            return (false, null, null);
+        }
+        return (false, null, null);
+    }
+
+    /// <summary>
+    /// 票 249 软化质量门(纯规则):SVG 恒胜(分辨率无关);其次短边 ≥32 者中
+    /// 取最大短边;若全在 32 以下,取已知最大者(未知尺寸排最后);唯一
+    /// 候选时无论多小都保留,绝不因此落回首字母。空集返回 null。
+    /// </summary>
+    public static LogoCandidate? PickBestLogo(IReadOnlyList<LogoCandidate> candidates)
+    {
+        if (candidates is null || candidates.Count == 0) return null;
+        LogoCandidate? best = null;
+        foreach (var c in candidates)
+        {
+            if (best is null || c.QualityScore > best.QualityScore) best = c;
+        }
+        return best;
     }
 }

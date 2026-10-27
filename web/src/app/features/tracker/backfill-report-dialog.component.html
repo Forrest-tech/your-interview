@@ -1,0 +1,27 @@
+<h2 mat-dialog-title>{{ t('tracker.backfillDetails') }}</h2>
+<mat-dialog-content>
+  @if (data.skipped.length > 0) {
+    <h3>{{ t('tracker.backfillSkippedTitle') }} ({{ data.skipped.length }})</h3>
+    <p>{{ t('tracker.backfillSkipped') }}</p>
+    <ul>
+      @for (name of data.skipped; track name) { <li>{{ name }}</li> }
+    </ul>
+  }
+  @if (data.failed.length > 0) {
+    <h3>{{ t('tracker.backfillFailedTitle') }} ({{ data.failed.length }})</h3>
+    <p>{{ t('tracker.backfillFailed') }}</p>
+    <ul>
+      @for (name of data.failed; track name) { <li>{{ name }}</li> }
+    </ul>
+  }
+  @if (data.ambiguous.length > 0) {
+    <h3>{{ t('tracker.backfillAmbiguousTitle') }} ({{ data.ambiguous.length }})</h3>
+    <p>{{ t('tracker.backfillAmbiguous') }}</p>
+    <ul>
+      @for (name of data.ambiguous; track name) { <li>{{ name }}</li> }
+    </ul>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>{{ t('common.close') }}</button>
+</mat-dialog-actions>

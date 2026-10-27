@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.Extensions.Logging;
 using YourInterview.Services.Jobs.Application;
 
@@ -5,16 +6,18 @@ namespace YourInterview.Services.Jobs.Infrastructure.Services;
 
 // ============================================================================
 //  票 150:公司 logo 取数 —— 只负责 I/O,决策在 CompanyLogoRules。
-//
-//  取数链(§2.2):LinkedIn li-logo(最高质量) → Website 派生 favicon。
-//  派生方式按 §8 U-150-2:(a) Google s2 + 默认图标关,关过不了时 (b)
-//  自研 favicon 发现。两种方式都只存“校验过的真实图标”,无图标宁可 null
-//  (前端色块),绝不把通用默认图标写进库。
-//
-//  SSRF(§2.5/A-150-10):一切站外抓取只接受公司 id 派生的 host,
-//  绝不接受调用方传入的任意 URL;每次抓取前解析 host 并拒绝内网/
-//  保留 IP;HttpClient 禁自动重定向(3xx 即失败,防重定向绕过校验)。
-//  失败一律返回 null(或 false),绝不抛异常中断回填整批;原因只进日志。
+//  票 249 改动:①重定向跟随 —— 旧 client 禁一切重定向,导致 s2 的
+//  301→gstatic 与官网 naked→www 301/308 全灭;现循环内手动跟随,放行
+//  判定只认 TryResolveRedirectUri(同 registrable-domain 或 s2→gstatic
+//  host-exact 豁口),每跳重做 SSRF 校验,跳数上限 5,底层再由
+//  ConnectCallback 做 resolve-then-fetch pinning(见 Program.cs)。
+//  ②质量挑选 —— favicon 环内 s2/首页图标/favicon.ico 三路候选齐取,
+//  按 PickBestLogo 留最优(SVG 恒胜、短边≥32 优先、唯一资产无论多小
+//  都保留),不再首中即返。③s2 默认图标关修复 —— 旧参照探针走 200-only
+//  抓取,而新 faviconV2 对无图标域名回 404 + 默认图体,致参照恒 null、
+//  关失效;现参照改走状态无关体读取(404 体即默认图),候选与参照逐字
+//  节相等即默认图标。失败一律返回 null(或 false),绝不抛异常中断
+//  回填整批;原因只进日志。
 // ============================================================================
 
 public interface ICompanyLogoFetcher
@@ -22,7 +25,7 @@ public interface ICompanyLogoFetcher
     /// <summary>重提 LinkedIn 职位页的 li-logo;任何失败返回 null。</summary>
     Task<string?> TryLinkedInLogoAsync(string url, CancellationToken ct);
 
-    /// <summary>Website 派生 favicon(先 s2 + 默认图标关,后自研发现);无图标返回 null。</summary>
+    /// <summary>Website 派生 favicon(s2 + 首页发现 + favicon.ico,质量最优);无图标返回 null。</summary>
     Task<string?> TryFaviconAsync(string website, CancellationToken ct);
 
     /// <summary>存量 s2 地址是否为默认图标(抓取/比对失败时返回 false,即不清洗)。</summary>
@@ -37,10 +40,12 @@ public static class CompanyLogoFetcherOptions
 public sealed class CompanyLogoFetcher(
     IHttpClientFactory httpFactory,
     LinkedInFetcher linkedIn,
-    ILogger<CompanyLogoFetcher> logger) : ICompanyLogoFetcher
+    ILogger<CompanyLogoFetcher> logger,
+    Func<string, Task<IPAddress[]>>? hostResolver = null) : ICompanyLogoFetcher
 {
     // 默认图标参照:向 s2 要一个注定无 favicon 的域名的图标 ——
-    // 该服务对无 favicon 域名返回的固定默认图标即参照字节。同一实例内只取一次。
+    // 新 faviconV2 对无图标域名回 404 + 固定默认图体,该体即参照字节。
+    // 同一实例内只取一次;取不到则关不可靠,后续直接走 (b)。
     private const string DefaultProbeDomain = "invalid.invalid";
     private byte[]? _defaultIconBytes;
     private bool _defaultIconProbed;
@@ -67,80 +72,88 @@ public sealed class CompanyLogoFetcher(
         var host = CompanyLogoRules.TryGetHost(website);
         if (string.IsNullOrWhiteSpace(host)) return null;
         if (CompanyLogoRules.IsAggregatorWebsite(website)) return null;
-        if (!await CompanyLogoRules.IsSafeHostAsync(host, ct)) return null;
+        if (!await CompanyLogoRules.IsSafeHostAsync(host, ct, hostResolver)) return null;
 
-        // (a) Google s2 + 默认图标关
+        var candidates = new List<CompanyLogoRules.LogoCandidate>();
+
+        // (a) Google s2 + 默认图标关:候选字节须与参照不同才算真实图标。
         var s2Url = Domain.Company.LogoUrlFromWebsite($"https://{host}/");
         if (s2Url is not null)
         {
-            var s2Bytes = await FetchImageBytesAsync(s2Url, ct);
-            if (s2Bytes is not null)
+            var (s2, s2Bytes) = await FetchImageWithDimsAsync(s2Url, ct);
+            if (s2 is not null && s2Bytes is not null)
             {
                 var reference = await GetDefaultIconBytesAsync(ct);
                 if (reference is not null)
                 {
-                    // 字节与默认图标不同 = 真实图标,直接存 s2 地址(前端 img 直取)
-                    if (!CompanyLogoRules.IsDefaultIcon(s2Bytes, reference)) return s2Url;
-                    // 命中默认图标:不写 s2,落到 (b) 再找一次(官网自带 icon 时 s2 未必收录)
+                    if (!CompanyLogoRules.IsDefaultIcon(s2Bytes, reference)) candidates.Add(s2);
+                    // 命中默认图标:不入选,落到 (b) 再找一次。
                 }
                 else
                 {
-                    // 参照取不到 = 默认图标关不可靠,按 §8 兜底改走 (b),不硬上 (a)
+                    // 参照取不到 = 默认图标关不可靠,按 §8 兜底不硬上 (a)。
                     logger.LogWarning("票150:s2 默认图标参照取不到,改走自研 favicon 发现: {Host}", host);
                 }
             }
-            // s2 本身抓不到时同样落到 (b)
+            // s2 本身抓不到时同样落到 (b)。
         }
 
-        // (b) 自研 favicon 发现:官网首页 link[rel=icon] → /favicon.ico,均须校验为图片
+        // (b) 自研 favicon 发现:官网首页 link[rel=icon] → /favicon.ico,均须校验为图片。
+        // 相对图标地址须按重定向后的最终 URL 解析(票 249 实测:naked→www 后仍按
+        // 原 URL 解析会命中旧 host 的 404,白白丢掉已跟随到的首页图标)。
         var pageUrl = CompanyLogoRules.NormalizeWebsiteUrl(website);
-        if (pageUrl is null) return null;
-        try
+        string? finalPageUrl = null;
+        if (pageUrl is not null)
         {
-            var client = httpFactory.CreateClient(CompanyLogoFetcherOptions.ClientName);
-            using var resp = await client.GetAsync(pageUrl, HttpCompletionOption.ResponseHeadersRead, ct);
-            if (resp.IsSuccessStatusCode)
+            try
             {
-                var mediaType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
-                if (mediaType.Contains("html", StringComparison.OrdinalIgnoreCase)
-                    || mediaType.Contains("text", StringComparison.OrdinalIgnoreCase)
-                    || mediaType.Length == 0)
+                var (status, mediaType, body, finalUrl) = await GetWithRedirectsAsync(pageUrl, ct, 2_000_000);
+                finalPageUrl = finalUrl;
+                if (status == 200 && body is not null
+                    && (string.IsNullOrWhiteSpace(mediaType)
+                        || mediaType.Contains("html", StringComparison.OrdinalIgnoreCase)
+                        || mediaType.Contains("text", StringComparison.OrdinalIgnoreCase)))
                 {
-                    var html = await resp.Content.ReadAsStringAsync(ct);
+                    var html = System.Text.Encoding.UTF8.GetString(body);
                     if (html.Length is >= 200 and <= 2_000_000)
                     {
-                        var iconUrl = CompanyLogoRules.ExtractIconUrl(html, pageUrl);
-                        if (iconUrl is not null
-                            && await IsFetchableImageAsync(iconUrl, ct))
-                            return iconUrl;
+                        var iconUrl = CompanyLogoRules.ExtractIconUrl(html, finalPageUrl ?? pageUrl);
+                        if (iconUrl is not null)
+                        {
+                            var icon = await TryFetchCandidateAsync(iconUrl, ct);
+                            if (icon is not null) candidates.Add(icon);
+                        }
                     }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "票150:官网首页抓取失败: {Url}", pageUrl);
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "票150:官网首页抓取失败: {Url}", pageUrl);
+            }
+
+            try
+            {
+                var baseUri = new Uri(finalPageUrl ?? pageUrl);
+                var faviconUrl = new Uri(baseUri, "/favicon.ico").ToString();
+                var favicon = await TryFetchCandidateAsync(faviconUrl, ct);
+                if (favicon is not null) candidates.Add(favicon);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "票150:/favicon.ico 校验失败: {Url}", pageUrl);
+            }
         }
 
-        // /favicon.ico 兜底:须是图片且非空才存
-        try
-        {
-            var baseUri = new Uri(pageUrl);
-            var faviconUrl = new Uri(baseUri, "/favicon.ico").ToString();
-            if (await IsFetchableImageAsync(faviconUrl, ct)) return faviconUrl;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "票150:/favicon.ico 校验失败: {Url}", pageUrl);
-        }
-        return null;
+        // 质量最优者胜出;唯一候选无论多小都保留(软化门,不落回首字母)。
+        return CompanyLogoRules.PickBestLogo(candidates)?.Url;
     }
 
     public async Task<bool> IsDefaultFaviconAsync(string s2Url, CancellationToken ct)
     {
         try
         {
-            var bytes = await FetchImageBytesAsync(s2Url, ct);
+            // 清洗路径须认 404 默认图体:状态无关体读取,体与参照相等即默认。
+            var bytes = await FetchBodyAnyStatusAsync(s2Url, ct);
             var reference = await GetDefaultIconBytesAsync(ct);
             if (bytes is null || reference is null) return false;
             return CompanyLogoRules.IsDefaultIcon(bytes, reference);
@@ -158,46 +171,87 @@ public sealed class CompanyLogoFetcher(
         if (_defaultIconProbed) return _defaultIconBytes;
         _defaultIconProbed = true;
         var probeUrl = $"https://www.google.com/s2/favicons?sz=128&domain={DefaultProbeDomain}";
-        _defaultIconBytes = await FetchImageBytesAsync(probeUrl, ct);
+        _defaultIconBytes = await FetchBodyAnyStatusAsync(probeUrl, ct);
         return _defaultIconBytes;
     }
 
-    /// <summary>抓一张图回字节:非 200、非图片、超 1MB 一律 null。禁重定向由 client 保证。</summary>
-    private async Task<byte[]?> FetchImageBytesAsync(string url, CancellationToken ct)
+    /// <summary>
+    /// 抓一张候选图:200 + image/* + 非空 + ≤1MB 才入选,附尺寸嗅探与原始字节
+    /// (s2 默认图标关需字节比对)。任何失败返回 (null, null)。
+    /// </summary>
+    private async Task<(CompanyLogoRules.LogoCandidate? Candidate, byte[]? Bytes)> FetchImageWithDimsAsync(
+        string url, CancellationToken ct)
     {
-        try
-        {
-            var client = httpFactory.CreateClient(CompanyLogoFetcherOptions.ClientName);
-            using var resp = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-            if (!resp.IsSuccessStatusCode) return null;
-            var mediaType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
-            if (!mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return null;
-            var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
-            if (bytes.Length == 0 || bytes.Length > 1_000_000) return null;
-            return bytes;
-        }
-        catch
-        {
-            return null;
-        }
+        var (status, mediaType, body, _) = await GetWithRedirectsAsync(url, ct, 1_000_000);
+        if (status != 200 || body is null || body.Length == 0) return (null, null);
+        if (string.IsNullOrWhiteSpace(mediaType)
+            || !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return (null, null);
+        var (isSvg, w, h) = CompanyLogoRules.TryGetImageDimensions(body, mediaType);
+        return (new CompanyLogoRules.LogoCandidate(url, isSvg, w, h), body);
+    }
+
+    /// <summary>抓一张候选图(只要候选,不要字节):首页图标与 favicon 兜底路径用。</summary>
+    private async Task<CompanyLogoRules.LogoCandidate?> TryFetchCandidateAsync(string url, CancellationToken ct)
+    {
+        var (candidate, _) = await FetchImageWithDimsAsync(url, ct);
+        return candidate;
     }
 
     /// <summary>
-    /// 校验一个候选图标 URL 是否真实可取:host 须过 SSRF 校验,响应须为图片
-    /// 且非空。只读响应头 + 首字节判断,不下载整图(图标通常很小,直接读体亦可)。
+    /// 状态无关图片体读取(默认图标参照与清洗路径用):新 faviconV2 对无图标
+    /// 域名回 404 + 默认图体,体本身即参照;非图片、超 1MB、无体一律 null。
     /// </summary>
-    private async Task<bool> IsFetchableImageAsync(string url, CancellationToken ct)
+    private async Task<byte[]?> FetchBodyAnyStatusAsync(string url, CancellationToken ct)
     {
-        try
+        var (_, mediaType, body, _) = await GetWithRedirectsAsync(url, ct, 1_000_000);
+        if (body is null || body.Length == 0) return null;
+        if (string.IsNullOrWhiteSpace(mediaType)
+            || !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return null;
+        return body;
+    }
+
+    /// <summary>
+    /// 手动重定向循环:HttpClient 禁自动重定向,此处逐跳判定。
+    /// 每跳先做 SSRF host 校验(失败即停);Location 经
+    /// TryResolveRedirectUri 放行才跟随(同 registrable-domain 或
+    /// s2→gstatic host-exact 豁口);跳数上限 5。任何异常返回 (0, null, null)。
+    /// FinalUrl 为实际取到体的 URL(相对地址解析用);失败路径下为最后尝试的 URL。
+    /// </summary>
+    private async Task<(int Status, string? MediaType, byte[]? Body, string? FinalUrl)> GetWithRedirectsAsync(
+        string url, CancellationToken ct, int maxBodyBytes, int maxHops = 5)
+    {
+        var current = url;
+        for (var hop = 0; hop <= maxHops; hop++)
         {
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
-            if (!await CompanyLogoRules.IsSafeHostAsync(uri.Host, ct)) return false;
-            var bytes = await FetchImageBytesAsync(url, ct);
-            return bytes is not null;
+            if (!Uri.TryCreate(current, UriKind.Absolute, out var uri)) return (0, null, null, current);
+            if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) return (0, null, null, current);
+            if (!await CompanyLogoRules.IsSafeHostAsync(uri.Host, ct, hostResolver)) return (0, null, null, current);
+            try
+            {
+                var client = httpFactory.CreateClient(CompanyLogoFetcherOptions.ClientName);
+                using var resp = await client.GetAsync(current, HttpCompletionOption.ResponseHeadersRead, ct);
+                var status = (int)resp.StatusCode;
+                var location = resp.Headers.Location?.ToString();
+                if (status is 301 or 302 or 303 or 307 or 308 && !string.IsNullOrWhiteSpace(location))
+                {
+                    var next = CompanyLogoRules.TryResolveRedirectUri(current, location);
+                    if (next is null) return (status, null, null, current);
+                    if (hop == maxHops) return (status, null, null, current);
+                    current = next;
+                    continue;
+                }
+                var mediaType = resp.Content?.Headers.ContentType?.MediaType;
+                var body = resp.Content is null
+                    ? []
+                    : await resp.Content.ReadAsByteArrayAsync(ct);
+                if (body.Length > maxBodyBytes) return (status, mediaType, null, current);
+                return (status, mediaType, body, current);
+            }
+            catch
+            {
+                return (0, null, null, current);
+            }
         }
-        catch
-        {
-            return false;
-        }
+        return (0, null, null, current);
     }
 }

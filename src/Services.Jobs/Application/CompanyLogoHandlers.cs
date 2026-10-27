@@ -23,9 +23,15 @@ namespace YourInterview.Services.Jobs.Application;
 
 public sealed record BackfillLogosCommand(Guid UserId) : IRequest<Result<BackfillLogosResultDto>>;
 
-/// <summary>批量回填结果:成功/跳过/失败三数 + 清洗数 + 失败公司名清单(只进响应体与日志)。</summary>
+/// <summary>
+/// 批量回填结果:成功/跳过/失败三数 + 清洗数 + 失败公司名清单(只进响应体与日志)。
+/// 票 249:跳过与待消歧公司名亦进响应体,供回填报告 UI 区分展示
+/// (跳过 = 本轮未找到可用 logo;待消歧 = Wikidata 平局未写域名;失败 = 尝试中抛异常)。
+/// 三类名清单互斥:待消歧不计入跳过数,跳过数只含非待消歧的空结果。
+/// </summary>
 public sealed record BackfillLogosResultDto(
-    int Success, int Skipped, int Failed, int Cleaned, IReadOnlyList<string> FailedCompanies);
+    int Success, int Skipped, int Failed, int Cleaned, IReadOnlyList<string> FailedCompanies,
+    IReadOnlyList<string>? SkippedCompanies = null, IReadOnlyList<string>? AmbiguousCompanies = null);
 
 public sealed record RefreshLogoCommand(Guid UserId, Guid CompanyId) : IRequest<Result<RefreshLogoResultDto>>;
 
@@ -35,6 +41,8 @@ public sealed record RefreshLogoResultDto(Guid CompanyId, string Status, string?
 public sealed class BackfillLogosCommandHandler(
     JobsDbContext db,
     ICompanyLogoFetcher fetcher,
+    ILocalLogoCatalog catalog,
+    IWikidataDomainResolver wikidata,
     ILogger<BackfillLogosCommandHandler> logger)
     : IRequestHandler<BackfillLogosCommand, Result<BackfillLogosResultDto>>
 {
@@ -63,24 +71,33 @@ public sealed class BackfillLogosCommandHandler(
             }
         }
 
-        // ② 回填:只处理空值(含刚清洗出的空值),按 §2.2 顺序逐家尝试。
+        // ② 回填:只处理空值(含刚清洗出的空值),按票 249 链序逐家尝试。
         var success = 0;
         var skipped = 0;
         var failed = 0;
         var failedCompanies = new List<string>();
+        var skippedCompanies = new List<string>();
+        var ambiguousCompanies = new List<string>();
         foreach (var c in companies.Where(c => string.IsNullOrWhiteSpace(c.LogoUrl)))
         {
             try
             {
-                var logo = await CompanyLogoResolver.ResolveLogoAsync(db, fetcher, c, request.UserId, ct);
-                if (logo is null)
+                var r = await CompanyLogoResolver.ResolveLogoAsync(
+                    db, fetcher, catalog, wikidata, c, request.UserId, ct);
+                if (r.Ambiguous)
                 {
-                    skipped++;
+                    // Wikidata 平局:域名未写,本轮不计跳过,单列待消歧。
+                    ambiguousCompanies.Add(c.Name);
+                }
+                else if (r.LogoUrl is not null)
+                {
+                    c.SetLogoUrl(r.LogoUrl);
+                    success++;
                 }
                 else
                 {
-                    c.SetLogoUrl(logo);
-                    success++;
+                    skipped++;
+                    skippedCompanies.Add(c.Name);
                 }
             }
             catch (Exception ex)
@@ -92,18 +109,36 @@ public sealed class BackfillLogosCommandHandler(
             }
         }
 
+        // R2 解析到的域名挂在被追踪实体上,随本 SaveChanges 一并持久化
+        // (即使该公司本轮仍无 logo,下轮可直接走 favicon 环)。
         await db.SaveChangesAsync(ct);
-        return Result.Success(new BackfillLogosResultDto(success, skipped, failed, cleaned, failedCompanies));
+        return Result.Success(new BackfillLogosResultDto(
+            success, skipped, failed, cleaned, failedCompanies, skippedCompanies, ambiguousCompanies));
     }
 }
 
-/// <summary>两端点共用的 §2.2 取数顺序:LinkedIn 重提 → Website 派生;全无则 null。</summary>
+/// <summary>
+/// 票 249 链序(每环 fall-through,全环失败才算最终 miss):
+/// R1 本地开源层(按公司名) → LinkedIn 重提 → R2(Wikidata 域名解析,
+/// 仅 Website 为空时) → Website favicon 环(C1 修好的 s2/首页/favicon)。
+/// WebsiteResolved 表示本轮新解析并写进了公司 Website(回填终态 SaveChanges
+/// 本就覆盖;单家刷新须据此单独 SaveChanges)。Ambiguous 表示 Wikidata
+/// 平局:域名未写、亦未尝试 favicon,调用方单列待消歧。
+/// </summary>
+internal sealed record LogoResolution(string? LogoUrl, bool WebsiteResolved, bool Ambiguous);
+
 internal static class CompanyLogoResolver
 {
-    internal static async Task<string?> ResolveLogoAsync(
-        JobsDbContext db, ICompanyLogoFetcher fetcher,
-        Domain.Company company, Guid userId, CancellationToken ct)
+    internal static async Task<LogoResolution> ResolveLogoAsync(
+        JobsDbContext db, ICompanyLogoFetcher fetcher, ILocalLogoCatalog catalog,
+        IWikidataDomainResolver wikidata, Domain.Company company, Guid userId, CancellationToken ct)
     {
+        // R1 本地层:离线、无 key,命中即存网关相对地址(经 /api/jobs 前缀回 Jobs)。
+        var local = catalog.TryResolve(company.Name);
+        if (local is not null)
+            return new LogoResolution(
+                LocalLogoCatalog.LocalLogoUrl(local.Value.Provider, local.Value.Key), false, false);
+
         var links = await db.Applications
             .Where(a => a.CompanyId == company.Id && a.UserId == userId)
             .Select(a => new ValueTuple<string?, DateTimeOffset>(a.Link, a.CreatedAt))
@@ -112,21 +147,40 @@ internal static class CompanyLogoResolver
                      links.Select(x => (x.Item1, x.Item2))))
         {
             var liLogo = await fetcher.TryLinkedInLogoAsync(link, ct);
-            if (!string.IsNullOrWhiteSpace(liLogo)) return liLogo;
+            if (!string.IsNullOrWhiteSpace(liLogo)) return new LogoResolution(liLogo, false, false);
         }
-        if (!string.IsNullOrWhiteSpace(company.Website)
-            && !CompanyLogoRules.IsAggregatorWebsite(company.Website))
+
+        // R2:仅 Website 为空时解析域名;解析到则写进实体并继续走 favicon 环。
+        var website = company.Website;
+        if (string.IsNullOrWhiteSpace(website))
         {
-            var favicon = await fetcher.TryFaviconAsync(company.Website, ct);
-            if (!string.IsNullOrWhiteSpace(favicon)) return favicon;
+            var r = await wikidata.TryResolveDomainAsync(company.Name, ct);
+            if (r.Ambiguous) return new LogoResolution(null, false, true);
+            if (!string.IsNullOrWhiteSpace(r.Domain))
+            {
+                company.SetWebsite(r.Domain);
+                website = r.Domain;
+                var favicon = await fetcher.TryFaviconAsync(website, ct);
+                return string.IsNullOrWhiteSpace(favicon)
+                    ? new LogoResolution(null, true, false)
+                    : new LogoResolution(favicon, true, false);
+            }
+            return new LogoResolution(null, false, false);
         }
-        return null;
+
+        // Website 已有(含聚合站值,聚合站在 TryFaviconAsync 内拒绝) → 直接走 favicon 环。
+        var existing = await fetcher.TryFaviconAsync(website, ct);
+        return string.IsNullOrWhiteSpace(existing)
+            ? new LogoResolution(null, false, false)
+            : new LogoResolution(existing, false, false);
     }
 }
 
 public sealed class RefreshLogoCommandHandler(
     JobsDbContext db,
     ICompanyLogoFetcher fetcher,
+    ILocalLogoCatalog catalog,
+    IWikidataDomainResolver wikidata,
     ILogger<RefreshLogoCommandHandler> logger)
     : IRequestHandler<RefreshLogoCommand, Result<RefreshLogoResultDto>>
 {
@@ -136,11 +190,15 @@ public sealed class RefreshLogoCommandHandler(
             .FirstOrDefaultAsync(c => c.Id == request.CompanyId && c.UserId == request.UserId, ct);
         if (company is null) return Result.Failure<RefreshLogoResultDto>(Error.NotFound("公司"));
 
-        // 第 1 步除外:已有值也不跳过,用户显式触发即重算。
+        // 第 1 步除外:已有值也不跳过,用户显式触发即按票 249 链序重算。
         string? logo = null;
+        var websiteResolved = false;
         try
         {
-            logo = await CompanyLogoResolver.ResolveLogoAsync(db, fetcher, company, request.UserId, ct);
+            var r = await CompanyLogoResolver.ResolveLogoAsync(
+                db, fetcher, catalog, wikidata, company, request.UserId, ct);
+            logo = r.LogoUrl;
+            websiteResolved = r.WebsiteResolved;
         }
         catch (Exception ex)
         {
@@ -153,6 +211,9 @@ public sealed class RefreshLogoCommandHandler(
             await db.SaveChangesAsync(ct);
             return Result.Success(new RefreshLogoResultDto(company.Id, "Updated", logo));
         }
+
+        // 本轮新解析到域名即使未找到 logo 也要持久化,下轮可直接走 favicon 环。
+        if (websiteResolved) await db.SaveChangesAsync(ct);
 
         // 算不出新值:存量是 s2 默认图标则清洗置 null,否则保持原值。
         if (CompanyLogoRules.IsGoogleFaviconUrl(company.LogoUrl))

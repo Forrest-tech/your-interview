@@ -92,6 +92,17 @@ public sealed class Company : AuditableAggregateRoot
     }
 
     /// <summary>
+    /// 票 249 R2:Wikidata 解析到的域名一次性写进公司 Website(只改这一字段)。
+    /// 调用方只在 Website 为空时解析,解析到才调本方法;平局(Ambiguous)时
+    /// 绝不调用,避免把待消歧的域名写进库。
+    /// </summary>
+    public void SetWebsite(string? website)
+    {
+        Website = website;
+        Touch();
+    }
+
+    /// <summary>
     /// 按公司官网解析一个 Logo 地址(确定性,不做网络请求)。
     /// 用 Google 的 favicon 服务:输入一个能解析出 host 的网址即返回该 host 的图标,
     /// 浏览器侧再叠加"加载失败则降级为首字母头像"的兜底。

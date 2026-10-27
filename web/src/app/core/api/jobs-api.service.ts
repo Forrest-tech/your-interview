@@ -27,6 +27,9 @@ export interface BackfillLogosResult {
   failed: number;
   cleaned: number;
   failedCompanies: string[];
+  /** 票 249 C3-reporting:跳过公司名(本轮未找到可用 logo)与待消歧公司名(Wikidata 平局)。 */
+  skippedCompanies?: string[];
+  ambiguousCompanies?: string[];
 }
 
 /** 后端 CompanySummaryDto。 */

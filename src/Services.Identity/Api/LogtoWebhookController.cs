@@ -151,7 +151,12 @@ public sealed class LogtoWebhookController(
         return GetString(data, "id") ?? GetString(data, "userId")
             ?? (root.TryGetProperty("user", out var u) && u.ValueKind == JsonValueKind.Object
                 ? GetString(u, "id") : null)
-            ?? GetString(root, "userId");
+            ?? GetString(root, "userId")
+            // 票256(NTC-1):Management API 驱动的投递是审计形态,user id 只在
+            // params.userId(data 只有变更字段、无 id)。放最后 fallback,今天
+            // 能通的形态全部先返回、行为一字不变。
+            ?? (root.TryGetProperty("params", out var p) && p.ValueKind == JsonValueKind.Object
+                ? GetString(p, "userId") : null);
     }
 
     private static string? GetString(JsonElement? el, string name) =>

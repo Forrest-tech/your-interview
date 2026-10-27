@@ -229,6 +229,165 @@ public sealed class LogtoWebhookControllerTests
             type.GetMethod(method)!.GetCustomAttribute<AuthorizeAttribute>()!.Policy!;
     }
 
+    // 票256(NTC-1):审计形态 user-data-updated —— user id 只在 params.userId
+    // (data 只有变更字段、无 id)—— 必须 200 并触发翻转,不再 400"事件缺 user id"。
+    // Fixture 事件值已非猜测:Logto 1.45.0 源码实证 —— schemas 注册表
+    // 'PATCH /users/:userId/custom-data': 'User.Data.Updated'，经
+    // context-manager 组装、hook/index buildWebhooks 在载荷首位放 event，
+    // 故投递载荷恒含 event='User.Data.Updated'；data = PATCH 响应体即
+    // user.customData 全量(无 id 字段)，与 run-3 实测一致。
+    [Fact]
+    public async Task UserDataUpdated_AuditShape_ReachesGate_FlipsToApproved()
+    {
+        var client = Substitute.For<ILogtoManagementClient>();
+        var store = Substitute.For<ILogtoMappingStore>();
+        var audit = Substitute.For<ILogtoSweepAudit>();
+        var legacy = Guid.NewGuid();
+        client.GetUserAsync("u9", Arg.Any<CancellationToken>()).Returns(
+            new LogtoUserDto("u9", false,
+                new JsonObject { ["approval"] = "pending", ["legacyUserId"] = legacy.ToString() },
+                DateTimeOffset.UtcNow, "u9@test.local", DateTimeOffset.UtcNow));
+        var c = Controller(client, store, audit);
+        var body = Encoding.UTF8.GetBytes(
+            """{"event":"User.Data.Updated","createdAt":"2026-10-27T00:00:00.000Z","ip":"127.0.0.1","path":"/users/u9/custom-data","method":"PATCH","status":200,"params":{"userId":"u9"},"matchedRoute":"/users/:userId/custom-data","data":{"approval":"pending","legacyUserId":"00000000-0000-0000-0000-000000000000"},"hookId":"hook-1"}""");
+        SetRequest(c, body, Sign(body));
+
+        var result = await c.UserDataUpdated(default);
+
+        result.Should().BeOfType<OkResult>();
+        await client.Received(1).GetUserAsync("u9", Arg.Any<CancellationToken>());
+        await audit.Received(1).WriteAsync("logto.approval.data-updated.flip", "u9",
+            Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // 票256:审计形态 user-created —— params.userId 同样到达门(置停用 + pending)。
+    [Fact]
+    public async Task UserCreated_AuditShape_ReachesGate_ReturnsOk()
+    {
+        var client = Substitute.For<ILogtoManagementClient>();
+        var store = Substitute.For<ILogtoMappingStore>();
+        var audit = Substitute.For<ILogtoSweepAudit>();
+        client.GetUserAsync("u9", Arg.Any<CancellationToken>()).Returns(
+            new LogtoUserDto("u9", false, new JsonObject(),
+                DateTimeOffset.UtcNow, "u9@test.local", DateTimeOffset.UtcNow));
+        var c = Controller(client, store, audit);
+        var body = Encoding.UTF8.GetBytes(
+            """{"event":"User.Created","params":{"userId":"u9"},"data":{}}""");
+        SetRequest(c, body, Sign(body));
+
+        var result = await c.UserCreated(default);
+
+        result.Should().BeOfType<OkResult>();
+        await client.Received(1).SuspendUserAsync("u9", true, Arg.Any<CancellationToken>());
+    }
+
+    // 票256:审计形态 suspension-status-updated —— id 门已过,但 data 缺 isSuspended
+    // 时仍 400"事件缺 isSuspended"、门不执行:无错误动作,这是 presence 校验在守门,
+    // 不是本票要修的范围(审计形态的停用事件是另一问题,见本票说明)。
+    [Fact]
+    public async Task SuspensionStatusUpdated_AuditShapeWithoutIsSuspended_ReturnsBadRequest_IsSuspended_NotUserId()
+    {
+        var client = Substitute.For<ILogtoManagementClient>();
+        var store = Substitute.For<ILogtoMappingStore>();
+        var audit = Substitute.For<ILogtoSweepAudit>();
+        var c = Controller(client, store, audit);
+        var body = Encoding.UTF8.GetBytes(
+            """{"event":"User.SuspensionStatus.Updated","params":{"userId":"u9"},"data":{"approval":"pending"}}""");
+        SetRequest(c, body, Sign(body));
+
+        var result = await c.SuspensionStatusUpdated(default);
+
+        var bad = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        bad.Value!.GetType().GetProperty("error")!.GetValue(bad.Value).Should().Be("事件缺 isSuspended");
+        await client.DidNotReceiveWithAnyArgs().GetUserAsync(default!, default);
+    }
+
+    // 票256:审计形态 user-deleted —— params.userId 到达门(无镜像行 → NoAction → 200)。
+    [Fact]
+    public async Task UserDeleted_AuditShape_ReachesGate_ReturnsOk()
+    {
+        var client = Substitute.For<ILogtoManagementClient>();
+        var store = Substitute.For<ILogtoMappingStore>();
+        var audit = Substitute.For<ILogtoSweepAudit>();
+        var c = Controller(client, store, audit);
+        var body = Encoding.UTF8.GetBytes(
+            """{"event":"User.Deleted","params":{"userId":"u9"},"data":{}}""");
+        SetRequest(c, body, Sign(body));
+
+        var result = await c.UserDeleted(default);
+
+        result.Should().BeOfType<OkResult>();
+        await store.Received(1).GetRowByLogtoIdAsync("u9", Arg.Any<CancellationToken>());
+    }
+
+    // 票256:回归 —— data.id / user.id / 根 userId 三种旧形态在 data-updated 上仍 200 翻转。
+    [Theory]
+    [InlineData("""{"event":"User.Data.Updated","data":{"id":"u9"}}""")]
+    [InlineData("""{"event":"User.Data.Updated","user":{"id":"u9"}}""")]
+    [InlineData("""{"event":"User.Data.Updated","userId":"u9"}""")]
+    public async Task UserDataUpdated_LegacyShapes_StillFlip_ReturnsOk(string json)
+    {
+        var client = Substitute.For<ILogtoManagementClient>();
+        var store = Substitute.For<ILogtoMappingStore>();
+        var audit = Substitute.For<ILogtoSweepAudit>();
+        var legacy = Guid.NewGuid();
+        client.GetUserAsync("u9", Arg.Any<CancellationToken>()).Returns(
+            new LogtoUserDto("u9", false,
+                new JsonObject { ["approval"] = "pending", ["legacyUserId"] = legacy.ToString() },
+                DateTimeOffset.UtcNow, "u9@test.local", DateTimeOffset.UtcNow));
+        var c = Controller(client, store, audit);
+        var body = Encoding.UTF8.GetBytes(json);
+        SetRequest(c, body, Sign(body));
+
+        var result = await c.UserDataUpdated(default);
+
+        result.Should().BeOfType<OkResult>();
+        await audit.Received(1).WriteAsync("logto.approval.data-updated.flip", "u9",
+            Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // 票256:params.userId 是 LAST fallback —— data.id 在先时绝不越位。
+    [Fact]
+    public async Task UserDataUpdated_DataIdWinsOverParamsUserId()
+    {
+        var client = Substitute.For<ILogtoManagementClient>();
+        var store = Substitute.For<ILogtoMappingStore>();
+        var audit = Substitute.For<ILogtoSweepAudit>();
+        var legacy = Guid.NewGuid();
+        client.GetUserAsync("u1", Arg.Any<CancellationToken>()).Returns(
+            new LogtoUserDto("u1", false,
+                new JsonObject { ["approval"] = "pending", ["legacyUserId"] = legacy.ToString() },
+                DateTimeOffset.UtcNow, "u1@test.local", DateTimeOffset.UtcNow));
+        var c = Controller(client, store, audit);
+        var body = Encoding.UTF8.GetBytes(
+            """{"event":"User.Data.Updated","data":{"id":"u1"},"params":{"userId":"u9"}}""");
+        SetRequest(c, body, Sign(body));
+
+        var result = await c.UserDataUpdated(default);
+
+        result.Should().BeOfType<OkResult>();
+        await client.Received(1).GetUserAsync("u1", Arg.Any<CancellationToken>());
+        await client.DidNotReceive().GetUserAsync("u9", Arg.Any<CancellationToken>());
+    }
+
+    // 票256:无 id 形态 —— 仍 400"事件缺 user id",畸形载荷信号保留。
+    [Theory]
+    [InlineData("""{"event":"User.Data.Updated","data":{"approval":"pending"}}""")]
+    [InlineData("""{"event":"User.Data.Updated","params":"u9","data":{}}""")]
+    [InlineData("""{"event":"User.Data.Updated","params":{"userId":123},"data":{}}""")]
+    public async Task UserDataUpdated_NoIdAnywhere_StillBadRequest(string json)
+    {
+        var c = Controller(Substitute.For<ILogtoManagementClient>(),
+            Substitute.For<ILogtoMappingStore>(), Substitute.For<ILogtoSweepAudit>());
+        var body = Encoding.UTF8.GetBytes(json);
+        SetRequest(c, body, Sign(body));
+
+        var result = await c.UserDataUpdated(default);
+
+        var bad = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        bad.Value!.GetType().GetProperty("error")!.GetValue(bad.Value).Should().Be("事件缺 user id");
+    }
+
     private static object? Prop(IActionResult result, string name)
     {
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;

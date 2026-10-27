@@ -309,7 +309,7 @@
    而不是贴住底线；页签仍 stretch 撑满行高，下划线与容器底线重合关系一字不动。 */
 .page-tabs {
   display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; min-height: 44px;
-  border-bottom: 1.5px solid var(--yi-border, #e2e8f0);
+  /* 票231重启：上排页签行下方的分隔线去掉（上排页签已删）。 */
 }
 /* 票 232：卡片头行内的按钮组——整组不压缩（flex: 0 0 auto，内部 gap 8px 不拆散），窄屏整组换行至下一行；
    行内垂直居中与铅笔同款（align-self: center，行高下限 44px 内的留白与铅笔一致）。 */

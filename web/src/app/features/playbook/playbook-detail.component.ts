@@ -30,7 +30,6 @@ import {
 } from './redesign/v2.helpers';
 import { derivedCompanyFromJd } from '../tracker/jd-sections.helpers';
 import { RoundCardComponent } from './redesign/round/round-card.component';
-import { CommLogComponent } from './redesign/round/comm-log.component';
 
 interface ResumeFileItem {
   id: string;
@@ -57,7 +56,7 @@ interface ResumeFileItem {
   imports: [
     CommonModule, FormsModule, RouterLink,
     MatButtonModule, MatIconModule, MatTooltipModule, MatDialogModule,
-    RoundCardComponent, CommLogComponent,
+    RoundCardComponent,
     PdfContentViewerComponent
   ],
   templateUrl: './playbook-detail.component.html',
@@ -156,7 +155,6 @@ export class PlaybookDetailComponent implements OnDestroy {
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
 
-  readonly pageTab = signal<'rounds' | 'comm'>('rounds');
   readonly selectedRoundId = signal<string | null>(null);
   /** 票159：统一入口“保存并生成”的单次生成请求（透传给轮次卡，token 递增）。 */
   readonly prepGenRequest = signal<{ roundId: string; token: number } | null>(null);
@@ -637,7 +635,6 @@ export class PlaybookDetailComponent implements OnDestroy {
    */
   async onPrepGenerate(ev: { roundId: string }): Promise<void> {
     await this.onChildChanged();
-    this.pageTab.set('rounds');
     const entry = this.entry();
     if (!entry) return;
     if (this.selectedRound()?.id === ev.roundId) {

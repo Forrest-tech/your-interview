@@ -212,17 +212,8 @@
 
     <!-- 下区:轮次工作区(页签 + stepper + Round + 复盘与待办,单一边框容器) -->
     <section class="zone zone-work">
-      <!-- ③ 页面页签:轮次 / 沟通记录 -->
-      <nav class="page-tabs" role="tablist">
-        <button type="button" role="tab" class="ptab" [class.on]="pageTab() === 'rounds'"
-                (click)="pageTab.set('rounds')">{{ t('pb.v2.d.tabRounds') }}</button>
-        <button type="button" role="tab" class="ptab" [class.on]="pageTab() === 'comm'"
-                (click)="pageTab.set('comm')" data-testid="comm-tab">
-          {{ t('pb.v2.d.tabComm') }}
-          @if (pendingComm() > 0) {
-            <span class="red-dot" data-testid="comm-red-dot">{{ pendingComm() }}</span>
-          }
-        </button>
+      <!-- 票 231 重启：上排页签已去掉（Rounds tab 删除、Communications 移入卡片内下排末位）；卡片头行只剩 spacer + 三按钮 + 编辑铅笔。 -->
+      <nav class="page-tabs">
         <span class="spacer"></span>
         <!-- 票 232：三按钮整组由 Back to list 行移至此（卡片头行右侧、编辑铅笔左侧；三行按钮原文一字不动，顺序/接线/tooltip/aria-label 全保留）。本行只在 entry 下渲染，与旧 Back 行 @if (entry()) 门控等价。 -->
         <div class="zone-actions">
@@ -238,10 +229,9 @@
         }
       </nav>
 
-      @if (pageTab() === 'rounds') {
-        @if (pendingComm() > 0) {
-          <button type="button" class="comm-banner" (click)="pageTab.set('comm')"
-                  data-testid="rounds-comm-banner">
+      @if (pendingComm() > 0) {
+        <button type="button" class="comm-banner" (click)="roundCard()?.selectTab('comm')"
+                data-testid="rounds-comm-banner">
             {{ fmt('pb.v2.d.commBanner', { n: pendingComm() }) }}
           </button>
         }
@@ -296,7 +286,8 @@
                                 (addMaterialHere)="openIntake('email', $event)"
                                 (addNoteHere)="openIntake('note')"
                                 (editPrepInput)="openPrepInput($event.roundId, $event.purpose, $event.assetId, $event.text)"
-                                (generateConsumed)="prepGenRequest.set(null)" />
+                                (generateConsumed)="prepGenRequest.set(null)"
+                                (pendingCount)="onCommPending($event)" />
               </div>
             }
           </div>
@@ -351,10 +342,6 @@
           }
         </section>
         }
-      } @else {
-        <app-comm-log [entry]="e" (changed)="onChildChanged()"
-                      (pendingCount)="onCommPending($event)" />
-      }
     </section>
     @if (!hideFootDelete) {
     <footer class="entry-foot">

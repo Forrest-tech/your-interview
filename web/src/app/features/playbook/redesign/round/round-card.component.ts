@@ -19,13 +19,14 @@ import { RoundRecordComponent } from './round-record.component';
 import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
 import { QaImportComponent } from './qa-import.component';
 import { MaterialsListComponent } from './materials-list.component';
+import { CommLogComponent } from './comm-log.component';
 import { ExportDialogComponent, ExportDialogData } from '../export/export-dialog.component';
 import { ExportBlock, ExportDoc } from '../export/export-doc';
 import { I18nService } from '../../../../core/i18n/i18n.service';
 import { derivePhase, formatLabel, makeV2Fmt, makeV2T } from '../v2.helpers';
 import { fieldErrorFromServer, textLengthError } from '../../../../core/api/validation-errors.helpers';
 
-type RoundTab = 'prep' | 'record' | 'qa' | 'materials';
+type RoundTab = 'prep' | 'record' | 'qa' | 'materials' | 'comm';
 
 /** 轮次阶段口径:与 rounds-timeline / Tracker smart-add / Tech Stack 共用的同一套取值。 */
 const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral', 'Final'];
@@ -41,6 +42,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
   imports: [
     CommonModule, FormsModule, MatButtonModule, MatIconModule,
     PrepReportComponent, RoundRecordComponent, QaImportComponent, MaterialsListComponent,
+    CommLogComponent,
     QaZoomComponent],
   template: `
     <section class="card" data-testid="round-card">
@@ -179,6 +181,10 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
           <app-materials-list [entryId]="entry().id" [assets]="roundAssets()"
                               [rounds]="entry().rounds ?? []" (changed)="changed.emit()" />
         }
+        @case ('comm') {
+          <!-- 票231重启：Communications 移入下排末位；内容仍是条目级 comm-log 原件（entry 全量、不按轮次过滤），只换宿主位置。 -->
+          <app-comm-log [entry]="entry()" (changed)="changed.emit()" (pendingCount)="pendingCount.emit($event)" />
+        }
       }
     </section>
   `,
@@ -249,6 +255,8 @@ export class RoundCardComponent implements OnInit {
   @Output() readonly editPrepInput = new EventEmitter<{ roundId: string; purpose: 'experiences' | 'resume'; assetId: string | null; text: string }>();
   /** 票159：生成请求已被备考报告消费（透传，详情页据此清零）。 */
   @Output() readonly generateConsumed = new EventEmitter<void>();
+  /** 票231重启：卡片内 Communications 页签的 comm-log 待处理计数上抛（父级接 onCommPending，供横幅与下一步建议用）。 */
+  @Output() readonly pendingCount = new EventEmitter<number>();
 
   private readonly api = inject(PlaybookV2Api);
   private readonly remindersSvc = inject(RoundRemindersService);
@@ -271,6 +279,8 @@ export class RoundCardComponent implements OnInit {
   }
 
   readonly tab = signal<RoundTab>('prep');
+  /** 票231重启：父级卡片头横幅跳转 Communications 页签用（viewChild 调用）。 */
+  selectTab(key: RoundTab): void { this.tab.set(key); }
   // 票189：用户令去掉的两处（先隐藏不删除：日历提醒数据、上传/addMaterialHere/addNoteHere 接线、i18n 键一律保留；恢复只改开关）。
   readonly hideCalBar = true;
   readonly hideMatActions = true;
@@ -333,7 +343,8 @@ export class RoundCardComponent implements OnInit {
     { key: 'prep', label: this.t('pb.v2.r.tabPrep'), count: () => null },
     { key: 'record', label: this.t('pb.v2.r.tabRecord'), count: () => null },
     { key: 'qa', label: this.t('pb.v2.r.tabQa'), count: () => this.questionCount() || null },
-    { key: 'materials', label: this.t('pb.v2.r.tabMaterials'), count: () => this.roundAssets().length || null }
+    { key: 'materials', label: this.t('pb.v2.r.tabMaterials'), count: () => this.roundAssets().length || null },
+    { key: 'comm', label: this.t('pb.v2.d.tabComm'), count: () => null }
   ]);
 
   readonly formatLabel = formatLabel;

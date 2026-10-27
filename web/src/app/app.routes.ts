@@ -91,17 +91,12 @@ export const routes: Routes = [
       {
         // 票 146：GitHub 式设置中心 —— /settings 父路由 + 子路由。
         // 票 244：旧 /settings/ai 拆为 voice / llm 两页；旧 URL 全部重定向，不 404。
-        // 旧 URL（/profile、/account/ai-setting）全部重定向到新 URL，任何旧入口不 404。
+        // 票 247：My Account 移出设置中心（profile 为顶级路由）；旧 /settings/profile 重定向到 /profile，不 404。
         path: 'settings',
         loadComponent: () =>
           import('./features/settings/settings-hub.component').then((m) => m.SettingsHubComponent),
         children: [
-          { path: '', pathMatch: 'full', redirectTo: 'profile' },
-          {
-            path: 'profile',
-            loadComponent: () =>
-              import('./features/profile/profile.component').then((m) => m.ProfileComponent)
-          },
+          { path: '', pathMatch: 'full', redirectTo: 'voice' },
           {
             // 票 244：语音设置页（Azure Speech 凭据 + 语音教程 + 发音评测说明）。
             path: 'voice',
@@ -123,7 +118,13 @@ export const routes: Routes = [
           }
         ]
       },
-      { path: 'profile', redirectTo: 'settings/profile' },
+      {
+        // 票 247：My Account 与 Settings 平级 —— 顶级路由，主布局，无设置左导航。
+        path: 'profile',
+        loadComponent: () =>
+          import('./features/profile/profile.component').then((m) => m.ProfileComponent)
+      },
+      { path: 'settings/profile', redirectTo: '/profile' },
       { path: 'account/ai-setting', redirectTo: 'settings/llm' },
       {
         path: 'resume',

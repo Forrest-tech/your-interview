@@ -488,7 +488,7 @@ export class ProfileComponent implements OnInit {
         // 再莫名被踢,诚实且清晰得多。
         this.auth.clearSession();
         this.router.navigate(['/login'], {
-          queryParams: { notice: this.t('profile.pwdChanged'), returnUrl: '/settings/profile' }
+          queryParams: { notice: this.t('profile.pwdChanged'), returnUrl: '/profile' }
         });
       },
       error: (e: Error) => {

@@ -15,7 +15,7 @@ export const ROUTE_TITLE_KEYS: ReadonlyArray<readonly [prefix: string, key: stri
   ['/playbook/calendar', 'pb.cal.title'],
   ['/settings/voice', 'setting.voiceTitle'],
   ['/settings/llm', 'ai.pageTitle'],
-  ['/settings/profile', 'account.profile'],
+  ['/profile', 'account.profile'],
   ['/settings', 'settings.title'],
   ['/dashboard', 'nav.dashboard'],
   ['/tracker', 'nav.tracker'],

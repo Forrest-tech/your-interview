@@ -72,8 +72,11 @@
       </div>
     </div>
     <mat-divider></mat-divider>
-    <!-- 票 244：头像菜单只留 Settings（设置中心入口）+ Admin + Sign out；
-         My Account / Mailbox 快捷已删，设置中心左导航为唯一分节导航。 -->
+    <!-- 票 247：My Account 与 Settings 平级 —— 头像菜单顺序 My Account、Settings、Admin、Sign out；
+         My Account 走顶级 /profile，不再嵌在设置中心。 -->
+    <button mat-menu-item (click)="goProfile()">
+      <mat-icon>person</mat-icon><span>{{ t('account.profile') }}</span>
+    </button>
     <button mat-menu-item (click)="goSettings()">
       <mat-icon>settings</mat-icon><span>{{ t('settings.title') }}</span>
     </button>

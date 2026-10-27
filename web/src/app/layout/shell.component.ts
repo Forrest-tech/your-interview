@@ -138,6 +138,10 @@ export class ShellComponent {
     try { localStorage.setItem('ui.navCollapsed.shellSubnav', next ? '1' : '0'); } catch { /* ignore */ }
   }
 
+  goProfile(): void {
+    this.router.navigate(['/profile']);
+  }
+
   goSettings(): void {
     this.router.navigate(['/settings']);
   }

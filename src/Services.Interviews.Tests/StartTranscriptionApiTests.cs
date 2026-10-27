@@ -86,6 +86,11 @@ public sealed class StartTranscriptionApiTests : IAsyncLifetime
         // appsettings 的 true(实测真总线被注册);环境变量由 CreateBuilder 急切加载,两头都稳。
         Environment.SetEnvironmentVariable("Jwt__SigningKey", SigningKey);
         Environment.SetEnvironmentVariable("Messaging__Enabled", "false");
+        Environment.SetEnvironmentVariable("Mailbox__DataProtectionKeysDir",
+            Path.Combine(Path.GetTempPath(), "your-interview-tests", "starttranscription-mailbox-keys"));
+        // 票 242：密钥目录走本类临时目录，不依赖 Program 默认路径。
+        // 跨类并行下进程级环境变量可能被另一类覆盖/清空（见 SigningKey 注释），
+        // 但回落目标是主机可写默认目录，竞态也不会重现 /app 建目录失败。
 
         _factory = new WebApplicationFactory<InterviewsController>()
             .WithWebHostBuilder(builder =>
@@ -121,6 +126,7 @@ public sealed class StartTranscriptionApiTests : IAsyncLifetime
         _factory?.Dispose();
         Environment.SetEnvironmentVariable("Jwt__SigningKey", null);
         Environment.SetEnvironmentVariable("Messaging__Enabled", null);
+        Environment.SetEnvironmentVariable("Mailbox__DataProtectionKeysDir", null);
         await _db.DisposeAsync();
     }
 

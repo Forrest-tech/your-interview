@@ -48,13 +48,11 @@ builder.Services.AddAiGatewayClient(builder.Configuration["AiGateway:BaseUrl"]);
 // ---------- 票 240：邮箱直连导入(OAuth 只读、token 加密存储、手动刷新) ----------
 // Secret 一律走配置（appsettings 空占位 + 环境变量注入），绝不硬编码、不进日志。
 builder.Services.Configure<MailboxOptions>(builder.Configuration.GetSection(MailboxOptions.Section));
-var mailboxKeysDir = builder.Configuration["Mailbox:DataProtectionKeysDir"];
-if (string.IsNullOrWhiteSpace(mailboxKeysDir))
-{
-    var storageDir = Environment.GetEnvironmentVariable("INTERVIEW_STORAGE_DIR");
-    if (string.IsNullOrWhiteSpace(storageDir)) storageDir = "/app/storage/interviews";
-    mailboxKeysDir = Path.Combine(storageDir, "mailbox-keys");
-}
+// 票 242：密钥目录解析抽纯函数（见 MailboxKeysDirectory；单服务账号假设见其注释）。
+// 显式配置 > INTERVIEW_STORAGE_DIR > 主机可写默认；旧 /app 默认在 CI 非 root runner 上建目录失败。
+var mailboxKeysDir = MailboxKeysDirectory.Resolve(
+    builder.Configuration["Mailbox:DataProtectionKeysDir"],
+    Environment.GetEnvironmentVariable("INTERVIEW_STORAGE_DIR"));
 Directory.CreateDirectory(mailboxKeysDir);
 builder.Services.AddDataProtection()
     .SetApplicationName("your-interview")

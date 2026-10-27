@@ -131,7 +131,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
         @for (tb of tabs(); track tb.key) {
           <button type="button" role="tab" class="rtab" [class.on]="tab() === tb.key"
                   (click)="tab.set(tb.key)">
-            {{ tb.label }}@if (tb.count() != null) { <span class="cnt">{{ tb.count() }}</span> }
+            {{ tb.label }}@if (!hideTabCounts && tb.count() != null) { <span class="cnt">{{ tb.count() }}</span> }
           </button>
         }
       </div>
@@ -289,6 +289,8 @@ export class RoundCardComponent implements OnInit {
   readonly editing = signal(false);
   /** 票188：详情卡 Location 显示项暂隐藏（见模板处注释）。 */
   readonly hideLocation = true;
+  /** 票237：页签统计数字暂隐藏（隐藏不是删除：tabs() 的 count 回调、questionCount、roundAssets 长度一律保留；恢复只改开关）。 */
+  readonly hideTabCounts = true;
   readonly eStage = signal('');
   readonly eDate = signal('');
   readonly eTime = signal('');

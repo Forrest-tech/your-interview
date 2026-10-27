@@ -1,11 +1,38 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using System.Security.Cryptography;
+using System.Text;
 using YourInterview.BuildingBlocks.Results;
 using YourInterview.Services.Interviews.Domain;
 using YourInterview.Services.Interviews.Infrastructure.Persistence;
 
 namespace YourInterview.Services.Interviews.Application;
+
+/// <summary>
+/// 票239:瞬时并发异常判定 —— 死锁 40P01 与序列化失败 40001 可能以
+/// DbUpdateException 之外的形态冒出（查询阶段的原始 PostgresException、
+/// 或内层链含 PostgresException 的 InvalidOperationException），既有仅
+/// 捕 DbUpdateException 的重试环会漏捕、穿透成 500。本判定沿内层链找
+/// PostgresException 的 SqlState 白名单，命中即按瞬时并发走重试；白名单
+/// 外的异常一律不捕、不改语义。
+/// </summary>
+internal static class TransientConcurrency
+{
+    private static readonly HashSet<string> TransientSqlStates = new(StringComparer.Ordinal)
+        { "40P01", "40001" };
+
+    public static bool IsTransient(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            if (e is PostgresException pg && TransientSqlStates.Contains(pg.SqlState))
+                return true;
+        }
+        return false;
+    }
+}
 
 // ============================ DTO ============================
 // 口径与票14(Jobs 面 Tracker 收藏/自备问题)一致:导入一律返回
@@ -294,7 +321,8 @@ public sealed class UpsertStarStoryCommandHandler(InterviewsDbContext db)
                         input.Result, input.Tags);
                     if (existing.IsDeleted) existing.Restore();
                     try { await db.SaveChangesAsync(ct); return Result.Success(existing.Id); }
-                    catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+                    catch (Exception ex) when (ex is DbUpdateException
+                        || TransientConcurrency.IsTransient(ex)) { db.ChangeTracker.Clear(); }
                     break;
                 case StarStoryUpsertRules.UpsertDecision.Create:
                     var nextOrder = await db.StarStories.IgnoreQueryFilters()
@@ -304,7 +332,8 @@ public sealed class UpsertStarStoryCommandHandler(InterviewsDbContext db)
                         input.Situation, input.Task, input.Action, input.Result, input.Tags, nextOrder + 1);
                     db.StarStories.Add(story);
                     try { await db.SaveChangesAsync(ct); return Result.Success(story.Id); }
-                    catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+                    catch (Exception ex) when (ex is DbUpdateException
+                        || TransientConcurrency.IsTransient(ex)) { db.ChangeTracker.Clear(); }
                     break;
             }
         }
@@ -339,7 +368,18 @@ public sealed class ImportStarStoriesCommandHandler(InterviewsDbContext db)
     // 实测)。导入契约本就是幂等(按 ClientId 去重),故同法收敛:撞
     // DbUpdateException 清跟踪后整批重跑 —— 重跑时赢家行已在,按既有行
     // 更新/计数口径自然收敛(imported 只数重跑时新建行,对账不虚报)。
+    // 票239:既有重试环只捕 DbUpdateException,死锁 40P01 / 序列化失败
+    // 40001 以其他形态冒出时会漏捕穿透 —— catch 已拓宽为 DbUpdateException
+    // 或内层链含瞬时 SqlState 白名单的异常(见 TransientConcurrency);
+    // 另 HandleCore 全程显式事务 + 按用户 advisory lock 串行化(见下)。
     private const int MaxAttempts = 5;
+
+    /// <summary>票239:故事导入 advisory 锁键 —— UserId 的 SHA256 前 8 字节,
+    /// 跨进程稳定,同用户同键、不同用户不同键(64 位碰撞概率可忽略,最坏
+    /// 只是两个无关用户短暂排队,无正确性影响)。</summary>
+    private static long ImportLockKey(Guid userId)
+        => BitConverter.ToInt64(SHA256.HashData(
+            Encoding.UTF8.GetBytes("starstory-import:" + userId.ToString("N"))), 0);
 
     public async Task<Result<PlaybookImportResultDto>> Handle(
         ImportStarStoriesCommand request, CancellationToken ct)
@@ -347,7 +387,8 @@ public sealed class ImportStarStoriesCommandHandler(InterviewsDbContext db)
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             try { return await HandleCore(request, ct); }
-            catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+            catch (Exception ex) when (ex is DbUpdateException
+                || TransientConcurrency.IsTransient(ex)) { db.ChangeTracker.Clear(); }
         }
         return Result.Failure<PlaybookImportResultDto>(Error.Conflict(
             "StarStory.ImportConflict", "故事导入与并发请求冲突,请重试"));
@@ -356,6 +397,13 @@ public sealed class ImportStarStoriesCommandHandler(InterviewsDbContext db)
     private async Task<Result<PlaybookImportResultDto>> HandleCore(
         ImportStarStoriesCommand request, CancellationToken ct)
     {
+        // 票239 B:同用户并发导入串行化 —— 本方法全程跑在一个显式事务内,
+        // 开头取事务级 advisory lock(按 UserId 哈希):同用户并发导入排队、
+        // 死锁窗消失,不同用户互不影响;生产代码他处无 advisory 锁,不成
+        // 锁顺序环;异常时事务随 using 释放回滚,外层重试环重开事务重取锁。
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock({ImportLockKey(request.UserId)})", ct);
         // 输入内先按 ClientId 去重(后出现的覆盖先出现的 —— 与本地数组
         // findIndex 首个命中不同,这里取最后一版,与用户最后编辑的意图一致)。
         var byClientId = new Dictionary<string, StarStoryInput>(StringComparer.Ordinal);
@@ -406,6 +454,7 @@ public sealed class ImportStarStoriesCommandHandler(InterviewsDbContext db)
 
         var total = await db.StarStories.AsNoTracking()
             .CountAsync(s => s.UserId == request.UserId, ct);
+        await tx.CommitAsync(ct);
         return Result.Success(new PlaybookImportResultDto(imported, total));
     }
 }
@@ -442,7 +491,8 @@ public sealed class ImportLegacyDebriefsCommandHandler(InterviewsDbContext db)
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             try { return await HandleCore(request, ct); }
-            catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+            catch (Exception ex) when (ex is DbUpdateException
+                || TransientConcurrency.IsTransient(ex)) { db.ChangeTracker.Clear(); }
         }
         return Result.Failure<PlaybookImportResultDto>(Error.Conflict(
             "LegacyDebrief.ImportConflict", "复盘导入与并发请求冲突,请重试"));
@@ -510,7 +560,8 @@ public sealed class ImportLegacyPastedCommandHandler(InterviewsDbContext db)
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             try { return await HandleCore(request, ct); }
-            catch (DbUpdateException) { db.ChangeTracker.Clear(); }
+            catch (Exception ex) when (ex is DbUpdateException
+                || TransientConcurrency.IsTransient(ex)) { db.ChangeTracker.Clear(); }
         }
         return Result.Failure<PlaybookImportResultDto>(Error.Conflict(
             "LegacyPasted.ImportConflict", "粘贴材料导入与并发请求冲突,请重试"));

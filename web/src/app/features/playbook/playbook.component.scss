@@ -200,6 +200,186 @@
   }
 }
 
+/* 票253:分区计数行、Completed 空态、未分析说明、视图切换、列表视图 */
+.section-counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0 4px;
+  padding-left: 2px;
+  font-size: 14px;
+
+  .counts-link {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    color: #2563eb;
+    padding: 2px 4px;
+    border-radius: 6px;
+
+    &:hover { background: #eff6ff; }
+  }
+
+  .counts-sep { color: #94a3b8; }
+  .counts-filtered { font-size: 12px; color: var(--attention); }
+}
+
+.completed-empty {
+  margin: 0 0 16px;
+  padding-left: 2px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.scores-hint {
+  margin: -4px 0 10px 56px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.filters .filter-row .view-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 列表视图:列顺序与卡片信息顺序一致,单行不折行,窄屏横向滚动。
+   编辑态多一列勾选框,故两套列宽(与表头严格同列,否则错位)。 */
+.list {
+  overflow-x: auto;
+  margin-bottom: 24px;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+
+  .list-head,
+  .list-row {
+    display: grid;
+    grid-template-columns: 40px minmax(130px, 1.6fr) minmax(120px, 1.4fr) 96px 110px 64px 108px 108px minmax(100px, 1fr) minmax(130px, 1.3fr) 64px 150px 96px 96px;
+    gap: 12px;
+    align-items: center;
+    min-width: 1180px;
+    padding: 10px 16px;
+  }
+
+  &.editing .list-head,
+  &.editing .list-row {
+    grid-template-columns: 32px 40px minmax(130px, 1.6fr) minmax(120px, 1.4fr) 96px 110px 64px 108px 108px minmax(100px, 1fr) minmax(130px, 1.3fr) 64px 150px 96px 96px;
+  }
+
+  .list-head {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    border-bottom: 1px solid #f1f5f9;
+    background: #f8fafc;
+  }
+
+  .list-row {
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid #f8fafc;
+
+    &:hover { background: #f8fafc; }
+    &.selected { background: #eff6ff; }
+
+    .cell {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .company-cell { font-weight: 700; color: #0f172a; }
+    .role-cell { color: #475569; }
+
+    /* 状态 pill:与卡片 .entry .status-pill 同色档 */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      &.ok { background: #f0fdf4; color: #16a34a; }
+      &.bad { background: #fef2f2; color: #dc2626; }
+      &.busy { background: #eff6ff; color: #2563eb; }
+      &.ready { background: #fffbeb; color: var(--attention); }
+      &.idle { background: #f6f8fb; color: #475569; }
+    }
+
+    .overall-val { font-weight: 700; }
+    .overall-none { color: #94a3b8; }
+
+    .dims-cell {
+      display: flex;
+      gap: 8px;
+
+      .dim-num { font-weight: 600; }
+    }
+
+    .counts-cell {
+      display: inline-flex;
+      gap: 10px;
+
+      span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      mat-icon { font-size: 15px; width: 15px; height: 15px; }
+      .has-transcript { color: #16a34a; }
+      .has-transcript mat-icon { color: #16a34a; }
+    }
+
+    .view-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2563eb;
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 8px;
+
+      mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+      &:hover { background: var(--hover-wash); }
+      &:active { background: var(--press-wash); }
+    }
+  }
+}
+
+/* 已结束区列表行与卡片同口径收敛 */
+#completed-section .list-row { opacity: 0.85; }
+
 /* 结果徽章(仅 Completed 卡):结果原文 + 语义色,比状态 pill 更醒目 */
 .result-badge {
   flex: 0 0 auto;

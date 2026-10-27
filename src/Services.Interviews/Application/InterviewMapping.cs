@@ -105,7 +105,9 @@ public static class InterviewMappingExtensions
         e.CreatedAt, e.EnteredActiveAt,
         // Tracker 联动(M1.4):邀请登记自动建的草稿带申请 Id,前端可回链
         e.JobApplicationId,
-        DeriveOutcome(e)?.ToString());
+        DeriveOutcome(e)?.ToString(),
+        // 票253:列表 DTO 补齐 Interviewers/Location(与详情 DTO 同源,仅暴露已有数据)。
+        e.Interviewers, e.Location);
 
     // ===================== 条目结果派生(票05 / ARC-14 单一事实源) =====================
     //

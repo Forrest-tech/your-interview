@@ -162,6 +162,48 @@ export class PlaybookComponent implements OnInit {
     this.completedOpen.update(v => !v);
   }
 
+  /**
+   * 票253:卡片/列表视图切换。默认卡片(既有行为首访不变);偏好存 localStorage,
+   * 键 yi-playbook-view(与 Tracker 的 yi-tracker-view 区分,互不串扰)。
+   */
+  readonly viewMode = signal<'cards' | 'list'>(
+    ((): 'cards' | 'list' => {
+      try {
+        const v = localStorage.getItem('yi-playbook-view');
+        return v === 'list' ? 'list' : 'cards';
+      } catch { return 'cards'; }
+    })()
+  );
+  setViewMode(m: 'cards' | 'list'): void {
+    this.viewMode.set(m);
+    try { localStorage.setItem('yi-playbook-view', m); } catch { /* 忽略 */ }
+  }
+
+  /**
+   * 票253:计数行跳转。Completed 先展开再滚动并把焦点交给折叠标题
+   * (已展开时同样滚动+聚焦);In Progress 直接滚动(锚点不存在时静默无动作)。
+   */
+  goToActive(): void {
+    document.getElementById('active-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  goToCompleted(): void {
+    this.completedOpen.set(true);
+    setTimeout(() => {
+      document.getElementById('completed-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('completed-toggle-btn')?.focus();
+    }, 0);
+  }
+
+  /** 票253:列表行点击 —— 编辑模式下勾选,常态下进详情页(与卡片行为一致)。 */
+  onRowClick(e: InterviewEntry, ev: Event): void {
+    if (this.editing()) {
+      ev.preventDefault();
+      this.toggleSelectById(e.id);
+      return;
+    }
+    void this.router.navigate(['/playbook', e.id]);
+  }
+
   /** 旁路数据:公司聚合与统计。失败时留空,页面不报错。 */
   readonly companies = signal<CompanySummary[]>([]);
   readonly stats = signal<InterviewStats | null>(null);

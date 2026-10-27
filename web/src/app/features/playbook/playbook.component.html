@@ -237,8 +237,37 @@
       <button mat-button (click)="resetFilter()">
         <mat-icon>filter_alt_off</mat-icon> {{ t('common.clearFilter') }}
       </button>
+
+      <!-- 票253:卡片/列表视图切换(列表是加法,卡片仍为默认)。 -->
+      <span class="view-toggle" role="group" [attr.aria-label]="t('pb.view.cards') + ' / ' + t('pb.view.list')">
+        <button mat-stroked-button [color]="viewMode() === 'cards' ? 'primary' : undefined"
+                (click)="setViewMode('cards')" data-testid="view-cards">
+          <mat-icon>grid_view</mat-icon> {{ t('pb.view.cards') }}
+        </button>
+        <button mat-stroked-button [color]="viewMode() === 'list' ? 'primary' : undefined"
+                (click)="setViewMode('list')" data-testid="view-list">
+          <mat-icon>list</mat-icon> {{ t('pb.view.list') }}
+        </button>
+      </span>
     </div>
   </mat-card>
+
+  <!-- 票253:分区计数行 —— 计数取当前筛选后的两区;筛选激活时明示,
+       避免"已结束(0)"被误读为确实没有已结束条目。 -->
+  @if (!loading() && entries().length > 0) {
+    <div class="section-counts" data-testid="section-counts">
+      <button type="button" class="counts-link" (click)="goToActive()">
+        {{ t('pb.section.active') }} ({{ activeEntries().length }})
+      </button>
+      <span class="counts-sep">·</span>
+      <button type="button" class="counts-link" (click)="goToCompleted()">
+        {{ t('pb.section.completed') }} ({{ completedEntries().length }})
+      </button>
+      @if (companyFilter || statusFilter) {
+        <span class="counts-filtered">{{ t('pb.section.filteredNote') }}</span>
+      }
+    </div>
+  }
 
   <!-- 列表 -->
   @if (!loading() && entries().length === 0) {
@@ -256,29 +285,75 @@
 
   <!-- 进行中 / 已结束:两个平行区域 -->
   @if (activeEntries().length > 0) {
-    <h3 class="section-title">{{ t('pb.section.active') }}</h3>
-    <div class="grid">
-      @for (e of activeEntries(); track e.id) {
-        <ng-container *ngTemplateOutlet="entryCard; context: { $implicit: e }"></ng-container>
+    <section id="active-section">
+      <h3 class="section-title">{{ t('pb.section.active') }}</h3>
+      @if (viewMode() === 'list') {
+        <ng-container *ngTemplateOutlet="entryList; context: { $implicit: activeEntries(), testid: 'active-list' }"></ng-container>
+      } @else {
+        <div class="grid">
+          @for (e of activeEntries(); track e.id) {
+            <ng-container *ngTemplateOutlet="entryCard; context: { $implicit: e }"></ng-container>
+          }
+        </div>
+      }
+    </section>
+  }
+  <!-- 票253 F1a:Completed 标题恒渲染 —— 零条目时不再是"整个分区不存在",
+       而是标题 + 计数 0 + 一行诚实空态(讲清"记一轮结果即移入这里"的机制);
+       条目全空时整页已是 empty-card,本区不重复出现。 -->
+  @if (entries().length > 0) {
+    <section id="completed-section">
+      <button type="button" class="section-toggle" id="completed-toggle-btn" data-testid="completed-toggle"
+              [attr.aria-expanded]="completedOpen()" [title]="t('common.collapse')"
+              (click)="toggleCompleted()">
+        <mat-icon>{{ completedOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+        <span>{{ t('pb.section.completed') }}</span>
+        <span class="count-badge">{{ completedEntries().length }}</span>
+      </button>
+      @if (completedEntries().length === 0) {
+        <p class="completed-empty">{{ t(companyFilter || statusFilter ? 'pb.section.completedEmptyFiltered' : 'pb.section.completedEmpty') }}</p>
+      } @else if (completedOpen()) {
+        @if (viewMode() === 'list') {
+          <ng-container *ngTemplateOutlet="entryList; context: { $implicit: completedEntries(), testid: 'completed-list' }"></ng-container>
+        } @else {
+          <div class="grid completed">
+            @for (e of completedEntries(); track e.id) {
+              <ng-container *ngTemplateOutlet="entryCard; context: { $implicit: e }"></ng-container>
+            }
+          </div>
+        }
+      }
+    </section>
+  }
+
+  <!-- 票253:列表视图 —— 与卡片同字段、同导航、同编辑勾选,仅渲染更紧凑。
+       列顺序与卡片信息顺序一致;过长文本省略 + title,行永不折成多行。 -->
+  <ng-template #entryList let-list let-testid="testid">
+    <div class="list" [class.editing]="editing()" [attr.data-testid]="testid">
+      <div class="list-head" aria-hidden="true">
+        @if (editing()) {
+          <span class="cell check-cell"></span>
+        }
+        <span class="cell avatar-cell"></span>
+        <span class="cell company-cell">{{ t('pb.filter.company') }}</span>
+        <span class="cell role-cell">{{ t('pb.list.role') }}</span>
+        <span class="cell status-cell">{{ t('pb.filter.status') }}</span>
+        <span class="cell result-cell">{{ t('pb.list.result') }}</span>
+        <span class="cell round-cell">{{ t('pb.list.round') }}</span>
+        <span class="cell date-cell">{{ t('pb.form.interviewDate') }}</span>
+        <span class="cell format-cell">{{ t('pb.list.format') }}</span>
+        <span class="cell location-cell">{{ t('pb.list.location') }}</span>
+        <span class="cell interviewers-cell">{{ t('pb.list.interviewers') }}</span>
+        <span class="cell overall-cell">{{ t('dim.overall') }}</span>
+        <span class="cell dims-cell">{{ t('pb.list.dims') }}</span>
+        <span class="cell counts-cell">{{ t('pb.list.counts') }}</span>
+        <span class="cell view-cell">{{ t('pb.list.review') }}</span>
+      </div>
+      @for (e of list; track e.id) {
+        <ng-container *ngTemplateOutlet="entryRow; context: { $implicit: e }"></ng-container>
       }
     </div>
-  }
-  @if (completedEntries().length > 0) {
-    <button type="button" class="section-toggle" data-testid="completed-toggle"
-            [attr.aria-expanded]="completedOpen()" [title]="t('common.collapse')"
-            (click)="toggleCompleted()">
-      <mat-icon>{{ completedOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
-      <span>{{ t('pb.section.completed') }}</span>
-      <span class="count-badge">{{ completedEntries().length }}</span>
-    </button>
-    @if (completedOpen()) {
-      <div class="grid completed">
-        @for (e of completedEntries(); track e.id) {
-          <ng-container *ngTemplateOutlet="entryCard; context: { $implicit: e }"></ng-container>
-        }
-      </div>
-    }
-  }
+  </ng-template>
 
   <!-- 条目卡片模板 -->
   <ng-template #entryCard let-e>
@@ -295,8 +370,8 @@
           }
           <span class="avatar" [style.background]="avatarColor(e.companyName)">{{ companyInitials(e.companyName) }}</span>
           <div class="entry-title">
-            <span class="company">{{ e.companyName }}</span>
-            <span class="role">{{ e.role }}</span>
+            <span class="company" [title]="e.companyName">{{ e.companyName }}</span>
+            <span class="role" [title]="e.role">{{ e.role }}</span>
           </div>
           <span class="status-pill" [class]="statusClass(e.status)"><span class="dot"></span>{{ statusLabel(e.status) }}</span>
           @if (resultOutcome(e); as oc) {
@@ -311,6 +386,13 @@
           }
           @if (e.interviewFormat) {
             <span><mat-icon inline>laptop</mat-icon> {{ e.interviewFormat }}</span>
+          }
+          <!-- 票253 F3b:列表 DTO 已补齐的两字段,按日期/形式之后、地点在前、面试官在后的顺序渲染;缺失仍渲染无内容(不编占位)。 -->
+          @if (e.location) {
+            <span><mat-icon inline>place</mat-icon> {{ e.location }}</span>
+          }
+          @if (e.interviewers) {
+            <span><mat-icon inline>people</mat-icon> {{ e.interviewers }}</span>
           }
         </div>
 
@@ -339,6 +421,11 @@
           </div>
         </div>
 
+        <!-- 票253:未分析卡片的诚实说明 —— 分数空是因为还没分析,不是字段丢了;绝不编分数。 -->
+        @if (e.overallScore == null) {
+          <p class="scores-hint">{{ t('pb.card.scoresAfterAnalysis') }}</p>
+        }
+
         <div class="entry-foot">
           <div class="counts">
             <span [title]="t('playbook.qaCount')"><mat-icon inline>help_outline</mat-icon> {{ e.questionCount ?? 0 }}</span>
@@ -352,6 +439,54 @@
           </a>
         </div>
       </mat-card>
+  </ng-template>
+
+  <!-- 票253:列表行模板 —— 与卡片同字段、同导航、同编辑勾选;分数为紧凑数字,缺失一律 '–' 并以 title 载明含义。 -->
+  <ng-template #entryRow let-e>
+    <div class="list-row" [class.selected]="isSelected(e.id)" (click)="onRowClick(e, $event)">
+      @if (editing()) {
+        <mat-checkbox [checked]="isSelected(e.id)"
+                      (click)="$event.stopPropagation()"
+                      (change)="toggleSelectById(e.id)"
+                      class="sel-box"></mat-checkbox>
+      }
+      <span class="cell avatar-cell"><span class="avatar" [style.background]="avatarColor(e.companyName)">{{ companyInitials(e.companyName) }}</span></span>
+      <span class="cell company-cell" [title]="e.companyName">{{ e.companyName }}</span>
+      <span class="cell role-cell" [title]="e.role">{{ e.role }}</span>
+      <span class="cell status-cell"><span class="status-pill" [class]="statusClass(e.status)"><span class="dot"></span>{{ statusLabel(e.status) }}</span></span>
+      <span class="cell result-cell">
+        @if (resultOutcome(e); as oc) {
+          <span class="result-badge" [class]="oc" data-testid="result-badge">{{ e.result }}</span>
+        }
+      </span>
+      <span class="cell round-cell">{{ tn('pb.round', e.roundNo) }}</span>
+      <span class="cell date-cell">{{ e.interviewDate ?? '–' }}</span>
+      <span class="cell format-cell">{{ e.interviewFormat ?? '–' }}</span>
+      <span class="cell location-cell" [title]="e.location ?? ''">{{ e.location ?? '–' }}</span>
+      <span class="cell interviewers-cell" [title]="e.interviewers ?? ''">{{ e.interviewers ?? '–' }}</span>
+      <span class="cell overall-cell">
+        @if (e.overallScore != null) {
+          <span class="overall-val" [class]="scoreClass(e.overallScore)">{{ e.overallScore }}</span>
+        } @else {
+          <span class="overall-none" [title]="t('pb.noAnalysisYet')">–</span>
+        }
+      </span>
+      <span class="cell dims-cell">
+        @for (d of dims(e); track d.key) {
+          <span class="dim-num" [class]="scoreClass(d.value)" [title]="t(d.labelKey)">{{ d.value ?? '–' }}</span>
+        }
+      </span>
+      <span class="cell counts-cell">
+        <span [title]="t('playbook.qaCount')"><mat-icon inline>help_outline</mat-icon> {{ e.questionCount ?? 0 }}</span>
+        <span [title]="t('playbook.assetCount')"><mat-icon inline>attach_file</mat-icon> {{ e.assetCount ?? 0 }}</span>
+        @if (e.hasTranscript) {
+          <span class="has-transcript"><mat-icon inline>check_circle</mat-icon></span>
+        }
+      </span>
+      <a class="view-link" [routerLink]="['/playbook', e.id]" (click)="$event.stopPropagation()">
+        {{ t('pb.card.viewReview') }} <mat-icon inline>arrow_forward</mat-icon>
+      </a>
+    </div>
   </ng-template>
 
   <!-- 新建对话框:用固定层而不是 cdk Dialog,

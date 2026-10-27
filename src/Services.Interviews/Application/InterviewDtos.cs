@@ -127,7 +127,10 @@ public sealed record InterviewEntryListItemDto(
     // 票186:最近一次进入 Active 的时刻(必填位,不得放在可选位之后)。
     DateTimeOffset EnteredActiveAt, Guid? JobApplicationId = null,
     // 票05(ARC-14):结构化结果,口径同 InterviewEntryDto.Outcome(见 DeriveOutcome)。
-    string? Outcome = null);
+    string? Outcome = null,
+    // 票253:列表页卡片/列表行需展示的对应字段(详情 DTO 早已有,列表 DTO 补齐;
+    // 追加为可选尾参,既有位置调用一字不动)。
+    string? Interviewers = null, string? Location = null);
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
 {

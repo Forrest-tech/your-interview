@@ -18,6 +18,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { catchError, concat, forkJoin, of, type Observable } from 'rxjs';
 import { JobsApiService } from '../../core/api/jobs-api.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { InterviewsApiService } from '../../core/api/interviews-api.service';
 import { KnowledgeApiService } from '../../core/api/knowledge-api.service';
 import { I18nService } from '../../core/i18n/i18n.service';
@@ -64,6 +65,8 @@ import {
 })
 export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly jobsApi = inject(JobsApiService);
+  /** 票 150 续：批量回填菜单项仅 admin.system.write 可见（与 backfill-logos 端点同口径）。 */
+  readonly auth = inject(AuthService);
   private readonly interviewsApi = inject(InterviewsApiService);
   private readonly knowledgeApi = inject(KnowledgeApiService);
   private readonly trackerApi = inject(TrackerApi);
@@ -553,6 +556,32 @@ export class TrackerComponent implements OnInit, OnDestroy, AfterViewInit {
     const next = new Set(this.brokenLogos());
     next.add(id);
     this.brokenLogos.set(next);
+  }
+
+  /** 票 150 续：批量回填进行中（防重复点击）。 */
+  readonly backfillingLogos = signal(false);
+
+  /**
+   * 票 150 续：批量回填全部空 logo 公司 —— 调用 150 已落地的 backfill-logos 端点。
+   * 此前该端点全仓零调用方，只能走裸 API 调用，这是“logo 一直没补上”的直接缺口。
+   * 端点本身幂等（只处理空值、单家失败不中断整批）；跑完 reload()，新 logo 即在列表显示。
+   */
+  backfillLogos(): void {
+    if (this.backfillingLogos()) return;
+    this.backfillingLogos.set(true);
+    this.jobsApi.backfillLogos().subscribe({
+      next: (r) => {
+        this.backfillingLogos.set(false);
+        this.reload();
+        this.snack.open(this.tf('tracker.backfillLogosDone', {
+          success: r.success, skipped: r.skipped, failed: r.failed, cleaned: r.cleaned,
+        }), this.t('common.close'), { duration: 4000 });
+      },
+      error: () => {
+        this.backfillingLogos.set(false);
+        this.snack.open(this.t('tracker.backfillLogosFailed'), this.t('common.close'), { duration: 4000 });
+      },
+    });
   }
 
   private readonly dialog = inject(MatDialog);

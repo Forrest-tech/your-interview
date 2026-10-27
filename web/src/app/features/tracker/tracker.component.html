@@ -49,6 +49,11 @@
         <button mat-menu-item (click)="reload()">
           <mat-icon>refresh</mat-icon>{{ t('common.refresh') }}
         </button>
+        @if (auth.can('admin.system.write')) {
+          <button mat-menu-item (click)="backfillLogos()" [disabled]="backfillingLogos()">
+            <mat-icon>image_search</mat-icon>{{ t('tracker.backfillLogos') }}
+          </button>
+        }
       </mat-menu>
       <input #csvFile type="file" hidden accept=".csv" (change)="importCsv($event)">
     </div>

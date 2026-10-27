@@ -91,6 +91,20 @@ public interface IMailboxProvider
     /// <summary>取附件字节（provider 侧附件 id；超 25MB 的附件调用方不取、只记名）。</summary>
     Task<byte[]?> GetAttachmentBytesAsync(string accessToken, string providerMessageId,
         string providerAttachmentId, CancellationToken ct);
+
+    /// <summary>
+    /// 整组拉取（Gmail thread / Graph conversation）：强信号命中时同组全量导入用。
+    /// 默认空实现（不支持整组的 provider 返回空，调用方只导入命中封本身）。
+    /// </summary>
+    Task<IReadOnlyList<MailboxMessage>> GetThreadAsync(string accessToken, string threadId,
+        CancellationToken ct) => Task.FromResult<IReadOnlyList<MailboxMessage>>([]);
+
+    /// <summary>取当前授权账号的邮箱地址（回调建连接时用：Gmail userinfo / Graph /me）。</summary>
+    Task<string?> GetAccountEmailAsync(string accessToken, CancellationToken ct);
+
+    /// <summary>列出单封邮件的附件清单（Graph：列表页不含清单，导入时按需取）。</summary>
+    Task<IReadOnlyList<MailboxAttachment>> ListAttachmentsAsync(string accessToken, string providerMessageId,
+        CancellationToken ct) => Task.FromResult<IReadOnlyList<MailboxAttachment>>([]);
 }
 
 /// <summary>provider 工厂：按枚举取实现；Imap 抛 NotSupported（本轮未落地）。</summary>

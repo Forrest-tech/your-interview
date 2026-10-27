@@ -11,10 +11,10 @@ namespace YourInterview.Services.Interviews.Application;
 /// OAuth state 自含 userId|provider|nonce|expiryUnix，回调时比对当前用户 + 10 分钟有效期，
 /// 防止 CSRF 与跨用户冒用；state 本身也经 DataProtection 保护（独立 purpose）。
 /// </summary>
-public sealed class MailboxProtection(IDataProtector protector)
+public sealed class MailboxProtection(IDataProtectionProvider provider)
 {
-    private readonly IDataProtector _tokenProtector = protector.CreateProtector("mailbox-refresh-token-v1");
-    private readonly IDataProtector _stateProtector = protector.CreateProtector("mailbox-oauth-state-v1");
+    private readonly IDataProtector _tokenProtector = provider.CreateProtector("mailbox-refresh-token-v1");
+    private readonly IDataProtector _stateProtector = provider.CreateProtector("mailbox-oauth-state-v1");
 
     public string ProtectRefreshToken(string refreshToken) => _tokenProtector.Protect(refreshToken);
 
@@ -28,8 +28,13 @@ public sealed class MailboxProtection(IDataProtector protector)
         return _stateProtector.Protect(plain);
     }
 
-    /// <summary>校验 state：解密失败、格式不对、过期、用户不符、provider 不符 → null（回调直接 400，不泄露原因细节）。</summary>
-    public (Guid UserId, MailboxProvider Provider)? ValidateState(string state, Guid currentUserId)
+    /// <summary>
+    /// 校验 state：解密失败、格式不对、过期 → null（回调直接 400，不泄露原因细节）。
+    /// 注意：回调是浏览器重定向、不带 bearer，无法“比对当前用户”——信任锚就是
+    /// DataProtection 保护的 state 本身（防篡改 + 随机 nonce + 10 分钟有效期）；
+    /// state 值只出现在发起连接的用户浏览器地址栏里，攻击者拿不到即伪造不了。
+    /// </summary>
+    public (Guid UserId, MailboxProvider Provider)? ValidateState(string state)
     {
         string plain;
         try { plain = _stateProtector.Unprotect(state); }
@@ -39,7 +44,6 @@ public sealed class MailboxProtection(IDataProtector protector)
         if (!Guid.TryParse(parts[0], out var userId)) return null;
         if (!Enum.TryParse<MailboxProvider>(parts[1], out var provider)) return null;
         if (!long.TryParse(parts[3], out var expiry)) return null;
-        if (userId != currentUserId) return null;
         if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiry) return null;
         return (userId, provider);
     }
@@ -75,11 +79,17 @@ public sealed class MailboxOptions
     {
         public string ClientId { get; set; } = string.Empty;
         public string ClientSecret { get; set; } = string.Empty;
+
+        /// <summary>Google Cloud 中注册的授权回调（须与云端登记一字一致）。</summary>
+        public string RedirectUri { get; set; } = string.Empty;
     }
 
     public sealed class MicrosoftOptions
     {
         public string ClientId { get; set; } = string.Empty;
         public string ClientSecret { get; set; } = string.Empty;
+
+        /// <summary>Azure 应用注册中登记的授权回调（须与门户登记一字一致）。</summary>
+        public string RedirectUri { get; set; } = string.Empty;
     }
 }

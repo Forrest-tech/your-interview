@@ -31,6 +31,51 @@ module.exports = {
     'src/app/features/playbook/redesign/intake/intake-panel.component.ts',
     'src/app/features/playbook/redesign/v2.helpers.ts',
     'src/app/core/models/radar.helpers.ts',
+    // 票255 TQ-1 前端覆盖率基线 v1：收官七票（123/124/125/130/131/132/133）并集 37 文件。
+    // 其中 intake-panel.component.ts 已在上方票64四条目中，36 条为新增，40 条唯一路径覆盖全部 37 并集文件。
+    // 123（18 并集首批，intake-panel 已在上）：
+    'src/app/features/auth/human-check.component.ts',
+    'src/app/features/dashboard/dashboard.component.html',
+    'src/app/features/playbook/playbook-calendar.component.html',
+    'src/app/features/playbook/playbook-calendar.component.scss',
+    'src/app/features/playbook/playbook-detail.component.html',
+    'src/app/features/playbook/playbook-detail.component.scss',
+    'src/app/features/playbook/playbook.component.html',
+    'src/app/features/playbook/playbook.component.scss',
+    'src/app/features/techstack/category-manager/category-manager.component.scss',
+    'src/app/features/techstack/techstack.component.html',
+    'src/app/features/techstack/techstack.component.scss',
+    'src/app/features/tracker/application-detail-dialog.component.ts',
+    'src/app/features/tracker/tracker.component.html',
+    'src/app/features/tracker/tracker.component.scss',
+    'src/app/layout/shell.component.scss',
+    'src/app/shared/doc-viewer/doc-viewer.component.scss',
+    'src/styles.scss',
+    // 124（+12，styles.scss 已在 123 中）：
+    'src/app/core/api/practice-api.service.ts',
+    'src/app/core/i18n/i18n.service.ts',
+    'src/app/features/ai-practice/ai-practice.component.html',
+    'src/app/features/ai-practice/ai-practice.component.ts',
+    'src/app/features/ai-practice/material-trash-dialog.component.html',
+    'src/app/features/ai-practice/material-trash-dialog.component.scss',
+    'src/app/features/ai-practice/material-trash-dialog.component.ts',
+    'src/app/features/ai-practice/material-trash.helpers.ts',
+    'src/app/features/ai-practice/practice-material-tree.ts',
+    'src/app/shared/material-tree/material-tree.component.html',
+    'src/app/shared/material-tree/material-tree.component.scss',
+    'src/app/shared/material-tree/material-tree.component.ts',
+    // 125（+1）：
+    'src/app/features/ai-practice/practice-grading-session.ts',
+    // 130（+2）：
+    'src/app/features/ai-practice/dictionary-card.component.ts',
+    'src/app/features/ai-practice/practice-dictionary.ts',
+    // 131（+1）：
+    'src/app/features/ai-practice/dictionary.helpers.ts',
+    // 132（+0，practice-grading-session.ts 已在 125 中）：
+    // 133（+3，i18n.service.ts 已在 124 中）：
+    'src/app/features/playbook/redesign/round/prep-report.component.ts',
+    'src/app/features/playbook/redesign/round/prep-report.helpers.ts',
+    'src/app/features/playbook/redesign/v2.models.ts',
   ],
   coverageDirectory: '<rootDir>/coverage',
   testEnvironment: 'node',

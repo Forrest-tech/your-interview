@@ -230,7 +230,10 @@ public sealed class PracticeRecording
     /// "录音 id → 找文件"这条链路就断了。
     /// </param>
     public PracticeRecording(Guid id, Guid userId, Guid materialId, string storagePath,
-        string contentType, long sizeBytes, double durationSeconds, string sourceLanguage = "en-US")
+        string contentType, long sizeBytes, double durationSeconds, string sourceLanguage = "en-US",
+        // ★ 票258 S1:跟读标识(可空)。NULL = S1 之前录的历史行,语义"未知",
+        //   过滤时按非跟读处理;新上传由 SaveRecordingCommand 显式传(缺省 false)。
+        bool? isShadow = null)
     {
         if (string.IsNullOrWhiteSpace(storagePath))
             throw new ArgumentException("存储路径不能为空", nameof(storagePath));
@@ -243,6 +246,7 @@ public sealed class PracticeRecording
         SizeBytes = sizeBytes;
         DurationSeconds = durationSeconds;
         SourceLanguage = sourceLanguage;
+        IsShadow = isShadow;
         CreatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -257,6 +261,11 @@ public sealed class PracticeRecording
     public double DurationSeconds { get; private set; }
     /// <summary>语言(默认 en-US,练北美面试)。</summary>
     public string SourceLanguage { get; private set; } = "en-US";
+    /// <summary>
+    /// ★ 票258 S1:服务端跟读标识(可空)。true = 跟读上传的混音行;
+    /// NULL = S1 之前录的历史行(未知),DTO 映射为 false,过滤时按非跟读处理。
+    /// </summary>
+    public bool? IsShadow { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public bool IsDeleted { get; private set; }
 

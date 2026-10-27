@@ -341,6 +341,9 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<bool?>("IsShadow")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("MaterialId")
                         .HasColumnType("uuid");
 

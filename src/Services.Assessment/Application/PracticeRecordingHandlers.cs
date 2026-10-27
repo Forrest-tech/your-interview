@@ -93,7 +93,9 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
             // 计费两字段列表口径逐字不变(原实现未回填,本票不顺带改),只补 Version。
             null, null,
             scoreVersions is not null && scoreVersions.TryGetValue(x.Id, out var v) ? v : null),
-        recordingVersions is not null && recordingVersions.TryGetValue(x.Id, out var rv) ? rv : null);
+        recordingVersions is not null && recordingVersions.TryGetValue(x.Id, out var rv) ? rv : null,
+        // ★ 票258 S1:NULL(历史行)映射为 false,前端只见 bool。
+        x.IsShadow ?? false);
 
     internal static IReadOnlyList<WordScoreDto> DeserializeWords(string? json)
     {
@@ -127,7 +129,9 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
 ///   反过来则是用户可见的坏数据。宁可浪费空间,不给用户看坏数据。
 /// </remarks>
 public sealed record SaveRecordingCommand(Guid UserId, Guid MaterialId, string? FileName,
-    string ContentType, double DurationSeconds, string SourceLanguage, Stream Audio)
+    string ContentType, double DurationSeconds, string SourceLanguage, Stream Audio,
+    // ★ 票258 S1:跟读上传传 true;普通上传不传(缺省 false),行为一字不变。
+    bool IsShadow = false)
     : MediatR.IRequest<Result<RecordingDto>>;
 
 public sealed class SaveRecordingCommandHandler(AssessmentDbContext db, IAudioStore store)
@@ -167,7 +171,7 @@ public sealed class SaveRecordingCommandHandler(AssessmentDbContext db, IAudioSt
         // 保证"录音 id → 文件路径"这条链路闭合(不再用反射硬改属性,那是脏写法)。
         var rec = new PracticeRecording(recordingId, r.UserId, r.MaterialId, relativePath,
             string.IsNullOrWhiteSpace(r.ContentType) ? "audio/webm" : r.ContentType,
-            buffered.Length, r.DurationSeconds, r.SourceLanguage);
+            buffered.Length, r.DurationSeconds, r.SourceLanguage, r.IsShadow);
 
         db.Recordings.Add(rec);
         await db.SaveChangesAsync(ct);

@@ -23,7 +23,9 @@ public sealed record RecordingDto(
     string ContentType, DateTimeOffset CreatedAt, RecordingScoreDto? Score,
     // ★ 票111 段3(A11):录音行自身读时 xmin(区别于 Score.Version 评分行)——
     //   DELETE recordings/{id} 时 If-Match 回传钉版用。
-    uint? Version = null);
+    uint? Version = null,
+    // ★ 票258 S1:服务端跟读标识。前端只见 bool,不见 NULL(NULL 映射为 false)。
+    bool IsShadow = false);
 
 /// <summary>
 /// 发音评分结果。

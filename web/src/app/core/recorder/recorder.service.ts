@@ -32,6 +32,8 @@ export interface Recording {
   error: string | null;
   /** ★ 票111 段3(A11):录音行读时 xmin,删除时 If-Match 回传;本地未落库为 undefined。 */
   version?: number | null;
+  /** ★ 票258 S1:服务端跟读标识(缺省 = 历史行/非跟读,按 false 处理)。 */
+  isShadow?: boolean;
 }
 
 /** Azure 发音评估结果(与后端返回结构对齐)。 */
@@ -544,7 +546,9 @@ export class RecorderService {
       // 能从后端列出来的录音,必然已在服务端存在
       uploaded: true,
       error: null,
-      version: d.version ?? null
+      version: d.version ?? null,
+      // ★ 票258 S1:服务端跟读标识透传(缺省 false = 历史行/非跟读)。
+      isShadow: d.isShadow ?? false
     };
   }
 

@@ -16,9 +16,12 @@
  *   审阅 + retry-write/Discard（P29g）；孤儿口径与重键走 shadow-store，
  *   重键校验为 decode-based；行时长 = jointDuration（laneShift≈0 时
  *   退化为 §5 max，见 helpers 注）。
- * - 列表（P29a）：分类只认本地 store 链接（本地 take id / 持久待提交 /
- *   重键 GUID），shadow- 文件名前缀只是 hint；无本地链接的服务端行
- *   默认非跟读（常规列表），跨设备/清库后混音行即普通服务端行。
+ * - 列表（P29a，票258 S1 修订）：行是跟读行 IFF **服务端 IsShadow 为 true
+ *   OR 本地 store 有链接**（本地 take id / 持久待提交 / 重键 GUID），
+ *   本地链接优先——覆盖“已上传但无标识”的过渡期历史行；两者皆无的行
+ *   仍按非跟读处理（P29a fallback 不变）。S1 之前：无本地链接的服务端行
+ *   默认非跟读（常规列表），跨设备/清库后混音行即普通服务端行——
+ *   S1 之后该句仅适用于 IsShadow 为 false/缺省的行。
  *   跟读模式只显跟读行，常规模式只显非跟读行（P24）；跟读行
  *   永不调用评分路径（本类无任何 grade 调用，模板跟读行无评分钮）。
  * - 非 1x 行（P29b）：本地-only，无服务端行、无 Submit；Stop 即保存
@@ -87,6 +90,48 @@ export interface ShadowPendingView {
   mixStatus: ShadowMixStatus;
   /** 跟读原文（P29h：缓存缺失时重请求 TTS 用）。 */
   text?: string;
+}
+
+/**
+ * ★ 票258 S1 分类规则（纯函数，跟读行判定唯一口径，见 S3-PLAN §2.2）：
+ * 行是跟读行 IFF 服务端 IsShadow 为 true OR 本地 shadow-store 有链接。
+ * 本地链接优先：服务端标识为 false/缺省、但本地有链接的行仍是跟读行
+ * （覆盖“已上传但无标识”的过渡期历史行）；两者皆无 = 非跟读行。
+ * 无本地链接且 IsShadow 为 false/缺省的行仍按非跟读处理（P29a fallback 不变）。
+ */
+export function isShadowRow(serverIsShadow: boolean | undefined, hasLocalLink: boolean): boolean {
+  return serverIsShadow === true || hasLocalLink;
+}
+
+/**
+ * ★ 票258 S1：无本地链接的服务端跟读行（另一设备上的 1x 混音行）。
+ * 这类行只有服务端混音可播：kind 恒为 'mix'（dual 行无 Submit，不可能
+ * 经服务端来）、mixStatus 'done'、rate 缺省 1（take 率元数据是 S2 的
+ * TakeRate 列，S1 尚无从得知）、localTakeId 为空串（无本地 take）。
+ * 展开时 meta 为 null → 人声道走既有降级态（“本设备无此人声道”+
+ * solo 禁用），混音经服务端取回播放；不新增降级文案。
+ */
+export function serverOnlyShadowRows(
+  recordings: Pick<Recording, 'id' | 'createdAt' | 'duration' | 'isShadow'>[],
+  linkedIds: ReadonlySet<string>,
+): ShadowRowView[] {
+  const rows: ShadowRowView[] = [];
+  for (const r of recordings) {
+    if (r.isShadow !== true || linkedIds.has(r.id)) continue;
+    rows.push({
+      id: r.id,
+      key: r.id,
+      localTakeId: '',
+      serverId: r.id,
+      createdAt: r.createdAt,
+      durationSec: r.duration,
+      rate: 1,
+      kind: 'mix',
+      mixStatus: 'done',
+      uploaded: true,
+    });
+  }
+  return rows;
 }
 
 /** 音高点门：双侧同一实现（P23 对称门控）。 */
@@ -225,6 +270,16 @@ export class PracticeShadowSession {
         uploaded: false,
       });
     }
+    // ★ 票258 S1：无本地链接的服务端跟读行（另一设备上的 1x 混音行）
+    //   也进跟读列表——这正是“认得出”。已链接的行（本地 meta 的 key /
+    //   localTakeId / serverId 任一命中）不重复进列。
+    const linkedIds = new Set<string>();
+    for (const r of meta) {
+      linkedIds.add(r.key);
+      linkedIds.add(r.localTakeId);
+      if (r.serverId) linkedIds.add(r.serverId);
+    }
+    rows.push(...serverOnlyShadowRows(this.host.grading.myRecordings(), linkedIds));
     return rows.sort((a, b) => b.createdAt - a.createdAt);
   });
 
@@ -237,7 +292,10 @@ export class PracticeShadowSession {
       shadowIds.add(r.localTakeId);
       if (r.serverId) shadowIds.add(r.serverId);
     }
-    return this.host.grading.myRecordings().filter((r) => !shadowIds.has(r.id));
+    // ★ 票258 S1：服务端 IsShadow 为 true 的行同样排除——即使本设备
+    //   无本地链接（另一设备上的 1x 跟读行从普通列表消失、进入跟读列表，
+    //   是有意的行为变化，见 S3-PLAN §2.2，验收显式断言）。
+    return this.host.grading.myRecordings().filter((r) => !isShadowRow(r.isShadow, shadowIds.has(r.id)));
   });
 
   readonly shadowExpandedRow = computed(() => {
@@ -898,6 +956,8 @@ export class PracticeShadowSession {
           pending.durationSec,
           `shadow-${Date.now()}.${extOf(mime)}`,
           mime,
+          // ★ 票258 S1：跟读混音上传带服务端标识，别设备据此认出跟读行。
+          true,
         ),
       );
       const url = URL.createObjectURL(payload);
@@ -912,6 +972,8 @@ export class PracticeShadowSession {
         grading: false,
         uploaded: true,
         error: null,
+        // ★ 票258 S1：服务端回传的标识透传（缺省 false）。
+        isShadow: dto.isShadow ?? false,
       };
       this.host.recorder.recordings.update((list) => [entry, ...list]);
       // 重键（P18 + P29g decode-based 校验）：失败则保留本地记录 +
@@ -1101,12 +1163,14 @@ export class PracticeShadowSession {
     this.shadowVoiceMissing.set(!voiceBlob || voiceBlob.size === 0);
     this.shadowExpandedPeaks.set(meta?.peaks ?? []);
     // 参考：缓存优先（与 take 的 refKey 一致）；缺失 = 参考 lane 不可用态。
+    // ★ 票258 S1：meta 为 null 的服务端-only 行（无本地 take）不得借用
+    //   上一行残留的 this.refBlob——仅当 meta 存在且 refKey 命中时才回落。
     let refBlob: Blob | null = null;
     if (meta) {
       const cached = await getCachedAudio(meta.refKey);
       refBlob = cached?.blob ?? null;
     }
-    if (!refBlob && this.refBlob && this.refKey === meta?.refKey) refBlob = this.refBlob;
+    if (!refBlob && meta && this.refBlob && this.refKey === meta.refKey) refBlob = this.refBlob;
     this.shadowRefMissing.set(!refBlob);
     if (refBlob) {
       const dec = await this.decodeAudio(refBlob);

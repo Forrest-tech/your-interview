@@ -73,7 +73,7 @@ interface StdEdit { spoken: string; technical: string; }
           @for (seg of segments(); track $index) {
             <div class="seg" [class.playing]="currentSeg() === $index">
               <div class="seg-head">
-                <span class="speaker">{{ seg.speaker }}</span>
+                @if (seg.speaker) { <span class="speaker">{{ seg.speaker }}</span> }
                 @if (seg.start != null) {
                   <span class="time">{{ fmtTime(seg.start) }}–{{ fmtTime(seg.end) }}</span>
                   @if (audioAsset()) {
@@ -325,7 +325,8 @@ export class RoundRecordComponent {
   readonly roundReview = computed(() =>
     safeJson<RoundReview>(this.round().reviewJson));
   readonly speakerList = computed(() =>
-    [...new Set(this.segments().map(s => s.speaker))]);
+    // 票234：空说话人段落（无分段纯文本整块）不进说话人列表、不参与 Rename。
+    [...new Set(this.segments().map(s => s.speaker).filter(s => !!s))]);
   /** 票191：Extract Q&A 按钮先隐藏不删除（恢复时改回 false 即一处恢复）。 */
   readonly hideExtractQa = true;
 
@@ -430,8 +431,10 @@ export class RoundRecordComponent {
     // （CompleteTranscription 对录音资产 SetTranscript），不纳入则转写完成也永不显示。
     // 空/失败照既有规则跳过；fromTranscript 判定不动（仍只认 Transcript/Text），自动抽取逻辑一字不动。
     const audioId = this.audioAsset()?.id;
+    // 票234：实录候选只排除 Text（邮件类，定稿 §4.4 邮件归 Materials 页签）；
+    // 保留 Transcript / Notes / 已转写录音。邮件不再进实录。
     const candidates = this.roundAssets()
-      .filter(a => a.kind === 'Transcript' || a.kind === 'Text' || a.kind === 'Notes'
+      .filter(a => a.kind === 'Transcript' || a.kind === 'Notes'
         || (audioId !== undefined && a.id === audioId));
     const all: TranscriptSegment[] = [];
     for (const a of candidates) {
@@ -439,9 +442,10 @@ export class RoundRecordComponent {
         const t = await this.api.getTranscript(this.entry().id, a.id).toPromise();
         const segs = safeJson<TranscriptSegment[]>(t?.segmentsJson ?? null);
         if (segs?.length) all.push(...segs);
-        else if (t?.transcriptText) {
-          all.push(...t.transcriptText.split(/\r?\n/).filter(x => x.trim())
-            .map(x => ({ speaker: this.t('pb.v2.rec.speakerTranscript'), text: x.trim() })));
+        else if (t?.transcriptText?.trim()) {
+          // 票234：无分段纯文本改为整块无说话人段落（不再按行贴“Transcript”标签）；
+          // speaker 为空，不进说话人列表、不参与 Rename（.seg-text 已是 pre-wrap，块内换行保留）。
+          all.push({ speaker: '', text: t.transcriptText.trim() });
         }
       } catch { /* 单件失败不阻塞其它材料 */ }
       // 票195：每次 await 之后查销毁旗与世代号——已销毁或已有更新的加载发起时，本批结果整批丢弃。

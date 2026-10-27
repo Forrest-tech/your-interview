@@ -20,6 +20,7 @@ import { AdminApiService } from '../../core/api/admin-api.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { AuthService } from '../../core/auth/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { environment } from '../../../environments/environment';
 import {
   AdminPermission, AdminRole, AdminStats, AdminUser, AuditLog, Paged
 } from '../../core/models/api.models';
@@ -67,6 +68,14 @@ export class AdminComponent implements OnInit {
   // -------- 权限:按钮级显隐,与后端 perm 策略同源 --------
   readonly canWriteUsers = computed(() => this.auth.can('admin.users.write'));
   readonly canWriteRoles = computed(() => this.auth.can('admin.roles.write'));
+
+  // -------- 票241 割接期只读 --------
+  /** true 时旧 /admin 只读：新建/编辑/删除/启用停用动作全部隐藏，写操作走 Logto Console。 */
+  readonly logtoCutover = environment.logtoCutover;
+  readonly logtoConsoleUrl = environment.logtoConsoleUrl;
+  /** 割接期即使有写权限也不显示旧写入口（与 canWrite* 的后端策略无关，是前端割接开关）。 */
+  readonly canWriteUsersEffective = computed(() => this.canWriteUsers() && !this.logtoCutover);
+  readonly canWriteRolesEffective = computed(() => this.canWriteRoles() && !this.logtoCutover);
   private readonly meId = computed(() => this.auth.user()?.id ?? null);
 
   // -------- 统计 --------

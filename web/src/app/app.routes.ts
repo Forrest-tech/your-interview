@@ -21,6 +21,12 @@ export const routes: Routes = [
       import('./features/auth/register.component').then((m) => m.RegisterComponent)
   },
   {
+    // 票241：Logto 授权回调（壳外，与登录页同级；回调页内建会话或回登录页）。
+    path: 'auth/logto/callback',
+    loadComponent: () =>
+      import('./features/auth/logto-callback.component').then((m) => m.LogtoCallbackComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
     canActivate: [authGuard],

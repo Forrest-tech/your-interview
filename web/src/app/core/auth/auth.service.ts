@@ -4,10 +4,18 @@ import { Observable, tap, map, catchError, throwError, of, shareReplay, finalize
 import { ApiClient } from '../api/api-client';
 import { I18nService, Lang } from '../i18n/i18n.service';
 import { AuthResult, AuthUser, Tokens } from '../models/api.models';
+import { LogtoService } from './logto.service';
 
 const TOKEN_KEY = 'yi.accessToken';
 const REFRESH_KEY = 'yi.refreshToken';
 const USER_KEY = 'yi.user';
+/**
+ * 票241 会话发行方标记：'logto' = 当前会话走 Logto（刷新必须走 Logto token 端点，
+ * 绝不能拿 Logto refresh token 去调旧 /api/auth/refresh —— 旧 Identity 查不到它，
+ * 只会报错并把用户踢回登录页）；'legacy' = 旧 Identity 会话。缺失时按 legacy 处理
+ * （历史会话没有这个标记，本来就是旧会话）。
+ */
+const ISSUER_KEY = 'yi.tokenIssuer';
 
 /**
  * 认证状态。
@@ -25,6 +33,7 @@ export class AuthService {
   private readonly api = inject(ApiClient);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18nService);
+  private readonly logto = inject(LogtoService);
 
   private readonly _user = signal<AuthUser | null>(readUser());
   readonly user = this._user.asReadonly();
@@ -76,7 +85,29 @@ export class AuthService {
   completeExternalLogin(accessToken: string, refreshToken: string): Observable<AuthUser | null> {
     localStorage.setItem(TOKEN_KEY, accessToken);
     localStorage.setItem(REFRESH_KEY, refreshToken);
+    localStorage.setItem(ISSUER_KEY, 'legacy');
     return this.restoreSession();
+  }
+
+  /**
+   * 票241 Logto 登录收尾：与 completeExternalLogin 同款落库，但会话建立走
+   * /api/auth/logto/me —— 旧 /api/auth/me 查本地 users 表，Logto-only 用户
+   * 在旧表里没有行，会 404，绝不能复用 restoreSession()。
+   * 返回 null = 会话没建成（调用方据此显示错误）；permissions 为空数组 =
+   * 待审批账号（门已翻译 NameIdentifier 所以 /me 是 200 不是 401），调用方
+   * 据此显示待审批提示、清会话、绝不进 Dashboard（见 logto-callback 组件）。
+   */
+  completeLogtoLogin(accessToken: string, refreshToken: string): Observable<AuthUser | null> {
+    localStorage.setItem(TOKEN_KEY, accessToken);
+    localStorage.setItem(REFRESH_KEY, refreshToken);
+    localStorage.setItem(ISSUER_KEY, 'logto');
+    return this.api.get<AuthUser>('/api/auth/logto/me').pipe(
+      tap((u) => this.applyProfile(u)),
+      catchError(() => {
+        this.clear();
+        return of(null);
+      })
+    );
   }
 
   /** Google 登录是否可用(后端配置了 OAuth 凭据)。匿名端点。 */
@@ -124,6 +155,12 @@ export class AuthService {
     if (l === 'zh' || l === 'en' || l === 'fr') this.i18n.setLang(l as Lang);
   }
 
+  /**
+   * 票241 已废弃（灰度期服务端直接 410）：注册统一走 Logto hosted 注册页
+   * （register 路由在 logto.enabled 时重定向到 Logto sign-up），本方法只在
+   * 双轨关闭（logto.enabled=false）的旧环境里仍被注册页调用；灰度期开始后
+   * 不要再从任何新入口调用它，调用只会拿到 410。
+   */
   register(email: string, displayName: string, password: string): Observable<AuthResult> {
     return this.api.post<AuthResult>('/api/auth/register', { email, displayName, password }).pipe(
       tap((r) => this.persist(r))
@@ -198,6 +235,35 @@ export class AuthService {
       return throwError(() => new Error('缺少刷新令牌'));
     }
 
+    // 票241 双轨刷新：Logto 会话的 refresh token 只能向 Logto token 端点刷新
+    // （旧 Identity 的刷新存储里没有它）；旧会话走老路。失败时两路都一样：
+    // 拦截器 catch → clearSession() → 回登录页（收敛后旧刷新 410 也走这条路）。
+    if (localStorage.getItem(ISSUER_KEY) === 'logto') {
+      this.refreshInFlight$ = new Observable<Tokens>((sub) => {
+        this.logto.refreshLogto(refreshToken).then(
+          (r) => {
+            const tokens: Tokens = {
+              accessToken: r.access_token,
+              // Logto 未轮转出新 refresh token 时沿用旧的（不清空，否则下次无法刷新）。
+              refreshToken: r.refresh_token ?? refreshToken,
+              expiresIn: r.expires_in
+            };
+            localStorage.setItem(TOKEN_KEY, tokens.accessToken);
+            localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
+            sub.next(tokens);
+            sub.complete();
+          },
+          (e) => sub.error(e)
+        );
+      }).pipe(
+        shareReplay({ bufferSize: 1, refCount: false }),
+        finalize(() => {
+          this.refreshInFlight$ = null;
+        })
+      );
+      return this.refreshInFlight$;
+    }
+
     this.refreshInFlight$ = this.api.post<{ tokens: Tokens }>('/api/auth/refresh', {
       refreshToken
     }).pipe(
@@ -229,6 +295,7 @@ export class AuthService {
   private persist(r: AuthResult): void {
     localStorage.setItem(TOKEN_KEY, r.tokens.accessToken);
     localStorage.setItem(REFRESH_KEY, r.tokens.refreshToken);
+    localStorage.setItem(ISSUER_KEY, 'legacy');
     localStorage.setItem(USER_KEY, JSON.stringify(r.profile));
     this._user.set(r.profile);
     // 登录即采用账号里保存的语言偏好(个人中心"记住"的效果)
@@ -238,6 +305,7 @@ export class AuthService {
   private clear(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(ISSUER_KEY);
     localStorage.removeItem(USER_KEY);
     this._user.set(null);
     // 已经在登录页就不必再 navigate —— 否则登录页自身初始化时的会话恢复失败

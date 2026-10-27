@@ -119,6 +119,21 @@
           {{ googleBusy() ? t('auth.googleEstablishing') : t('auth.googleSignIn') }}
         </button>
       }
+
+      <!-- 票241：Logto 入口（环境启用时才出现；旧邮箱登录与 Google 登录都不动）。 -->
+      @if (logtoEnabled) {
+        <div class="divider"><span>{{ t('auth.or') }}</span></div>
+
+        <button mat-stroked-button class="full" type="button"
+                (click)="loginWithLogto('sign_in')" [disabled]="busy()">
+          {{ t('auth.logtoSignIn') }}
+        </button>
+
+        <button mat-stroked-button class="full" type="button"
+                (click)="loginWithLogto('register')" [disabled]="busy()">
+          {{ t('auth.logtoRegister') }}
+        </button>
+      }
     </div>
   </main>
 </div>

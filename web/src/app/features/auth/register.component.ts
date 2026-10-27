@@ -1,4 +1,4 @@
-import { Component, inject, signal, viewChild } from '@angular/core';
+import { Component, OnInit, inject, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AuthService } from '../../core/auth/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { LogtoService } from '../../core/auth/logto.service';
 import { HumanCheckComponent } from './human-check.component';
 
 /**
@@ -28,11 +29,19 @@ import { HumanCheckComponent } from './human-check.component';
   templateUrl: './register.component.html',
   styleUrl: './register.component.scss'
 })
-export class RegisterComponent {
+export class RegisterComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18nService);
+  private readonly logto = inject(LogtoService);
   t = (key: string): string => this.i18n.t(key);
+
+  ngOnInit(): void {
+    // 票241 灰度期：注册统一走 Logto hosted 注册页（审批流的唯一入口），
+    // 旧表单只在双轨关闭（logto.enabled=false）时保留；灰度期服务端对旧
+    // /api/auth/register 直接回 410，旧表单即使留下也提交不出去。
+    if (this.logto.isEnabled()) void this.logto.beginLogin('register');
+  }
 
   email = '';
   displayName = '';

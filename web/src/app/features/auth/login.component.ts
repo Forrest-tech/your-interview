@@ -11,6 +11,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AuthService } from '../../core/auth/auth.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { AuthApiService } from '../../core/api/auth-api.service';
+import { LogtoService } from '../../core/auth/logto.service';
 import { HumanCheckComponent } from './human-check.component';
 
 /** Google 登录状态(是否配置了凭据)。 */
@@ -32,10 +33,14 @@ interface GoogleLoginStatus {
 export class LoginComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly authApi = inject(AuthApiService);
+  private readonly logto = inject(LogtoService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly i18n = inject(I18nService);
   t = (key: string): string => this.i18n.t(key);
+
+  /** 票241：Logto 入口是否展示（环境未启用或关键字段缺失时不展示，旧登录不受影响）。 */
+  readonly logtoEnabled = this.logto.isEnabled();
 
   email = '';
   password = '';
@@ -114,6 +119,14 @@ export class LoginComponent implements OnInit {
     }
     // 401 等:后端故意不区分"邮箱不存在"和"密码错误"(防枚举攻击)
     return e.message || this.t('auth.loginFailed');
+  }
+
+  /**
+   * 票241：跳 Logto hosted 登录/注册页（Logto 自带人机与邮箱验证，不走本站的人机验证）。
+   * returnUrl 带过去，回调页登录成功后回到原页面。
+   */
+  loginWithLogto(firstScreen: 'sign_in' | 'register'): void {
+    void this.logto.beginLogin(firstScreen, this.returnUrl);
   }
 
   /** 跳到后端 authorize 端点 → 302 到 Google 授权页。 */

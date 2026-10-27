@@ -15,6 +15,25 @@ export const environment = {
   //      生产构建请改回真实网关地址(部署时由反向代理同源收口)。
   apiBaseUrl: '',
 
+  // 票241 Logto 接入（占位，真实值只进部署环境的 .env / 环境配置，绝不入库）：
+  //   enabled=false = 双轨关闭（旧登录一字不变）；灰度期开始时填入 endpoint +
+  //   clientId 并把 enabled 改 true，前端才出现 Logto 登录/注册入口。
+  //   audience = Console 里建的 API resource identifier（access token 的 scope
+  //   载体就靠它；空则不发 resource 参数，token 里就没有业务 scope）。
+  //   redirectUri 为空时自动取当前 origin + '/auth/logto/callback'。
+  logto: {
+    enabled: false,
+    endpoint: '',
+    clientId: '',
+    audience: '',
+    redirectUri: ''
+  },
+
+  // 票241 割接期开关：true 时旧 /admin 页只读（隐藏新建/编辑/删除/启用停用动作，
+  // 显示 Logto Console 链接）；写操作走 Console 或 /api/admin/logto 端点。
+  logtoCutover: false,
+  logtoConsoleUrl: 'http://localhost:3002',
+
   // 直连模式(排查网关问题时用):把 apiBaseUrl 换成具体服务端口
   servicePorts: {
     identity: 5262,

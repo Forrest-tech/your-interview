@@ -1,0 +1,12 @@
+<div class="logto-callback">
+  <mat-card>
+    @if (busy()) {
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+      <p>{{ t('auth.logtoEstablishing') }}</p>
+    }
+    @if (error()) {
+      <p class="err" role="alert">{{ error() }}</p>
+      <a mat-button routerLink="/login">{{ t('auth.logtoBackToLogin') }}</a>
+    }
+  </mat-card>
+</div>

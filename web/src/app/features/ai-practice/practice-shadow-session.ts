@@ -296,6 +296,11 @@ export class PracticeShadowSession {
   readonly voiceTrackFailedFor = signal<string | null>(null);
   // ---------- 列表与展开 ----------
   private readonly shadowMeta = signal<Map<string, ShadowTakeRecord>>(new Map());
+  /**
+   * 票 270：shadowMeta 所属素材；只与 shadowMeta.set 在同一同步块内设置
+   * （原子配对，中间无 await，门禁不闪烁）。shadowRows 据此过滤旧素材行。
+   */
+  private readonly shadowMetaMaterial = signal<string | null>(null);
   readonly shadowExpandedId = signal<string | null>(null);
   readonly shadowExpandedPeaks = signal<ShadowPeak[]>([]);
   readonly shadowPlayingId = signal<string | null>(null);
@@ -305,7 +310,13 @@ export class PracticeShadowSession {
 
   /** 跟读行（meta 驱动；GUID 与本地并存去重后只显 GUID，P26）。 */
   readonly shadowRows = computed<ShadowRowView[]>(() => {
-    const meta = [...this.shadowMeta().values()];
+    // 票 270：meta 只在标签与当前素材一致时采用。素材切换后、新刷新未落前，
+    // 旧素材行不渲染（仅服务端行）；刷新落点时标签同步更新即恢复。标签为 null
+    // （从未刷新）时同样不采用——meta 此时本为空，不影响任何已验证行为。
+    const tag = this.shadowMetaMaterial();
+    const meta = tag !== null && tag === this.host.selectedId()
+      ? [...this.shadowMeta().values()]
+      : [];
     const byLocal = new Map<string, ShadowTakeRecord>();
     for (const r of meta) {
       const prev = byLocal.get(r.localTakeId);
@@ -512,7 +523,11 @@ export class PracticeShadowSession {
     const after = await getShadowTakesForMaterial(materialId);
     const map = new Map<string, ShadowTakeRecord>();
     for (const r of after) map.set(r.key, r);
+    // 票 270：标签与 map 在同一同步块内设置（原子配对，中间无 await）——
+    // 迟到的旧素材刷新若先落点，标签仍指旧素材，门禁照样挡住它；新素材
+    // 刷新落点时标签同步更新，行即恢复，无需另起 generation 守卫。
     this.shadowMeta.set(map);
+    this.shadowMetaMaterial.set(materialId);
   }
 
   onMaterialChange(): void {

@@ -192,6 +192,21 @@ export function serverOnlyShadowRows(
   return rows;
 }
 
+/**
+ * 票 264：参考播完是否自动停。三条件缺一即 no-op：未在录音（已手动停）
+ * → 不停；正在停（stopShadow 已进入）→ 不双停；触发 end 的 howl 已不是
+ * 当前参考（新 take 已重建 refHowl，旧 end 事件迟到）→ 不误停新录音。
+ * 暂停不走 Howler onend，故暂停天然不停；参考不可用时 startShadow 在
+ * 录音起前已 abort，无录音可停。
+ */
+export function shouldAutoStopOnRefEnd(
+  isRecording: boolean,
+  isStopping: boolean,
+  isCurrentHowl: boolean,
+): boolean {
+  return isRecording && !isStopping && isCurrentHowl;
+}
+
 /** 音高点门：双侧同一实现（P23 对称门控）。 */
 class PitchGate {
   private recent: number[] = [];
@@ -686,8 +701,20 @@ export class PracticeShadowSession {
           this.startPlayTimer();
         },
         onend: () => {
-          // 参考播完而活声继续 = 轴扩展语义（P15），录音不自动停。
+          // 票 264（用户令）：参考播完 → 自动停，停后状态与手动停止完全一致
+          // （同一 stopShadow 路径）。取代旧注记的轴扩展语义“播完不停”。
+          // 暂停不触发 onend，故暂停不停；参考不可用时 startShadow 已 abort，
+          // 无录音可停；重播（新 take）会替换 refHowl，旧 end 事件被身份门挡下。
           this.stopPlayTimer();
+          if (
+            shouldAutoStopOnRefEnd(
+              this.shadowRecording(),
+              this.stopping,
+              this.refHowl === howl,
+            )
+          ) {
+            void this.stopShadow();
+          }
         },
         onloaderror: () => {
           if (!refStarted) void this.abortStart(this.host.t('practice.shadow.refPlayFailed'));

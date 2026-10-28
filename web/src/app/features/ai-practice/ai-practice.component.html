@@ -606,6 +606,7 @@
             <!-- 票 261 §4：跟读开关 —— 开关式按钮，放在 Previous 左侧；
                  不再放在播放条里（播放条只负责播放）。 -->
             <mat-slide-toggle class="shadow-switch"
+                    labelPosition="before"
                     [checked]="shadow.shadowMode()"
                     (change)="shadow.toggleShadowMode()"
                     [matTooltip]="shadow.shadowMode() ? t('practice.shadow.toggleOn') : t('practice.shadow.toggleOff')"
@@ -615,6 +616,7 @@
             <!-- 票 277：一句话开关改成与跟读开关同形的 mat-slide-toggle（票 268 iPhone 样式）；
                  票 273 的图文按钮作废；data-testid、禁用逻辑、tooltip、与跟读互斥均不动。 -->
             <mat-slide-toggle class="sentence-switch"
+                    labelPosition="before"
                     [checked]="sentence.sentenceMode()"
                     (change)="sentence.toggleSentenceMode()"
                     [disabled]="editing() || recorder.recording() || shadow.shadowRecording()"

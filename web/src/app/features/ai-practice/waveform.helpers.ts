@@ -37,6 +37,8 @@ export function valuesToLinePoints(
  * 票 261 §6：中线对称线形波形 —— 数值数组 → 上下两条 polyline points
  * （viewBox 0 0 1000 100，y = 50 ∓ v/maxV*50；原居中柱形的数据，只换画法）。
  * 返回 [上, 下]；点数 < 2 → ['', '']。
+ * 注（票 275）：报告波形已改回单条下沿锚定线（valuesToLinePoints），不再调用
+ * 本函数；函数与单测保留（不删覆盖），以备他处复用。
  */
 export function valuesToMirroredLinePoints(
   values: readonly number[],

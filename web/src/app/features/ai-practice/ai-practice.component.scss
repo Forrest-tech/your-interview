@@ -3418,7 +3418,8 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
   align-items: center;
   overflow: hidden;
 }
-/* 票 261 §6：波形画线不画柱 —— 中线对称上下两条线（与原柱形同数据）。
+/* 票 275：波形画单条线 —— 下沿锚定包络线（用户选定的样式 1，跟读面板同款；
+   原票 261 §6 的中线对称双线已废止，只换画法、数据不动）。
    票137 R-137-3 的意图原样保留：未播放线 #7fbfa0 深于条带底色 #f0fdf4、
    浅于已播放实绿 #16a34a，两态均可区分。 */
 .result-wrap .res-block .wave-strip .ws-line {

@@ -940,17 +940,16 @@
                           @if (waveStatus() === 'loading') {
                             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
                           } @else if (waveStatus() === 'ready') {
-                            <!-- 票 261 §6：波形画线不画柱 —— 中线对称上下两条线，
-                                 已播部分用实绿覆盖（与原柱形同数据、同 played 口径）。 -->
+                            <!-- 票 275：波形画单条线不画双线 —— 下沿锚定包络线
+                                 （用户选定的样式 1，跟读面板同款），已播部分用实绿
+                                 覆盖（与原中线对称两条线同数据、同 played 口径）。 -->
                             <div class="wave-strip"
                                  [class.wave-live]="activePlaying() || previewingPending()">
-                              @if (waveLinePoints()[0]) {
+                              @if (waveLinePoints()) {
                                 <svg class="ws-line" viewBox="0 0 1000 100" preserveAspectRatio="none"
                                      [matTooltip]="t('practice.recPlay')">
-                                  <polyline [attr.points]="waveLinePoints()[0]" />
-                                  <polyline [attr.points]="waveLinePoints()[1]" />
-                                  <polyline class="played" [attr.points]="waveLinePlayedPoints()[0]" />
-                                  <polyline class="played" [attr.points]="waveLinePlayedPoints()[1]" />
+                                  <polyline [attr.points]="waveLinePoints()" />
+                                  <polyline class="played" [attr.points]="waveLinePlayedPoints()" />
                                 </svg>
                               }
                             </div>

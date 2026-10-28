@@ -29,7 +29,7 @@ import { PracticeTtsPlayer } from './practice-tts-player';
 import { PracticeGradingSession } from './practice-grading-session';
 import { PracticeShadowSession } from './practice-shadow-session';
 import { clampFocusIndex, hasSeekableFiller, wordClickAction } from './word-click.helpers';
-import { valuesToLinePoints, valuesToMirroredLinePoints } from './waveform.helpers';
+import { valuesToLinePoints } from './waveform.helpers';
 import { PracticeDictionary } from './practice-dictionary';
 import { PracticeSentenceSession } from './practice-sentence-session';
 import { SENTENCE_MIN_WORDS } from './sentence-select.helpers';
@@ -1039,16 +1039,17 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     return this.grading.stopRecording();
   }
 
-  /** 票 261 §6：报告波形线（中线对称上下两条，与原居中柱形同数据）。 */
-  waveLinePoints(): [string, string] {
-    return valuesToMirroredLinePoints(this.grading.waveBars());
+  /** 票 275：报告波形线 —— 单条下沿锚定包络线（用户选定的样式 1，跟读面板同款），
+   * 与原中线对称两条线同数据（waveBars），只换画法。 */
+  waveLinePoints(): string {
+    return valuesToLinePoints(this.grading.waveBars());
   }
-  /** 票 261 §6：报告波形已播部分（与上同 x 标尺，覆盖层用）。 */
-  waveLinePlayedPoints(): [string, string] {
+  /** 票 275：报告波形已播部分（与上同 x 标尺、同下沿锚定，覆盖层用）。 */
+  waveLinePlayedPoints(): string {
     const bars = this.grading.waveBars();
     let played = 0;
     while (played < bars.length && this.grading.wavePlayed(played)) played++;
-    return valuesToMirroredLinePoints(bars, 100, played);
+    return valuesToLinePoints(bars, 100, played);
   }
   /** 票 261 §6：录音中实时音量线（liveWave 0~1，与原柱形同数据）。 */
   liveWaveLinePoints(): string {

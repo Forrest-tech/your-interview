@@ -180,6 +180,8 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             e.Property(x => x.StoragePath).HasMaxLength(1000);
             e.Property(x => x.ContentType).HasMaxLength(100).IsRequired();
             e.Property(x => x.SourceLanguage).HasMaxLength(10).IsRequired();
+            // ★ 票269:选区文本为短文本但长度不限，显式 text 列（与 ReferenceText 同口径）。
+            e.Property(x => x.SentenceText).HasColumnType("text");
 
             // ★ 第五十二轮(2026-09-17,Forrest 明确要求):录音改为**硬删除** ——
             //   删一条录音 = 数据库行消失 + 磁盘音频文件消失,不留痕。

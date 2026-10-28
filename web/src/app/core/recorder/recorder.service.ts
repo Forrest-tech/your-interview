@@ -34,6 +34,9 @@ export interface Recording {
   version?: number | null;
   /** ★ 票258 S1:服务端跟读标识(缺省 = 历史行/非跟读,按 false 处理)。 */
   isShadow?: boolean;
+  /** ★ 票269:一句话模式标识 + 选区文本(缺省 = 历史行/普通 take,按 false/null 处理)。 */
+  isSentence?: boolean;
+  sentenceText?: string | null;
   /** ★ 票259 S2:人声轨存在 + 双轨对齐参数（NULL = 非跟读行或旧行）。 */
   hasVoiceTrack?: boolean;
   /** ★ 票260 S3:混音存在（StoragePath 非空）。与 hasVoiceTrack 一起构成行 kind 派生。 */
@@ -56,6 +59,11 @@ export interface RecordingScore {
   prosodyScore: number | null;
   /** 识别出的文本。 */
   recognized: string;
+  /**
+   * ★ 票269:本次评分的参考文本（后端 DTO 已有字段，前端现行丢弃）。
+   * 一句话 take 的报告区据此显示“本次评的是哪段”；普通 take 的参考文本即全文。
+   */
+  referenceText?: string;
   /** 逐词明细(含时间戳,供回放定位)。 */
   words: { word: string; accuracy: number; errorType: string; offsetMs?: number; durationMs?: number }[];
   /** 是否在模拟态(阶段一,未接后端)。界面需明示。 */
@@ -379,8 +387,12 @@ export class RecorderService {
       : 'webm';
     const localId = rec.id;
 
+    // 票269:一句话 take 随 FormData 带上模式 + 选区文本（M-A）；普通上传不传，
+    // 请求体一字不变。isShadow 沿用既有口径（本路径不产生跟读行，传 undefined）。
     this.practiceApi.uploadRecording(rec.materialId, blob, rec.duration,
-      `take-${Date.now()}.${ext}`, mime)
+      `take-${Date.now()}.${ext}`, mime, undefined,
+      rec.isSentence ? true : undefined,
+      rec.isSentence ? rec.sentenceText ?? undefined : undefined)
       .subscribe({
         next: (dto) => {
           // 用后端 id 替换本地临时 id:后续评分/删除都走后端 id
@@ -555,6 +567,9 @@ export class RecorderService {
       version: d.version ?? null,
       // ★ 票258 S1:服务端跟读标识透传(缺省 false = 历史行/非跟读)。
       isShadow: d.isShadow ?? false,
+      // ★ 票269:一句话模式标识 + 选区文本透传(缺省 false/null = 历史行/普通 take)。
+      isSentence: d.isSentence ?? false,
+      sentenceText: d.sentenceText ?? null,
       // ★ 票259 S2:人声轨存在 + 对齐参数透传（列表渲染据此决定是否可取人声轨）。
       hasVoiceTrack: d.hasVoiceTrack ?? false,
       // ★ 票260 S3:混音存在透传（缺省 false；与 hasVoiceTrack 一起构成行 kind 派生）。
@@ -572,6 +587,8 @@ export class RecorderService {
       completenessScore: sc.completenessScore,
       prosodyScore: sc.prosodyScore,
       recognized: sc.recognized ?? '',
+      // ★ 票269:补映射 referenceText（后端 DTO 已有字段，前端现行丢弃）。
+      referenceText: sc.referenceText,
       words: sc.words ?? [],
       simulated: false,
       // ★ 第三十四轮:把库里的计费口径带上来 —— 刷新后也能显示花了多少

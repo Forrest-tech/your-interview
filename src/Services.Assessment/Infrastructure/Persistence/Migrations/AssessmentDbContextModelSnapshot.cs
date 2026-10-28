@@ -341,6 +341,9 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<bool?>("IsSentence")
+                        .HasColumnType("boolean");
+
                     b.Property<bool?>("IsShadow")
                         .HasColumnType("boolean");
 
@@ -349,6 +352,9 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
 
                     b.Property<Guid>("MaterialId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("SentenceText")
+                        .HasColumnType("text");
 
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");

@@ -557,13 +557,15 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
     /// 上传一次录音(音频 + 元数据一步到位)。
     /// multipart/form-data:file=音频,durationSeconds/contentType 作表单字段。
     /// ★ 票258 S1:可选字段 isShadow(缺省 false)——跟读混音上传传 true,普通上传不传。
+    /// ★ 票269:可选字段 isSentence(缺省 false) + sentenceText——一句话上传传，普通上传不传。
     /// </summary>
     [HttpPost("materials/{materialId:guid}/recordings")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockAnswer)]
     [RequestSizeLimit(26 * 1024 * 1024)]
     public async Task<IResult> SaveRecording(Guid materialId,
         [FromForm] double durationSeconds, [FromForm] string? contentType,
-        [FromForm] string? language, IFormFile file, [FromForm] bool? isShadow, CancellationToken ct)
+        [FromForm] string? language, IFormFile file, [FromForm] bool? isShadow,
+        [FromForm] bool? isSentence, [FromForm] string? sentenceText, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
         if (file is null || file.Length == 0)
@@ -572,7 +574,8 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
         await using var stream = file.OpenReadStream();
         var result = await sender.Send(new SaveRecordingCommand(userId, materialId, file.FileName,
-            contentType ?? file.ContentType, durationSeconds, language ?? "en-US", stream, isShadow ?? false), ct);
+            contentType ?? file.ContentType, durationSeconds, language ?? "en-US", stream,
+            isShadow ?? false, isSentence ?? false, sentenceText), ct);
 
         return result.IsSuccess
             ? Results.Created($"/api/assessment/recordings/{result.Value.Id}", result.Value)

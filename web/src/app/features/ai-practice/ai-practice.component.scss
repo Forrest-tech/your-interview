@@ -3595,3 +3595,23 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .shadow-expanded-actions .btn-mini.on { background: #dbeafe; color: #1d4ed8; }
 .shadow-lane-empty { font-size: 13px; color: #92400e; margin: 0; }
 .shadow-item { cursor: pointer; }
+
+/* ---------- 票 269：一句话模式 ---------- */
+/* 选区高亮：复用跟读“已选”色 #dbeafe（.shadow-badge / .shadow-expanded-actions .on 同色），
+   比 --signal-tint 悬停色更深一档，与悬停可区分；不引入新色板。
+   本块置于文件末尾：.dict-word.sentence-sel 与 .dict-word:hover 同权重（0,2,0），
+   后出现者胜，保证已选词悬停时仍保持选区色。 */
+.dict-word.sentence-sel { background: #dbeafe; }
+/* 计数行（篇章区附近常驻，role=status）；录音中置灰 = 选区锁定。 */
+.sentence-count { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; color: #334155; margin-top: 8px; }
+.sentence-count.locked { opacity: 0.5; }
+.sentence-need { color: #b45309; }
+/* 模式开关（卡片底部导航栏，跟读开关旁 P-A；图标键 + 开启态蓝底，与 .shadow-switch 同级）。 */
+.sentence-switch { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 9px; border: 1px solid #e2e8f0; background: #fff; color: #475569; cursor: pointer; }
+.sentence-switch mat-icon { font-size: 20px; width: 20px; height: 20px; }
+.sentence-switch.on { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+.sentence-switch:disabled { opacity: 0.5; cursor: default; }
+/* 报告顶部选区文本行（复用 .tts-alert 一类浅底灰边口径，不新增视觉体系）。 */
+.sentence-graded-line { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; }
+.sentence-graded-line mat-icon { color: #2563eb; font-size: 18px; width: 18px; height: 18px; flex: 0 0 auto; }
+.sentence-graded-text { word-break: break-word; }

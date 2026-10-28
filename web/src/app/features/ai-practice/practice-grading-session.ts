@@ -2,6 +2,7 @@ import { computed, effect, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Recording, RecordingScore, RecorderService } from '../../core/recorder/recorder.service';
 import type { AiPracticeComponent } from './ai-practice.component';
+import { SENTENCE_MIN_WORDS, sentenceWordCountOf } from './sentence-select.helpers';
 import { computeWaveBarsFromSamples, estimateAvgF0 } from './waveform.helpers';
 
 
@@ -465,6 +466,9 @@ export class PracticeGradingSession {
   // ---------- 录音 ----------
   async startRecording(): Promise<void> {
     this.recError.set(null);
+    // 票 269：新录音开始即清掉上一条的选区快照（上一条若未提交已被下行丢弃；
+    // 若本条是一句话录音，成功开始后重新捕获，见下）。
+    this.host.sentence?.clearRecordingSnapshot();
     const id = this.host.selectedId();
     if (!id) return;
     // ★ 第四十九轮:录音前停掉页面上所有在响的声音 ——
@@ -484,6 +488,7 @@ export class PracticeGradingSession {
 
     const err = await this.host.recorder.start(id);
     if (err) this.recError.set(err);
+    else this.host.sentence?.captureForRecording();
   }
 
   stopRecording(): void {
@@ -550,7 +555,24 @@ export class PracticeGradingSession {
     // 停掉试听
     this.pausePendingPreview();
 
+    // 票 269：待提交条带上录音时刻的选区快照（M-A）；快照缺失 = 非一句话 take，原样提交。
+    // 快照在提交前打到 pendingTake 上，recorder.submitPending() → upload() 即随 FormData 落库，
+    // 上传成功后的 id 替换是 recordings.update 的展开，字段自动保留，无需重键逻辑。
+    const snap = this.host.sentence?.recordingSentenceText();
+    if (snap) {
+      // 纵深防御：快照若不足 10 词（正常路径不可能：录音键已门禁 + 录音中锁定），
+      // 拒绝提交，绝不把不足选区的 take 当一句话 take 送上服务端；待提交条保留，用户可重录。
+      if (sentenceWordCountOf(snap) < SENTENCE_MIN_WORDS) {
+        this.host.toast(this.host.t('practice.sentence.needMoreWords')
+          .replace('{m}', '' + (SENTENCE_MIN_WORDS - sentenceWordCountOf(snap))));
+        return;
+      }
+      this.host.recorder.pendingTake.update((p) =>
+        p ? { ...p, isSentence: true, sentenceText: snap } : p);
+    }
+
     this.host.recorder.submitPending();
+    this.host.sentence?.clearRecordingSnapshot();
     // 提交后把它设为当前作品 —— 用户下一步大概率就是回听/评分它。
     // ⚠️ 2026-09-16:这里是**本地临时 id**;上传成功后后端会换成正式 GUID,
     //    下面的 effect 会跟着把 activeTakeId 改过去,否则 activeTake() 会找不到人。
@@ -604,6 +626,8 @@ export class PracticeGradingSession {
   discardPending(): void {
     this.pausePendingPreview();
     this.host.recorder.discardPending();
+    // 票 269：丢弃即丢快照 —— 下一条录音的选区身份须重新捕获，不得沿用旧快照。
+    this.host.sentence?.clearRecordingSnapshot();
   }
 
   removeRecording(id: string): void {
@@ -627,7 +651,8 @@ export class PracticeGradingSession {
   }
 
   /**
-   * 对某条录音做发音评分(以当前素材文本为参考文本)。
+   * 对某条录音做发音评分(普通 take 以当前素材文本为参考文本；
+   * 票 269：一句话 take 以行上选区快照为参考文本，只评选区)。
    *
    * ★ 第五十轮(Forrest):胶囊上的「Run AI Scoring」已移除,这里是唯一评分入口
    *   (列表每行的 ✦ 按钮)。评分即把它设为当前作品 —— 报告区跟随被评的那条。
@@ -639,6 +664,12 @@ export class PracticeGradingSession {
   async gradeRecording(id: string): Promise<void> {
     const t = this.myRecordings().find((r) => r.id === id);
     if (!t || t.grading) return;
+    // 票 269 fail-closed（结构性要求）：isSentence 为真而选区缺失 → 拒绝评分，
+    // 绝不回落到 currentText() 全文评分。静默评全文是本功能唯一不可接受的失效形态。
+    if (t.isSentence === true && !t.sentenceText?.trim()) {
+      this.host.toast(this.host.t('practice.sentence.missingSelection'));
+      return;
+    }
     this.stopPlayback();
     this.activeTakeId.set(id);
 
@@ -647,7 +678,11 @@ export class PracticeGradingSession {
     this.scoreBilledSeconds.set(null);
     this.scoreBilledBytes.set(null);
 
-    await this.host.recorder.grade(id, this.host.currentText(), this.host.practiceLang());
+    // 票 269：一句话 take 评行上选区快照（提交后改选区不影响它，§6 第 3 条）；
+    // 普通 take 评当前全文（一字不动）。
+    const referenceText = t.isSentence === true && t.sentenceText
+      ? t.sentenceText : this.host.currentText();
+    await this.host.recorder.grade(id, referenceText, this.host.practiceLang());
 
     // grade() 完成后回读计费口径:真调 → 新值;命中缓存 → 库里的旧值。
     const after = this.myRecordings().find((x) => x.id === id) ?? null;

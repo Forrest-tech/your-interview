@@ -36,7 +36,12 @@ public sealed record RecordingDto(
     bool HasVoiceTrack = false,
     bool HasMixTrack = false,
     double? TakeRate = null,
-    double? LaneShiftSec = null);
+    double? LaneShiftSec = null,
+    // ★ 票269:一句话模式标识 + 选区文本。
+    //   NULL = 269 之前录的历史行；列表渲染据此决定是否显示“一句话”标注，
+    //   评分时 referenceText 取行上选区文本（M-A）。
+    bool IsSentence = false,
+    string? SentenceText = null);
 
 /// <summary>票 259(S3-S2)：人声轨上传/读取结果（行 + 文件三元组 + 对齐参数）。</summary>
 public sealed record VoiceTrackDto(Guid RecordingId, string ContentType, long SizeBytes,

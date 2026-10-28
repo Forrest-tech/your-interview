@@ -143,6 +143,9 @@ export interface RecordingDto {
   version?: number | null;
   /** ★ 票258 S1:服务端跟读标识(缺省 = 历史行/非跟读,按 false 处理)。 */
   isShadow?: boolean;
+  /** ★ 票269:一句话模式标识 + 选区文本(缺省 = 历史行/普通 take)。 */
+  isSentence?: boolean;
+  sentenceText?: string | null;
   /** ★ 票259 S2:人声轨存在 + 双轨对齐参数（NULL = 非跟读行或旧行）。 */
   hasVoiceTrack?: boolean;
   /** ★ 票260 S3:混音存在（StoragePath 非空）。与 hasVoiceTrack 一起构成行 kind 派生。 */
@@ -457,7 +460,8 @@ export class PracticeApi {
    * durationSeconds 走查询参数之外的表单字段,与后端 [FromForm] 对齐。
    */
   uploadRecording(materialId: string, blob: Blob, durationSeconds: number,
-    fileName: string, contentType: string, isShadow?: boolean): Observable<RecordingDto> {
+    fileName: string, contentType: string, isShadow?: boolean,
+    isSentence?: boolean, sentenceText?: string): Observable<RecordingDto> {
     const fd = new FormData();
     fd.append('file', blob, fileName);
     fd.append('durationSeconds', String(durationSeconds));
@@ -466,6 +470,10 @@ export class PracticeApi {
     // ★ 票258 S1:跟读混音上传传 isShadow=true;普通上传不传该字段(后端缺省 false),
     //   普通上传的请求体一字不变。
     if (isShadow !== undefined) fd.append('isShadow', String(isShadow));
+    // ★ 票269:一句话 take 上传传 isSentence=true + sentenceText;普通上传不传，
+    //   请求体一字不变（照抄 isShadow 的 append 口径）。
+    if (isSentence !== undefined) fd.append('isSentence', String(isSentence));
+    if (sentenceText !== undefined) fd.append('sentenceText', sentenceText);
     // 必须走 postForm —— FormData 交给普通 post 会被当成 JSON 序列化,后端收不到文件
     return this.api.postForm<RecordingDto>(
       `${PracticeApi.BASE}/materials/${materialId}/recordings`, fd);

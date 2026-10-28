@@ -6,6 +6,7 @@ import {
   DictAccent, DictCardState, DictPlayStatus, IDLE_DICT_PLAY_STATUS, PassageToken, errorStatusOf,
   isRovingKey, lookupKeyOf, nextRovingIndex, tokenizePassage,
 } from './dictionary.helpers';
+import { wordIndexOfSelectionNode } from './sentence-select.helpers';
 import { DictionaryShadowSession, DictShadowAction } from './dictionary-shadow';
 import type { DictPlayRequest } from './dictionary-card.component';
 
@@ -29,6 +30,9 @@ export class PracticeDictionary {
     document.addEventListener('click', this.docClickHandler);
     document.addEventListener('keydown', this.docKeydownHandler);
     document.addEventListener('scroll', this.pendingScrollHandler, true);
+    // 票 269：末尾点击抑制旗标在下一次 mousedown 即清零（拖选自身的 mouseup
+    // 在 mousedown 之后，故不影响拖选落定那次 click 的消费；见 onWordClick）。
+    document.addEventListener('mousedown', this.docMousedownHandler);
   }
 
   /**
@@ -55,6 +59,26 @@ export class PracticeDictionary {
   shadowAction(a: DictShadowAction): void {
     this.shadow.action(a);
   }
+
+  /**
+   * 票 269：拖选末尾点击抑制旗标（单次消费）。
+   * 浏览器在拖选结束后仍会在终点 span 上触发一次 click；不处理则该 click
+   * 经 onWordClick 打开词典卡 —— 拖选一次弹一次卡，S-A 不可用。
+   * 置位点：篇章 mouseup/touchend 捕获成功时（见 captureSelectionFromDom）；
+   * 消费点：onWordClick 首行（置位则清零并直接 return）；另在下一次 mousedown、
+   * 退出模式、换素材（reset）时清零，旗标永不跨操作残留。
+   */
+  private suppressNextWordClick = false;
+
+  /** 票 269：清零末尾点击抑制旗标（模式退出时由一句话会话调用）。 */
+  clearSuppress(): void {
+    this.suppressNextWordClick = false;
+  }
+
+  /** 票 269：下一次 mousedown 即清零抑制旗标（见构造器注记的时序论证）。 */
+  private readonly docMousedownHandler = (): void => {
+    this.suppressNextWordClick = false;
+  };
 
   /** 点卡外关闭(SPEC §6.1):词跨度与卡本体内的点击不算「卡外」。 */
   private readonly docClickHandler = (event: MouseEvent): void => {
@@ -131,6 +155,8 @@ export class PracticeDictionary {
 
   /** 换素材时由宿主 effect 调用:关卡、清已查标记、roving 归首。 */
   reset(): void {
+    // 票 269：换素材同触发点清零末尾点击抑制旗标（选区属于具体篇章，不跨素材残留）。
+    this.suppressNextWordClick = false;
     this.shadow.teardown();
     this.cancelPendingMount();
     this.popupMounted = false;
@@ -151,6 +177,7 @@ export class PracticeDictionary {
     document.removeEventListener('click', this.docClickHandler);
     document.removeEventListener('keydown', this.docKeydownHandler);
     document.removeEventListener('scroll', this.pendingScrollHandler, true);
+    document.removeEventListener('mousedown', this.docMousedownHandler);
     this.howl?.unload();
     this.howl = null;
     if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
@@ -163,6 +190,12 @@ export class PracticeDictionary {
 
   /** 点击词:同词再点关闭;点另一词直接切换内容(SPEC §6.1)。 */
   onWordClick(token: PassageToken, event: MouseEvent): void {
+    // 票 269：拖选末尾点击抑制 —— 旗标置位则只消费一次（清零并直接 return，
+    // 不开卡、不换词）；下一次点击不再受影响（见旗标注记）。
+    if (this.suppressNextWordClick) {
+      this.suppressNextWordClick = false;
+      return;
+    }
     // 票127 §9.4:跟读录音态下点任何词都不关不换(关闭/换词手势被忽略)。
     if (this.shadow.isRecording) return;
     if (this.openWordIndex() === token.wordIndex && this.state() !== null) {
@@ -350,14 +383,68 @@ export class PracticeDictionary {
   }
 
   /**
+   * 票 269：篇章拖选落定（S-A，模板 mouseup 绑定）。
+   * 仅当选区非折叠且锚点/焦点节点均能解析为词 span 时才落定选区并置位
+   * 末尾点击抑制旗标；否则（单击、折叠选区、端点在篇章外）不捕获、不置位，
+   * 点词查词典原样进行。捕获后清除原生选区，改上自定义高亮 class。
+   * 判定阈值：以“非折叠选区 + 双端点可解析”为唯一判定，不另设像素阈值
+   * （像素阈值在触屏与高 DPI 下不稳定；折叠选区 = 单击，已足够区分）。
+   */
+  onPassageMouseUp(): void {
+    this.captureSelectionFromDom();
+  }
+
+  /**
+   * 票 269：触屏拖选落定（模板 touchend 绑定）。
+   * 捕获成功时 preventDefault 阻止合成鼠标序列（mousedown/mouseup/click），
+   * 否则合成 click 会经 onWordClick 打开词典；抑制旗标同时置位作后备。
+   * （无 HammerJS，touchend 为非被动监听，preventDefault 有效。）
+   */
+  onPassageTouchEnd(event: TouchEvent): void {
+    if (!this.captureSelectionFromDom()) return;
+    event.preventDefault();
+  }
+
+  /** 拖选捕获本体。返回 true = 本次落定了选区（并置位抑制旗标）。 */
+  private captureSelectionFromDom(): boolean {
+    const sentence = this.host.sentence;
+    if (!sentence?.sentenceMode()) return false;
+    // 录音中锁定：选区捕获暂停（计划 §6 第 1 条），录完前改不了选区。
+    if (this.host.recorder.recording()) return false;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return false;
+    const a = wordIndexOfSelectionNode(sel.anchorNode);
+    const f = wordIndexOfSelectionNode(sel.focusNode);
+    if (a === null || f === null) return false;
+    sentence.setRange(Math.min(a, f), Math.max(a, f));
+    this.suppressNextWordClick = true;
+    sel.removeAllRanges();
+    return true;
+  }
+
+  /**
    * 篇章区键盘(SPEC §6.3):事件自词跨度冒泡至此。
    * 方向键/Home/End 移动 roving 并聚焦目标词;Enter/Space 在触发词上开/关卡。
+   * 票 269：Shift+方向键 = 键盘选区（须先于 roving 分支：isRovingKey 不区分 Shift，
+   * 不先拦截时 Shift+方向键只会移动 roving 焦点，选区永远建不起来）。
    */
   onPassageKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement;
     const wiRaw = target.dataset?.['wi'];
     if (wiRaw === undefined) return;
     const wi = Number(wiRaw);
+    const sentence = this.host.sentence;
+    if (sentence?.sentenceMode() && event.shiftKey && isRovingKey(event.key)) {
+      event.preventDefault();
+      // 录音中锁定：键盘扩展同样暂停（与拖选捕获同口径），且不产生原生选区。
+      if (this.host.recorder.recording()) return;
+      const focus = sentence.extendByKey(wi, event.key);
+      const container = event.currentTarget as HTMLElement;
+      container
+        .querySelector<HTMLElement>(`[data-wi="${focus}"]`)
+        ?.focus();
+      return;
+    }
     if (isRovingKey(event.key)) {
       event.preventDefault();
       const next = nextRovingIndex(wi, event.key, this.wordCount());
@@ -366,6 +453,13 @@ export class PracticeDictionary {
       container
         .querySelector<HTMLElement>(`[data-wi="${next}"]`)
         ?.focus();
+      // 票 269：不带 Shift 的方向键折叠选区（标准语义），模式本身不动。
+      if (sentence?.sentenceMode()) sentence.clearRange();
+      return;
+    }
+    if (event.key === 'Escape' && sentence?.sentenceMode() && this.state() === null) {
+      // 卡已挂出时 Esc 走卡的收口（不冲突）；无卡时 Esc 清选区与锚点。
+      sentence.clearRange();
       return;
     }
     if (event.key === 'Enter' || event.key === ' ') {

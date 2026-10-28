@@ -236,7 +236,10 @@ public sealed class PracticeRecording
         string contentType, long sizeBytes, double durationSeconds, string sourceLanguage = "en-US",
         // ★ 票258 S1:跟读标识(可空)。NULL = S1 之前录的历史行,语义"未知",
         //   过滤时按非跟读处理;新上传由 SaveRecordingCommand 显式传(缺省 false)。
-        bool? isShadow = null)
+        bool? isShadow = null,
+        // ★ 票269:一句话模式标识 + 选区文本(可空)。NULL = 269 之前录的历史行,语义"未知",
+        //   DTO 映射为 false/null,按普通 take 处理;新上传由 SaveRecordingCommand 显式传。
+        bool? isSentence = null, string? sentenceText = null)
     {
         // ★ 票260 S3：仅普通行必填 StoragePath；跟读行（IsShadow=true）可空——
         //   跟读-only 行无混音文件（两步创建的第一步连人声轨也还没有），
@@ -254,6 +257,8 @@ public sealed class PracticeRecording
         DurationSeconds = durationSeconds;
         SourceLanguage = sourceLanguage;
         IsShadow = isShadow;
+        IsSentence = isSentence;
+        SentenceText = sentenceText;
         CreatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -277,6 +282,17 @@ public sealed class PracticeRecording
     /// NULL = S1 之前录的历史行(未知),DTO 映射为 false,过滤时按非跟读处理。
     /// </summary>
     public bool? IsShadow { get; private set; }
+    /// <summary>
+    /// ★ 票269:一句话模式标识(可空)。true = 一句话模式录的 take;
+    /// NULL = 269 之前录的历史行(未知),DTO 映射为 false,按普通 take 处理。
+    /// </summary>
+    public bool? IsSentence { get; private set; }
+    /// <summary>
+    /// ★ 票269:一句话 take 的选区文本（存文本而非起止下标——篇章可编辑，
+    /// 文本比下标抗编辑漂移；评分时 referenceText 即此文本）。
+    /// NULL = 非一句话 take 或历史行。
+    /// </summary>
+    public string? SentenceText { get; private set; }
 
     // ---- 票 259(S3-S2)：跨设备跟读 — 人声轨文件三元组 + 双轨对齐参数 ----
     /// <summary>人声轨相对路径（NULL = 无人声轨；旧行与仅混音行均为 NULL）。</summary>

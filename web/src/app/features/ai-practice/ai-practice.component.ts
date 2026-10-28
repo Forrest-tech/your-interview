@@ -31,6 +31,8 @@ import { PracticeShadowSession } from './practice-shadow-session';
 import { clampFocusIndex, hasSeekableFiller, wordClickAction } from './word-click.helpers';
 import { valuesToLinePoints, valuesToMirroredLinePoints } from './waveform.helpers';
 import { PracticeDictionary } from './practice-dictionary';
+import { PracticeSentenceSession } from './practice-sentence-session';
+import { SENTENCE_MIN_WORDS } from './sentence-select.helpers';
 import { DictionaryCardComponent } from './dictionary-card.component';
 import { dictPopupGeometry } from './dictionary.helpers';
 import type { MarkColor } from './practice-material-tree';
@@ -83,6 +85,8 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly recError = this.grading.recError;
   /** 票119 篇章点词词典(状态机/发音链全在委托类)。 */
   readonly dict = new PracticeDictionary(this);
+  /** 票 269：一句话模式会话（选区状态机全在委托类，组件只作暴露与接线）。 */
+  readonly sentence = new PracticeSentenceSession(this);
 
   // ---------- 票126 词典卡 popup 浮层宿主(§6:CDK Overlay,锚定触发词) ----------
   private readonly overlay = inject(Overlay);
@@ -744,6 +748,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   // ---------- 编辑 / 保存 / 取消 ----------
   startEdit(): void {
     if (!this.selectedId()) return;
+    // 票 269：进入编辑态（textarea，无词 span，逐词高亮无法渲染）→ 先退出一句话模式
+    // 并清空选区；模式按钮在编辑态置灰（模板侧），保存/取消回到只读态后恢复可用。
+    this.sentence.exitSentenceMode();
     this.draft.set(this.saved());
     this.editing.set(true);
   }
@@ -859,9 +866,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     });
 
     // 票119:换素材即关词典卡并清已查标记(词卡状态属于具体篇章,不跨素材残留)。
+    // 票 269：同触发点复位一句话模式与选区（选区属于具体篇章，不跨素材残留）。
     effect(() => {
       this.selectedId();   // 依赖
       queueMicrotask(() => this.dict.reset());
+      queueMicrotask(() => this.sentence.exitSentenceMode());
     });
 
     // ★ 第二十九轮(对齐 ynwac 参考站):评分一产出,就把该录音的
@@ -1009,6 +1018,13 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    */
   startRecording(): Promise<void> {
     if (this.shadow.shadowMode()) return this.shadow.startShadow();
+    // 票 269：模式内选区不足 10 词 → 录音键禁用（模板侧 disabled）+ 尝试操作时 toast，
+    // 绝不开始录音（grading.startRecording 的丢弃旧待提交条副作用也不应触发）。
+    if (this.sentence.sentenceMode() && !this.sentence.canRecord()) {
+      this.toast(this.t('practice.sentence.needMoreWords')
+        .replace('{m}', '' + (SENTENCE_MIN_WORDS - this.sentence.sentenceWordCount())));
+      return Promise.resolve();
+    }
     return this.grading.startRecording();
   }
   stopRecording(): void {

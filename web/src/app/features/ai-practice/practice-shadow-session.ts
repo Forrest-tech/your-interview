@@ -429,6 +429,8 @@ export class PracticeShadowSession {
     this.shadowMeterWarning.set(false);
     this.shadowStorageFailed.set(false);
     if (next) {
+      // 票 269：互斥 —— 开跟读模式先关一句话模式（反向由一句话会话 toggleSentenceMode 接线）。
+      this.host.sentence?.exitSentenceMode();
       // 票 261 §2：进跟读模式即枚举麦克风（授权前 label 可能为空，授权后重枚举）。
       await this.refreshMicDevices();
       await this.refreshShadowMeta();

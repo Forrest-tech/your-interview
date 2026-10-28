@@ -282,6 +282,18 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.shadow.toggleOn': { zh: '跟读模式已开启', en: 'Shadowing mode on', fr: 'Mode shadowing activé' },
   'practice.shadow.toggleOff': { zh: '跟读模式已关闭', en: 'Shadowing mode off', fr: 'Mode shadowing désactivé' },
 
+  // 票 269：一句话模式（Q6 文案终稿待用户过目，此处为计划草稿文案；结构与测试不受文案影响）。
+  'practice.sentence.modeOn': { zh: '一句话模式已开启', en: 'Sentence mode on', fr: 'Mode phrase activé' },
+  'practice.sentence.modeOff': { zh: '一句话模式已关闭', en: 'Sentence mode off', fr: 'Mode phrase désactivé' },
+  'practice.sentence.modeTip': { zh: '一句话模式', en: 'Sentence mode', fr: 'Mode phrase' },
+  'practice.sentence.selectedCount': { zh: '已选 {n} 词', en: 'Selected {n} words', fr: '{n} mot(s) sélectionné(s)' },
+  'practice.sentence.needMoreWords': { zh: '还差 {m} 词', en: '{m} more word(s) needed', fr: 'Encore {m} mot(s) requis' },
+  'practice.sentence.badge': { zh: '一句话', en: 'Sentence', fr: 'Phrase' },
+  'practice.sentence.badgeTip': { zh: '评分句段：{text}', en: 'Scored passage: {text}', fr: 'Passage évalué : {text}' },
+  'practice.sentence.scoreOnlyNote': { zh: '仅对所选句段评分', en: 'Scores only the selected passage', fr: 'Seule la sélection est évaluée' },
+  'practice.sentence.editDisabledTip': { zh: '编辑态下不可选词，请先保存或取消编辑', en: 'Word selection is unavailable while editing — save or cancel first', fr: 'Sélection indisponible en édition — enregistrez ou annulez d’abord' },
+  'practice.sentence.missingSelection': { zh: '该一句话录音缺少选区，无法评分', en: 'This sentence take has no saved selection, so it cannot be scored', fr: 'Cette prise phrase n’a pas de sélection enregistrée, impossible de l’évaluer' },
+
   'practice.shadow.reviewRate': { zh: '回放倍速', en: 'Review rate', fr: 'Vitesse de relecture' },
   'practice.shadow.start': { zh: '开始跟读', en: 'Start shadowing', fr: 'Commencer le shadowing' },
   'practice.shadow.stop': { zh: '停止跟读', en: 'Stop shadowing', fr: 'Arrêter le shadowing' },

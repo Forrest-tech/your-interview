@@ -101,7 +101,10 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
         // ★ 票260 S3:混音存在 = StoragePath 非空；与 HasVoiceTrack 一起构成行 kind 派生。
         !string.IsNullOrWhiteSpace(x.StoragePath),
         x.TakeRate,
-        x.LaneShiftSec);
+        x.LaneShiftSec,
+        // ★ 票269:一句话模式标识 + 选区文本（NULL 历史行映射为 false/null，按普通 take 处理）。
+        x.IsSentence ?? false,
+        x.SentenceText);
 
     internal static IReadOnlyList<WordScoreDto> DeserializeWords(string? json)
     {
@@ -137,7 +140,9 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
 public sealed record SaveRecordingCommand(Guid UserId, Guid MaterialId, string? FileName,
     string ContentType, double DurationSeconds, string SourceLanguage, Stream Audio,
     // ★ 票258 S1:跟读上传传 true;普通上传不传(缺省 false),行为一字不变。
-    bool IsShadow = false)
+    bool IsShadow = false,
+    // ★ 票269:一句话上传传 true + 选区文本;普通上传不传(缺省 false/null),行为一字不变。
+    bool IsSentence = false, string? SentenceText = null)
     : MediatR.IRequest<Result<RecordingDto>>;
 
 public sealed class SaveRecordingCommandHandler(AssessmentDbContext db, IAudioStore store)
@@ -177,7 +182,8 @@ public sealed class SaveRecordingCommandHandler(AssessmentDbContext db, IAudioSt
         // 保证"录音 id → 文件路径"这条链路闭合(不再用反射硬改属性,那是脏写法)。
         var rec = new PracticeRecording(recordingId, r.UserId, r.MaterialId, relativePath,
             string.IsNullOrWhiteSpace(r.ContentType) ? "audio/webm" : r.ContentType,
-            buffered.Length, r.DurationSeconds, r.SourceLanguage, r.IsShadow);
+            buffered.Length, r.DurationSeconds, r.SourceLanguage, r.IsShadow,
+            r.IsSentence, r.SentenceText);
 
         db.Recordings.Add(rec);
         await db.SaveChangesAsync(ct);

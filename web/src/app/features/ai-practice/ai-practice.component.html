@@ -299,11 +299,21 @@
             @if (readonlyText()) {
               <!-- ★ 第十三轮(Forrest):标记属于素材本身,不再给正文涂色 -->
               <!-- 票119:篇章点词查词典 —— token 化渲染(分隔符为显式 token,模板内不留游离空白节点) -->
-              <p class="read-text dict-passage" (keydown)="dict.onPassageKeydown($event)">@for (tok of dict.tokens(); track $index) {@if (tok.kind === 'word') {<span class="dict-word" [attr.data-wi]="tok.wordIndex" [attr.tabindex]="dict.roving() === tok.wordIndex ? 0 : -1" aria-haspopup="dialog" [attr.aria-expanded]="dict.openWordIndex() === tok.wordIndex" (click)="dict.onWordClick(tok, $event)">{{ tok.text }}</span>} @else {{{ tok.text }}}}</p>
+              <p class="read-text dict-passage" (keydown)="dict.onPassageKeydown($event)" (mouseup)="dict.onPassageMouseUp()" (touchend)="dict.onPassageTouchEnd($event)">@for (tok of dict.tokens(); track $index) {@if (tok.kind === 'word') {<span class="dict-word" [class.sentence-sel]="sentence.inSentenceRange(tok.wordIndex)" [attr.data-wi]="tok.wordIndex" [attr.tabindex]="dict.roving() === tok.wordIndex ? 0 : -1" aria-haspopup="dialog" [attr.aria-expanded]="dict.openWordIndex() === tok.wordIndex" (click)="dict.onWordClick(tok, $event)">{{ tok.text }}</span>} @else {{{ tok.text }}}}</p>
               <!-- 票126 §6:词典卡改 popup 浮层(见文末 #dictPopupTpl),篇章文档流内不再有卡节点 -->
             } @else {
               <p class="readonly-empty">{{ t('practice.emptyContent') }}</p>
             }
+          }
+          <!-- 票 269：一句话模式计数行（选区非空时常驻，role=status 宣告变化；
+               录音中置灰 = 选区锁定；模板内 10 与 SENTENCE_MIN_WORDS 同值）。 -->
+          @if (sentence.sentenceMode() && sentence.sentenceRange()) {
+            <div class="sentence-count" role="status" [class.locked]="recorder.recording()">
+              <span>{{ t('practice.sentence.selectedCount').replace('{n}', '' + sentence.sentenceWordCount()) }}</span>
+              @if (sentence.sentenceWordCount() < 10) {
+                <span class="sentence-need">{{ t('practice.sentence.needMoreWords').replace('{m}', '' + (10 - sentence.sentenceWordCount())) }}</span>
+              }
+            </div>
           }
         </div>
 
@@ -433,8 +443,12 @@
                   <span class="outer"><span class="rec-dot"></span></span>
                 </button>
               } @else {
+                <!-- 票 269：一句话模式内选区不足 10 词时录音键禁用 + tooltip 说明原因。 -->
                 <button class="big-round" (click)="startRecording()"
-                        [matTooltip]="t('practice.record')">
+                        [disabled]="sentence.recordDisabled()"
+                        [matTooltip]="sentence.recordDisabled()
+                          ? t('practice.sentence.needMoreWords').replace('{m}', '' + (10 - sentence.sentenceWordCount()))
+                          : t('practice.record')">
                   <span class="outer"><mat-icon>mic</mat-icon></span>
                 </button>
               }
@@ -572,6 +586,19 @@
                     data-testid="shadow-toggle">
               {{ t('practice.shadow.shadowBadge') }}
             </mat-slide-toggle>
+            <!-- 票 269 P-RECONFIRM：跟读开关旁有空间，落 P-A（与跟读开关并列）；
+                 图标键 + aria-pressed + tooltip；编辑态/录音中禁用；与跟读模式互斥。 -->
+            <button class="sentence-switch" [class.on]="sentence.sentenceMode()"
+                    [attr.aria-pressed]="sentence.sentenceMode()"
+                    [attr.aria-label]="t('practice.sentence.modeTip')"
+                    [disabled]="editing() || recorder.recording() || shadow.shadowRecording()"
+                    (click)="sentence.toggleSentenceMode()"
+                    [matTooltip]="editing()
+                      ? t('practice.sentence.editDisabledTip')
+                      : (sentence.sentenceMode() ? t('practice.sentence.modeOn') : t('practice.sentence.modeOff'))"
+                    data-testid="sentence-toggle">
+              <mat-icon>format_quote</mat-icon>
+            </button>
             <button class="nav-btn" [disabled]="!hasPrev()" (click)="prevItem()">
               <mat-icon>arrow_back</mat-icon>
               <span>{{ t('practice.prev') }}</span>
@@ -756,6 +783,12 @@
               <!-- ★ 第四十九轮:Take 序号按时间先后(最早=#1),与显示顺序解耦 ——
                    新录的一条永远是最大号,不再把旧录音挤成 #1。 -->
               <span class="hi-idx">Take #{{ takeNo(r.id) }}</span>
+              <!-- 票 269：一句话 take 标注（仅 isSentence 为真时渲染；样式复用 .shadow-badge，
+                   tooltip = 选区文本前 N 字，全文放 title）。 -->
+              @if (r.isSentence) {
+                <span class="sentence-badge shadow-badge"
+                      [matTooltip]="sentence.badgeTipFor(r)" [attr.title]="r.sentenceText ?? ''">{{ t('practice.sentence.badge') }}</span>
+              }
               <span class="hi-meta">{{ fmtTime(r.createdAt) }} · {{ fmtDuration(r.duration) }}</span>
 
               @if (r.score) {
@@ -805,6 +838,16 @@
                 @if (activeTake()?.score; as sc) {
                   @if (reportOpen()) {
                     <div class="result-wrap">
+
+                      <!-- 票 269：一句话 take 的报告顶部：本次评的选区文本 + 仅评选区说明；
+                           普通 take 不渲染（报告一字不动）。 -->
+                      @if (r.isSentence && r.sentenceText) {
+                        <p class="sentence-graded-line" data-testid="sentence-graded-line">
+                          <mat-icon>format_quote</mat-icon>
+                          <span>{{ t('practice.sentence.scoreOnlyNote') }}</span>
+                          <span class="sentence-graded-text">“{{ r.sentenceText }}”</span>
+                        </p>
+                      }
 
                       <!-- ★ #3:Orai 模式 — 一次只给一个最关键的改进点 -->
                       @if (oneFix(); as fix) {

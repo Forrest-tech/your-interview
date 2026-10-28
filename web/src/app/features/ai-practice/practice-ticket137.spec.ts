@@ -275,11 +275,17 @@ describe('票137 状态机与模板三态（源码对照，活体作主证）', 
     }
   });
 
-  it('scss：未播放柱色不再等于条带底色 #f0fdf4（第二成因已修）', () => {
+  // 票 261 §6：波形由柱改线，断言口径随之改线色 —— 意图不变：
+  // 未播放线 #7fbfa0 必须与条带底色 #f0fdf4 可区分，且浅于已播放实绿 #16a34a。
+  it('scss：未播放线色不再等于条带底色 #f0fdf4（第二成因已修，线版）', () => {
     const scss = fs.readFileSync(path.join(__dirname, 'ai-practice.component.scss'), 'utf8');
-    const barBlock = scss.slice(scss.indexOf('.ws-bar {'));
-    const bgLine = barBlock.split('\n').find((l) => l.includes('background:'));
-    expect(bgLine).toBeDefined();
-    expect(bgLine).not.toContain('#f0fdf4');
+    const lineBlock = scss.slice(scss.indexOf('.ws-line polyline {'));
+    const strokeLine = lineBlock.split('\n').find((l) => l.includes('stroke:'));
+    expect(strokeLine).toBeDefined();
+    expect(strokeLine).toContain('#7fbfa0');
+    expect(strokeLine).not.toContain('#f0fdf4');
+    const playedBlock = scss.slice(scss.indexOf('.ws-line polyline.played {'));
+    const playedLine = playedBlock.split('\n').find((l) => l.includes('stroke:'));
+    expect(playedLine).toContain('#16a34a');
   });
 });

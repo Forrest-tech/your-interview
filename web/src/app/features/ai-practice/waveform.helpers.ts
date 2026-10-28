@@ -10,6 +10,53 @@
  *   再逐帧自相关；帧数上限 300（均匀抽取），避免长录音在主线程算太久。
  */
 
+/**
+ * 票 261 §6：线形波形 —— 数值数组 → SVG polyline points（viewBox 0 0 1000 100）。
+ * x 按全长等分（count 只截前 count 个点时 x 位置仍对齐全长，播放态覆盖层用）；
+ * y = 100 − v/maxV*100（下沿锚定，与原柱顶一致）；点数 < 2 → ''。
+ */
+export function valuesToLinePoints(
+  values: readonly number[],
+  maxV = 100,
+  count?: number,
+): string {
+  const n = values.length;
+  if (n < 2 || !(maxV > 0)) return '';
+  const vs = count === undefined ? values : values.slice(0, count);
+  if (vs.length < 2) return '';
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return vs
+    .map(
+      (v, i) =>
+        `${((i / (n - 1)) * 1000).toFixed(1)},${(100 - (clamp(v, 0, maxV) / maxV) * 100).toFixed(1)}`,
+    )
+    .join(' ');
+}
+
+/**
+ * 票 261 §6：中线对称线形波形 —— 数值数组 → 上下两条 polyline points
+ * （viewBox 0 0 1000 100，y = 50 ∓ v/maxV*50；原居中柱形的数据，只换画法）。
+ * 返回 [上, 下]；点数 < 2 → ['', '']。
+ */
+export function valuesToMirroredLinePoints(
+  values: readonly number[],
+  maxV = 100,
+  count?: number,
+): [string, string] {
+  const n = values.length;
+  if (n < 2 || !(maxV > 0)) return ['', ''];
+  const vs = count === undefined ? values : values.slice(0, count);
+  if (vs.length < 2) return ['', ''];
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  const upper = vs
+    .map((v, i) => `${((i / (n - 1)) * 1000).toFixed(1)},${(50 - (clamp(v, 0, maxV) / maxV) * 50).toFixed(1)}`)
+    .join(' ');
+  const lower = vs
+    .map((v, i) => `${((i / (n - 1)) * 1000).toFixed(1)},${(50 + (clamp(v, 0, maxV) / maxV) * 50).toFixed(1)}`)
+    .join(' ');
+  return [upper, lower];
+}
+
 /** 峰值柱形：与 session.computeWaveBars 现行规则逐字一致。 */
 export function computeWaveBarsFromSamples(
   data: ArrayLike<number>,

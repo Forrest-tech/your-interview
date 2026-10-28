@@ -314,6 +314,11 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.shadow.playTogether': { zh: '一起听', en: 'Play together', fr: 'Écouter ensemble' },
   'practice.shadow.shadowEmpty': { zh: '还没有跟读。开启跟读模式后录一遍,跟读会只出现在这里。', en: 'No shadowing takes yet. Record one in shadowing mode; it will only appear here.', fr: 'Aucune prise de shadowing. Enregistrez-en une en mode shadowing ; elle n’apparaîtra qu’ici.' },
   'practice.shadow.shadowBadge': { zh: '跟读', en: 'Shadow', fr: 'Shadowing' },
+  // 票 261 §2：麦克风设备选择 + 静音 take 警告 + 波形上下文警告。
+  'practice.shadow.micDevice': { zh: '麦克风', en: 'Microphone', fr: 'Microphone' },
+  'practice.shadow.micDefault': { zh: '系统默认', en: 'System default', fr: 'Par défaut du système' },
+  'practice.shadow.noVoice': { zh: '这次跟读几乎没有录到你的声音，请检查麦克风设备或音量。', en: 'Almost no voice was captured in this take. Check your microphone device and volume.', fr: 'Presque aucune voix n’a été capturée. Vérifiez votre microphone et le volume.' },
+  'practice.shadow.liveMeterUnavailable': { zh: '实时波形不可用（音频上下文未能启动），录音本身不受影响。', en: 'Live waveform unavailable (audio context could not start); recording itself is unaffected.', fr: 'La forme d’onde en direct est indisponible (le contexte audio n’a pas démarré) ; l’enregistrement n’est pas affecté.' },
   'practice.shadow.liveRef': { zh: '参考', en: 'Reference', fr: 'Référence' },
   'practice.shadow.liveVoice': { zh: '我的声音', en: 'My voice', fr: 'Ma voix' },
   'practice.shadow.pitchVoice': { zh: '我的音高', en: 'My pitch', fr: 'Ma hauteur' },

@@ -18,6 +18,25 @@ export interface ShadowPeak {
   v: number;
 }
 
+/**
+ * 票 261 §6：线形波形 —— 峰值点 → SVG polyline points（viewBox 0 0 1000 100，
+ * 下沿锚定：y = 100 − v，即原来柱顶的连线，数据与柱形一字不差，只换画法）。
+ * 点数 < 2 或轴长无效 → ''（调用方不画线）。
+ */
+export function peaksToLinePoints(
+  peaks: readonly ShadowPeak[],
+  axisLength: number,
+): string {
+  if (peaks.length < 2 || !(axisLength > 0)) return '';
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return peaks
+    .map(
+      (p) =>
+        `${((clamp(p.t, 0, axisLength) / axisLength) * 1000).toFixed(1)},${(100 - clamp(p.v, 0, 100)).toFixed(1)}`,
+    )
+    .join(' ');
+}
+
 /** 实时一帧的峰值：时域数据最大绝对值 → 0~100 取整。静音 → 0。 */
 export function framePeak(timeDomain: ArrayLike<number>): number {
   let max = 0;

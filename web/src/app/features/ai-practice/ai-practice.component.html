@@ -369,14 +369,7 @@
 
             <!-- 未配 Azure Key → 置灰不可播;点它会直接展开上面的配置浮层
                  (见 speak():没配 Key 时先展开设置,再 return)。 -->
-            <!-- 票 250：跟读模式切换（播放/录音控件附近，见 PLAN-PATCHED3 §0-1）。 -->
-            <button class="shadow-toggle" [class.on]="shadow.shadowMode()"
-                    (click)="shadow.toggleShadowMode()"
-                    [matTooltip]="shadow.shadowMode() ? t('practice.shadow.toggleOn') : t('practice.shadow.toggleOff')"
-                    [attr.aria-pressed]="shadow.shadowMode()"
-                    data-testid="shadow-toggle">
-              <mat-icon>record_voice_over</mat-icon>
-            </button>
+            <!-- 票 261 §4：跟读开关已移出播放条，见卡片底部导航栏 Previous 左侧。 -->
 
             <button class="play-round" [class.is-off]="!azureReady()"
                     (click)="speak()"
@@ -432,7 +425,9 @@
                    点列表行中间按钮又跟着变 —— 录音键和回放键被绑在同一个
                    activeTake 上。行业标准(语音练习类应用):主录音键恒为
                    麦克风/停止,回放只属于列表每行自己的播放键。 -->
-              @if (recorder.recording()) {
+              <!-- 票 261 §5：绿色录音键是全页唯一录音入口 —— 跟读模式下
+                   它启动/停止跟读采集，常规模式下走常规录音。 -->
+              @if (recorder.recording() || shadow.shadowRecording()) {
                 <button class="big-round recording" (click)="stopRecording()"
                         [matTooltip]="t('practice.stopRec')">
                   <span class="outer"><span class="rec-dot"></span></span>
@@ -445,15 +440,14 @@
               }
             </div>
 
-            <!-- ★ 第三十轮:实时波形 —— 录音时在胶囊内显示跳动的音量柱。
-                 纯视觉增强,失败不影响录音;liveWave 为空时不占位。 -->
-            @if (recorder.recording() && recorder.liveWave().length) {
+            <!-- ★ 第三十轮:实时波形 —— 录音时在胶囊内显示跳动的音量线。
+                 纯视觉增强,失败不影响录音;liveWave 为空时不占位。
+                 票 261 §6：画线不画柱（与原柱形同数据）。 -->
+            @if (recorder.recording() && liveWaveLinePoints(); as pts) {
               <div class="live-wave" aria-hidden="true">
-                @for (v of recorder.liveWave(); track $index) {
-                  <span class="lw-bar"
-                        [style.height.%]="8 + v * 92"
-                        [style.opacity]="0.45 + v * 0.55"></span>
-                }
+                <svg class="live-line" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+                  <polyline [attr.points]="pts" />
+                </svg>
               </div>
             }
 
@@ -472,6 +466,23 @@
               <span>{{ t('practice.shadow.headphonesHint') }}</span>
             </div>
 
+            <!-- 票 261 §2：麦克风选择（此前全站无设备选择，浏览器默认设备
+                 选错即整条跟读静音，且用户无从改；录制中锁定）。 -->
+            @if (shadow.micDevices().length) {
+              <div class="shadow-mic-row">
+                <label class="shadow-rate-label" for="shadow-mic-select">{{ t('practice.shadow.micDevice') }}</label>
+                <select id="shadow-mic-select" class="shadow-mic-select"
+                        [disabled]="shadow.shadowRecording()"
+                        [value]="shadow.micDeviceId() ?? ''"
+                        (change)="shadow.setMicDevice($any($event.target).value || null)">
+                  <option value="">{{ t('practice.shadow.micDefault') }}</option>
+                  @for (d of shadow.micDevices(); track d.deviceId) {
+                    <option [value]="d.deviceId">{{ d.label }}</option>
+                  }
+                </select>
+              </div>
+            }
+
             @if (shadow.shadowAecWarning()) {
               <div class="shadow-alert" role="alert">
                 <mat-icon>warning_amber</mat-icon>
@@ -479,37 +490,47 @@
               </div>
             }
 
+            @if (shadow.shadowMeterWarning()) {
+              <div class="shadow-alert" role="note">
+                <mat-icon>warning_amber</mat-icon>
+                <span>{{ t('practice.shadow.liveMeterUnavailable') }}</span>
+              </div>
+            }
+
+            <!-- 票 261 §3/§5：倍速与示范条用同一套菜单（按钮 + zoom-menu/zm-item），
+                 不再是展开的一排 pills；录音的开始/停止走绿色录音键，
+                 这里不再另设开始/停止键。 -->
             <div class="shadow-rate-row">
               <span class="shadow-rate-label">{{ t('practice.shadow.rate') }}</span>
-              @for (r of shadow.shadowRates; track r) {
-                <button class="shadow-rate-btn" [class.on]="shadow.shadowRate() === r"
-                        [disabled]="shadow.shadowRecording()"
-                        (click)="shadow.setShadowRate(r)">
-                  <span>{{ r }}x</span>
-                </button>
-              }
+              <button class="shadow-rate-menu-btn" [matMenuTriggerFor]="shadowRateMenu"
+                      [disabled]="shadow.shadowRecording()">
+                <span>{{ shadow.shadowRate() }}x</span>
+                <mat-icon>expand_more</mat-icon>
+              </button>
+              <mat-menu #shadowRateMenu="matMenu" class="app-menu zoom-menu" xPosition="before">
+                @for (r of shadow.shadowRates; track r) {
+                  <button mat-menu-item class="zm-item rate-item"
+                          [class.on]="shadow.shadowRate() === r"
+                          (click)="shadow.setShadowRate(r)">
+                    <span>{{ r }}x</span>
+                  </button>
+                }
+              </mat-menu>
               @if (shadow.shadowRecording()) {
-                <button class="shadow-stop-btn" (click)="shadow.stopShadow()"
-                        data-testid="shadow-stop">
-                  <mat-icon>stop</mat-icon>
-                  <span>{{ t('practice.shadow.stop') }}</span>
-                </button>
-              } @else {
-                <button class="shadow-start-btn" (click)="shadow.startShadow()"
-                        data-testid="shadow-start">
-                  <mat-icon>mic</mat-icon>
-                  <span>{{ t('practice.shadow.start') }}</span>
-                </button>
+                <span class="shadow-rate-label">{{ t('practice.shadow.recording') }}</span>
               }
             </div>
 
             @if (shadow.shadowRecording()) {
               <div class="shadow-live" data-testid="shadow-live">
+                <!-- 票 261 §6：波形画线不画柱（与原柱顶同数据，只换画法）。 -->
                 <div class="shadow-lane">
                   <span class="shadow-lane-label">{{ t('practice.shadow.liveRef') }}</span>
                   <div class="shadow-track">
-                    @for (p of shadow.shadowRefPeaks(); track $index) {
-                      <span class="shadow-bar" [style.height.%]="p.v"></span>
+                    @if (shadow.liveRefLinePoints(); as pts) {
+                      <svg class="shadow-line" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+                        <polyline [attr.points]="pts" />
+                      </svg>
                     }
                     <span class="shadow-playhead"
                           [style.left.%]="shadow.shadowAxisLength() > 0 ? (shadow.shadowPlayhead() / shadow.shadowAxisLength() * 100) : 0"></span>
@@ -518,8 +539,10 @@
                 <div class="shadow-lane">
                   <span class="shadow-lane-label">{{ t('practice.shadow.liveVoice') }}</span>
                   <div class="shadow-track">
-                    @for (p of shadow.shadowLivePeaks(); track $index) {
-                      <span class="shadow-bar voice" [style.height.%]="p.v"></span>
+                    @if (shadow.liveVoiceLinePoints(); as pts) {
+                      <svg class="shadow-line voice" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+                        <polyline [attr.points]="pts" />
+                      </svg>
                     }
                     <span class="shadow-playhead"
                           [style.left.%]="shadow.shadowAxisLength() > 0 ? (shadow.shadowPlayhead() / shadow.shadowAxisLength() * 100) : 0"></span>
@@ -609,6 +632,15 @@
           </div>
 
           <div class="cf-right">
+            <!-- 票 261 §4：跟读开关 —— 开关式按钮，放在 Previous 左侧；
+                 不再放在播放条里（播放条只负责播放）。 -->
+            <mat-slide-toggle class="shadow-switch"
+                    [checked]="shadow.shadowMode()"
+                    (change)="shadow.toggleShadowMode()"
+                    [matTooltip]="shadow.shadowMode() ? t('practice.shadow.toggleOn') : t('practice.shadow.toggleOff')"
+                    data-testid="shadow-toggle">
+              {{ t('practice.shadow.shadowBadge') }}
+            </mat-slide-toggle>
             <button class="nav-btn" [disabled]="!hasPrev()" (click)="prevItem()">
               <mat-icon>arrow_back</mat-icon>
               <span>{{ t('practice.prev') }}</span>
@@ -665,7 +697,8 @@
                         [matTooltip]="shadow.shadowPlayingId() === row.id ? t('practice.stop') : t('practice.shadow.playTogether')">
                   <mat-icon>{{ shadow.shadowPlayingId() === row.id ? 'pause' : 'play_arrow' }}</mat-icon>
                 </button>
-                <span class="hi-idx">{{ t('practice.shadow.shadowBadge') }} #{{ $index + 1 }}</span>
+                <!-- 票 261 §1：号按时间先后（最早 #1），显示最新在上。 -->
+                <span class="hi-idx">{{ t('practice.shadow.shadowBadge') }} #{{ row.no }}</span>
                 <span class="hi-meta">{{ fmtDuration(row.durationSec) }} · {{ row.rate }}x</span>
                 <div class="track hi-track" (click)="$event.stopPropagation(); shadow.seekShadowLane(row, $event)">
                   <div class="track-bg"></div>
@@ -697,14 +730,17 @@
               @if (shadow.shadowExpandedId() === row.id) {
                 <section class="shadow-expanded" data-testid="shadow-expanded">
                   <div class="shadow-lanes">
+                    <!-- 票 261 §6：波形画线不画柱（与原柱顶同数据，只换画法）。 -->
                     <div class="shadow-lane">
                       <span class="shadow-lane-label">{{ t('practice.shadow.liveRef') }}</span>
                       @if (shadow.shadowRefMissing()) {
                         <p class="shadow-lane-empty">{{ t('practice.shadow.refUnavailable') }}</p>
                       } @else {
                         <div class="shadow-track" (click)="shadow.seekShadowLane(row, $event)">
-                          @for (p of shadow.shadowRefPeaks(); track $index) {
-                            <span class="shadow-bar" [style.height.%]="p.v"></span>
+                          @if (shadow.expandedRefLinePoints(); as pts) {
+                            <svg class="shadow-line" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+                              <polyline [attr.points]="pts" />
+                            </svg>
                           }
                           <span class="shadow-playhead"
                                 [style.left.%]="shadow.shadowExpandedAxis() > 0 ? (shadow.shadowPlayhead() / shadow.shadowExpandedAxis() * 100) : 0"></span>
@@ -717,8 +753,10 @@
                         <p class="shadow-lane-empty">{{ t('practice.shadow.voiceUnavailable') }}</p>
                       } @else {
                         <div class="shadow-track" (click)="shadow.seekShadowLane(row, $event)">
-                          @for (p of shadow.shadowExpandedPeaks(); track $index) {
-                            <span class="shadow-bar voice" [style.height.%]="p.v"></span>
+                          @if (shadow.expandedVoiceLinePoints(); as pts) {
+                            <svg class="shadow-line voice" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+                              <polyline [attr.points]="pts" />
+                            </svg>
                           }
                           <span class="shadow-playhead"
                                 [style.left.%]="shadow.shadowExpandedAxis() > 0 ? (shadow.shadowPlayhead() / shadow.shadowExpandedAxis() * 100) : 0"></span>
@@ -752,13 +790,21 @@
                             (click)="shadow.setShadowSoloTogether()">
                       <span>{{ t('practice.shadow.together') }}</span>
                     </button>
+                    <!-- 票 261 §3：回放倍速与示范条同一套菜单，不再展开 pills。 -->
                     <span class="shadow-rate-label">{{ t('practice.shadow.reviewRate') }}</span>
-                    @for (r of shadow.shadowRates; track r) {
-                      <button class="shadow-rate-btn" [class.on]="shadow.shadowReviewRate() === r"
-                              (click)="shadow.setReviewRate(r)">
-                        <span>{{ r }}x</span>
-                      </button>
-                    }
+                    <button class="shadow-rate-menu-btn" [matMenuTriggerFor]="shadowReviewMenu">
+                      <span>{{ shadow.shadowReviewRate() }}x</span>
+                      <mat-icon>expand_more</mat-icon>
+                    </button>
+                    <mat-menu #shadowReviewMenu="matMenu" class="app-menu zoom-menu" xPosition="before">
+                      @for (r of shadow.shadowRates; track r) {
+                        <button mat-menu-item class="zm-item rate-item"
+                                [class.on]="shadow.shadowReviewRate() === r"
+                                (click)="shadow.setReviewRate(r)">
+                          <span>{{ r }}x</span>
+                        </button>
+                      }
+                    </mat-menu>
                   </div>
                 </section>
               }
@@ -768,8 +814,9 @@
           <p class="hist-empty">{{ t('practice.noRecordings') }}</p>
         } @else {
           <!-- ②-2 单条录音:横向通栏
-               播放键 → Take #n + 时间/时长 → 进度条 → AI 评分 → 查看报告 → 删除 -->
-          @for (r of shadow.nonShadowRecordings(); track r.id) {
+               播放键 → Take #n + 时间/时长 → 进度条 → AI 评分 → 查看报告 → 删除
+               票 261 §1：显示最新在上（takeNo 本就时间先后，不动）。 -->
+          @for (r of shadow.orderedNonShadowRecordings(); track r.id) {
             <div class="hist-item" [class.active]="activeTakeId() === r.id"
                  [class.grading]="r.grading"
                  (click)="toggleTakeReport(r.id)"
@@ -886,15 +933,19 @@
                           @if (waveStatus() === 'loading') {
                             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
                           } @else if (waveStatus() === 'ready') {
+                            <!-- 票 261 §6：波形画线不画柱 —— 中线对称上下两条线，
+                                 已播部分用实绿覆盖（与原柱形同数据、同 played 口径）。 -->
                             <div class="wave-strip"
                                  [class.wave-live]="activePlaying() || previewingPending()">
-                              <div class="ws-bars" [matTooltip]="t('practice.recPlay')">
-                                @for (b of waveBars(); track $index) {
-                                  <span class="ws-bar"
-                                        [style.height.%]="b"
-                                        [class.played]="wavePlayed($index)"></span>
-                                }
-                              </div>
+                              @if (waveLinePoints()[0]) {
+                                <svg class="ws-line" viewBox="0 0 1000 100" preserveAspectRatio="none"
+                                     [matTooltip]="t('practice.recPlay')">
+                                  <polyline [attr.points]="waveLinePoints()[0]" />
+                                  <polyline [attr.points]="waveLinePoints()[1]" />
+                                  <polyline class="played" [attr.points]="waveLinePlayedPoints()[0]" />
+                                  <polyline class="played" [attr.points]="waveLinePlayedPoints()[1]" />
+                                </svg>
+                              }
                             </div>
                             @if (speechPace() || waveAvgHz() !== null) {
                               <div class="wave-metrics" data-testid="wave-metrics">

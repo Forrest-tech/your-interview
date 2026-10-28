@@ -29,6 +29,7 @@ import { PracticeTtsPlayer } from './practice-tts-player';
 import { PracticeGradingSession } from './practice-grading-session';
 import { PracticeShadowSession } from './practice-shadow-session';
 import { clampFocusIndex, hasSeekableFiller, wordClickAction } from './word-click.helpers';
+import { valuesToLinePoints, valuesToMirroredLinePoints } from './waveform.helpers';
 import { PracticeDictionary } from './practice-dictionary';
 import { DictionaryCardComponent } from './dictionary-card.component';
 import { dictPopupGeometry } from './dictionary.helpers';
@@ -1001,8 +1002,35 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   onNodeCreated(_node: MaterialNode): void { return this.tree.onNodeCreated(_node); }
   onDelete(n: MaterialNode): void { return this.tree.onDelete(n); }
   speak(): void { return this.tts.speak(); }
-  startRecording(): Promise<void> { return this.grading.startRecording(); }
-  stopRecording(): void { return this.grading.stopRecording(); }
+  /**
+   * 票 261 §5：绿色录音键是全页唯一的录音入口 —— 跟读模式下它启动
+   * 跟读采集（与跟读面板里旧的开始/停止键同一行为），常规模式下走
+   * 常规录音；跟读面板不再有自己的开始/停止键。
+   */
+  startRecording(): Promise<void> {
+    if (this.shadow.shadowMode()) return this.shadow.startShadow();
+    return this.grading.startRecording();
+  }
+  stopRecording(): void {
+    if (this.shadow.shadowRecording()) { void this.shadow.stopShadow(); return; }
+    return this.grading.stopRecording();
+  }
+
+  /** 票 261 §6：报告波形线（中线对称上下两条，与原居中柱形同数据）。 */
+  waveLinePoints(): [string, string] {
+    return valuesToMirroredLinePoints(this.grading.waveBars());
+  }
+  /** 票 261 §6：报告波形已播部分（与上同 x 标尺，覆盖层用）。 */
+  waveLinePlayedPoints(): [string, string] {
+    const bars = this.grading.waveBars();
+    let played = 0;
+    while (played < bars.length && this.grading.wavePlayed(played)) played++;
+    return valuesToMirroredLinePoints(bars, 100, played);
+  }
+  /** 票 261 §6：录音中实时音量线（liveWave 0~1，与原柱形同数据）。 */
+  liveWaveLinePoints(): string {
+    return valuesToLinePoints(this.recorder.liveWave(), 1);
+  }
   previewPending(): void { return this.grading.previewPending(); }
   submitPending(): void { return this.grading.submitPending(); }
   discardPending(): void { return this.grading.discardPending(); }

@@ -69,10 +69,38 @@ export function pickShadowMime(): string {
   return '';
 }
 
+/**
+ * 票 261 §2：麦克风采集约束（唯一口径）。
+ * echoCancellation 开（跟读时参考声经扬声器串入麦克风，必须消回声）、
+ * noiseSuppression 关（降噪会连人声气声一起吃掉，跟读要的是原声）。
+ * autoGainControl 不指定 = 浏览器默认（Chrome 为开），不画蛇添足。
+ */
+const MIC_BASE: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: false,
+};
+
+/**
+ * 票 261 §2：带设备回落的麦克风请求。
+ * deviceId 指定时先用 exact 约束；设备已拔/已换导致 OverconstrainedError
+ * 时回落到默认设备（绝不因存量 deviceId 失效就整起失败）。
+ * 其它错误（NotAllowedError 等）原样上抛，由调用方分级呈现。
+ */
+export async function requestMicStream(deviceId: string | null): Promise<MediaStream> {
+  if (deviceId) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { ...MIC_BASE, deviceId: { exact: deviceId } },
+      });
+    } catch (e) {
+      if ((e as { name?: string } | null)?.name !== 'OverconstrainedError') throw e;
+    }
+  }
+  return navigator.mediaDevices.getUserMedia({ audio: { ...MIC_BASE } });
+}
+
 function defaultProvider(): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: false },
-  });
+  return requestMicStream(null);
 }
 
 export class ShadowCaptureService {
@@ -96,6 +124,8 @@ export class ShadowCaptureService {
     /** session 供给的当前参考音轨时间（Howl seek）；无则用墙钟映射。 */
     private readonly getRefTrackTime: () => number | null = () => null,
     private readonly rate: number = 1,
+    /** 票 261 §2：AudioContext 构造接缝（默认 new AudioContext，单测可注入）。 */
+    private readonly createCtx: () => AudioContext = () => new AudioContext(),
   ) {}
 
   /** 是否支持采集（无 mediaDevices/getUserMedia 即不支持，诚实返回 false）。 */
@@ -121,6 +151,22 @@ export class ShadowCaptureService {
   }
 
   /**
+   * 票 261 §2：采集用 AudioContext 是否在跑（null = 未建）。
+   * 诊断依据：grant() 在授权弹窗之后建 context，Chrome 自动播放策略
+   * 会把它起成 suspended —— 此时 Analyser 读到的全是 0，活声道一片死寂，
+   * 而 MediaRecorder（直录原始流）不受影响；两路表现不一致正是用户报的
+   * “录音没收进声音”在界面上的样子。调用方据此给可见警告。
+   */
+  ctxRunning(): boolean | null {
+    if (!this.ctx) return null;
+    try {
+      return this.ctx.state === 'running';
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 麦克风授权（P4 麦克风优先的第一步）：只拿流、不启动录音机。
    * session 在 grant 成功后起参考，再调 beginRecording —— 两路同起，
    * laneShift 记录剩余的毫秒级启动 skew。抛出的错误原样上抛
@@ -136,7 +182,17 @@ export class ShadowCaptureService {
         if (!this.stopped) this.onMidTakeFailure();
       });
     }
-    this.ctx = new AudioContext();
+    this.ctx = this.createCtx();
+    // 票 261 §2：授权弹窗断了用户手势链，Chrome 会把此后建的 context
+    // 起成 suspended —— 必须显式 resume（本站已有 sticky activation，
+    // 即点击 Start，因此 resume 应成功；失败则由调用方警告，不拦截录音）。
+    if (this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch {
+        /* 调用方经 ctxRunning() 核验并警告 */
+      }
+    }
     const src = this.ctx.createMediaStreamSource(this.stream);
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 2048;

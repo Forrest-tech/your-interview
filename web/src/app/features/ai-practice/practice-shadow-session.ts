@@ -43,10 +43,11 @@ import {
   decimatePeaks,
   jointDuration,
   medianHz,
+  peaksToLinePoints,
   trackTimeToVoiceTime,
 } from './shadow-waveform.helpers';
 import type { ShadowPeak } from './shadow-waveform.helpers';
-import { ShadowCaptureService } from './shadow-capture';
+import { ShadowCaptureService, requestMicStream } from './shadow-capture';
 import type { ShadowFrame } from './shadow-capture';
 import { ShadowPlaybackController } from './shadow-playback';
 import type { PlaybackTrack } from './shadow-playback';
@@ -77,7 +78,13 @@ export interface ShadowRowView {
   uploaded: boolean;
   /** 双轨对齐 laneShift（秒；本地行取 store，服务端-only 行取 DTO，缺省 0）。 */
   laneShiftSec?: number;
+  /**
+   * 票 261 §1：时间先后号（最早 = #1，永不随显示顺序变）。
+   * serverOnlyShadowRows 产出的行先填 0，shadowRows computed 统一编号。
+   */
+  no: number;
 }
+
 
 /**
  * ★ 票260 S3：服务端行 kind 派生（前后端同一公式，与后端 DTO 注释、assess 拒绝注释同一句话）：
@@ -97,6 +104,24 @@ export function recordingKind(
   if (hasMixTrack === true) return 'shadow-mix';
   if (hasVoiceTrack === true) return 'shadow-only';
   return 'shadow-unfinished';
+}
+
+
+/**
+ * 票 261 §1：纯函数 —— 按 createdAt 升序编号（最早 = 1）。
+ * 显示顺序与编号解耦：列表倒序展示时，号大的新 take 仍在前面。
+ */
+export function assignShadowNumbers<T extends { id: string; createdAt: number }>(
+  rows: readonly T[],
+): Map<string, number> {
+  const map = new Map<string, number>();
+  [...rows].sort((a, b) => a.createdAt - b.createdAt).forEach((r, i) => map.set(r.id, i + 1));
+  return map;
+}
+
+/** 票 261 §1：纯函数 —— 最新在上（createdAt 降序），不改原数组。 */
+export function orderNewestFirst<T extends { createdAt: number }>(rows: readonly T[]): T[] {
+  return [...rows].sort((a, b) => b.createdAt - a.createdAt);
 }
 
 /** 待提交跟读（Stop 后、提交前的审阅态；仅 mix 行有提交，dual 行无 pending 态）。 */
@@ -161,6 +186,7 @@ export function serverOnlyShadowRows(
       mixStatus: 'done',
       uploaded: true,
       laneShiftSec: r.laneShiftSec ?? 0,
+      no: 0, // 票 261 §1：占位，shadowRows computed 统一按时间先后编号。
     });
   }
   return rows;
@@ -246,6 +272,23 @@ export class PracticeShadowSession {
   readonly shadowPitchRef = signal<number | null>(null);
   readonly shadowError = signal<string | null>(null);
   readonly shadowAecWarning = signal(false);
+  /**
+   * 票 261 §2：实时波形上下文未能启动警告（Analyser 读 0 的可见解释；
+   * 录音本身走原始流不受影响，故只警告、不拦截）。
+   */
+  readonly shadowMeterWarning = signal(false);
+  /** 票 261 §2：麦克风设备（enumerateDevices 结果；空 = 未枚举或无设备）。 */
+  readonly micDevices = signal<{ deviceId: string; label: string }[]>([]);
+  /** 票 261 §2：用户选定的麦克风 deviceId（null = 系统默认），localStorage 持久化。 */
+  readonly micDeviceId = signal<string | null>(PracticeShadowSession.loadMicDevice());
+
+  private static loadMicDevice(): string | null {
+    try {
+      return localStorage.getItem('yi-mic-device') ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   // ---------- 待提交态 ----------
   readonly shadowPending = signal<ShadowPendingView | null>(null);
@@ -291,6 +334,7 @@ export class PracticeShadowSession {
         mixStatus: r.mixStatus,
         uploaded: r.serverId !== null,
         laneShiftSec: r.laneShiftSec,
+        no: 0, // 票 261 §1：下文统一编号。
       });
     }
     if (pending) {
@@ -306,6 +350,7 @@ export class PracticeShadowSession {
         mixStatus: pending.mixStatus,
         uploaded: false,
         laneShiftSec: pending.laneShiftSec,
+        no: 0, // 票 261 §1：下文统一编号（待提交行时间最新，号最大）。
       });
     }
     // ★ 票258 S1：无本地链接的服务端跟读行（另一设备上的 1x 混音行）
@@ -318,8 +363,18 @@ export class PracticeShadowSession {
       if (r.serverId) linkedIds.add(r.serverId);
     }
     rows.push(...serverOnlyShadowRows(this.host.grading.myRecordings(), linkedIds));
-    return rows.sort((a, b) => b.createdAt - a.createdAt);
+    // 票 261 §1：显示最新在上、编号时间先后（最早 #1）——
+    // 旧实现用 $index+1 当号，新录一条就把旧号全顶下去，用户看到的
+    // #1 永远是最新一条，与“第几次录的”完全对不上。
+    const sorted = orderNewestFirst(rows);
+    const numbers = assignShadowNumbers(sorted);
+    return sorted.map((r) => ({ ...r, no: numbers.get(r.id) ?? 1 }));
   });
+
+  /** 票 261 §1：常规列表同样最新在上（takeNo 本就时间先后，不动）。 */
+  readonly orderedNonShadowRecordings = computed(() =>
+    orderNewestFirst(this.nonShadowRecordings()),
+  );
 
   /** 常规列表（P24：跟读行绝不出现在常规模式，哪怕已上传）。 */
   readonly nonShadowRecordings = computed(() => {
@@ -395,14 +450,63 @@ export class PracticeShadowSession {
     const next = !this.shadowMode();
     this.shadowMode.set(next);
     this.shadowError.set(null);
+    this.shadowMeterWarning.set(false);
     this.shadowStorageFailed.set(false);
-    if (next) await this.refreshShadowMeta();
+    if (next) {
+      // 票 261 §2：进跟读模式即枚举麦克风（授权前 label 可能为空，授权后重枚举）。
+      await this.refreshMicDevices();
+      await this.refreshShadowMeta();
+    }
     this.host.cdr.detectChanges();
   }
 
   setShadowRate(r: number): void {
     if (this.shadowRecording()) return; // 录制中锁定（P15 单率线性映射的前提）
     this.shadowRate.set(r);
+  }
+
+  /**
+   * 票 261 §2：枚举麦克风设备（授权前 label 为空属浏览器行为，照常列出；
+   * 授权后重枚举一次即可拿到 label）。存量 deviceId 已不在列表中 = 设备
+   * 已拔/已换，清掉选择、回落默认，绝不拿失效 id 去撞 exact 约束。
+   */
+  async refreshMicDevices(): Promise<void> {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices
+        .filter((d) => d.kind === 'audioinput')
+        .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Mic ${i + 1}` }));
+      this.micDevices.set(mics);
+      const selected = this.micDeviceId();
+      if (selected && !mics.some((m) => m.deviceId === selected)) this.setMicDevice(null);
+    } catch {
+      /* 枚举失败 = 不提供选设备（默认设备路径不受影响） */
+    }
+  }
+
+  /** 票 261 §2：选定麦克风（null = 系统默认），持久化。 */
+  setMicDevice(deviceId: string | null): void {
+    this.micDeviceId.set(deviceId);
+    try {
+      if (deviceId) localStorage.setItem('yi-mic-device', deviceId);
+      else localStorage.removeItem('yi-mic-device');
+    } catch {
+      /* 存储不可用不影响本次选择 */
+    }
+  }
+
+  /** 票 261 §6：线形波形 points（模板直接绑定，空 = 不画线）。 */
+  liveRefLinePoints(): string {
+    return peaksToLinePoints(this.shadowRefPeaks(), this.shadowAxisLength());
+  }
+  liveVoiceLinePoints(): string {
+    return peaksToLinePoints(this.shadowLivePeaks(), this.shadowAxisLength());
+  }
+  expandedRefLinePoints(): string {
+    return peaksToLinePoints(this.shadowRefPeaks(), this.shadowExpandedAxis());
+  }
+  expandedVoiceLinePoints(): string {
+    return peaksToLinePoints(this.shadowExpandedPeaks(), this.shadowExpandedAxis());
   }
 
   async setReviewRate(r: number): Promise<void> {
@@ -510,8 +614,10 @@ export class PracticeShadowSession {
       this.host.grading.pausePendingPreview?.();
 
       // P4 麦克风优先：先授权，授权失败则整起 abort（绝不单放参考）。
+      // 票 261 §2：provider 带用户选定的设备（null = 系统默认；失效 id
+      // 由 requestMicStream 回落默认，见 shadow-capture）。
       const capture = new ShadowCaptureService(
-        undefined,
+        () => requestMicStream(this.micDeviceId()),
         (fn) => this.host.ngZone.run(fn),
         (f) => this.onLiveFrame(f),
         () => this.onMidTakeFailure(),
@@ -531,8 +637,13 @@ export class PracticeShadowSession {
         );
         return;
       }
+      // 授权后重枚举一次：此时 label 已可读，设备下拉显示真名。
+      void this.refreshMicDevices();
       // AEC 核验（P12）：未生效 → 可见警告，永不拦截。
       this.shadowAecWarning.set(capture.aecApplied() === false);
+      // 票 261 §2：采集上下文未能启动 → 活声道读 0 的可见解释（只警告，
+      // 录音本身走原始流不受影响，绝不因此 abort）。
+      this.shadowMeterWarning.set(capture.ctxRunning() === false);
       this.takeRate = this.shadowRate();
       this.refKey = cached.key;
       this.refBlob = cached.blob;
@@ -670,6 +781,13 @@ export class PracticeShadowSession {
       this.takeLaneShiftSec = result.laneShiftSec;
       this.takeVoiceWallSec = result.voiceWallSec;
       this.takePeaks = decimatePeaks(this.shadowLivePeaks(), 600);
+      // 票 261 §2：整条 take 的活声峰值都 < 5/100 = 基本没收到声音 ——
+      // 非阻塞警告（take 照常保存/待提交），让用户立刻知道要查麦克风，
+      // 而不是对着一条静音 take 猜。正常说话峰值在 20~80 区间，阈值 5
+      // 只抓近乎全静音，误报面极小。
+      if (this.takePeaks.reduce((m, p) => Math.max(m, p.v), 0) < 5) {
+        this.shadowError.set(this.host.t('practice.shadow.noVoice'));
+      }
       const localTakeId = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
       const durationSec = jointDuration(
         this.takeRefDurSec / this.takeRate,
@@ -1151,6 +1269,13 @@ export class PracticeShadowSession {
   async discardShadowPending(): Promise<void> {
     const pending = this.shadowPending();
     if (!pending) return;
+    // 票 261 §7：丢弃待提交 take 也要先确认（与行删除同口径）。
+    const ok = await this.host.tree.confirmDialog({
+      title: this.host.t('dialog.deleteRecTitle'),
+      confirmText: this.host.t('dialog.deleteConfirm'),
+      danger: true,
+    });
+    if (ok !== true) return;
     await deleteShadowTake(pending.localTakeId);
     this.shadowPending.set(null);
     this.shadowMixStatus.set('idle');
@@ -1159,12 +1284,22 @@ export class PracticeShadowSession {
     await this.refreshShadowMeta();
   }
 
-  /** 删除跟读行：本地行直接删库；服务端行走既有删除确认，meta 由下次扫除清。 */
+  /**
+   * 票 261 §7：删除跟读行必须先确认。
+   * 服务端行走既有删除确认（grading.removeRecording）；本地行此前直接删库
+   * （用户截图的“删除没有提示框”正是这一路），现补同一确认弹窗。
+   */
   async removeShadowRow(row: ShadowRowView): Promise<void> {
     if (row.serverId) {
       this.host.grading.removeRecording(row.serverId);
       return;
     }
+    const ok = await this.host.tree.confirmDialog({
+      title: this.host.t('dialog.deleteRecTitle'),
+      confirmText: this.host.t('dialog.deleteConfirm'),
+      danger: true,
+    });
+    if (ok !== true) return;
     await deleteShadowTake(row.key);
     if (this.shadowExpandedId() === row.id) {
       this.stopShadowPlayback();

@@ -3374,20 +3374,22 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .audio-stack .rec-pill .live-wave {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;      /* 柱条以中线对齐,上下对称 */
+  align-items: center;
   justify-content: center;
-  gap: 2px;
   height: 30px;
   padding: 0 8px;
   overflow: hidden;
 }
-.audio-stack .rec-pill .live-wave .lw-bar {
-  display: block;
-  width: 3px;
-  min-height: 2px;
-  border-radius: 2px;
-  background: #16a34a;      /* 与录音麦克风同色 */
-  transition: height 60ms linear, opacity 60ms linear;
+/* 票 261 §6：实时波形画线不画柱（与原柱形同数据；线色与录音麦克风同色）。 */
+.audio-stack .rec-pill .live-wave .live-line {
+  width: 100%;
+  height: 100%;
+}
+.audio-stack .rec-pill .live-wave .live-line polyline {
+  fill: none;
+  stroke: #16a34a;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
 /* ---------- ② 录完后的静态波形(★ 第三十一轮起位于评分报告内部) ----------
@@ -3408,28 +3410,23 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
   align-items: center;
   overflow: hidden;
 }
-.result-wrap .res-block .wave-strip .ws-bars {
+/* 票 261 §6：波形画线不画柱 —— 中线对称上下两条线（与原柱形同数据）。
+   票137 R-137-3 的意图原样保留：未播放线 #7fbfa0 深于条带底色 #f0fdf4、
+   浅于已播放实绿 #16a34a，两态均可区分。 */
+.result-wrap .res-block .wave-strip .ws-line {
   flex: 1 1 auto;
-  display: flex;
-  align-items: center;      /* 波形以中线为轴对称 */
-  justify-content: space-between;
-  gap: 1px;
+  width: 100%;
   height: 100%;
   cursor: default;
 }
-.result-wrap .res-block .wave-strip .ws-bar {
-  flex: 1 1 0;
-  min-width: 1px;
-  max-width: 4px;
-  border-radius: 2px;
-  /* 票137 R-137-3：未播放必须与条带底色 #f0fdf4 可区分 ——
-     旧值与底色逐字相同，解出的柱子在视觉上同样是一条平绿条（第二成因）。
-     中绿 #7fbfa0：浅于已播放 #16a34a、深于条带底色，两态均可区分。 */
-  background: #7fbfa0;
-  transition: background 120ms linear, height 120ms ease-out;
+.result-wrap .res-block .wave-strip .ws-line polyline {
+  fill: none;
+  stroke: #7fbfa0;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
-.result-wrap .res-block .wave-strip .ws-bar.played {
-  background: #16a34a;      /* 已播放:实绿 */
+.result-wrap .res-block .wave-strip .ws-line polyline.played {
+  stroke: #16a34a;      /* 已播放:实绿 */
 }
 /* 播放中整条轻微提亮,提示"正在读这里" */
 .result-wrap .res-block .wave-strip.wave-live {
@@ -3537,13 +3534,13 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .custom-q-banner mat-icon { color: #2563eb; }
 .custom-q-banner span { flex: 1; }
 
-/* 票 250：跟读模式（与既有胶囊/列表色系一致：参考蓝、活声绿）。 */
-.shadow-toggle {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: 50%;
-  border: 1px solid #dbeafe; background: #fff; color: #2563eb; cursor: pointer;
+/* 票 250：跟读模式（与既有胶囊/列表色系一致：参考蓝、活声绿）。
+   票 261 §4：开关已移出播放条，放在卡片底部导航栏 Previous 左侧，
+   用 Material slide-toggle（开关式），不再是播放条里的圆形图标键。 */
+.shadow-switch {
+  display: inline-flex; align-items: center;
+  font-size: 13px; color: #334155; margin-right: 4px;
 }
-.shadow-toggle.on { background: #2563eb; color: #fff; border-color: #2563eb; }
 .shadow-panel {
   margin-top: 12px; padding: 12px 14px;
   background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
@@ -3558,29 +3555,37 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .shadow-alert mat-icon { font-size: 18px; width: 18px; height: 18px; }
 .shadow-rate-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .shadow-rate-label { font-size: 13px; color: #475569; margin-right: 4px; }
-.shadow-rate-btn {
-  padding: 4px 10px; border-radius: 999px; border: 1px solid #cbd5e1;
-  background: #fff; color: #334155; font-size: 13px; cursor: pointer;
+/* 票 261 §3：倍速菜单键 —— 与示范条 .speed-badge 同一套视觉
+   （白底、#dbeafe 边框、#2563eb 文字、12px 圆角），菜单用 zoom-menu/zm-item。 */
+.shadow-rate-menu-btn {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 4px 8px 4px 12px; border-radius: 12px; border: 1px solid #dbeafe;
+  background: #fff; color: #2563eb; font-size: 11.5px; font-weight: 600; cursor: pointer;
 }
-.shadow-rate-btn.on { background: #2563eb; color: #fff; border-color: #2563eb; }
-.shadow-rate-btn:disabled { opacity: 0.5; cursor: default; }
-.shadow-start-btn, .shadow-stop-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 14px; border-radius: 999px; border: none; cursor: pointer;
-  font-size: 13px; font-weight: 500; margin-left: 8px;
+.shadow-rate-menu-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.shadow-rate-menu-btn:disabled { opacity: 0.5; cursor: default; }
+/* 票 261 §2：麦克风设备行（与倍速行同排布）。 */
+.shadow-mic-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.shadow-mic-select {
+  flex: 1 1 auto; min-width: 160px; padding: 4px 8px; border-radius: 12px;
+  border: 1px solid #dbeafe; background: #fff; color: #334155; font-size: 13px;
 }
-.shadow-start-btn { background: #16a34a; color: #fff; }
-.shadow-stop-btn { background: #dc2626; color: #fff; }
+.shadow-mic-select:disabled { opacity: 0.5; }
 .shadow-lanes { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
 .shadow-lane { display: flex; align-items: center; gap: 10px; }
 .shadow-lane-label { width: 64px; flex-shrink: 0; font-size: 13px; color: #475569; }
 .shadow-track {
-  position: relative; flex: 1; height: 44px; display: flex; align-items: flex-end; gap: 2px;
+  position: relative; flex: 1; height: 44px;
   background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 6px;
   overflow: hidden; cursor: pointer;
 }
-.shadow-bar { flex: 1; min-width: 2px; background: #93c5fd; border-radius: 2px 2px 0 0; }
-.shadow-bar.voice { background: #86efac; }
+/* 票 261 §6：跟读波形画线不画柱 —— 参考蓝、活声绿（与旧柱色同色系加深，
+   细线在白底上可读）。 */
+.shadow-line { position: absolute; inset: 4px 6px; width: calc(100% - 12px); height: calc(100% - 8px); }
+.shadow-line polyline {
+  fill: none; stroke: #3b82f6; stroke-width: 2; vector-effect: non-scaling-stroke;
+}
+.shadow-line.voice polyline { stroke: #22c55e; }
 .shadow-playhead {
   position: absolute; top: 0; bottom: 0; width: 2px; background: #dc2626; pointer-events: none;
 }

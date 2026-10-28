@@ -98,6 +98,8 @@ public sealed class ListRecordingsQueryHandler(AssessmentDbContext db)
         x.IsShadow ?? false,
         // ★ 票259 S2:人声轨存在 = VoiceStoragePath 非空；对齐参数原样透传（NULL 保持 NULL）。
         !string.IsNullOrWhiteSpace(x.VoiceStoragePath),
+        // ★ 票260 S3:混音存在 = StoragePath 非空；与 HasVoiceTrack 一起构成行 kind 派生。
+        !string.IsNullOrWhiteSpace(x.StoragePath),
         x.TakeRate,
         x.LaneShiftSec);
 
@@ -203,6 +205,57 @@ public sealed class SaveRecordingCommandHandler(AssessmentDbContext db, IAudioSt
     }
 }
 
+/// <summary>
+/// 票260 S3：创建跟读-only 行（两步创建的第一步，纯元数据，无文件）。
+/// 普通录音上传流程一字不动 —— 本命令是 P29b 修订后非 1x 行上服务端的唯一合法入口。
+/// 行 kind 派生（前后端同一公式）：IsShadow=true 且 StoragePath 非空 → 跟读-混音行；
+/// IsShadow=true 且 StoragePath 为空 且 VoiceStoragePath 非空 → 跟读-only 行；
+/// IsShadow=true 且两路径皆空 → 未完成行；其余 → 普通行。
+/// 建出的行即未完成行（无混音、无人声轨）；第二步经 S2 人声轨端点传人声轨后才完整。
+/// 未完成行在别设备不可见（前端 shadow 列表按 HasVoiceTrack + 本地链接过滤），
+/// 录制设备可见（本地人声 blob 还在，显示上传中/失败、可重试）。
+/// </summary>
+public sealed record CreateShadowRowCommand(Guid UserId, Guid MaterialId,
+    double DurationSeconds, double TakeRate, double LaneShiftSec)
+    : MediatR.IRequest<Result<RecordingDto>>;
+
+public sealed class CreateShadowRowCommandHandler(AssessmentDbContext db)
+    : MediatR.IRequestHandler<CreateShadowRowCommand, Result<RecordingDto>>
+{
+    public async Task<Result<RecordingDto>> Handle(CreateShadowRowCommand r, CancellationToken ct)
+    {
+        // 素材必须属于我 —— 与普通上传同一口径，非本人素材 = 不存在（404）。
+        var owns = await db.Materials.AnyAsync(
+            x => x.Id == r.MaterialId && x.UserId == r.UserId, ct);
+        if (!owns)
+            return Result.Failure<RecordingDto>(Error.NotFound("素材"));
+
+        // 校验矩阵（缺一不可；duration 与现有 durationSeconds 表单字段同一信任模型，
+        // 即客户端按 §5 联合时长公式算、服务端如实存，但仍挡非法值）。
+        if (!(r.DurationSeconds > 0))
+            return Result.Failure<RecordingDto>(Error.Validation("ShadowRow.Duration",
+                "行时长必须大于 0。"));
+        if (!double.IsFinite(r.TakeRate) || r.TakeRate <= 0 || r.TakeRate > 2)
+            return Result.Failure<RecordingDto>(Error.Validation("ShadowRow.TakeRate",
+                "跟读倍速必须在 (0, 2] 区间内。"));
+        if (!double.IsFinite(r.LaneShiftSec))
+            return Result.Failure<RecordingDto>(Error.Validation("ShadowRow.LaneShift",
+                "laneShift 必须是有限数值。"));
+
+        var rec = new PracticeRecording(Guid.NewGuid(), r.UserId, r.MaterialId,
+            storagePath: null, contentType: "audio/webm", sizeBytes: 0,
+            durationSeconds: r.DurationSeconds, sourceLanguage: "en-US", isShadow: true);
+        // 对齐参数随行落库（两步创建的第一步即写，不等第二步人声轨）；
+        // 人声轨端点重传不带参数时保留既有值（AttachVoiceTrack 语义）。
+        // VoiceStoragePath 保持 NULL（≠ 空串）⇒ HasVoiceTrack=false ⇒ 未完成行。
+        rec.SetAlignment(r.TakeRate, r.LaneShiftSec);
+        db.Recordings.Add(rec);
+        await db.SaveChangesAsync(ct);
+
+        return Result.Success(ListRecordingsQueryHandler.ToDto(rec));
+    }
+}
+
 /// <summary>取一条录音的音频流(用于回放)。</summary>
 public sealed record GetRecordingAudioQuery(Guid UserId, Guid RecordingId)
     : MediatR.IRequest<Result<(Stream Audio, string ContentType, string FileName)>>;
@@ -215,6 +268,11 @@ public sealed class GetRecordingAudioQueryHandler(AssessmentDbContext db, IAudio
         var rec = await db.Recordings.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == r.RecordingId && x.UserId == r.UserId && !x.IsDeleted, ct);
         if (rec is null) return Result.Failure<(Stream, string, string)>(Error.NotFound("录音"));
+
+        // ★ 票260 S3：跟读-only 行无混音文件 —— 混音端点对它 404，绝不把人声轨当混音回流。
+        //   普通行与跟读-混音行的 StoragePath 由构造器保证非空，此处只挡空路径行。
+        if (string.IsNullOrWhiteSpace(rec.StoragePath))
+            return Result.Failure<(Stream, string, string)>(Error.NotFound("录音文件"));
 
         var s = await store.OpenReadAsync(r.UserId, rec.StoragePath, ct);
         if (s is null)
@@ -463,6 +521,16 @@ public sealed class SaveRecordingScoreCommandHandler(AssessmentDbContext db)
             .Include(x => x.Score)
             .FirstOrDefaultAsync(x => x.Id == r.RecordingId && x.UserId == r.UserId, ct);
         if (rec is null) return Result.Failure<RecordingScoreDto>(Error.NotFound("录音"));
+
+        // ★ 票260 S3：评分隔离第二道防线（结构保证，不是约定）。
+        //   行 kind 派生（前后端同一公式）：IsShadow=true 且 StoragePath 非空 → 跟读-混音行；
+        //   IsShadow=true 且 StoragePath 为空 且 VoiceStoragePath 非空 → 跟读-only 行；
+        //   IsShadow=true 且两路径皆空 → 未完成行；其余 → 普通行。
+        //   三种跟读态一律拒绝入评分（400），普通行才放行；第一道防线是
+        //   正常列表永不返回跟读行（P24 + S1 分类规则），本处防 crafted 请求。
+        if (rec.IsShadow == true)
+            return Result.Failure<RecordingScoreDto>(Error.Validation("Recording.ShadowNotScored",
+                "跟读行不参与评分。"));
 
         var score = new PracticeRecordingScore(r.RecordingId, r.PronScore, r.AccuracyScore,
             r.FluencyScore, r.CompletenessScore, r.ProsodyScore,

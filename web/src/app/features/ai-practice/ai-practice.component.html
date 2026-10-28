@@ -673,6 +673,14 @@
                 </div>
                 <span class="hi-time">{{ fmtDuration(row.durationSec) }}</span>
                 <span class="spacer"></span>
+                <!-- 票260 S3（§4.7）：本地-only 双轨行的“上传到服务器”（S3 范围内唯一新增控件；批量上传不在范围）。 -->
+                @if (!row.serverId && row.kind === 'dual') {
+                  <button class="hi-retry" [matTooltip]="t('practice.shadow.uploadToServer')"
+                          [disabled]="shadow.uploadingToServerFor() === row.localTakeId"
+                          (click)="$event.stopPropagation(); shadow.uploadShadowRowToServer(row)">
+                    <mat-icon>cloud_upload</mat-icon>
+                  </button>
+                }
                 <!-- 票259 S2：人声轨上传失败时，行上只重传人声轨（绝不重传混音）。 -->
                 @if (shadow.voiceTrackFailedFor() === row.serverId) {
                   <button class="hi-retry" [matTooltip]="t('practice.shadow.retryVoice')"

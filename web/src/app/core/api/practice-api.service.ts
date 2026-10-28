@@ -145,6 +145,8 @@ export interface RecordingDto {
   isShadow?: boolean;
   /** ★ 票259 S2:人声轨存在 + 双轨对齐参数（NULL = 非跟读行或旧行）。 */
   hasVoiceTrack?: boolean;
+  /** ★ 票260 S3:混音存在（StoragePath 非空）。与 hasVoiceTrack 一起构成行 kind 派生。 */
+  hasMixTrack?: boolean;
   takeRate?: number | null;
   laneShiftSec?: number | null;
 }
@@ -512,6 +514,19 @@ export class PracticeApi {
    */
   fetchVoiceTrack(recordingId: string): Observable<Blob> {
     return this.api.getBlob(`${PracticeApi.BASE}/recordings/${recordingId}/voice-track`);
+  }
+
+  /**
+   * 票260 S3：创建跟读-only 行（两步创建的第一步，纯元数据，无文件）。
+   * durationSeconds = §5 联合时长（客户端按 max 公式算、服务端如实存）；
+   * takeRate 有限且 (0, 2]、laneShiftSec 有限，否则后端 400。
+   * 返回新 GUID，行状态 = 未完成；第二步经 uploadVoiceTrack 传人声轨。
+   */
+  createShadowRow(materialId: string, durationSeconds: number,
+    takeRate: number, laneShiftSec: number): Observable<RecordingDto> {
+    return this.api.post<RecordingDto>(
+      `${PracticeApi.BASE}/materials/${materialId}/shadow-rows`,
+      { durationSeconds, takeRate, laneShiftSec });
   }
 
   // ---------- 票119 词典(点词查词典) ----------

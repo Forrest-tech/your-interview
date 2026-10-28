@@ -29,7 +29,12 @@ public sealed record RecordingDto(
     // ★ 票259 S2:人声轨存在标识（VoiceStoragePath 非空）+ 双轨对齐参数。
     //   NULL = 非跟读行或 S2 之前录的旧行；列表渲染据此决定是否可取人声轨，
     //   不再每行多一次请求。
+    // ★ 票260 S3:混音存在标识（StoragePath 非空）。行 kind 派生（前后端同一公式）：
+    //   IsShadow=true 且 StoragePath 非空 → 跟读-混音行；
+    //   IsShadow=true 且 StoragePath 为空 且 VoiceStoragePath 非空 → 跟读-only 行；
+    //   IsShadow=true 且两路径皆空 → 未完成行；其余 → 普通行。
     bool HasVoiceTrack = false,
+    bool HasMixTrack = false,
     double? TakeRate = null,
     double? LaneShiftSec = null);
 

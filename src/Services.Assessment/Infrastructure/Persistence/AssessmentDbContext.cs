@@ -177,7 +177,7 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
         {
             e.ToTable("practice_recordings");
             e.HasKey(x => x.Id);
-            e.Property(x => x.StoragePath).HasMaxLength(1000).IsRequired();
+            e.Property(x => x.StoragePath).HasMaxLength(1000);
             e.Property(x => x.ContentType).HasMaxLength(100).IsRequired();
             e.Property(x => x.SourceLanguage).HasMaxLength(10).IsRequired();
 

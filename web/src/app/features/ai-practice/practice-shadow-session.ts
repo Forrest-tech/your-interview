@@ -75,6 +75,28 @@ export interface ShadowRowView {
   mixStatus: ShadowMixStatus;
   /** 服务端行是否存在（本地行 false）。 */
   uploaded: boolean;
+  /** 双轨对齐 laneShift（秒；本地行取 store，服务端-only 行取 DTO，缺省 0）。 */
+  laneShiftSec?: number;
+}
+
+/**
+ * ★ 票260 S3：服务端行 kind 派生（前后端同一公式，与后端 DTO 注释、assess 拒绝注释同一句话）：
+ * IsShadow=true 且 StoragePath 非空 → 跟读-混音行；
+ * IsShadow=true 且 StoragePath 为空 且 VoiceStoragePath 非空 → 跟读-only 行；
+ * IsShadow=true 且两路径皆空 → 未完成行；其余 → 普通行。
+ * 前端以 hasMixTrack（StoragePath 非空）+ hasVoiceTrack（VoiceStoragePath 非空）计算。
+ */
+export type ServerRecordingKind = 'ordinary' | 'shadow-mix' | 'shadow-only' | 'shadow-unfinished';
+
+export function recordingKind(
+  isShadow: boolean | undefined,
+  hasMixTrack: boolean | undefined,
+  hasVoiceTrack: boolean | undefined,
+): ServerRecordingKind {
+  if (isShadow !== true) return 'ordinary';
+  if (hasMixTrack === true) return 'shadow-mix';
+  if (hasVoiceTrack === true) return 'shadow-only';
+  return 'shadow-unfinished';
 }
 
 /** 待提交跟读（Stop 后、提交前的审阅态；仅 mix 行有提交，dual 行无 pending 态）。 */
@@ -111,14 +133,22 @@ export function isShadowRow(serverIsShadow: boolean | undefined, hasLocalLink: b
  * 无对齐参数）；展开时 meta 为 null → 人声道先试取服务端人声轨，
  * 取不到才走既有降级态（“本设备无此人声道”+ solo 禁用），混音经服务端
  * 取回播放；不新增降级文案。
+ * ★ 票260 S3：kind 改由 rate 派生（rate===1 → 'mix'，否则 'dual'，与本地
+ * take 的 kind 口径一致）；未完成行（无本地链接且无混音、无人声轨）
+ * 在别设备不可见 —— 无混音、无人声，列出来就是死行，不列。
+ * 兼容：两轨字段皆缺省 = S3 之前的响应（那时服务端行恒有混音），按混音行处理，
+ * S1/S2 旧单测与旧响应不受影响；S3 响应恒带两字段，缺省分支不再触发。
  */
 export function serverOnlyShadowRows(
-  recordings: Pick<Recording, 'id' | 'createdAt' | 'duration' | 'isShadow' | 'takeRate'>[],
+  recordings: Pick<Recording, 'id' | 'createdAt' | 'duration' | 'isShadow' | 'takeRate' | 'hasVoiceTrack' | 'hasMixTrack' | 'laneShiftSec'>[],
   linkedIds: ReadonlySet<string>,
 ): ShadowRowView[] {
   const rows: ShadowRowView[] = [];
   for (const r of recordings) {
     if (r.isShadow !== true || linkedIds.has(r.id)) continue;
+    // 未完成行（两轨皆明确无）→ 别设备不可见；两字段皆缺省 = 旧响应 → 混音行。
+    if (r.hasMixTrack === false && r.hasVoiceTrack === false) continue;
+    const rate = r.takeRate ?? 1;
     rows.push({
       id: r.id,
       key: r.id,
@@ -126,10 +156,11 @@ export function serverOnlyShadowRows(
       serverId: r.id,
       createdAt: r.createdAt,
       durationSec: r.duration,
-      rate: r.takeRate ?? 1,
-      kind: 'mix',
+      rate,
+      kind: rate === 1 ? 'mix' : 'dual',
       mixStatus: 'done',
       uploaded: true,
+      laneShiftSec: r.laneShiftSec ?? 0,
     });
   }
   return rows;
@@ -224,6 +255,8 @@ export class PracticeShadowSession {
   readonly shadowStorageFailed = signal(false);
   /** 票259 S2：人声轨上传失败的服务端行 id（仅该行显示“重试传人声”）。 */
   readonly voiceTrackFailedFor = signal<string | null>(null);
+  /** 票260 S3：正在上传到服务器的本地行 localTakeId（上传中禁用该行按钮）。 */
+  readonly uploadingToServerFor = signal<string | null>(null);
 
   // ---------- 列表与展开 ----------
   private readonly shadowMeta = signal<Map<string, ShadowTakeRecord>>(new Map());
@@ -257,6 +290,7 @@ export class PracticeShadowSession {
         kind: r.kind,
         mixStatus: r.mixStatus,
         uploaded: r.serverId !== null,
+        laneShiftSec: r.laneShiftSec,
       });
     }
     if (pending) {
@@ -271,6 +305,7 @@ export class PracticeShadowSession {
         kind: pending.kind,
         mixStatus: pending.mixStatus,
         uploaded: false,
+        laneShiftSec: pending.laneShiftSec,
       });
     }
     // ★ 票258 S1：无本地链接的服务端跟读行（另一设备上的 1x 混音行）
@@ -1064,6 +1099,55 @@ export class PracticeShadowSession {
       voiceBlob, row.rate, rec?.laneShiftSec ?? 0);
   }
 
+  /**
+   * 票260 S3（§4.7 迁移）：把一条本地-only 双轨行上传到服务器。
+   * S3 范围内唯一新增的 UI 控件（用户定夺“后期录音文件都会放在服务器上”；
+   * 不自动批量上传，批量“上传全部”不在范围）。
+   * 两步创建：POST shadow-rows（元数据，行 = 未完成）→ POST voice-track
+   * （人声 blob，成功后行 = 完整跟读行）→ 本地记录按 P18 重键为服务端 GUID。
+   * 人声失败 → 行留在未完成态 + 失败标志（行上重试钮只重传人声轨），
+   * 本地 blob 保留，行仍可在录制设备播放；不删本地记录。
+   * 成功后本地人声 blob 按 §3.2 规则可丢弃（uploadVoiceTrackFor 内
+   * 服务端 GET 回读 size > 0 才删，peaks/F0 保留）。
+   */
+  async uploadShadowRowToServer(row: ShadowRowView): Promise<void> {
+    if (row.serverId || row.kind !== 'dual' || !row.localTakeId) return;
+    if (this.uploadingToServerFor()) return;
+    const materialId = this.host.selectedId();
+    if (!materialId) return;
+    const rec = await this.storeRecord(row.localTakeId);
+    const voiceBlob = rec?.voiceBlob ?? null;
+    if (!voiceBlob || voiceBlob.size === 0) return;
+    this.uploadingToServerFor.set(row.localTakeId);
+    try {
+      const dto = await firstValueFrom(this.host.practiceApi.createShadowRow(
+        materialId, row.durationSec, row.rate, rec?.laneShiftSec ?? 0));
+      // 先写回 serverId 关联（重键失败时行仍可通过 serverId 识别，不丢声轨）。
+      const ok = await rekeyShadowTake(row.localTakeId, dto.id, async (b) => {
+        const d = await this.decodeAudio(b);
+        return d ? d.data.length / d.sampleRate : 0;
+      });
+      if (!ok) {
+        const cur = await this.storeRecord(row.localTakeId);
+        if (cur) await putShadowTake({ ...cur, serverId: dto.id, pendingUpload: true });
+      }
+      const uploaded = await this.uploadVoiceTrackFor(dto.id, row.localTakeId,
+        voiceBlob, row.rate, rec?.laneShiftSec ?? 0);
+      if (!uploaded) {
+        // 人声失败：行已是服务端未完成行，失败标志驱动行上重试（只重传人声轨）。
+        this.voiceTrackFailedFor.set(dto.id);
+      } else {
+        this.host.toast(this.host.t('practice.shadow.uploadedToServer'));
+      }
+      await this.refreshShadowMeta();
+    } catch {
+      this.shadowError.set(this.host.t('practice.shadow.uploadToServerFailed'));
+    } finally {
+      this.uploadingToServerFor.set(null);
+      this.host.cdr.detectChanges();
+    }
+  }
+
   async discardShadowPending(): Promise<void> {
     const pending = this.shadowPending();
     if (!pending) return;
@@ -1259,7 +1343,9 @@ export class PracticeShadowSession {
     }
 
     const reviewRate = this.shadowReviewRate();
-    const laneShift = meta?.laneShiftSec ?? 0;
+    // ★ 票260 S3：服务端-only 行无本地 meta 时，laneShift 取行上的 DTO 值
+    //   （serverOnlyShadowRows 已从 TakeRate/LaneShiftSec 透传），不再恒为 0。
+    const laneShift = meta?.laneShiftSec ?? row.laneShiftSec ?? 0;
     const refDur = meta?.refDurationSec ?? row.durationSec;
     const voiceDur = meta?.voiceWallSec ?? row.durationSec;
 

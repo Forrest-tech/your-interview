@@ -36,6 +36,8 @@ export interface Recording {
   isShadow?: boolean;
   /** ★ 票259 S2:人声轨存在 + 双轨对齐参数（NULL = 非跟读行或旧行）。 */
   hasVoiceTrack?: boolean;
+  /** ★ 票260 S3:混音存在（StoragePath 非空）。与 hasVoiceTrack 一起构成行 kind 派生。 */
+  hasMixTrack?: boolean;
   takeRate?: number | null;
   laneShiftSec?: number | null;
 }
@@ -555,6 +557,8 @@ export class RecorderService {
       isShadow: d.isShadow ?? false,
       // ★ 票259 S2:人声轨存在 + 对齐参数透传（列表渲染据此决定是否可取人声轨）。
       hasVoiceTrack: d.hasVoiceTrack ?? false,
+      // ★ 票260 S3:混音存在透传（缺省 false；与 hasVoiceTrack 一起构成行 kind 派生）。
+      hasMixTrack: d.hasMixTrack ?? false,
       takeRate: d.takeRate ?? null,
       laneShiftSec: d.laneShiftSec ?? null
     };

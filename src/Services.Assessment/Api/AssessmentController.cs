@@ -579,6 +579,28 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
             : result.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 票260 S3：创建跟读-only 行（两步创建的第一步，纯元数据，无文件）。
+    /// P29b 修订后非 1x 行上服务端的唯一合法入口；普通上传流程一字不动
+    /// （POST materials/{id}/recordings 仍要求 file 非空，单传人声 blob 仍被禁止）。
+    /// JSON: durationSeconds（§5 联合时长，客户端算、服务端如实存）、
+    /// takeRate（有限 double，(0, 2]，超出 → 400）、laneShiftSec（有限 double）。
+    /// 返回新 GUID，行状态 = 未完成（无人声轨、无混音）；第二步经
+    /// POST recordings/{id}/voice-track 传人声轨，成功后行 = 完整跟读行。
+    /// </summary>
+    [HttpPost("materials/{materialId:guid}/shadow-rows")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockManage)]
+    public async Task<IResult> CreateShadowRow(Guid materialId,
+        [FromBody] CreateShadowRowBody body, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var result = await sender.Send(new CreateShadowRowCommand(userId, materialId,
+            body.DurationSeconds, body.TakeRate, body.LaneShiftSec), ct);
+        return result.IsSuccess
+            ? Results.Created($"/api/assessment/recordings/{result.Value.Id}", result.Value)
+            : result.ToProblemDetails();
+    }
+
     /// <summary>回放:取录音音频流。前端 &lt;audio src&gt; 直接指向这里。</summary>
     [HttpGet("recordings/{id:guid}/audio")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.MockRead)]
@@ -938,6 +960,9 @@ public sealed class AssessmentController(ISender sender, ICurrentUser currentUse
 
 public sealed record CreateSessionBody(string Title, string Mode, string? Topic,
     string? CompanyStyle, int TargetQuestionCount = 5, string? Language = null);
+
+/// <summary>票260 S3：跟读-only 行创建体（两步创建的第一步）。</summary>
+public sealed record CreateShadowRowBody(double DurationSeconds, double TakeRate, double LaneShiftSec);
 
 public sealed record CompleteBody(string? OverallSummary, string? PriorityAction);
 

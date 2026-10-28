@@ -359,7 +359,6 @@ namespace YourInterview.Services.Assessment.Infrastructure.Persistence.Migration
                         .HasColumnType("character varying(10)");
 
                     b.Property<string>("StoragePath")
-                        .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 

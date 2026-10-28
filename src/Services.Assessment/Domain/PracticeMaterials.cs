@@ -222,6 +222,9 @@ public sealed class PracticeRecording
 
     /// <summary>
     /// 建一条录音。
+    /// 行 kind 派生（前后端同一公式）：IsShadow=true 且 StoragePath 非空 → 跟读-混音行；
+    /// IsShadow=true 且 StoragePath 为空 且 VoiceStoragePath 非空 → 跟读-only 行；
+    /// IsShadow=true 且两路径皆空 → 未完成行；其余 → 普通行。
     /// </summary>
     /// <param name="id">
     /// 显式传入 Id —— 因为**磁盘文件名用的就是它**,两边必须一致
@@ -229,13 +232,17 @@ public sealed class PracticeRecording
     /// 若不显式传,实体自己 NewGuid() 就会和文件名对不上,
     /// "录音 id → 找文件"这条链路就断了。
     /// </param>
-    public PracticeRecording(Guid id, Guid userId, Guid materialId, string storagePath,
+    public PracticeRecording(Guid id, Guid userId, Guid materialId, string? storagePath,
         string contentType, long sizeBytes, double durationSeconds, string sourceLanguage = "en-US",
         // ★ 票258 S1:跟读标识(可空)。NULL = S1 之前录的历史行,语义"未知",
         //   过滤时按非跟读处理;新上传由 SaveRecordingCommand 显式传(缺省 false)。
         bool? isShadow = null)
     {
-        if (string.IsNullOrWhiteSpace(storagePath))
+        // ★ 票260 S3：仅普通行必填 StoragePath；跟读行（IsShadow=true）可空——
+        //   跟读-only 行无混音文件（两步创建的第一步连人声轨也还没有），
+        //   命令层按 kind 校验（普通行 StoragePath 必填；跟读-only 行完成态
+        //   才有人声轨），此处不替命令层把跟读行也卡死。
+        if (isShadow != true && string.IsNullOrWhiteSpace(storagePath))
             throw new ArgumentException("存储路径不能为空", nameof(storagePath));
 
         Id = id;
@@ -254,8 +261,12 @@ public sealed class PracticeRecording
     public Guid UserId { get; private set; }
     /// <summary>所属素材文件 —— 换素材就换录音列表。</summary>
     public Guid MaterialId { get; private set; }
-    /// <summary>音频文件相对路径(相对 Storage:RootDirectory),不存绝对路径 —— 换机器也能用。</summary>
-    public string StoragePath { get; private set; } = string.Empty;
+    /// <summary>音频文件相对路径(相对 Storage:RootDirectory),不存绝对路径 —— 换机器也能用。
+    /// 票260 S3：可空 —— 跟读-only 行无混音文件（StoragePath 为空）；普通行与跟读-混音行非空。
+    /// 行 kind 派生（前后端同一公式）：IsShadow=true 且 StoragePath 非空 → 跟读-混音行；
+    /// IsShadow=true 且 StoragePath 为空 且 VoiceStoragePath 非空 → 跟读-only 行；
+    /// IsShadow=true 且两路径皆空 → 未完成行；其余 → 普通行。</summary>
+    public string? StoragePath { get; private set; }
     public string ContentType { get; private set; } = "audio/webm";
     public long SizeBytes { get; private set; }
     public double DurationSeconds { get; private set; }
@@ -300,6 +311,17 @@ public sealed class PracticeRecording
         VoiceSizeBytes = sizeBytes;
         if (takeRate.HasValue) TakeRate = takeRate.Value;
         if (laneShiftSec.HasValue) LaneShiftSec = laneShiftSec.Value;
+    }
+
+    /// <summary>
+    /// 票260 S3：只写双轨对齐参数，不动人声轨三元组。
+    /// 两步创建的第一步用：行落库时即带 TakeRate/LaneShiftSec，
+    /// VoiceStoragePath 保持 NULL（未完成行），不等第二步人声轨。
+    /// </summary>
+    public void SetAlignment(double takeRate, double laneShiftSec)
+    {
+        TakeRate = takeRate;
+        LaneShiftSec = laneShiftSec;
     }
 
     /// <summary>重新评分时替换旧结果(可重跑是硬要求)。</summary>

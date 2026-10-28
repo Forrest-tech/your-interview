@@ -14,29 +14,39 @@
  * - 只用于 dual together：voice 元素。人声独奏是单轨，无“与参考比”
  *   问题；mix 单轨行的人声已 baked 进混音、无法单独放大（整轨放大
  *   等比放大参考，无意义），故两者都不挂增益。
- * - 固定增益值（SHADOW_VOICE_TOGETHER_GAIN）：走查实测调定（见台账
- *   271 条目），限幅器保证大音量人声不削波。
+ * - 票 279 改动（评分胜出 C）：固定 ×3 + ratio 20 已废止——
+ *   ① 自适应增益（computeTogetherGain）：按 take 的人声峰/参考峰
+ *   定增益，钳在 [1.0, 3.0]，峰值缺失时回落固定 3.0；
+ *   ② 限幅器改为纯限幅角色（只碰顶端约 1dB，中段语音不动），
+ *   不再把大音量人声压扁出抽吸/生硬感；
+ *   ③ 挂接前门控（ensureVoiceGainContextRunning）：图必须在
+ *   上下文 running 后才挂，resume 失败/超时则不挂图、元素直出。
  */
-
-/** 一起听人声增益（线性倍数；走查实测调定，见台账 271）。 */
-export const SHADOW_VOICE_TOGETHER_GAIN = 3;
 
 /**
- * 限幅器参数：实测调定（Chrome DynamicsCompressor 真实曲线与教科书
- * 膝区公式不符——它会把小信号抬高，故参数只认 OfflineAudioContext
- * 实测，不认公式推导）。增益 3、knee 3、ratio 20 下的实测表：
- *   人声峰 0.15（×3=0.45）→ 输出 0.63（对 0.9 参考 = 70%，过可比 bar）
- *   人声峰 0.25（×3=0.75）→ 输出 0.81
- *   人声峰 0.40（×3=1.20）→ 输出 0.85（未被压扁）
- *   人声峰 0.80（×3=2.40）→ 输出 0.91（< 0.98，无削波）
- *   人声峰 1.00（×3=3.00）→ 输出 0.91（< 0.98，无削波）
- * 阈值 -3dB 曾实测不达标（0.8 人声输出 1.00、满幅输出 1.02 仍削波），
- * 故不用；阈值 -1dB 同理出局（0.8 人声输出 1.08）。
+ * 一起听人声增益上限与峰值缺失时的回落值（线性倍数；271 走查实测
+ * 调定，279 起仅作上限/回落，不再是固定增益）。
+ */
+export const SHADOW_VOICE_TOGETHER_GAIN = 3;
+
+/** 自适应增益下限：只放大、永不衰减（大音量人声不被压小）。 */
+export const TOGETHER_GAIN_FLOOR = 1;
+
+/**
+ * 票 279 限幅器参数（纯限幅角色）：阈值 -3dB + 宽膝 6dB + ratio 12。
+ * 自适应增益保证入限幅峰值 ≈ 参考峰（≤ 1.0），故只有顶端约 3dB 会
+ * 被碰到，中段语音基本不动——不再复现 271 ratio 20 + 阈值 -6dB
+ * 把大音量语音全程压扁的抽吸感。阈值实测三轮：-1dB 时满幅正弦
+ * 起振瞬态冲到 0.995、-2dB 时 0.981，均贴 271 的 0.98 安全线；
+ * -3dB 时满幅 0.959、可比度仍 ≥ 95%，中段 0.5 输入仅抬到 0.541。
+ * 注意：271 的“-3dB 不达标”是在固定 ×3 下入限幅峰值高达 3.0 的
+ * 旧链上测的，与自适应增益（入限幅峰值 ≤ 1.0）不可比。参数只认
+ * OfflineAudioContext 实测（见台账 279 实测表），不认公式推导。
  */
 export const VOICE_LIMITER = {
-  thresholdDb: -6,
-  kneeDb: 3,
-  ratio: 20,
+  thresholdDb: -3,
+  kneeDb: 6,
+  ratio: 12,
   attackSec: 0.003,
   releaseSec: 0.1,
 } as const;
@@ -65,10 +75,72 @@ export interface MediaSourceLike {
 /** 挂增益所需的最小 AudioContext 面（真实 AudioContext / Jest 假对象）。 */
 export interface VoiceGainContextLike {
   destination: unknown;
+  /** 'running' | 'suspended' | 'closed'（真实 AudioContextState；假对象须给值）。 */
+  state: string;
   createMediaElementSource(el: unknown): MediaSourceLike;
   createGain(): GainNodeLike;
   createDynamicsCompressor(): DynamicsCompressorLike;
   resume(): Promise<void> | void;
+}
+
+/** 峰值列的最大 v（0..100 口径）；空列 → null（调用方走回落）。 */
+export function peakMaxValue(peaks: readonly { v: number }[]): number | null {
+  let max: number | null = null;
+  for (const p of peaks) {
+    if (typeof p.v === 'number' && Number.isFinite(p.v) && (max === null || p.v > max)) max = p.v;
+  }
+  return max;
+}
+
+/**
+ * 票 279 自适应一起听增益：把人声峰补到与参考峰可比。
+ * 公式 gain = refPeak / voicePeak（两边同 0..100 口径，比值与量纲无关），
+ * 钳在 [TOGETHER_GAIN_FLOOR, SHADOW_VOICE_TOGETHER_GAIN]：
+ * 人声已 ≥ 参考 → 1.0（永不衰减）；人声极小 → 顶格 3.0（271 的可听上限）。
+ * 任一峰值缺失/非正/非有限 → 回落固定 3.0（fallback: true）。
+ */
+export function computeTogetherGain(
+  voicePeak: number | null | undefined,
+  refPeak: number | null | undefined,
+): { gain: number; fallback: boolean } {
+  if (
+    typeof voicePeak !== 'number' || typeof refPeak !== 'number' ||
+    !Number.isFinite(voicePeak) || !Number.isFinite(refPeak) ||
+    !(voicePeak > 0) || !(refPeak > 0)
+  ) {
+    return { gain: SHADOW_VOICE_TOGETHER_GAIN, fallback: true };
+  }
+  const raw = refPeak / voicePeak;
+  const gain = Math.min(SHADOW_VOICE_TOGETHER_GAIN, Math.max(TOGETHER_GAIN_FLOOR, raw));
+  return { gain, fallback: false };
+}
+
+/**
+ * 票 279 挂接前门控：图必须在上下文 running 后才挂。
+ * 已 running → 立即 true；suspended → 调 resume 并等到 running 或超时
+ * （默认 1000ms）；closed / 无上下文 / resume 抛错且状态仍非 running → false。
+ * 调用方在 false 时必须不挂图（元素直出）——元素一旦被
+ * MediaElementSource 捕获，输出只走图，断开图并不能恢复直出，
+ * 所以“先挂后拆”不是合法回落。
+ */
+export async function ensureVoiceGainContextRunning(
+  ctx: VoiceGainContextLike | null | undefined,
+  timeoutMs = 1000,
+): Promise<boolean> {
+  if (!ctx) return false;
+  if (ctx.state === 'running') return true;
+  try {
+    const r = ctx.resume();
+    if (r && typeof (r as Promise<void>).then === 'function') {
+      await Promise.race([
+        (r as Promise<void>).catch(() => undefined),
+        new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+      ]);
+    }
+  } catch {
+    /* resume 抛错 → 下方状态判定兜底 */
+  }
+  return ctx.state === 'running';
 }
 
 export interface VoiceGainStage {
@@ -108,7 +180,11 @@ export function attachVoiceGainStage(
         (r as Promise<void>).catch(() => undefined);
       }
     } catch {
-      /* suspended 上下文也不断播：元素照常出声，只是增益待恢复 */
+      /* 票 279 更正 271 旧注：被 MediaElementSource 捕获的元素在
+         suspended 上下文里是静音的（输出只走图），不存在“元素照常
+         出声、只是增益待恢复”——所以调用方必须先门控
+         （ensureVoiceGainContextRunning）再挂图，挂接内的 resume
+         只是尽力而为，不能当作前置静音的解法。 */
     }
     return {
       gainValue,

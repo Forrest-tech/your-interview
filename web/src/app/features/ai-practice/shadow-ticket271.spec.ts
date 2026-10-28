@@ -67,6 +67,7 @@ function fakeCtx(): VoiceGainContextLike & {
     resumed: boolean;
   } = {
     destination,
+    state: 'running',
     gain,
     limiter,
     source,

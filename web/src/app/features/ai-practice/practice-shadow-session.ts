@@ -52,8 +52,10 @@ import { ShadowPlaybackController } from './shadow-playback';
 import type { PlaybackTrack } from './shadow-playback';
 import {
   attachVoiceGainStage,
+  computeTogetherGain,
+  ensureVoiceGainContextRunning,
   micLevelFromPeaks,
-  SHADOW_VOICE_TOGETHER_GAIN,
+  peakMaxValue,
   shouldShowQuietHint,
 } from './shadow-voice-gain';
 import type { VoiceGainStage } from './shadow-voice-gain';
@@ -1218,8 +1220,18 @@ export class PracticeShadowSession {
     (rEl as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
     this.expandedVoiceEl = vEl;
     this.expandedRefEl = rEl;
-    // 票 271 A：dual together 人声挂增益级（只动听的路径；挂接失败
-    // 返回 null 时回落原播放，绝不断播）。独奏/混音单轨不挂（见模块注）。
+    // 票 279：dual together 人声挂增益级（只动听的路径）。
+    // ① 自适应增益：人声峰/参考峰取本行已算好的两条 lane（同 0..100
+    // 口径），缺失时回落固定值（见模块注）。独奏/混音单轨不挂。
+    // ② 挂接前门控：必须先等上下文 running 才挂图——元素一旦被
+    // MediaElementSource 捕获，输出只走图，suspended 的图 = 静音，
+    // 且断开图不能恢复元素直出；所以 resume 失败/超时时只能不挂图
+    // （元素直出、绝不断播），不能先挂后拆。
+    const { gain: togetherGain } = computeTogetherGain(
+      peakMaxValue(this.shadowExpandedPeaks()),
+      peakMaxValue(this.shadowRefPeaks()),
+    );
+    let stage: VoiceGainStage | null = null;
     if (typeof AudioContext !== 'undefined') {
       if (!this.voiceGainCtx) {
         try {
@@ -1228,11 +1240,12 @@ export class PracticeShadowSession {
           this.voiceGainCtx = null;
         }
       }
-      this.voiceGainStage = this.voiceGainCtx
-        ? attachVoiceGainStage(this.voiceGainCtx, vEl, SHADOW_VOICE_TOGETHER_GAIN)
-        : null;
-      this.shadowVoiceGain.set(this.voiceGainStage ? this.voiceGainStage.gainValue : 0);
+      const ctx = this.voiceGainCtx;
+      const running = ctx ? await ensureVoiceGainContextRunning(ctx, 1000) : false;
+      stage = ctx && running ? attachVoiceGainStage(ctx, vEl, togetherGain) : null;
     }
+    this.voiceGainStage = stage;
+    this.shadowVoiceGain.set(stage ? stage.gainValue : 0);
     this.controller = new ShadowPlaybackController(
       {
         mode: 'dual',

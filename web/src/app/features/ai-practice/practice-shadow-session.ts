@@ -272,7 +272,7 @@ export class PracticeShadowSession {
 
   // ---------- 模式与倍速 ----------
   readonly shadowMode = signal(false);
-  readonly shadowRate = signal(1);
+  /** 倍速率表（现仅回放菜单用；录制率跟示范条 x1，票 265）。 */
   readonly shadowRates = [0.5, 0.75, 1, 1.25, 1.5, 2];
   /** 审阅率（当前展开行的 listening 率，独立于 take 率，P25）。 */
   readonly shadowReviewRate = signal(1);
@@ -475,11 +475,6 @@ export class PracticeShadowSession {
     this.host.cdr.detectChanges();
   }
 
-  setShadowRate(r: number): void {
-    if (this.shadowRecording()) return; // 录制中锁定（P15 单率线性映射的前提）
-    this.shadowRate.set(r);
-  }
-
   /**
    * 票 261 §2：枚举麦克风设备（授权前 label 为空属浏览器行为，照常列出；
    * 授权后重枚举一次即可拿到 label）。存量 deviceId 已不在列表中 = 设备
@@ -637,7 +632,8 @@ export class PracticeShadowSession {
         (f) => this.onLiveFrame(f),
         () => this.onMidTakeFailure(),
         () => (this.refHowl ? this.refHowl.seek() || 0 : null),
-        this.shadowRate(),
+        // 票 265：录制率跟示范条 x1（host.tts.rate），不再另设跟读倍速行。
+        this.host.tts.rate(),
       );
       this.capture = capture;
       try {
@@ -659,7 +655,7 @@ export class PracticeShadowSession {
       // 票 261 §2：采集上下文未能启动 → 活声道读 0 的可见解释（只警告，
       // 录音本身走原始流不受影响，绝不因此 abort）。
       this.shadowMeterWarning.set(capture.ctxRunning() === false);
-      this.takeRate = this.shadowRate();
+      this.takeRate = this.host.tts.rate(); // 票 265：take 率 = 开录时示范条 x1。
       this.refKey = cached.key;
       this.refBlob = cached.blob;
 

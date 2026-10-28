@@ -181,7 +181,13 @@ describe('票 261：模板与样式结构契约', () => {
     expect(html).toContain('mat-slide-toggle');
   });
 
-  it('§3：倍速用菜单键（无展开 pills），跟读面板无开始/停止键', () => {
+  it('§3（票 265 修订）：跟读倍速行已删除，倍速只用示范条 x1；回放菜单仍在，跟读面板无开始/停止键', () => {
+    // 录制倍速行彻底删除（不是改回 pills，也不是换菜单样式）。
+    expect(html).not.toContain('shadow-rate-row');
+    expect(html).not.toContain('shadowRateMenu');
+    expect(html).not.toContain('shadow.setShadowRate');
+    // 回放菜单是另一行，刻意保留：仍用菜单键，仍用同一套 class。
+    expect(html).toContain('shadowReviewMenu');
     expect(html).toContain('shadow-rate-menu-btn');
     expect(html).not.toContain('shadow-rate-btn');
     expect(html).not.toContain('data-testid="shadow-start"');

@@ -482,30 +482,8 @@
               </div>
             }
 
-            <!-- 票 261 §3/§5：倍速与示范条用同一套菜单（按钮 + zoom-menu/zm-item），
-                 不再是展开的一排 pills；录音的开始/停止走绿色录音键，
-                 这里不再另设开始/停止键。 -->
-            <div class="shadow-rate-row">
-              <span class="shadow-rate-label">{{ t('practice.shadow.rate') }}</span>
-              <button class="shadow-rate-menu-btn" [matMenuTriggerFor]="shadowRateMenu"
-                      [disabled]="shadow.shadowRecording()">
-                <span>{{ shadow.shadowRate() }}x</span>
-                <mat-icon>expand_more</mat-icon>
-              </button>
-              <mat-menu #shadowRateMenu="matMenu" class="app-menu zoom-menu" xPosition="before">
-                @for (r of shadow.shadowRates; track r) {
-                  <button mat-menu-item class="zm-item rate-item"
-                          [class.on]="shadow.shadowRate() === r"
-                          (click)="shadow.setShadowRate(r)">
-                    <span>{{ r }}x</span>
-                  </button>
-                }
-              </mat-menu>
-              @if (shadow.shadowRecording()) {
-                <span class="shadow-rate-label">{{ t('practice.shadow.recording') }}</span>
-              }
-            </div>
-
+            <!-- 票 265：跟读倍速行已删除——倍速只用示范条上的 x1（host.tts.rate），
+                 录音的开始/停止走绿色录音键，这里不再另设开始/停止键。 -->
             @if (shadow.shadowRecording()) {
               <div class="shadow-live" data-testid="shadow-live">
                 <!-- 票 261 §6：波形画线不画柱（与原柱顶同数据，只换画法）。 -->

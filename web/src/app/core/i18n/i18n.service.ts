@@ -281,11 +281,11 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.shadow.toggle': { zh: '跟读模式', en: 'Shadowing mode', fr: 'Mode shadowing' },
   'practice.shadow.toggleOn': { zh: '跟读模式已开启', en: 'Shadowing mode on', fr: 'Mode shadowing activé' },
   'practice.shadow.toggleOff': { zh: '跟读模式已关闭', en: 'Shadowing mode off', fr: 'Mode shadowing désactivé' },
-  'practice.shadow.rate': { zh: '跟读倍速', en: 'Shadowing rate', fr: 'Vitesse de shadowing' },
+
   'practice.shadow.reviewRate': { zh: '回放倍速', en: 'Review rate', fr: 'Vitesse de relecture' },
   'practice.shadow.start': { zh: '开始跟读', en: 'Start shadowing', fr: 'Commencer le shadowing' },
   'practice.shadow.stop': { zh: '停止跟读', en: 'Stop shadowing', fr: 'Arrêter le shadowing' },
-  'practice.shadow.recording': { zh: '跟读录音中…', en: 'Shadowing…', fr: 'Shadowing en cours…' },
+
   'practice.shadow.submit': { zh: '提交跟读', en: 'Submit shadowing', fr: 'Envoyer le shadowing' },
   'practice.shadow.discard': { zh: '丢弃跟读', en: 'Discard shadowing', fr: 'Abandonner le shadowing' },
   'practice.shadow.retryMix': { zh: '重新混音', en: 'Retry mixdown', fr: 'Réessayer le mixage' },

@@ -529,6 +529,14 @@
                   <span>{{ t('practice.shadow.pitchVoice') }}: {{ shadow.shadowPitchVoice() === null ? '—' : shadow.shadowPitchVoice() }} Hz</span>
                   <span>{{ t('practice.shadow.pitchRef') }}: {{ shadow.shadowPitchRef() === null ? '—' : shadow.shadowPitchRef() }} Hz</span>
                 </div>
+                <!-- 票 271 C：录音中麦克风音量表（只读显示，不改音频）。 -->
+                <div class="shadow-mic-meter" data-testid="shadow-mic-meter">
+                  <span class="shadow-mic-meter-label">{{ t('practice.shadow.micLevel') }}</span>
+                  <div class="shadow-mic-meter-track">
+                    <span class="shadow-mic-meter-fill" [style.width.%]="shadow.shadowMicLevel()"></span>
+                  </div>
+                  <span class="shadow-mic-meter-value">{{ shadow.shadowMicLevel() }}%</span>
+                </div>
               </div>
             }
 
@@ -542,6 +550,14 @@
                     <span>{{ t('practice.shadow.retryWrite') }}</span>
                   </button>
                 }
+              </div>
+            }
+
+            <!-- 票 271 C：人声过小提示（非阻塞 note，与 noVoice 错误互斥，见模块注）。 -->
+            @if (shadow.shadowQuietHint()) {
+              <div class="shadow-alert" role="note">
+                <mat-icon>volume_down</mat-icon>
+                <span>{{ shadow.shadowQuietHint() }}</span>
               </div>
             }
           </div>

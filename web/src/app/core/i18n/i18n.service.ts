@@ -320,6 +320,9 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.shadow.micDevice': { zh: '麦克风', en: 'Microphone', fr: 'Microphone' },
   'practice.shadow.micDefault': { zh: '系统默认', en: 'System default', fr: 'Par défaut du système' },
   'practice.shadow.noVoice': { zh: '这次跟读几乎没有录到你的声音，请检查麦克风设备或音量。', en: 'Almost no voice was captured in this take. Check your microphone device and volume.', fr: 'Presque aucune voix n’a été capturée. Vérifiez votre microphone et le volume.' },
+  // 票 271 C：录音中麦克风音量表 + 人声过小提示（只诊断、不改音频）。
+  'practice.shadow.micLevel': { zh: '麦克风音量', en: 'Mic level', fr: 'Niveau du micro' },
+  'practice.shadow.quietVoiceHint': { zh: '这次跟读的人声比示范小很多：可以离麦克风近一点，或检查系统麦克风音量、确认选对了设备；也可以戴耳机再跟读一次。', en: 'Your voice came out much quieter than the reference in this take: move closer to the microphone, check your system mic volume and device, or try headphones.', fr: 'Votre voix est beaucoup plus faible que la référence sur cet enregistrement : rapprochez-vous du microphone, vérifiez le volume et le périphérique du microphone, ou essayez avec des écouteurs.' },
   'practice.shadow.liveMeterUnavailable': { zh: '实时波形不可用（音频上下文未能启动），录音本身不受影响。', en: 'Live waveform unavailable (audio context could not start); recording itself is unaffected.', fr: 'La forme d’onde en direct est indisponible (le contexte audio n’a pas démarré) ; l’enregistrement n’est pas affecté.' },
   'practice.shadow.liveRef': { zh: '参考', en: 'Reference', fr: 'Référence' },
   'practice.shadow.liveVoice': { zh: '我的声音', en: 'My voice', fr: 'Ma voix' },

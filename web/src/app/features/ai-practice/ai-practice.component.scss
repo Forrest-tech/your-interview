@@ -3644,6 +3644,12 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
   position: absolute; top: 0; bottom: 0; width: 2px; background: #dc2626; pointer-events: none;
 }
 .shadow-pitch { display: flex; gap: 20px; font-size: 13px; color: #334155; margin: 4px 0 2px 74px; }
+/* 票 271 C：录音中麦克风音量表（只读显示；轨道白底、填充沿用活声绿）。 */
+.shadow-mic-meter { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px 74px; }
+.shadow-mic-meter-label { flex-shrink: 0; font-size: 13px; color: #475569; }
+.shadow-mic-meter-track { flex: 1; height: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 999px; overflow: hidden; }
+.shadow-mic-meter-fill { display: block; height: 100%; background: #22c55e; border-radius: 999px; }
+.shadow-mic-meter-value { flex-shrink: 0; font-size: 13px; color: #334155; }
 .shadow-pending {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px;
   font-size: 13px; color: #334155;

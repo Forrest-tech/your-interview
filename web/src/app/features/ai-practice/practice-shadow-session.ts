@@ -51,6 +51,13 @@ import type { ShadowFrame } from './shadow-capture';
 import { ShadowPlaybackController } from './shadow-playback';
 import type { PlaybackTrack } from './shadow-playback';
 import {
+  attachVoiceGainStage,
+  micLevelFromPeaks,
+  SHADOW_VOICE_TOGETHER_GAIN,
+  shouldShowQuietHint,
+} from './shadow-voice-gain';
+import type { VoiceGainStage } from './shadow-voice-gain';
+import {
   deleteShadowTake,
   getShadowTakesForMaterial,
   putShadowTake,
@@ -270,6 +277,22 @@ export class PracticeShadowSession {
   readonly shadowPitchVoice = signal<number | null>(null);
   readonly shadowPitchRef = signal<number | null>(null);
   readonly shadowError = signal<string | null>(null);
+  /**
+   * 票 271 C：人声过小提示（非阻塞 note；只在停录时按人声/参考峰值比
+   * 判定，见 shouldShowQuietHint；近静音归票 261 noVoice 警告，不叠加）。
+   * 下一次 startShadow 时清掉。
+   */
+  readonly shadowQuietHint = signal<string | null>(null);
+  /**
+   * 票 271 C：录音中麦克风音量表读数（最近 12 帧峰值最大值，0~100；
+   * 只读信号，模板在录音时渲染一条小音量条，不改任何音频）。
+   */
+  readonly shadowMicLevel = computed(() => micLevelFromPeaks(this.shadowLivePeaks()));
+  /**
+   * 票 271 A：当前展开行一起听时人声增益级的生效倍数；未挂增益为 0。
+   * 仅供走查/验证断言（模板不渲染），增益本身只动听的路径。
+   */
+  readonly shadowVoiceGain = signal(0);
   readonly shadowAecWarning = signal(false);
   /**
    * 票 261 §2：实时波形上下文未能启动警告（Analyser 读 0 的可见解释；
@@ -421,6 +444,10 @@ export class PracticeShadowSession {
   private voiceGate = new PitchGate();
   private refGate = new PitchGate();
   private controller: ShadowPlaybackController | null = null;
+  /** 票 271 A：一起听人声增益级（随 stopShadowPlayback 断开丢弃）。 */
+  private voiceGainStage: VoiceGainStage | null = null;
+  /** 票 271 A：增益图共用的 AudioContext（懒建；元素重建不重建它）。 */
+  private voiceGainCtx: AudioContext | null = null;
   private expandedVoiceUrl: string | null = null;
   private expandedRefUrl: string | null = null;
   private expandedVoiceEl: HTMLAudioElement | null = null;
@@ -542,6 +569,7 @@ export class PracticeShadowSession {
   async startShadow(): Promise<void> {
     if (this.starting || this.shadowRecording()) return;
     this.shadowError.set(null);
+    this.shadowQuietHint.set(null);
     this.shadowStorageFailed.set(false);
     const materialId = this.host.selectedId();
     if (!materialId) return;
@@ -759,6 +787,13 @@ export class PracticeShadowSession {
       // 只抓近乎全静音，误报面极小。
       if (this.takePeaks.reduce((m, p) => Math.max(m, p.v), 0) < 5) {
         this.shadowError.set(this.host.t('practice.shadow.noVoice'));
+      }
+      // 票 271 C：人声不近静音、但远小于参考 → 非阻塞过小提示（不叠加
+      // noVoice；提示本身不改音频，修法在耳：近麦/查系统音量/换设备/耳机）。
+      const voiceMax = this.takePeaks.reduce((m, p) => Math.max(m, p.v), 0);
+      const refMax = this.shadowRefPeaks().reduce((m, p) => Math.max(m, p.v), 0);
+      if (shouldShowQuietHint(voiceMax, refMax)) {
+        this.shadowQuietHint.set(this.host.t('practice.shadow.quietVoiceHint'));
       }
       const localTakeId = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
       const durationSec = jointDuration(
@@ -999,6 +1034,10 @@ export class PracticeShadowSession {
     this.controller?.destroy();
     this.controller = null;
     this.shadowPlayingId.set(null);
+    // 票 271 A：增益级随播放控制器一起断开（旧元素丢弃，新元素重挂）。
+    this.voiceGainStage?.disconnect();
+    this.voiceGainStage = null;
+    this.shadowVoiceGain.set(0);
     for (const u of [this.expandedVoiceUrl, this.expandedRefUrl]) {
       if (u) URL.revokeObjectURL(u);
     }
@@ -1179,6 +1218,21 @@ export class PracticeShadowSession {
     (rEl as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
     this.expandedVoiceEl = vEl;
     this.expandedRefEl = rEl;
+    // 票 271 A：dual together 人声挂增益级（只动听的路径；挂接失败
+    // 返回 null 时回落原播放，绝不断播）。独奏/混音单轨不挂（见模块注）。
+    if (typeof AudioContext !== 'undefined') {
+      if (!this.voiceGainCtx) {
+        try {
+          this.voiceGainCtx = new AudioContext();
+        } catch {
+          this.voiceGainCtx = null;
+        }
+      }
+      this.voiceGainStage = this.voiceGainCtx
+        ? attachVoiceGainStage(this.voiceGainCtx, vEl, SHADOW_VOICE_TOGETHER_GAIN)
+        : null;
+      this.shadowVoiceGain.set(this.voiceGainStage ? this.voiceGainStage.gainValue : 0);
+    }
     this.controller = new ShadowPlaybackController(
       {
         mode: 'dual',

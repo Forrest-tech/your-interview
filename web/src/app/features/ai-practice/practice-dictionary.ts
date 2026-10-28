@@ -337,12 +337,16 @@ export class PracticeDictionary {
     void this.open(token, this.triggerEl, { keepCurrentCardUntilSettle: true });
   }
 
-  /** 播放失败重试（卡组件 retryPlayRequested）：以已失败键全集作排除重发 pronounce。 */
+  /** 播放失败重试（卡组件 retryPlayRequested）：以已失败键全集作排除重发 pronounce。
+   * 票262：排除重发若链耗尽（available=false），说明排除集已无候选可进——此时
+   * Retry 的意义是给瞬时失败的键一次重取机会，而非对着空链再发一次排除请求。
+   * 故仅在链耗尽时、无排除重发一次（本轮唯一一次）；仍无候选 → 可见失败。
+   * 有候选时行为不变（仍走排除集的前进逻辑），绝不为 Retry 清掉尚有候选的排除集。 */
   retryPlay(): void {
     const ps = this.playStatus();
     if (ps.phase !== 'error' || !ps.word || !ps.accent) return;
     void this.pronounceAndPlay(
-      ps.word, ps.accent, ps.targetType ?? 'accent', ps.targetForm ?? undefined, ps.failedKeys);
+      ps.word, ps.accent, ps.targetType ?? 'accent', ps.targetForm ?? undefined, ps.failedKeys, true);
   }
 
   /**
@@ -393,11 +397,12 @@ export class PracticeDictionary {
    * 票254 §4:pronounce 解析 Main 面 → 有 key 取流播；取流失败 → 一次自动回落
    * （pronounce-with-exclusion，合成键永不可排除，合成键失败不自动回落）；
    * 首次 pronounce 即失败（无失败键可排除）→ 可见 error 态，永不静默。
-   * 每次调用至多一次自动回落；手动重试（retryPlay）是新调用，带全集排除重发。
+   * 每次调用至多一次自动回落；手动重试（retryPlay）是新调用，带全集排除重发，
+   * 票262：手动重试中排除重发若链耗尽，再无排除重发一次（本轮唯一一次，见下）。
    */
   private async pronounceAndPlay(
     word: string, accent: DictAccent, targetType: 'accent' | 'form',
-    targetForm?: string, initialExcludeKeys: string[] = [],
+    targetForm?: string, initialExcludeKeys: string[] = [], clearExclusionsOnExhaustion = false,
   ): Promise<void> {
     const playToken = ++this.playSeq;
     const failedKeys: string[] = [...initialExcludeKeys];
@@ -414,13 +419,27 @@ export class PracticeDictionary {
     try {
       dto = await firstValueFrom(
         this.host.practiceApi.pronounceDictionaryWord(
-          word, accent, failedKeys.length ? { excludeKeys: failedKeys } : {}),
+          word, accent, failedKeys.length ? { excludeKeys: [...failedKeys] } : {}),
       );
     } catch {
       fail(); // 首次 pronounce 即失败：无失败键可排除 → 可见失败，永不静默。
       return;
     }
     if (playToken !== this.playSeq) return;
+    if ((!dto.available || !dto.key) && clearExclusionsOnExhaustion && failedKeys.length) {
+      // 票262：排除重发链耗尽 —— 排除集里已无候选，继续排除只会重复 available=false。
+      // 瞬时失败（Wikimedia 限流/超时）的键此时值得一次无排除重取：限流已过则播出，
+      // 仍失败则按正常流程走（取流失败 → 自动回落排除该键 → 可见失败），不循环。
+      try {
+        dto = await firstValueFrom(
+          this.host.practiceApi.pronounceDictionaryWord(word, accent, {}));
+      } catch {
+        fail();
+        return;
+      }
+      if (playToken !== this.playSeq) return;
+      failedKeys.length = 0;
+    }
     if (!dto.available || !dto.key) {
       fail();
       return;
@@ -444,7 +463,7 @@ export class PracticeDictionary {
     let dto2;
     try {
       dto2 = await firstValueFrom(
-        this.host.practiceApi.pronounceDictionaryWord(word, accent, { excludeKeys: failedKeys }),
+        this.host.practiceApi.pronounceDictionaryWord(word, accent, { excludeKeys: [...failedKeys] }),
       );
     } catch {
       fail();

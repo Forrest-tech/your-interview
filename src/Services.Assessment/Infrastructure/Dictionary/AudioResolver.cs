@@ -312,28 +312,90 @@ public sealed class AudioResolver
             return await MaterializeSyntheticAsync(key, word, accent, userId, ct);
         }
 
-        // 4) 按 audio-index 懒拉取（3s 超时，SPEC §2.1 第 3 级）
+        // 4) 按 audio-index 懒拉取（单次 3s 超时，SPEC §2.1 第 3 级）
+        // 票262：Wikimedia 会对源站请求做瞬时限流（实证：同一文件同一 UA 下一次 429、
+        // 数分钟后 200）——瞬时失败绝不能直接判死刑。旧代码任何一次拉取失败即回 null
+        // （端点 404），前端随即在本轮播放会话内排除该键并回落合成；合成不可用时
+        // 整轮播放失败（“Playback failed”），而卡内 Retry 只重发排除集、链耗尽时
+        // 永远拿不到候选（关卡重开才能重取该键）。故仅对瞬时类失败（429 / 5xx /
+        // 单次超时）重试，最多 3 次；429 优先服从 Retry-After（封顶 5s），其余瞬时
+        // 失败固定 1s；其它 4xx（文件确实没了）与外层取消不重试，立即回 null。
+        // 卡内 Retry 的链耗尽重取见前端 retryPlay（票262 后端 + 前端两道）。
         var rec = FindIndexRecByMp3Name(key);
         if (rec is null || string.IsNullOrEmpty(rec.Mp3Url)) return null;
-        try
+        var client = _httpFactory.CreateClient("dictionary-audio");
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(3));
-            var client = _httpFactory.CreateClient("dictionary-audio");
-            var bytes = await client.GetByteArrayAsync(rec.Mp3Url, cts.Token);
-            if (bytes.Length == 0) return null;
-            Directory.CreateDirectory(cacheDir);
-            await File.WriteAllBytesAsync(cachePath, bytes, ct);
-            RegisterCacheEntry(key, bytes.Length, rec.Mp3Url, rec.License, "commons");
-            EvictIfNeeded(protectedKey: key);
-            return cachePath;
+            try
+            {
+                using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                attemptCts.CancelAfter(TimeSpan.FromSeconds(3));
+                using var req = new HttpRequestMessage(HttpMethod.Get, rec.Mp3Url);
+                using var resp = await client.SendAsync(
+                    req, HttpCompletionOption.ResponseHeadersRead, attemptCts.Token);
+                if (resp.IsSuccessStatusCode)
+                {
+                    // 票262（接续）：正文读取也用单次预算 attemptCts——否则 ResponseHeadersRead
+                    // 下慢正文会逃出 3s 预算；读超时走下面的超时分支重试。
+                    var bytes = await resp.Content.ReadAsByteArrayAsync(attemptCts.Token);
+                    if (bytes.Length == 0) return null;
+                    Directory.CreateDirectory(cacheDir);
+                    await File.WriteAllBytesAsync(cachePath, bytes, ct);
+                    RegisterCacheEntry(key, bytes.Length, rec.Mp3Url, rec.License, "commons");
+                    EvictIfNeeded(protectedKey: key);
+                    return cachePath;
+                }
+                var status = (int)resp.StatusCode;
+                var transient = resp.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+                    || status >= 500;
+                if (!transient || attempt == 3) return null;
+                _logger.LogWarning(
+                    "Dictionary lazy audio fetch throttled/transient for {Key} from {Url}: {Status} (attempt {Attempt}/3, retrying)",
+                    key, rec.Mp3Url, status, attempt);
+                var delay = RetryDelayFor(resp);
+                try { await Task.Delay(delay, ct); }
+                catch (OperationCanceledException) { return null; }
+                continue;
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // 单次 3s 超时 = 瞬时失败，重试；外层取消（ct 已取消）不进此分支。
+                if (attempt == 3) return null;
+                _logger.LogWarning(
+                    "Dictionary lazy audio fetch timed out for {Key} from {Url} (attempt {Attempt}/3, retrying)",
+                    key, rec.Mp3Url, attempt);
+                try { await Task.Delay(TimeSpan.FromSeconds(1), ct); }
+                catch (OperationCanceledException) { return null; }
+                continue;
+            }
+            catch (Exception ex)
+            {
+                // 网络层异常（DNS/连接失败等）：同样按瞬时失败重试一次预算内次数。
+                if (attempt == 3)
+                {
+                    _logger.LogWarning(ex, "Dictionary lazy audio fetch failed for {Key} from {Url}", key, rec.Mp3Url);
+                    return null;
+                }
+                _logger.LogWarning(ex,
+                    "Dictionary lazy audio fetch failed for {Key} from {Url} (attempt {Attempt}/3, retrying)",
+                    key, rec.Mp3Url, attempt);
+                try { await Task.Delay(TimeSpan.FromSeconds(1), ct); }
+                catch (OperationCanceledException) { return null; }
+                continue;
+            }
         }
-        catch (Exception ex)
-        {
-            // 拉取失败 → 下一层（端点 404 → 前端走 pronounce/device）；留日志以便区分网络故障与索引缺口
-            _logger.LogWarning(ex, "Dictionary lazy audio fetch failed for {Key} from {Url}", key, rec.Mp3Url);
-            return null;
-        }
+        return null;
+    }
+
+    /// <summary>
+    /// 票262：429 重试等待（秒）。服从服务端 Retry-After（仅 delay-seconds 形态，
+    /// 封顶 5s 防长挂）；无头或不可解析时默认 1s。HTTP-date 形态不解析，走默认 1s。
+    /// </summary>
+    private static TimeSpan RetryDelayFor(HttpResponseMessage resp)
+    {
+        if (resp.Headers.RetryAfter is { Delta: { } delta } && delta >= TimeSpan.Zero)
+            return delta > TimeSpan.FromSeconds(5) ? TimeSpan.FromSeconds(5) : delta;
+        return TimeSpan.FromSeconds(1);
     }
 
     // ---------- Tier 2 神经 TTS（配置启用时，SPEC §2.1 第 4 级） ----------

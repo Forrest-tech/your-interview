@@ -47,7 +47,9 @@ describe('票 263：麦克风选择移出跟读面板', () => {
 
   it('录音路径未动：会话仍读同一键、仍把所选设备传给 requestMicStream', () => {
     expect(session).toContain(`localStorage.getItem('yi-mic-device')`);
-    expect(session).toContain('requestMicStream(this.micDeviceId())');
+    // 票 278：调用加了第二参 loadShadowMicMode()（模式现读），设备仍是第一参原样传；
+    // 263 的“所选设备传给 requestMicStream”口径未变，只是断言跟随新签名。
+    expect(session).toContain('requestMicStream(this.micDeviceId(), loadShadowMicMode())');
   });
 
   it('setting.micNote 与复用键均有 zh/en/fr', () => {

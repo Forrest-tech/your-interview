@@ -71,32 +71,56 @@ export function pickShadowMime(): string {
 
 /**
  * 票 261 §2：麦克风采集约束（唯一口径）。
- * echoCancellation 开（跟读时参考声经扬声器串入麦克风，必须消回声）、
- * noiseSuppression 关（降噪会连人声气声一起吃掉，跟读要的是原声）。
+ * noiseSuppression 恒关（降噪会连人声气声一起吃掉，跟读要的是原声）。
  * autoGainControl 不指定 = 浏览器默认（Chrome 为开），不画蛇添足。
+ * 票 278：echoCancellation 由麦克风模式决定 —— 扬声器模式开（跟读时
+ * 参考声经扬声器串入麦克风，必须消回声 = 261 原行为）；耳机模式关
+ * （戴着耳机本无声学回声可消，回声消除的门控反而把人声切得断断续续）。
  */
-const MIC_BASE: MediaTrackConstraints = {
-  echoCancellation: true,
-  noiseSuppression: false,
-};
+export type ShadowMicMode = 'speaker' | 'earphones';
+
+/** 票 278：跟读麦克风模式存储键（与 yi-mic-device 同 localStorage 族；缺省 = 扬声器）。 */
+export const SHADOW_MIC_MODE_KEY = 'yi-mic-mode';
+
+/** 票 278：读当前麦克风模式（非法值 / 读失败一律回落扬声器 = 现状）。 */
+export function loadShadowMicMode(): ShadowMicMode {
+  try {
+    return localStorage.getItem(SHADOW_MIC_MODE_KEY) === 'earphones' ? 'earphones' : 'speaker';
+  } catch {
+    return 'speaker';
+  }
+}
+
+function micConstraints(micMode: ShadowMicMode): MediaTrackConstraints {
+  return {
+    echoCancellation: micMode !== 'earphones',
+    noiseSuppression: false,
+  };
+}
 
 /**
  * 票 261 §2：带设备回落的麦克风请求。
  * deviceId 指定时先用 exact 约束；设备已拔/已换导致 OverconstrainedError
  * 时回落到默认设备（绝不因存量 deviceId 失效就整起失败）。
  * 其它错误（NotAllowedError 等）原样上抛，由调用方分级呈现。
+ * 票 278：micMode 缺省 = 扬声器（261 原行为）；约束对象按次构造，
+ * 授权时定格 —— 此后切模式不影响已授权的流（下一条录音才读新值）。
  */
-export async function requestMicStream(deviceId: string | null): Promise<MediaStream> {
+export async function requestMicStream(
+  deviceId: string | null,
+  micMode: ShadowMicMode = 'speaker',
+): Promise<MediaStream> {
+  const mic = micConstraints(micMode);
   if (deviceId) {
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio: { ...MIC_BASE, deviceId: { exact: deviceId } },
+        audio: { ...mic, deviceId: { exact: deviceId } },
       });
     } catch (e) {
       if ((e as { name?: string } | null)?.name !== 'OverconstrainedError') throw e;
     }
   }
-  return navigator.mediaDevices.getUserMedia({ audio: { ...MIC_BASE } });
+  return navigator.mediaDevices.getUserMedia({ audio: { ...mic } });
 }
 
 function defaultProvider(): Promise<MediaStream> {

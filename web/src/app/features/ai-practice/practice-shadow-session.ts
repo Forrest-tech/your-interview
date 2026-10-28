@@ -46,7 +46,7 @@ import {
   trackTimeToVoiceTime,
 } from './shadow-waveform.helpers';
 import type { ShadowPeak } from './shadow-waveform.helpers';
-import { ShadowCaptureService, requestMicStream } from './shadow-capture';
+import { ShadowCaptureService, loadShadowMicMode, requestMicStream } from './shadow-capture';
 import type { ShadowFrame } from './shadow-capture';
 import { ShadowPlaybackController } from './shadow-playback';
 import type { PlaybackTrack } from './shadow-playback';
@@ -634,8 +634,10 @@ export class PracticeShadowSession {
       // P4 麦克风优先：先授权，授权失败则整起 abort（绝不单放参考）。
       // 票 261 §2：provider 带用户选定的设备（null = 系统默认；失效 id
       // 由 requestMicStream 回落默认，见 shadow-capture）。
+      // 票 278：模式每次授权时现读（下一条录音即生效；已授权的流约束
+      // 已定格，录中切模式不影响本条）。
       const capture = new ShadowCaptureService(
-        () => requestMicStream(this.micDeviceId()),
+        () => requestMicStream(this.micDeviceId(), loadShadowMicMode()),
         (fn) => this.host.ngZone.run(fn),
         (f) => this.onLiveFrame(f),
         () => this.onMidTakeFailure(),

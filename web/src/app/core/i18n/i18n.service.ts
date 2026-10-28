@@ -1861,6 +1861,10 @@ const DICT: Record<string, Record<Lang, string>> = {
   'setting.current': { zh: '当前', en: 'Current', fr: 'Actuel' },
   'setting.credTitle': { zh: 'Azure Speech 凭据', en: 'Azure Speech Credentials', fr: 'Identifiants Azure Speech' },
   'setting.micNote': { zh: '跟读录音使用的麦克风；不选则用系统默认设备。下次进入跟读时生效。', en: 'Microphone used for shadowing recordings; system default when unset. Applies next time you enter shadowing.', fr: 'Microphone utilisé pour les enregistrements de shadowing ; appareil par défaut du système si aucun choix. Appliqué à la prochaine ouverture du shadowing.' },
+  'setting.micMode': { zh: '麦克风模式', en: 'Microphone mode', fr: 'Mode microphone' },
+  'setting.micModeSpeaker': { zh: '扬声器', en: 'Speaker', fr: 'Haut-parleur' },
+  'setting.micModeEarphones': { zh: '耳机', en: 'Earphones', fr: 'Écouteurs' },
+  'setting.micModeNote': { zh: '耳机模式会关掉回声消除，录出来的人声更干净，但只有真正戴着耳机时才有效；用扬声器外放时请选扬声器模式，否则示范声会串进录音。下一条跟读起生效，正在录的不受影响。', en: 'Earphones mode turns echo cancellation off for a cleaner voice, but only works if you are actually wearing earphones; with a speaker, use Speaker mode or reference audio will leak into the recording. Applies from the next take; a recording in progress is unaffected.', fr: 'Le mode Écouteurs désactive l’annulation d’écho pour une voix plus nette, mais il n’est efficace que si vous portez réellement des écouteurs ; avec un haut-parleur, choisissez le mode Haut-parleur, sinon l’audio de référence fuira dans l’enregistrement. Appliqué dès la prise suivante ; un enregistrement en cours n’est pas affecté.' },
   'setting.credDesc': {
     zh: '在 Azure 门户创建 Speech 资源后,从「密钥和终结点」页复制 Key 与区域填入下方。凭据仅用于服务端调用,不会写入浏览器存储。',
     en: 'Create a Speech resource in the Azure portal, then copy the Key and Region from the Keys and Endpoint page. Credentials are used server-side only and never stored in your browser.',

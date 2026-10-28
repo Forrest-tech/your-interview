@@ -3,6 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { PracticeApi } from '../../core/api/practice-api.service';
+import {
+  SHADOW_MIC_MODE_KEY,
+  loadShadowMicMode,
+} from '../ai-practice/shadow-capture';
+import type { ShadowMicMode } from '../ai-practice/shadow-capture';
 import { serverFieldErrorSummary } from '../../core/api/validation-errors.helpers';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { MatIconModule } from '@angular/material/icon';
@@ -82,6 +87,10 @@ export class VoiceSettingComponent {
   readonly micDevices = signal<{ deviceId: string; label: string }[]>([]);
   readonly micDeviceId = signal<string | null>(null);
 
+  /** 票 278：跟读麦克风模式（扬声器 = 现状；耳机 = 关回声消除）。
+   *  与 yi-mic-device 同族存储（yi-mic-mode；只存耳机，缺省即扬声器）。 */
+  readonly micMode = signal<ShadowMicMode>('speaker');
+
   /** Azure Key 输入框内容。⚠️ 只用于提交给后端,不落 localStorage。 */
   readonly azureKey = signal('');
 
@@ -159,6 +168,9 @@ export class VoiceSettingComponent {
     } catch {
       // 存储不可用就用系统默认,不阻断页面
     }
+
+    // 票 278：恢复已存的麦克风模式（缺省扬声器 = 现状）。
+    this.micMode.set(loadShadowMicMode());
     void this.refreshMicDevices();
 
     // 拉一次服务端的真实状态 —— 刷新后仍能看到"已配置的 key 是哪一把"
@@ -194,6 +206,17 @@ export class VoiceSettingComponent {
       if (selected && !mics.some((m) => m.deviceId === selected)) this.setMicDevice(null);
     } catch {
       /* 枚举失败 = 不提供选设备（默认设备路径不受影响） */
+    }
+  }
+
+  /** 票 278：选定跟读麦克风模式（耳机存键、扬声器清键 = 缺省；下一条录音起生效）。 */
+  setMicMode(mode: ShadowMicMode): void {
+    this.micMode.set(mode);
+    try {
+      if (mode === 'earphones') localStorage.setItem(SHADOW_MIC_MODE_KEY, 'earphones');
+      else localStorage.removeItem(SHADOW_MIC_MODE_KEY);
+    } catch {
+      /* 存储不可用不影响本次选择 */
     }
   }
 

@@ -106,6 +106,21 @@
         </mat-select>
       </mat-form-field>
     </div>
+
+    <!-- 票 278：麦克风模式（紧挨设备选择；耳机 = 关回声消除，扬声器 = 现状）。 -->
+    <div class="form-grid">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ t('setting.micMode') }}</mat-label>
+        <mat-select data-testid="mic-mode-select"
+                    [ngModel]="micMode()"
+                    (ngModelChange)="setMicMode($event)">
+          <mat-option value="speaker">{{ t('setting.micModeSpeaker') }}</mat-option>
+          <mat-option value="earphones">{{ t('setting.micModeEarphones') }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <p class="sp-card-desc">{{ t('setting.micModeNote') }}</p>
   </section>
 
   <!-- 配置教程(2026-09-16 Forrest:参考他提供的截图,给 Speech Key 页补上教程)

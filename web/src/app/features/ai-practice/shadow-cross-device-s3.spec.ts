@@ -178,26 +178,26 @@ describe('PracticeApi.createShadowRow（票260 S3 两步创建第一步）', () 
   });
 });
 
-describe('i18n/模板契约（票260 S3 迁移控件）', () => {
-  it('三新键三语齐全', () => {
+describe('模板契约（票 266：上传路径已删除，服务端读路径保留）', () => {
+  it('模板无“上传到服务器”钮、无待提交块', () => {
+    const html = SRC('./ai-practice.component.html');
+    expect(html).not.toContain(`shadow.uploadShadowRowToServer(row)`);
+    expect(html).not.toContain(`practice.shadow.uploadToServer`);
+    expect(html).not.toContain(`shadow-pending`);
+    expect(html).not.toContain(`submitShadowPending`);
+    expect(html).not.toContain(`discardShadowPending`);
+  });
+
+  it('上传三键已随删除移除（服务端读路径与人声重试键不受影响）', () => {
     const src = SRC('../../core/i18n/i18n.service.ts');
     for (const key of [
       'practice.shadow.uploadToServer',
       'practice.shadow.uploadedToServer',
       'practice.shadow.uploadToServerFailed',
     ]) {
-      expect(src).toContain(`'${key}'`);
-      const line = src.split('\n').find((l) => l.includes(`'${key}'`)) ?? '';
-      expect(line).toContain('zh:');
-      expect(line).toContain('en:');
-      expect(line).toContain('fr:');
+      expect(src).not.toContain(`'${key}'`);
     }
-  });
-
-  it('模板：“上传到服务器”钮只在本地-only 双轨行上出现', () => {
-    const html = SRC('./ai-practice.component.html');
-    expect(html).toContain(`!row.serverId && row.kind === 'dual'`);
-    expect(html).toContain(`shadow.uploadShadowRowToServer(row)`);
-    expect(html).toContain(`practice.shadow.uploadToServer`);
+    expect(src).toContain(`'practice.shadow.retryVoice'`);
+    expect(src).toContain(`'practice.shadow.voiceUploadFailed'`);
   });
 });

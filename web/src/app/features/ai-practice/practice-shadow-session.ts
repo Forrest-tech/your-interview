@@ -38,7 +38,6 @@ import type { AiPracticeComponent } from './ai-practice.component';
 import { getCachedAudio, getCachedAudioByMaterial, putCachedAudio, ttsKey } from './tts-audio-cache';
 import {
   computeF0Contour,
-  computeMixSchedule,
   continuityGateHz,
   decimatePeaks,
   jointDuration,
@@ -122,21 +121,6 @@ export function assignShadowNumbers<T extends { id: string; createdAt: number }>
 /** 票 261 §1：纯函数 —— 最新在上（createdAt 降序），不改原数组。 */
 export function orderNewestFirst<T extends { createdAt: number }>(rows: readonly T[]): T[] {
   return [...rows].sort((a, b) => b.createdAt - a.createdAt);
-}
-
-/** 待提交跟读（Stop 后、提交前的审阅态；仅 mix 行有提交，dual 行无 pending 态）。 */
-export interface ShadowPendingView {
-  localTakeId: string;
-  materialId: string;
-  rate: number;
-  kind: 'mix' | 'dual';
-  durationSec: number;
-  refDurationSec: number;
-  voiceWallSec: number;
-  laneShiftSec: number;
-  mixStatus: ShadowMixStatus;
-  /** 跟读原文（P29h：缓存缺失时重请求 TTS 用）。 */
-  text?: string;
 }
 
 /**
@@ -305,17 +289,11 @@ export class PracticeShadowSession {
     }
   }
 
-  // ---------- 待提交态 ----------
-  readonly shadowPending = signal<ShadowPendingView | null>(null);
-  readonly shadowMixStatus = signal<ShadowMixStatus>('idle');
-  readonly shadowMixProgress = signal(0);
+  // ---------- 写失败态（P29g：Stop 写失败时保留重试） ----------
   /** P29g：Stop 写失败标志（写进内存退路而非 IndexedDB 时置位）。 */
   readonly shadowStorageFailed = signal(false);
   /** 票259 S2：人声轨上传失败的服务端行 id（仅该行显示“重试传人声”）。 */
   readonly voiceTrackFailedFor = signal<string | null>(null);
-  /** 票260 S3：正在上传到服务器的本地行 localTakeId（上传中禁用该行按钮）。 */
-  readonly uploadingToServerFor = signal<string | null>(null);
-
   // ---------- 列表与展开 ----------
   private readonly shadowMeta = signal<Map<string, ShadowTakeRecord>>(new Map());
   readonly shadowExpandedId = signal<string | null>(null);
@@ -333,10 +311,8 @@ export class PracticeShadowSession {
       const prev = byLocal.get(r.localTakeId);
       if (!prev || (r.serverId && !prev.serverId)) byLocal.set(r.localTakeId, r);
     }
-    const pending = this.shadowPending();
     const rows: ShadowRowView[] = [];
     for (const r of byLocal.values()) {
-      if (r.mixStatus === 'pending' && pending && pending.localTakeId === r.localTakeId) continue;
       rows.push({
         id: r.serverId ?? r.key,
         key: r.key,
@@ -350,22 +326,6 @@ export class PracticeShadowSession {
         uploaded: r.serverId !== null,
         laneShiftSec: r.laneShiftSec,
         no: 0, // 票 261 §1：下文统一编号。
-      });
-    }
-    if (pending) {
-      rows.push({
-        id: pending.localTakeId,
-        key: pending.localTakeId,
-        localTakeId: pending.localTakeId,
-        serverId: null,
-        createdAt: Date.now(),
-        durationSec: pending.durationSec,
-        rate: pending.rate,
-        kind: pending.kind,
-        mixStatus: pending.mixStatus,
-        uploaded: false,
-        laneShiftSec: pending.laneShiftSec,
-        no: 0, // 票 261 §1：下文统一编号（待提交行时间最新，号最大）。
       });
     }
     // ★ 票258 S1：无本地链接的服务端跟读行（另一设备上的 1x 混音行）
@@ -445,7 +405,8 @@ export class PracticeShadowSession {
   private starting = false;
   private stopping = false;
   private midTakeFailed = false;
-  private mixCancel = false;
+  /** 票 266：Stop 写失败时记下的 take id（重试写用；成功/重试成功后清掉）。 */
+  private lastFailedTakeId: string | null = null;
   private voiceGate = new PitchGate();
   private refGate = new PitchGate();
   private controller: ShadowPlaybackController | null = null;
@@ -543,8 +504,6 @@ export class PracticeShadowSession {
     if (listReady) {
       const serverIds = new Set(this.host.recorder.recordings().map((r) => r.id));
       const pendingKeys = new Set<string>();
-      const pending = this.shadowPending();
-      if (pending) pendingKeys.add(pending.localTakeId);
       for (const r of rows) if (r.pendingUpload || r.mixStatus === 'pending') pendingKeys.add(r.key);
       await sweepShadowOrphans(materialId, serverIds, pendingKeys);
     }
@@ -552,38 +511,11 @@ export class PracticeShadowSession {
     const map = new Map<string, ShadowTakeRecord>();
     for (const r of after) map.set(r.key, r);
     this.shadowMeta.set(map);
-    // P10：导航离开后回来，持久化的待提交记录恢复为待提交态（可重渲/提交）。
-    if (!this.shadowPending()) {
-      const restored = after
-        .filter((r) => r.mixStatus === 'pending' || r.mixStatus === 'ready' || r.mixStatus === 'failed')
-        .sort((a, b) => b.createdAt - a.createdAt)[0];
-      if (restored && !restored.serverId) {
-        this.shadowPending.set({
-          localTakeId: restored.localTakeId,
-          materialId: restored.materialId,
-          rate: restored.rate,
-          kind: restored.kind,
-          durationSec: jointDuration(
-            restored.refDurationSec / restored.rate,
-            restored.voiceWallSec,
-            restored.laneShiftSec,
-          ),
-          refDurationSec: restored.refDurationSec,
-          voiceWallSec: restored.voiceWallSec,
-          laneShiftSec: restored.laneShiftSec,
-          mixStatus: restored.mixStatus,
-          text: restored.text,
-        });
-        this.shadowMixStatus.set(restored.mixStatus);
-        this.refKey = restored.refKey;
-      }
-    }
   }
 
   onMaterialChange(): void {
     this.stopShadowPlayback();
     this.shadowExpandedId.set(null);
-    this.shadowPending.set(null);
     this.shadowStorageFailed.set(false);
     this.revokeRefUrl();
     void this.refreshShadowMeta();
@@ -817,7 +749,9 @@ export class PracticeShadowSession {
         result.voiceWallSec,
         result.laneShiftSec,
       );
-      const kind = this.takeRate === 1 ? 'mix' : 'dual';
+      // 票 266：1x 与非 1x 同一生命周期——Stop 后直接是本地终态行，
+      // 不再分 mix/dual 两条路；kind 恒为 dual（双轨本地播放，无需混音文件）。
+      const kind = 'dual' as const;
       const text = (this.host.currentText() || '').trim() || undefined;
       const rec: ShadowTakeRecord = {
         key: localTakeId,
@@ -828,10 +762,10 @@ export class PracticeShadowSession {
         laneShiftSec: result.laneShiftSec,
         refDurationSec: this.takeRefDurSec,
         refKey: this.refKey,
-        // P29b：dual 行是已保存的本地行（mixStatus 'local'），不是待提交；
-        // 它没有服务端行、没有 Submit，行时长只是本地展示时长。
+        // 票 266：所有 take 都是已保存的本地行（mixStatus 'local'），
+        // 无待提交态、无上传；行时长只是本地展示时长。
         kind,
-        mixStatus: kind === 'dual' ? 'local' : 'pending',
+        mixStatus: 'local',
         pendingUpload: false,
         createdAt: Date.now(),
         voiceBlob: result.blob,
@@ -842,42 +776,24 @@ export class PracticeShadowSession {
         text,
       };
       // P29g：Stop 必须确认持久化写成功；写进内存退路 = 失败，显式报错、
-      // 保留内存态审阅（pending 仍置位），由用户选 retry-write 或 Discard。
+      // 保留内存态并记下 take id，由用户点重试写（票 266：重试钮改挂在
+      // 错误提示区，不再依赖已删除的待提交块）。
       const persisted = await putShadowTake(rec);
       if (!persisted) {
         this.shadowStorageFailed.set(true);
+        this.lastFailedTakeId = localTakeId;
         this.shadowError.set(this.host.t('practice.shadow.storageFailed'));
       } else {
         this.shadowStorageFailed.set(false);
+        this.lastFailedTakeId = null;
       }
-      if (kind === 'dual') {
-        // dual 行直接进跟读列表（meta 刷新后可见），不设 pending 态。
-        this.shadowMixStatus.set('local');
-        this.host.toast(
-          this.host.t(
-            this.midTakeFailed ? 'practice.shadow.partialKeptLocal' : 'practice.shadow.savedLocal',
-          ),
-        );
-        this.midTakeFailed = false;
-      } else {
-        this.shadowPending.set({
-          localTakeId,
-          materialId,
-          rate: this.takeRate,
-          kind,
-          durationSec,
-          refDurationSec: this.takeRefDurSec,
-          voiceWallSec: result.voiceWallSec,
-          laneShiftSec: result.laneShiftSec,
-          mixStatus: 'pending',
-          text,
-        });
-        this.shadowMixStatus.set('pending');
-        if (this.midTakeFailed) {
-          this.host.toast(this.host.t('practice.shadow.partialKept'));
-          this.midTakeFailed = false;
-        }
-      }
+      // 行直接进跟读列表（meta 刷新后可见），无待提交态、无上传。
+      this.host.toast(
+        this.host.t(
+          this.midTakeFailed ? 'practice.shadow.partialKeptLocal' : 'practice.shadow.savedLocal',
+        ),
+      );
+      this.midTakeFailed = false;
       // 事后 F0 算一次后缓存（P25），失败不阻塞审阅（波形仍在）。
       void this.computeAndCachePostF0(rec).catch(() => undefined);
       await this.refreshShadowMeta();
@@ -889,13 +805,13 @@ export class PracticeShadowSession {
 
   /** P29g：Stop 写失败后的重试写（写进 IDB 即清失败态；仍失败则保留）。 */
   async retryShadowWrite(): Promise<void> {
-    const pending = this.shadowPending();
-    if (!pending) return;
-    const meta = await this.storeRecord(pending.localTakeId);
+    if (!this.lastFailedTakeId) return;
+    const meta = await this.storeRecord(this.lastFailedTakeId);
     if (!meta) return;
     const persisted = await putShadowTake(meta);
     if (persisted) {
       this.shadowStorageFailed.set(false);
+      this.lastFailedTakeId = null;
       this.shadowError.set(null);
     }
     this.host.cdr.detectChanges();
@@ -907,293 +823,6 @@ export class PracticeShadowSession {
     if (!decoded) return;
     const contour = computeF0Contour(decoded.data, decoded.sampleRate, 0.1);
     await putShadowTake({ ...rec, f0Contour: contour });
-  }
-
-  // ---------- 混音（仅 1x） ----------
-  async retryShadowMix(): Promise<void> {
-    await this.renderMix();
-  }
-
-  /**
-   * P29h：缓存缺失时先走既有 Azure TTS 路径重生成参考（同文本/同语种，
-   * 等效混音，不声称字节相同），缓存后重试一次混音；重生成也失败则
-   * 本地保留 + 显式重录，永不上传纯活声“跟读”行。
-   */
-  private async regenerateReference(
-    meta: ShadowTakeRecord | null,
-    pending: ShadowPendingView,
-  ): Promise<boolean> {
-    const text =
-      meta?.text ??
-      (pending.materialId === this.host.selectedId()
-        ? (this.host.currentText() || '').trim() || null
-        : null);
-    if (!text) return false;
-    const lang = this.host.practiceLang();
-    const key = meta?.refKey ?? ttsKey(text, '', lang);
-    try {
-      const res = await firstValueFrom(
-        this.host.practiceApi.synthesize(text, undefined, 1, false, lang),
-      );
-      if (!res?.blob || res.blob.size === 0) return false;
-      const typedBlob = res.blob.type ? res.blob : new Blob([res.blob], { type: 'audio/mpeg' });
-      await putCachedAudio({
-        key,
-        blob: typedBlob,
-        voice: res.voice,
-        lang,
-        savedAt: Date.now(),
-        materialId: pending.materialId,
-        text,
-      });
-      this.refKey = key;
-      this.refBlob = typedBlob;
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private async renderMix(allowRegen = true): Promise<Blob | null> {
-    const pending = this.shadowPending();
-    if (!pending || pending.kind !== 'mix') return null;
-    this.mixCancel = false;
-    this.shadowMixStatus.set('rendering');
-    this.shadowMixProgress.set(0);
-    const started = Date.now();
-    const timeoutMs = 60000;
-    try {
-      const meta = await this.storeRecord(pending.localTakeId);
-      const cached = await getCachedAudio(meta?.refKey ?? this.refKey);
-      const refBlob = cached?.blob ?? this.refBlob;
-      if (!refBlob) {
-        // P29h：缓存缺失先重生成再重试一次；两路都失败 = 本地保留 + 重录。
-        if (allowRegen && (await this.regenerateReference(meta, pending))) {
-          return this.renderMix(false);
-        }
-        this.shadowMixStatus.set('failed');
-        this.shadowError.set(this.host.t('practice.shadow.regenFailed'));
-        return null;
-      }
-      const voiceBlob = meta?.voiceBlob;
-      if (!voiceBlob) {
-        this.shadowMixStatus.set('failed');
-        this.shadowError.set(this.host.t('practice.shadow.voiceMissing'));
-        return null;
-      }
-      const voiceDec = await this.decodeAudio(voiceBlob);
-      const refDec = await this.decodeAudio(refBlob);
-      if (!voiceDec || !refDec) {
-        this.shadowMixStatus.set('failed');
-        this.shadowError.set(this.host.t('practice.shadow.mixFailed'));
-        return null;
-      }
-      const schedule = computeMixSchedule(
-        pending.laneShiftSec * 1000,
-        pending.refDurationSec,
-        pending.voiceWallSec,
-      );
-      const ctx = new AudioContext();
-      const dest = ctx.createMediaStreamDestination();
-      const vBuf = ctx.createBuffer(1, voiceDec.data.length, voiceDec.sampleRate);
-      vBuf.copyToChannel(voiceDec.data as Float32Array, 0);
-      const rBuf = ctx.createBuffer(1, refDec.data.length, refDec.sampleRate);
-      rBuf.copyToChannel(refDec.data as Float32Array, 0);
-      const vSrc = ctx.createBufferSource();
-      vSrc.buffer = vBuf;
-      vSrc.connect(dest);
-      const rSrc = ctx.createBufferSource();
-      rSrc.buffer = rBuf;
-      rSrc.connect(dest);
-      const mime = pickMimeForMix();
-      const recorder = mime
-        ? new MediaRecorder(dest.stream, { mimeType: mime })
-        : new MediaRecorder(dest.stream);
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
-      };
-      const done = new Promise<Blob>((resolve, reject) => {
-        recorder.onstop = () => {
-          resolve(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
-        };
-        const timer = setTimeout(() => {
-          try {
-            recorder.stop();
-          } catch {
-            /* ignore */
-          }
-          reject(new Error('mix-timeout'));
-        }, timeoutMs);
-        // 渲染进度（约 1x 时长）与后台暂停/恢复（P9）。
-        const prog = setInterval(() => {
-          const el = (Date.now() - started) / 1000;
-          this.shadowMixProgress.set(Math.min(100, Math.round((el / Math.max(1, schedule.mixDurSec)) * 100)));
-          if (this.mixCancel) {
-            clearInterval(prog);
-            clearTimeout(timer);
-            try {
-              recorder.stop();
-            } catch {
-              /* ignore */
-            }
-            reject(new Error('mix-cancelled'));
-          }
-        }, 250);
-        const onVis = () => {
-          try {
-            if (document.hidden) {
-              void ctx.suspend();
-              if (recorder.state === 'recording') recorder.pause();
-            } else {
-              void ctx.resume();
-              if (recorder.state === 'paused') recorder.resume();
-            }
-          } catch {
-            /* 后台暂停是尽力而为 */
-          }
-        };
-        document.addEventListener('visibilitychange', onVis);
-        vSrc.start(ctx.currentTime + schedule.voiceStartSec);
-        rSrc.start(ctx.currentTime + schedule.refStartSec);
-        recorder.start();
-        // 停表 = 混音长 + 50ms：50ms 在 §5 的 100ms 校验容差内（尾部静音
-        // 不会把校验拖垮），又给 setTimeout 的迟到留了余量。注意：此前
-        // +500ms 会让解码出的混音比并集时长长 0.5s，恒触发 mixFailed，
-        // 1x 提交在走查里从未成功上传（走查实证，见票 250  ledger）。
-        setTimeout(() => {
-          document.removeEventListener('visibilitychange', onVis);
-          clearInterval(prog);
-          clearTimeout(timer);
-          if (recorder.state !== 'inactive') {
-            try {
-              recorder.stop();
-            } catch {
-              /* ignore */
-            }
-          }
-        }, Math.ceil(schedule.mixDurSec * 1000) + 50);
-      });
-      let mixBlob: Blob;
-      try {
-        mixBlob = await done;
-      } catch {
-        this.shadowMixStatus.set(this.mixCancel ? 'pending' : 'failed');
-        if (!this.mixCancel) this.shadowError.set(this.host.t('practice.shadow.mixFailed'));
-        return null;
-      } finally {
-        void ctx.close().catch(() => undefined);
-      }
-      // 渲染时长校验（§5：与并集时长差 >100ms = 混音失败，重试）。
-      const mixDec = await this.decodeAudio(mixBlob);
-      const joint = jointDuration(pending.refDurationSec, pending.voiceWallSec, pending.laneShiftSec);
-      if (!mixDec || Math.abs(mixDec.data.length / mixDec.sampleRate - joint) > 0.1) {
-        this.shadowMixStatus.set('failed');
-        this.shadowError.set(this.host.t('practice.shadow.mixFailed'));
-        return null;
-      }
-      if (meta) await putShadowTake({ ...meta, mixBlob, mixStatus: 'ready' });
-      this.shadowMixStatus.set('ready');
-      this.shadowMixProgress.set(100);
-      this.shadowPending.set({ ...pending, mixStatus: 'ready' });
-      return mixBlob;
-    } catch {
-      this.shadowMixStatus.set('failed');
-      this.shadowError.set(this.host.t('practice.shadow.mixFailed'));
-      return null;
-    }
-  }
-
-  cancelShadowMix(): void {
-    this.mixCancel = true;
-  }
-
-  // ---------- 提交 / 丢弃 ----------
-  async submitShadowPending(): Promise<void> {
-    const pending = this.shadowPending();
-    // P29b：dual 行没有 Submit（上传纯活声会误表行时长与双轨上下文）。
-    if (!pending || pending.kind !== 'mix') return;
-    this.shadowError.set(null);
-    const materialId = this.host.selectedId();
-    if (!materialId) return;
-    if (!RecorderService.isGuid(materialId)) {
-      this.shadowError.set(this.host.t('practice.shadow.needSavedMaterial'));
-      return;
-    }
-    const payload: Blob | null =
-      this.shadowMixStatus() === 'ready'
-        ? (await this.storeRecord(pending.localTakeId))?.mixBlob ?? null
-        : await this.renderMix();
-    if (!payload) return; // renderMix 已置 failed + 错误（缓存缺失时绝不上传）
-    const mime = payload.type || 'audio/webm';
-    this.shadowMixStatus.set('uploading');
-    const metaBefore = await this.storeRecord(pending.localTakeId);
-    if (metaBefore) await putShadowTake({ ...metaBefore, pendingUpload: true });
-    // ★ 票259 S2：人声 blob 取自提交前记录（重键后键已变，事后取不到旧键）。
-    const pendingVoiceBlob = metaBefore?.voiceBlob ?? null;
-    try {
-      const dto = await firstValueFrom(
-        this.host.practiceApi.uploadRecording(
-          materialId,
-          payload,
-          pending.durationSec,
-          `shadow-${Date.now()}.${extOf(mime)}`,
-          mime,
-          // ★ 票258 S1：跟读混音上传带服务端标识，别设备据此认出跟读行。
-          true,
-        ),
-      );
-      const url = URL.createObjectURL(payload);
-      const entry: Recording = {
-        id: dto.id,
-        materialId,
-        createdAt: new Date(dto.createdAt).getTime(),
-        duration: pending.durationSec,
-        blob: payload,
-        url,
-        score: null,
-        grading: false,
-        uploaded: true,
-        error: null,
-        // ★ 票258 S1：服务端回传的标识透传（缺省 false）。
-        isShadow: dto.isShadow ?? false,
-      };
-      this.host.recorder.recordings.update((list) => [entry, ...list]);
-      // 重键（P18 + P29g decode-based 校验）：失败则保留本地记录 +
-      // 服务端行关联（serverId 写回），行仍可通过 serverId 识别为跟读行，
-      // 不丢声轨。
-      const ok = await rekeyShadowTake(pending.localTakeId, dto.id, async (b) => {
-        const d = await this.decodeAudio(b);
-        return d ? d.data.length / d.sampleRate : 0;
-      });
-      if (!ok) {
-        const cur = await this.storeRecord(pending.localTakeId);
-        if (cur) await putShadowTake({ ...cur, serverId: dto.id, pendingUpload: true });
-        this.shadowError.set(this.host.t('practice.shadow.rekeyFailed'));
-      }
-      // ★ 票259 S2：混音行已落库 → 跟传人声轨（人声跟人走）。
-      //   人声失败不影响混音行：行留在 S1 态（混音 + 降级人声道），仅置
-      //   失败标志 + toast，行上的重试钮只重传人声轨、绝不重传混音。
-      if (pendingVoiceBlob && pendingVoiceBlob.size > 0) {
-        await this.uploadVoiceTrackFor(dto.id, pending.localTakeId,
-          pendingVoiceBlob, pending.rate, pending.laneShiftSec);
-      }
-      this.shadowPending.set(null);
-      this.shadowMixStatus.set('done');
-      this.host.toast(this.host.t('practice.shadow.submitted'));
-      await this.refreshShadowMeta();
-    } catch (e) {
-      const meta = await this.storeRecord(pending.localTakeId);
-      if (meta) await putShadowTake({ ...meta, pendingUpload: true });
-      this.shadowMixStatus.set('pending');
-      this.shadowError.set(
-        this.host.t('practice.shadow.uploadFailed') +
-          ' · ' +
-          String((e as { message?: string } | null)?.message ?? e ?? '').slice(0, 120),
-      );
-    } finally {
-      this.host.cdr.detectChanges();
-    }
   }
 
   /**
@@ -1238,73 +867,6 @@ export class PracticeShadowSession {
     if (!voiceBlob || voiceBlob.size === 0) return;
     await this.uploadVoiceTrackFor(row.serverId, row.localTakeId,
       voiceBlob, row.rate, rec?.laneShiftSec ?? 0);
-  }
-
-  /**
-   * 票260 S3（§4.7 迁移）：把一条本地-only 双轨行上传到服务器。
-   * S3 范围内唯一新增的 UI 控件（用户定夺“后期录音文件都会放在服务器上”；
-   * 不自动批量上传，批量“上传全部”不在范围）。
-   * 两步创建：POST shadow-rows（元数据，行 = 未完成）→ POST voice-track
-   * （人声 blob，成功后行 = 完整跟读行）→ 本地记录按 P18 重键为服务端 GUID。
-   * 人声失败 → 行留在未完成态 + 失败标志（行上重试钮只重传人声轨），
-   * 本地 blob 保留，行仍可在录制设备播放；不删本地记录。
-   * 成功后本地人声 blob 按 §3.2 规则可丢弃（uploadVoiceTrackFor 内
-   * 服务端 GET 回读 size > 0 才删，peaks/F0 保留）。
-   */
-  async uploadShadowRowToServer(row: ShadowRowView): Promise<void> {
-    if (row.serverId || row.kind !== 'dual' || !row.localTakeId) return;
-    if (this.uploadingToServerFor()) return;
-    const materialId = this.host.selectedId();
-    if (!materialId) return;
-    const rec = await this.storeRecord(row.localTakeId);
-    const voiceBlob = rec?.voiceBlob ?? null;
-    if (!voiceBlob || voiceBlob.size === 0) return;
-    this.uploadingToServerFor.set(row.localTakeId);
-    try {
-      const dto = await firstValueFrom(this.host.practiceApi.createShadowRow(
-        materialId, row.durationSec, row.rate, rec?.laneShiftSec ?? 0));
-      // 先写回 serverId 关联（重键失败时行仍可通过 serverId 识别，不丢声轨）。
-      const ok = await rekeyShadowTake(row.localTakeId, dto.id, async (b) => {
-        const d = await this.decodeAudio(b);
-        return d ? d.data.length / d.sampleRate : 0;
-      });
-      if (!ok) {
-        const cur = await this.storeRecord(row.localTakeId);
-        if (cur) await putShadowTake({ ...cur, serverId: dto.id, pendingUpload: true });
-      }
-      const uploaded = await this.uploadVoiceTrackFor(dto.id, row.localTakeId,
-        voiceBlob, row.rate, rec?.laneShiftSec ?? 0);
-      if (!uploaded) {
-        // 人声失败：行已是服务端未完成行，失败标志驱动行上重试（只重传人声轨）。
-        this.voiceTrackFailedFor.set(dto.id);
-      } else {
-        this.host.toast(this.host.t('practice.shadow.uploadedToServer'));
-      }
-      await this.refreshShadowMeta();
-    } catch {
-      this.shadowError.set(this.host.t('practice.shadow.uploadToServerFailed'));
-    } finally {
-      this.uploadingToServerFor.set(null);
-      this.host.cdr.detectChanges();
-    }
-  }
-
-  async discardShadowPending(): Promise<void> {
-    const pending = this.shadowPending();
-    if (!pending) return;
-    // 票 261 §7：丢弃待提交 take 也要先确认（与行删除同口径）。
-    const ok = await this.host.tree.confirmDialog({
-      title: this.host.t('dialog.deleteRecTitle'),
-      confirmText: this.host.t('dialog.deleteConfirm'),
-      danger: true,
-    });
-    if (ok !== true) return;
-    await deleteShadowTake(pending.localTakeId);
-    this.shadowPending.set(null);
-    this.shadowMixStatus.set('idle');
-    this.shadowError.set(null);
-    this.shadowStorageFailed.set(false);
-    await this.refreshShadowMeta();
   }
 
   /**
@@ -1701,25 +1263,6 @@ export class PracticeShadowSession {
     this.capture?.cancel();
     this.capture = null;
   }
-}
-
-function pickMimeForMix(): string {
-  const cands = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/mp4;codecs=mp4a.40.2',
-    'audio/mp4',
-    'audio/ogg;codecs=opus',
-    'audio/ogg',
-  ];
-  for (const c of cands) {
-    try {
-      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c;
-    } catch {
-      /* ignore */
-    }
-  }
-  return '';
 }
 
 /**

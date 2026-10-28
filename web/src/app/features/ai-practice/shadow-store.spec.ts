@@ -47,16 +47,20 @@ describe('shadow-store', () => {
     expect(g?.localTakeId).toBe('local-a');
     await deleteShadowTake('guid-a');
   });
-  it('扫除只删孤儿：待提交/待上传/已上服务端行一律保留', async () => {
-    await putShadowTake(rec('orphan-1'));
+  it('票 266：扫除永不删本地-only 行，只删服务端已失联的链接行', async () => {
+    await putShadowTake(rec('local-1'));
     await putShadowTake(rec('pend-1', { mixStatus: 'pending' }));
     await putShadowTake(rec('retry-1', { pendingUpload: true }));
     await putShadowTake(rec('guided-1', { key: 'guided-1', serverId: 'guided-1', localTakeId: 'local-g' }));
+    await putShadowTake(rec('linked-gone', { key: 'linked-gone', serverId: 'gone-1', localTakeId: 'local-gone' }));
     const deleted = await sweepShadowOrphans('mat-1', new Set(['guided-1']), new Set(['pend-1']));
-    expect(deleted).toEqual(['orphan-1']);
+    expect(deleted).toEqual(['linked-gone']);
+    expect(await getShadowTake('local-1')).not.toBeNull();
     expect(await getShadowTake('pend-1')).not.toBeNull();
     expect(await getShadowTake('retry-1')).not.toBeNull();
     expect(await getShadowTake('guided-1')).not.toBeNull();
+    expect(await getShadowTake('linked-gone')).toBeNull();
+    await deleteShadowTake('local-1');
     await deleteShadowTake('pend-1');
     await deleteShadowTake('retry-1');
     await deleteShadowTake('guided-1');
@@ -94,13 +98,16 @@ describe('shadow-store', () => {
     await deleteShadowTake('local-e');
     await deleteShadowTake('local-f');
   });
-  it('P29b：扫除永不删 dual 本地行，只删 mix 孤儿', async () => {
+  it('P29b + 票 266：扫除永不删本地行（dual 与本地 mix 皆保留），只删失联链接行', async () => {
     await putShadowTake(rec('dual-keep', { kind: 'dual', mixStatus: 'local' }));
-    await putShadowTake(rec('mix-orphan-2'));
+    await putShadowTake(rec('mix-keep', { kind: 'mix', mixStatus: 'pending' }));
+    await putShadowTake(rec('linked-gone-2', { key: 'linked-gone-2', serverId: 'gone-2', localTakeId: 'local-gone-2' }));
     const deleted = await sweepShadowOrphans('mat-1', new Set(), new Set());
-    expect(deleted).toEqual(['mix-orphan-2']);
+    expect(deleted).toEqual(['linked-gone-2']);
     expect(await getShadowTake('dual-keep')).not.toBeNull();
-    expect(await getShadowTake('mix-orphan-2')).toBeNull();
+    expect(await getShadowTake('mix-keep')).not.toBeNull();
+    expect(await getShadowTake('linked-gone-2')).toBeNull();
     await deleteShadowTake('dual-keep');
+    await deleteShadowTake('mix-keep');
   });
 });

@@ -222,11 +222,9 @@ describe('票 261：模板与样式结构契约', () => {
     expect(html).not.toContain('shadow-mic-row');
   });
 
-  it('§7：本地行删除与待提交丢弃走确认（session 源码含 confirmDialog 门）', () => {
+  it('§7：本地行删除走确认（session 源码含 confirmDialog 门；票 266 起已无待提交丢弃）', () => {
     const session = fs.readFileSync(path.join(__dirname, 'practice-shadow-session.ts'), 'utf8');
     const removeBlock = session.slice(session.indexOf('async removeShadowRow'));
     expect(removeBlock.slice(0, 1200)).toContain('confirmDialog');
-    const discardBlock = session.slice(session.indexOf('async discardShadowPending'));
-    expect(discardBlock.slice(0, 1200)).toContain('confirmDialog');
   });
 });

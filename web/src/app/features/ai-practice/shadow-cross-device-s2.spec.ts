@@ -150,17 +150,16 @@ describe('i18n + 模板契约（票259 S2：人声重试）', () => {
   });
 
   it('重试钮两处：行内（hi-retry）+ 展开区（btn-mini），均只在 voiceTrackFailedFor 命中该行时出现', () => {
-    const rowBtn = tpl.match(/@if \(shadow\.voiceTrackFailedFor\(\) === row\.serverId\) \{[\s\S]*?hi-retry[\s\S]*?retryVoiceTrack\(row\)/);
+    const rowBtn = tpl.match(/@if \(shadow\.voiceTrackFailedFor\(\) !== null && shadow\.voiceTrackFailedFor\(\) === row\.serverId\) \{[\s\S]*?hi-retry[\s\S]*?retryVoiceTrack\(row\)/);
     expect(rowBtn).not.toBeNull();
-    const expandedBtn = tpl.match(/shadow-expanded-actions[\s\S]*?@if \(shadow\.voiceTrackFailedFor\(\) === row\.serverId\) \{[\s\S]*?retryVoiceTrack\(row\)/);
+    const expandedBtn = tpl.match(/shadow-expanded-actions[\s\S]*?@if \(shadow\.voiceTrackFailedFor\(\) !== null && shadow\.voiceTrackFailedFor\(\) === row\.serverId\) \{[\s\S]*?retryVoiceTrack\(row\)/);
     expect(expandedBtn).not.toBeNull();
   });
 
-  it('重试钮不调 submitShadowPending（只重传人声，绝不重传混音）', () => {
+  it('重试钮只调 retryVoiceTrack（只重传人声；票 266 起已无提交路径可误调）', () => {
     const retryBlocks = [...tpl.matchAll(/voiceTrackFailedFor\(\) === row\.serverId\) \{([\s\S]*?)\n\s*\}/g)];
     expect(retryBlocks.length).toBeGreaterThanOrEqual(2);
     for (const b of retryBlocks) {
-      expect(b[1]).not.toContain('submitShadowPending');
       expect(b[1]).toContain('retryVoiceTrack(row)');
     }
   });

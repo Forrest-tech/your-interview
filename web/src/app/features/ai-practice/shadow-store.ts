@@ -205,6 +205,8 @@ export async function rekeyShadowTake(
  * 返回被删的键。GUID 与本地并存时去重只显 GUID（P26，显示层用
  * dedupeShadowKeys；此处不删本地副本——重键流程负责删，扫除不越权）。
  * P29b：dual 行是用户可见的已保存本地行，扫除永不删，只由显式行删除删。
+ * 票 266：本地-only 行（serverId 为空）一律是用户数据，扫除永不删——
+ * 跟读只留本机后，本地行就是正本，不能因服务端没有对应行而被清掉。
  */
 export async function sweepShadowOrphans(
   materialId: string,
@@ -215,6 +217,7 @@ export async function sweepShadowOrphans(
   const deleted: string[] = [];
   for (const r of rows) {
     if (r.kind === 'dual') continue;
+    if (r.serverId === null) continue;
     const hasServerRow = (r.serverId !== null && serverIds.has(r.serverId)) || serverIds.has(r.key);
     const orphan = isShadowOrphan(hasServerRow, pendingKeys.has(r.key), r.pendingUpload || pendingKeys.has(r.key));
     if (orphan) {

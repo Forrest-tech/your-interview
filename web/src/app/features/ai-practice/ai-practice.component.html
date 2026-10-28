@@ -522,44 +522,12 @@
               <div class="shadow-alert is-error" role="alert">
                 <mat-icon>error_outline</mat-icon>
                 <span>{{ shadow.shadowError() }}</span>
-              </div>
-            }
-
-            @if (shadow.shadowPending(); as sp) {
-              <div class="shadow-pending" data-testid="shadow-pending">
-                <span class="shadow-badge">{{ t('practice.shadow.shadowBadge') }}</span>
-                <span>{{ fmtDuration(sp.durationSec) }} · {{ sp.rate }}x</span>
-                @if (shadow.shadowMixStatus() === 'rendering') {
-                  <mat-progress-bar mode="determinate" [value]="shadow.shadowMixProgress()"></mat-progress-bar>
-                  <span>{{ t('practice.shadow.mixRendering') }} {{ shadow.shadowMixProgress() }}%</span>
-                  <button class="btn-mini" (click)="shadow.cancelShadowMix()">
-                    <span>{{ t('common.cancel') }}</span>
-                  </button>
-                } @else if (shadow.shadowMixStatus() === 'failed') {
-                  @if (sp.kind === 'mix') {
-                    <button class="btn-mini" (click)="shadow.retryShadowMix()">
-                      <span>{{ t('practice.shadow.retryMix') }}</span>
-                    </button>
-                  }
-                }
+                <!-- 票 266：Stop 写失败后的重试写（原待提交块里的按钮改挂此处；跟读已无待提交态）。 -->
                 @if (shadow.shadowStorageFailed()) {
                   <button class="btn-mini" (click)="shadow.retryShadowWrite()">
                     <span>{{ t('practice.shadow.retryWrite') }}</span>
                   </button>
                 }
-                <!-- 票 250 P29b：Submit 只属于 mix 行；dual 行无 pending 态、无提交。 -->
-                @if (sp.kind === 'mix') {
-                  <button class="btn-primary"
-                          [disabled]="shadow.shadowMixStatus() === 'rendering' || shadow.shadowMixStatus() === 'uploading'"
-                          (click)="shadow.submitShadowPending()">
-                    <mat-icon>check</mat-icon>
-                    <span>{{ t('practice.shadow.submit') }}</span>
-                  </button>
-                }
-                <button class="btn-mini danger" (click)="shadow.discardShadowPending()">
-                  <mat-icon>delete_outline</mat-icon>
-                  <span>{{ t('practice.shadow.discard') }}</span>
-                </button>
               </div>
             }
           </div>
@@ -669,16 +637,8 @@
                 </div>
                 <span class="hi-time">{{ fmtDuration(row.durationSec) }}</span>
                 <span class="spacer"></span>
-                <!-- 票260 S3（§4.7）：本地-only 双轨行的“上传到服务器”（S3 范围内唯一新增控件；批量上传不在范围）。 -->
-                @if (!row.serverId && row.kind === 'dual') {
-                  <button class="hi-retry" [matTooltip]="t('practice.shadow.uploadToServer')"
-                          [disabled]="shadow.uploadingToServerFor() === row.localTakeId"
-                          (click)="$event.stopPropagation(); shadow.uploadShadowRowToServer(row)">
-                    <mat-icon>cloud_upload</mat-icon>
-                  </button>
-                }
                 <!-- 票259 S2：人声轨上传失败时，行上只重传人声轨（绝不重传混音）。 -->
-                @if (shadow.voiceTrackFailedFor() === row.serverId) {
+                @if (shadow.voiceTrackFailedFor() !== null && shadow.voiceTrackFailedFor() === row.serverId) {
                   <button class="hi-retry" [matTooltip]="t('practice.shadow.retryVoice')"
                           (click)="$event.stopPropagation(); shadow.retryVoiceTrack(row)">
                     <mat-icon>cloud_upload</mat-icon>
@@ -733,7 +693,7 @@
                       <span>{{ t('practice.shadow.playTogether') }}</span>
                     </button>
                     <!-- 票259 S2：人声轨上传失败时，展开区也可只重传人声轨。 -->
-                    @if (shadow.voiceTrackFailedFor() === row.serverId) {
+                    @if (shadow.voiceTrackFailedFor() !== null && shadow.voiceTrackFailedFor() === row.serverId) {
                       <button class="btn-mini" (click)="shadow.retryVoiceTrack(row)">
                         <mat-icon>cloud_upload</mat-icon>
                         <span>{{ t('practice.shadow.retryVoice') }}</span>

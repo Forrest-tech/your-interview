@@ -689,7 +689,9 @@
                   <div class="track-bg"></div>
                   <div class="track-fill" [style.width.%]="shadow.shadowPlayingId() === row.id ? (shadow.shadowPlayhead() / row.durationSec * 100) : 0"></div>
                 </div>
-                <span class="hi-time">{{ fmtDuration(row.durationSec) }}</span>
+                <!-- 票 281：跟读行时长与常规行同款“当前 / 总长”（常规行 playingTime 口径）；
+                     未播本行时 0:00，播本行时跟随 shadowPlayhead（与行内 track-fill 同信号）。 -->
+                <span class="hi-time">{{ shadowPlayTime(row) }} / {{ fmtDuration(row.durationSec) }}</span>
                 <span class="spacer"></span>
                 <!-- 票259 S2：人声轨上传失败时，行上只重传人声轨（绝不重传混音）。 -->
                 @if (shadow.voiceTrackFailedFor() !== null && shadow.voiceTrackFailedFor() === row.serverId) {

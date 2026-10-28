@@ -28,6 +28,7 @@ import { PracticeMaterialTree } from './practice-material-tree';
 import { PracticeTtsPlayer } from './practice-tts-player';
 import { PracticeGradingSession } from './practice-grading-session';
 import { PracticeShadowSession } from './practice-shadow-session';
+import type { ShadowRowView } from './practice-shadow-session';
 import { clampFocusIndex, hasSeekableFiller, wordClickAction } from './word-click.helpers';
 import { valuesToLinePoints } from './waveform.helpers';
 import { PracticeDictionary } from './practice-dictionary';
@@ -1143,6 +1144,14 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   wavePlayed(index: number): boolean { return this.grading.wavePlayed(index); }
   progress(r: Recording): number { return this.grading.progress(r); }
   playingTime(r: Recording): string { return this.grading.playingTime(r); }
+  /** 票 281：跟读行当前播放位置（常规行 playingTime 同口径）——未播本行时
+   *  "0:00"，播本行时取 shadowPlayhead（秒，与 durationSec 同单位）转 m:ss；
+   *  播完停录时 playhead 已归 0，显示自然回到 0:00。 */
+  shadowPlayTime(row: ShadowRowView): string {
+    if (this.shadow.shadowPlayingId() !== row.id) return '0:00';
+    const s = Math.max(0, Math.floor(this.shadow.shadowPlayhead()));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
   seek(r: Recording, ev: MouseEvent): void { return this.grading.seek(r, ev); }
   verdict(v: number): string { return this.grading.verdict(v); }
   scoreClass(v: number): string { return this.grading.scoreClass(v); }

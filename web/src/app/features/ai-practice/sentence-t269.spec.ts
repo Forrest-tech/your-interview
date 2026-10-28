@@ -392,17 +392,32 @@ describe('票 269：接线结构契约（源码断言）', () => {
     expect(prevAt).toBeGreaterThan(sentenceAt);
   });
 
-  it('票 273：模式按钮可读——short_text 图标 + 一句话文字（非纯图标）', () => {
+  it('票 277：一句话控件是与跟读开关同形的 mat-slide-toggle（273 图文按钮作废）', () => {
     const html = read('ai-practice.component.html');
     const start = html.indexOf('class="sentence-switch"');
     expect(start).toBeGreaterThan(-1);
-    const btn = html.slice(start, html.indexOf('</button>', start));
-    expect(btn).toContain('data-testid="sentence-toggle"');
-    expect(btn).toContain('<mat-icon>short_text</mat-icon>');
-    expect(btn).toContain("{{ t('practice.sentence.badge') }}");
-    expect(btn).not.toContain('format_quote');
+    // 控件本身必须是 slide-toggle，不是 button；且 273 的图文内容已无。
+    expect(html.slice(start - 40, start)).toContain('<mat-slide-toggle');
+    const ctl = html.slice(start, html.indexOf('</mat-slide-toggle>', start));
+    expect(ctl).toContain('data-testid="sentence-toggle"');
+    expect(ctl).toContain('[checked]="sentence.sentenceMode()"');
+    expect(ctl).toContain('(change)="sentence.toggleSentenceMode()"');
+    expect(ctl).toContain('[disabled]="editing() || recorder.recording() || shadow.shadowRecording()"');
+    expect(ctl).toContain("{{ t('practice.sentence.badge') }}");
+    expect(ctl).not.toContain('<button');
+    expect(ctl).not.toContain('short_text');
+    expect(ctl).not.toContain('format_quote');
     // 另一处 format_quote（评分句段引用行）不在本票范围，必须原样保留。
     expect(html.match(/format_quote/g)).toHaveLength(1);
+    // 样式：273 的胶囊按钮规则已清除；268 的 iPhone 样式块以嵌套共用覆盖 .sentence-switch。
+    const scss = read('ai-practice.component.scss');
+    expect(scss).not.toContain('.sentence-switch { display: inline-flex;');
+    expect(scss).not.toContain('.sentence-switch.on {');
+    expect(scss).toContain('.shadow-switch, .sentence-switch {');
+    expect(scss).toContain('.mdc-switch__track {');
+    expect(scss).toContain('.mdc-switch__icons {');
+    // 平铺逗号 ::ng-deep 是已证缺陷（首选择器编译成裸宿主命中，致跟读开关 display:none），必须不存在。
+    expect(scss).not.toContain('.shadow-switch, .sentence-switch ::ng-deep');
   });
 
   it('词典：抑制旗标首行消费 + mousedown 清零 + reset 清零 + 捕获门禁', () => {

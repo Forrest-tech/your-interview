@@ -612,20 +612,18 @@
                     data-testid="shadow-toggle">
               {{ t('practice.shadow.shadowBadge') }}
             </mat-slide-toggle>
-            <!-- 票 269 P-RECONFIRM：跟读开关旁有空间，落 P-A（与跟读开关并列）；
-                 图标键 + aria-pressed + tooltip；编辑态/录音中禁用；与跟读模式互斥。 -->
-            <button class="sentence-switch" [class.on]="sentence.sentenceMode()"
-                    [attr.aria-pressed]="sentence.sentenceMode()"
-                    [attr.aria-label]="t('practice.sentence.modeTip')"
+            <!-- 票 277：一句话开关改成与跟读开关同形的 mat-slide-toggle（票 268 iPhone 样式）；
+                 票 273 的图文按钮作废；data-testid、禁用逻辑、tooltip、与跟读互斥均不动。 -->
+            <mat-slide-toggle class="sentence-switch"
+                    [checked]="sentence.sentenceMode()"
+                    (change)="sentence.toggleSentenceMode()"
                     [disabled]="editing() || recorder.recording() || shadow.shadowRecording()"
-                    (click)="sentence.toggleSentenceMode()"
                     [matTooltip]="editing()
                       ? t('practice.sentence.editDisabledTip')
                       : (sentence.sentenceMode() ? t('practice.sentence.modeOn') : t('practice.sentence.modeOff'))"
                     data-testid="sentence-toggle">
-              <mat-icon>short_text</mat-icon>
-              <span>{{ t('practice.sentence.badge') }}</span>
-            </button>
+              {{ t('practice.sentence.badge') }}
+            </mat-slide-toggle>
             <button class="nav-btn" [disabled]="!hasPrev()" (click)="prevItem()">
               <mat-icon>arrow_back</mat-icon>
               <span>{{ t('practice.prev') }}</span>

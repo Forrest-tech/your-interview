@@ -3546,63 +3546,68 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 /* 票 250：跟读模式（与既有胶囊/列表色系一致：参考蓝、活声绿）。
    票 261 §4：开关已移出播放条，放在卡片底部导航栏 Previous 左侧，
    用 Material slide-toggle（开关式），不再是播放条里的圆形图标键。 */
-.shadow-switch {
+.shadow-switch, .sentence-switch {
   display: inline-flex; align-items: center;
   font-size: 13px; color: #334155; margin-right: 4px;
-}
-/* 票 268：跟读开关改 iPhone（iOS UISwitch）外观 —— 只改样子，不改行为、
-   位置、文案、tooltip、data-testid。MDC 内部结构（Angular Material 17）：
-   switch 根节点下是 track、handle-track、handle 三层，handle 内含
-   icons 层（即旧的 −/✓ 字形）。
-   iOS 口径：轨道 46×28 胶囊、圆钮 24px 白色带 iOS 阴影、开态轨道
-   #34C759、关态轨道 #E9E9EA、钮滑动 0.25s ease、钮上不留任何字形。 */
-.shadow-switch ::ng-deep .mdc-switch {
-  width: 46px; height: 28px;
-}
-/* MDC 内部尺寸走 CSS 变量（实测：--mdc-switch-handle-width 默认 20px，
-   且变量定义在 .mdc-switch 自身，写在宿主上会被它盖过），故变量必须
-   下到 .mdc-switch 元素上，并与直接值双写。 */
-.shadow-switch ::ng-deep .mdc-switch {
-  --mdc-switch-handle-width: 24px;
-  --mdc-switch-handle-height: 24px;
-  --mdc-switch-track-width: 46px;
-  --mdc-switch-track-height: 28px;
-}
-.shadow-switch ::ng-deep .mdc-switch__track {
-  width: 46px; height: 28px; border-radius: 14px;
-  background-color: #e9e9ea; border: none;
-  transition: background-color 0.25s ease;
-}
-.shadow-switch ::ng-deep .mdc-switch__track::before,
-.shadow-switch ::ng-deep .mdc-switch__track::after {
-  background-color: #e9e9ea; border: none; opacity: 1;
-}
-.shadow-switch ::ng-deep .mdc-switch--selected .mdc-switch__track,
-.shadow-switch ::ng-deep .mdc-switch--selected .mdc-switch__track::before,
-.shadow-switch ::ng-deep .mdc-switch--selected .mdc-switch__track::after {
-  background-color: #34c759;
-}
-.shadow-switch ::ng-deep .mdc-switch__handle-track {
-  transition: transform 0.25s ease;
-}
-.shadow-switch ::ng-deep .mdc-switch--selected .mdc-switch__handle-track {
-  transform: translateX(22px);
-}
-.shadow-switch ::ng-deep .mdc-switch__handle {
-  /* 钮尺寸实测不吃普通宽高（MDC 内部口径未明），只好 !important 定死；
-     作用域仅这一个开关，不碰其他开关。 */
-  width: 24px !important; height: 24px !important; border-radius: 50%;
-  background-color: #fff;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16);
-}
-.shadow-switch ::ng-deep .mdc-switch__shadow {
-  width: 24px !important; height: 24px !important;
-  background-color: #fff;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16);
-}
-/* 钮上字形去掉：开态 ✓ / 关态 − 皆不留。 */
-.shadow-switch ::ng-deep .mdc-switch__icons {
-  display: none;
+  /* 票 268：跟读开关改 iPhone（iOS UISwitch）外观 —— 只改样子，不改行为、
+     位置、文案、tooltip、data-testid。票 277：一句话开关与跟读开关同形，
+     故本块以嵌套共用（父选择器并列 + ::ng-deep 内嵌）：编译后每条规则
+     都是“宿主 .mdc-…”完整后代链，绝不用逗号平铺写 ::ng-deep（平铺会把
+     首选择器编译成裸宿主命中，致跟读开关 display:none，见票 277 走查）。
+     MDC 内部结构（Angular Material 17）：switch 根节点下是 track、
+     handle-track、handle 三层，handle 内含 icons 层（即旧的 −/✓ 字形）。
+     iOS 口径：轨道 46×28 胶囊、圆钮 24px 白色带 iOS 阴影、开态轨道
+     #34C759、关态轨道 #E9E9EA、钮滑动 0.25s ease、钮上不留任何字形。 */
+  ::ng-deep {
+    .mdc-switch {
+      width: 46px; height: 28px;
+    }
+    /* MDC 内部尺寸走 CSS 变量（实测：--mdc-switch-handle-width 默认 20px，
+       且变量定义在 .mdc-switch 自身，写在宿主上会被它盖过），故变量必须
+       下到 .mdc-switch 元素上，并与直接值双写。 */
+    .mdc-switch {
+      --mdc-switch-handle-width: 24px;
+      --mdc-switch-handle-height: 24px;
+      --mdc-switch-track-width: 46px;
+      --mdc-switch-track-height: 28px;
+    }
+    .mdc-switch__track {
+      width: 46px; height: 28px; border-radius: 14px;
+      background-color: #e9e9ea; border: none;
+      transition: background-color 0.25s ease;
+    }
+    .mdc-switch__track::before,
+    .mdc-switch__track::after {
+      background-color: #e9e9ea; border: none; opacity: 1;
+    }
+    .mdc-switch--selected .mdc-switch__track,
+    .mdc-switch--selected .mdc-switch__track::before,
+    .mdc-switch--selected .mdc-switch__track::after {
+      background-color: #34c759;
+    }
+    .mdc-switch__handle-track {
+      transition: transform 0.25s ease;
+    }
+    .mdc-switch--selected .mdc-switch__handle-track {
+      transform: translateX(22px);
+    }
+    .mdc-switch__handle {
+      /* 钮尺寸实测不吃普通宽高（MDC 内部口径未明），只好 !important 定死；
+         作用域仅这两个开关，不碰其他开关。 */
+      width: 24px !important; height: 24px !important; border-radius: 50%;
+      background-color: #fff;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16);
+    }
+    .mdc-switch__shadow {
+      width: 24px !important; height: 24px !important;
+      background-color: #fff;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16);
+    }
+    /* 钮上字形去掉：开态 ✓ / 关态 − 皆不留。 */
+    .mdc-switch__icons {
+      display: none;
+    }
+  }
 }
 .shadow-panel {
   margin-top: 12px; padding: 12px 14px;
@@ -3677,11 +3682,8 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .sentence-count { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; color: #334155; margin-top: 8px; }
 .sentence-count.locked { opacity: 0.5; }
 .sentence-need { color: #b45309; }
-/* 模式开关（卡片底部导航栏，跟读开关旁 P-A；图标键 + 开启态蓝底，与 .shadow-switch 同级）。 */
-.sentence-switch { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 12px; font-size: 12.5px; border-radius: 9px; border: 1px solid #e2e8f0; background: #fff; color: #475569; cursor: pointer; }
-.sentence-switch mat-icon { font-size: 20px; width: 20px; height: 20px; }
-.sentence-switch.on { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
-.sentence-switch:disabled { opacity: 0.5; cursor: default; }
+/* 票 277：273 的 .sentence-switch 胶囊按钮样式已清除；一句话开关与跟读开关
+   共用票 268 的 iPhone 样式块（见上，父选择器并列 + ::ng-deep 嵌套共用）。 */
 /* 报告顶部选区文本行（复用 .tts-alert 一类浅底灰边口径，不新增视觉体系）。 */
 .sentence-graded-line { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; }
 .sentence-graded-line mat-icon { color: #2563eb; font-size: 18px; width: 18px; height: 18px; flex: 0 0 auto; }

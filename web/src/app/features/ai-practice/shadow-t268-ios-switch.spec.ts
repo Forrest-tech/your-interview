@@ -25,7 +25,9 @@ describe('票 268：跟读开关 iPhone 外观结构契约', () => {
   });
 
   it('iOS 轨道：46×28 胶囊、关态浅灰、开态 #34C759', () => {
-    expect(scss).toContain('.shadow-switch ::ng-deep .mdc-switch__track');
+    // 票 277：一句话开关与跟读开关嵌套共用本块（父选择器并列 + ::ng-deep 内嵌），规则口径不变。
+    expect(scss).toContain('.shadow-switch, .sentence-switch {');
+    expect(scss).toContain('.mdc-switch__track {');
     expect(scss).toContain('width: 46px; height: 28px; border-radius: 14px;');
     expect(scss).toContain('background-color: #e9e9ea;');
     expect(scss).toContain('.mdc-switch--selected .mdc-switch__track');
@@ -36,7 +38,7 @@ describe('票 268：跟读开关 iPhone 外观结构契约', () => {
     // MDC 内部尺寸走 CSS 变量，直接宽高与变量双写，缺一不可。
     expect(scss).toContain('--mdc-switch-handle-width: 24px;');
     expect(scss).toContain('--mdc-switch-handle-height: 24px;');
-    expect(scss).toContain('.shadow-switch ::ng-deep .mdc-switch__handle {');
+    expect(scss).toContain('.mdc-switch__handle {');
     expect(scss).toContain('width: 24px !important; height: 24px !important; border-radius: 50%;');
     expect(scss).toContain('background-color: #fff;');
     expect(scss).toContain('box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15)');
@@ -46,12 +48,14 @@ describe('票 268：跟读开关 iPhone 外观结构契约', () => {
     expect(scss).toContain('display: none;');
   });
 
-  it('只动这一个开关：其余开关/菜单的样式锚点未被波及', () => {
-    // 覆盖限定在 .shadow-switch 之下，不存在全局 .mdc-switch 改写。
+  it('只动这两个开关：其余开关/菜单的样式锚点未被波及', () => {
+    // 覆盖限定在 .shadow-switch/.sentence-switch 之下，不存在全局 .mdc-switch 改写。
+    // 票 277 嵌套共用后，作用域内规则行均为缩进的后代链；只有顶格（列 0）起首的
+    // .mdc-switch 行才是全局改写，缩进行不算。
     const globalMdc = scss
       .split('\n')
-      .filter((line) => line.includes('.mdc-switch') && !line.includes('.shadow-switch'))
-      .filter((line) => line.trim().startsWith('.mdc-switch'));
+      .filter((line) => line.includes('.mdc-switch') && !line.includes('.shadow-switch') && !line.includes('.sentence-switch'))
+      .filter((line) => line.startsWith('.mdc-switch'));
     expect(globalMdc).toEqual([]);
   });
 });

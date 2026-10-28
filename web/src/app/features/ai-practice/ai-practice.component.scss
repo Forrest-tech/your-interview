@@ -3547,6 +3547,60 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
   display: inline-flex; align-items: center;
   font-size: 13px; color: #334155; margin-right: 4px;
 }
+/* 票 268：跟读开关改 iPhone（iOS UISwitch）外观 —— 只改样子，不改行为、
+   位置、文案、tooltip、data-testid。MDC 内部结构（Angular Material 17）：
+   switch 根节点下是 track、handle-track、handle 三层，handle 内含
+   icons 层（即旧的 −/✓ 字形）。
+   iOS 口径：轨道 46×28 胶囊、圆钮 24px 白色带 iOS 阴影、开态轨道
+   #34C759、关态轨道 #E9E9EA、钮滑动 0.25s ease、钮上不留任何字形。 */
+.shadow-switch ::ng-deep .mdc-switch {
+  width: 46px; height: 28px;
+}
+/* MDC 内部尺寸走 CSS 变量（实测：--mdc-switch-handle-width 默认 20px，
+   且变量定义在 .mdc-switch 自身，写在宿主上会被它盖过），故变量必须
+   下到 .mdc-switch 元素上，并与直接值双写。 */
+.shadow-switch ::ng-deep .mdc-switch {
+  --mdc-switch-handle-width: 24px;
+  --mdc-switch-handle-height: 24px;
+  --mdc-switch-track-width: 46px;
+  --mdc-switch-track-height: 28px;
+}
+.shadow-switch ::ng-deep .mdc-switch__track {
+  width: 46px; height: 28px; border-radius: 14px;
+  background-color: #e9e9ea; border: none;
+  transition: background-color 0.25s ease;
+}
+.shadow-switch ::ng-deep .mdc-switch__track::before,
+.shadow-switch ::ng-deep .mdc-switch__track::after {
+  background-color: #e9e9ea; border: none; opacity: 1;
+}
+.shadow-switch ::ng-deep .mdc-switch--selected .mdc-switch__track,
+.shadow-switch ::ng-deep .mdc-switch--selected .mdc-switch__track::before,
+.shadow-switch ::ng-deep .mdc-switch--selected .mdc-switch__track::after {
+  background-color: #34c759;
+}
+.shadow-switch ::ng-deep .mdc-switch__handle-track {
+  transition: transform 0.25s ease;
+}
+.shadow-switch ::ng-deep .mdc-switch--selected .mdc-switch__handle-track {
+  transform: translateX(22px);
+}
+.shadow-switch ::ng-deep .mdc-switch__handle {
+  /* 钮尺寸实测不吃普通宽高（MDC 内部口径未明），只好 !important 定死；
+     作用域仅这一个开关，不碰其他开关。 */
+  width: 24px !important; height: 24px !important; border-radius: 50%;
+  background-color: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16);
+}
+.shadow-switch ::ng-deep .mdc-switch__shadow {
+  width: 24px !important; height: 24px !important;
+  background-color: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16);
+}
+/* 钮上字形去掉：开态 ✓ / 关态 − 皆不留。 */
+.shadow-switch ::ng-deep .mdc-switch__icons {
+  display: none;
+}
 .shadow-panel {
   margin-top: 12px; padding: 12px 14px;
   background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;

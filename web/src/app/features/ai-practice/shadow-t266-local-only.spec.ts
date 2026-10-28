@@ -1,9 +1,13 @@
 /**
  * 票 266：跟读只留本机（用户点选定案：去掉上传）。
- *   · 模板：无 Submit/Discard/上传控件，无待提交块；写失败重试钮改挂错误提示区；
+ *   · 模板：无上传控件，无上传用待提交块；写失败重试钮改挂错误提示区；
  *     人声重试钮（服务端行）与行删除钮保留。
- *   · session：提交/丢弃/上传/混音方法与待提交信号全部删除；Stop 统一为本地终态行；
+ *     票 274 补充：卡片底部共享的 Submit/Preview/Discard 三钮复用于
+ *     跟读“本地确认”（停录先挂起、Submit 仅本地落库），与 266 删掉的
+ *     “上传用待提交”是两回事——上传路径仍删，本地确认是新加的。
+ *   · session：上传/混音方法与混音信号全部删除；Stop 统一为本地终态行；
  *     新 take 不再调任何新建服务端行的 API（人声重试与服务端读路径除外）。
+ *     票 274：Stop 改为先挂 pending（见票 274 规约），Submit 才落库。
  *   · i18n：被删 UI 专用的键已移除，无残留引用。
  * 结构断言（沿用票 264 前例）：读源码文本钉死契约，不跑 Angular。
  */
@@ -43,15 +47,16 @@ describe('票 266：上传删除', () => {
 
   it('session 删除提交/丢弃/上传/混音方法与待提交信号', () => {
     const session = SRC('./practice-shadow-session.ts');
+    // 票 274 接管说明：266 删的是“上传用待提交”（Submit 上传到服务端）；
+    // 274 重新引入的是“本地确认用 pending”（Submit 仅本地落库、永不上传），
+    // 故 submit/discard + pending 信号三项不再断言缺失（见票 274 规约）；
+    // 上传/混音相关删除项仍全量断言。
     for (const name of [
-      'async submitShadowPending',
-      'async discardShadowPending',
       'async uploadShadowRowToServer',
       'private async renderMix',
       'async retryShadowMix',
       'cancelShadowMix',
       'async regenerateReference',
-      'readonly shadowPending',
       'readonly shadowMixStatus',
       'readonly shadowMixProgress',
       'readonly uploadingToServerFor',

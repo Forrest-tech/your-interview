@@ -560,6 +560,15 @@
                 <span>{{ shadow.shadowQuietHint() }}</span>
               </div>
             }
+
+            <!-- 票 274：待确认的跟读 take（停录后先挂起，Submit 才进列表；
+                 列表只认 IDB，pending 期间行不出现）。 -->
+            @if (shadow.shadowPendingTake()) {
+              <div class="shadow-alert shadow-confirm" role="note" data-testid="shadow-confirm">
+                <mat-icon>pending_actions</mat-icon>
+                <span>{{ t('practice.shadow.pendingConfirm') }}</span>
+              </div>
+            }
           </div>
         }
         </div><!-- /.practice-box-border -->
@@ -577,11 +586,12 @@
               <span>{{ t('practice.submitTake') }}</span>
             </button>
 
-            <!-- 待提交时的次要动作:试听 + 丢弃 -->
-            @if (recorder.pendingTake()) {
+            <!-- 待提交时的次要动作:试听 + 丢弃（常规待提交 或 跟读待确认；
+                 跟读待确认时接影子处理，见 component 的 submit/preview/discard 路由）。 -->
+            @if (recorder.pendingTake() || shadow.shadowPendingTake()) {
               <button class="btn-mini" (click)="previewPending()"
                       [matTooltip]="t('practice.recPlay')">
-                <mat-icon>{{ previewingPending() ? 'pause' : 'play_arrow' }}</mat-icon>
+                <mat-icon>{{ (shadow.shadowPendingTake() ? shadow.shadowPendingPlaying() : previewingPending()) ? 'pause' : 'play_arrow' }}</mat-icon>
                 <span>{{ t('practice.previewTake') }}</span>
               </button>
               <button class="btn-mini danger" (click)="discardPending()"

@@ -224,7 +224,9 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   readonly treeOpen = this.tree.treeOpen;
   readonly treeWidth = this.tree.treeWidth;
   readonly azureReady = this.grading.azureReady;
-  readonly canSubmitTake = this.grading.canSubmitTake;
+  // 票 274：Submit 门 = 常规待提交 或 跟读待确认（任一有即激活；
+  // 跟读待确认时底部钮接影子处理，见 submitPending/previewPending/discardPending）。
+  readonly canSubmitTake = computed(() => this.shadow.shadowPendingTake() !== null || this.grading.canSubmitTake());
   readonly uploadingPending = this.grading.uploadingPending;
   readonly speaking = this.tts.speaking;
   readonly rate = this.tts.rate;
@@ -1017,6 +1019,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
    * 常规录音；跟读面板不再有自己的开始/停止键。
    */
   startRecording(): Promise<void> {
+    // 票 274：有待确认的跟读 take 时，禁开任何新录音（先 Submit 或 Discard）。
+    if (this.shadow.shadowPendingTake()) {
+      this.toast(this.t('practice.shadow.pendingBlocksRecording'));
+      return Promise.resolve();
+    }
     if (this.shadow.shadowMode()) return this.shadow.startShadow();
     // 票 269：模式内选区不足 10 词 → 录音键禁用（模板侧 disabled）+ 尝试操作时 toast，
     // 绝不开始录音（grading.startRecording 的丢弃旧待提交条副作用也不应触发）。
@@ -1047,9 +1054,21 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
   liveWaveLinePoints(): string {
     return valuesToLinePoints(this.recorder.liveWave(), 1);
   }
-  previewPending(): void { return this.grading.previewPending(); }
-  submitPending(): void { return this.grading.submitPending(); }
-  discardPending(): void { return this.grading.discardPending(); }
+  previewPending(): void {
+    // 票 274：跟读待确认优先——底部钮先处理影子 pending，常规待提交随后。
+    if (this.shadow.shadowPendingTake()) { void this.shadow.previewShadowPending(); return; }
+    return this.grading.previewPending();
+  }
+  submitPending(): void {
+    // 票 274：跟读待确认优先（Submit = 落库进列表，仅本地）。
+    if (this.shadow.shadowPendingTake()) { void this.shadow.submitShadowPending(); return; }
+    return this.grading.submitPending();
+  }
+  discardPending(): void {
+    // 票 274：跟读待确认优先（Discard = 丢干净，无行无 blob）。
+    if (this.shadow.shadowPendingTake()) { this.shadow.discardShadowPending(); return; }
+    return this.grading.discardPending();
+  }
   removeRecording(id: string): void { return this.grading.removeRecording(id); }
   gradeRecording(id: string): Promise<void> { return this.grading.gradeRecording(id); }
   speakProgress(): number { return this.tts.speakProgress(); }

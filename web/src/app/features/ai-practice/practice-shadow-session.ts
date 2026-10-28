@@ -317,6 +317,20 @@ export class PracticeShadowSession {
   // ---------- 写失败态（P29g：Stop 写失败时保留重试） ----------
   /** P29g：Stop 写失败标志（写进内存退路而非 IndexedDB 时置位）。 */
   readonly shadowStorageFailed = signal(false);
+  // ---------- 待确认态（票 274：停录后先挂起，Submit 才落库进列表） ----------
+  /**
+   * 票 274：跟读停录（手动/自动同一 stopShadow 路径）不再直接落库；
+   * finished take 先挂在内存 pending 态，卡片底部 Submit/Preview/Discard
+   * 三钮接影子专属处理：Submit 落库进列表（仅本地，永不上传），
+   * Preview 播这条待确认的，Discard 丢干净（无行、无 blob）。
+   * pending 只在内存：刷新页面即丢（与常规待提交条同一语义）；
+   * 列表只认 shadowMeta（IDB），pending 绝不进列表。
+   */
+  readonly shadowPendingTake = signal<ShadowTakeRecord | null>(null);
+  /** 票 274：待确认 take 试听播放态（卡片底部 Preview 钮图标用）。 */
+  readonly shadowPendingPlaying = signal(false);
+  /** 票 274：提交进行中门（防 Submit 连点双写）。 */
+  private submittingPending = false;
   /** 票259 S2：人声轨上传失败的服务端行 id（仅该行显示“重试传人声”）。 */
   readonly voiceTrackFailedFor = signal<string | null>(null);
   // ---------- 列表与展开 ----------
@@ -563,6 +577,15 @@ export class PracticeShadowSession {
     this.stopShadowPlayback();
     this.shadowExpandedId.set(null);
     this.shadowStorageFailed.set(false);
+    // 票 274：素材切换 → 待确认 take 归属旧素材，一并丢弃（不落库、不留行）；
+    // 这条 take 的提示与写失败态同样作废，不留指向已丢 take 的文案。
+    if (this.shadowPendingTake()) {
+      this.stopPendingPreview();
+      this.shadowPendingTake.set(null);
+      this.shadowQuietHint.set(null);
+      this.shadowError.set(null);
+      this.lastFailedTakeId = null;
+    }
     this.revokeRefUrl();
     void this.refreshShadowMeta();
   }
@@ -570,6 +593,12 @@ export class PracticeShadowSession {
   // ---------- 采集 ----------
   async startShadow(): Promise<void> {
     if (this.starting || this.shadowRecording()) return;
+    // 票 274：有待确认的跟读 take 时，禁开新录音（先 Submit 或 Discard）。
+    // 注意：此门必须在下方清提示之前——否则这条提示会被清掉。
+    if (this.shadowPendingTake()) {
+      this.shadowError.set(this.host.t('practice.shadow.pendingBlocksRecording'));
+      return;
+    }
     this.shadowError.set(null);
     this.shadowQuietHint.set(null);
     this.shadowStorageFailed.set(false);
@@ -829,36 +858,134 @@ export class PracticeShadowSession {
         voiceWallSec: result.voiceWallSec,
         text,
       };
-      // P29g：Stop 必须确认持久化写成功；写进内存退路 = 失败，显式报错、
-      // 保留内存态并记下 take id，由用户点重试写（票 266：重试钮改挂在
-      // 错误提示区，不再依赖已删除的待提交块）。
-      const persisted = await putShadowTake(rec);
-      if (!persisted) {
-        this.shadowStorageFailed.set(true);
-        this.lastFailedTakeId = localTakeId;
-        this.shadowError.set(this.host.t('practice.shadow.storageFailed'));
-      } else {
-        this.shadowStorageFailed.set(false);
-        this.lastFailedTakeId = null;
-      }
-      // 行直接进跟读列表（meta 刷新后可见），无待提交态、无上传。
-      this.host.toast(
-        this.host.t(
-          this.midTakeFailed ? 'practice.shadow.partialKeptLocal' : 'practice.shadow.savedLocal',
-        ),
-      );
-      this.midTakeFailed = false;
-      // 事后 F0 算一次后缓存（P25），失败不阻塞审阅（波形仍在）。
-      void this.computeAndCachePostF0(rec).catch(() => undefined);
-      await this.refreshShadowMeta();
+      // 票 274：Stop 后不直接落库——take 挂 pending，由卡片底部
+      // Submit 落库进列表 / Discard 丢弃；列表只认 shadowMeta（IDB），
+      // pending 期间行不出现。事后 F0 与刷新随提交走（见 submitShadowPending）。
+      this.shadowPendingTake.set(rec);
     } finally {
       this.stopping = false;
       this.host.cdr.detectChanges();
     }
   }
 
+  /**
+   * 票 274：提交待确认的跟读 take——落库进列表（仅本地，永不上传）。
+   * 写失败：pending 保留，用户可再点 Submit 重试（错误提示区重试钮同路）。
+   * 写成功：事后 F0 照 P25 缓存，刷新落点后行出现，才清 pending。
+   */
+  async submitShadowPending(): Promise<void> {
+    const rec = this.shadowPendingTake();
+    if (!rec || this.submittingPending) return;
+    this.submittingPending = true;
+    try {
+      this.stopPendingPreview();
+      const persisted = await putShadowTake(rec);
+      if (!persisted) {
+        this.shadowStorageFailed.set(true);
+        this.lastFailedTakeId = rec.localTakeId;
+        this.shadowError.set(this.host.t('practice.shadow.storageFailed'));
+        return;
+      }
+      this.shadowStorageFailed.set(false);
+      this.lastFailedTakeId = null;
+      this.midTakeFailed = false;
+      // 事后 F0 算一次后缓存（P25），失败不阻塞审阅（波形仍在）。
+      void this.computeAndCachePostF0(rec).catch(() => undefined);
+      await this.refreshShadowMeta();
+      this.shadowPendingTake.set(null);
+    } finally {
+      this.submittingPending = false;
+      this.host.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * 票 274：丢弃待确认的跟读 take——无行、无 blob；这条 take 的
+   * 提示（过小提示/无声错误/写失败）一并清掉，不留指向已丢 take 的文案。
+   */
+  discardShadowPending(): void {
+    if (!this.shadowPendingTake()) return;
+    this.stopPendingPreview();
+    this.shadowPendingTake.set(null);
+    this.shadowQuietHint.set(null);
+    this.shadowError.set(null);
+    this.shadowStorageFailed.set(false);
+    this.lastFailedTakeId = null;
+    this.host.cdr.detectChanges();
+  }
+
+  /**
+   * 票 274：试听待确认的跟读 take（参考 + 人声双轨；只动听的路径，
+   * 与行一起听同一构造：增益级复用 attachTogetherGain，存档不动）。
+   * 再点 = 暂停；Submit/Discard/切其他播放时由 stopPendingPreview 收口。
+   */
+  async previewShadowPending(): Promise<void> {
+    const rec = this.shadowPendingTake();
+    if (!rec) return;
+    if (this.shadowPendingPlaying()) {
+      this.stopPendingPreview();
+      return;
+    }
+    this.stopOtherAudio();
+    this.stopShadowPlayback();
+    const voiceBlob = rec.voiceBlob;
+    const cached = rec.refKey ? await getCachedAudio(rec.refKey) : null;
+    const refBlob = cached?.blob ?? (this.refKey === rec.refKey ? this.refBlob : null);
+    if (!voiceBlob || voiceBlob.size === 0 || !refBlob) {
+      this.shadowError.set(this.host.t('practice.shadow.voiceMissing'));
+      return;
+    }
+    const reviewRate = this.shadowReviewRate();
+    const vUrl = URL.createObjectURL(voiceBlob);
+    const rUrl = URL.createObjectURL(refBlob);
+    this.expandedVoiceUrl = vUrl;
+    this.expandedRefUrl = rUrl;
+    const vEl = this.makeAudioEl(vUrl);
+    const rEl = this.makeAudioEl(rUrl);
+    rEl.playbackRate = reviewRate;
+    (rEl as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+    this.expandedVoiceEl = vEl;
+    this.expandedRefEl = rEl;
+    await this.attachTogetherGain(vEl);
+    this.controller = new ShadowPlaybackController(
+      {
+        mode: 'dual',
+        tracks: [
+          { id: 'voice', el: vEl, durationSec: rec.voiceWallSec },
+          { id: 'reference', el: rEl, durationSec: rec.refDurationSec },
+        ],
+        reviewRate,
+        laneShiftSec: rec.laneShiftSec,
+        seekOffsetSec: 0,
+      },
+      (refTime) => {
+        this.shadowPlayhead.set(refTime);
+      },
+    );
+    this.controller.seek(0);
+    // makeAudioEl 的 ended 处理只清 shadowPlayingId；待确认试听态另清。
+    vEl.addEventListener('ended', () => {
+      this.shadowPendingPlaying.set(false);
+    }, { once: true });
+    await this.controller.play();
+    this.shadowPendingPlaying.set(true);
+  }
+
+  /** 票 274：停待确认 take 的试听（控制器销毁 + URL 回收，走统一收口）。 */
+  stopPendingPreview(): void {
+    if (!this.shadowPendingPlaying()) return;
+    this.shadowPendingPlaying.set(false);
+    this.stopShadowPlayback();
+  }
+
   /** P29g：Stop 写失败后的重试写（写进 IDB 即清失败态；仍失败则保留）。 */
   async retryShadowWrite(): Promise<void> {
+    // 票 274：待确认 take 的提交写失败 → 重试 = 再提交（pending 仍在内存）。
+    const pending = this.shadowPendingTake();
+    if (pending && pending.localTakeId === this.lastFailedTakeId) {
+      await this.submitShadowPending();
+      return;
+    }
     if (!this.lastFailedTakeId) return;
     const meta = await this.storeRecord(this.lastFailedTakeId);
     if (!meta) return;
@@ -1036,6 +1163,8 @@ export class PracticeShadowSession {
     this.controller?.destroy();
     this.controller = null;
     this.shadowPlayingId.set(null);
+    // 票 274：控制器销毁 = 待确认试听亦停（行播放会先走此处销毁待确认控制器）。
+    this.shadowPendingPlaying.set(false);
     // 票 271 A：增益级随播放控制器一起断开（旧元素丢弃，新元素重挂）。
     this.voiceGainStage?.disconnect();
     this.voiceGainStage = null;
@@ -1048,6 +1177,37 @@ export class PracticeShadowSession {
     this.expandedVoiceEl = null;
     this.expandedRefEl = null;
     this.expandedMixEl = null;
+  }
+
+  /**
+   * 票 274（自 271 A 抽出复用）+ 票 279（rebase 合并升级）：
+   * dual together 人声挂增益级，行一起听与待确认试听共用。
+   * ① 自适应增益：人声峰/参考峰取本行已算好的两条 lane（同 0..100
+   * 口径），缺失时回落固定值（见模块注）。独奏/混音单轨不挂。
+   * ② 挂接前门控：必须先等上下文 running 才挂图——元素一旦被
+   * MediaElementSource 捕获，输出只走图，suspended 的图 = 静音，
+   * 且断开图不能恢复元素直出；所以 resume 失败/超时时只能不挂图
+   * （元素直出、绝不断播），不能先挂后拆。
+   * 只动听的路径；挂接失败回落原播放，绝不断播。
+   */
+  private async attachTogetherGain(vEl: HTMLAudioElement): Promise<void> {
+    if (typeof AudioContext === 'undefined') return;
+    if (!this.voiceGainCtx) {
+      try {
+        this.voiceGainCtx = new AudioContext();
+      } catch {
+        this.voiceGainCtx = null;
+      }
+    }
+    const { gain: togetherGain } = computeTogetherGain(
+      peakMaxValue(this.shadowExpandedPeaks()),
+      peakMaxValue(this.shadowRefPeaks()),
+    );
+    const ctx = this.voiceGainCtx;
+    const running = ctx ? await ensureVoiceGainContextRunning(ctx, 1000) : false;
+    this.voiceGainStage =
+      ctx && running ? attachVoiceGainStage(ctx, vEl, togetherGain) : null;
+    this.shadowVoiceGain.set(this.voiceGainStage ? this.voiceGainStage.gainValue : 0);
   }
 
   private async buildController(
@@ -1220,32 +1380,10 @@ export class PracticeShadowSession {
     (rEl as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
     this.expandedVoiceEl = vEl;
     this.expandedRefEl = rEl;
-    // 票 279：dual together 人声挂增益级（只动听的路径）。
-    // ① 自适应增益：人声峰/参考峰取本行已算好的两条 lane（同 0..100
-    // 口径），缺失时回落固定值（见模块注）。独奏/混音单轨不挂。
-    // ② 挂接前门控：必须先等上下文 running 才挂图——元素一旦被
-    // MediaElementSource 捕获，输出只走图，suspended 的图 = 静音，
-    // 且断开图不能恢复元素直出；所以 resume 失败/超时时只能不挂图
-    // （元素直出、绝不断播），不能先挂后拆。
-    const { gain: togetherGain } = computeTogetherGain(
-      peakMaxValue(this.shadowExpandedPeaks()),
-      peakMaxValue(this.shadowRefPeaks()),
-    );
-    let stage: VoiceGainStage | null = null;
-    if (typeof AudioContext !== 'undefined') {
-      if (!this.voiceGainCtx) {
-        try {
-          this.voiceGainCtx = new AudioContext();
-        } catch {
-          this.voiceGainCtx = null;
-        }
-      }
-      const ctx = this.voiceGainCtx;
-      const running = ctx ? await ensureVoiceGainContextRunning(ctx, 1000) : false;
-      stage = ctx && running ? attachVoiceGainStage(ctx, vEl, togetherGain) : null;
-    }
-    this.voiceGainStage = stage;
-    this.shadowVoiceGain.set(stage ? stage.gainValue : 0);
+    // 票 279（经 274 抽出的方法复用）：dual together 人声挂增益级——
+    // 自适应增益 + 挂接前门控的实现见 attachTogetherGain（行一起听与
+    // 待确认试听共用同一链路）；挂接失败回落原播放，绝不断播。
+    await this.attachTogetherGain(vEl);
     this.controller = new ShadowPlaybackController(
       {
         mode: 'dual',

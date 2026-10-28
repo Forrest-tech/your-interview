@@ -3614,6 +3614,8 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .shadow-hint mat-icon { color: #2563eb; font-size: 18px; width: 18px; height: 18px; }
 .shadow-alert { color: #92400e; }
 .shadow-alert.is-error { color: #b91c1c; }
+/* 票 274：待确认提示（与 shadow-alert 同排版，蓝色信息态）。 */
+.shadow-alert.shadow-confirm { color: #1d4ed8; }
 .shadow-alert mat-icon { font-size: 18px; width: 18px; height: 18px; }
 .shadow-rate-label { font-size: 13px; color: #475569; margin-right: 4px; }
 /* 票 261 §3：倍速菜单键 —— 与示范条 .speed-badge 同一套视觉

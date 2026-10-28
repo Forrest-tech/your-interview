@@ -1039,7 +1039,9 @@
   gap: 16px;
   align-items: start;
 }
-@media (max-width: 1100px) {
+/* 票 283：堆叠阈值由 1100px 降至 600px —— 用户实测视口（约 800–1050px，截图中图例呈 3+2 列）下
+   五项指标必须留在右侧（与 >1100px 的既有两列版式一致）；只在真正窄屏（≤600px）才单列堆叠。 */
+@media (max-width: 600px) {
   .recog-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -1809,9 +1811,10 @@
 }
 
 /* ---------- 窄屏退让 ---------- */
-/* ★ 票120:≤1100px 网格已单列堆叠,图例栏落到文本下方但不拉满整行 ——
-   图例行改 2 列 wrap,免得五行短行横贯整宽重演"右侧大片死白";<600px 退化 1 列。 */
-@media (max-width: 1100px) {
+/* ★ 票120:网格单列堆叠时,图例栏落到文本下方但不拉满整行 ——
+   图例行改 2 列 wrap,免得五行短行横贯整宽重演"右侧大片死白";<600px 退化 1 列。
+   ★ 票 283：堆叠阈值由 1100px 降至 600px（与 .recog-grid 配对），601px 以上图例栏保持右侧单列。 */
+@media (max-width: 600px) {
   .err-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

@@ -597,7 +597,8 @@
                       ? t('practice.sentence.editDisabledTip')
                       : (sentence.sentenceMode() ? t('practice.sentence.modeOn') : t('practice.sentence.modeOff'))"
                     data-testid="sentence-toggle">
-              <mat-icon>format_quote</mat-icon>
+              <mat-icon>short_text</mat-icon>
+              <span>{{ t('practice.sentence.badge') }}</span>
             </button>
             <button class="nav-btn" [disabled]="!hasPrev()" (click)="prevItem()">
               <mat-icon>arrow_back</mat-icon>

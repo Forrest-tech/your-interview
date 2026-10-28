@@ -3667,7 +3667,7 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .sentence-count.locked { opacity: 0.5; }
 .sentence-need { color: #b45309; }
 /* 模式开关（卡片底部导航栏，跟读开关旁 P-A；图标键 + 开启态蓝底，与 .shadow-switch 同级）。 */
-.sentence-switch { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 9px; border: 1px solid #e2e8f0; background: #fff; color: #475569; cursor: pointer; }
+.sentence-switch { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 12px; font-size: 12.5px; border-radius: 9px; border: 1px solid #e2e8f0; background: #fff; color: #475569; cursor: pointer; }
 .sentence-switch mat-icon { font-size: 20px; width: 20px; height: 20px; }
 .sentence-switch.on { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
 .sentence-switch:disabled { opacity: 0.5; cursor: default; }

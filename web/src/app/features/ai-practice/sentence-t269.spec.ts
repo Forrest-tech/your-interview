@@ -392,6 +392,19 @@ describe('票 269：接线结构契约（源码断言）', () => {
     expect(prevAt).toBeGreaterThan(sentenceAt);
   });
 
+  it('票 273：模式按钮可读——short_text 图标 + 一句话文字（非纯图标）', () => {
+    const html = read('ai-practice.component.html');
+    const start = html.indexOf('class="sentence-switch"');
+    expect(start).toBeGreaterThan(-1);
+    const btn = html.slice(start, html.indexOf('</button>', start));
+    expect(btn).toContain('data-testid="sentence-toggle"');
+    expect(btn).toContain('<mat-icon>short_text</mat-icon>');
+    expect(btn).toContain("{{ t('practice.sentence.badge') }}");
+    expect(btn).not.toContain('format_quote');
+    // 另一处 format_quote（评分句段引用行）不在本票范围，必须原样保留。
+    expect(html.match(/format_quote/g)).toHaveLength(1);
+  });
+
   it('词典：抑制旗标首行消费 + mousedown 清零 + reset 清零 + 捕获门禁', () => {
     const dict = read('practice-dictionary.ts');
     const onWordClick = dict.slice(dict.indexOf('onWordClick(token'));

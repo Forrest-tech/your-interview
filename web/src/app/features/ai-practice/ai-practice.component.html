@@ -667,6 +667,9 @@
           }
         </div>
 
+        <!-- 票 286：录音列表滚动容器 —— 标头留在容器外，行 + 展开区/报告区全部在容器内；
+             内容超高时容器内滚动、右侧出滚动条，卡片本身不再无限撑高。 -->
+        <div class="hist-list" data-testid="hist-list">
         <!-- 票 250：跟读列表（仅跟读模式在席；无评分钮、无评分列，见 PLAN-PATCHED3 §7）。 -->
         @if (shadow.shadowMode()) {
           @if (!shadow.shadowRows().length) {
@@ -1150,6 +1153,7 @@
             }
           }
         }
+        </div>
 
       </section>
     }

@@ -3166,6 +3166,16 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .hist-card .hist-head .hh-count { font-size: 14px; font-weight: 600; color: #64748b; }
 .hist-card .hist-empty { margin: 16px 0 4px; font-size: 13px; color: #64748b; }
 
+/* 票 286：录音列表滚动容器 —— 行高约 54px，480px 约放 8 行；
+   60vh 夹住矮视口，卡片不吃掉整页；内容未超高时 overflow-y:auto 不出滚动条；
+   overscroll-behavior:contain 让列表滚到头/尾时不连带滚整页。 */
+.hist-card .hist-list {
+  max-height: min(480px, 60vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
 .hist-card .hist-item {
   position: relative;
   display: flex;

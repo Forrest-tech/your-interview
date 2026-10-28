@@ -466,23 +466,8 @@
               <span>{{ t('practice.shadow.headphonesHint') }}</span>
             </div>
 
-            <!-- 票 261 §2：麦克风选择（此前全站无设备选择，浏览器默认设备
-                 选错即整条跟读静音，且用户无从改；录制中锁定）。 -->
-            @if (shadow.micDevices().length) {
-              <div class="shadow-mic-row">
-                <label class="shadow-rate-label" for="shadow-mic-select">{{ t('practice.shadow.micDevice') }}</label>
-                <select id="shadow-mic-select" class="shadow-mic-select"
-                        [disabled]="shadow.shadowRecording()"
-                        [value]="shadow.micDeviceId() ?? ''"
-                        (change)="shadow.setMicDevice($any($event.target).value || null)">
-                  <option value="">{{ t('practice.shadow.micDefault') }}</option>
-                  @for (d of shadow.micDevices(); track d.deviceId) {
-                    <option [value]="d.deviceId">{{ d.label }}</option>
-                  }
-                </select>
-              </div>
-            }
-
+            <!-- 票 263：麦克风选择已移出跟读面板（用户令：面板内不再反复选设备；
+                 设备配置改放 Settings → 语音设置，与跟读录音共享同一 yi-mic-device 键）。 -->
             @if (shadow.shadowAecWarning()) {
               <div class="shadow-alert" role="alert">
                 <mat-icon>warning_amber</mat-icon>

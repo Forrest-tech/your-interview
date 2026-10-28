@@ -77,6 +77,11 @@ export class VoiceSettingComponent {
   /** Azure 区域。 */
   readonly region = signal('canadacentral');
 
+  /** 票 263：麦克风设备（从跟读面板移入本页；与跟读录音共享同一 localStorage 键
+   *  yi-mic-device，null = 系统默认。空 = 未枚举或无设备，只留系统默认项）。 */
+  readonly micDevices = signal<{ deviceId: string; label: string }[]>([]);
+  readonly micDeviceId = signal<string | null>(null);
+
   /** Azure Key 输入框内容。⚠️ 只用于提交给后端,不落 localStorage。 */
   readonly azureKey = signal('');
 
@@ -148,6 +153,14 @@ export class VoiceSettingComponent {
       // 隐私模式下读不到就用默认值,不阻断页面
     }
 
+    // 票 263：恢复已存的麦克风选择（与跟读录音同一键；进跟读时会话重建即读到新值）。
+    try {
+      this.micDeviceId.set(localStorage.getItem('yi-mic-device') ?? null);
+    } catch {
+      // 存储不可用就用系统默认,不阻断页面
+    }
+    void this.refreshMicDevices();
+
     // 拉一次服务端的真实状态 —— 刷新后仍能看到"已配置的 key 是哪一把"
     this.loadRemoteStatus();
 
@@ -160,6 +173,39 @@ export class VoiceSettingComponent {
     try {
       localStorage.setItem(REGION_KEY, r);
     } catch { /* 同上 */ }
+  }
+
+  /**
+   * 票 263：枚举麦克风设备（与票 261 跟读面板旧逻辑同规则：只取 audioinput，
+   * 授权前 label 为空属浏览器行为、照常列出并以 Mic N 兜底；存量 deviceId 已
+   * 不在列表中 = 设备已拔/已换，清掉选择、回落默认，绝不拿失效 id 去撞 exact 约束）。
+   * 枚举失败 = 只留系统默认项，默认设备录音路径不受影响。
+   */
+  async refreshMicDevices(): Promise<void> {
+    try {
+      const md = navigator.mediaDevices;
+      if (!md?.enumerateDevices) return;
+      const devices = await md.enumerateDevices();
+      const mics = devices
+        .filter((d) => d.kind === 'audioinput')
+        .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Mic ${i + 1}` }));
+      this.micDevices.set(mics);
+      const selected = this.micDeviceId();
+      if (selected && !mics.some((m) => m.deviceId === selected)) this.setMicDevice(null);
+    } catch {
+      /* 枚举失败 = 不提供选设备（默认设备路径不受影响） */
+    }
+  }
+
+  /** 票 263：选定麦克风（null = 系统默认），与跟读录音同一键持久化。 */
+  setMicDevice(deviceId: string | null): void {
+    this.micDeviceId.set(deviceId);
+    try {
+      if (deviceId) localStorage.setItem('yi-mic-device', deviceId);
+      else localStorage.removeItem('yi-mic-device');
+    } catch {
+      /* 存储不可用不影响本次选择 */
+    }
   }
 
   /**

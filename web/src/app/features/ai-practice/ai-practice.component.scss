@@ -3564,13 +3564,6 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 }
 .shadow-rate-menu-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
 .shadow-rate-menu-btn:disabled { opacity: 0.5; cursor: default; }
-/* 票 261 §2：麦克风设备行（与倍速行同排布）。 */
-.shadow-mic-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.shadow-mic-select {
-  flex: 1 1 auto; min-width: 160px; padding: 4px 8px; border-radius: 12px;
-  border: 1px solid #dbeafe; background: #fff; color: #334155; font-size: 13px;
-}
-.shadow-mic-select:disabled { opacity: 0.5; }
 .shadow-lanes { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
 .shadow-lane { display: flex; align-items: center; gap: 10px; }
 .shadow-lane-label { width: 64px; flex-shrink: 0; font-size: 13px; color: #475569; }

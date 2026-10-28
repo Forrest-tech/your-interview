@@ -1857,6 +1857,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'setting.engineAzureNote': { zh: '高质量自然人声 · 需消耗额度', en: 'Natural voice · uses quota', fr: 'Voix naturelle · consomme du quota' },
   'setting.current': { zh: '当前', en: 'Current', fr: 'Actuel' },
   'setting.credTitle': { zh: 'Azure Speech 凭据', en: 'Azure Speech Credentials', fr: 'Identifiants Azure Speech' },
+  'setting.micNote': { zh: '跟读录音使用的麦克风；不选则用系统默认设备。下次进入跟读时生效。', en: 'Microphone used for shadowing recordings; system default when unset. Applies next time you enter shadowing.', fr: 'Microphone utilisé pour les enregistrements de shadowing ; appareil par défaut du système si aucun choix. Appliqué à la prochaine ouverture du shadowing.' },
   'setting.credDesc': {
     zh: '在 Azure 门户创建 Speech 资源后,从「密钥和终结点」页复制 Key 与区域填入下方。凭据仅用于服务端调用,不会写入浏览器存储。',
     en: 'Create a Speech resource in the Azure portal, then copy the Key and Region from the Keys and Endpoint page. Credentials are used server-side only and never stored in your browser.',

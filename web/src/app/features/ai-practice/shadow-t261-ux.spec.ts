@@ -211,9 +211,9 @@ describe('票 261：模板与样式结构契约', () => {
     expect(html).toContain('orderedNonShadowRecordings()');
   });
 
-  it('§2：跟读面板有麦克风设备选择', () => {
-    expect(html).toContain('shadow-mic-select');
-    expect(html).toContain('practice.shadow.micDevice');
+  it('§2（票 263：已移出面板）：跟读面板无麦克风设备选择', () => {
+    expect(html).not.toContain('shadow-mic-select');
+    expect(html).not.toContain('shadow-mic-row');
   });
 
   it('§7：本地行删除与待提交丢弃走确认（session 源码含 confirmDialog 门）', () => {

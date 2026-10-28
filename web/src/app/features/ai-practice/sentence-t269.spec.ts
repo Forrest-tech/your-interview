@@ -437,11 +437,28 @@ describe('票 269：接线结构契约（源码断言）', () => {
       .toBeLessThan(dict.indexOf('if (isRovingKey(event.key)) {'));
   });
 
-  it('互斥双向接线：开跟读关一句话、开一句话关跟读', () => {
+  it('互斥单向 + 锁定（票 287）：开一句话关跟读；一句话开着时开跟读被锁住，不再自动关一句话', () => {
     const shadow = read('practice-shadow-session.ts');
-    expect(shadow).toContain('this.host.sentence?.exitSentenceMode()');
+    expect(shadow).toContain('if (this.host.sentence?.sentenceMode()) return;');
+    expect(shadow).not.toContain('this.host.sentence?.exitSentenceMode()');
     const session = read('practice-sentence-session.ts');
     expect(session).toContain('await this.host.shadow.toggleShadowMode()');
+  });
+
+  it('锁定模板 + 提示键（票 287）：一句话开着时跟读开关禁用、悬停提示先关一句话模式', () => {
+    const html = read('ai-practice.component.html');
+    const start = html.indexOf('data-testid="shadow-toggle"');
+    expect(start).toBeGreaterThan(-1);
+    const ctl = html.slice(html.lastIndexOf('<mat-slide-toggle', start), html.indexOf('</mat-slide-toggle>', start));
+    expect(ctl).toContain('[disabled]="sentence.sentenceMode()"');
+    expect(ctl).toContain("sentence.sentenceMode() ? t('practice.shadow.sentenceLockedTip')");
+    const dict = read('../../core/i18n/i18n.service.ts');
+    const keyAt = dict.indexOf("'practice.shadow.sentenceLockedTip'");
+    expect(keyAt).toBeGreaterThan(-1);
+    const entry = dict.slice(keyAt, dict.indexOf('},', keyAt));
+    expect(entry).toContain('请先关闭一句话模式');
+    expect(entry).toContain('Turn off One sentence mode first');
+    expect(entry).toContain('Désactivez');
   });
 
   it('上传链路：一句话字段随 FormData 落库（recorder → api → 后端 DTO 映射）', () => {

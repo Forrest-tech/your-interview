@@ -281,6 +281,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.shadow.toggle': { zh: '跟读模式', en: 'Shadowing mode', fr: 'Mode shadowing' },
   'practice.shadow.toggleOn': { zh: '跟读模式已开启', en: 'Shadowing mode on', fr: 'Mode shadowing activé' },
   'practice.shadow.toggleOff': { zh: '跟读模式已关闭', en: 'Shadowing mode off', fr: 'Mode shadowing désactivé' },
+  // 票 287：一句话模式开着时跟读开关被禁用，悬停提示须先关一句话模式再开跟读。
+  'practice.shadow.sentenceLockedTip': { zh: '请先关闭一句话模式，再开启跟读', en: 'Turn off One sentence mode first to enable Shadowing', fr: 'Désactivez d’abord le mode Une phrase pour activer le Shadowing' },
 
   // 票 269：一句话模式（Q6 文案终稿待用户过目，此处为计划草稿文案；结构与测试不受文案影响）。
   'practice.sentence.modeOn': { zh: '一句话模式已开启', en: 'Sentence mode on', fr: 'Mode phrase activé' },

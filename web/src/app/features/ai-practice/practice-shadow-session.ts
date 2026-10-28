@@ -475,6 +475,10 @@ export class PracticeShadowSession {
 
   // ---------- 模式 ----------
   async toggleShadowMode(): Promise<void> {
+    // 票 287：一句话模式开着时跟读开关被禁用（模板 [disabled]），会话层同样守住：
+    // 此方向不再自动关一句话模式——调用直接返回，须先关一句话模式再开跟读。
+    // 反向不受影响：开一句话模式时 sentenceMode() 仍为 false，关跟读那路照常走。
+    if (this.host.sentence?.sentenceMode()) return;
     if (this.shadowRecording()) await this.stopShadow();
     this.stopShadowPlayback();
     const next = !this.shadowMode();
@@ -483,8 +487,6 @@ export class PracticeShadowSession {
     this.shadowMeterWarning.set(false);
     this.shadowStorageFailed.set(false);
     if (next) {
-      // 票 269：互斥 —— 开跟读模式先关一句话模式（反向由一句话会话 toggleSentenceMode 接线）。
-      this.host.sentence?.exitSentenceMode();
       // 票 261 §2：进跟读模式即枚举麦克风（授权前 label 可能为空，授权后重枚举）。
       await this.refreshMicDevices();
       await this.refreshShadowMeta();

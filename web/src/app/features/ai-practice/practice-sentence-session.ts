@@ -11,7 +11,8 @@ import {
  *
  * 状态机（计划 §3 步骤 2、§6）：
  * - 开启模式 → 篇章进入选区捕获态（拖选 S-A + 键盘 Shift+方向键）；若跟读模式正开着 → 先关跟读；
- * - 开启跟读模式 → 同理先关一句话模式（跟读会话 toggleShadowMode 内接线）；
+ * - 开启跟读模式 → 票 287 起不再先关一句话模式：跟读开关在一句话模式开着时被禁用，
+ *   须先关一句话模式再开跟读（跟读会话 toggleShadowMode 入口守住）；
  * - 关闭模式 / 换素材 / 进入编辑态 → 清空选区、高亮与锚点（已提交/已评分 take 不受影响，
  *   标签与评分依据在 take 行上，不在模式状态上）；
  * - 录音进行中 → 选区锁定（捕获与键盘扩展直接忽略、模式按钮禁用）；
@@ -106,7 +107,8 @@ export class PracticeSentenceSession {
   /**
    * 模式开关。录音进行中（常规/跟读）禁用（模板侧 disabled + 此处双重门禁，
    * 防止录音中途模式翻转破坏“录音内容与选区对应”的不变量）。
-   * 互斥：开一句话模式先关跟读模式（反向由跟读会话 toggleShadowMode 接线）。
+   * 互斥（票 287 后为单向）：开一句话模式先关跟读模式；反向不再自动关——
+   * 一句话模式开着时跟读开关被禁用，须先关一句话模式再开跟读。
    */
   async toggleSentenceMode(): Promise<void> {
     if (this.host.recorder.recording() || this.host.shadow.shadowRecording()) return;

@@ -604,12 +604,15 @@
 
           <div class="cf-right">
             <!-- 票 261 §4：跟读开关 —— 开关式按钮，放在 Previous 左侧；
-                 不再放在播放条里（播放条只负责播放）。 -->
+                 不再放在播放条里（播放条只负责播放）。
+                 票 287：一句话模式开着时跟读开关禁用（[disabled]），悬停提示
+                 sentenceLockedTip；点它不做任何事，须先关一句话模式。 -->
             <mat-slide-toggle class="shadow-switch"
                     labelPosition="before"
                     [checked]="shadow.shadowMode()"
                     (change)="shadow.toggleShadowMode()"
-                    [matTooltip]="shadow.shadowMode() ? t('practice.shadow.toggleOn') : t('practice.shadow.toggleOff')"
+                    [disabled]="sentence.sentenceMode()"
+                    [matTooltip]="sentence.sentenceMode() ? t('practice.shadow.sentenceLockedTip') : (shadow.shadowMode() ? t('practice.shadow.toggleOn') : t('practice.shadow.toggleOff'))"
                     data-testid="shadow-toggle">
               {{ t('practice.shadow.shadowBadge') }}
             </mat-slide-toggle>

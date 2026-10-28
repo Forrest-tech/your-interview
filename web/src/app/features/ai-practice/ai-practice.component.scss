@@ -1650,6 +1650,8 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
+  /* 票 276：五维胶囊靠右（与右上角总分同侧，常规格式）。 */
+  justify-content: flex-end;
 }
 .pill {
   display: inline-flex;

@@ -3226,6 +3226,12 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
   color: #64748b;
 }
 .hist-card .hist-item .spacer { flex: 1 1 auto; min-width: 0; }
+/* 票 267：跟读行中间空闲过大 —— 行内有两个 flex 生长项（hi-track flex:1 与
+   spacer flex:1）把行撑满，空 track + spacer 占了行宽大半。只收跟读行
+   （.shadow-item），常规行一字不动：track 改 140px 基宽、可缩不伸（播放时
+   fill 仍按百分比填充、点击 seek 不变），spacer 藏掉，时长与删除钮贴到标题后。 */
+.hist-card .hist-item.shadow-item .hi-track { flex: 0 1 140px; min-width: 80px; }
+.hist-card .hist-item.shadow-item .spacer { display: none; }
 
 .hist-card .hist-item .hi-score {
   /* ★ 第二十六轮:与录音条 .side-score 完全统一 ——

@@ -674,7 +674,9 @@
                 </button>
                 <!-- 票 261 §1：号按时间先后（最早 #1），显示最新在上。 -->
                 <span class="hi-idx">{{ t('practice.shadow.shadowBadge') }} #{{ row.no }}</span>
-                <span class="hi-meta">{{ fmtDuration(row.durationSec) }} · {{ row.rate }}x</span>
+                <!-- 票 280：跟读行与常规 Take 行同版式——日期时间 + 时长 + 倍速；
+                     日期口径与常规行一致（fmtTime：MM-DD HH:mm）。 -->
+                <span class="hi-meta">{{ fmtTime(row.createdAt) }} · {{ fmtDuration(row.durationSec) }} · {{ row.rate }}x</span>
                 <div class="track hi-track" (click)="$event.stopPropagation(); shadow.seekShadowLane(row, $event)">
                   <div class="track-bg"></div>
                   <div class="track-fill" [style.width.%]="shadow.shadowPlayingId() === row.id ? (shadow.shadowPlayhead() / row.durationSec * 100) : 0"></div>
@@ -688,6 +690,18 @@
                     <mat-icon>cloud_upload</mat-icon>
                   </button>
                 }
+                <!-- 票 280：跟读行 View Report 开关——复用常规行 .hi-view 与
+                     viewReport/collapseReport 键；只开关展开区（expandShadowRow
+                     本身不起播），不用第二套展开态；无评分钮、无评分数字。 -->
+                <button class="hi-view" [class.on]="shadow.shadowExpandedId() === row.id"
+                        [attr.aria-expanded]="shadow.shadowExpandedId() === row.id"
+                        (click)="$event.stopPropagation(); shadow.expandShadowRow(row)"
+                        data-testid="shadow-view-report">
+                  <span>
+                    {{ shadow.shadowExpandedId() === row.id ? t('practice.collapseReport') : t('practice.viewReport') }}
+                  </span>
+                  <mat-icon>{{ shadow.shadowExpandedId() === row.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </button>
                 <button class="hi-del" [matTooltip]="t('practice.discardTake')"
                         (click)="$event.stopPropagation(); shadow.removeShadowRow(row)">
                   <mat-icon>delete_outline</mat-icon>

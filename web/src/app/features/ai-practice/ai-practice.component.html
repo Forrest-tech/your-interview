@@ -754,10 +754,8 @@
                     </div>
                   </div>
                   <div class="shadow-expanded-actions">
-                    <button class="btn-mini" (click)="shadow.toggleShadowPlay(row)">
-                      <mat-icon>{{ shadow.shadowPlayingId() === row.id ? 'pause' : 'play_arrow' }}</mat-icon>
-                      <span>{{ t('practice.shadow.playTogether') }}</span>
-                    </button>
+                    <!-- 票 272：展开区 Play together 已删——与行首播放钮同函数（toggleShadowPlay），
+                         播放/暂停只走行首钮；展开区只留 solo 三态 + 倍速菜单。 -->
                     <!-- 票259 S2：人声轨上传失败时，展开区也可只重传人声轨。 -->
                     @if (shadow.voiceTrackFailedFor() !== null && shadow.voiceTrackFailedFor() === row.serverId) {
                       <button class="btn-mini" (click)="shadow.retryVoiceTrack(row)">

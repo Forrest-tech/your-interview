@@ -3624,14 +3624,15 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 .shadow-alert.shadow-confirm { color: #1d4ed8; }
 .shadow-alert mat-icon { font-size: 18px; width: 18px; height: 18px; }
 .shadow-rate-label { font-size: 13px; color: #475569; margin-right: 4px; }
-/* 票 261 §3：倍速菜单键 —— 与示范条 .speed-badge 同一套视觉
-   （白底、#dbeafe 边框、#2563eb 文字、12px 圆角），菜单用 zoom-menu/zm-item。 */
+/* 票 261 §3：倍速菜单键（菜单用 zoom-menu/zm-item）。
+   票 272：与展开区 solo 钮、.card-foot .btn-mini 同款对齐
+   （白底、#e2e8f0 边框、#475569 文字、9px 圆角、32px 高）。 */
 .shadow-rate-menu-btn {
-  display: inline-flex; align-items: center; gap: 2px;
-  padding: 4px 8px 4px 12px; border-radius: 12px; border: 1px solid #dbeafe;
-  background: #fff; color: #2563eb; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 32px; padding: 0 10px; border-radius: 9px; border: 1px solid #e2e8f0;
+  background: #fff; color: #475569; font-size: 12.5px; font-weight: 600; cursor: pointer;
 }
-.shadow-rate-menu-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.shadow-rate-menu-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
 .shadow-rate-menu-btn:disabled { opacity: 0.5; cursor: default; }
 .shadow-lanes { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
 .shadow-lane { display: flex; align-items: center; gap: 10px; }
@@ -3668,7 +3669,26 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
 }
 .shadow-expanded { padding: 10px 12px 12px; border-top: 1px solid #f1f5f9; }
 .shadow-expanded-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.shadow-expanded-actions .btn-mini.on { background: #dbeafe; color: #1d4ed8; }
+/* 票 272：展开区 solo 钮此前在本作用域内无基础样式（仅 .on 一条规则），
+   与行首钮/倍速菜单钮的控件语言脱节。按下述与 .card-foot .btn-mini
+   同款的显式样式对齐（32px 高、9px 圆角、#e2e8f0 边框、白底），
+   激活态保留浅蓝填充并加深边框——展开区唯一的模式指示必须一眼可辨。
+   悬停规则排除 .on（:not(.on)）：悬停选择符的特异度高于 .on，若不排除，
+   正被悬停的激活钮会被悬停底色盖掉浅蓝填充——激活态在点击瞬间（指针
+   正在钮上）必须仍是浅蓝。
+   倍速菜单钮同款对齐（原 12px 蓝边小 pill 与本行脱节，改后与 solo 钮
+   同高同框同字色，行内不再有第二种按钮语言；倍速值仍显示在钮上）。 */
+.shadow-expanded-actions .btn-mini {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 32px; padding: 0 10px;
+  border: 1px solid #e2e8f0; border-radius: 9px;
+  background: #ffffff; color: #475569;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.shadow-expanded-actions .btn-mini:hover:not([disabled]):not(.on) { background: #f6f8fb; }
+.shadow-expanded-actions .btn-mini[disabled] { border-color: #e2e8f0; color: #64748b; cursor: not-allowed; }
+.shadow-expanded-actions .btn-mini mat-icon { font-size: 17px; width: 17px; height: 17px; }
+.shadow-expanded-actions .btn-mini.on { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
 .shadow-lane-empty { font-size: 13px; color: #92400e; margin: 0; }
 .shadow-item { cursor: pointer; }
 

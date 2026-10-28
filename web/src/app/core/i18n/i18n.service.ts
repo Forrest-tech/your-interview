@@ -288,7 +288,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.sentence.modeTip': { zh: '一句话模式', en: 'Sentence mode', fr: 'Mode phrase' },
   'practice.sentence.selectedCount': { zh: '已选 {n} 词', en: 'Selected {n} words', fr: '{n} mot(s) sélectionné(s)' },
   'practice.sentence.needMoreWords': { zh: '还差 {m} 词', en: '{m} more word(s) needed', fr: 'Encore {m} mot(s) requis' },
-  'practice.sentence.badge': { zh: '一句话', en: 'Sentence', fr: 'Phrase' },
+  'practice.sentence.badge': { zh: '一句话', en: 'One sentence', fr: 'Phrase' },
   'practice.sentence.badgeTip': { zh: '评分句段：{text}', en: 'Scored passage: {text}', fr: 'Passage évalué : {text}' },
   'practice.sentence.scoreOnlyNote': { zh: '仅对所选句段评分', en: 'Scores only the selected passage', fr: 'Seule la sélection est évaluée' },
   'practice.sentence.editDisabledTip': { zh: '编辑态下不可选词，请先保存或取消编辑', en: 'Word selection is unavailable while editing — save or cancel first', fr: 'Sélection indisponible en édition — enregistrez ou annulez d’abord' },

@@ -25,6 +25,12 @@ export class PracticeSentenceSession {
   readonly sentenceMode = signal(false);
   /** 选区（词序闭区间，起止均为 wordIndex）；null = 无选区。 */
   readonly sentenceRange = signal<SentenceRange | null>(null);
+  /**
+   * 票 285：不足 10 词拖选被驳回后的提示旗标。拖选落定不足下限时选区被取消、
+   * 本旗标置位，模板在篇章下方显示 tooShortHint 提示；下一次成功选区、
+   * 清选区或退出模式时清零（键盘逐步扩展不触发本旗标，仍走计数行 needMoreWords）。
+   */
+  readonly tooShortHint = signal(false);
   /** 键盘选区的锚点词序（首次按 Shift 时以当前焦点词为锚点，之后保持不变）。 */
   readonly sentenceAnchor = signal<number | null>(null);
   /**
@@ -64,11 +70,30 @@ export class PracticeSentenceSession {
   /**
    * 拖选落定。录音中锁定：直接忽略，不改选区（§6 第 1 条）。
    * 拖选后键盘再扩展时锚点取选区起点（焦点端 = 选区终点），符合编辑器直觉。
+   * 成功选区清掉票 285 的不足提示（陈旧提示不得残留）。
    */
   setRange(start: number, end: number): void {
     if (this.host.recorder.recording()) return;
     this.sentenceRange.set({ start, end });
     this.sentenceAnchor.set(start);
+    this.tooShortHint.set(false);
+  }
+
+  /**
+   * 票 285：拖选落定 + 下限门禁（拖选专用，键盘逐步扩展不用此口）。
+   * 区间词数 ≥ SENTENCE_MIN_WORDS → 与 setRange 等价，返回 true；
+   * 不足下限 → 取消选择（旧选区一并清除，不留高亮）并置位 tooShortHint，
+   * 模板在篇章下方显示重选提示，返回 false。录音中锁定：原样不动，返回 false。
+   */
+  setRangeOrReject(start: number, end: number): boolean {
+    if (this.host.recorder.recording()) return false;
+    if (end - start + 1 < SENTENCE_MIN_WORDS) {
+      this.clearRange();
+      this.tooShortHint.set(true);
+      return false;
+    }
+    this.setRange(start, end);
+    return true;
   }
 
   /**
@@ -87,10 +112,11 @@ export class PracticeSentenceSession {
     return res.focus;
   }
 
-  /** 方向键折叠选区（标准语义）：清选区与锚点，模式本身不动。 */
+  /** 方向键折叠选区（标准语义）：清选区与锚点，模式本身不动；票 285 不足提示同清。 */
   clearRange(): void {
     this.sentenceRange.set(null);
     this.sentenceAnchor.set(null);
+    this.tooShortHint.set(false);
   }
 
   /**

@@ -290,6 +290,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.sentence.modeTip': { zh: '一句话模式', en: 'Sentence mode', fr: 'Mode phrase' },
   'practice.sentence.selectedCount': { zh: '已选 {n} 词', en: 'Selected {n} words', fr: '{n} mot(s) sélectionné(s)' },
   'practice.sentence.needMoreWords': { zh: '还差 {m} 词', en: '{m} more word(s) needed', fr: 'Encore {m} mot(s) requis' },
+  'practice.sentence.tooShortHint': { zh: '至少要选择 10 个词以上的句子，请重新选择', en: 'Please select a sentence of at least 10 words, then select again.', fr: 'Veuillez sélectionner une phrase d’au moins 10 mots, puis sélectionnez à nouveau.' },
   'practice.sentence.badge': { zh: '一句话', en: 'One sentence', fr: 'Phrase' },
   'practice.sentence.badgeTip': { zh: '评分句段：{text}', en: 'Scored passage: {text}', fr: 'Passage évalué : {text}' },
   'practice.sentence.scoreOnlyNote': { zh: '仅对所选句段评分', en: 'Scores only the selected passage', fr: 'Seule la sélection est évaluée' },

@@ -299,7 +299,7 @@
             @if (readonlyText()) {
               <!-- ★ 第十三轮(Forrest):标记属于素材本身,不再给正文涂色 -->
               <!-- 票119:篇章点词查词典 —— token 化渲染(分隔符为显式 token,模板内不留游离空白节点) -->
-              <p class="read-text dict-passage" (keydown)="dict.onPassageKeydown($event)" (mouseup)="dict.onPassageMouseUp()" (touchend)="dict.onPassageTouchEnd($event)">@for (tok of dict.tokens(); track $index) {@if (tok.kind === 'word') {<span class="dict-word" [class.sentence-sel]="sentence.inSentenceRange(tok.wordIndex)" [attr.data-wi]="tok.wordIndex" [attr.tabindex]="dict.roving() === tok.wordIndex ? 0 : -1" aria-haspopup="dialog" [attr.aria-expanded]="dict.openWordIndex() === tok.wordIndex" (click)="dict.onWordClick(tok, $event)">{{ tok.text }}</span>} @else {{{ tok.text }}}}</p>
+              <p class="read-text dict-passage" [class.sentence-mode]="sentence.sentenceMode()" (keydown)="dict.onPassageKeydown($event)" (mouseup)="dict.onPassageMouseUp()" (touchend)="dict.onPassageTouchEnd($event)">@for (tok of dict.tokens(); track $index) {@if (tok.kind === 'word') {<span class="dict-word" [class.sentence-sel]="sentence.inSentenceRange(tok.wordIndex)" [attr.data-wi]="tok.wordIndex" [attr.tabindex]="dict.roving() === tok.wordIndex ? 0 : -1" aria-haspopup="dialog" [attr.aria-expanded]="dict.openWordIndex() === tok.wordIndex" (click)="dict.onWordClick(tok, $event)">{{ tok.text }}</span>} @else {{{ tok.text }}}}</p>
               <!-- 票126 §6:词典卡改 popup 浮层(见文末 #dictPopupTpl),篇章文档流内不再有卡节点 -->
             } @else {
               <p class="readonly-empty">{{ t('practice.emptyContent') }}</p>
@@ -314,6 +314,11 @@
                 <span class="sentence-need">{{ t('practice.sentence.needMoreWords').replace('{m}', '' + (10 - sentence.sentenceWordCount())) }}</span>
               }
             </div>
+          }
+          <!-- 票 285：拖选不足 10 词被驳回后的重选提示（选区已取消，计数行不出现，
+               故提示独立成行、紧贴计数行位置，模式关闭/成功选区/清选区时消失）。 -->
+          @if (sentence.sentenceMode() && sentence.tooShortHint()) {
+            <div class="sentence-hint" role="status">{{ t('practice.sentence.tooShortHint') }}</div>
           }
         </div>
 

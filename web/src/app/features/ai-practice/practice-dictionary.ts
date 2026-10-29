@@ -384,10 +384,12 @@ export class PracticeDictionary {
 
   /**
    * 票 269：篇章拖选落定（S-A，模板 mouseup 绑定）。
-   * 仅当选区非折叠且锚点/焦点节点均能解析为词 span 时才落定选区并置位
+   * 仅当选区非折叠且锚点/焦点节点均能解析为词 span 时才处理并置位
    * 末尾点击抑制旗标；否则（单击、折叠选区、端点在篇章外）不捕获、不置位，
-   * 点词查词典原样进行。捕获后清除原生选区，改上自定义高亮 class。
-   * 判定阈值：以“非折叠选区 + 双端点可解析”为唯一判定，不另设像素阈值
+   * 点词查词典原样进行。处理后清除原生选区，改上自定义高亮 class。
+   * 票 285：不足 10 词的拖选同样视为“已处理”——选区被取消（不落定、不留高亮），
+   * 不足提示置位，且末尾点击同样抑制（驳回后不得紧接着弹出词典卡），
+   * 原生选区同样清除。判定阈值：以“非折叠选区 + 双端点可解析”为唯一判定，不另设像素阈值
    * （像素阈值在触屏与高 DPI 下不稳定；折叠选区 = 单击，已足够区分）。
    */
   onPassageMouseUp(): void {
@@ -398,6 +400,7 @@ export class PracticeDictionary {
    * 票 269：触屏拖选落定（模板 touchend 绑定）。
    * 捕获成功时 preventDefault 阻止合成鼠标序列（mousedown/mouseup/click），
    * 否则合成 click 会经 onWordClick 打开词典；抑制旗标同时置位作后备。
+   * 票 285：不足 10 词驳回同样 preventDefault（驳回后不得弹出词典卡）。
    * （无 HammerJS，touchend 为非被动监听，preventDefault 有效。）
    */
   onPassageTouchEnd(event: TouchEvent): void {
@@ -405,7 +408,7 @@ export class PracticeDictionary {
     event.preventDefault();
   }
 
-  /** 拖选捕获本体。返回 true = 本次落定了选区（并置位抑制旗标）。 */
+  /** 拖选捕获本体。返回 true = 本次拖选已处理（落定选区，或票 285 不足驳回并已清原生选区+置提示）。 */
   private captureSelectionFromDom(): boolean {
     const sentence = this.host.sentence;
     if (!sentence?.sentenceMode()) return false;
@@ -416,7 +419,7 @@ export class PracticeDictionary {
     const a = wordIndexOfSelectionNode(sel.anchorNode);
     const f = wordIndexOfSelectionNode(sel.focusNode);
     if (a === null || f === null) return false;
-    sentence.setRange(Math.min(a, f), Math.max(a, f));
+    sentence.setRangeOrReject(Math.min(a, f), Math.max(a, f));
     this.suppressNextWordClick = true;
     sel.removeAllRanges();
     return true;

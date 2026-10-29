@@ -57,6 +57,7 @@ import {
   micLevelFromPeaks,
   peakMaxValue,
   shouldShowQuietHint,
+  duckedVolume,
 } from './shadow-voice-gain';
 import type { VoiceGainStage } from './shadow-voice-gain';
 import {
@@ -442,6 +443,8 @@ export class PracticeShadowSession {
   // ---------- 内部态 ----------
   private capture: ShadowCaptureService | null = null;
   private refHowl: Howl | null = null;
+  /** 票 284：本条参考是否被压低（仅扬声器模式）；停参考时恢复原音量。 */
+  private refDucked = false;
   private refUrl: string | null = null;
   private refKey = '';
   private refBlob: Blob | null = null;
@@ -638,14 +641,19 @@ export class PracticeShadowSession {
       // 由 requestMicStream 回落默认，见 shadow-capture）。
       // 票 278：模式每次授权时现读（下一条录音即生效；已授权的流约束
       // 已定格，录中切模式不影响本条）。
+      // 票 284：模式在 take 开始时读一次 —— 授权约束、录制端增益、
+      // 参考声压低三处共用同一值（读点仍在 grant 之前，278 语义不变）。
+      const micMode = loadShadowMicMode();
       const capture = new ShadowCaptureService(
-        () => requestMicStream(this.micDeviceId(), loadShadowMicMode()),
+        () => requestMicStream(this.micDeviceId(), micMode),
         (fn) => this.host.ngZone.run(fn),
         (f) => this.onLiveFrame(f),
         () => this.onMidTakeFailure(),
         () => (this.refHowl ? this.refHowl.seek() || 0 : null),
         // 票 265：录制率跟示范条 x1（host.tts.rate），不再另设跟读倍速行。
         this.host.tts.rate(),
+        undefined,
+        micMode,
       );
       this.capture = capture;
       try {
@@ -696,6 +704,11 @@ export class PracticeShadowSession {
         format: howlFormat(cached.blob.type),
         html5: true,
         rate: this.takeRate,
+        // 票 284：扬声器模式下参考声在 take 期间适度压低（0.6×，绝非静音）——
+        // 进入麦克风的回声绝对值变小，AEC 少取消、AGC 少向下增益；
+        // 参考只在 take 内播放，故构造时压低 = take 期间压低，停参考时恢复。
+        // 耳机模式无声学回声，音量保持 1.0 不动。
+        volume: micMode === 'speaker' ? duckedVolume(1) : 1,
         onload: () => {
           // 解码失败时的时长回落：Howl 自身 duration()。
           const d = howl.duration();
@@ -732,6 +745,7 @@ export class PracticeShadowSession {
         },
       });
       this.refHowl = howl;
+      this.refDucked = micMode === 'speaker';
       this.keepPitch(howl);
       this.unlockHowlerAudio();
       howl.play();
@@ -1464,6 +1478,19 @@ export class PracticeShadowSession {
 
   private stopRefHowl(): void {
     if (this.refHowl) {
+      // 票 284：压低过的参考声在停/卸前恢复原音量（本 howl 随即 unload，
+      // 恢复本身是防御性清理；真正的“不外泄”保证是作用域 —— 压低只施加
+      // 于本条 take 的 howl 实例，停时 unload；下一条 take 建新 howl，
+      // 扬声器模式下按构造时再次压低（设计如此），非 take 播放不用此 howl，
+      // 故压低绝不漏到 take 之外）。
+      if (this.refDucked) {
+        try {
+          this.refHowl.volume(1);
+        } catch {
+          /* ignore */
+        }
+        this.refDucked = false;
+      }
       try {
         this.refHowl.stop();
         this.refHowl.unload();

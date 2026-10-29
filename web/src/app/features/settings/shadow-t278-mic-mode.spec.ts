@@ -144,7 +144,11 @@ describe('票 278：开关位置与接线（结构契约）', () => {
 
   it('会话每次授权时现读模式（下一条即生效；非缓存信号）', () => {
     expect(session).toContain('loadShadowMicMode');
-    expect(session).toContain('requestMicStream(this.micDeviceId(), loadShadowMicMode())');
+    // 票 284：模式在 take 开始时读一次存入 take 局部量（非缓存信号，
+    // 下一条重读），授权约束、录制端增益、参考声压低三处共用同一值；
+    // 278 的“每次授权现读”口径未变，只是断言跟随新写法。
+    expect(session).toContain('const micMode = loadShadowMicMode()');
+    expect(session).toContain('requestMicStream(this.micDeviceId(), micMode)');
   });
 
   it('常规录音流一字未动（不含模式键与模式读取）', () => {

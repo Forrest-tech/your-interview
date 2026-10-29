@@ -233,3 +233,18 @@ export function micLevelFromPeaks(peaks: readonly { v: number }[]): number {
   }
   return Math.min(100, Math.max(0, Math.round(max)));
 }
+
+/**
+ * 票 284：录音期间参考声压低系数（相对原音量）。
+ * 适度压低、绝非静音：参考声仍需可跟读，只是让进入麦克风的回声
+ * 绝对值变小 —— AEC 少取消、AGC 少向下增益，录制端增益放大的
+ * 回声污染也随之变小。仅限 take 期间（session 在停参考时恢复原音量），
+ * 只在扬声器模式生效（耳机模式无声学回声，不压）。
+ */
+export const SHADOW_REF_DUCK_FACTOR = 0.6;
+
+/** 压低后音量 = 原音量 × 系数；非法输入原样返回（调用方不因此断播）。 */
+export function duckedVolume(baseVolume: number): number {
+  if (typeof baseVolume !== 'number' || !Number.isFinite(baseVolume)) return baseVolume;
+  return baseVolume * SHADOW_REF_DUCK_FACTOR;
+}

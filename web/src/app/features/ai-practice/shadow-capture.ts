@@ -28,6 +28,7 @@
  *   不是整条实时路径。
  */
 import { estimateWindowF0, framePeak } from './shadow-waveform.helpers';
+import { VOICE_LIMITER } from './shadow-voice-gain';
 
 export type ShadowStreamProvider = () => Promise<MediaStream>;
 
@@ -127,12 +128,140 @@ function defaultProvider(): Promise<MediaStream> {
   return requestMicStream(null);
 }
 
+/**
+ * 票 284：扬声器模式录制端增益（线性倍数；只在扬声器模式生效）。
+ * 标定依据：271 走查实测同类场景采集峰值约 0.15、对参考 0.90 ——
+ * ×3 把典型人声抬到 ~0.45（可用区间），与 279 一起听增益上限
+ * （SHADOW_VOICE_TOGETHER_GAIN = 3，播放侧已验证可听）同值；
+ * 满幅输入经限幅后约 0.96（279 限幅实测），不削波。
+ * 诚实缺口：终值仍需真机标定（本票走查只验接线与相对增益）；
+ * 若真机验证发现回声淹没或削波，调此值 + 压低系数，分数重评。
+ */
+export const SHADOW_CAPTURE_SPEAKER_GAIN = 3;
+
+/**
+ * 票 284：录制图构造的最小 AudioContext 面（真实 AudioContext /
+ * Jest 假对象皆可；方法式签名使真实节点可结构传入）。
+ */
+export interface CaptureGraphSourceLike {
+  connect(node: unknown): void;
+  disconnect(): void;
+}
+export interface CaptureGraphGainLike {
+  gain: { value: number };
+  connect(node: unknown): void;
+  disconnect(): void;
+}
+export interface CaptureGraphLimiterLike {
+  threshold: { value: number };
+  knee: { value: number };
+  ratio: { value: number };
+  attack: { value: number };
+  release: { value: number };
+  connect(node: unknown): void;
+  disconnect(): void;
+}
+export interface CaptureGraphAnalyserLike {
+  fftSize: number;
+  getFloatTimeDomainData(arr: Float32Array): void;
+}
+export interface CaptureGraphDestinationLike {
+  stream: MediaStream;
+  disconnect(): void;
+}
+export interface CaptureGraphContextLike {
+  state: string;
+  createMediaStreamSource(stream: MediaStream): CaptureGraphSourceLike;
+  createGain(): CaptureGraphGainLike;
+  createDynamicsCompressor(): CaptureGraphLimiterLike;
+  createAnalyser(): CaptureGraphAnalyserLike;
+  createMediaStreamDestination(): CaptureGraphDestinationLike;
+}
+
+export interface CaptureGraph {
+  /** MediaRecorder 应该录的流（增益路 = 目的流；原路 = 原始流）。 */
+  recordStream: MediaStream;
+  /** 已接好的 Analyser（调用方只需读数；增益路 tap 增益后流）。 */
+  analyser: CaptureGraphAnalyserLike;
+  /** 增益路是否生效（扬声器模式 + 上下文 running 才 true）。 */
+  gained: boolean;
+  /** 增益路的目的流（释放时停轨）；原路为 null。 */
+  outputStream: MediaStream | null;
+  disconnect(): void;
+}
+
+/**
+ * 票 284：按麦克风模式建录制图。
+ * - 扬声器模式：原始流 → Gain（×3）→ DynamicsCompressor（279 纯限幅
+ *   参数）→ MediaStreamDestination（录该流）；Analyser tap 限幅后流，
+ *   故 meter、lane、blob 三者同源一致。
+ * - 耳机模式：278 现状原样 —— 原始流直录、Analyser 直 tap，无增益节点。
+ * - 硬性安全规则：增益路的录音流由 AudioContext 图驱动 —— 上下文
+ *   suspended 时图不渲染，录出来的会是静音；此时必须回落原路
+ *   （MediaRecorder 直录原始流，不受上下文状态影响 = 261 已证行为），
+ *   绝不拿一条图驱动的静音流去录音。调用方已有的 meter 警告会提示用户。
+ */
+export function buildCaptureGraph(
+  ctx: CaptureGraphContextLike,
+  stream: MediaStream,
+  micMode: ShadowMicMode,
+): CaptureGraph {
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  const src = ctx.createMediaStreamSource(stream);
+  if (micMode === 'speaker' && ctx.state === 'running') {
+    const gain = ctx.createGain();
+    gain.gain.value = SHADOW_CAPTURE_SPEAKER_GAIN;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = VOICE_LIMITER.thresholdDb;
+    limiter.knee.value = VOICE_LIMITER.kneeDb;
+    limiter.ratio.value = VOICE_LIMITER.ratio;
+    limiter.attack.value = VOICE_LIMITER.attackSec;
+    limiter.release.value = VOICE_LIMITER.releaseSec;
+    const dest = ctx.createMediaStreamDestination();
+    src.connect(gain);
+    gain.connect(limiter);
+    limiter.connect(dest);
+    limiter.connect(analyser);
+    return {
+      recordStream: dest.stream,
+      analyser,
+      gained: true,
+      outputStream: dest.stream,
+      disconnect(): void {
+        for (const n of [src, gain, limiter, dest]) {
+          try {
+            n.disconnect();
+          } catch {
+            /* 已断开时忽略 */
+          }
+        }
+      },
+    };
+  }
+  src.connect(analyser);
+  return {
+    recordStream: stream,
+    analyser,
+    gained: false,
+    outputStream: null,
+    disconnect(): void {
+      try {
+        src.disconnect();
+      } catch {
+        /* 已断开时忽略 */
+      }
+    },
+  };
+}
+
 export class ShadowCaptureService {
   private stream: MediaStream | null = null;
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private ctx: AudioContext | null = null;
-  private analyser: AnalyserNode | null = null;
+  private analyser: CaptureGraphAnalyserLike | null = null;
+  private graph: CaptureGraph | null = null;
   private raf = 0;
   private startedWall = 0;
   private recorderStartedWall = 0;
@@ -150,6 +279,12 @@ export class ShadowCaptureService {
     private readonly rate: number = 1,
     /** 票 261 §2：AudioContext 构造接缝（默认 new AudioContext，单测可注入）。 */
     private readonly createCtx: () => AudioContext = () => new AudioContext(),
+    /**
+     * 票 284：本条 take 的麦克风模式（缺省 = 扬声器 = 产品缺省）。
+     * 扬声器模式才走增益路；耳机模式保持 278 现状原样。
+     * 调用方（session）在 take 开始时读一次、与授权约束共用同一值。
+     */
+    private readonly micMode: ShadowMicMode = 'speaker',
   ) {}
 
   /** 是否支持采集（无 mediaDevices/getUserMedia 即不支持，诚实返回 false）。 */
@@ -169,6 +304,22 @@ export class ShadowCaptureService {
       if (!track) return null;
       const s = track.getSettings() as { echoCancellation?: boolean };
       return typeof s.echoCancellation === 'boolean' ? s.echoCancellation : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 票 284：当前流的 autoGainControl 是否生效（与 aecApplied 同 P12 口径）。
+   * 代码从不指定该约束（Chrome 默认开）——本方法只作真机核查用：
+   * 扬声器双讲下 AGC 向下增益是人声变小的共犯之一，核验时与 AEC 值同读。
+   */
+  agcApplied(): boolean | null {
+    try {
+      const track = this.stream?.getAudioTracks()[0];
+      if (!track) return null;
+      const s = track.getSettings() as { autoGainControl?: boolean };
+      return typeof s.autoGainControl === 'boolean' ? s.autoGainControl : null;
     } catch {
       return null;
     }
@@ -217,15 +368,17 @@ export class ShadowCaptureService {
         /* 调用方经 ctxRunning() 核验并警告 */
       }
     }
-    const src = this.ctx.createMediaStreamSource(this.stream);
-    this.analyser = this.ctx.createAnalyser();
-    this.analyser.fftSize = 2048;
-    src.connect(this.analyser);
+    // 票 284：录制图按模式建（扬声器模式走增益路；耳机模式与 suspended
+    // 回落皆走原路，见 buildCaptureGraph 安全规则）。Analyser 恒 tap
+    // 增益后流（增益路）或原始流（原路），故 meter、lane、blob 同源。
+    const graph = buildCaptureGraph(this.ctx, this.stream, this.micMode);
+    this.graph = graph;
+    this.analyser = graph.analyser;
     const mime = pickShadowMime();
     this.recorder = this.stream
       ? mime
-        ? new MediaRecorder(this.stream, { mimeType: mime })
-        : new MediaRecorder(this.stream)
+        ? new MediaRecorder(graph.recordStream, { mimeType: mime })
+        : new MediaRecorder(graph.recordStream)
       : null;
     if (this.recorder) {
       this.recorder.ondataavailable = (e) => {
@@ -320,6 +473,18 @@ export class ShadowCaptureService {
   }
 
   private release(): void {
+    try {
+      this.graph?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    // 票 284：增益路的目的流音轨也要停（否则图停后仍占麦克风链路）。
+    try {
+      this.graph?.outputStream?.getTracks().forEach((t) => t.stop());
+    } catch {
+      /* ignore */
+    }
+    this.graph = null;
     try {
       this.stream?.getTracks().forEach((t) => t.stop());
     } catch {

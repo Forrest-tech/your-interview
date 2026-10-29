@@ -49,7 +49,8 @@ describe('票 263：麦克风选择移出跟读面板', () => {
     expect(session).toContain(`localStorage.getItem('yi-mic-device')`);
     // 票 278：调用加了第二参 loadShadowMicMode()（模式现读），设备仍是第一参原样传；
     // 263 的“所选设备传给 requestMicStream”口径未变，只是断言跟随新签名。
-    expect(session).toContain('requestMicStream(this.micDeviceId(), loadShadowMicMode())');
+    // 票 284：模式改由 take 局部量 micMode 传递（take 开始时现读），设备仍是第一参原样传。
+    expect(session).toContain('requestMicStream(this.micDeviceId(), micMode)');
   });
 
   it('setting.micNote 与复用键均有 zh/en/fr', () => {

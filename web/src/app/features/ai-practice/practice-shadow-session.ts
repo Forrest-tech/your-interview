@@ -298,6 +298,12 @@ export class PracticeShadowSession {
   readonly shadowVoiceGain = signal(0);
   readonly shadowAecWarning = signal(false);
   /**
+   * 票 291 A：AEC 生效状态常显（unknown = 尚未核验，即未录过；applied /
+   * not-applied = 最近一次授权后 aecApplied() 核验结果）。与 shadowAecWarning
+   * 并存：警告只在未生效时弹，状态行始终显示。
+   */
+  readonly shadowAecState = signal<'unknown' | 'applied' | 'not-applied'>('unknown');
+  /**
    * 票 261 §2：实时波形上下文未能启动警告（Analyser 读 0 的可见解释；
    * 录音本身走原始流不受影响，故只警告、不拦截）。
    */
@@ -671,7 +677,12 @@ export class PracticeShadowSession {
       // 授权后重枚举一次：此时 label 已可读，设备下拉显示真名。
       void this.refreshMicDevices();
       // AEC 核验（P12）：未生效 → 可见警告，永不拦截。
-      this.shadowAecWarning.set(capture.aecApplied() === false);
+      // 票 291 A：同源结果另写状态信号，供面板常显。
+      const aecApplied = capture.aecApplied();
+      this.shadowAecWarning.set(aecApplied === false);
+      this.shadowAecState.set(
+        aecApplied === true ? 'applied' : aecApplied === false ? 'not-applied' : 'unknown',
+      );
       // 票 261 §2：采集上下文未能启动 → 活声道读 0 的可见解释（只警告，
       // 录音本身走原始流不受影响，绝不因此 abort）。
       this.shadowMeterWarning.set(capture.ctxRunning() === false);
@@ -704,7 +715,8 @@ export class PracticeShadowSession {
         format: howlFormat(cached.blob.type),
         html5: true,
         rate: this.takeRate,
-        // 票 284：扬声器模式下参考声在 take 期间适度压低（0.6×，绝非静音）——
+        // 票 284/291 A：扬声器模式下参考声在 take 期间压低（284 为 0.6×；
+        // 291 A 改为 0.3×，再轻约 6dB，绝非静音）——
         // 进入麦克风的回声绝对值变小，AEC 少取消、AGC 少向下增益；
         // 参考只在 take 内播放，故构造时压低 = take 期间压低，停参考时恢复。
         // 耳机模式无声学回声，音量保持 1.0 不动。

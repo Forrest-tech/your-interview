@@ -317,11 +317,11 @@ describe('票 284 ShadowCaptureService', () => {
   });
 });
 
-describe('票 284 duckedVolume', () => {
-  it('系数 0.6：1 → 0.6，0.5 → 0.3；非法输入透传', () => {
-    expect(SHADOW_REF_DUCK_FACTOR).toBe(0.6);
-    expect(duckedVolume(1)).toBeCloseTo(0.6);
-    expect(duckedVolume(0.5)).toBeCloseTo(0.3);
+describe('票 284 duckedVolume（票 291 A 系数改 0.3）', () => {
+  it('系数 0.3：1 → 0.3，0.5 → 0.15；非法输入透传', () => {
+    expect(SHADOW_REF_DUCK_FACTOR).toBe(0.3);
+    expect(duckedVolume(1)).toBeCloseTo(0.3);
+    expect(duckedVolume(0.5)).toBeCloseTo(0.15);
     expect(duckedVolume(NaN)).toBeNaN();
   });
 });
@@ -332,7 +332,7 @@ describe('票 284 会话参考声压低（结构契约）', () => {
     'utf8',
   );
 
-  it('take 的参考 howl 仅扬声器模式压低（0.6×，绝非静音），耳机模式 1.0 不动', () => {
+  it('take 的参考 howl 仅扬声器模式压低（0.3×，票 291 A，绝非静音），耳机模式 1.0 不动', () => {
     expect(session).toContain('duckedVolume');
     expect(session).toContain("volume: micMode === 'speaker' ? duckedVolume(1) : 1");
   });

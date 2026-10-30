@@ -494,6 +494,18 @@
               </div>
             }
 
+            <!-- 票 291 A：AEC 生效状态常显（警告只在未生效时弹，状态行始终显示）。 -->
+            <div class="shadow-hint" data-testid="shadow-aec-state" role="note">
+              <mat-icon>graphic_eq</mat-icon>
+              @if (shadow.shadowAecState() === 'applied') {
+                <span>{{ t('practice.shadow.aecOn') }}</span>
+              } @else if (shadow.shadowAecState() === 'not-applied') {
+                <span>{{ t('practice.shadow.aecOff') }}</span>
+              } @else {
+                <span>{{ t('practice.shadow.aecUnknown') }}</span>
+              }
+            </div>
+
             @if (shadow.shadowMeterWarning()) {
               <div class="shadow-alert" role="note">
                 <mat-icon>warning_amber</mat-icon>

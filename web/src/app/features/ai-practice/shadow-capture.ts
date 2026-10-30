@@ -73,10 +73,12 @@ export function pickShadowMime(): string {
 /**
  * 票 261 §2：麦克风采集约束（唯一口径）。
  * noiseSuppression 恒关（降噪会连人声气声一起吃掉，跟读要的是原声）。
- * autoGainControl 不指定 = 浏览器默认（Chrome 为开），不画蛇添足。
  * 票 278：echoCancellation 由麦克风模式决定 —— 扬声器模式开（跟读时
  * 参考声经扬声器串入麦克风，必须消回声 = 261 原行为）；耳机模式关
  * （戴着耳机本无声学回声可消，回声消除的门控反而把人声切得断断续续）。
+ * 票 291 A：扬声器模式显式 autoGainControl: false —— Chrome 默认开 AGC
+ * 会在用户停顿时把麦克风增益抬起来，连带把 AEC 残留回声一起抬高；
+ * 关掉后增益恒定，串音不再随停顿起伏。耳机模式不动（仍不指定 AGC）。
  */
 export type ShadowMicMode = 'speaker' | 'earphones';
 
@@ -96,6 +98,7 @@ function micConstraints(micMode: ShadowMicMode): MediaTrackConstraints {
   return {
     echoCancellation: micMode !== 'earphones',
     noiseSuppression: false,
+    ...(micMode === 'speaker' ? { autoGainControl: false } : {}),
   };
 }
 

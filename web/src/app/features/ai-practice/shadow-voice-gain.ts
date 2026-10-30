@@ -240,8 +240,9 @@ export function micLevelFromPeaks(peaks: readonly { v: number }[]): number {
  * 绝对值变小 —— AEC 少取消、AGC 少向下增益，录制端增益放大的
  * 回声污染也随之变小。仅限 take 期间（session 在停参考时恢复原音量），
  * 只在扬声器模式生效（耳机模式无声学回声，不压）。
+ * 票 291 A：0.6 → 0.3（再轻约 6dB），进麦的串音同量下降；仍非静音。
  */
-export const SHADOW_REF_DUCK_FACTOR = 0.6;
+export const SHADOW_REF_DUCK_FACTOR = 0.3;
 
 /** 压低后音量 = 原音量 × 系数；非法输入原样返回（调用方不因此断播）。 */
 export function duckedVolume(baseVolume: number): number {

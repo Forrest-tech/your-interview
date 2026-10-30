@@ -107,7 +107,7 @@ describe('票 261 §2：requestMicStream 设备回落', () => {
   };
   const fakeStream = {} as MediaStream;
 
-  it('指定 deviceId → 以 exact 约束请求', async () => {
+  it('指定 deviceId → 以 exact 约束请求（扬声器缺省：AGC 显式关）', async () => {
     const md = mockMedia(async () => fakeStream);
     const stream = await requestMicStream('dev-1');
     expect(stream).toBe(fakeStream);
@@ -115,6 +115,17 @@ describe('票 261 §2：requestMicStream 设备回落', () => {
     expect(c.audio['echoCancellation']).toBe(true);
     expect(c.audio['noiseSuppression']).toBe(false);
     expect(c.audio['deviceId']).toEqual({ exact: 'dev-1' });
+    expect(c.audio['autoGainControl']).toBe(false);
+  });
+
+  it('耳机模式 → AEC 关、AGC 不指定（278 原样）', async () => {
+    const md = mockMedia(async () => fakeStream);
+    const stream = await requestMicStream(null, 'earphones');
+    expect(stream).toBe(fakeStream);
+    const c = md.getUserMedia.mock.calls[0][0] as { audio: Record<string, unknown> };
+    expect(c.audio['echoCancellation']).toBe(false);
+    expect(c.audio['noiseSuppression']).toBe(false);
+    expect(c.audio['autoGainControl']).toBeUndefined();
   });
 
   it('OverconstrainedError → 回落默认设备（不带 deviceId 再请求一次）', async () => {

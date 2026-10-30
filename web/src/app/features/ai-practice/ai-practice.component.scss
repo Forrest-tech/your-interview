@@ -3240,7 +3240,13 @@ button.zoom-label:hover { background: #eff6ff; color: #2563eb; }
   font-variant-numeric: tabular-nums;
   color: #64748b;
 }
-.hist-card .hist-item .spacer { flex: 1 1 auto; min-width: 0; }
+.hist-card .hist-item > .spacer { flex: 0 0 auto; }
+/* 票 290：行内条拉长、贴紧 View Report（用户令：中间的条要长一点，与 View
+   Report 不要空隙）——行内有两个 flex 生长项（track flex:1 与 spacer flex:1）
+   平分空闲，条到一半就停、spacer 留下一大段空。修法：行内 spacer 不再生长
+   （直接子代规则 flex:0 0 auto，模板 span 保留），空闲全归 track；展开区等
+   嵌套 spacer 不受影响（仍走全局 .spacer flex:1 规则，res-total 照常顶右）。
+   两列表共用此规则，Shadow 与 Take 保持同版式。 */
 /* 票 289：跟读行与常规 Take 行同版式（用户令：Shadow 行要跟 Take 行一样，
    除了不要 Run AI Scoring）——删掉票 267 的两条 Shadow 专属覆盖（track 140px
    封顶、spacer 藏掉），跟读行继承 base 布局：track flex:1 生长、spacer 把按钮

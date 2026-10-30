@@ -6,6 +6,10 @@
  * 票 289（用户令：Shadow 行要跟 Take 行一样，除了不要 Run AI Scoring）：
  * 267 的两条 Shadow 专属覆盖就此废止——跟读行继承常规行 base 布局
  * （track flex:1 生长、spacer 顶按钮到行尾），以下两条断言改为断言覆盖已删。
+ * 票 290（用户令：中间的条要长一点，与 View Report 不要空隙）：
+ * 行内两个 flex 生长项（track flex:1 与 spacer flex:1）平分空闲是空隙根因；
+ * 修法是行内 spacer 不再生长（直接子代规则 flex:0 0 auto），空闲全归 track。
+ * 嵌套 spacer（如展开区 res-total 行）不受影响，仍走全局 .spacer 规则。
  * 本文件为结构契约（按票 264/265/266 结构契约先例断言源码）；行为由沙盒走查覆盖。
  */
 import { describe, expect, it } from '@jest/globals';
@@ -21,10 +25,15 @@ describe('票 267：跟读行收紧中间空闲（票 289 废止覆盖、回归�
     expect(scss).not.toContain('.hist-item.shadow-item .spacer');
   });
 
-  it('SCSS：常规行基规则不动（track 仍可生长、spacer 仍在）', () => {
+  it('SCSS：常规行基规则不动（track 仍可生长）', () => {
     expect(scss).toContain('.hist-card .hist-item .hi-track');
     expect(scss).toContain('flex: 1 1 90px');
-    expect(scss).toContain('.hist-card .hist-item .spacer { flex: 1 1 auto; min-width: 0; }');
+  });
+
+  it('SCSS：票 290：行内 spacer 不再生长，空闲全归 track；嵌套 spacer 走全局规则', () => {
+    expect(scss).toContain('.hist-card .hist-item > .spacer { flex: 0 0 auto; }');
+    expect(scss).not.toContain('.hist-card .hist-item .spacer { flex: 1 1 auto; min-width: 0; }');
+    expect(scss).toContain('.spacer { flex: 1 1 auto; }');
   });
 
   it('模板：跟读行控件与信息一个不少（track 进度、时长、删除钮都在）', () => {

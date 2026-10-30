@@ -506,6 +506,39 @@
               }
             </div>
 
+            <!-- 票 292：录前麦克风校准 → 冻结增益（扬声器模式；耳机模式按钮禁用，
+                 状态行显示无需校准；未校准时行为与现状一致，校准不是新门禁）。 -->
+            <div class="shadow-hint" data-testid="mic-calibrate-block" role="note">
+              <mat-icon>mic</mat-icon>
+              <button class="btn-mini" data-testid="mic-calibrate"
+                      [disabled]="shadow.shadowRecording() || shadow.micCalibrating() || shadow.isEarphoneMode()"
+                      (click)="shadow.startMicCalibration()">
+                <span>{{ t(shadow.micCalibrated() ? 'practice.shadow.recalibrateMic' : 'practice.shadow.calibrateMic') }}</span>
+              </button>
+              <span data-testid="mic-calibrate-state">
+                @if (shadow.micCalibrating()) {
+                  {{ shadow.micCalibratePhase() === 'silence' ? t('practice.shadow.micCalibrateSilence') : t('practice.shadow.micCalibrateSpeak') }}
+                } @else if (shadow.micCalibrateMessage()) {
+                  {{ shadow.micCalibrateMessage() }}
+                } @else if (shadow.isEarphoneMode()) {
+                  {{ t('practice.shadow.micCalibrateEarphone') }}
+                } @else if (shadow.micCalibrated()) {
+                  {{ t('practice.shadow.micCalibrated') }} {{ shadow.micCalibratedGainText() }} · {{ shadow.micCalibratedDate() }}
+                } @else {
+                  {{ t('practice.shadow.micUncalibrated') }}
+                }
+              </span>
+              @if (shadow.micCalibrating()) {
+                <div class="shadow-mic-meter" data-testid="mic-calibrate-meter">
+                  <span class="shadow-mic-meter-label">{{ t('practice.shadow.micLevel') }}</span>
+                  <div class="shadow-mic-meter-track">
+                    <span class="shadow-mic-meter-fill" [style.width.%]="shadow.micCalibrateLevel()"></span>
+                  </div>
+                  <span class="shadow-mic-meter-value">{{ shadow.micCalibrateLevel() }}%</span>
+                </div>
+              }
+            </div>
+
             @if (shadow.shadowMeterWarning()) {
               <div class="shadow-alert" role="note">
                 <mat-icon>warning_amber</mat-icon>
@@ -570,11 +603,20 @@
               </div>
             }
 
-            <!-- 票 271 C：人声过小提示（非阻塞 note，与 noVoice 错误互斥，见模块注）。 -->
+            <!-- 票 271 C：人声过小提示（非阻塞 note，与 noVoice 错误互斥，见模块注）。
+                 票 292：提示块旁加校准入口（未校准 → 校准麦克风，已校准 →
+                 重新校准；点击滚动 + 聚焦面板内校准块按钮；耳机模式无按钮，
+                 避免通向禁用校准块的死胡同；原提示文案一字不动）。 -->
             @if (shadow.shadowQuietHint()) {
               <div class="shadow-alert" role="note">
                 <mat-icon>volume_down</mat-icon>
                 <span>{{ shadow.shadowQuietHint() }}</span>
+                @if (!shadow.isEarphoneMode()) {
+                  <button class="btn-mini" data-testid="quiet-hint-calibrate"
+                          (click)="shadow.focusMicCalibration()">
+                    <span>{{ t(shadow.micCalibrated() ? 'practice.shadow.recalibrateMic' : 'practice.shadow.calibrateMic') }}</span>
+                  </button>
+                }
               </div>
             }
 

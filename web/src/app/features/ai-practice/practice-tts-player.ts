@@ -227,6 +227,9 @@ export class PracticeTtsPlayer {
     const text = this.host.editing() ? this.host.draft() : this.host.saved();
     const clean = (text || '').trim();
     if (!clean) return;
+    // 票 292：示范朗读启动先取消进行中跟读校准（窗口内播放启动规则；
+    // 预载路径 autoplay=false 不播，不经过此处）。
+    this.host.shadow.cancelMicCalibration();
 
     // ★ Forrest 逻辑:文本没改 → 直接播本地/已装载的那份。
     const key = ttsKey(clean, '', this.host.practiceLang());

@@ -48,6 +48,16 @@ import {
 import type { ShadowPeak } from './shadow-waveform.helpers';
 import { ShadowCaptureService, loadShadowMicMode, requestMicStream } from './shadow-capture';
 import type { ShadowFrame } from './shadow-capture';
+import {
+  computeCalibrationGain,
+  dbfs,
+  evaluateCalibration,
+  loadCalibration,
+  percentile95,
+  pooledRmsDb,
+  saveCalibration,
+} from './shadow-mic-calibration';
+import type { MicCalibrationRecord } from './shadow-mic-calibration';
 import { ShadowPlaybackController } from './shadow-playback';
 import type { PlaybackTrack } from './shadow-playback';
 import {
@@ -304,6 +314,20 @@ export class PracticeShadowSession {
    */
   readonly shadowAecState = signal<'unknown' | 'applied' | 'not-applied'>('unknown');
   /**
+   * 票 292：录前麦克风校准（扬声器模式；耳机模式禁用，见 isEarphoneMode）。
+   * micCalibrated = 当前设备的存储记录（null = 未校准；设备切换时重读）；
+   * micCalibrating = 校准进行中（两入口共用锁；录制中与校准中均禁用）；
+   * micCalibratePhase = 进行中的步骤（silence = 1 秒底噪窗本身，
+   * speaking = 固定 3 秒语音窗）；micCalibrateLevel = 校准中实时电平
+   * （0~100，只读显示，复用 271 音量条画法）；micCalibrateMessage =
+   * 失败/中止原因（失败时状态行显示它；成功或新一轮开始时清掉）。
+   */
+  readonly micCalibrated = signal<MicCalibrationRecord | null>(null);
+  readonly micCalibrating = signal(false);
+  readonly micCalibratePhase = signal<'silence' | 'speaking'>('silence');
+  readonly micCalibrateLevel = signal(0);
+  readonly micCalibrateMessage = signal<string | null>(null);
+  /**
    * 票 261 §2：实时波形上下文未能启动警告（Analyser 读 0 的可见解释；
    * 录音本身走原始流不受影响，故只警告、不拦截）。
    */
@@ -481,6 +505,23 @@ export class PracticeShadowSession {
   private fetchedAudio = new Map<string, string>();
   /** 票259 S2：会话内已取回的人声轨 blob（按服务端行 id 缓存，免重复下载）。 */
   private fetchedVoiceBlobs = new Map<string, Blob>();
+  /**
+   * 票 292：校准进行中的临时资源。电平条与帧采样共用同一 calibTimer
+   * 句柄（约 100ms 一 tick）；成功路径同样清掉（不只取消路径），
+   * 否则悬空 interval 会对着已断开的 Analyser 一直读数。
+   * calibSeq = 校准代次：取消时 +1，使正在 await 建流/建图的旧一轮
+   * 在醒来时认出自己已作废、自行拆 teardown，绝不迟到起 interval。
+   */
+  private calibTimer: ReturnType<typeof setInterval> | null = null;
+  private calibStream: MediaStream | null = null;
+  private calibCtx: AudioContext | null = null;
+  private calibSrc: MediaStreamAudioSourceNode | null = null;
+  private calibAnalyser: AnalyserNode | null = null;
+  private calibDeviceId: string | null = null;
+  private calibFloorSamples: number[] = [];
+  private calibFramePeaks: number[] = [];
+  private calibStarting = false;
+  private calibSeq = 0;
 
   // ---------- 模式 ----------
   async toggleShadowMode(): Promise<void> {
@@ -490,6 +531,8 @@ export class PracticeShadowSession {
     if (this.host.sentence?.sentenceMode()) return;
     if (this.shadowRecording()) await this.stopShadow();
     this.stopShadowPlayback();
+    // 票 292：面板关闭 = 放弃校准（静默取消，不留后台开着的麦克风流）。
+    this.cancelMicCalibration();
     const next = !this.shadowMode();
     this.shadowMode.set(next);
     this.shadowError.set(null);
@@ -499,6 +542,13 @@ export class PracticeShadowSession {
       // 票 261 §2：进跟读模式即枚举麦克风（授权前 label 可能为空，授权后重枚举）。
       await this.refreshMicDevices();
       await this.refreshShadowMeta();
+      // 票 292：面板打开时按当前设备重读校准态（状态行本身就是提示）。
+      this.refreshMicCalibration();
+      // 票 292 走查接缝：?shadowForceQuietHint=1 时面板打开即置过小提示，
+      // 使走查能断言提示按钮渲染与点击聚焦（take→提示的计算由单测覆盖）。
+      if (this.forceQuietHintForWalkthrough()) {
+        this.shadowQuietHint.set(this.host.t('practice.shadow.quietVoiceHint'));
+      }
     }
     this.host.cdr.detectChanges();
   }
@@ -531,6 +581,15 @@ export class PracticeShadowSession {
     } catch {
       /* 存储不可用不影响本次选择 */
     }
+    // 票 292：设备切换时状态行按新设备键重读。切换发生在校准进行中 →
+    // 中止校准并提示，不向任何键写值；中止提示随后保留（重读不清提示，
+    // 否则“设备已切换”刚设就被清掉）。
+    if (this.micCalibrating() || this.calibStarting) {
+      this.cancelMicCalibration(this.host.t('practice.shadow.micCalibrateDeviceChanged'));
+      this.micCalibrated.set(loadCalibration(deviceId));
+    } else {
+      this.refreshMicCalibration();
+    }
   }
 
   /** 票 261 §6：线形波形 points（模板直接绑定，空 = 不画线）。 */
@@ -550,6 +609,8 @@ export class PracticeShadowSession {
   async setReviewRate(r: number): Promise<void> {
     this.shadowReviewRate.set(r);
     if (this.controller && this.shadowPlayingId()) {
+      // 票 292：setRate 在播时先暂停后恢复 = 播放启动，先取消校准。
+      this.cancelMicCalibration();
       await this.controller.setRate(r);
     }
   }
@@ -586,6 +647,8 @@ export class PracticeShadowSession {
 
   onMaterialChange(): void {
     this.stopShadowPlayback();
+    // 票 292：素材切换 = 放弃校准（静默取消）。
+    this.cancelMicCalibration();
     this.shadowExpandedId.set(null);
     this.shadowStorageFailed.set(false);
     // 票 274：素材切换 → 待确认 take 归属旧素材，一并丢弃（不落库、不留行）；
@@ -601,9 +664,379 @@ export class PracticeShadowSession {
     void this.refreshShadowMeta();
   }
 
+  // ---------- 录前麦克风校准（票 292） ----------
+  /** 耳机模式（278）：校准块按钮禁用、状态行显示无需校准、过小提示块无按钮。 */
+  isEarphoneMode(): boolean {
+    return loadShadowMicMode() === 'earphones';
+  }
+
+  /** 按当前设备重读校准态（面板打开 / 设备切换 / 校准成功后调用）。 */
+  refreshMicCalibration(): void {
+    this.micCalibrated.set(loadCalibration(this.micDeviceId()));
+    this.micCalibrateMessage.set(null);
+  }
+
+  /** 已校准增益展示（状态行用，如 +13.4dB；未校准为空串）。 */
+  micCalibratedGainText(): string {
+    const rec = this.micCalibrated();
+    return rec ? `+${rec.gainDb.toFixed(1)}dB` : '';
+  }
+
+  /** 校准日期展示（状态行用；存储值不设过期，日期仅供用户判断陈旧）。 */
+  micCalibratedDate(): string {
+    const rec = this.micCalibrated();
+    if (!rec) return '';
+    try {
+      return new Date(rec.calibratedAt).toLocaleDateString();
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * 过小提示按钮点击：滚动 + 聚焦面板内校准块按钮（即 §2 流程入口）。
+   * 提示块只在面板展开时存在（面板关闭时提示块一并隐藏），故无需
+   * “面板未展开时”的回退分支；面板未渲染时此调用无事可做。
+   */
+  focusMicCalibration(): void {
+    try {
+      if (typeof document === 'undefined') return;
+      const el = document.querySelector('[data-testid="mic-calibrate"]') as HTMLElement | null;
+      if (!el) return;
+      el.scrollIntoView({ block: 'nearest' });
+      el.focus();
+    } catch {
+      /* 面板未渲染时无事可做 */
+    }
+  }
+
+  /**
+   * 取消进行中校准（幂等；不在进行中时无事可做）。
+   * 清理 = 停临时流 + 断节点 + 清全部 pending 计时器（含电平条与帧采样
+   * 共用的 setInterval 句柄）+ 状态复位，不留后台开着的麦克风流，
+   * 不留迟到回调触碰已拆除的校准状态。message 为 null = 静默取消
+   * （take 开始 / 面板关闭 / 素材切换 / 销毁）；非 null = 中止提示。
+   * 调用点（校准窗口内任何播放或录音启动皆先取消再执行，用户意图优先）：
+   * 本会话 startShadow / toggleShadowPlay / previewShadowPending /
+   * solo 恢复播放 / setReviewRate 恢复播放；材料参考播放（tts.speak）、
+   * 常规回放与试听（grading.togglePlay / previewPending）、常规录音
+   * （grading.startRecording）各自由其入口调用。
+   */
+  cancelMicCalibration(message: string | null = null): void {
+    this.calibSeq++;
+    if (!this.micCalibrating() && !this.calibStarting) return;
+    this.clearMicCalibrationRun();
+    this.micCalibrating.set(false);
+    this.micCalibrateLevel.set(0);
+    if (message !== null) this.micCalibrateMessage.set(message);
+    this.host.cdr.detectChanges();
+  }
+
+  private clearMicCalibrationTimer(): void {
+    if (this.calibTimer !== null) {
+      clearInterval(this.calibTimer);
+      this.calibTimer = null;
+    }
+  }
+
+  private clearMicCalibrationRun(): void {
+    this.clearMicCalibrationTimer();
+    try {
+      this.calibSrc?.disconnect();
+    } catch {
+      /* 已断开时忽略 */
+    }
+    try {
+      this.calibAnalyser?.disconnect();
+    } catch {
+      /* 已断开时忽略 */
+    }
+    try {
+      this.calibStream?.getTracks().forEach((t) => t.stop());
+    } catch {
+      /* ignore */
+    }
+    if (this.calibCtx) {
+      void this.calibCtx.close().catch(() => undefined);
+    }
+    this.calibStream = null;
+    this.calibCtx = null;
+    this.calibSrc = null;
+    this.calibAnalyser = null;
+    this.calibDeviceId = null;
+  }
+
+  /**
+   * 校准开始前的停播核对（强制执行，非仅前提）。
+   * 停播清单：take 参考 Howl、材料参考播放器（host.tts）、展开行
+   * voice/ref/mix 元素、待确认预览播放（与行播放共用控制器与元素），
+   * 外加常规回放与常规待确认试听（host.grading）—— session 持有的
+   * 全部音频 owner 盘点（兜底：实现时须核对组件内全部音频 owner，
+   * 不得只按四路字面实现；本次盘点结论见台账 292 音频 owner 表）。
+   * 核对方式：停之前先快照指针（停会把指针清 null，事后无从核对），
+   * 停之后逐项核对 —— Howl playing() === false、各元素 .paused === true、
+   * 材料播放器暴露的暂停态读数 speaking() === false、常规回放
+   * playingId === null 且 audio.paused === true、常规试听
+   * previewingPending() !== true；任一仍在播 → 返回 false（中止，
+   * 不打开临时流）。注意：本函数是“停 + 核对”，核对用的暂停态读数
+   * 取自各 owner 自己的暴露口径（材料播放器是控制器包装，故以其
+   * speaking() 为准，不假设其为裸 HTMLAudioElement）。
+   */
+  private stopAllReferencePlaybackForCalibration(): boolean {
+    const howl = this.refHowl;
+    const els = [this.expandedVoiceEl, this.expandedRefEl, this.expandedMixEl].filter(
+      (el): el is HTMLAudioElement => el !== null,
+    );
+    this.stopRefHowl();
+    this.stopShadowPlayback();
+    this.stopOtherAudio();
+    const howlStopped = !howl || howl.playing() === false;
+    const elsStopped = els.every((el) => el.paused === true);
+    const ttsStopped = !this.host.tts.speaking();
+    const gradingStopped =
+      this.host.grading.playingId() === null && this.host.grading.audio.paused === true;
+    const gradingPreviewStopped = this.host.grading.previewingPending?.() !== true;
+    return howlStopped && elsStopped && ttsStopped && gradingStopped && gradingPreviewStopped;
+  }
+
+  /**
+   * 校准入口（面板按钮与过小提示按钮共用同一 calibrating 锁的面板侧；
+   * 提示按钮只做滚动聚焦，不直接开流，故重入只可能来自面板按钮连点，
+   * 由 calibStarting + micCalibrating 双重守门）。
+   * 步骤：停播核对 → 锁定设备 + 扬声器约束请求临时流 → 核对临时流
+   * 设备 → 建测量图（上下文必须 running）→ 上锁、进 1 秒底噪窗。
+   */
+  async startMicCalibration(): Promise<void> {
+    if (this.micCalibrating() || this.calibStarting || this.shadowRecording()) return;
+    if (this.isEarphoneMode()) return;
+    this.calibStarting = true;
+    try {
+      await this.micCalibrationSetup();
+    } finally {
+      this.calibStarting = false;
+    }
+  }
+
+  private async micCalibrationSetup(): Promise<void> {
+    const seq = this.calibSeq;
+    this.micCalibrateMessage.set(null);
+    // ① 先停一切参考声播放并逐项核对；任一仍在播 → 中止，不开临时流。
+    if (!this.stopAllReferencePlaybackForCalibration()) {
+      this.micCalibrateMessage.set(this.host.t('practice.shadow.micCalibrateError'));
+      this.host.cdr.detectChanges();
+      return;
+    }
+    // ② 锁定当时设备 + 扬声器约束（AEC true、NS false、AGC false）
+    // 请求临时流；临时流测的是所选设备本身，与 take 用同一设备。
+    const deviceId = this.micDeviceId();
+    let stream: MediaStream;
+    try {
+      stream = await requestMicStream(deviceId, 'speaker');
+    } catch {
+      this.micCalibrateMessage.set(this.host.t('practice.shadow.micCalibrateError'));
+      this.host.cdr.detectChanges();
+      return;
+    }
+    if (seq !== this.calibSeq) {
+      try {
+        stream.getTracks().forEach((t) => t.stop());
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    // ③ 临时流必须是所选设备本身：requestMicStream 的 exact 回落
+    // （take 鲁棒性设计）会把默认设备流交给校准，测到的就不是所选麦
+    // —— 此时宁可失败，也不把错设备的增益存到所选设备的键下。
+    // deviceId 为空（系统默认）时不核对；浏览器未暴露 granted deviceId
+    // （空串）时无法核对，放行（授权本身已成功）。
+    try {
+      const granted = stream.getAudioTracks()[0]?.getSettings()?.deviceId;
+      if (deviceId && granted && granted !== deviceId) {
+        stream.getTracks().forEach((t) => t.stop());
+        this.micCalibrateMessage.set(this.host.t('practice.shadow.micCalibrateError'));
+        this.host.cdr.detectChanges();
+        return;
+      }
+    } catch {
+      /* getSettings 异常不阻塞（核对本身非关键路径） */
+    }
+    // ④ 建测量图：上下文必须 running，否则 Analyser 全读 0、峰值 −∞
+    // 会被误判为 too-quiet（硬件建议是错的）——此时直接报测量失败。
+    let ctx: AudioContext;
+    let src: MediaStreamAudioSourceNode;
+    let analyser: AnalyserNode;
+    try {
+      ctx = new AudioContext();
+      if (ctx.state === 'suspended') {
+        try {
+          await ctx.resume();
+        } catch {
+          /* 下方状态判定兜底 */
+        }
+      }
+      if (ctx.state !== 'running') throw new Error('calibration context not running');
+      src = ctx.createMediaStreamSource(stream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      src.connect(analyser);
+    } catch {
+      try {
+        stream.getTracks().forEach((t) => t.stop());
+      } catch {
+        /* ignore */
+      }
+      this.micCalibrateMessage.set(this.host.t('practice.shadow.micCalibrateError'));
+      this.host.cdr.detectChanges();
+      return;
+    }
+    if (seq !== this.calibSeq) {
+      try {
+        src.disconnect();
+      } catch {
+        /* ignore */
+      }
+      try {
+        stream.getTracks().forEach((t) => t.stop());
+      } catch {
+        /* ignore */
+      }
+      void ctx.close().catch(() => undefined);
+      return;
+    }
+    // ⑤ 上锁、进底噪窗（倒计时 1 秒即底噪窗口本身；结束立即进 3 秒语音窗）。
+    this.calibStream = stream;
+    this.calibCtx = ctx;
+    this.calibSrc = src;
+    this.calibAnalyser = analyser;
+    this.calibDeviceId = deviceId;
+    this.calibFloorSamples = [];
+    this.calibFramePeaks = [];
+    this.micCalibrating.set(true);
+    this.micCalibratePhase.set('silence');
+    this.micCalibrateLevel.set(0);
+    const startedAt = Date.now();
+    const td = new Float32Array(2048);
+    this.calibTimer = setInterval(() => this.calibTick(startedAt, td), 100);
+    this.host.cdr.detectChanges();
+  }
+
+  /**
+   * 校准采样 tick（约 100ms，电平条与帧采样共用此同一句柄）。
+   * 窗口以墙钟计：[0, 1000ms) 底噪窗（全部采样 pooled RMS），
+   * [1000ms, 4000ms) 语音窗（帧峰值供 95 百分位），到时进 finish。
+   * 每 tick 先核对设备与模式：Settings 里切换设备/模式时面板会话
+   * 收不到事件，轮询是最短迟到（≤ 一 tick）的中止办法；中止不写值。
+   */
+  private calibTick(startedAt: number, td: Float32Array): void {
+    if (this.micDeviceId() !== this.calibDeviceId) {
+      this.cancelMicCalibration(this.host.t('practice.shadow.micCalibrateDeviceChanged'));
+      this.micCalibrated.set(loadCalibration(this.micDeviceId()));
+      return;
+    }
+    if (loadShadowMicMode() !== 'speaker') {
+      this.cancelMicCalibration(this.host.t('practice.shadow.micCalibrateModeChanged'));
+      return;
+    }
+    const analyser = this.calibAnalyser;
+    if (!analyser) {
+      this.cancelMicCalibration(this.host.t('practice.shadow.micCalibrateError'));
+      return;
+    }
+    try {
+      analyser.getFloatTimeDomainData(td);
+    } catch {
+      this.cancelMicCalibration(this.host.t('practice.shadow.micCalibrateError'));
+      return;
+    }
+    let peak = 0;
+    for (let i = 0; i < td.length; i++) {
+      const v = Math.abs(td[i]);
+      if (v > peak) peak = v;
+    }
+    this.micCalibrateLevel.set(Math.round(peak * 100));
+    const elapsed = Date.now() - startedAt;
+    if (elapsed < 1000) {
+      this.calibFloorSamples.push(...td);
+      this.micCalibratePhase.set('silence');
+    } else if (elapsed < 4000) {
+      if (this.micCalibratePhase() !== 'speaking') this.micCalibratePhase.set('speaking');
+      this.calibFramePeaks.push(peak);
+    } else {
+      this.finishMicCalibration();
+    }
+    this.host.cdr.detectChanges();
+  }
+
+  /**
+   * 校准收尾：先清 interval（成功路径同样清，见 calibTimer 注），
+   * 再按门控定 outcome。门控求值顺序：too-quiet 优先于 unclear。
+   * 任何失败（无帧 / too-quiet / unclear / 写失败）皆不写存储；
+   * 重校准失败不覆盖旧增益（micCalibrated 原值不动）；从未存过时
+   * take 本就回落固定 ×3，无需额外动作。
+   */
+  private finishMicCalibration(): void {
+    // 先取值再清运行态：clearMicCalibrationRun 会把 calibDeviceId 置 null。
+    const deviceId = this.calibDeviceId;
+    const floorDb = pooledRmsDb(this.calibFloorSamples);
+    const peakLinear = percentile95(this.calibFramePeaks);
+    this.clearMicCalibrationRun();
+    this.micCalibrating.set(false);
+    this.micCalibrateLevel.set(0);
+    if (peakLinear === null) {
+      this.micCalibrateMessage.set(this.host.t('practice.shadow.micCalibrateError'));
+      this.host.cdr.detectChanges();
+      return;
+    }
+    const peakDb = dbfs(peakLinear);
+    const gate = evaluateCalibration(peakDb, floorDb);
+    if (gate === 'too-quiet') {
+      this.micCalibrateMessage.set(this.host.t('practice.shadow.micCalibrateTooQuiet'));
+    } else if (gate === 'unclear') {
+      this.micCalibrateMessage.set(this.host.t('practice.shadow.micCalibrateUnclear'));
+    } else {
+      const { gainLinear, gainDb } = computeCalibrationGain(peakDb);
+      const record: MicCalibrationRecord = {
+        gainLinear,
+        gainDb,
+        peakDb,
+        floorDb,
+        calibratedAt: Date.now(),
+      };
+      if (saveCalibration(deviceId, record)) {
+        this.micCalibrated.set(record);
+        this.micCalibrateMessage.set(null);
+      } else {
+        // 写失败 → 错误 note，状态保持原样（旧增益不被覆盖、
+        // 未校准不显示已校准）。
+        this.micCalibrateMessage.set(this.host.t('practice.shadow.micCalibrateError'));
+      }
+    }
+    this.host.cdr.detectChanges();
+  }
+
+  /**
+   * 票 292 走查专用接缝：?shadowForceQuietHint=1 时强制显示过小提示块
+   * （take 停止时强制置提示；面板打开时亦强制置提示），使走查能断言
+   * 提示按钮渲染与点击聚焦，而不依赖假麦克风凑出峰值对。
+   * 只影响提示块显隐，不改任何音频、存储或评分行为；生产链接永不带
+   * 此参数。备选（假麦克风实录凑峰值对）因峰值不可控被否决。
+   */
+  private forceQuietHintForWalkthrough(): boolean {
+    try {
+      if (typeof window === 'undefined') return false;
+      return new URLSearchParams(window.location.search).get('shadowForceQuietHint') === '1';
+    } catch {
+      return false;
+    }
+  }
+
   // ---------- 采集 ----------
   async startShadow(): Promise<void> {
     if (this.starting || this.shadowRecording()) return;
+    // 票 292：take 开始先取消进行中校准（用户意图优先；校准窗口内
+    // 任何录音/播放启动皆如此，见 cancelMicCalibration 调用点）。
+    this.cancelMicCalibration();
     // 票 274：有待确认的跟读 take 时，禁开新录音（先 Submit 或 Discard）。
     // 注意：此门必须在下方清提示之前——否则这条提示会被清掉。
     if (this.shadowPendingTake()) {
@@ -649,7 +1082,11 @@ export class PracticeShadowSession {
       // 已定格，录中切模式不影响本条）。
       // 票 284：模式在 take 开始时读一次 —— 授权约束、录制端增益、
       // 参考声压低三处共用同一值（读点仍在 grant 之前，278 语义不变）。
+      // 票 292：校准增益在 take 开始时读一次存储传入（与 micMode 同读点）；
+      // 耳机模式不传（buildCaptureGraph 本就忽略），未校准传 undefined（= ×3）。
       const micMode = loadShadowMicMode();
+      const calibratedGain =
+        micMode === 'speaker' ? loadCalibration(this.micDeviceId())?.gainLinear : undefined;
       const capture = new ShadowCaptureService(
         () => requestMicStream(this.micDeviceId(), micMode),
         (fn) => this.host.ngZone.run(fn),
@@ -660,6 +1097,7 @@ export class PracticeShadowSession {
         this.host.tts.rate(),
         undefined,
         micMode,
+        calibratedGain,
       );
       this.capture = capture;
       try {
@@ -851,9 +1289,10 @@ export class PracticeShadowSession {
       }
       // 票 271 C：人声不近静音、但远小于参考 → 非阻塞过小提示（不叠加
       // noVoice；提示本身不改音频，修法在耳：近麦/查系统音量/换设备/耳机）。
+      // 票 292 走查接缝：?shadowForceQuietHint=1 时强制显示（见方法注）。
       const voiceMax = this.takePeaks.reduce((m, p) => Math.max(m, p.v), 0);
       const refMax = this.shadowRefPeaks().reduce((m, p) => Math.max(m, p.v), 0);
-      if (shouldShowQuietHint(voiceMax, refMax)) {
+      if (shouldShowQuietHint(voiceMax, refMax) || this.forceQuietHintForWalkthrough()) {
         this.shadowQuietHint.set(this.host.t('practice.shadow.quietVoiceHint'));
       }
       const localTakeId = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -952,6 +1391,8 @@ export class PracticeShadowSession {
   async previewShadowPending(): Promise<void> {
     const rec = this.shadowPendingTake();
     if (!rec) return;
+    // 票 292：待确认试听启动先取消进行中校准（窗口内播放启动规则）。
+    this.cancelMicCalibration();
     if (this.shadowPendingPlaying()) {
       this.stopPendingPreview();
       return;
@@ -1123,6 +1564,8 @@ export class PracticeShadowSession {
   }
 
   async toggleShadowPlay(row: ShadowRowView): Promise<void> {
+    // 票 292：行播放启动先取消进行中校准（窗口内无在播音频，故此调用恒为启动）。
+    this.cancelMicCalibration();
     if (this.shadowPlayingId() === row.id) {
       this.controller?.pause();
       this.shadowPlayingId.set(null);
@@ -1164,6 +1607,8 @@ export class PracticeShadowSession {
     const wasPlaying = this.shadowPlayingId() === row.id;
     await this.buildController(row, 'together', at);
     if (wasPlaying && this.controller) {
+      // 票 292：恢复播放才取消校准（仅切控制器不播时不取消）。
+      this.cancelMicCalibration();
       await this.controller.play();
       this.shadowPlayingId.set(row.id);
     }
@@ -1178,6 +1623,8 @@ export class PracticeShadowSession {
     const wasPlaying = this.shadowPlayingId() === row.id;
     await this.buildController(row, next, at);
     if (wasPlaying && this.controller) {
+      // 票 292：恢复播放才取消校准（仅切控制器不播时不取消）。
+      this.cancelMicCalibration();
       await this.controller.play();
       this.shadowPlayingId.set(row.id);
     }
@@ -1521,6 +1968,13 @@ export class PracticeShadowSession {
   }
 
   destroy(): void {
+    // 票 292：会话销毁 = 放弃校准（含正在建流/建图的旧一轮，代次 bump
+    // 使其醒来时自行拆 teardown）。不用 cancelMicCalibration：销毁时
+    // 调 detectChanges 可能抛 ViewDestroyedError，此处只清资源与信号。
+    this.calibSeq++;
+    this.clearMicCalibrationRun();
+    this.micCalibrating.set(false);
+    this.micCalibrateLevel.set(0);
     this.stopShadowPlayback();
     this.stopRefHowl();
     this.stopPlayTimer();

@@ -203,18 +203,25 @@ export interface CaptureGraph {
  *   suspended 时图不渲染，录出来的会是静音；此时必须回落原路
  *   （MediaRecorder 直录原始流，不受上下文状态影响 = 261 已证行为），
  *   绝不拿一条图驱动的静音流去录音。调用方已有的 meter 警告会提示用户。
+ * 票 292：第 4 可选参数 calibratedGain（线性倍数，调用方传入存储的
+ * gainLinear；缺省 = 284 固定 ×3 = 未校准行为）。非法值（非有限数 /
+ * ≤ 0）回落 ×3，绝不把坏增益喂给图；耳机路与 suspended 回落不取此值。
  */
 export function buildCaptureGraph(
   ctx: CaptureGraphContextLike,
   stream: MediaStream,
   micMode: ShadowMicMode,
+  calibratedGain?: number,
 ): CaptureGraph {
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 2048;
   const src = ctx.createMediaStreamSource(stream);
   if (micMode === 'speaker' && ctx.state === 'running') {
     const gain = ctx.createGain();
-    gain.gain.value = SHADOW_CAPTURE_SPEAKER_GAIN;
+    gain.gain.value =
+      typeof calibratedGain === 'number' && Number.isFinite(calibratedGain) && calibratedGain > 0
+        ? calibratedGain
+        : SHADOW_CAPTURE_SPEAKER_GAIN;
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = VOICE_LIMITER.thresholdDb;
     limiter.knee.value = VOICE_LIMITER.kneeDb;
@@ -288,6 +295,12 @@ export class ShadowCaptureService {
      * 调用方（session）在 take 开始时读一次、与授权约束共用同一值。
      */
     private readonly micMode: ShadowMicMode = 'speaker',
+    /**
+     * 票 292：本条 take 的校准增益（线性倍数，缺省 = 未校准 = ×3）。
+     * 调用方（session）在 take 开始时读一次存储传入；耳机路与
+     * suspended 回落由 buildCaptureGraph 内部忽略此值。
+     */
+    private readonly calibratedGain?: number,
   ) {}
 
   /** 是否支持采集（无 mediaDevices/getUserMedia 即不支持，诚实返回 false）。 */
@@ -374,7 +387,8 @@ export class ShadowCaptureService {
     // 票 284：录制图按模式建（扬声器模式走增益路；耳机模式与 suspended
     // 回落皆走原路，见 buildCaptureGraph 安全规则）。Analyser 恒 tap
     // 增益后流（增益路）或原始流（原路），故 meter、lane、blob 同源。
-    const graph = buildCaptureGraph(this.ctx, this.stream, this.micMode);
+    // 票 292：增益路取校准增益（有存储时），否则固定 ×3。
+    const graph = buildCaptureGraph(this.ctx, this.stream, this.micMode, this.calibratedGain);
     this.graph = graph;
     this.analyser = graph.analyser;
     const mime = pickShadowMime();

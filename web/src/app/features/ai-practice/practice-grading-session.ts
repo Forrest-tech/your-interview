@@ -465,6 +465,10 @@ export class PracticeGradingSession {
 
   // ---------- 录音 ----------
   async startRecording(): Promise<void> {
+    // 票 292：常规录音启动先取消进行中跟读校准（窗口内录音启动规则）。
+    // ?. 容忍局部 mock host（既有 pausePendingPreview?.() 同款口径）；
+    // 生产 host.shadow 恒存在，行为不受影响。
+    this.host.shadow?.cancelMicCalibration();
     this.recError.set(null);
     // 票 269：新录音开始即清掉上一条的选区快照（上一条若未提交已被下行丢弃；
     // 若本条是一句话录音，成功开始后重新捕获，见下）。
@@ -512,6 +516,8 @@ export class PracticeGradingSession {
   previewPending(): void {
     const pt = this.host.recorder.pendingTake();
     if (!pt) return;
+    // 票 292：常规待确认试听启动先取消进行中跟读校准（窗口内播放启动规则）。
+    this.host.shadow.cancelMicCalibration();
 
     if (this.previewingPending()) {
       this.pausePendingPreview();
@@ -906,6 +912,9 @@ export class PracticeGradingSession {
    *   拉取失败时如实提示,绝不静默假装能播。
    */
   togglePlay(r: Recording): void {
+    // 票 292：常规回放启动先取消进行中跟读校准（窗口内播放启动规则；
+    // 窗口内无在播音频，故此调用恒为启动）。
+    this.host.shadow.cancelMicCalibration();
     // 播放期间先把示范朗读停掉,避免两种声音叠在一起
     this.host.tts.stopSpeak();
     // ★ 第四十九轮:待提交录音的试听也一并停掉 —— 全页只允许一路声音

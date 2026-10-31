@@ -78,6 +78,61 @@ public sealed class MailboxConnection : Entity
 }
 
 /// <summary>
+/// 票 294：Gmail 回填断点（页边界续跑）。
+/// 一行 = 一个账号正在进行的回填；回填完成即删行，稳态由 MailboxConnection.Cursor（historyId）承载。
+/// 作用域：ScopeEntryId null = 全量跑；非 null = 条目级跑。续跑安全规则见刷新 Handler：
+/// stored.Scope == run.Scope 或 stored.Scope == null 时续跑，否则丢弃重起（贵但正确）。
+/// StartHistoryId = 回填起跑时取的锚点；完成时用它跑 history 兜底，闭合“回填期间到达的新信”竞态。
+/// </summary>
+public sealed class MailboxBackfillProgress : Entity
+{
+    private MailboxBackfillProgress() { }
+
+    public MailboxBackfillProgress(Guid userId, MailboxProvider provider, string accountEmail,
+        Guid? scopeEntryId, DateTimeOffset windowStartUtc, string? startHistoryId,
+        string currentPageIdsJson, int currentPageIndex, string? nextPageToken)
+    {
+        UserId = userId;
+        Provider = provider;
+        AccountEmail = accountEmail;
+        ScopeEntryId = scopeEntryId;
+        WindowStartUtc = windowStartUtc;
+        StartHistoryId = startHistoryId;
+        CurrentPageIdsJson = currentPageIdsJson;
+        CurrentPageIndex = currentPageIndex;
+        NextPageToken = nextPageToken;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public Guid UserId { get; private set; }
+    public MailboxProvider Provider { get; private set; }
+    public string AccountEmail { get; private set; } = string.Empty;
+    public Guid? ScopeEntryId { get; private set; }
+    public DateTimeOffset WindowStartUtc { get; private set; }
+    public string? StartHistoryId { get; private set; }
+    public string CurrentPageIdsJson { get; private set; } = "[]";
+    public int CurrentPageIndex { get; private set; }
+    public string? NextPageToken { get; private set; }
+    public DateTimeOffset UpdatedAt { get; private set; }
+
+    /// <summary>进入下一页：id 列表与 token 一起换位，下标归零。</summary>
+    public void StartPage(string currentPageIdsJson, string? nextPageToken)
+    {
+        CurrentPageIdsJson = currentPageIdsJson;
+        CurrentPageIndex = 0;
+        NextPageToken = nextPageToken;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>页内推进：nextIndex = 下一条未处理下标。</summary>
+    public void AdvanceIndex(int nextIndex)
+    {
+        CurrentPageIndex = nextIndex;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+}
+
+/// <summary>
 /// 条目级邮箱匹配规则（票 240，方案 §2.3）：规则挂在条目上，随条目走，不设全局第二套。
 /// 三张表 + 排除列表全部以 JSON 数组存一列；设置区不管规则（只放连接卡）。
 /// </summary>

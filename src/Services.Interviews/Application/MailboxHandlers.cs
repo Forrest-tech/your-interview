@@ -138,6 +138,11 @@ public sealed class DisconnectMailboxCommandHandler(
         }
         catch { /* 撤销尽力而为：删行即断开 */ }
         db.MailboxConnections.Remove(conn);
+        var progresses = await db.MailboxBackfillProgress
+            .Where(p => p.UserId == request.UserId && p.Provider == conn.Provider
+                && p.AccountEmail == conn.AccountEmail)
+            .ToListAsync(ct);
+        db.MailboxBackfillProgress.RemoveRange(progresses);
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }

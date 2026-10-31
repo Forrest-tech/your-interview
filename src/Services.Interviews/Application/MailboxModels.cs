@@ -54,6 +54,43 @@ public sealed class MailboxRateLimitedException(string message, TimeSpan? retryA
 public sealed class MailboxProviderException(string message) : Exception(message);
 
 /// <summary>
+/// 票 294：增量游标过期（Gmail history.list 404 / Graph 410 的流式等价物）。
+/// 调用方须清锚点并回落回填重拉；不是限流、不是授权失效。
+/// </summary>
+public sealed class MailboxCursorExpiredException(string message) : Exception(message);
+
+/// <summary>
+/// 票 294：Gmail 流式拉取原语（分页列单 + 逐封取数 + history 锚点）。
+/// 仅 Gmail 实现；Graph 不实现，走旧 ListNewAsync 路径。
+/// 列单页 50 封（小于旧 100，断点更细）；取数失败语义与旧路径一致：
+/// 单封 404 → null（信已不在），配额/限流 → MailboxRateLimitedException，锚点过期 → MailboxCursorExpiredException。
+/// </summary>
+public interface IIncrementalMailboxProvider : IMailboxProvider
+{
+    /// <summary>列单页：返回本页 id + 下一页 token（null = 列完）。sinceUtc 仅回填路径用。</summary>
+    Task<(IReadOnlyList<string> Ids, string? NextPageToken)> ListIdsPageAsync(
+        string accessToken, string? pageToken, DateTimeOffset sinceUtc, CancellationToken ct);
+
+    /// <summary>取单封全文（format=full；不含原文 RawMime）。未找到返回 null。</summary>
+    Task<MailboxMessage?> GetMessageFullAsync(string accessToken, string providerMessageId,
+        CancellationToken ct);
+
+    /// <summary>取单封原文 base64url（format=raw）。未找到返回 null。</summary>
+    Task<string?> GetMessageRawAsync(string accessToken, string providerMessageId,
+        CancellationToken ct);
+
+    /// <summary>取当前 history 锚点（users.getProfile 的 historyId；1 单位）。</summary>
+    Task<string?> GetProfileHistoryIdAsync(string accessToken, CancellationToken ct);
+
+    /// <summary>
+    /// 增量页：history.list 起点锚点；返回本页新增 id + 下一页 token + 响应 historyId。
+    /// 锚点过期（404）→ 抛 MailboxCursorExpiredException。
+    /// </summary>
+    Task<(IReadOnlyList<string> Ids, string? NextPageToken, string? NewHistoryId)> ListHistoryPageAsync(
+        string accessToken, string startHistoryId, string? pageToken, CancellationToken ct);
+}
+
+/// <summary>
 /// 票 240：邮箱 provider 抽象（方案 §1）。
 /// Gmail / Graph 双实现；IMAP 仅兜底（本轮未落地：MailKit 不在本地 NuGet 缓存、沙盒无出站，
 /// 强行手写 MIME 解析不干净——见票 240 剩余项，connect 端点对 Imap 返回 400）。

@@ -818,6 +818,56 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.ToTable("mail_match_rules", "interviews");
                 });
 
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.MailboxBackfillProgress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("CurrentPageIdsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("CurrentPageIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("NextPageToken")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("ScopeEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StartHistoryId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("WindowStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "Provider", "AccountEmail");
+
+                    b.ToTable("mailbox_backfill_progress", "interviews");
+                });
+
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.MailboxConnection", b =>
                 {
                     b.Property<Guid>("Id")

@@ -72,6 +72,10 @@ public sealed class InterviewsDbContext(
     /// <summary>邮箱 OAuth 应用凭据：一行 = 一个 provider 的整组三元组，不挂 UserId、无用户过滤器。</summary>
     public DbSet<MailboxOAuthCredential> MailboxOAuthCredentials => Set<MailboxOAuthCredential>();
 
+    // ---- 票 294：Gmail 回填断点（页边界续跑）----
+    /// <summary>回填断点：一行 = 一个账号正在进行的回填；完成即删行。</summary>
+    public DbSet<MailboxBackfillProgress> MailboxBackfillProgress => Set<MailboxBackfillProgress>();
+
     /// <summary>
     /// 给该条目所有未关单的任务排定终态(只改跟踪状态,不落库 ——
     /// 由调用方随后的 SaveChangesAsync 与业务变更**同一事务**提交)。
@@ -505,6 +509,21 @@ public sealed class InterviewsDbContext(
             e.Property(x => x.UpdatedAt).IsRequired();
             // 部署级：一行 = 一个 provider，无 UserId、故意不设用户过滤器。
             e.HasIndex(x => x.Provider).IsUnique();
+        });
+
+        b.Entity<MailboxBackfillProgress>(e =>
+        {
+            e.ToTable("mailbox_backfill_progress");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Provider).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.AccountEmail).HasMaxLength(320).IsRequired();
+            e.Property(x => x.CurrentPageIdsJson).HasColumnType("text").IsRequired();
+            e.Property(x => x.StartHistoryId).HasColumnType("text");
+            e.Property(x => x.NextPageToken).HasColumnType("text");
+            e.Property(x => x.UserId).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.Provider, x.AccountEmail });
+            e.HasQueryFilter(x => x.UserId == CurrentUserId);
         });
     }
 }

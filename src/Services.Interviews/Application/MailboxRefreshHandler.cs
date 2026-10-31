@@ -77,21 +77,35 @@ public sealed class RefreshMailboxCommandHandler(
         var mapBySender = contactMaps.ToDictionary(
             m => m.SenderEmailLower, m => m.EntryId, StringComparer.OrdinalIgnoreCase);
 
-        // 下次同范围刷新先清旧“新导入”标记（读 MetaJson 改写；本轮新导入的重新打标）。
-        foreach (var entry in entries)
+        // 票 294：回填断点。续跑（起跑时已有进度行）不清 mailboxNew，否则会抹掉上一段已导入的 new 标记；
+        // 新起跑与稳态跑（无进度行）清标行为与今日一致。
+        var progress = await db.MailboxBackfillProgress.FirstOrDefaultAsync(
+            p => p.UserId == request.UserId && p.Provider == conn.Provider
+                && p.AccountEmail == conn.AccountEmail, ct);
+        if (progress is null)
         {
-            foreach (var asset in entry.Assets)
+            // 下次同范围刷新先清旧“新导入”标记（读 MetaJson 改写；本轮新导入的重新打标）。
+            foreach (var entry in entries)
             {
-                if (asset.MetaJson is null || !asset.MetaJson.Contains("\"mailboxNew\":true")) continue;
-                try
+                foreach (var asset in entry.Assets)
                 {
-                    var node = JsonNode.Parse(asset.MetaJson)?.AsObject();
-                    if (node is null) continue;
-                    node["mailboxNew"] = false;
-                    asset.SetMeta(node.ToJsonString());
+                    if (asset.MetaJson is null || !asset.MetaJson.Contains("\"mailboxNew\":true")) continue;
+                    try
+                    {
+                        var node = JsonNode.Parse(asset.MetaJson)?.AsObject();
+                        if (node is null) continue;
+                        node["mailboxNew"] = false;
+                        asset.SetMeta(node.ToJsonString());
+                    }
+                    catch { /* 坏 meta 不阻塞刷新 */ }
                 }
-                catch { /* 坏 meta 不阻塞刷新 */ }
             }
+        }
+
+        if (provider is IIncrementalMailboxProvider stream)
+        {
+            return await HandleStreamingAsync(request, conn, stream, access, entryById, rules,
+                mapBySender, progress, opts, ct);
         }
 
         // 拉取：增量游标优先；过期 → 回落窗口重拉（Gmail 404 / Graph 410 已在 provider 内转 CursorExpired）。
@@ -125,11 +139,7 @@ public sealed class RefreshMailboxCommandHandler(
             return Result.Success(new RefreshMailboxResult(0, 0, 0, 0, ["刷新已取消。"], true, false, false, false));
         }
 
-        var added = 0;
-        var pending = 0;
-        var skipped = 0;
-        var failed = 0;
-        var failedReasons = new List<string>();
+        var counters = new RefreshCounters();
         var cancelled = false;
 
         try
@@ -137,48 +147,13 @@ public sealed class RefreshMailboxCommandHandler(
             foreach (var message in fetch.Messages)
             {
                 ct.ThrowIfCancellationRequested();
-                var match = MailboxMatching.Match(message.FromEmail, message.ToEmails,
-                    message.Subject, message.BodyText, rules, mapBySender);
-                if (match.Signal is null) continue;
-
-                // 作用域外命中（条目级刷新时映射指向其他条目）→ 不导入不提示。
-                if (match.EntryId is { } targetId && !entryById.ContainsKey(targetId)) continue;
-                if (match.CandidateEntryIds.Count > 0
-                    && !match.CandidateEntryIds.Any(id => entryById.ContainsKey(id))) continue;
-
-                if (match.IsStrong && match.EntryId is { } strongEntryId)
-                {
-                    var entry = entryById[strongEntryId];
-                    var imported = await ImportStrongAsync(entry, message, match, provider, access, opts, request.UserId, ct);
-                    added += imported.Added;
-                    skipped += imported.Skipped;
-                    failed += imported.Failed;
-                    failedReasons.AddRange(imported.Reasons);
-                    continue;
-                }
-
-                // 弱信号 / 歧义：只进待确认队列（本行不存原文；确认时重取）。
-                var alreadyPending = await db.MailboxPendingItems.AnyAsync(p =>
-                    p.UserId == request.UserId && p.Provider == conn.Provider
-                    && p.ProviderMessageId == message.ProviderMessageId
-                    && p.Status == MailboxPendingStatus.Pending, ct);
-                if (alreadyPending) { skipped++; continue; }
-                var alreadyImported = await db.MailboxImportRecords.AnyAsync(r =>
-                    r.UserId == request.UserId && r.Provider == conn.Provider
-                    && r.AccountEmail == conn.AccountEmail
-                    && r.ProviderMessageId == message.ProviderMessageId, ct);
-                if (alreadyImported) { skipped++; continue; }
-                var candidates = match.CandidateEntryIds
-                    .Where(id => entryById.ContainsKey(id)).ToList();
-                db.MailboxPendingItems.Add(new MailboxPendingItem(request.UserId, conn.Provider,
-                    conn.AccountEmail, message.ProviderMessageId, message.ProviderThreadId,
-                    message.FromEmail, message.FromName, message.Subject, message.ReceivedAt,
-                    match.Signal, match.MatchedRule,
-                    match.Signal == "Ambiguous" ? null : match.EntryId,
-                    match.Signal == "Ambiguous"
-                        ? JsonSerializer.Serialize(candidates) : null,
-                    MailboxMatching.Snippet(message.BodyText)));
-                pending++;
+                var r = await ProcessMessageAsync(message, fetchRaw: null, entryById, rules,
+                    mapBySender, conn, provider, access, opts, request.UserId, ct);
+                counters.Added += r.Added;
+                counters.Pending += r.Pending;
+                counters.Skipped += r.Skipped;
+                counters.Failed += r.Failed;
+                counters.Reasons.AddRange(r.Reasons);
             }
         }
         catch (OperationCanceledException)
@@ -189,8 +164,8 @@ public sealed class RefreshMailboxCommandHandler(
         catch (MailboxRateLimitedException ex)
         {
             await db.SaveChangesAsync(ct);
-            return Result.Success(new RefreshMailboxResult(added, pending, skipped, failed,
-                [.. failedReasons, ex.RetryAfter is { } ra
+            return Result.Success(new RefreshMailboxResult(counters.Added, counters.Pending, counters.Skipped,
+                counters.Failed, [.. counters.Reasons, ex.RetryAfter is { } ra
                     ? $"邮箱限流，请 {ra.TotalSeconds:0} 秒后重试。"
                     : "邮箱限流，请稍后重试。"],
                 cancelled, true, false, false));
@@ -204,8 +179,311 @@ public sealed class RefreshMailboxCommandHandler(
             cursorAdvanced = true;
         }
         await db.SaveChangesAsync(ct);
-        return Result.Success(new RefreshMailboxResult(added, pending, skipped, failed,
-            failedReasons, cancelled, false, false, cursorAdvanced));
+        return Result.Success(new RefreshMailboxResult(counters.Added, counters.Pending, counters.Skipped,
+            counters.Failed, counters.Reasons, cancelled, false, false, cursorAdvanced));
+    }
+
+    /// <summary>票 294：流式刷新计数（跨页/跨段累积；异常中断时保留已计部分）。</summary>
+    private sealed class RefreshCounters
+    {
+        public int Added;
+        public int Pending;
+        public int Skipped;
+        public int Failed;
+        public List<string> Reasons { get; } = [];
+    }
+
+    private static List<string> ReadIdList(string json)
+    {
+        if (string.IsNullOrEmpty(json)) return [];
+        try { return JsonSerializer.Deserialize<List<string>>(json) ?? []; }
+        catch { return []; }
+    }
+
+    /// <summary>
+    /// 票 294：单封处理（legacy 与流式共用，唯一事实源）。
+    /// 匹配 → 作用域外跳过 → 强信号（fetchRaw 非空时先取原文再导入）→ 弱/歧义进待确认队列。
+    /// fetchRaw 为 null = legacy（原文已在 message 上）；非 null = 流式（强信号命中时才取原文）。
+    /// </summary>
+    private async Task<(int Added, int Pending, int Skipped, int Failed, List<string> Reasons)> ProcessMessageAsync(
+        MailboxMessage message,
+        Func<string, CancellationToken, Task<string?>>? fetchRaw,
+        IReadOnlyDictionary<Guid, InterviewEntry> entryById,
+        IReadOnlyList<MailboxMatching.EntryRules> rules,
+        IReadOnlyDictionary<string, Guid> mapBySender,
+        MailboxConnection conn, IMailboxProvider provider, string access, MailboxOptions opts,
+        Guid userId, CancellationToken ct)
+    {
+        var match = MailboxMatching.Match(message.FromEmail, message.ToEmails,
+            message.Subject, message.BodyText, rules, mapBySender);
+        if (match.Signal is null) return (0, 0, 0, 0, []);
+
+        // 作用域外命中（条目级刷新时映射指向其他条目）→ 不导入不提示。
+        if (match.EntryId is { } targetId && !entryById.ContainsKey(targetId)) return (0, 0, 0, 0, []);
+        if (match.CandidateEntryIds.Count > 0
+            && !match.CandidateEntryIds.Any(id => entryById.ContainsKey(id))) return (0, 0, 0, 0, []);
+
+        if (match.IsStrong && match.EntryId is { } strongEntryId)
+        {
+            var msg = message;
+            if (fetchRaw is not null)
+            {
+                var raw = await fetchRaw(message.ProviderMessageId, ct);
+                msg = message with { RawMimeBase64Url = raw };
+            }
+            var entry = entryById[strongEntryId];
+            var imported = await ImportStrongAsync(entry, msg, match, provider, access, opts, userId, ct);
+            return (imported.Added, 0, imported.Skipped, imported.Failed, imported.Reasons);
+        }
+
+        // 弱信号 / 歧义：只进待确认队列（本行不存原文；确认时重取）。
+        var alreadyPending = await db.MailboxPendingItems.AnyAsync(p =>
+            p.UserId == userId && p.Provider == conn.Provider
+            && p.ProviderMessageId == message.ProviderMessageId
+            && p.Status == MailboxPendingStatus.Pending, ct);
+        if (alreadyPending) return (0, 0, 1, 0, []);
+        var alreadyImported = await db.MailboxImportRecords.AnyAsync(r =>
+            r.UserId == userId && r.Provider == conn.Provider
+            && r.AccountEmail == conn.AccountEmail
+            && r.ProviderMessageId == message.ProviderMessageId, ct);
+        if (alreadyImported) return (0, 0, 1, 0, []);
+        var candidates = match.CandidateEntryIds
+            .Where(id => entryById.ContainsKey(id)).ToList();
+        db.MailboxPendingItems.Add(new MailboxPendingItem(userId, conn.Provider,
+            conn.AccountEmail, message.ProviderMessageId, message.ProviderThreadId,
+            message.FromEmail, message.FromName, message.Subject, message.ReceivedAt,
+            match.Signal, match.MatchedRule,
+            match.Signal == "Ambiguous" ? null : match.EntryId,
+            match.Signal == "Ambiguous"
+                ? JsonSerializer.Serialize(candidates) : null,
+            MailboxMatching.Snippet(message.BodyText)));
+        return (0, 1, 0, 0, []);
+    }
+
+    /// <summary>
+    /// 票 294：流式刷新总入口。稳态（有锚点且无未完成回填）→ history deltas；
+    /// 否则 → 回填（新起跑 / 断点续跑）。限流与取消返回已计计数 + 进度保留。
+    /// </summary>
+    private async Task<Result<RefreshMailboxResult>> HandleStreamingAsync(
+        RefreshMailboxCommand request, MailboxConnection conn, IIncrementalMailboxProvider stream,
+        string access, IReadOnlyDictionary<Guid, InterviewEntry> entryById,
+        IReadOnlyList<MailboxMatching.EntryRules> rules, IReadOnlyDictionary<string, Guid> mapBySender,
+        MailboxBackfillProgress? progress, MailboxOptions opts, CancellationToken ct)
+    {
+        var counters = new RefreshCounters();
+        try
+        {
+            if (conn.Cursor is not null && progress is null)
+            {
+                try
+                {
+                    return await RunSteadyAsync(request, conn, stream, access, entryById, rules,
+                        mapBySender, opts, counters, ct);
+                }
+                catch (MailboxCursorExpiredException)
+                {
+                    // 锚点过期：清锚 + 按既有过期回落口径以 30 天窗口重跑回填。
+                    conn.AdvanceCursor(null, DateTimeOffset.UtcNow);
+                    return await RunBackfillAsync(request, conn, stream, access, entryById, rules,
+                        mapBySender, null, opts.HistoryFallbackDays, opts, counters, ct);
+                }
+            }
+            return await RunBackfillAsync(request, conn, stream, access, entryById, rules,
+                mapBySender, progress, opts.FirstImportDays, opts, counters, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // 取消不阻塞已挣状态落库（逐封保存已覆盖绝大多数；此处补 token 轮换等残余）。
+            await db.SaveChangesAsync(CancellationToken.None);
+            return Result.Success(new RefreshMailboxResult(counters.Added, counters.Pending, counters.Skipped,
+                counters.Failed, counters.Reasons, true, false, false, false));
+        }
+        catch (MailboxRateLimitedException ex)
+        {
+            await db.SaveChangesAsync(CancellationToken.None);
+            return Result.Success(new RefreshMailboxResult(counters.Added, counters.Pending, counters.Skipped,
+                counters.Failed, [.. counters.Reasons, ex.RetryAfter is { } ra
+                    ? $"邮箱限流，请 {ra.TotalSeconds:0} 秒后重试。"
+                    : "邮箱限流，请稍后重试。"],
+                false, true, false, false));
+        }
+    }
+
+    /// <summary>
+    /// 票 294：稳态增量。history 分页收齐 deltas 再逐封处理；成功后以响应 historyId 推进 cursor；
+    /// 响应无 historyId 时不推进（与今日“仅成功推进”一致）。锚点过期由上层捕获回落回填。
+    /// </summary>
+    private async Task<Result<RefreshMailboxResult>> RunSteadyAsync(
+        RefreshMailboxCommand request, MailboxConnection conn, IIncrementalMailboxProvider stream,
+        string access, IReadOnlyDictionary<Guid, InterviewEntry> entryById,
+        IReadOnlyList<MailboxMatching.EntryRules> rules, IReadOnlyDictionary<string, Guid> mapBySender,
+        MailboxOptions opts, RefreshCounters counters, CancellationToken ct)
+    {
+        var ids = new List<string>();
+        string? pageToken = null;
+        string? newHistoryId = null;
+        do
+        {
+            var page = await stream.ListHistoryPageAsync(access, conn.Cursor!, pageToken, ct);
+            ids.AddRange(page.Ids);
+            pageToken = page.NextPageToken;
+            newHistoryId = page.NewHistoryId;
+        } while (pageToken is not null);
+
+        await ProcessIdBatchAsync(ids, 0, onAfterMessage: null, request, conn, stream, access,
+            entryById, rules, mapBySender, opts, counters, ct);
+
+        var cursorAdvanced = false;
+        if (newHistoryId is not null)
+        {
+            conn.AdvanceCursor(newHistoryId, DateTimeOffset.UtcNow);
+            cursorAdvanced = true;
+        }
+        await db.SaveChangesAsync(ct);
+        return Result.Success(new RefreshMailboxResult(counters.Added, counters.Pending, counters.Skipped,
+            counters.Failed, counters.Reasons, false, false, false, cursorAdvanced));
+    }
+
+    /// <summary>
+    /// 票 294：回填（新起跑 / 断点续跑 / 作用域切换重起）。
+    /// 页循环：页内下标跑满 → 进下一页；token 为空 → 回填完成（anchor0 兜底 + 定锚 + 删进度行）。
+    /// 完成逻辑幂等：兜底中段失败时进度行仍在，下轮从已完成页边界重进完成段（去重前置跳过已导入）。
+    /// </summary>
+    private async Task<Result<RefreshMailboxResult>> RunBackfillAsync(
+        RefreshMailboxCommand request, MailboxConnection conn, IIncrementalMailboxProvider stream,
+        string access, IReadOnlyDictionary<Guid, InterviewEntry> entryById,
+        IReadOnlyList<MailboxMatching.EntryRules> rules, IReadOnlyDictionary<string, Guid> mapBySender,
+        MailboxBackfillProgress? progress, int windowDays, MailboxOptions opts,
+        RefreshCounters counters, CancellationToken ct)
+    {
+        var userId = request.UserId;
+        // 作用域切换：stored.Scope 非空且与本轮不同 → 丢弃重起（贵但正确；全量跑 stored.Scope == null 可续跑任何作用域）。
+        if (progress is not null && progress.ScopeEntryId is not null && progress.ScopeEntryId != request.EntryId)
+        {
+            db.MailboxBackfillProgress.Remove(progress);
+            await db.SaveChangesAsync(ct);
+            progress = null;
+        }
+        if (progress is null)
+        {
+            var windowStart = DateTimeOffset.UtcNow.AddDays(-windowDays);
+            var startAnchor = await stream.GetProfileHistoryIdAsync(access, ct);
+            progress = new MailboxBackfillProgress(userId, conn.Provider, conn.AccountEmail,
+                request.EntryId, windowStart, startAnchor, "[]", 0, null);
+            db.MailboxBackfillProgress.Add(progress);
+            var first = await stream.ListIdsPageAsync(access, null, windowStart, ct);
+            progress.StartPage(JsonSerializer.Serialize(first.Ids), first.NextPageToken);
+            await db.SaveChangesAsync(ct);
+        }
+
+        while (true)
+        {
+            var ids = ReadIdList(progress.CurrentPageIdsJson);
+            if (progress.CurrentPageIndex < ids.Count)
+            {
+                await ProcessIdBatchAsync(ids, progress.CurrentPageIndex,
+                    nextIndex =>
+                    {
+                        progress.AdvanceIndex(nextIndex);
+                        return Task.CompletedTask;
+                    },
+                    request, conn, stream, access, entryById, rules, mapBySender, opts, counters, ct);
+                continue;
+            }
+            if (progress.NextPageToken is null) break;
+            var next = await stream.ListIdsPageAsync(access, progress.NextPageToken, progress.WindowStartUtc, ct);
+            progress.StartPage(JsonSerializer.Serialize(next.Ids), next.NextPageToken);
+            await db.SaveChangesAsync(ct);
+        }
+
+        // 完成：anchor0 兜底（回填期间到达、页已列过的新信），再定锚、删进度行。
+        var anchor = progress.StartHistoryId;
+        if (anchor is not null)
+        {
+            try
+            {
+                string? catchPageToken = null;
+                string? latestHistoryId = null;
+                var catchIds = new List<string>();
+                do
+                {
+                    var page = await stream.ListHistoryPageAsync(access, anchor, catchPageToken, ct);
+                    catchIds.AddRange(page.Ids);
+                    catchPageToken = page.NextPageToken;
+                    latestHistoryId = page.NewHistoryId;
+                } while (catchPageToken is not null);
+                await ProcessIdBatchAsync(catchIds, 0, onAfterMessage: null,
+                    request, conn, stream, access, entryById, rules, mapBySender, opts, counters, ct);
+                anchor = latestHistoryId ?? await stream.GetProfileHistoryIdAsync(access, ct);
+            }
+            catch (MailboxCursorExpiredException)
+            {
+                // anchor0 极罕见过期：放弃兜底，改取 fresh 锚点定锚（回填页本身已完整）。
+                anchor = await stream.GetProfileHistoryIdAsync(access, ct);
+            }
+        }
+        else
+        {
+            anchor = await stream.GetProfileHistoryIdAsync(access, ct);
+        }
+
+        db.MailboxBackfillProgress.Remove(progress);
+        var cursorAdvanced = false;
+        if (anchor is not null)
+        {
+            conn.AdvanceCursor(anchor, DateTimeOffset.UtcNow);
+            cursorAdvanced = true;
+        }
+        await db.SaveChangesAsync(ct);
+        return Result.Success(new RefreshMailboxResult(counters.Added, counters.Pending, counters.Skipped,
+            counters.Failed, counters.Reasons, false, false, false, cursorAdvanced));
+    }
+
+    /// <summary>
+    /// 票 294：逐封批处理（回填页内段与稳态 deltas 共用）。
+    /// 每封：导入记录前置去重（仅导入记录；不查待确认项，与强信号路径今日语义一致）
+    /// → 取全文（404 = 信已不在，静默跳过，与旧取数后过滤一致）
+    /// → 共享 ProcessMessageAsync（强信号命中时取原文）→ 逐封落库。
+    /// 限流与取消不捕获，由上层按已计计数返回；onAfterMessage 在每次落库前推进断点下标。
+    /// </summary>
+    private async Task ProcessIdBatchAsync(
+        IReadOnlyList<string> ids, int startIndex, Func<int, Task>? onAfterMessage,
+        RefreshMailboxCommand request, MailboxConnection conn, IIncrementalMailboxProvider stream,
+        string access, IReadOnlyDictionary<Guid, InterviewEntry> entryById,
+        IReadOnlyList<MailboxMatching.EntryRules> rules, IReadOnlyDictionary<string, Guid> mapBySender,
+        MailboxOptions opts, RefreshCounters counters, CancellationToken ct)
+    {
+        for (var i = startIndex; i < ids.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var id = ids[i];
+            var alreadyImported = await db.MailboxImportRecords.AnyAsync(r =>
+                r.UserId == request.UserId && r.Provider == conn.Provider
+                && r.AccountEmail == conn.AccountEmail
+                && r.ProviderMessageId == id, ct);
+            if (alreadyImported)
+            {
+                counters.Skipped++;
+            }
+            else
+            {
+                var full = await stream.GetMessageFullAsync(access, id, ct);
+                if (full is not null)
+                {
+                    var r = await ProcessMessageAsync(full,
+                        (id, token) => stream.GetMessageRawAsync(access, id, token),
+                        entryById, rules,
+                        mapBySender, conn, stream, access, opts, request.UserId, ct);
+                    counters.Added += r.Added;
+                    counters.Pending += r.Pending;
+                    counters.Skipped += r.Skipped;
+                    counters.Failed += r.Failed;
+                    counters.Reasons.AddRange(r.Reasons);
+                }
+            }
+            if (onAfterMessage is not null) await onAfterMessage(i + 1);
+            await db.SaveChangesAsync(ct);
+        }
     }
 
     /// <summary>

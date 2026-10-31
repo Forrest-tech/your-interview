@@ -11,9 +11,25 @@ namespace YourInterview.Services.Interviews.Application;
 /// scope：gmail.readonly + openid email profile（只读，不发信、不删改、不标已读）。
 /// 增量：history.list(startHistoryId)；historyId 过期返回 404 → CursorExpired，由调用方回落 30 天窗口重拉。
 /// 原文：messages.get(format=raw) 拿真正的原文 MIME；结构化字段另取 format=full（不自写 MIME 解析）。
+/// 票 294：流式拉取（IIncrementalMailboxProvider）+ 节流与配额退避。
+/// 配额表（新 cohort 口径）：6000 单位/分钟/用户；list 5、full/raw 60、history 2、getProfile 1。
+/// 计量调用（full/raw）之间默认 700ms 间隔（≈5143 单位/分钟，余量容纳列单与命中封原文）；
+/// 403-quota / 429 在 run 内指数退避 + 抖动重试至多 3 次，耗尽 → MailboxRateLimitedException。
 /// </summary>
-public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
+public sealed class GmailMailboxProvider : IMailboxProvider, IIncrementalMailboxProvider
 {
+    private readonly HttpClient _http;
+    private readonly TimeSpan _pacingDelay;
+    private readonly TimeSpan _retryBaseDelay;
+    private DateTimeOffset _lastMeteredCallUtc = DateTimeOffset.MinValue;
+
+    public GmailMailboxProvider(HttpClient http, TimeSpan? pacingDelay = null, TimeSpan? retryBaseDelay = null)
+    {
+        _http = http;
+        _pacingDelay = pacingDelay ?? TimeSpan.FromMilliseconds(700);
+        _retryBaseDelay = retryBaseDelay ?? TimeSpan.FromSeconds(1);
+    }
+
     public MailboxProvider Kind => MailboxProvider.Gmail;
 
     private const string AuthUrl = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -65,11 +81,158 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
             {
                 Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = refreshToken })
             };
-            using var resp = await http.SendAsync(req, ct);
+            using var resp = await _http.SendAsync(req, ct);
             // 撤销是尽力而为：失败不抛（断开语义 = 本地删 token 即失效）。
         }
         catch (OperationCanceledException) { throw; }
         catch { /* 忽略 */ }
+    }
+
+    // ============================ 票 294：流式拉取 + 节流与配额退避 ============================
+
+    private static HttpRequestMessage GetRequest(string url, string accessToken)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return req;
+    }
+
+    /// <summary>
+    /// 计量调用节流：60 单位级调用（full/raw）之间至少间隔 _pacingDelay。
+    /// provider 实例由单例 factory 持有，节流状态跨用户共享是保守方向（安全）。
+    /// </summary>
+    private async Task PaceAsync(CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var wait = _pacingDelay - (now - _lastMeteredCallUtc);
+        if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
+        _lastMeteredCallUtc = DateTimeOffset.UtcNow;
+    }
+
+    private static bool IsQuotaErrorBody(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var err)
+                && err.TryGetProperty("errors", out var errors))
+            {
+                foreach (var e in errors.EnumerateArray())
+                {
+                    if (e.TryGetProperty("reason", out var reason)
+                        && reason.ValueKind == JsonValueKind.String
+                        && reason.GetString() is "quotaExceeded" or "rateLimitExceeded")
+                        return true;
+                }
+            }
+        }
+        catch { /* 非 JSON 体 → 回落子串 */ }
+        return body.Contains("quotaExceeded", StringComparison.Ordinal)
+            || body.Contains("rateLimitExceeded", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 票 294 统一发送路径（流式方法与逐封取数共用）。
+    /// 成功或 404 直通（调用方按“不在”处理）；401 → MailboxAuthException；
+    /// 403-quota / 429 → 指数退避 + 抖动重试至多 3 次，耗尽 → MailboxRateLimitedException；
+    /// 其余 → MailboxProviderException（与旧 ThrowIfErrorAsync 同文）。
+    /// metered 调用先节流；重试只走退避，不重复节流。
+    /// </summary>
+    private async Task<HttpResponseMessage> SendGmailAsync(
+        Func<HttpRequestMessage> requestFactory, bool metered, CancellationToken ct)
+    {
+        if (metered) await PaceAsync(ct);
+        var backoff = _retryBaseDelay;
+        for (var attempt = 0; ; attempt++)
+        {
+            using var req = requestFactory();
+            var resp = await _http.SendAsync(req, ct);
+            if (resp.IsSuccessStatusCode || resp.StatusCode == HttpStatusCode.NotFound) return resp;
+            var status = resp.StatusCode;
+            var retryAfter = resp.Headers.RetryAfter?.Delta;
+            if (status == HttpStatusCode.Unauthorized)
+            {
+                resp.Dispose();
+                throw new MailboxAuthException("Gmail 授权失效（401），请重新连接邮箱。");
+            }
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            resp.Dispose();
+            var retryable = status == (HttpStatusCode)429
+                || (status == HttpStatusCode.Forbidden && IsQuotaErrorBody(body));
+            if (!retryable)
+                throw new MailboxProviderException($"Gmail API 错误 {(int)status}：{Truncate(body)}");
+            if (attempt >= 3)
+                throw new MailboxRateLimitedException("Gmail 配额已耗尽，请稍后重试。", retryAfter);
+            var wait = backoff > TimeSpan.FromSeconds(30) ? TimeSpan.FromSeconds(30) : backoff;
+            wait += TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500));
+            await Task.Delay(wait, ct);
+            backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, TimeSpan.FromSeconds(30).Ticks));
+        }
+    }
+
+    /// <summary>票 294 流式列单页（50 封/页）。</summary>
+    public async Task<(IReadOnlyList<string> Ids, string? NextPageToken)> ListIdsPageAsync(
+        string accessToken, string? pageToken, DateTimeOffset sinceUtc, CancellationToken ct)
+    {
+        var after = sinceUtc.UtcDateTime.ToString("yyyy/MM/dd");
+        var url = $"{ApiBase}/messages?q={Uri.EscapeDataString($"after:{after}")}&maxResults=50"
+            + (pageToken is null ? string.Empty : $"&pageToken={Uri.EscapeDataString(pageToken)}");
+        using var resp = await SendGmailAsync(() => GetRequest(url, accessToken), metered: false, ct);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        var root = doc.RootElement;
+        var ids = new List<string>();
+        if (root.TryGetProperty("messages", out var msgs))
+        {
+            foreach (var m in msgs.EnumerateArray())
+            {
+                if (m.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String)
+                    ids.Add(id.GetString()!);
+            }
+        }
+        var next = root.TryGetProperty("nextPageToken", out var nt) ? nt.GetString() : null;
+        return (ids, next);
+    }
+
+    /// <summary>票 294 流式增量页。404 = 锚点过期 → MailboxCursorExpiredException。</summary>
+    public async Task<(IReadOnlyList<string> Ids, string? NextPageToken, string? NewHistoryId)> ListHistoryPageAsync(
+        string accessToken, string startHistoryId, string? pageToken, CancellationToken ct)
+    {
+        var url = $"{ApiBase}/history?startHistoryId={Uri.EscapeDataString(startHistoryId)}&historyTypes=messageAdded"
+            + (pageToken is null ? string.Empty : $"&pageToken={Uri.EscapeDataString(pageToken)}");
+        using var resp = await SendGmailAsync(() => GetRequest(url, accessToken), metered: false, ct);
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            throw new MailboxCursorExpiredException("Gmail 增量锚点已过期（historyId 超出保留期），须回落回填重拉。");
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        var root = doc.RootElement;
+        var ids = new List<string>();
+        if (root.TryGetProperty("history", out var history))
+        {
+            foreach (var h in history.EnumerateArray())
+            {
+                if (!h.TryGetProperty("messagesAdded", out var added)) continue;
+                foreach (var a in added.EnumerateArray())
+                {
+                    if (a.TryGetProperty("message", out var m)
+                        && m.TryGetProperty("id", out var id)
+                        && id.ValueKind == JsonValueKind.String)
+                        ids.Add(id.GetString()!);
+                }
+            }
+        }
+        var next = root.TryGetProperty("nextPageToken", out var nt) ? nt.GetString() : null;
+        var hid = root.TryGetProperty("historyId", out var h2) ? h2.GetString() : null;
+        return (ids, next, hid);
+    }
+
+    /// <summary>票 294：取当前 history 锚点（users.getProfile，1 单位）。</summary>
+    public async Task<string?> GetProfileHistoryIdAsync(string accessToken, CancellationToken ct)
+    {
+        using var resp = await SendGmailAsync(() => GetRequest($"{ApiBase}/profile", accessToken),
+            metered: false, ct);
+        if (resp.StatusCode == HttpStatusCode.NotFound) return null;
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.TryGetProperty("historyId", out var h) ? h.GetString() : null;
     }
 
     public async Task<MailboxFetchResult> ListNewAsync(string accessToken, string? cursor,
@@ -81,7 +244,7 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
             using var req = new HttpRequestMessage(HttpMethod.Get,
                 $"{ApiBase}/history?startHistoryId={Uri.EscapeDataString(cursor)}&historyTypes=messageAdded");
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            using var resp = await http.SendAsync(req, ct);
+            using var resp = await _http.SendAsync(req, ct);
             if (resp.StatusCode == HttpStatusCode.NotFound)
                 return new([], null, CursorExpired: true);
             await ThrowIfErrorAsync(resp, ct);
@@ -117,7 +280,7 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
                 + (pageToken is null ? string.Empty : $"&pageToken={Uri.EscapeDataString(pageToken)}");
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            using var resp = await http.SendAsync(req, ct);
+            using var resp = await _http.SendAsync(req, ct);
             await ThrowIfErrorAsync(resp, ct);
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
             var root = doc.RootElement;
@@ -150,7 +313,7 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, "https://openidconnect.googleapis.com/v1/userinfo");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        using var resp = await http.SendAsync(req, ct);
+        using var resp = await _http.SendAsync(req, ct);
         if (!resp.IsSuccessStatusCode) return null;
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
         return doc.RootElement.TryGetProperty("email", out var e) ? e.GetString() : null;
@@ -162,7 +325,7 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
         using var req = new HttpRequestMessage(HttpMethod.Get,
             $"{ApiBase}/messages/{Uri.EscapeDataString(providerMessageId)}/attachments/{Uri.EscapeDataString(providerAttachmentId)}");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        using var resp = await http.SendAsync(req, ct);
+        using var resp = await _http.SendAsync(req, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound) return null;
         await ThrowIfErrorAsync(resp, ct);
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -177,7 +340,7 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
         using var req = new HttpRequestMessage(HttpMethod.Get,
             $"{ApiBase}/threads/{Uri.EscapeDataString(threadId)}?format=full");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        using var resp = await http.SendAsync(req, ct);
+        using var resp = await _http.SendAsync(req, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound) return [];
         await ThrowIfErrorAsync(resp, ct);
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -206,26 +369,24 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
         return list;
     }
 
-    private async Task<MailboxMessage?> GetMessageFullAsync(string accessToken, string id, CancellationToken ct)
+    /// <summary>票 294 流式取全文（format=full；不含原文）。旧私有方法改公开，走统一发送路径。</summary>
+    public async Task<MailboxMessage?> GetMessageFullAsync(string accessToken, string id, CancellationToken ct)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get,
-            $"{ApiBase}/messages/{Uri.EscapeDataString(id)}?format=full");
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        using var resp = await http.SendAsync(req, ct);
+        using var resp = await SendGmailAsync(
+            () => GetRequest($"{ApiBase}/messages/{Uri.EscapeDataString(id)}?format=full", accessToken),
+            metered: true, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound) return null;
-        await ThrowIfErrorAsync(resp, ct);
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
         return ParseFullMessage(doc.RootElement);
     }
 
-    private async Task<string?> GetMessageRawAsync(string accessToken, string id, CancellationToken ct)
+    /// <summary>票 294 流式取原文（format=raw）。旧私有方法改公开，走统一发送路径。</summary>
+    public async Task<string?> GetMessageRawAsync(string accessToken, string id, CancellationToken ct)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get,
-            $"{ApiBase}/messages/{Uri.EscapeDataString(id)}?format=raw");
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        using var resp = await http.SendAsync(req, ct);
+        using var resp = await SendGmailAsync(
+            () => GetRequest($"{ApiBase}/messages/{Uri.EscapeDataString(id)}?format=raw", accessToken),
+            metered: true, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound) return null;
-        await ThrowIfErrorAsync(resp, ct);
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
         return doc.RootElement.TryGetProperty("raw", out var raw) ? raw.GetString() : null;
     }
@@ -329,7 +490,7 @@ public sealed class GmailMailboxProvider(HttpClient http) : IMailboxProvider
         {
             Content = new FormUrlEncodedContent(form)
         };
-        using var resp = await http.SendAsync(req, ct);
+        using var resp = await _http.SendAsync(req, ct);
         await ThrowIfErrorAsync(resp, ct);
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
         var root = doc.RootElement;

@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using YourInterview.BuildingBlocks.Security;
 using YourInterview.BuildingBlocks.Web;
@@ -20,7 +21,9 @@ namespace YourInterview.Services.Interviews.Api;
 public sealed class MailboxController(
     ISender sender,
     ICurrentUser currentUser,
-    IOptions<MailboxOptions> options) : ControllerBase
+    IOptions<MailboxOptions> options,
+    MailboxRefreshJobTracker jobs,
+    IServiceScopeFactory scopes) : ControllerBase
 {
     private Guid Me => currentUser.RequireUserId();
 
@@ -69,13 +72,44 @@ public sealed class MailboxController(
         return r.IsSuccess ? Results.NoContent() : r.ToProblemDetails();
     }
 
-    /// <summary>手动刷新：entryId 缺省 = 全部条目规则；否则仅该条目规则。</summary>
+    /// <summary>
+    /// 票 296：手动刷新改异步——立刻 202 返回任务标识，长活在服务端后台任务跑既有
+    /// RefreshMailboxCommandHandler（294 断点/去重/匹配一字不动）；进行中再点返回同一运行任务。
+    /// entryId 缺省 = 全部条目规则；否则仅该条目规则（运行中任务的作用域胜出）。
+    /// </summary>
     [HttpPost("mailbox/refresh")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
-    public async Task<IResult> Refresh([FromBody] RefreshMailboxBody body, CancellationToken ct)
+    public IResult Refresh([FromBody] RefreshMailboxBody body)
     {
-        var r = await sender.Send(new RefreshMailboxCommand(Me, body.EntryId), ct);
+        var me = Me;
+        var entryId = body.EntryId;
+        var job = jobs.StartOrAttach(me, entryId, async ct =>
+        {
+            // 任务自带 scope：请求早已返回，绝不用请求 scope；取消只认任务 CTS。
+            using var scope = scopes.CreateScope();
+            var jobSender = scope.ServiceProvider.GetRequiredService<ISender>();
+            return await jobSender.Send(new RefreshMailboxCommand(me, entryId), ct);
+        });
+        return Results.Accepted("/api/interviews/mailbox/refresh/status",
+            new { jobId = job.JobId, state = job.State.ToString() });
+    }
+
+    /// <summary>票 296：刷新任务状态轮询（无任务时 state = None，前端视为空闲）。</summary>
+    [HttpGet("mailbox/refresh/status")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> RefreshStatus(CancellationToken ct)
+    {
+        var r = await sender.Send(new GetMailboxRefreshStatusQuery(Me), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
+    }
+
+    /// <summary>票 296：取消运行中的刷新任务（停拉新、已落库保留；无运行任务时 cancelled = false）。</summary>
+    [HttpPost("mailbox/refresh/cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public IResult CancelRefresh()
+    {
+        var (cancelled, job) = jobs.TryCancel(Me);
+        return Results.Ok(new { cancelled, state = job.State.ToString(), jobId = job.JobId });
     }
 
     [HttpGet("mailbox/pending")]

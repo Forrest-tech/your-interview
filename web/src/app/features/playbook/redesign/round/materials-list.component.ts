@@ -9,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subscription } from 'rxjs';
+import { Subscription, interval, startWith, switchMap, takeWhile } from 'rxjs';
 import {
   InterviewsApiService, RefreshMailboxResult
 } from '../../../../core/api/interviews-api.service';
@@ -52,6 +52,9 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
       </button>
       @if (mailRefreshing()) {
         <button type="button" class="mini-btn" (click)="cancelMailboxRefresh()">{{ t('mailbox.cancel') }}</button>
+      }
+      @if (mailRefreshProgress(); as p) {
+        <span class="mail-progress">{{ mailProgressLine(p) }}</span>
       }
       @if (mailLatestDate(); as d) {
         <span class="mail-latest">{{ fmt('mailbox.latestMail', { date: d }) }}</span>
@@ -345,6 +348,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
     .mail-refresh .mini-btn mat-spinner { width: 16px; height: 16px; }
     .mail-latest { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .mail-result { font-size: 13px; color: var(--yi-text-muted, #475569); }
+    .mail-progress { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .new-pill { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px;
                 background: #dbeafe; color: #1d4ed8; white-space: nowrap; }
     .mat { border: 1px solid var(--yi-border, #e2e8f0); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
@@ -494,16 +498,28 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   private readonly dialog = inject(MatDialog);
   private readonly i18n = inject(I18nService);
 
-  /** 票240：条目级刷新状态（取消 = 退订请求，后端按已落库部分保留、cursor 不推进）。 */
+  /** 票240：条目级刷新状态（取消 = 取消服务端任务，已落库部分保留、cursor 不推进）。 */
   readonly mailRefreshing = signal(false);
   readonly mailRefreshResult = signal<RefreshMailboxResult | null>(null);
   /** 票298：条目最新邮件日期（yyyy-MM-dd；null = 尚无已导入邮件，不渲染）。 */
   readonly mailLatestDate = signal<string | null>(null);
+  /** 票 296：运行中实时进度（按钮之外展示，不进按钮模板——按钮 spinner 归票 295）。 */
+  readonly mailRefreshProgress = signal<{ added: number; pending: number } | null>(null);
   private mailRefreshSub: Subscription | null = null;
   private mailLatestSub: Subscription | null = null;
 
   ngOnInit(): void {
     this.loadLatestMailDate();
+    // 票 296：重进页面时若服务端有运行中的刷新任务，自动重挂轮询（任务不随组件销毁而停）。
+    this.interviewsApi.getMailboxRefreshStatus().subscribe({
+      next: (s) => {
+        if (s.state === 'Running') {
+          this.mailRefreshing.set(true);
+          this.pollMailboxRefresh();
+        }
+      },
+      error: () => { /* 状态查询失败 = 当作无任务，刷新按钮照常可用 */ }
+    });
   }
 
   ngOnDestroy(): void {
@@ -522,11 +538,45 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
 
   refreshFromMailbox(): void {
     this.mailRefreshResult.set(null);
+    this.mailRefreshProgress.set(null);
     this.mailRefreshing.set(true);
     this.mailRefreshSub?.unsubscribe();
-    this.mailRefreshSub = this.interviewsApi.refreshMailbox(this.entryId()).subscribe({
-      next: (r) => {
+    this.mailRefreshSub = this.interviewsApi.startMailboxRefresh(this.entryId()).subscribe({
+      next: () => this.pollMailboxRefresh(),
+      error: (err) => {
         this.mailRefreshing.set(false);
+        const e = err as { error?: { detail?: string }; message?: string };
+        this.snack.open(e?.error?.detail || e?.message || '刷新失败', undefined, { duration: 5000 });
+      }
+    });
+  }
+
+  /** 票 296：3s 轮询任务状态；终态处理与今日同步语义一一对应（结果/snack/重载）。 */
+  private pollMailboxRefresh(): void {
+    this.mailRefreshSub?.unsubscribe();
+    this.mailRefreshSub = interval(3000).pipe(
+      startWith(0),
+      switchMap(() => this.interviewsApi.getMailboxRefreshStatus()),
+      takeWhile((s) => s.state === 'Running', true),
+    ).subscribe({
+      next: (s) => {
+        if (s.state === 'Running') {
+          this.mailRefreshProgress.set({ added: s.added, pending: s.pending });
+          return;
+        }
+        this.mailRefreshing.set(false);
+        this.mailRefreshProgress.set(null);
+        if (s.state === 'Cancelled') { this.changed.emit(); return; }
+        if (s.state === 'Failed') {
+          this.snack.open(s.message || '刷新失败', undefined, { duration: 5000 });
+          return;
+        }
+        const r: RefreshMailboxResult = {
+          added: s.added, pending: s.pending, skippedDuplicates: s.skippedDuplicates,
+          failed: s.failed, failedReasons: s.failedReasons, cancelled: s.cancelled,
+          rateLimited: s.rateLimited, needsReconnect: s.needsReconnect,
+          cursorAdvanced: s.cursorAdvanced,
+        };
         this.mailRefreshResult.set(r);
         // 票298：刷新完成（即使零新增）后重取最新日期；取消时亦然（取消前已落库的同样算数）。
         this.loadLatestMailDate();
@@ -538,6 +588,7 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
       },
       error: (err) => {
         this.mailRefreshing.set(false);
+        this.mailRefreshProgress.set(null);
         const e = err as { error?: { detail?: string }; message?: string };
         this.snack.open(e?.error?.detail || e?.message || '刷新失败', undefined, { duration: 5000 });
       }
@@ -547,9 +598,19 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   cancelMailboxRefresh(): void {
     this.mailRefreshSub?.unsubscribe();
     this.mailRefreshSub = null;
+    // 服务端取消（任务停拉新、已落库保留）；即使请求失败，本地也按已取消处理，与今日语义一致。
+    this.interviewsApi.cancelMailboxRefresh().subscribe({ next: () => {}, error: () => {} });
     this.mailRefreshing.set(false);
+    this.mailRefreshProgress.set(null);
     this.loadLatestMailDate();
     this.changed.emit();
+  }
+
+  /** 票 296：运行中进度行（与结果行同格式口径，实时计数）。 */
+  mailProgressLine(p: { added: number; pending: number }): string {
+    return this.i18n.t('mailbox.refreshProgress')
+      .replace('{added}', String(p.added))
+      .replace('{pending}', String(p.pending));
   }
 
   /** 刷新结果条：新增 N 封 · 待确认 M 封 · 跳过重复 K 封（失败另行 snack 提示）。 */

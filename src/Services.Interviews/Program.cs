@@ -62,6 +62,7 @@ builder.Services.AddHttpClient<GraphMailboxProvider>();
 builder.Services.AddSingleton<MailboxProtection>();
 builder.Services.AddScoped<MailboxOAuthResolver>();
 builder.Services.AddSingleton<IMailboxProviderFactory, MailboxProviderFactory>();
+builder.Services.AddSingleton<MailboxRefreshJobTracker>(); // 票 296：刷新任务跟踪（内存态）
 
 // ---------- 消息总线:转写完成 → 触发分析流水线 ----------
 builder.Services.AddMassTransitWithRabbitMq(builder.Configuration, x =>

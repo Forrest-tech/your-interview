@@ -1762,6 +1762,12 @@ const DICT: Record<string, Record<Lang, string>> = {
   'mailbox.refreshAll': { zh: '从邮箱刷新', en: 'Refresh from mailbox', fr: 'Actualiser depuis la boîte mail' },
   'mailbox.refresh': { zh: '从邮箱刷新', en: 'Refresh from mailbox', fr: 'Actualiser depuis la boîte mail' },
   'mailbox.refreshing': { zh: '刷新中…', en: 'Refreshing…', fr: 'Actualisation…' },
+  'mailbox.refreshProgress': {
+    zh: '正在导入…已新增 {added} 封 · 待确认 {pending} 封',
+    en: 'Importing… {added} added · {pending} pending review',
+    fr: 'Importation… {added} ajoutés · {pending} en attente de vérification',
+  },
+  'mailbox.refreshFailed': { zh: '刷新失败', en: 'Refresh failed', fr: 'Échec de l’actualisation' },
   'mailbox.refreshHint': {
     zh: '按本条目规则从邮箱拉取新邮件（强信号自动导入，弱信号进待确认队列）。',
     en: 'Pull new mail for this entry’s rules (strong signals import automatically, weak signals go to the review queue).',

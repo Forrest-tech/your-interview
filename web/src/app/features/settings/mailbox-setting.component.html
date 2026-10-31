@@ -123,6 +123,11 @@
       }
     </div>
 
+    @if (refreshProgress(); as p) {
+      <p class="sp-result">{{ t('mailbox.refreshProgress')
+        .replace('{added}', '' + p.added).replace('{pending}', '' + p.pending) }}</p>
+    }
+
     @if (refreshResult(); as r) {
       <p class="sp-result">
         @if (r.added === 0 && r.pending === 0 && r.skippedDuplicates === 0 && r.failed === 0) {

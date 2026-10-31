@@ -2,7 +2,7 @@ import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, interval, startWith, switchMap, takeWhile } from 'rxjs';
 
 import {
   InterviewsApiService, MailboxConnectionDto, MailboxOAuthSettingsDto, MailboxPendingDto,
@@ -48,6 +48,8 @@ export class MailboxSettingComponent implements OnDestroy {
   readonly error = signal<string | null>(null);
   readonly refreshing = signal(false);
   readonly refreshResult = signal<RefreshMailboxResult | null>(null);
+  /** 票 296：运行中实时进度（按钮之外展示，不进按钮模板——按钮 spinner 归票 295）。 */
+  readonly refreshProgress = signal<{ added: number; pending: number } | null>(null);
   readonly busy = signal(false);
   /** 票 245：OAuth 凭据卡行（Secret 永不下发，只给状态位）。 */
   readonly oauthSettings = signal<MailboxOAuthSettingsDto[]>([]);
@@ -76,6 +78,16 @@ export class MailboxSettingComponent implements OnDestroy {
       this.error.set(this.t('mailbox.connectFailed'));
     }
     this.loadAll();
+    // 票 296：重进页面时若服务端有运行中的刷新任务，自动重挂轮询（任务不随组件销毁而停）。
+    this.api.getMailboxRefreshStatus().subscribe({
+      next: (s) => {
+        if (s.state === 'Running') {
+          this.refreshing.set(true);
+          this.pollRefresh();
+        }
+      },
+      error: () => { /* 状态查询失败 = 当作无任务，刷新按钮照常可用 */ }
+    });
     this.api.getEntries({ page: 1, pageSize: 100 }).subscribe({
       next: (p) => this.entries.set(p.items ?? []),
       error: () => { /* 条目列表仅供歧义选择，失败不阻塞本页 */ }
@@ -184,30 +196,67 @@ export class MailboxSettingComponent implements OnDestroy {
     });
   }
 
-  /** 全部刷新（手动刷新；取消 = 退订请求，后端按已落库部分保留、cursor 不推进）。 */
+  /** 全部刷新（手动刷新；取消 = 取消服务端任务，已落库部分保留、cursor 不推进）。 */
   refreshAll(): void {
     this.error.set(null);
     this.notice.set(null);
     this.refreshResult.set(null);
+    this.refreshProgress.set(null);
     this.refreshing.set(true);
     this.refreshSub?.unsubscribe();
-    this.refreshSub = this.api.refreshMailbox().subscribe({
-      next: (r) => {
+    this.refreshSub = this.api.startMailboxRefresh().subscribe({
+      next: () => this.pollRefresh(),
+      error: (err) => { this.refreshing.set(false); this.error.set(errMsg(err)); }
+    });
+  }
+
+  /** 票 296：3s 轮询任务状态；终态处理与今日同步语义一一对应（结果/提示/重载）。 */
+  private pollRefresh(): void {
+    this.refreshSub?.unsubscribe();
+    this.refreshSub = interval(3000).pipe(
+      startWith(0),
+      switchMap(() => this.api.getMailboxRefreshStatus()),
+      takeWhile((s) => s.state === 'Running', true),
+    ).subscribe({
+      next: (s) => {
+        if (s.state === 'Running') {
+          this.refreshProgress.set({ added: s.added, pending: s.pending });
+          return;
+        }
         this.refreshing.set(false);
+        this.refreshProgress.set(null);
+        if (s.state === 'Cancelled') {
+          this.notice.set(this.t('mailbox.refreshCancelled'));
+          this.loadAll();
+          return;
+        }
+        if (s.state === 'Failed') {
+          this.error.set(s.message || this.t('mailbox.refreshFailed'));
+          return;
+        }
+        const r: RefreshMailboxResult = {
+          added: s.added, pending: s.pending, skippedDuplicates: s.skippedDuplicates,
+          failed: s.failed, failedReasons: s.failedReasons, cancelled: s.cancelled,
+          rateLimited: s.rateLimited, needsReconnect: s.needsReconnect,
+          cursorAdvanced: s.cursorAdvanced,
+        };
         this.refreshResult.set(r);
         if (r.needsReconnect) this.error.set(this.t('mailbox.needsReconnect'));
         if (r.rateLimited) this.error.set(this.t('mailbox.rateLimited'));
         if (r.failed > 0 && r.failedReasons.length > 0) this.error.set(r.failedReasons.join('；'));
         this.loadAll();
       },
-      error: (err) => { this.refreshing.set(false); this.error.set(errMsg(err)); }
+      error: (err) => { this.refreshing.set(false); this.refreshProgress.set(null); this.error.set(errMsg(err)); }
     });
   }
 
   cancelRefresh(): void {
     this.refreshSub?.unsubscribe();
     this.refreshSub = null;
+    // 服务端取消（任务停拉新、已落库保留）；即使请求失败，本地也按已取消处理，与今日语义一致。
+    this.api.cancelMailboxRefresh().subscribe({ next: () => {}, error: () => {} });
     this.refreshing.set(false);
+    this.refreshProgress.set(null);
     this.notice.set(this.t('mailbox.refreshCancelled'));
     this.loadAll();
   }

@@ -112,10 +112,21 @@ export class InterviewsApiService {
     return this.api.delete<void>(`${InterviewsApiService.BASE}/mailbox/connections/${id}`);
   }
 
-  /** 手动刷新：entryId 缺省 = 全部条目规则；否则仅该条目规则。 */
-  refreshMailbox(entryId?: string | null): Observable<RefreshMailboxResult> {
-    return this.api.post<RefreshMailboxResult>(`${InterviewsApiService.BASE}/mailbox/refresh`,
+  /** 手动刷新：启动异步任务，立刻返回任务标识（票 296：同步长请求改 202 + 轮询）。 */
+  startMailboxRefresh(entryId?: string | null): Observable<{ jobId: string; state: string }> {
+    return this.api.post<{ jobId: string; state: string }>(`${InterviewsApiService.BASE}/mailbox/refresh`,
       { entryId: entryId ?? null });
+  }
+
+  /** 刷新任务状态轮询（票 296；无任务时 state = 'None'）。 */
+  getMailboxRefreshStatus(): Observable<MailboxRefreshJobStatus> {
+    return this.api.get<MailboxRefreshJobStatus>(`${InterviewsApiService.BASE}/mailbox/refresh/status`);
+  }
+
+  /** 取消运行中的刷新任务（票 296；无运行任务时 cancelled = false）。 */
+  cancelMailboxRefresh(): Observable<{ cancelled: boolean; state: string; jobId: string }> {
+    return this.api.post<{ cancelled: boolean; state: string; jobId: string }>(
+      `${InterviewsApiService.BASE}/mailbox/refresh/cancel`, {});
   }
 
   getMailboxPending(entryId?: string | null): Observable<MailboxPendingDto[]> {
@@ -211,6 +222,27 @@ export interface RefreshMailboxResult {
   rateLimited: boolean;
   needsReconnect: boolean;
   cursorAdvanced: boolean;
+}
+
+/** 票 296：刷新任务状态（终态计数与 RefreshMailboxResult 同形，前端复用结果处理）。 */
+export interface MailboxRefreshJobStatus {
+  state: string;
+  jobId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  added: number;
+  pending: number;
+  skippedDuplicates: number;
+  failed: number;
+  failedReasons: string[];
+  cancelled: boolean;
+  rateLimited: boolean;
+  needsReconnect: boolean;
+  cursorAdvanced: boolean;
+  backfillActive: boolean;
+  backfillPageIndex: number | null;
+  backfillPageSize: number | null;
+  message: string | null;
 }
 
 /** 票 240：待确认队列行（不含原文；确认时后端重取）。 */

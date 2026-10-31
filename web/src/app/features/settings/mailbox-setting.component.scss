@@ -96,6 +96,9 @@
   margin-top: 14px;
 }
 
+/* 票301：刷新按钮内 spinner 与图标同槽 16px（与 Materials 按钮票295同款）。 */
+.act-row mat-spinner { width: 16px; height: 16px; }
+
 /* ---------- 连接行 ---------- */
 
 .conn-row {

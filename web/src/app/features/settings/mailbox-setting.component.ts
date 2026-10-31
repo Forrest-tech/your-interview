@@ -15,6 +15,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 /**
  * 票 240：邮箱配置页 —— 与 LLM 配置页（/settings/llm）平行，挂在设置中心左导航。
@@ -29,7 +30,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
   standalone: true,
   imports: [
     CommonModule, FormsModule,
-    MatIconModule, MatButtonModule,
+    MatIconModule, MatButtonModule, MatProgressSpinnerModule,
     MatFormFieldModule, MatSelectModule, MatTooltipModule
   ],
   templateUrl: './mailbox-setting.component.html',

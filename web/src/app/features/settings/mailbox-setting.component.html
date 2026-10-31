@@ -113,7 +113,12 @@
               [disabled]="refreshing() || !activeConnection()"
               [matTooltip]="t('mailbox.refreshHint')"
               (click)="refreshAll()">
-        <mat-icon>refresh</mat-icon>
+        <!-- 票301：刷新中用系统既有 mat-spinner（与 Materials 按钮票295同款指示器）替换静态 refresh 图标，动画由 Material 自带；文案、禁用规则一字不动。 -->
+        @if (refreshing()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        } @else {
+          <mat-icon>refresh</mat-icon>
+        }
         <span>{{ refreshing() ? t('mailbox.refreshing') : t('mailbox.refreshAll') }}</span>
       </button>
       @if (refreshing()) {

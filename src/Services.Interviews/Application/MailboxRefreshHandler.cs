@@ -477,6 +477,9 @@ public sealed class RefreshMailboxCommandHandler(
     /// 每封：导入记录前置去重（仅导入记录；不查待确认项，与强信号路径今日语义一致）
     /// → 取全文（404 = 信已不在，静默跳过，与旧取数后过滤一致）
     /// → 共享 ProcessMessageAsync（强信号命中时取原文）→ 逐封落库。
+    /// 票 300：单封落库失败不中断整轮 —— 每封保存前快照计数与新增跟踪项；
+    /// 保存失败时只摘除本封新增实体（Added），Modified 的断点推进、游标/轮换类状态刻意保留，
+    /// 随下一封保存落库；计数回滚后记 failed + 内层异常原因，继续下一封。
     /// 限流与取消不捕获，由上层按已计计数返回；onAfterMessage 在每次落库前推进断点下标。
     /// </summary>
     private async Task ProcessIdBatchAsync(
@@ -490,6 +493,14 @@ public sealed class RefreshMailboxCommandHandler(
         {
             ct.ThrowIfCancellationRequested();
             var id = ids[i];
+            // 票 300 快照：保存失败时只回滚本封的计数与新增实体。
+            var trackedAddedBefore = db.ChangeTracker.Entries()
+                .Where(e => e.State == EntityState.Added)
+                .Select(e => e.Entity)
+                .ToHashSet();
+            var (addedBefore, pendingBefore, skippedBefore, failedBefore, reasonsBefore) =
+                (counters.Added, counters.Pending, counters.Skipped, counters.Failed, counters.Reasons.Count);
+            string? messageSubject = null;
             var alreadyImported = await db.MailboxImportRecords.AnyAsync(r =>
                 r.UserId == request.UserId && r.Provider == conn.Provider
                 && r.AccountEmail == conn.AccountEmail
@@ -503,6 +514,7 @@ public sealed class RefreshMailboxCommandHandler(
                 var full = await stream.GetMessageFullAsync(access, id, ct);
                 if (full is not null)
                 {
+                    messageSubject = full.Subject;
                     var r = await ProcessMessageAsync(full,
                         (id, token) => stream.GetMessageRawAsync(access, id, token),
                         entryById, rules,
@@ -515,7 +527,29 @@ public sealed class RefreshMailboxCommandHandler(
                 }
             }
             if (onAfterMessage is not null) await onAfterMessage(i + 1);
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // 保存失败的实体仍被跟踪：不摘除则下一封保存会重抛同一插入错误。
+                // 只摘本封新增（Added）；Modified 的断点推进等状态保留，随下一封保存落库。
+                foreach (var tracked in db.ChangeTracker.Entries()
+                    .Where(e => e.State == EntityState.Added && !trackedAddedBefore.Contains(e.Entity))
+                    .ToList())
+                    tracked.State = EntityState.Detached;
+                counters.Added = addedBefore;
+                counters.Pending = pendingBefore;
+                counters.Skipped = skippedBefore;
+                counters.Failed = failedBefore;
+                counters.Reasons.RemoveRange(reasonsBefore, counters.Reasons.Count - reasonsBefore);
+                counters.Failed++;
+                var detail = ex.InnerException?.Message ?? ex.Message;
+                if (detail.Length > 300) detail = detail[..300];
+                var label = string.IsNullOrWhiteSpace(messageSubject) ? id : Truncate(messageSubject);
+                counters.Reasons.Add($"《{label}》保存失败：{detail}");
+            }
         }
     }
 

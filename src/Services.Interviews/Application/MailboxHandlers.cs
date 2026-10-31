@@ -99,7 +99,9 @@ public sealed class MailboxCallbackCommandHandler(
             return Result.Failure<string>(Error.Validation("Mailbox.Account",
                 "无法读取授权账号邮箱，请重新连接。"));
         var encrypted = protection.ProtectRefreshToken(tokens.RefreshToken);
-        var existing = await db.MailboxConnections
+        // 票 303：回调 AllowAnonymous、无 bearer，ambient 用户为 null；同理 IgnoreQueryFilters，
+        // 用户隔离靠 state 派生的 userId 显式谓词，否则旧 Active 行查不到、重连越攒越多。
+        var existing = await db.MailboxConnections.IgnoreQueryFilters()
             .Where(c => c.UserId == userId && c.Status == MailboxConnectionStatus.Active)
             .ToListAsync(ct);
         foreach (var old in existing) old.MarkInactive();

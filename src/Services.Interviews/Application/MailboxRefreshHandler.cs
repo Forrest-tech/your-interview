@@ -59,7 +59,9 @@ public sealed class RefreshMailboxCommandHandler(
             return Result.Success(new RefreshMailboxResult(0, 0, 0, 0, [], false, false, true, false));
 
         // 作用域：条目级只认该条目规则；页签级认全部条目规则。
-        var entriesQuery = db.Entries.Include(e => e.Assets).Include(e => e.Rounds)
+        // 票 303：任务 scope 无 HTTP 用户，全局过滤器会 fail-closed 匹配零行；任务路径查询一律
+        // IgnoreQueryFilters，用户隔离靠各查询已有的显式 UserId 谓词（绝不改过滤器定义本身）。
+        var entriesQuery = db.Entries.IgnoreQueryFilters().Include(e => e.Assets).Include(e => e.Rounds)
             .Where(e => e.UserId == request.UserId);
         if (request.EntryId is { } scopedId) entriesQuery = entriesQuery.Where(e => e.Id == scopedId);
         var entries = await entriesQuery.ToListAsync(ct);
@@ -67,13 +69,13 @@ public sealed class RefreshMailboxCommandHandler(
             return Result.Failure<RefreshMailboxResult>(Error.NotFound("面试条目"));
         var entryById = entries.ToDictionary(e => e.Id);
 
-        var rulesQuery = db.MailMatchRules.Where(r => r.UserId == request.UserId);
+        var rulesQuery = db.MailMatchRules.IgnoreQueryFilters().Where(r => r.UserId == request.UserId);
         if (request.EntryId is { } rid) rulesQuery = rulesQuery.Where(r => r.EntryId == rid);
         var rules = (await rulesQuery.ToListAsync(ct))
             .Select(r => MailboxMatching.ParseRules(r.EntryId, r.DomainsJson, r.ContactsJson,
                 r.KeywordsJson, r.ExclusionsJson))
             .ToList();
-        var contactMaps = await db.MailContactMaps.Where(m => m.UserId == request.UserId).ToListAsync(ct);
+        var contactMaps = await db.MailContactMaps.IgnoreQueryFilters().Where(m => m.UserId == request.UserId).ToListAsync(ct);
         var mapBySender = contactMaps.ToDictionary(
             m => m.SenderEmailLower, m => m.EntryId, StringComparer.OrdinalIgnoreCase);
 
@@ -82,7 +84,7 @@ public sealed class RefreshMailboxCommandHandler(
         DateTimeOffset? entryLatest = null;
         if (request.EntryId is { } latestEntryId)
         {
-            entryLatest = await db.MailboxImportRecords
+            entryLatest = await db.MailboxImportRecords.IgnoreQueryFilters()
                 .Where(r => r.UserId == request.UserId && r.EntryId == latestEntryId
                     && r.MailReceivedAt != null)
                 .MaxAsync(r => (DateTimeOffset?)r.MailReceivedAt, ct);
@@ -90,7 +92,7 @@ public sealed class RefreshMailboxCommandHandler(
 
         // 票 294：回填断点。续跑（起跑时已有进度行）不清 mailboxNew，否则会抹掉上一段已导入的 new 标记；
         // 新起跑与稳态跑（无进度行）清标行为与今日一致。
-        var progress = await db.MailboxBackfillProgress.FirstOrDefaultAsync(
+        var progress = await db.MailboxBackfillProgress.IgnoreQueryFilters().FirstOrDefaultAsync(
             p => p.UserId == request.UserId && p.Provider == conn.Provider
                 && p.AccountEmail == conn.AccountEmail, ct);
         if (progress is null)
@@ -262,12 +264,12 @@ public sealed class RefreshMailboxCommandHandler(
         }
 
         // 弱信号 / 歧义：只进待确认队列（本行不存原文；确认时重取）。
-        var alreadyPending = await db.MailboxPendingItems.AnyAsync(p =>
+        var alreadyPending = await db.MailboxPendingItems.IgnoreQueryFilters().AnyAsync(p =>
             p.UserId == userId && p.Provider == conn.Provider
             && p.ProviderMessageId == message.ProviderMessageId
             && p.Status == MailboxPendingStatus.Pending, ct);
         if (alreadyPending) return (0, 0, 1, 0, []);
-        var alreadyImported = await db.MailboxImportRecords.AnyAsync(r =>
+        var alreadyImported = await db.MailboxImportRecords.IgnoreQueryFilters().AnyAsync(r =>
             r.UserId == userId && r.Provider == conn.Provider
             && r.AccountEmail == conn.AccountEmail
             && r.ProviderMessageId == message.ProviderMessageId, ct);
@@ -501,7 +503,7 @@ public sealed class RefreshMailboxCommandHandler(
             var (addedBefore, pendingBefore, skippedBefore, failedBefore, reasonsBefore) =
                 (counters.Added, counters.Pending, counters.Skipped, counters.Failed, counters.Reasons.Count);
             string? messageSubject = null;
-            var alreadyImported = await db.MailboxImportRecords.AnyAsync(r =>
+            var alreadyImported = await db.MailboxImportRecords.IgnoreQueryFilters().AnyAsync(r =>
                 r.UserId == request.UserId && r.Provider == conn.Provider
                 && r.AccountEmail == conn.AccountEmail
                 && r.ProviderMessageId == id, ct);
@@ -581,7 +583,7 @@ public sealed class RefreshMailboxCommandHandler(
             catch (OperationCanceledException) { throw; }
             catch { /* 整组拉取失败不阻塞命中封本身 */ }
         }
-        var entryRule = await db.MailMatchRules.FirstOrDefaultAsync(
+        var entryRule = await db.MailMatchRules.IgnoreQueryFilters().FirstOrDefaultAsync(
             r => r.UserId == userId && r.EntryId == entry.Id, ct);
         var exclusions = entryRule is null
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -637,7 +639,7 @@ public static class MailboxImportHelper
         GetActiveAccessAsync(InterviewsDbContext db, IMailboxProviderFactory providers,
             MailboxProtection protection, MailboxOAuthResolver oauth, Guid userId, CancellationToken ct)
     {
-        var conn = await db.MailboxConnections
+        var conn = await db.MailboxConnections.IgnoreQueryFilters()
             .FirstOrDefaultAsync(c => c.UserId == userId && c.Status == MailboxConnectionStatus.Active, ct);
         if (conn is null) return (null, null, null);
         var provider = providers.Get(conn.Provider);
@@ -673,11 +675,11 @@ public static class MailboxImportHelper
         string access, MailboxOptions opts, Guid userId, InterviewEntry entry, MailboxMessage message,
         string ruleLabel, CancellationToken ct)
     {
-        var conn = await db.MailboxConnections
+        var conn = await db.MailboxConnections.IgnoreQueryFilters()
             .FirstOrDefaultAsync(c => c.UserId == userId && c.Status == MailboxConnectionStatus.Active, ct);
         var accountEmail = conn?.AccountEmail ?? string.Empty;
         var providerKind = conn?.Provider ?? provider.Kind;
-        var already = await db.MailboxImportRecords.AnyAsync(r =>
+        var already = await db.MailboxImportRecords.IgnoreQueryFilters().AnyAsync(r =>
             r.UserId == userId && r.Provider == providerKind && r.AccountEmail == accountEmail
             && r.ProviderMessageId == message.ProviderMessageId, ct);
         if (already) return null;

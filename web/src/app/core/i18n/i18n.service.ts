@@ -341,7 +341,8 @@ const DICT: Record<string, Record<Lang, string>> = {
   'practice.shadow.calibrateMic': { zh: '校准麦克风', en: 'Calibrate microphone', fr: 'Calibrer le microphone' },
   'practice.shadow.recalibrateMic': { zh: '重新校准', en: 'Recalibrate', fr: 'Recalibrer' },
   'practice.shadow.micUncalibrated': { zh: '未校准', en: 'Not calibrated', fr: 'Non calibré' },
-  'practice.shadow.micCalibrated': { zh: '已校准', en: 'Calibrated', fr: 'Calibré' },
+  // 票 293：已校准状态行改成人话句子（仍含增益值与校准日期；旧 micCalibrated 键不再被引用，随本票移除）。
+  'practice.shadow.micCalibratedSentence': { zh: '已校准：扬声器跟读时人声提升 {gain} · {date}', en: 'Calibrated: voice boosted {gain} on speaker takes · {date}', fr: 'Calibré : voix amplifiée de {gain} sur les prises en mode haut-parleur · {date}' },
   'practice.shadow.micCalibrateSilence': { zh: '请保持安静，正在测底噪…', en: 'Please stay quiet — measuring room noise…', fr: 'Veuillez rester silencieux — mesure du bruit ambiant…' },
   'practice.shadow.micCalibrateSpeak': { zh: '请用正常跟读音量读一句话', en: 'Read one sentence at your normal shadowing volume', fr: 'Lisez une phrase à votre volume habituel de shadowing' },
   'practice.shadow.micCalibrateTooQuiet': { zh: '人声太小：请离麦克风近一点，检查系统麦克风音量，或换耳机麦克风', en: 'Voice too quiet: move closer to the microphone, check your system mic volume, or try a headset microphone.', fr: 'Voix trop faible : rapprochez-vous du microphone, vérifiez le volume du microphone ou essayez un micro-casque.' },

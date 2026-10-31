@@ -719,6 +719,11 @@ export class AiPracticeComponent implements OnInit, OnDestroy {
     return this.i18n.t(key);
   }
 
+  /** 票 293：多占位符文案透传（校准状态句含增益与日期，见 i18n.tf）。 */
+  tf(key: string, params: Record<string, string | number | null | undefined>): string {
+    return this.i18n.tf(key, params);
+  }
+
   // ---------- 选择素材:换素材一律回只读,防止误改 ----------
   onSelect(n: MaterialNode): void {
     if (this.editing()) return; // 编辑中先保存或取消

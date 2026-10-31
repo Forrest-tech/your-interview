@@ -12,6 +12,8 @@
  *   面板块与过小提示按钮、i18n 三语齐全。
  * 声学校准精度无法在沙盒验证（假麦克风），真机验证 = 用户读一句话
  * 校准 + 下一条 take 波形（见台账诚实缺口）。
+ * 票 293（仅表现层）：校准按钮图标化 + tooltip、已校准状态行改人话句子
+ * （仍含增益与日期）；行为、testid、禁用规则一字不动。
  */
 import { describe, expect, it } from '@jest/globals';
 import * as fs from 'fs';
@@ -328,12 +330,35 @@ describe('票 292：会话层结构契约', () => {
     expect(session).toContain('document.querySelector');
   });
 
+  it('票 293：校准按钮图标化 + tooltip、状态行人话句子（行为与 testid 不动）', () => {
+    // 按钮：mat-icon-button + mic 图标 + tooltip，按钮内无文字 span。
+    expect(html).toContain('mat-icon-button data-testid="mic-calibrate"');
+    expect(html).toContain('mat-icon-button data-testid="quiet-hint-calibrate"');
+    const btn = region(html, 'data-testid="mic-calibrate"', 'data-testid="mic-calibrate-state"');
+    expect(btn).toContain('<mat-icon>mic</mat-icon>');
+    expect(btn).toContain(`[matTooltip]="t(shadow.micCalibrated() ? 'practice.shadow.recalibrateMic' : 'practice.shadow.calibrateMic')"`);
+    expect(btn).not.toContain('<span>');
+    const hintBtn = region(html, 'data-testid="quiet-hint-calibrate"', '</button>');
+    expect(hintBtn).toContain('<mat-icon>mic</mat-icon>');
+    expect(hintBtn).toContain('[matTooltip]');
+    expect(hintBtn).not.toContain('<span>');
+    // 状态行：人话句子键 + 增益与日期仍在，旧拼接文案已移除。
+    const state = region(html, 'data-testid="mic-calibrate-state"', 'data-testid="mic-calibrate-meter"');
+    expect(state).toContain('practice.shadow.micCalibratedSentence');
+    expect(state).toContain('micCalibratedGainText()');
+    expect(state).toContain('micCalibratedDate()');
+    expect(state).not.toContain(`t('practice.shadow.micCalibrated')`);
+    // 行为锚点不动。
+    expect(html).toContain('shadow.startMicCalibration()');
+    expect(html).toContain('focusMicCalibration()');
+  });
+
   it('i18n 十二键三语齐全（校准/重新校准按钮分键）', () => {
     for (const key of [
       'practice.shadow.calibrateMic',
       'practice.shadow.recalibrateMic',
       'practice.shadow.micUncalibrated',
-      'practice.shadow.micCalibrated',
+      'practice.shadow.micCalibratedSentence',
       'practice.shadow.micCalibrateSilence',
       'practice.shadow.micCalibrateSpeak',
       'practice.shadow.micCalibrateTooQuiet',

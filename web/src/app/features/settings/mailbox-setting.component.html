@@ -133,7 +133,7 @@
       <button mat-stroked-button [disabled]="busy()" (click)="connect('Graph')">
         <mat-icon>mail</mat-icon><span>{{ t('mailbox.connectOutlook') }}</span>
       </button>
-      <button mat-raised-button color="primary"
+      <button mat-raised-button color="primary" class="refresh-btn"
               [disabled]="refreshing() || !activeConnection()"
               [matTooltip]="t('mailbox.refreshHint')"
               (click)="refreshAll()">

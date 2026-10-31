@@ -99,6 +99,9 @@
 /* 票301：刷新按钮内 spinner 与图标同槽 16px（与 Materials 按钮票295同款）。 */
 .act-row mat-spinner { width: 16px; height: 16px; }
 
+/* 票304：刷新按钮静态图标与相邻 Connect 按钮的 mail 图标同为 16px（沙盒实测：Connect 图标 16x16，refresh 图标默认 24x24；三按钮高度已同为 36px、内边距与字号同款，不动）。 */
+.act-row .refresh-btn mat-icon { font-size: 16px; width: 16px; height: 16px; line-height: 16px; }
+
 /* ---------- 连接行 ---------- */
 
 .conn-row {

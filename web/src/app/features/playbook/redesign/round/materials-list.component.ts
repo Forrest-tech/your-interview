@@ -507,6 +507,8 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   readonly mailRefreshProgress = signal<{ added: number; pending: number } | null>(null);
   private mailRefreshSub: Subscription | null = null;
   private mailLatestSub: Subscription | null = null;
+  /** 票305：轮询中上次见到的计数值；Running 分支仅在计数增长时增量重载列表。 */
+  private mailSeenCounts: { added: number; pending: number } | null = null;
 
   ngOnInit(): void {
     this.loadLatestMailDate();
@@ -540,11 +542,14 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
     this.mailRefreshResult.set(null);
     this.mailRefreshProgress.set(null);
     this.mailRefreshing.set(true);
+    // 票305：全新一轮的基线为零——首个 Running 轮询见新增即增量重载。
+    this.mailSeenCounts = { added: 0, pending: 0 };
     this.mailRefreshSub?.unsubscribe();
     this.mailRefreshSub = this.interviewsApi.startMailboxRefresh(this.entryId()).subscribe({
       next: () => this.pollMailboxRefresh(),
       error: (err) => {
         this.mailRefreshing.set(false);
+        this.mailSeenCounts = null;
         const e = err as { error?: { detail?: string }; message?: string };
         this.snack.open(e?.error?.detail || e?.message || '刷新失败', undefined, { duration: 5000 });
       }
@@ -562,10 +567,22 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
       next: (s) => {
         if (s.state === 'Running') {
           this.mailRefreshProgress.set({ added: s.added, pending: s.pending });
+          // 票305：计数增长 = 服务端已有新导入落库，增量重载列表（changed.emit() 走既有终态重载路径）；
+          // 父级 load() 在已有条目时不显示加载态、不重建本组件，刷新按钮/进度/页签/展开态均保留。
+          // 首个 Running 轮询（重进重挂时）只记基线不重载——详情页刚加载的条目已含此前导入。
+          const prev = this.mailSeenCounts;
+          if (prev === null) {
+            this.mailSeenCounts = { added: s.added, pending: s.pending };
+          } else if (s.added > prev.added || s.pending > prev.pending) {
+            this.mailSeenCounts = { added: s.added, pending: s.pending };
+            this.loadLatestMailDate();
+            this.changed.emit();
+          }
           return;
         }
         this.mailRefreshing.set(false);
         this.mailRefreshProgress.set(null);
+        this.mailSeenCounts = null;
         if (s.state === 'Cancelled') { this.changed.emit(); return; }
         if (s.state === 'Failed') {
           this.snack.open(s.message || '刷新失败', undefined, { duration: 5000 });
@@ -589,6 +606,7 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
       error: (err) => {
         this.mailRefreshing.set(false);
         this.mailRefreshProgress.set(null);
+        this.mailSeenCounts = null;
         const e = err as { error?: { detail?: string }; message?: string };
         this.snack.open(e?.error?.detail || e?.message || '刷新失败', undefined, { duration: 5000 });
       }
@@ -602,6 +620,7 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
     this.interviewsApi.cancelMailboxRefresh().subscribe({ next: () => {}, error: () => {} });
     this.mailRefreshing.set(false);
     this.mailRefreshProgress.set(null);
+    this.mailSeenCounts = null;
     this.loadLatestMailDate();
     this.changed.emit();
   }
@@ -641,11 +660,13 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   constructor() {
     // 票165：邮件卡挂载即取全文（现成懒取改挂载取），正文不再需要点击才出现；非邮件 kind 不动。
     // 票217：取数收敛到 ensureEmailBody（transcript 优先 + 截图回落 + 空白归一），effect 与展开共用。
+    // 票305：增量重载会中途改 assets()，effect 重跑时 ensureEmailBody 写 emailBodies —— 与票299 同类，
+    // 须加 allowSignalWrites（Angular 为此场景提供的官方出口），否则每次新邮件出现都报 NG0600 且正文取不到。
     effect(() => {
       for (const a of this.assets()) {
         this.ensureEmailBody(a);
       }
-    });
+    }, { allowSignalWrites: true });
   }
 
   /**

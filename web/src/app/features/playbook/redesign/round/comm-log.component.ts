@@ -230,7 +230,7 @@ export class CommLogComponent {
     effect(() => {
       void this.entry().id;
       void this.load();
-    });
+    }, { allowSignalWrites: true });
     effect(() => {
       this.pendingCount.emit(this.useJobs()
         ? this.pendingItems().length

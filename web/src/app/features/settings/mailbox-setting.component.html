@@ -14,6 +14,7 @@
   }
 
   <!-- 票 245：OAuth 凭据卡（部署级，每 provider 一区；Secret 写-only 永不回显） -->
+  <!-- 票 302：凭据表单默认收起；Add → 选服务商 → 仅展开所选 provider 的表单。 -->
   <section class="sp-card">
     <h2 class="sp-card-title">
       <mat-icon>key</mat-icon>
@@ -21,7 +22,7 @@
     </h2>
     <p class="sp-card-desc">{{ t('mailbox.oauthDesc') }}</p>
 
-    @for (s of oauthSettings(); track s.provider) {
+    @if (oauthSelectedSetting(); as s) {
       <div class="oauth-provider">
         <div class="oauth-head">
           <span class="oauth-name">{{ s.provider === 'Graph' ? 'Outlook' : s.provider }}</span>
@@ -65,8 +66,31 @@
           }
         </div>
       </div>
+      <p class="oauth-note">{{ t('mailbox.oauthEnvNote') }}</p>
+      <div class="act-row">
+        <button mat-stroked-button (click)="cancelOAuthAdd()">
+          {{ t('mailbox.cancel') }}
+        </button>
+      </div>
+    } @else if (oauthChoosing()) {
+      <p class="oauth-note">{{ t('mailbox.chooseProvider') }}</p>
+      <div class="act-row">
+        @for (s of oauthSettings(); track s.provider) {
+          <button mat-stroked-button (click)="oauthFormProvider.set(s.provider)">
+            <mat-icon>mail</mat-icon><span>{{ s.provider === 'Graph' ? 'Outlook' : s.provider }}</span>
+          </button>
+        }
+        <button mat-stroked-button (click)="cancelOAuthAdd()">
+          {{ t('mailbox.cancel') }}
+        </button>
+      </div>
+    } @else {
+      <div class="act-row">
+        <button mat-raised-button color="primary" (click)="oauthChoosing.set(true)">
+          <mat-icon>add</mat-icon><span>{{ t('mailbox.addMailbox') }}</span>
+        </button>
+      </div>
     }
-    <p class="oauth-note">{{ t('mailbox.oauthEnvNote') }}</p>
   </section>
 
   <!-- 连接卡 -->

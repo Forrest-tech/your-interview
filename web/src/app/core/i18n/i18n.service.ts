@@ -1870,6 +1870,8 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'When left blank, server environment variables (MAILBOX_GOOGLE_ / MICROSOFT_…) are used; existing deployments are unaffected.',
     fr: 'Si rien n’est renseigné, les variables d’environnement du serveur (MAILBOX_GOOGLE_ / MICROSOFT_…) sont utilisées ; les déploiements existants ne sont pas affectés.'
   },
+  'mailbox.addMailbox': { zh: '添加邮箱', en: 'Add mailbox', fr: 'Ajouter une boîte mail' },
+  'mailbox.chooseProvider': { zh: '选择邮箱服务商', en: 'Choose a provider', fr: 'Choisir un fournisseur' },
   // 2026-09-16(Forrest 本轮第 6 条):设置页不再负责"选朗读引擎" ——
   // 引擎选择已归到练习页的 TTS 弹窗,本页只管 Azure 凭据。
   'setting.subtitle': {

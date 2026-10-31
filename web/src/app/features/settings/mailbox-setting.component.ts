@@ -56,6 +56,9 @@ export class MailboxSettingComponent implements OnDestroy {
   readonly oauthSettings = signal<MailboxOAuthSettingsDto[]>([]);
   /** 票 245：OAuth 凭据卡保存/清除进行中的 provider（按钮防重）。 */
   readonly oauthSaving = signal<string | null>(null);
+  /** 票 302：凭据表单默认收起；Add → 选服务商 → 仅展开所选 provider 的表单。 */
+  readonly oauthChoosing = signal(false);
+  readonly oauthFormProvider = signal<string | null>(null);
   /** 票 245：每 provider 的编辑态（Secret 留空 = 沿用已存密文）。 */
   readonly oauthForms = signal<Record<string, { clientId: string; secret: string; redirectUri: string }>>({});
   /** 歧义待确认项当前展开的条目选择（pendingId → 选中的 entryId）。 */
@@ -132,6 +135,18 @@ export class MailboxSettingComponent implements OnDestroy {
 
   oauthForm(provider: string): { clientId: string; secret: string; redirectUri: string } {
     return this.oauthForms()[provider] ?? { clientId: '', secret: '', redirectUri: '' };
+  }
+
+  /** 票 302：当前展开凭据表单的 provider 设置行（未展开时 undefined）。 */
+  oauthSelectedSetting(): MailboxOAuthSettingsDto | undefined {
+    const p = this.oauthFormProvider();
+    return p ? this.oauthSettings().find((s) => s.provider === p) : undefined;
+  }
+
+  /** 票 302：收起凭据表单，回到仅显示 Add 按钮的状态。 */
+  cancelOAuthAdd(): void {
+    this.oauthChoosing.set(false);
+    this.oauthFormProvider.set(null);
   }
 
   setOAuthField(provider: string, field: 'clientId' | 'secret' | 'redirectUri', value: string): void {

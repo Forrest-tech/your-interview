@@ -279,7 +279,8 @@ public sealed class MailboxImportRecord : Entity
 
     public MailboxImportRecord(Guid userId, Guid entryId, Guid? assetId, MailboxProvider provider,
         string accountEmail, string providerMessageId, string? providerThreadId, string matchedRule,
-        string rawMimeSha256, long rawMimeBytes, string? cursorSnapshot)
+        string rawMimeSha256, long rawMimeBytes, string? cursorSnapshot,
+        DateTimeOffset? mailReceivedAt = null)
     {
         UserId = userId;
         EntryId = entryId;
@@ -292,6 +293,7 @@ public sealed class MailboxImportRecord : Entity
         RawMimeSha256 = rawMimeSha256;
         RawMimeBytes = rawMimeBytes;
         CursorSnapshot = cursorSnapshot;
+        MailReceivedAt = mailReceivedAt;
         IsNew = true;
         ImportedAt = DateTimeOffset.UtcNow;
     }
@@ -312,6 +314,12 @@ public sealed class MailboxImportRecord : Entity
 
     public long RawMimeBytes { get; private set; }
     public string? CursorSnapshot { get; private set; }
+
+    /// <summary>
+    /// 票 298：被导入邮件本身的收件时间（MailboxMessage.ReceivedAt：Date 头，缺失时 internalDate 兜底）。
+    /// 与导入时间 ImportedAt 不同：最新邮件日期 = 本字段的最大值；旧行 null 不计入。
+    /// </summary>
+    public DateTimeOffset? MailReceivedAt { get; private set; }
 
     /// <summary>“新导入”标记：本轮刷新导入的资产在 Materials 里打标；下轮同范围刷新开始时清掉旧标。</summary>
     public bool IsNew { get; private set; }

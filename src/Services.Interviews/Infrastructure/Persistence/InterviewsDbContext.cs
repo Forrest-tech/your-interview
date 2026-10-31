@@ -493,6 +493,8 @@ public sealed class InterviewsDbContext(
             // 去重键（方案 §3.3）：刷新命中已存在键即跳过，不覆盖、不更新。
             e.HasIndex(x => new { x.UserId, x.Provider, x.AccountEmail, x.ProviderMessageId }).IsUnique();
             e.HasIndex(x => new { x.UserId, x.EntryId, x.ImportedAt });
+            // 票 298：最新邮件日期查询（max MailReceivedAt）走本索引；可空列，旧行 null 不计入。
+            e.HasIndex(x => new { x.UserId, x.EntryId, x.MailReceivedAt });
             e.HasIndex(x => x.AssetId);
             e.HasQueryFilter(x => x.UserId == CurrentUserId);
         });

@@ -945,6 +945,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<bool>("IsNew")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTimeOffset?>("MailReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("MatchedRule")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -980,6 +983,8 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.HasIndex("AssetId");
 
                     b.HasIndex("UserId", "EntryId", "ImportedAt");
+
+                    b.HasIndex("UserId", "EntryId", "MailReceivedAt");
 
                     b.HasIndex("UserId", "Provider", "AccountEmail", "ProviderMessageId")
                         .IsUnique();

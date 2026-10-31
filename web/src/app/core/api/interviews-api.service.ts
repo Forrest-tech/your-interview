@@ -137,6 +137,12 @@ export class InterviewsApiService {
       entryId ? { entryId } : undefined);
   }
 
+  /** 票 298：条目最新邮件日期（yyyy-MM-dd 或 null）。 */
+  getMailboxLatestMailDate(entryId: string): Observable<{ latestMailDate: string | null }> {
+    return this.api.get<{ latestMailDate: string | null }>(
+      `${InterviewsApiService.BASE}/mailbox/latest-date`, { entryId });
+  }
+
   /** 条目级匹配规则读（条目详情页邮箱匹配区用；设置页绝不放规则）。 */
   getMailMatchRules(entryId: string): Observable<MailMatchRulesDto> {
     return this.api.get<MailMatchRulesDto>(`${InterviewsApiService.BASE}/${entryId}/mail-match-rules`);

@@ -77,6 +77,17 @@ public sealed class RefreshMailboxCommandHandler(
         var mapBySender = contactMaps.ToDictionary(
             m => m.SenderEmailLower, m => m.EntryId, StringComparer.OrdinalIgnoreCase);
 
+        // 票 298：条目级日期界线（只算一次，贯穿整轮；全局刷新不设界线）。
+        // 定义 = 该条目已导入邮件的 max MailReceivedAt；待确认队列不计入（还不是该条目的邮件）。
+        DateTimeOffset? entryLatest = null;
+        if (request.EntryId is { } latestEntryId)
+        {
+            entryLatest = await db.MailboxImportRecords
+                .Where(r => r.UserId == request.UserId && r.EntryId == latestEntryId
+                    && r.MailReceivedAt != null)
+                .MaxAsync(r => (DateTimeOffset?)r.MailReceivedAt, ct);
+        }
+
         // 票 294：回填断点。续跑（起跑时已有进度行）不清 mailboxNew，否则会抹掉上一段已导入的 new 标记；
         // 新起跑与稳态跑（无进度行）清标行为与今日一致。
         var progress = await db.MailboxBackfillProgress.FirstOrDefaultAsync(
@@ -105,19 +116,24 @@ public sealed class RefreshMailboxCommandHandler(
         if (provider is IIncrementalMailboxProvider stream)
         {
             return await HandleStreamingAsync(request, conn, stream, access, entryById, rules,
-                mapBySender, progress, opts, ct);
+                mapBySender, progress, opts, entryLatest, ct);
         }
 
         // 拉取：增量游标优先；过期 → 回落窗口重拉（Gmail 404 / Graph 410 已在 provider 内转 CursorExpired）。
+        // 票 298：条目级且无 latest 时强制全窗口（cursor 置 null），否则新条目锚点前的旧邮件永远捞不到；
+        // 有 latest 时首轮与回落窗口同样用界线起点。
+        var legacySince = entryLatest is { } lb ? BoundedWindowStart(lb)
+            : DateTimeOffset.UtcNow.AddDays(-opts.FirstImportDays);
+        var legacyCursor = request.EntryId is not null && entryLatest is null ? null : conn.Cursor;
         MailboxFetchResult fetch;
         try
         {
-            fetch = await provider.ListNewAsync(access, conn.Cursor,
-                DateTimeOffset.UtcNow.AddDays(-opts.FirstImportDays), ct);
+            fetch = await provider.ListNewAsync(access, legacyCursor, legacySince, ct);
             if (fetch.CursorExpired)
             {
                 fetch = await provider.ListNewAsync(access, null,
-                    DateTimeOffset.UtcNow.AddDays(-opts.HistoryFallbackDays), ct);
+                    entryLatest is { } fb ? BoundedWindowStart(fb)
+                        : DateTimeOffset.UtcNow.AddDays(-opts.HistoryFallbackDays), ct);
             }
         }
         catch (MailboxAuthException)
@@ -193,6 +209,15 @@ public sealed class RefreshMailboxCommandHandler(
         public List<string> Reasons { get; } = [];
     }
 
+    /// <summary>
+    /// 票 298：日期界线起点 = 最新邮件 UTC 日期 00:00 再减 1 天。
+    /// 减 1 天覆盖两处边界不确定性：Gmail after: 的当日包容性官方未明文定义；
+    /// after: 按账号时区解释日期，而本系统按 UTC 取日，时区差可达 1 天。
+    /// 多取 1 天无害：导入记录去重键保证不重复导入。
+    /// </summary>
+    private static DateTimeOffset BoundedWindowStart(DateTimeOffset latest)
+        => new(latest.UtcDateTime.Date.AddDays(-1), TimeSpan.Zero);
+
     private static List<string> ReadIdList(string json)
     {
         if (string.IsNullOrEmpty(json)) return [];
@@ -263,17 +288,21 @@ public sealed class RefreshMailboxCommandHandler(
     /// <summary>
     /// 票 294：流式刷新总入口。稳态（有锚点且无未完成回填）→ history deltas；
     /// 否则 → 回填（新起跑 / 断点续跑）。限流与取消返回已计计数 + 进度保留。
+    /// 票 298：条目级且无 latest 时不走稳态（否则新条目锚点前的旧邮件永远捞不到），强制回填全窗口；
+    /// 有 latest 时稳态 deltas 已比日期界线更窄，照旧。
     /// </summary>
     private async Task<Result<RefreshMailboxResult>> HandleStreamingAsync(
         RefreshMailboxCommand request, MailboxConnection conn, IIncrementalMailboxProvider stream,
         string access, IReadOnlyDictionary<Guid, InterviewEntry> entryById,
         IReadOnlyList<MailboxMatching.EntryRules> rules, IReadOnlyDictionary<string, Guid> mapBySender,
-        MailboxBackfillProgress? progress, MailboxOptions opts, CancellationToken ct)
+        MailboxBackfillProgress? progress, MailboxOptions opts, DateTimeOffset? entryLatest,
+        CancellationToken ct)
     {
         var counters = new RefreshCounters();
         try
         {
-            if (conn.Cursor is not null && progress is null)
+            if (conn.Cursor is not null && progress is null
+                && (request.EntryId is null || entryLatest is not null))
             {
                 try
                 {
@@ -282,14 +311,14 @@ public sealed class RefreshMailboxCommandHandler(
                 }
                 catch (MailboxCursorExpiredException)
                 {
-                    // 锚点过期：清锚 + 按既有过期回落口径以 30 天窗口重跑回填。
+                    // 锚点过期：清锚 + 回落回填（有 latest 时新起跑用日期界线，否则沿用 30 天窗口）。
                     conn.AdvanceCursor(null, DateTimeOffset.UtcNow);
                     return await RunBackfillAsync(request, conn, stream, access, entryById, rules,
-                        mapBySender, null, opts.HistoryFallbackDays, opts, counters, ct);
+                        mapBySender, null, opts.HistoryFallbackDays, opts, counters, entryLatest, ct);
                 }
             }
             return await RunBackfillAsync(request, conn, stream, access, entryById, rules,
-                mapBySender, progress, opts.FirstImportDays, opts, counters, ct);
+                mapBySender, progress, opts.FirstImportDays, opts, counters, entryLatest, ct);
         }
         catch (OperationCanceledException)
         {
@@ -354,7 +383,7 @@ public sealed class RefreshMailboxCommandHandler(
         string access, IReadOnlyDictionary<Guid, InterviewEntry> entryById,
         IReadOnlyList<MailboxMatching.EntryRules> rules, IReadOnlyDictionary<string, Guid> mapBySender,
         MailboxBackfillProgress? progress, int windowDays, MailboxOptions opts,
-        RefreshCounters counters, CancellationToken ct)
+        RefreshCounters counters, DateTimeOffset? entryLatest, CancellationToken ct)
     {
         var userId = request.UserId;
         // 作用域切换：stored.Scope 非空且与本轮不同 → 丢弃重起（贵但正确；全量跑 stored.Scope == null 可续跑任何作用域）。
@@ -366,7 +395,11 @@ public sealed class RefreshMailboxCommandHandler(
         }
         if (progress is null)
         {
-            var windowStart = DateTimeOffset.UtcNow.AddDays(-windowDays);
+            // 票 298：有 latest 时新起跑只拉 [最新日期, 今天]（减 1 天安全垫见 BoundedWindowStart），
+            // 不再全窗口重扫；无 latest 时沿用既有窗口（首次 180 天 / 锚点过期回落 30 天）。
+            var windowStart = entryLatest is { } latest
+                ? BoundedWindowStart(latest)
+                : DateTimeOffset.UtcNow.AddDays(-windowDays);
             var startAnchor = await stream.GetProfileHistoryIdAsync(access, ct);
             progress = new MailboxBackfillProgress(userId, conn.Provider, conn.AccountEmail,
                 request.EntryId, windowStart, startAnchor, "[]", 0, null);
@@ -697,7 +730,7 @@ public static class MailboxImportHelper
 
         db.MailboxImportRecords.Add(new MailboxImportRecord(userId, entry.Id, asset.Id,
             providerKind, accountEmail, message.ProviderMessageId, message.ProviderThreadId,
-            ruleLabel, sha, rawBytes.LongLength, null));
+            ruleLabel, sha, rawBytes.LongLength, null, message.ReceivedAt));
         return asset.Id;
     }
 

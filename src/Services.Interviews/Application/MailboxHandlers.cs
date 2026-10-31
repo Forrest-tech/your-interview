@@ -332,3 +332,24 @@ public sealed class GetMailboxImportsQueryHandler(InterviewsDbContext db)
         return Result.Success<IReadOnlyList<MailboxImportDto>>(list);
     }
 }
+
+/// <summary>
+/// 票 298：条目最新邮件日期 = 该条目已导入邮件的 max MailReceivedAt（UTC 日期字符串，与资产 meta date 同口径）。
+/// 待确认队列不计入（还不是该条目的邮件）；无已导入邮件 → null。
+/// </summary>
+public sealed record GetMailboxLatestMailDateQuery(Guid UserId, Guid EntryId)
+    : IRequest<Result<string?>>;
+
+public sealed class GetMailboxLatestMailDateQueryHandler(InterviewsDbContext db)
+    : IRequestHandler<GetMailboxLatestMailDateQuery, Result<string?>>
+{
+    public async Task<Result<string?>> Handle(
+        GetMailboxLatestMailDateQuery request, CancellationToken ct)
+    {
+        var latest = await db.MailboxImportRecords
+            .Where(r => r.UserId == request.UserId && r.EntryId == request.EntryId
+                && r.MailReceivedAt != null)
+            .MaxAsync(r => (DateTimeOffset?)r.MailReceivedAt, ct);
+        return Result.Success<string?>(latest?.UtcDateTime.ToString("yyyy-MM-dd"));
+    }
+}

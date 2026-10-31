@@ -113,6 +113,15 @@ public sealed class MailboxController(
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>票 298：条目最新邮件日期（已导入邮件的 max 收件日，UTC 日期；无已导入邮件 → null）。</summary>
+    [HttpGet("mailbox/latest-date")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> LatestMailDate([FromQuery] Guid entryId, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetMailboxLatestMailDateQuery(Me, entryId), ct);
+        return r.IsSuccess ? Results.Ok(new { latestMailDate = r.Value }) : r.ToProblemDetails();
+    }
+
     /// <summary>票 245：OAuth 凭据卡读（Secret 永不回显，只给 secretSaved / secretUnreadable 状态位）。</summary>
     [HttpGet("mailbox/oauth-settings")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]

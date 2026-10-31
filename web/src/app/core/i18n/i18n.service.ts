@@ -1798,6 +1798,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   },
   'mailbox.disconnected': { zh: '已断开邮箱连接。', en: 'Mailbox disconnected.', fr: 'Boîte mail déconnectée.' },
   'mailbox.lastRefresh': { zh: '上次刷新', en: 'Last refresh', fr: 'Dernier rafraîchissement' },
+  'mailbox.latestMail': { zh: '最新邮件：{date}', en: 'Latest mail: {date}', fr: 'Dernier courriel : {date}' },
   'mailbox.status.Active': { zh: '已连接', en: 'Connected', fr: 'Connectée' },
   'mailbox.status.Inactive': { zh: '已切换', en: 'Switched', fr: 'Remplacée' },
   'mailbox.status.Invalid': { zh: '授权失效', en: 'Authorization expired', fr: 'Autorisation expirée' },

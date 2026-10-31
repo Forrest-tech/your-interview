@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, OnDestroy, Output, computed, effect, inject, input, signal
+  Component, EventEmitter, OnDestroy, OnInit, Output, computed, effect, inject, input, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -52,6 +52,9 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
       </button>
       @if (mailRefreshing()) {
         <button type="button" class="mini-btn" (click)="cancelMailboxRefresh()">{{ t('mailbox.cancel') }}</button>
+      }
+      @if (mailLatestDate(); as d) {
+        <span class="mail-latest">{{ fmt('mailbox.latestMail', { date: d }) }}</span>
       }
       @if (mailRefreshResult(); as r) {
         <span class="mail-result">
@@ -340,6 +343,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
     .mail-refresh .mini-btn { display: inline-flex; align-items: center; gap: 5px; }
     .mail-refresh .mini-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .mail-refresh .mini-btn mat-spinner { width: 16px; height: 16px; }
+    .mail-latest { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .mail-result { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .new-pill { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px;
                 background: #dbeafe; color: #1d4ed8; white-space: nowrap; }
@@ -470,7 +474,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
     }
   `]
 })
-export class MaterialsListComponent implements OnDestroy {
+export class MaterialsListComponent implements OnDestroy, OnInit {
   readonly entryId = input.required<string>();
   // 票189：用户令去掉材料卡红色删除图标（先隐藏不删除：remove() 逻辑、后端 deleteAsset、i18n 键保留；恢复只改开关）。
   readonly hideMatDelete = true;
@@ -493,10 +497,27 @@ export class MaterialsListComponent implements OnDestroy {
   /** 票240：条目级刷新状态（取消 = 退订请求，后端按已落库部分保留、cursor 不推进）。 */
   readonly mailRefreshing = signal(false);
   readonly mailRefreshResult = signal<RefreshMailboxResult | null>(null);
+  /** 票298：条目最新邮件日期（yyyy-MM-dd；null = 尚无已导入邮件，不渲染）。 */
+  readonly mailLatestDate = signal<string | null>(null);
   private mailRefreshSub: Subscription | null = null;
+  private mailLatestSub: Subscription | null = null;
+
+  ngOnInit(): void {
+    this.loadLatestMailDate();
+  }
 
   ngOnDestroy(): void {
     this.mailRefreshSub?.unsubscribe();
+    this.mailLatestSub?.unsubscribe();
+  }
+
+  /** 票298：取条目最新邮件日期（失败静默，不阻塞材料列表）。 */
+  private loadLatestMailDate(): void {
+    this.mailLatestSub?.unsubscribe();
+    this.mailLatestSub = this.interviewsApi.getMailboxLatestMailDate(this.entryId()).subscribe({
+      next: (r) => this.mailLatestDate.set(r.latestMailDate),
+      error: () => this.mailLatestDate.set(null),
+    });
   }
 
   refreshFromMailbox(): void {
@@ -507,6 +528,8 @@ export class MaterialsListComponent implements OnDestroy {
       next: (r) => {
         this.mailRefreshing.set(false);
         this.mailRefreshResult.set(r);
+        // 票298：刷新完成（即使零新增）后重取最新日期；取消时亦然（取消前已落库的同样算数）。
+        this.loadLatestMailDate();
         if (r.needsReconnect) this.snack.open(this.i18n.t('mailbox.needsReconnect'), this.i18n.t('mailbox.reconnect'), { duration: 5000 }).onAction().subscribe(() => void this.router.navigate(['/settings/mail']));
         else if (r.rateLimited) this.snack.open(this.i18n.t('mailbox.rateLimited'), undefined, { duration: 5000 });
         else if (r.failed > 0 && r.failedReasons.length > 0) this.snack.open(r.failedReasons.join('；'), undefined, { duration: 8000 });
@@ -525,6 +548,7 @@ export class MaterialsListComponent implements OnDestroy {
     this.mailRefreshSub?.unsubscribe();
     this.mailRefreshSub = null;
     this.mailRefreshing.set(false);
+    this.loadLatestMailDate();
     this.changed.emit();
   }
 

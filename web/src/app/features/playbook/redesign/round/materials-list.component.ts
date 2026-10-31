@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
@@ -36,12 +37,17 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
 @Component({
   selector: 'app-materials-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatDialogModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatDialogModule],
   template: `
     <!-- 票240：条目级邮箱刷新入口（主入口在设置页；此处为条目级快捷入口，仅刷本条目规则）。 -->
     <div class="mail-refresh">
       <button type="button" class="mini-btn" [disabled]="mailRefreshing()" (click)="refreshFromMailbox()">
-        <mat-icon>refresh</mat-icon>
+        <!-- 票295：刷新中用系统既有 mat-spinner（与 trash 对话框 / human-check 同款指示器）替换静态 refresh 图标，动画由 Material 自带；文案、禁用规则一字不动。 -->
+        @if (mailRefreshing()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        } @else {
+          <mat-icon>refresh</mat-icon>
+        }
         <span>{{ mailRefreshing() ? t('mailbox.refreshing') : t('mailbox.refresh') }}</span>
       </button>
       @if (mailRefreshing()) {
@@ -333,6 +339,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
     .mail-refresh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 6px; }
     .mail-refresh .mini-btn { display: inline-flex; align-items: center; gap: 5px; }
     .mail-refresh .mini-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .mail-refresh .mini-btn mat-spinner { width: 16px; height: 16px; }
     .mail-result { font-size: 13px; color: var(--yi-text-muted, #475569); }
     .new-pill { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px;
                 background: #dbeafe; color: #1d4ed8; white-space: nowrap; }

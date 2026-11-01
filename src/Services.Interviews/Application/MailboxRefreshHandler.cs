@@ -225,6 +225,21 @@ public sealed class RefreshMailboxCommandHandler(
     private static DateTimeOffset BoundedWindowStart(DateTimeOffset latest)
         => new(latest.UtcDateTime.Date.AddDays(-1), TimeSpan.Zero);
 
+    /// <summary>
+    /// 票 308：本作用域是否已完成升级后一次性整邮箱追补。后台任务 scope 无 HTTP 用户，
+    /// 故 IgnoreQueryFilters + 显式 UserId 谓词（303 同款口径）；可空作用域用常量 null 分支，
+    /// 避免可空参数在 SQL null 语义上的歧义。
+    /// </summary>
+    private async Task<bool> WholeMailboxCatchUpDoneAsync(Guid userId, MailboxProvider provider,
+        string accountEmail, Guid? scopeEntryId, CancellationToken ct)
+    {
+        var query = db.MailboxCatchUpMarkers.IgnoreQueryFilters().Where(m =>
+            m.UserId == userId && m.Provider == provider && m.AccountEmail == accountEmail);
+        return scopeEntryId is { } scopeId
+            ? await query.AnyAsync(m => m.ScopeEntryId == scopeId, ct)
+            : await query.AnyAsync(m => m.ScopeEntryId == null, ct);
+    }
+
     private static List<string> ReadIdList(string json)
     {
         if (string.IsNullOrEmpty(json)) return [];
@@ -308,7 +323,11 @@ public sealed class RefreshMailboxCommandHandler(
         var counters = new RefreshCounters();
         try
         {
-            if (conn.Cursor is not null && progress is null
+            // 票 308：升级后一次性整邮箱追补未完成时不走稳态——否则稳态 deltas 永远捞不到
+            // 追补窗口外的旧垃圾邮件/已删除邮件；改走回填（新起跑时用全窗口，见 RunBackfillAsync）。
+            var catchUpDone = await WholeMailboxCatchUpDoneAsync(
+                request.UserId, conn.Provider, conn.AccountEmail, request.EntryId, ct);
+            if (conn.Cursor is not null && progress is null && catchUpDone
                 && (request.EntryId is null || entryLatest is not null))
             {
                 try
@@ -367,7 +386,7 @@ public sealed class RefreshMailboxCommandHandler(
             newHistoryId = page.NewHistoryId;
         } while (pageToken is not null);
 
-        await ProcessIdBatchAsync(ids, 0, onAfterMessage: null, request, conn, stream, access,
+        await ProcessIdBatchAsync(ids.Distinct().ToList(), 0, onAfterMessage: null, request, conn, stream, access,
             entryById, rules, mapBySender, opts, counters, ct);
 
         var cursorAdvanced = false;
@@ -405,14 +424,23 @@ public sealed class RefreshMailboxCommandHandler(
         var backfillPageNo = 0;
         if (progress is null)
         {
-            // 票 298：有 latest 时新起跑只拉 [最新日期, 今天]（减 1 天安全垫见 BoundedWindowStart），
-            // 不再全窗口重扫；无 latest 时沿用既有窗口（首次 180 天 / 锚点过期回落 30 天）。
-            var windowStart = entryLatest is { } latest
-                ? BoundedWindowStart(latest)
-                : DateTimeOffset.UtcNow.AddDays(-windowDays);
+            // 票 308：升级后一次性整邮箱追补——本作用域未完成追补时，新起跑一律用全窗口
+            // （now − FirstImportDays），无视条目 latest 的界线；否则追补窗口外的旧垃圾邮件/
+            // 已删除邮件永远捞不到。追补完成时写标记（见完成段），此后恢复常规窗口。
+            // 票 298：追补完成后常规新起跑：有 latest 时只拉 [最新日期, 今天]（减 1 天安全垫见
+            // BoundedWindowStart），不再全窗口重扫；无 latest 时沿用既有窗口（首次 180 天 /
+            // 锚点过期回落 30 天）。
+            var catchUpDone = await WholeMailboxCatchUpDoneAsync(
+                userId, conn.Provider, conn.AccountEmail, request.EntryId, ct);
+            var isCatchUp = !catchUpDone;
+            var windowStart = isCatchUp
+                ? DateTimeOffset.UtcNow.AddDays(-opts.FirstImportDays)
+                : entryLatest is { } latest
+                    ? BoundedWindowStart(latest)
+                    : DateTimeOffset.UtcNow.AddDays(-windowDays);
             var startAnchor = await stream.GetProfileHistoryIdAsync(access, ct);
             progress = new MailboxBackfillProgress(userId, conn.Provider, conn.AccountEmail,
-                request.EntryId, windowStart, startAnchor, "[]", 0, null);
+                request.EntryId, windowStart, startAnchor, "[]", 0, null, isCatchUp);
             db.MailboxBackfillProgress.Add(progress);
             var first = await stream.ListIdsPageAsync(access, null, windowStart, ct);
             progress.StartPage(JsonSerializer.Serialize(first.Ids), first.NextPageToken);
@@ -462,7 +490,7 @@ public sealed class RefreshMailboxCommandHandler(
                     catchPageToken = page.NextPageToken;
                     latestHistoryId = page.NewHistoryId;
                 } while (catchPageToken is not null);
-                await ProcessIdBatchAsync(catchIds, 0, onAfterMessage: null,
+                await ProcessIdBatchAsync(catchIds.Distinct().ToList(), 0, onAfterMessage: null,
                     request, conn, stream, access, entryById, rules, mapBySender, opts, counters, ct);
                 anchor = latestHistoryId ?? await stream.GetProfileHistoryIdAsync(access, ct);
             }
@@ -477,6 +505,17 @@ public sealed class RefreshMailboxCommandHandler(
             anchor = await stream.GetProfileHistoryIdAsync(access, ct);
         }
 
+        // 票 308：追补回填完整结束时写标记（与删进度行、推游标同一批落库）。
+        // 中途取消/限流走异常分支、不到此处，故不写；作用域切换丢弃时旧行已换且不写标记，
+        // 下轮仍会重跑追补——标记设计天然服从切换丢弃规则。
+        if (progress.IsWholeMailboxCatchUp)
+        {
+            var alreadyMarked = await WholeMailboxCatchUpDoneAsync(
+                userId, conn.Provider, conn.AccountEmail, request.EntryId, ct);
+            if (!alreadyMarked)
+                db.MailboxCatchUpMarkers.Add(new MailboxCatchUpMarker(userId, conn.Provider,
+                    conn.AccountEmail, request.EntryId, DateTimeOffset.UtcNow));
+        }
         db.MailboxBackfillProgress.Remove(progress);
         var cursorAdvanced = false;
         if (anchor is not null)

@@ -76,6 +76,10 @@ public sealed class InterviewsDbContext(
     /// <summary>回填断点：一行 = 一个账号正在进行的回填；完成即删行。</summary>
     public DbSet<MailboxBackfillProgress> MailboxBackfillProgress => Set<MailboxBackfillProgress>();
 
+    // ---- 票 308：整邮箱追补完成标记（一作用域一行）----
+    /// <summary>追补标记：一行 = 一个作用域已完成升级后一次性全窗口追补。</summary>
+    public DbSet<MailboxCatchUpMarker> MailboxCatchUpMarkers => Set<MailboxCatchUpMarker>();
+
     /// <summary>
     /// 给该条目所有未关单的任务排定终态(只改跟踪状态,不落库 ——
     /// 由调用方随后的 SaveChangesAsync 与业务变更**同一事务**提交)。
@@ -523,6 +527,20 @@ public sealed class InterviewsDbContext(
             e.Property(x => x.StartHistoryId).HasColumnType("text");
             e.Property(x => x.NextPageToken).HasColumnType("text");
             e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.IsWholeMailboxCatchUp).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => new { x.UserId, x.Provider, x.AccountEmail });
+            e.HasQueryFilter(x => x.UserId == CurrentUserId);
+        });
+
+        b.Entity<MailboxCatchUpMarker>(e =>
+        {
+            e.ToTable("mailbox_catch_up_markers");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Provider).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.AccountEmail).HasMaxLength(320).IsRequired();
+            e.Property(x => x.UserId).IsRequired();
+            e.Property(x => x.CompletedAt).IsRequired();
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => new { x.UserId, x.Provider, x.AccountEmail });
             e.HasQueryFilter(x => x.UserId == CurrentUserId);

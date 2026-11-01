@@ -171,12 +171,13 @@ public sealed class GmailMailboxProvider : IMailboxProvider, IIncrementalMailbox
         }
     }
 
-    /// <summary>票 294 流式列单页（50 封/页）。</summary>
+    /// <summary>票 294 流式列单页（50 封/页）。
+    /// 票 308：整邮箱检索——includeSpamTrash=true，列单覆盖垃圾邮件与已删除邮件（Gmail 默认排除两者）。</summary>
     public async Task<(IReadOnlyList<string> Ids, string? NextPageToken)> ListIdsPageAsync(
         string accessToken, string? pageToken, DateTimeOffset sinceUtc, CancellationToken ct)
     {
         var after = sinceUtc.UtcDateTime.ToString("yyyy/MM/dd");
-        var url = $"{ApiBase}/messages?q={Uri.EscapeDataString($"after:{after}")}&maxResults=50"
+        var url = $"{ApiBase}/messages?q={Uri.EscapeDataString($"after:{after}")}&maxResults=50&includeSpamTrash=true"
             + (pageToken is null ? string.Empty : $"&pageToken={Uri.EscapeDataString(pageToken)}");
         using var resp = await SendGmailAsync(() => GetRequest(url, accessToken), metered: false, ct);
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -194,11 +195,13 @@ public sealed class GmailMailboxProvider : IMailboxProvider, IIncrementalMailbox
         return (ids, next);
     }
 
-    /// <summary>票 294 流式增量页。404 = 锚点过期 → MailboxCursorExpiredException。</summary>
+    /// <summary>票 294 流式增量页。404 = 锚点过期 → MailboxCursorExpiredException。
+    /// 票 308：除 messagesAdded 外同时解析 labelsAdded——从垃圾邮件/已删除中救回的邮件只产生
+    /// labelAdded 记录（无 messagesAdded），不解析则稳态永远看不到它们。</summary>
     public async Task<(IReadOnlyList<string> Ids, string? NextPageToken, string? NewHistoryId)> ListHistoryPageAsync(
         string accessToken, string startHistoryId, string? pageToken, CancellationToken ct)
     {
-        var url = $"{ApiBase}/history?startHistoryId={Uri.EscapeDataString(startHistoryId)}&historyTypes=messageAdded"
+        var url = $"{ApiBase}/history?startHistoryId={Uri.EscapeDataString(startHistoryId)}&historyTypes=messageAdded&historyTypes=labelAdded"
             + (pageToken is null ? string.Empty : $"&pageToken={Uri.EscapeDataString(pageToken)}");
         using var resp = await SendGmailAsync(() => GetRequest(url, accessToken), metered: false, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound)
@@ -210,13 +213,25 @@ public sealed class GmailMailboxProvider : IMailboxProvider, IIncrementalMailbox
         {
             foreach (var h in history.EnumerateArray())
             {
-                if (!h.TryGetProperty("messagesAdded", out var added)) continue;
-                foreach (var a in added.EnumerateArray())
+                if (h.TryGetProperty("messagesAdded", out var added))
                 {
-                    if (a.TryGetProperty("message", out var m)
-                        && m.TryGetProperty("id", out var id)
-                        && id.ValueKind == JsonValueKind.String)
-                        ids.Add(id.GetString()!);
+                    foreach (var a in added.EnumerateArray())
+                    {
+                        if (a.TryGetProperty("message", out var m)
+                            && m.TryGetProperty("id", out var id)
+                            && id.ValueKind == JsonValueKind.String)
+                            ids.Add(id.GetString()!);
+                    }
+                }
+                if (h.TryGetProperty("labelsAdded", out var labeled))
+                {
+                    foreach (var a in labeled.EnumerateArray())
+                    {
+                        if (a.TryGetProperty("message", out var m)
+                            && m.TryGetProperty("id", out var id)
+                            && id.ValueKind == JsonValueKind.String)
+                            ids.Add(id.GetString()!);
+                    }
                 }
             }
         }
@@ -241,8 +256,9 @@ public sealed class GmailMailboxProvider : IMailboxProvider, IIncrementalMailbox
         if (!string.IsNullOrEmpty(cursor))
         {
             // 增量路径：history.list。404 = historyId 过期 → 回落。
+            // 票 308：同时取 labelAdded（与流式路径同理：从垃圾邮件/已删除救回的邮件只产生 labelAdded）。
             using var req = new HttpRequestMessage(HttpMethod.Get,
-                $"{ApiBase}/history?startHistoryId={Uri.EscapeDataString(cursor)}&historyTypes=messageAdded");
+                $"{ApiBase}/history?startHistoryId={Uri.EscapeDataString(cursor)}&historyTypes=messageAdded&historyTypes=labelAdded");
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             using var resp = await _http.SendAsync(req, ct);
             if (resp.StatusCode == HttpStatusCode.NotFound)
@@ -255,13 +271,25 @@ public sealed class GmailMailboxProvider : IMailboxProvider, IIncrementalMailbox
             {
                 foreach (var h in history.EnumerateArray())
                 {
-                    if (!h.TryGetProperty("messagesAdded", out var added)) continue;
-                    foreach (var a in added.EnumerateArray())
+                    if (h.TryGetProperty("messagesAdded", out var added))
                     {
-                        if (a.TryGetProperty("message", out var m)
-                            && m.TryGetProperty("id", out var id)
-                            && id.ValueKind == JsonValueKind.String)
-                            ids.Add(id.GetString()!);
+                        foreach (var a in added.EnumerateArray())
+                        {
+                            if (a.TryGetProperty("message", out var m)
+                                && m.TryGetProperty("id", out var id)
+                                && id.ValueKind == JsonValueKind.String)
+                                ids.Add(id.GetString()!);
+                        }
+                    }
+                    if (h.TryGetProperty("labelsAdded", out var labeled))
+                    {
+                        foreach (var a in labeled.EnumerateArray())
+                        {
+                            if (a.TryGetProperty("message", out var m)
+                                && m.TryGetProperty("id", out var id)
+                                && id.ValueKind == JsonValueKind.String)
+                                ids.Add(id.GetString()!);
+                        }
                     }
                 }
             }
@@ -271,12 +299,13 @@ public sealed class GmailMailboxProvider : IMailboxProvider, IIncrementalMailbox
         }
 
         // 首刷 / 回落路径：日期窗口（Gmail q 的 after: 按账号日历日，取 UTC 日期近似）。
+        // 票 308：整邮箱检索——includeSpamTrash=true，覆盖垃圾邮件与已删除邮件。
         var after = sinceUtc.UtcDateTime.ToString("yyyy/MM/dd");
         var pageIds = new List<string>();
         string? pageToken = null;
         do
         {
-            var url = $"{ApiBase}/messages?q={Uri.EscapeDataString($"after:{after}")}&maxResults=100"
+            var url = $"{ApiBase}/messages?q={Uri.EscapeDataString($"after:{after}")}&maxResults=100&includeSpamTrash=true"
                 + (pageToken is null ? string.Empty : $"&pageToken={Uri.EscapeDataString(pageToken)}");
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);

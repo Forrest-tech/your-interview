@@ -90,7 +90,8 @@ public sealed class MailboxBackfillProgress : Entity
 
     public MailboxBackfillProgress(Guid userId, MailboxProvider provider, string accountEmail,
         Guid? scopeEntryId, DateTimeOffset windowStartUtc, string? startHistoryId,
-        string currentPageIdsJson, int currentPageIndex, string? nextPageToken)
+        string currentPageIdsJson, int currentPageIndex, string? nextPageToken,
+        bool isWholeMailboxCatchUp = false)
     {
         UserId = userId;
         Provider = provider;
@@ -101,6 +102,7 @@ public sealed class MailboxBackfillProgress : Entity
         CurrentPageIdsJson = currentPageIdsJson;
         CurrentPageIndex = currentPageIndex;
         NextPageToken = nextPageToken;
+        IsWholeMailboxCatchUp = isWholeMailboxCatchUp;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -114,6 +116,13 @@ public sealed class MailboxBackfillProgress : Entity
     public int CurrentPageIndex { get; private set; }
     public string? NextPageToken { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    /// <summary>
+    /// 票 308：本回填是否为升级后一次性整邮箱追补（全窗口 + includeSpamTrash）。
+    /// 断点续跑靠此字段记住追补身份：完成时据此写追补标记；升级前已存在的进度行默认为 false，
+    /// 故旧回填完成时不会误写标记（下轮仍会跑追补）。
+    /// </summary>
+    public bool IsWholeMailboxCatchUp { get; private set; }
 
     /// <summary>进入下一页：id 列表与 token 一起换位，下标归零。</summary>
     public void StartPage(string currentPageIdsJson, string? nextPageToken)
@@ -130,6 +139,34 @@ public sealed class MailboxBackfillProgress : Entity
         CurrentPageIndex = nextIndex;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
+}
+
+/// <summary>
+/// 票 308：升级后一次性整邮箱追补的完成标记（一作用域一行）。
+/// 语义：某作用域（ScopeEntryId null = 全局跑；非 null = 条目级跑）已完成过一次全窗口
+/// （now − FirstImportDays）+ includeSpamTrash 的回填，此后刷新恢复常规窗口与稳态。
+/// 标记只在追补回填完整结束时写入：中途取消/限流/作用域切换丢弃时不写，下轮仍会重跑追补。
+/// 注意：进度行完成即删，故标记不能只放进度行上——必须另表持久化。
+/// </summary>
+public sealed class MailboxCatchUpMarker : Entity
+{
+    private MailboxCatchUpMarker() { }
+
+    public MailboxCatchUpMarker(Guid userId, MailboxProvider provider, string accountEmail,
+        Guid? scopeEntryId, DateTimeOffset completedAt)
+    {
+        UserId = userId;
+        Provider = provider;
+        AccountEmail = accountEmail;
+        ScopeEntryId = scopeEntryId;
+        CompletedAt = completedAt;
+    }
+
+    public Guid UserId { get; private set; }
+    public MailboxProvider Provider { get; private set; }
+    public string AccountEmail { get; private set; } = string.Empty;
+    public Guid? ScopeEntryId { get; private set; }
+    public DateTimeOffset CompletedAt { get; private set; }
 }
 
 /// <summary>

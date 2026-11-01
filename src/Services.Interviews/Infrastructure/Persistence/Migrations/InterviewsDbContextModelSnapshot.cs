@@ -836,6 +836,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.Property<int>("CurrentPageIndex")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsWholeMailboxCatchUp")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("NextPageToken")
                         .HasColumnType("text");
 
@@ -866,6 +869,40 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                     b.HasIndex("UserId", "Provider", "AccountEmail");
 
                     b.ToTable("mailbox_backfill_progress", "interviews");
+                });
+
+            modelBuilder.Entity("YourInterview.Services.Interviews.Domain.MailboxCatchUpMarker", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTimeOffset>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("ScopeEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "Provider", "AccountEmail");
+
+                    b.ToTable("mailbox_catch_up_markers", "interviews");
                 });
 
             modelBuilder.Entity("YourInterview.Services.Interviews.Domain.MailboxConnection", b =>

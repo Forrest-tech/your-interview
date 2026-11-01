@@ -57,6 +57,7 @@ public sealed class MailboxDateBoundedRefreshTests : IAsyncLifetime, IDisposable
             foreach (var set in new[]
             {
                 (IQueryable<object>)db.MailboxBackfillProgress.IgnoreQueryFilters().Where(p => _users.Contains(p.UserId)),
+                db.MailboxCatchUpMarkers.IgnoreQueryFilters().Where(m => _users.Contains(m.UserId)),
                 db.MailboxConnections.IgnoreQueryFilters().Where(c => _users.Contains(c.UserId)),
                 db.MailMatchRules.IgnoreQueryFilters().Where(r => _users.Contains(r.UserId)),
                 db.MailContactMaps.IgnoreQueryFilters().Where(m => _users.Contains(m.UserId)),
@@ -257,6 +258,9 @@ public sealed class MailboxDateBoundedRefreshTests : IAsyncLifetime, IDisposable
         var (entry, _) = SeedEntry(db, userId, "Corpay", ["examplecorp.com"], [], ["corpay"], []);
         // 已有导入：最新邮件 2026-10-20（用与夹具不同的 message id，避免去重干扰）。
         SeedImport(db, userId, entry.Id, "seed-msg", new DateTimeOffset(2026, 10, 20, 10, 0, 0, TimeSpan.Zero));
+        // 票 308：追补已完成——本例断言追补后的常规 298 界线；无标记时首轮会走升级后一次性全窗口追补。
+        db.MailboxCatchUpMarkers.Add(new MailboxCatchUpMarker(userId, MailboxProvider.Gmail,
+            "user@example.com", entry.Id, DateTimeOffset.UtcNow));
         await db.SaveChangesAsync();
 
         var fake = new FakeBoundedProvider();
@@ -336,6 +340,9 @@ public sealed class MailboxDateBoundedRefreshTests : IAsyncLifetime, IDisposable
         SeedConnection(db, protection, userId, cursor: "h-live");
         var (entry, _) = SeedEntry(db, userId, "Corpay", ["examplecorp.com"], [], ["corpay"], []);
         SeedImport(db, userId, entry.Id, "seed-msg", new DateTimeOffset(2026, 10, 20, 10, 0, 0, TimeSpan.Zero));
+        // 票 308：追补已完成——本例断言追补后的稳态；无标记时首轮会走升级后一次性全窗口追补而非稳态。
+        db.MailboxCatchUpMarkers.Add(new MailboxCatchUpMarker(userId, MailboxProvider.Gmail,
+            "user@example.com", entry.Id, DateTimeOffset.UtcNow));
         await db.SaveChangesAsync();
 
         var fake = new FakeBoundedProvider();

@@ -57,6 +57,7 @@ public sealed class MailboxBackfillResumeTests : IAsyncLifetime, IDisposable
             foreach (var set in new[]
             {
                 (IQueryable<object>)db.MailboxBackfillProgress.IgnoreQueryFilters().Where(p => _users.Contains(p.UserId)),
+                db.MailboxCatchUpMarkers.IgnoreQueryFilters().Where(m => _users.Contains(m.UserId)),
                 db.MailboxConnections.IgnoreQueryFilters().Where(c => _users.Contains(c.UserId)),
                 db.MailMatchRules.IgnoreQueryFilters().Where(r => _users.Contains(r.UserId)),
                 db.MailContactMaps.IgnoreQueryFilters().Where(m => _users.Contains(m.UserId)),
@@ -395,6 +396,9 @@ public sealed class MailboxBackfillResumeTests : IAsyncLifetime, IDisposable
         var protection = NewProtection();
         SeedConnection(db, protection, userId, cursor: "h100");
         SeedEntry(db, userId, "Corpay", ["examplecorp.com"], [], ["corpay"], []);
+        // 票 308：追补已完成——本例断言追补后的稳态；无标记时首轮会走升级后一次性全窗口追补而非稳态。
+        db.MailboxCatchUpMarkers.Add(new MailboxCatchUpMarker(userId, MailboxProvider.Gmail,
+            "user@example.com", null, DateTimeOffset.UtcNow));
         await db.SaveChangesAsync();
 
         var fake = new FakeStreamingProvider();
@@ -422,6 +426,9 @@ public sealed class MailboxBackfillResumeTests : IAsyncLifetime, IDisposable
         var protection = NewProtection();
         SeedConnection(db, protection, userId, cursor: "hOld");
         SeedEntry(db, userId, "Corpay", ["examplecorp.com"], [], ["corpay"], []);
+        // 票 308：追补已完成——本例断言追补后的锚点过期回落（30 天窗口）；无标记时回落会走全窗口追补。
+        db.MailboxCatchUpMarkers.Add(new MailboxCatchUpMarker(userId, MailboxProvider.Gmail,
+            "user@example.com", null, DateTimeOffset.UtcNow));
         await db.SaveChangesAsync();
 
         var fake = new FakeStreamingProvider();

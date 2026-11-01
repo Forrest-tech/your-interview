@@ -147,6 +147,149 @@ public sealed class MailboxMatchingTests
         MailboxMatching.ClassifyEmail("Newsletter", "hello").Should().Be("other");
     }
 
+    // ---- 票 310：邀请收紧（阈值 + 空主题 fallback + 群发 veto）----
+
+    [Fact]
+    public void ClassifyEmail_TrueInvitation_KhalilStyle()
+    {
+        var body = "Hi Forrest,\nWe would like to invite you to interview for the Full Stack Developer role.\n"
+            + "Your interview is on October 7, 2026 at 11:00 AM.\n"
+            + "Join here: https://teams.microsoft.com/l/meetup-join/abc";
+        MailboxMatching.ClassifyEmail("Interview invitation - Full Stack Developer", body).Should().Be("invitation");
+    }
+
+    [Fact]
+    public void ClassifyEmail_OtterStyleDigest_IsOther()
+    {
+        var body = "Get ready for your week.\nUpcoming meetings include an interview with ExampleCorp on Monday.\n"
+            + "You received this email because you subscribed to weekly digests.\n"
+            + "To unsubscribe, click here.\nView in browser.";
+        MailboxMatching.ClassifyEmail("Your upcoming meetings", body).Should().Be("other");
+    }
+
+    [Fact]
+    public void ClassifyEmail_ChineseInvitation()
+    {
+        var body = "您好，诚邀您参加面试。面试时间：2026年10月13日 14:00。"
+            + "会议链接：https://teams.microsoft.com/l/meetup-join/abc";
+        MailboxMatching.ClassifyEmail("面试邀请", body).Should().Be("invitation");
+    }
+
+    [Fact]
+    public void ClassifyEmail_Reschedule_StillFirst()
+    {
+        MailboxMatching.ClassifyEmail("Interview rescheduled",
+            "We need to reschedule your interview to another time next week.").Should().Be("reschedule");
+    }
+
+    [Fact]
+    public void ClassifyEmail_Rejection_StillFirst()
+    {
+        MailboxMatching.ClassifyEmail("Update on your application",
+            "Unfortunately, we are not moving forward with your application.").Should().Be("rejection");
+    }
+
+    [Fact]
+    public void ClassifyEmail_Followup_MentioningPastInterview()
+    {
+        MailboxMatching.ClassifyEmail("Following up",
+            "Hi, just checking in on how your interview went last week.").Should().Be("followup");
+    }
+
+    [Fact]
+    public void ClassifyEmail_GenericSubject_RescuedByThreshold()
+    {
+        var body = "We would like to invite you to interview for the role.\n"
+            + "Your interview is on October 7, 2026 at 11:00 AM.\n"
+            + "Join: https://teams.microsoft.com/l/meetup-join/abc";
+        MailboxMatching.ClassifyEmail("Update", body).Should().Be("invitation");
+    }
+
+    [Fact]
+    public void ClassifyEmail_SpeechActOnly_GenericSubject_IsOther()
+    {
+        MailboxMatching.ClassifyEmail("Update",
+            "We would like to invite you to interview for the role. Details to follow.").Should().Be("other");
+    }
+
+    [Fact]
+    public void ClassifyEmail_BulkDigest_WithSpeechActPhrasing_Vetoed()
+    {
+        // 无 veto 时 (b) 言语行为 + (c) 时间 = 2 分且 (b) 成立，本应判邀请；veto 优先 → other。
+        var body = "This week's meetings:\n"
+            + "- ExampleCorp: We would like to invite you to interview for the developer role on October 7, 2026 at 11:00 AM.\n"
+            + "You received this email because you subscribed.\nTo unsubscribe, click here.";
+        MailboxMatching.ClassifyEmail("Your upcoming meetings", body).Should().Be("other");
+    }
+
+    [Fact]
+    public void ClassifyEmail_AtsInvitation_WithUnsubscribeFooter_IndicativeSubject()
+    {
+        var body = "We would like to invite you to interview for the role.\n"
+            + "Your interview is on October 7, 2026 at 11:00 AM.\n"
+            + "Join: https://teams.microsoft.com/l/meetup-join/abc\n"
+            + "To unsubscribe from these alerts, click here.";
+        MailboxMatching.ClassifyEmail("Interview invitation - Software Developer", body).Should().Be("invitation");
+    }
+
+    [Fact]
+    public void ClassifyEmail_SubjectMention_WithTimeAndLink_IsInvitation()
+    {
+        var body = "Your interview is on October 7, 2026 at 11:00 AM.\n"
+            + "Join: https://teams.microsoft.com/l/meetup-join/abc";
+        MailboxMatching.ClassifyEmail("Interview - ExampleCorp", body).Should().Be("invitation");
+    }
+
+    [Fact]
+    public void ClassifyEmail_EmptySubject_ParticipantPhrasing_Fallback()
+    {
+        // 票 158 体例：参与人口吻无邀约言语行为，仍走空主题 fallback 判邀请（前端同例一字对齐）。
+        MailboxMatching.ClassifyEmail("",
+            "I recived a email that I will take part in the screening interview via teams on 26 oct 2026")
+            .Should().Be("invitation");
+    }
+
+    [Fact]
+    public void ClassifyEmail_EmptySubject_BareSchedule_NoTrigger()
+    {
+        MailboxMatching.ClassifyEmail("", "Please schedule a call next week to discuss.").Should().Be("other");
+    }
+
+    [Fact]
+    public void ClassifyEmail_NonEmptySubject_BareSchedule_NoTrigger()
+    {
+        MailboxMatching.ClassifyEmail("Schedule", "Please schedule a call next week to discuss.").Should().Be("other");
+    }
+
+    [Fact]
+    public void ClassifyEmail_EmptySubject_PastedDigest_FallbackGap()
+    {
+        // 已知残留（票 310 台账 #5）：空主题粘贴不受群发 veto，旧关键词规则仍判邀请；
+        // 本断言锁定该取舍，未来修 fallback 缺口时须同步改此断言与台账。
+        MailboxMatching.ClassifyEmail("",
+            "Your weekly digest.\nMeetings this week include an interview with ExampleCorp.\nTo unsubscribe, click here.")
+            .Should().Be("invitation");
+    }
+
+    [Fact]
+    public void ClassifyEmail_NonBulkDigest_WithSpeechActPhrasing_Residual()
+    {
+        // 已知残留（票 310 台账 #2）：无群发标记的周报、所列会议含邀约言语行为时仍误判邀请；
+        // 本断言锁定该取舍，未来修此缺口时须同步改此断言与台账。
+        var body = "This week's meetings:\n"
+            + "- ExampleCorp: We would like to invite you to interview for the developer role on October 7, 2026 at 11:00 AM.";
+        MailboxMatching.ClassifyEmail("Weekly digest", body).Should().Be("invitation");
+    }
+
+    [Fact]
+    public void ClassifyEmail_IcsOnly_Residual()
+    {
+        // 已知残留（票 310 台账 #3）：证据只在 .ics 附件里时分类器看不到，仍判 other。
+        MailboxMatching.ClassifyEmail("Update",
+            "Please find the calendar invitation attached (meeting.ics). Join details are in the attachment.")
+            .Should().Be("other");
+    }
+
     [Fact]
     public void ExtractMeetingLink_PicksFirstMeetingLink()
     {

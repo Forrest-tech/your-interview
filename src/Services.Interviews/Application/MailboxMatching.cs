@@ -131,13 +131,53 @@ public static class MailboxMatching
         return s.ToLowerInvariant();
     }
 
-    /// <summary>前端 classifyEmail 的 C# 直译（优先级：改期 > 拒绝 > 邀请 > 跟进 > 其他）。</summary>
+    /// <summary>前端 classifyEmail 的 C# 直译（优先级：改期 > 拒绝 > 邀请 > 跟进 > 其他）。
+    /// 票 310：邀请分支收紧。旧规则对主题/正文任意一处出现 interview/schedule 即判邀请，
+    /// 周报类邮件只因提及面试即被错打邀请标签。新规则（与前端一字对齐）：
+    /// 1) 主题为空（粘贴/OCR 正文-only）时走旧正文关键词规则（票 158 体例：参与人口吻亦判邀请），
+    ///    但裸 schedule 不再单独触发；空主题不受群发 veto；
+    /// 2) 主题非空时算四信号：(a) 主题指示性（interview/面试且无周报标记，或邀约明示词）、
+    ///    (b) 正文邀约言语行为、(c) 正文可解析面试时间、(d) 正文可解析会议链接；
+    ///    邀约明示主题（(a) 第二款）本身即充分——否则既有断言（"Interview invitation"/"please confirm"）
+    ///    仅得 1 分会被新阈值挡掉；其余须总分 ≥ 2 且 (a) 或 (b) 成立；
+    /// 3) 群发 veto：主题非指示性且正文含群发标记（unsubscribe/退订/浏览器查看等）时跳过邀请
+    ///    分支（继续跟进/其他）；主题指示性邀约永不受 veto；顺序：拒绝 → veto → 邀请阈值；
+    /// 4) 裸 schedule 在任何路径均不再单独触发邀请。改期/拒绝/跟进分支一字未动。
+    /// 已知残留见台账票 310 条目（非实现缺口，是本组合的取舍区）。</summary>
     public static string ClassifyEmail(string subject, string body)
     {
         var s = $"{subject}\n{body}".ToLowerInvariant();
         if (Regex.IsMatch(s, @"reschedule|postpone|改期|重新安排|another time")) return "reschedule";
         if (Regex.IsMatch(s, @"regret|unfortunately|not (be )?moving forward|未通过|很抱歉|遗憾地通知|other candidates")) return "rejection";
-        if (Regex.IsMatch(s, @"invit|interview|schedule|安排面试|邀请您参加|book your|confirm your interview")) return "invitation";
+
+        var subjectText = (subject ?? string.Empty).Trim();
+        if (subjectText.Length == 0)
+        {
+            // 票 310 fallback：正文-only 时沿用旧正文关键词规则（不含裸 schedule）。
+            if (Regex.IsMatch((body ?? string.Empty).ToLowerInvariant(),
+                    @"invit|interview|安排面试|邀请您参加|book your|confirm your interview")) return "invitation";
+        }
+        else
+        {
+            var subjectLower = subjectText.ToLowerInvariant();
+            var bodyLower = (body ?? string.Empty).ToLowerInvariant();
+            var roundup = Regex.IsMatch(subjectLower,
+                @"this week|upcoming|digest|summary|roundup|newsletter|本周|下周|汇总|周报|upcoming meetings");
+            var explicitSubject = Regex.IsMatch(subjectLower,
+                @"invit|面邀|面试邀请|邀请您参加|interview invitation|interview request");
+            var subjectIndicative = !roundup && (explicitSubject || Regex.IsMatch(subjectLower, @"interview|面试"));
+            var explicitInvitationSubject = !roundup && explicitSubject;
+            var speechAct = Regex.IsMatch(bodyLower,
+                @"we would like to invite you|you are invited to (an? )?interview|we invite you to interview|邀请您参加|诚邀您参加");
+            var score = (subjectIndicative ? 1 : 0) + (speechAct ? 1 : 0)
+                + (ExtractInterviewWhen(body) is not null ? 1 : 0)
+                + (ExtractMeetingLink(body) is not null ? 1 : 0);
+            var vetoed = !subjectIndicative && Regex.IsMatch(bodyLower,
+                @"unsubscribe|退订|取消订阅|view in browser|在浏览器中查看|you received this (email )?because|您收到此邮件是因为");
+            if (!vetoed && (explicitInvitationSubject || (score >= 2 && (subjectIndicative || speechAct))))
+                return "invitation";
+        }
+
         if (Regex.IsMatch(s, @"follow ?up|checking in|跟进|想确认|touching base")) return "followup";
         return "other";
     }

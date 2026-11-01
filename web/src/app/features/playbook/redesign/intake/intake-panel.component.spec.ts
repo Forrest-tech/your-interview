@@ -550,3 +550,86 @@ describe('票161 正文-only 粘贴 + 会议卡单数字日期 + 归属下拉 + 
     expect(targetFromSelectValue('')).toBeNull();
   });
 });
+
+describe('classifyEmail(票310 邀请收紧，与后端一字对齐)', () => {
+  const inviteBody = [
+    'We would like to invite you to interview for the role.',
+    'Your interview is on October 7, 2026 at 11:00 AM.',
+    'Join: https://teams.microsoft.com/l/meetup-join/abc',
+  ].join('\n');
+
+  it('true invitation: indicative subject + speech act + time + link', () => {
+    expect(classifyEmail('Interview invitation - Full Stack Developer', inviteBody)).toBe('invitation');
+  });
+
+  it('Otter-style digest: upcoming subject + interview mentions + unsubscribe footer -> other', () => {
+    const body = [
+      'Get ready for your week.',
+      'Upcoming meetings include an interview with ExampleCorp on Monday.',
+      'You received this email because you subscribed to weekly digests.',
+      'To unsubscribe, click here.',
+      'View in browser.',
+    ].join('\n');
+    expect(classifyEmail('Your upcoming meetings', body)).toBe('other');
+  });
+
+  it('Chinese invitation: explicit subject + speech act + time + link', () => {
+    expect(classifyEmail('面试邀请',
+      '您好，诚邀您参加面试。面试时间：2026年10月13日 14:00。会议链接：https://teams.microsoft.com/l/meetup-join/abc'))
+      .toBe('invitation');
+  });
+
+  it('follow-up mentioning a past interview -> followup, not invitation', () => {
+    expect(classifyEmail('Following up', 'Hi, just checking in on how your interview went last week.'))
+      .toBe('followup');
+  });
+
+  it('generic-subject invitation rescued by threshold: speech act + time + link', () => {
+    expect(classifyEmail('Update', inviteBody)).toBe('invitation');
+  });
+
+  it('speech-act-only generic-subject invitation -> other (documented expectation)', () => {
+    expect(classifyEmail('Update', 'We would like to invite you to interview for the role. Details to follow.'))
+      .toBe('other');
+  });
+
+  it('bulk-marked digest with speech-act phrasing in a listed meeting -> other via veto', () => {
+    const body = [
+      "This week's meetings:",
+      '- ExampleCorp: We would like to invite you to interview for the developer role on October 7, 2026 at 11:00 AM.',
+      'You received this email because you subscribed.',
+      'To unsubscribe, click here.',
+    ].join('\n');
+    expect(classifyEmail('Your upcoming meetings', body)).toBe('other');
+  });
+
+  it('ATS invitation with unsubscribe footer + indicative subject -> invitation (veto does not apply)', () => {
+    expect(classifyEmail('Interview invitation - Software Developer', inviteBody + '\nTo unsubscribe from these alerts, click here.'))
+      .toBe('invitation');
+  });
+
+  it('subject mention + time + link -> invitation via subject anchor', () => {
+    expect(classifyEmail('Interview - ExampleCorp',
+      'Your interview is on October 7, 2026 at 11:00 AM.\nJoin: https://teams.microsoft.com/l/meetup-join/abc'))
+      .toBe('invitation');
+  });
+
+  it('bare schedule triggers nothing in either path', () => {
+    expect(classifyEmail('', 'Please schedule a call next week to discuss.')).toBe('other');
+    expect(classifyEmail('Schedule', 'Please schedule a call next week to discuss.')).toBe('other');
+  });
+
+  it('empty-subject pasted digest -> invitation (documented fallback gap,台账 #5)', () => {
+    expect(classifyEmail('',
+      'Your weekly digest.\nMeetings this week include an interview with ExampleCorp.\nTo unsubscribe, click here.'))
+      .toBe('invitation');
+  });
+
+  it('non-bulk digest with speech-act phrasing -> invitation (documented residual,台账 #2)', () => {
+    const body = [
+      "This week's meetings:",
+      '- ExampleCorp: We would like to invite you to interview for the developer role on October 7, 2026 at 11:00 AM.',
+    ].join('\n');
+    expect(classifyEmail('Weekly digest', body)).toBe('invitation');
+  });
+});

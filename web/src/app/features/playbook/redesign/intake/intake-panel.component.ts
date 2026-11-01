@@ -1476,11 +1476,45 @@ export function isEmptyEmailHeaders(subject: string, from: string, date: string)
   return ![subject, from, date].some(s => (s ?? '').trim());
 }
 
+/**
+ * 票310:邀请分支收紧,与后端 MailboxMatching.ClassifyEmail 一字对齐(优先级:改期 > 拒绝 > 邀请 > 跟进 > 其他)。
+ * 旧规则对主题/正文任意一处出现 interview/schedule 即判邀请,周报类邮件只因提及面试即被错打邀请标签。
+ * 新规则:1) 主题为空(粘贴/OCR 正文-only)时走旧正文关键词规则(票158 体例:参与人口吻亦判邀请),
+ * 但裸 schedule 不再单独触发;空主题不受群发 veto。
+ * 2) 主题非空时算四信号:(a) 主题指示性(interview/面试且无周报标记,或邀约明示词)、
+ * (b) 正文邀约言语行为、(c) 正文可解析面试时间、(d) 正文可解析会议链接;
+ * 邀约明示主题((a) 第二款)本身即充分——否则既有断言("Interview invitation"/"please confirm")
+ * 仅得 1 分会被新阈值挡掉;其余须总分 >= 2 且 (a) 或 (b) 成立。
+ * 3) 群发 veto:主题非指示性且正文含群发标记时跳过邀请分支(继续跟进/其他);
+ * 主题指示性邀约永不受 veto;顺序:拒绝 → veto → 邀请阈值。
+ * 4) 裸 schedule 在任何路径均不再单独触发邀请。改期/拒绝/跟进分支一字未动。
+ * 已知残留见台账票310 条目。注意:(c) 用本文件 extractInterviewWhen(含票158 date-only 回落),
+ * 后端 ExtractInterviewWhen 无此回落——date-only 文本两端 (c) 取值不同,是既有抽取差异,非分类差异。
+ */
 export function classifyEmail(subject: string, body: string): string {
   const s = `${subject}\n${body}`.toLowerCase();
   if (/reschedule|postpone|改期|重新安排|another time/.test(s)) return 'reschedule';
   if (/regret|unfortunately|not (be )?moving forward|未通过|很抱歉|遗憾地通知|other candidates/.test(s)) return 'rejection';
-  if (/invit|interview|schedule|安排面试|邀请您参加|book your|confirm your interview/.test(s)) return 'invitation';
+
+  const subjectText = (subject ?? '').trim();
+  if (!subjectText) {
+    // 票310 fallback:正文-only 时沿用旧正文关键词规则(不含裸 schedule)。
+    if (/invit|interview|安排面试|邀请您参加|book your|confirm your interview/.test((body ?? '').toLowerCase())) return 'invitation';
+  } else {
+    const subjectLower = subjectText.toLowerCase();
+    const bodyLower = (body ?? '').toLowerCase();
+    const roundup = /this week|upcoming|digest|summary|roundup|newsletter|本周|下周|汇总|周报|upcoming meetings/.test(subjectLower);
+    const explicitSubject = /invit|面邀|面试邀请|邀请您参加|interview invitation|interview request/.test(subjectLower);
+    const subjectIndicative = !roundup && (explicitSubject || /interview|面试/.test(subjectLower));
+    const explicitInvitationSubject = !roundup && explicitSubject;
+    const speechAct = /we would like to invite you|you are invited to (an? )?interview|we invite you to interview|邀请您参加|诚邀您参加/.test(bodyLower);
+    const score = (subjectIndicative ? 1 : 0) + (speechAct ? 1 : 0)
+      + (extractInterviewWhen(body) !== null ? 1 : 0)
+      + (extractMeetingLink(body) !== null ? 1 : 0);
+    const vetoed = !subjectIndicative && /unsubscribe|退订|取消订阅|view in browser|在浏览器中查看|you received this (email )?because|您收到此邮件是因为/.test(bodyLower);
+    if (!vetoed && (explicitInvitationSubject || (score >= 2 && (subjectIndicative || speechAct)))) return 'invitation';
+  }
+
   if (/follow ?up|checking in|跟进|想确认|touching base/.test(s)) return 'followup';
   return 'other';
 }

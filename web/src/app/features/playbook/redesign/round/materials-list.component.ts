@@ -108,17 +108,13 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                     <span class="msg-date">{{ displayDate(a) }}</span>
                     <span class="msg-title">{{ shortTitle(a) }}</span>
                     @if (metaOf(a)?.mailboxNew) { <span class="new-pill">{{ t('mailbox.newImport') }}</span> }
+                    <!-- 票307：类别芯片移入收起行（展开详情头删除后芯片仍可见）。 -->
+                    @if (metaOf(a)?.category) { <span class="cat-pill">{{ categoryLabel(metaOf(a)!.category!) }}</span> }
                     <span class="chev" [class.open]="isMessageOpen(a)">›</span>
                   </button>
                   @if (isMessageOpen(a)) {
                     <div class="msg-open">
-                      <div class="eo-sender">
-                        <span class="avatar sm">{{ senderInitial(a) }}</span>
-                        @if (senderName(a)) { <span class="eo-from">{{ senderName(a) }}</span> }
-                        <span class="eo-recv">{{ t('pb.v2.m.fReceived') }} {{ displayDate(a) }}</span>
-                        @if (metaOf(a)?.category) { <span class="cat-pill">{{ categoryLabel(metaOf(a)!.category!) }}</span> }
-                      </div>
-                      <div class="eo-title">{{ shortTitle(a) }}</div>
+                      <!-- 票307：展开详情头删除——发件人/日期/主题已在收起行，展开区自 parsed2 起。 -->
                       @if (metaOf(a); as m) {
                         <dl class="parsed2">
                           @if (m.interviewAt) { <div class="prow"><dt>{{ t('pb.v2.m.fWhen') }}</dt><dd>{{ m.interviewAt }}</dd></div> }
@@ -195,6 +191,9 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                 <span class="eh-title">{{ shortTitle(a) }}</span>
                 @if (metaOf(a)?.mailboxNew) { <span class="new-pill">{{ t('mailbox.newImport') }}</span> }
                 @if (metaOf(a)?.format) { <span class="eh-format">{{ formatLabel(t, metaOf(a)!.format) }}</span> }
+                <!-- 票307：类别芯片移入收起行；有面试时间时 eh-time 显示的是面试时间（非收件日期），故另补收件日期行——无面试时间时 eh-time 本就是收件日期，不重复。 -->
+                @if (metaOf(a)?.category) { <span class="cat-pill">{{ categoryLabel(metaOf(a)!.category!) }}</span> }
+                @if (metaOf(a)?.interviewAt) { <span class="eh-recv">{{ t('pb.v2.m.fReceived') }} {{ displayDate(a) }}</span> }
               </span>
               <span class="chev" [class.open]="isMessageOpen(a)">›</span>
             </button>
@@ -206,13 +205,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
 
             @if (isMessageOpen(a)) {
             <div class="email-open">
-              <div class="eo-sender">
-                <span class="avatar sm">{{ senderInitial(a) }}</span>
-                @if (senderName(a)) { <span class="eo-from">{{ senderName(a) }}</span> }
-                <span class="eo-recv">{{ t('pb.v2.m.fReceived') }} {{ displayDate(a) }}</span>
-                @if (metaOf(a)?.category) { <span class="cat-pill">{{ categoryLabel(metaOf(a)!.category!) }}</span> }
-              </div>
-              <div class="eo-title">{{ shortTitle(a) }}</div>
+              <!-- 票307：展开详情头删除——发件人/日期/主题已在收起行，展开区自 parsed2 起。 -->
               @if (metaOf(a); as m) {
                 <dl class="parsed2">
                   @if (m.interviewAt) { <div class="prow"><dt>{{ t('pb.v2.m.fWhen') }}</dt><dd>{{ m.interviewAt }}</dd></div> }
@@ -411,6 +404,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
     .eh-time { margin-left: auto; flex-shrink: 0; font-size: 13px; color: var(--yi-text-muted, #475569); }
     .eh-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .eh-format { font-size: 13px; color: var(--yi-text-muted, #475569); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .eh-recv { font-size: 13px; color: var(--yi-text-muted, #475569); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .chev { flex-shrink: 0; font-size: 20px; line-height: 1; color: var(--yi-text-muted, #475569);
             transition: transform .15s; align-self: center; }
     .chev.open { transform: rotate(90deg); }

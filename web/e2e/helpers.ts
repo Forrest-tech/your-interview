@@ -222,3 +222,43 @@ export async function addRound(
     throw new Error(`[e2e] 加轮次失败: HTTP ${r.status()} ${(await r.text()).slice(0, 200)}`);
   }
 }
+
+/**
+ * 票 309：播一封邮件资产（roundId null、channel=email，经票 306 allRoundsMail
+ * 路径在轮次卡 Materials 页可见；随条目删除一并清理，无需单独删除）。
+ * 返回资产 id（供 /html 路由桩匹配与 iframe 定位）。
+ */
+export async function seedMailAsset(
+  request: APIRequestContext,
+  token: string,
+  entryId: string,
+  opts: { subject: string; fromName: string; fromEmail: string; transcriptText: string },
+): Promise<string> {
+  const meta = {
+    channel: 'email',
+    category: 'interview',
+    from: opts.fromName,
+    fromEmail: opts.fromEmail,
+    subject: opts.subject,
+    date: new Date().toISOString(),
+    threadKey: `t309-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+  };
+  const r = await request.post(`${API}/api/interviews/${entryId}/assets`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      kind: 'Text',
+      fileName: 'seed-mail.eml',
+      contentType: 'message/rfc822',
+      transcriptText: opts.transcriptText,
+      metaJson: JSON.stringify(meta),
+      roundId: null,
+    },
+  });
+  if (!r.ok()) {
+    throw new Error(`[e2e] 播邮件资产失败: HTTP ${r.status()} ${(await r.text()).slice(0, 200)}`);
+  }
+  const body = await r.json();
+  const id = body?.id as string | undefined;
+  if (!id) throw new Error('[e2e] 播邮件资产失败: 响应无 id');
+  return id;
+}

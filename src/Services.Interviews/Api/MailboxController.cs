@@ -63,6 +63,41 @@ public sealed class MailboxController(
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
+    /// <summary>
+    /// 票 309 §6：取邮件 HTML（serve pass 后）。归属校验在 handler 内（资产级）；
+    /// 未拥有 → 404（绝不 403）；HtmlBody 为 NULL 且回填不可行 → 404，
+    /// 前端一律按“无 HTML、渲染纯文本”处理（404 是正常预期，不是错误）。
+    /// 直访本端点亦无脚本：Content-Security-Policy: sandbox。
+    /// </summary>
+    [HttpGet("mailbox/assets/{assetId:guid}/html")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> GetMailHtml(Guid assetId, [FromQuery] int? images,
+        CancellationToken ct)
+    {
+        var r = await sender.Send(new GetMailHtmlQuery(Me, assetId, images == 1), ct);
+        if (!r.IsSuccess) return r.ToProblemDetails();
+        Response.Headers["Content-Security-Policy"] = "sandbox";
+        if (r.Value.ImagesBlocked) Response.Headers["X-Images-Blocked"] = "1";
+        return Results.Content(r.Value.Html, "text/html; charset=utf-8");
+    }
+
+    /// <summary>
+    /// 票 309 §6：取内联图片字节（仅渲染依赖，无列表、无下载 UI）。
+    /// 检查顺序：归属 → cidMap 映射 → 类型白名单 → 路径 containment →
+    /// 缺失/不可读回占位图 200。文件名永不披露。
+    /// </summary>
+    [HttpGet("mailbox/assets/{assetId:guid}/inline/{cid}")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
+    public async Task<IResult> GetMailInlineImage(Guid assetId, string cid, CancellationToken ct)
+    {
+        var r = await sender.Send(new GetMailInlineImageQuery(Me, assetId, cid), ct);
+        if (!r.IsSuccess) return r.ToProblemDetails();
+        Response.Headers["Content-Disposition"] = "inline";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Cache-Control"] = "private, no-store";
+        return Results.Bytes(r.Value.Bytes, r.Value.ContentType);
+    }
+
     /// <summary>断开：删连接行 + 尽力撤销；已导入资源保留。</summary>
     [HttpDelete("mailbox/connections/{id:guid}")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]

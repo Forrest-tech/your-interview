@@ -785,6 +785,11 @@ public static class MailboxImportHelper
             Encoding.UTF8.GetByteCount(body), null, null,
             body, null, null, "en", sha, roundId, phase, meta.ToJsonString());
 
+        // 票 309：入库 HTML 与纯文本同源（已取到的 format=full 响应，零额外 quota）——
+        // 消毒 + 512KB cap + 消毒为空判空；任一不成立存 NULL，走纯文本回落。
+        // 独立于落盘块：即使附件落盘失败，HtmlBody 仍入库（落盘块的 catch 不影响它）。
+        asset.SetHtmlBody(MailHtmlSanitizer.PrepareStoredHtml(message.BodyHtml));
+
         // 原文与附件落盘（asset.Id 在构造时已生成；落盘失败不阻塞入库——原文 hash 已记审计行）。
         var root = ResolveRoot(opts);
         var dir = Path.Combine(root, asset.Id.ToString());
@@ -799,6 +804,7 @@ public static class MailboxImportHelper
             var attDir = Path.Combine(dir, "attachments");
             var stored = 0;
             var oversized = new List<string>();
+            var cidMap = new JsonObject();
             foreach (var att in attachments)
             {
                 if (att.SizeBytes > opts.AttachmentMaxBytes) { oversized.Add(att.FileName); continue; }
@@ -807,14 +813,26 @@ public static class MailboxImportHelper
                     bytes = await provider.GetAttachmentBytesAsync(access, message.ProviderMessageId,
                         att.ProviderAttachmentId, ct);
                 if (bytes is null) { oversized.Add(att.FileName); continue; }
+                var safeName = SanitizeFileName(att.FileName, 120);
                 Directory.CreateDirectory(attDir);
-                await File.WriteAllBytesAsync(
-                    Path.Combine(attDir, SanitizeFileName(att.FileName, 120)), bytes, ct);
+                await File.WriteAllBytesAsync(Path.Combine(attDir, safeName), bytes, ct);
                 stored++;
+                // 票 309：有 Content-ID 的附件 part 进 cidMap（内联图片渲染用；
+                // file 值用与 rawPath 同款存储基相对约定）。
+                var cid = MailHtmlSanitizer.NormalizeCid(att.ContentId);
+                if (cid is not null)
+                {
+                    cidMap[cid] = new JsonObject
+                    {
+                        ["file"] = $"mail-attachments/{asset.Id}/attachments/{safeName}",
+                        ["contentType"] = att.ContentType,
+                    };
+                }
             }
             meta["attachmentCount"] = stored;
             if (oversized.Count > 0)
                 meta["oversizedAttachments"] = JsonSerializer.SerializeToNode(oversized);
+            if (cidMap.Count > 0) meta["cidMap"] = cidMap;
             asset.SetMeta(meta.ToJsonString());
         }
         catch (OperationCanceledException) { throw; }
@@ -824,6 +842,106 @@ public static class MailboxImportHelper
             providerKind, accountEmail, message.ProviderMessageId, message.ProviderThreadId,
             ruleLabel, sha, rawBytes.LongLength, null, message.ReceivedAt));
         return asset.Id;
+    }
+
+    /// <summary>
+    /// 票 309 §7：懒回填的存盘一步（取数由调用方完成并区分 404/瞬时失败）。
+    /// 消毒 → 合并 CID（含字节落盘）→ cap/判空 → 存盘。调用方统一 SaveChanges
+    ///（与 ImportMessageAsync 同款约定）。返回存盘后的 HtmlBody（超限/消毒为空为 null）。
+    /// - CID 合并只加缺失键，既有键绝不覆盖；CID 字节落盘复用导入布局
+    ///   （mail-attachments/{assetId}/attachments/ + 同款 cap），但碰撞规则更严：
+    ///   同名文件字节相同 → 复用（不重写），不同 → -2/-3… 最低空闲后缀，永不覆盖；
+    /// - 单文件失败隔离：某 CID 存失败只令该 CID 不映射，其余继续，HTML 照常存；
+    /// - 永不重写 raw.eml（回填取的是 format=full，本就没有 raw 字节）。
+    /// </summary>
+    public static async Task<string?> ApplyBackfillAsync(
+        IMailboxProvider provider, string access, MailboxOptions opts,
+        InterviewAsset asset, MailboxMessage message, CancellationToken ct)
+    {
+        JsonObject? meta;
+        bool metaWritable;
+        if (string.IsNullOrWhiteSpace(asset.MetaJson))
+        {
+            meta = new JsonObject();
+            metaWritable = true;
+        }
+        else
+        {
+            try
+            {
+                meta = JsonNode.Parse(asset.MetaJson) as JsonObject;
+                metaWritable = meta is not null;
+            }
+            catch (JsonException)
+            {
+                // 历史 meta 非法：不碰 meta（避免丢字段），只存 HTML。
+                meta = null;
+                metaWritable = false;
+            }
+        }
+        JsonObject cidMap = new();
+        if (meta is not null && meta.TryGetPropertyValue("cidMap", out var existing)
+            && existing is JsonObject existingMap)
+        {
+            foreach (var kv in existingMap) cidMap[kv.Key] = kv.Value?.DeepClone();
+        }
+
+        var attachments = message.Attachments.Count > 0
+            ? message.Attachments
+            : await provider.ListAttachmentsAsync(access, message.ProviderMessageId, ct);
+        var attDir = Path.Combine(ResolveRoot(opts), asset.Id.ToString(), "attachments");
+        foreach (var att in attachments)
+        {
+            var cid = MailHtmlSanitizer.NormalizeCid(att.ContentId);
+            if (cid is null || cidMap.ContainsKey(cid)) continue;
+            if (att.SizeBytes > opts.AttachmentMaxBytes) continue;
+            try
+            {
+                byte[]? bytes = att.Bytes;
+                if (bytes is null && att.ProviderAttachmentId is not null)
+                    bytes = await provider.GetAttachmentBytesAsync(access, message.ProviderMessageId,
+                        att.ProviderAttachmentId, ct);
+                if (bytes is null) continue;
+                Directory.CreateDirectory(attDir);
+                var safeName = SanitizeFileName(att.FileName, 120);
+                var finalName = ResolveCollisionName(attDir, safeName, bytes);
+                if (finalName is null) continue;
+                if (!File.Exists(Path.Combine(attDir, finalName)))
+                    await File.WriteAllBytesAsync(Path.Combine(attDir, finalName), bytes, ct);
+                cidMap[cid] = new JsonObject
+                {
+                    ["file"] = $"mail-attachments/{asset.Id}/attachments/{finalName}",
+                    ["contentType"] = att.ContentType,
+                };
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { /* 单文件失败隔离：该 CID 不映射，其余继续 */ }
+        }
+
+        if (metaWritable && meta is not null)
+        {
+            if (cidMap.Count > 0) meta["cidMap"] = cidMap;
+            asset.SetMeta(meta.ToJsonString());
+        }
+        var html = MailHtmlSanitizer.PrepareStoredHtml(message.BodyHtml);
+        asset.SetHtmlBody(html);
+        return html;
+    }
+
+    /// <summary>回填碰撞消解：首个“不存在、或已存在且字节相同”的文件名；
+    /// 否则在扩展名前插 -2、-3… 直至空闲。返回 null 仅表示名义异常（不写盘）。</summary>
+    private static string? ResolveCollisionName(string dir, string safeName, byte[] bytes)
+    {
+        var stem = Path.GetFileNameWithoutExtension(safeName);
+        var ext = Path.GetExtension(safeName);
+        for (var i = 0; ; i++)
+        {
+            var name = i == 0 ? safeName : $"{stem}-{i + 1}{ext}";
+            var path = Path.Combine(dir, name);
+            if (!File.Exists(path)) return name;
+            if (File.ReadAllBytes(path).SequenceEqual(bytes)) return name;
+            if (i > 1000) return null;
+        }
     }
 
     /// <summary>轮次归属（方案 §2.2 既有 before/after 规则）：收件日最近的 ScheduledDate ≥ 收件日的轮次，否则最晚轮次，无轮次则 null。</summary>

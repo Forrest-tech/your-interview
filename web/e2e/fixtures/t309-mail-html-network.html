@@ -1,0 +1,9 @@
+<p>Dear candidate,</p>
+<p><strong>Interview invitation</strong> — we would like to invite you to the next round.</p>
+<table><tr><td>When</td><td>Friday 10:00</td></tr><tr><td>Where</td><td>Online meeting</td></tr></table>
+<p><a href="https://meet.example.com/abc" target="_blank" rel="noopener noreferrer">Join the meeting</a></p>
+<!-- (a) 服务端契约层：远端图已由服务端替换为共享占位图（客户端不应再发任何外站请求）。 -->
+<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAwMCAO+ip1sAAAAASUVORK5CYII=" alt="header">
+<!-- (b) 客户端鲁棒层（刻意不是服务端输出）：追踪 CSS 与追踪内联样式，客户端必须清掉。 -->
+<style>@import url('https://tracker.example.invalid/track.css'); .x { background-image: url('https://tracker.example.invalid/pixel.png'); }</style>
+<p style="color: #333; background-image: url('https://tracker.example.invalid/pixel2.png')">Styled text</p>

@@ -1,0 +1,7 @@
+<script>alert('xss')</script>
+<p onclick="alert('click')">Click <strong>me</strong> for the real content.</p>
+<p><a href="javascript:alert('js')">Evil link</a> and <a href="https://ok.example.com/page">Good link</a></p>
+<form action="https://evil.example.com/submit"><input type="text" name="q"><button>Submit</button></form>
+<style>.evil { background-image: url('https://tracker.example.invalid/pixel.png'); }</style>
+<p style="background-image: url('https://tracker.example.invalid/pixel2.png')">Styled trap</p>
+<table><tr><td>Keep this table</td></tr></table>

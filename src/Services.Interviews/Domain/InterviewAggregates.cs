@@ -841,6 +841,9 @@ public sealed class InterviewAsset : Entity
     /// <summary>转写全文。</summary>
     public string? TranscriptText { get; private set; }
 
+    /// <summary>票 309：邮件 HTML 正文（已按 §3 邮件配置消毒，NULL = 无 HTML，走纯文本回落）。</summary>
+    public string? HtmlBody { get; private set; }
+
     /// <summary>转写分段 JSON: [{idx,speaker,start,end,text,pitchHz}] —— 说话人分离结果。</summary>
     private string? _transcriptSegmentsJson;
     public string? TranscriptSegmentsJson { get => JsonFieldAdapter.Unwrap(_transcriptSegmentsJson); private set => _transcriptSegmentsJson = JsonFieldAdapter.Wrap(value); }
@@ -856,6 +859,8 @@ public sealed class InterviewAsset : Entity
     internal void Reassign(Guid? roundId) => RoundId = roundId;
 
     internal void SetMeta(string? metaJson) => MetaJson = metaJson;
+
+    internal void SetHtmlBody(string? htmlBody) => HtmlBody = htmlBody;
 
     public bool HasTranscript => !string.IsNullOrWhiteSpace(TranscriptText);
 

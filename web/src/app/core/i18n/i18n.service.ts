@@ -1761,6 +1761,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   'mailbox.reconnect': { zh: '重新连接', en: 'Reconnect', fr: 'Reconnecter' },
   'mailbox.refreshAll': { zh: '从邮箱刷新', en: 'Refresh from mailbox', fr: 'Actualiser depuis la boîte mail' },
   'mailbox.refresh': { zh: '从邮箱刷新', en: 'Refresh from mailbox', fr: 'Actualiser depuis la boîte mail' },
+  'mailbox.loadImages': { zh: '加载图片', en: 'Load images', fr: 'Charger les images' },
   'mailbox.refreshing': { zh: '刷新中…', en: 'Refreshing…', fr: 'Actualisation…' },
   'mailbox.refreshProgress': {
     zh: '正在导入…已新增 {added} 封 · 待确认 {pending} 封',

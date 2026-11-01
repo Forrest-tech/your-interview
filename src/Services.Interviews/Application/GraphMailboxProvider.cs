@@ -235,7 +235,7 @@ public sealed class GraphMailboxProvider(HttpClient http) : IMailboxProvider
         CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get,
-            $"{GraphBase}/me/messages/{Uri.EscapeDataString(id)}/attachments?$select=id,name,contentType,size");
+            $"{GraphBase}/me/messages/{Uri.EscapeDataString(id)}/attachments?$select=id,name,contentType,size,contentId");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         using var resp = await http.SendAsync(req, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound) return [];
@@ -252,7 +252,9 @@ public sealed class GraphMailboxProvider(HttpClient http) : IMailboxProvider
             if (name is null || attId is null) continue;
             var size = v.TryGetProperty("size", out var s) && s.TryGetInt64(out var sz) ? sz : 0;
             var ctype = v.TryGetProperty("contentType", out var c) ? c.GetString() : null;
-            list.Add(new(name, ctype ?? "application/octet-stream", size, attId, null));
+            // 票 309：fileAttachment 的 contentId（内联图片映射用）。
+            var contentId = v.TryGetProperty("contentId", out var cid) ? cid.GetString() : null;
+            list.Add(new(name, ctype ?? "application/octet-stream", size, attId, null, contentId));
         }
         return list;
     }

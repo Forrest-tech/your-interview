@@ -206,6 +206,8 @@ public sealed class InterviewsDbContext(
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
             // 2026-10-20 详情页 v2:材料元数据(解析字段/摘要/处理状态等),前端约定结构。
             e.Property(x => x.MetaJson).HasColumnType("text");
+            // 票 309：邮件 HTML 正文（消毒后，最大 512KB，超限/消毒为空时存 NULL）。
+            e.Property(x => x.HtmlBody).HasColumnType("text");
             // 票19 ARC-06:Json 大字段 backing field 存版本信封,EF 直读字段;属性 getter/setter 过 JsonFieldAdapter(列不变,无迁移)
             e.Metadata.FindProperty(nameof(InterviewAsset.TranscriptSegmentsJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);
             e.Metadata.FindProperty(nameof(InterviewAsset.MetaJson))!.SetPropertyAccessMode(PropertyAccessMode.Field);

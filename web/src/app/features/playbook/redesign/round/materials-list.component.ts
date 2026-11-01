@@ -14,6 +14,7 @@ import {
   InterviewsApiService, RefreshMailboxResult
 } from '../../../../core/api/interviews-api.service';
 import { EmailShotDialogComponent } from './email-shot-dialog.component';
+import { MailHtmlComponent } from './mail-html.component';
 import {
   InterviewAsset, InterviewRound
 } from '../../../../core/models/api.models';
@@ -37,7 +38,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
 @Component({
   selector: 'app-materials-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatDialogModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatDialogModule, MailHtmlComponent],
   template: `
     <!-- 票240：条目级邮箱刷新入口（主入口在设置页；此处为条目级快捷入口，仅刷本条目规则）。 -->
     <div class="mail-refresh">
@@ -123,6 +124,9 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                           @if (meetingLinkOf(a); as link) { <div class="prow"><dt>{{ t('pb.v2.r.meetingLink') }}</dt><dd><a [href]="link" target="_blank" rel="noopener">{{ t('pb.v2.r.openLink') }}</a></dd></div> }
                         </dl>
                       }
+                      <!-- 票 309：HTML 体（有 HTML 时渲染 iframe，无 HTML 时发 noHtml、父级改渲染纯文本）。 -->
+                      <app-mail-html [assetId]="a.id" (noHtml)="markHtmlMissing(a.id)" />
+                      @if (isHtmlMissing(a.id)) {
                       @if (bodyState(a); as eb) {
                         @if (eb.loading) { <p class="body-loading">{{ t('pb.v2.d.loading') }}</p> }
                         @else if (eb.error) { <p class="body-loading">{{ t('pb.v2.m.bodyFailed') }}</p> }
@@ -147,6 +151,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                       } @else {
                         <!-- 票236：正文区兜底（与单卡同款 bodyState 机制，不另设第二套）—— entry 缺失时渲染 loading 态，取数到后自动进终态分支。 -->
                         <p class="body-loading">{{ t('pb.v2.d.loading') }}</p>
+                      }
                       }
                       @if (metaOf(a)?.screenshotAssetId) {
                         <div class="shot-box">
@@ -215,6 +220,9 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                 </dl>
               }
 
+            <!-- 票 309：HTML 体（有 HTML 时渲染 iframe，无 HTML 时发 noHtml、父级改渲染纯文本）。 -->
+            <app-mail-html [assetId]="a.id" (noHtml)="markHtmlMissing(a.id)" />
+            @if (isHtmlMissing(a.id)) {
             @if (bodyState(a); as eb) {
               @if (eb.loading) { <p class="body-loading">{{ t('pb.v2.d.loading') }}</p> }
               @else if (eb.error) { <p class="body-loading">{{ t('pb.v2.m.bodyFailed') }}</p> }
@@ -240,6 +248,7 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
               <!-- 票236：正文区兜底 —— entry 缺失时不再留空白 void，直接渲染 loading 态；
                    bodyState 已在读数时触发 ensureEmailBody，取数到后自动进终态分支。 -->
               <p class="body-loading">{{ t('pb.v2.d.loading') }}</p>
+            }
             }
 
             @if (metaOf(a)?.screenshotAssetId) {
@@ -702,6 +711,9 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   readonly emailBodies = signal(new Map<string, EmailBodyState>());
   private readonly fetchedEmailIds = new Set<string>();
 
+  /** 票 309：HTML 渲染失败的资产 id 集合（mail-html 发 noHtml 后，父级改渲染纯文本路径）。 */
+  readonly htmlMissingIds = signal(new Set<string>());
+
   constructor() {
     // 票165：邮件卡挂载即取全文（现成懒取改挂载取），正文不再需要点击才出现；非邮件 kind 不动。
     // 票217：取数收敛到 ensureEmailBody（transcript 优先 + 截图回落 + 空白归一），effect 与展开共用。
@@ -762,6 +774,18 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
     if (eb) return eb;
     this.ensureEmailBody(a);
     return this.emailBodies().get(a.id) ?? null;
+  }
+
+  /** 票 309：该资产是否已确认无 HTML（渲染纯文本路径；HTML 成功时正文区不渲染）。 */
+  isHtmlMissing(id: string): boolean {
+    return this.htmlMissingIds().has(id);
+  }
+
+  /** 票 309：mail-html 取信失败/消毒为空时标记（幂等，Set 去重）。 */
+  markHtmlMissing(id: string): void {
+    const ids = new Set(this.htmlMissingIds());
+    ids.add(id);
+    this.htmlMissingIds.set(ids);
   }
 
   metaOf(a: InterviewAsset): AssetMeta | null {

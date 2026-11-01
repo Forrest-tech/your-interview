@@ -8,7 +8,10 @@ public sealed record MailboxAttachment(
     string ContentType,
     long SizeBytes,
     string? ProviderAttachmentId,
-    byte[]? Bytes);
+    byte[]? Bytes,
+    // 票 309：附件 MIME part 的 Content-ID（Gmail part headers / Graph $select contentId；
+    // null = 该 part 无 Content-ID，不进 cidMap）。可选参数，现有构造保持编译。
+    string? ContentId = null);
 
 /// <summary>
 /// provider 拉回的单封邮件。

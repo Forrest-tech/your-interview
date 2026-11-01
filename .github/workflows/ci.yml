@@ -192,6 +192,10 @@ jobs:
         working-directory: web
         run: npx tsc --noEmit
 
+      - name: mail-html 信任旁路静态门禁(票 309 测试 23)
+        working-directory: web
+        run: node tools/check-mail-html-bypass.mjs
+
       - name: Custom JWT 回归 harness(票 257,node --test)
         run: node --test docs/logto/custom-jwt.test.js
 

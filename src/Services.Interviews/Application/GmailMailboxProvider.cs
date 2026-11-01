@@ -466,7 +466,22 @@ public sealed class GmailMailboxProvider : IMailboxProvider, IIncrementalMailbox
             var body = part.TryGetProperty("body", out var b) ? b : (JsonElement?)null;
             var attId = body is { } bb && bb.TryGetProperty("attachmentId", out var a) ? a.GetString() : null;
             var size = body is { } bb2 && bb2.TryGetProperty("size", out var s) && s.TryGetInt64(out var sz) ? sz : 0;
-            attachments.Add(new(fileName, mime ?? "application/octet-stream", size, attId, null));
+            // 票 309：读该 MIME part 自身的 headers 数组取 Content-ID（此前只读顶层
+            // payload headers，part headers 全被忽略，内联图片无法映射）。
+            string? contentId = null;
+            if (part.TryGetProperty("headers", out var ph))
+            {
+                foreach (var h in ph.EnumerateArray())
+                {
+                    var hn = h.TryGetProperty("name", out var n) ? n.GetString() : null;
+                    if (string.Equals(hn, "Content-ID", StringComparison.OrdinalIgnoreCase))
+                    {
+                        contentId = h.TryGetProperty("value", out var v) ? v.GetString() : null;
+                        break;
+                    }
+                }
+            }
+            attachments.Add(new(fileName, mime ?? "application/octet-stream", size, attId, null, contentId));
             return;
         }
         if (mime == "text/plain" && bodyText.Length == 0)

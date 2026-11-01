@@ -220,6 +220,9 @@ namespace YourInterview.Services.Interviews.Infrastructure.Persistence.Migration
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("HtmlBody")
+                        .HasColumnType("text");
+
                     b.Property<string>("IntegrityStatus")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");

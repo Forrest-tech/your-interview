@@ -13,7 +13,7 @@ import {
 import { PlaybookV2Api } from '../playbook-v2.api';
 import { RoundRemindersService } from './round-reminders.service';
 import { formatRemindAt, reminderStateForRound } from './reminders.helpers';
-import { TranscriptSegment, parseQuestionReview, safeJson } from '../v2.models';
+import { AssetMeta, TranscriptSegment, parseQuestionReview, safeJson } from '../v2.models';
 import { PrepReportComponent } from './prep-report.component';
 import { RoundRecordComponent } from './round-record.component';
 import { QaZoomComponent } from '../../../../core/qa-zoom/qa-zoom.component';
@@ -179,6 +179,7 @@ const ROUND_STAGE_OPTIONS = ['Screen', 'Technical', 'SystemDesign', 'Behavioral'
             }
           </div>
           <app-materials-list [entryId]="entry().id" [assets]="roundAssets()"
+                              [allRoundsMail]="allRoundsMail()"
                               [rounds]="entry().rounds ?? []" (changed)="changed.emit()" />
         }
         @case ('comm') {
@@ -334,6 +335,11 @@ export class RoundCardComponent implements OnInit {
 
   readonly roundAssets = computed(() =>
     (this.entry().assets ?? []).filter(a => a.roundId === this.round().id));
+  /** 票 306：全部轮次的邮件视图——本条目 channel=email 且不在本轮的资产（含未分轮次的邮件）；
+      只放开轮次过滤，条目作用域与导入归属一字不动；Materials 页由 materials-list 并集展示。 */
+  readonly allRoundsMail = computed(() =>
+    (this.entry().assets ?? []).filter(a => a.roundId !== this.round().id
+      && safeJson<AssetMeta>(a.metaJson)?.channel === 'email'));
   readonly guidanceAssets = computed(() =>
     this.roundAssets().filter(a => a.kind === 'Guidance'));
   readonly questionCount = computed(() =>

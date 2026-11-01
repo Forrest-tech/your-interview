@@ -49,8 +49,12 @@ export class MailboxSettingComponent implements OnDestroy {
   readonly error = signal<string | null>(null);
   readonly refreshing = signal(false);
   readonly refreshResult = signal<RefreshMailboxResult | null>(null);
-  /** 票 296：运行中实时进度（按钮之外展示，不进按钮模板——按钮 spinner 归票 295）。 */
-  readonly refreshProgress = signal<{ added: number; pending: number } | null>(null);
+  /** 票 296：运行中实时进度（按钮之外展示，不进按钮模板——按钮 spinner 归票 295）。
+      票 306：+ 扫描进度（scanned/checked/phase/backfillPage）与心跳（startedAt/stale）。 */
+  readonly refreshProgress = signal<{
+    added: number; pending: number; scanned: number; checked: number; phase: string | null;
+    backfillPage: number | null; stale: boolean; startedAt: string | null;
+  } | null>(null);
   readonly busy = signal(false);
   /** 票 245：OAuth 凭据卡行（Secret 永不下发，只给状态位）。 */
   readonly oauthSettings = signal<MailboxOAuthSettingsDto[]>([]);
@@ -236,7 +240,10 @@ export class MailboxSettingComponent implements OnDestroy {
     ).subscribe({
       next: (s) => {
         if (s.state === 'Running') {
-          this.refreshProgress.set({ added: s.added, pending: s.pending });
+          this.refreshProgress.set({
+            added: s.added, pending: s.pending, scanned: s.scanned, checked: s.checked,
+            phase: s.phase, backfillPage: s.backfillPage, stale: s.stale, startedAt: s.startedAt,
+          });
           return;
         }
         this.refreshing.set(false);
@@ -270,11 +277,48 @@ export class MailboxSettingComponent implements OnDestroy {
     this.refreshSub?.unsubscribe();
     this.refreshSub = null;
     // 服务端取消（任务停拉新、已落库保留）；即使请求失败，本地也按已取消处理，与今日语义一致。
+    // 票 306：不传 entryId = 取消全局槽（设置页行为不变）。
     this.api.cancelMailboxRefresh().subscribe({ next: () => {}, error: () => {} });
     this.refreshing.set(false);
     this.refreshProgress.set(null);
     this.notice.set(this.t('mailbox.refreshCancelled'));
     this.loadAll();
+  }
+
+  /** 票 306：强制取消全局槽（删槽内条目，随后轮询见 None 即回空闲；用于心跳停滞的任务）。 */
+  forceCancelRefresh(): void {
+    this.refreshSub?.unsubscribe();
+    this.refreshSub = null;
+    this.api.forceCancelMailboxRefresh().subscribe({ next: () => {}, error: () => {} });
+    this.refreshing.set(false);
+    this.refreshProgress.set(null);
+    this.notice.set(this.t('mailbox.refreshCancelled'));
+    this.loadAll();
+  }
+
+  /** 票 306：运行中进度行（与 Materials 页同格式口径：新增/待确认 + 扫描计数/阶段/回填页/已运行时间/停滞提示）。 */
+  progressLine(p: {
+    added: number; pending: number; scanned: number; checked: number; phase: string | null;
+    backfillPage: number | null; stale: boolean; startedAt: string | null;
+  }): string {
+    let line = this.t('mailbox.refreshProgress')
+      .replace('{added}', '' + p.added).replace('{pending}', '' + p.pending);
+    if (p.scanned > 0 || p.checked > 0) {
+      line += ' · ' + this.t('mailbox.scanCounts')
+        .replace('{scanned}', '' + p.scanned).replace('{checked}', '' + p.checked);
+    }
+    if (p.phase === 'listing') line += ' · ' + this.t('mailbox.phaseListing');
+    else if (p.phase === 'fetching') line += ' · ' + this.t('mailbox.phaseFetching');
+    if (p.backfillPage != null) line += ' · ' + this.t('mailbox.backfillPage')
+      .replace('{page}', '' + p.backfillPage);
+    if (p.startedAt) {
+      const secs = Math.max(0, Math.floor((Date.now() - Date.parse(p.startedAt)) / 1000));
+      line += ' · ' + (secs < 60
+        ? this.t('mailbox.runningAgeSec').replace('{seconds}', '' + secs)
+        : this.t('mailbox.runningAgeMin').replace('{minutes}', '' + Math.floor(secs / 60)));
+    }
+    if (p.stale) line += ' · ' + this.t('mailbox.stalledNote');
+    return line;
   }
 
   confirmPending(item: MailboxPendingDto): void {

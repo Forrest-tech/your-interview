@@ -112,7 +112,7 @@ import { derivePhase, formatLabel, makeV2Fmt, makeV2T, normalizeThreadSubject, r
         }
       } @else {
         <p class="hint">{{ t('pb.v2.c.noAppHint') }}</p>
-        <app-materials-list [entryId]="entry().id" [assets]="entryAssets()"
+        <app-materials-list [entryId]="entry().id" [assets]="unlinkedCommAssets()"
                             [rounds]="entry().rounds ?? []" (changed)="reload()" />
       }
     </div>
@@ -181,6 +181,15 @@ export class CommLogComponent {
   }
   readonly entryAssets = computed(() =>
     (this.entry().assets ?? []).filter(a => !a.roundId));
+  /** 票 306：未关联投递时的 Communications 材料——未分轮次资产 + 全部邮件（channel=email，不论轮次归属）；
+      entryAssets/looseAssets/待确认计数一字不动，只换未关联分支的列表输入。 */
+  readonly unlinkedCommAssets = computed(() =>
+    (this.entry().assets ?? []).filter(a => {
+      if (!a.roundId) return true;
+      try {
+        return (JSON.parse(a.metaJson ?? '{}') as AssetMeta).channel === 'email';
+      } catch { return false; }
+    }));
   /** 已关联投递时:没有 Jobs 镜像行的条目级材料(communicationId 未回填的)。 */
   readonly looseAssets = computed(() =>
     this.entryAssets().filter(a => {

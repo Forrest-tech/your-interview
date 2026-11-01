@@ -118,15 +118,22 @@ export class InterviewsApiService {
       { entryId: entryId ?? null });
   }
 
-  /** 刷新任务状态轮询（票 296；无任务时 state = 'None'）。 */
-  getMailboxRefreshStatus(): Observable<MailboxRefreshJobStatus> {
-    return this.api.get<MailboxRefreshJobStatus>(`${InterviewsApiService.BASE}/mailbox/refresh/status`);
+  /** 刷新任务状态轮询（票 296；无任务时 state = 'None'）。票 306：传 entryId 查本条目槽，不传查全局槽。 */
+  getMailboxRefreshStatus(entryId?: string | null): Observable<MailboxRefreshJobStatus> {
+    return this.api.get<MailboxRefreshJobStatus>(`${InterviewsApiService.BASE}/mailbox/refresh/status`,
+      entryId ? { entryId } : undefined);
   }
 
-  /** 取消运行中的刷新任务（票 296；无运行任务时 cancelled = false）。 */
-  cancelMailboxRefresh(): Observable<{ cancelled: boolean; state: string; jobId: string }> {
+  /** 取消运行中的刷新任务（票 296；无运行任务时 cancelled = false）。票 306：传 entryId 取消对应槽。 */
+  cancelMailboxRefresh(entryId?: string | null): Observable<{ cancelled: boolean; state: string; jobId: string }> {
     return this.api.post<{ cancelled: boolean; state: string; jobId: string }>(
-      `${InterviewsApiService.BASE}/mailbox/refresh/cancel`, {});
+      `${InterviewsApiService.BASE}/mailbox/refresh/cancel`, { entryId: entryId ?? null });
+  }
+
+  /** 票 306：强制取消——删槽内条目，随后轮询见 None 即回空闲（用于心跳停滞的任务）。 */
+  forceCancelMailboxRefresh(entryId?: string | null): Observable<{ forced: boolean }> {
+    return this.api.post<{ forced: boolean }>(
+      `${InterviewsApiService.BASE}/mailbox/refresh/force-cancel`, { entryId: entryId ?? null });
   }
 
   getMailboxPending(entryId?: string | null): Observable<MailboxPendingDto[]> {
@@ -224,7 +231,8 @@ export interface RefreshMailboxResult {
   cursorAdvanced: boolean;
 }
 
-/** 票 296：刷新任务状态（终态计数与 RefreshMailboxResult 同形，前端复用结果处理）。 */
+/** 票 296：刷新任务状态（终态计数与 RefreshMailboxResult 同形，前端复用结果处理）。
+    票 306：+ 扫描进度（scanned/checked/phase/backfillPage）与心跳（lastActivityAt/stale）。 */
 export interface MailboxRefreshJobStatus {
   state: string;
   jobId: string | null;
@@ -243,6 +251,12 @@ export interface MailboxRefreshJobStatus {
   backfillPageIndex: number | null;
   backfillPageSize: number | null;
   message: string | null;
+  scanned: number;
+  checked: number;
+  phase: string | null;
+  lastActivityAt: string | null;
+  stale: boolean;
+  backfillPage: number | null;
 }
 
 /** 票 240：待确认队列行（不含原文；确认时后端重取）。 */

@@ -236,7 +236,8 @@ public sealed class MailboxBackfillResumeTests : IAsyncLifetime, IDisposable
         MailboxProtection protection, string root) =>
         new(db, new FakeFactory(provider), protection,
             new MailboxOAuthResolver(db, EnvOptions(), protection),
-            Options.Create(new MailboxOptions { AttachmentRootDir = root }));
+            Options.Create(new MailboxOptions { AttachmentRootDir = root }),
+            new MailboxRefreshJobTracker());
 
     private static (InterviewEntry Entry, MailMatchRule Rule) SeedEntry(InterviewsDbContext db, Guid userId,
         string company, string[] domains, string[] contacts, string[] keywords, string[] exclusions)
@@ -542,7 +543,8 @@ public sealed class MailboxBackfillResumeTests : IAsyncLifetime, IDisposable
         var root = NewTempRoot();
         var handler = new RefreshMailboxCommandHandler(db, new FakeFactory(fake), protection,
             new MailboxOAuthResolver(db, EnvOptions(), protection),
-            Options.Create(new MailboxOptions { AttachmentRootDir = root }));
+            Options.Create(new MailboxOptions { AttachmentRootDir = root }),
+            new MailboxRefreshJobTracker());
         var r = await handler.Handle(new RefreshMailboxCommand(userId, null), CancellationToken.None);
         r.IsSuccess.Should().BeTrue();
         var imported = (await db.MailboxImportRecords.ToListAsync()).Select(x => x.ProviderMessageId).ToHashSet();
@@ -575,7 +577,8 @@ public sealed class MailboxBackfillResumeTests : IAsyncLifetime, IDisposable
         var root = NewTempRoot();
         var handler = new RefreshMailboxCommandHandler(db, new FakeFactory(fake), protection,
             new MailboxOAuthResolver(db, EnvOptions(), protection),
-            Options.Create(new MailboxOptions { AttachmentRootDir = root }));
+            Options.Create(new MailboxOptions { AttachmentRootDir = root }),
+            new MailboxRefreshJobTracker());
         var r = await handler.Handle(new RefreshMailboxCommand(userId, null), CancellationToken.None);
         r.IsSuccess.Should().BeTrue();
         var imported = (await db.MailboxImportRecords.ToListAsync()).Select(x => x.ProviderMessageId).ToHashSet();

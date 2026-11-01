@@ -209,7 +209,8 @@ public sealed class MailboxRefreshSaveFailureTests : IAsyncLifetime, IDisposable
         InterviewsDbContext db, FakeStreaming fake, MailboxProtection protection, Guid userId, string root) =>
         await new RefreshMailboxCommandHandler(db, new FakeFactory(fake), protection,
                 new MailboxOAuthResolver(db, EnvOptions(), protection),
-                Options.Create(new MailboxOptions { AttachmentRootDir = root }))
+                Options.Create(new MailboxOptions { AttachmentRootDir = root }),
+            new MailboxRefreshJobTracker())
             .Handle(new RefreshMailboxCommand(userId, null), CancellationToken.None);
 
     [Fact]

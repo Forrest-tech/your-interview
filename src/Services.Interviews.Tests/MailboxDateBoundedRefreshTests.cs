@@ -200,7 +200,8 @@ public sealed class MailboxDateBoundedRefreshTests : IAsyncLifetime, IDisposable
         MailboxProtection protection, string root) =>
         new(db, new FakeFactory(provider), protection,
             new MailboxOAuthResolver(db, EnvOptions(), protection),
-            Options.Create(new MailboxOptions { AttachmentRootDir = root }));
+            Options.Create(new MailboxOptions { AttachmentRootDir = root }),
+            new MailboxRefreshJobTracker());
 
     private static (InterviewEntry Entry, MailMatchRule Rule) SeedEntry(InterviewsDbContext db, Guid userId,
         string company, string[] domains, string[] contacts, string[] keywords, string[] exclusions)

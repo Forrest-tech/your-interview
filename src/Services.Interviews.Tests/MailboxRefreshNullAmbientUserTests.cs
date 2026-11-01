@@ -232,7 +232,8 @@ public sealed class MailboxRefreshNullAmbientUserTests : IAsyncLifetime, IDispos
 
         var handler = new RefreshMailboxCommandHandler(db, new FakeFactory(fake), protection,
             new MailboxOAuthResolver(db, EnvOptions(), protection),
-            Options.Create(new MailboxOptions { AttachmentRootDir = root }));
+            Options.Create(new MailboxOptions { AttachmentRootDir = root }),
+            new MailboxRefreshJobTracker());
         var result = await handler.Handle(new RefreshMailboxCommand(userId, null), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();

@@ -1767,6 +1767,34 @@ const DICT: Record<string, Record<Lang, string>> = {
     en: 'Importing… {added} added · {pending} pending review',
     fr: 'Importation… {added} ajoutés · {pending} en attente de vérification',
   },
+  'mailbox.scanCounts': {
+    zh: '已扫描 {scanned} 封 · 已核对 {checked} 封',
+    en: 'Scanned {scanned} · Checked {checked}',
+    fr: 'Scannés {scanned} · Vérifiés {checked}',
+  },
+  'mailbox.phaseListing': { zh: '正在列取邮件', en: 'Listing mail', fr: 'Listage des courriels' },
+  'mailbox.phaseFetching': { zh: '正在逐封取数', en: 'Fetching messages', fr: 'Récupération des messages' },
+  'mailbox.backfillPage': {
+    zh: '回填第 {page} 页',
+    en: 'Backfill page {page}',
+    fr: 'Page de remplissage {page}',
+  },
+  'mailbox.runningAgeSec': {
+    zh: '已运行 {seconds} 秒',
+    en: 'Running {seconds}s',
+    fr: 'En cours depuis {seconds} s',
+  },
+  'mailbox.runningAgeMin': {
+    zh: '已运行 {minutes} 分钟',
+    en: 'Running {minutes} min',
+    fr: 'En cours depuis {minutes} min',
+  },
+  'mailbox.stalledNote': {
+    zh: '长时间无进展',
+    en: 'No progress for a while',
+    fr: 'Aucun progrès depuis un moment',
+  },
+  'mailbox.forceCancel': { zh: '强制取消', en: 'Force cancel', fr: 'Annulation forcée' },
   'mailbox.refreshFailed': { zh: '刷新失败', en: 'Refresh failed', fr: 'Échec de l’actualisation' },
   'mailbox.refreshHint': {
     zh: '按本条目规则从邮箱拉取新邮件（强信号自动导入，弱信号进待确认队列）。',

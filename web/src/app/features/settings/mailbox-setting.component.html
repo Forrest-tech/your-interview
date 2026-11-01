@@ -150,11 +150,15 @@
           {{ t('mailbox.cancel') }}
         </button>
       }
+      @if (refreshing() && refreshProgress()?.stale) {
+        <button mat-stroked-button (click)="forceCancelRefresh()">
+          {{ t('mailbox.forceCancel') }}
+        </button>
+      }
     </div>
 
     @if (refreshProgress(); as p) {
-      <p class="sp-result">{{ t('mailbox.refreshProgress')
-        .replace('{added}', '' + p.added).replace('{pending}', '' + p.pending) }}</p>
+      <p class="sp-result">{{ progressLine(p) }}</p>
     }
 
     @if (refreshResult(); as r) {

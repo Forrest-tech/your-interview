@@ -217,7 +217,8 @@ public sealed class MailboxAsyncRefreshTests : IAsyncLifetime, IDisposable
         InterviewsDbContext db, FakeStreaming fake, MailboxProtection protection, Guid userId, string root) =>
         ct => new RefreshMailboxCommandHandler(db, new FakeFactory(fake), protection,
             new MailboxOAuthResolver(db, EnvOptions(), protection),
-            Options.Create(new MailboxOptions { AttachmentRootDir = root }))
+            Options.Create(new MailboxOptions { AttachmentRootDir = root }),
+            new MailboxRefreshJobTracker())
             .Handle(new RefreshMailboxCommand(userId, null), ct);
 
     private static void SeedFourMessages(FakeStreaming fake)
@@ -233,16 +234,16 @@ public sealed class MailboxAsyncRefreshTests : IAsyncLifetime, IDisposable
     }
 
     private static async Task<MailboxRefreshJobSnapshot> WaitTerminalAsync(
-        MailboxRefreshJobTracker tracker, Guid userId, int timeoutMs = 60000)
+        MailboxRefreshJobTracker tracker, Guid userId, Guid? entryId = null, int timeoutMs = 60000)
     {
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            var snap = tracker.TryGet(userId);
+            var snap = tracker.TryGet(userId, entryId);
             if (snap is not null && snap.State != MailboxRefreshJobState.Running) return snap;
             await Task.Delay(50);
         }
-        throw new TimeoutException($"刷新任务未在 {timeoutMs}ms 内终结，当前态={tracker.TryGet(userId)?.State}");
+        throw new TimeoutException($"刷新任务未在 {timeoutMs}ms 内终结，当前态={tracker.TryGet(userId, entryId)?.State}");
     }
 
     // ============================ 纯跟踪逻辑（不依赖 DB） ============================
@@ -252,6 +253,7 @@ public sealed class MailboxAsyncRefreshTests : IAsyncLifetime, IDisposable
     {
         var tracker = new MailboxRefreshJobTracker();
         var userId = Guid.NewGuid();
+        var entryB = Guid.NewGuid();
         var gate = new TaskCompletionSource<Result<RefreshMailboxResult>>();
         var calls = 0;
         Func<CancellationToken, Task<Result<RefreshMailboxResult>>> run = async ct =>
@@ -262,24 +264,31 @@ public sealed class MailboxAsyncRefreshTests : IAsyncLifetime, IDisposable
 
         var first = tracker.StartOrAttach(userId, null, run);
         first.State.Should().Be(MailboxRefreshJobState.Running);
-        var second = tracker.StartOrAttach(userId, Guid.NewGuid(), run);
-        second.JobId.Should().Be(first.JobId);
+        // 票 306：不同槽互不干扰——条目槽起自己的任务，不再附到全局任务上。
+        var second = tracker.StartOrAttach(userId, entryB, run);
+        second.JobId.Should().NotBe(first.JobId);
         second.State.Should().Be(MailboxRefreshJobState.Running);
-        // Task.Run 调度异步：等委托真正跑起来再断言只跑了一次。
+        // Task.Run 调度异步：等两槽委托都真正跑起来再断言。
         var callDeadline = DateTimeOffset.UtcNow.AddSeconds(5);
-        while (Volatile.Read(ref calls) == 0 && DateTimeOffset.UtcNow < callDeadline)
+        while (Volatile.Read(ref calls) < 2 && DateTimeOffset.UtcNow < callDeadline)
             await Task.Delay(20);
-        calls.Should().Be(1);
+        calls.Should().Be(2);
+        // 同槽再点仍返回同一运行任务。
+        tracker.StartOrAttach(userId, null, run).JobId.Should().Be(first.JobId);
 
-        var (cancelled, _) = tracker.TryCancel(userId);
+        var (cancelled, _) = tracker.TryCancel(userId, null);
         cancelled.Should().BeTrue();
-        var terminal = await WaitTerminalAsync(tracker, userId);
+        var terminal = await WaitTerminalAsync(tracker, userId, null);
         terminal.State.Should().Be(MailboxRefreshJobState.Cancelled);
+        // 全局槽取消不影响条目槽。
+        tracker.TryGet(userId, entryB)?.State.Should().Be(MailboxRefreshJobState.Running);
+        tracker.TryCancel(userId, entryB).Cancelled.Should().BeTrue();
+        (await WaitTerminalAsync(tracker, userId, entryB)).State.Should().Be(MailboxRefreshJobState.Cancelled);
 
         var third = tracker.StartOrAttach(userId, null, _ =>
             Task.FromResult(Result.Success(new RefreshMailboxResult(1, 0, 0, 0, [], false, false, false, false))));
         third.JobId.Should().NotBe(first.JobId);
-        (await WaitTerminalAsync(tracker, userId)).State.Should().Be(MailboxRefreshJobState.Done);
+        (await WaitTerminalAsync(tracker, userId, null)).State.Should().Be(MailboxRefreshJobState.Done);
     }
 
     [Fact]
@@ -292,7 +301,7 @@ public sealed class MailboxAsyncRefreshTests : IAsyncLifetime, IDisposable
         var terminal = await WaitTerminalAsync(tracker, userId);
         terminal.State.Should().Be(MailboxRefreshJobState.Failed);
         terminal.ErrorMessage.Should().Be("boom");
-        tracker.TryCancel(userId).Cancelled.Should().BeFalse();
+        tracker.TryCancel(userId, null).Cancelled.Should().BeFalse();
     }
 
     // ============================ 任务 + 真 handler ============================
@@ -378,7 +387,7 @@ public sealed class MailboxAsyncRefreshTests : IAsyncLifetime, IDisposable
             await Task.Delay(50);
         fake.FullFetchedIds.Should().Contain("m3");
 
-        tracker.TryCancel(userId).Cancelled.Should().BeTrue();
+        tracker.TryCancel(userId, null).Cancelled.Should().BeTrue();
         blockM3.SetResult();
         var terminal = await WaitTerminalAsync(tracker, userId);
         terminal.State.Should().Be(MailboxRefreshJobState.Cancelled);

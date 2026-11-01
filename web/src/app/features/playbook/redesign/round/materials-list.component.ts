@@ -53,6 +53,9 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
       @if (mailRefreshing()) {
         <button type="button" class="mini-btn" (click)="cancelMailboxRefresh()">{{ t('mailbox.cancel') }}</button>
       }
+      @if (mailRefreshing() && mailRefreshProgress()?.stale) {
+        <button type="button" class="mini-btn" (click)="forceCancelMailboxRefresh()">{{ t('mailbox.forceCancel') }}</button>
+      }
       @if (mailRefreshProgress(); as p) {
         <span class="mail-progress">{{ mailProgressLine(p) }}</span>
       }
@@ -484,6 +487,9 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   readonly hideMatDelete = true;
   readonly assets = input.required<InterviewAsset[]>();
   readonly rounds = input<InterviewRound[]>([]);
+  /** 票 306：全部轮次的邮件（调用方算好：本条目 channel=email 且不在主列表轮次内的资产；
+      仅展示用，不改导入归属与轮次分配；空 = 不启用）。 */
+  readonly allRoundsMail = input<InterviewAsset[]>([]);
 
   /** 票30(REQ-10):归属下拉编号与详情页 stepper 同一日期序口径(helper 内部自排序,input 顺序无关)。 */
   roundNo(r: InterviewRound): number {
@@ -503,8 +509,12 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   readonly mailRefreshResult = signal<RefreshMailboxResult | null>(null);
   /** 票298：条目最新邮件日期（yyyy-MM-dd；null = 尚无已导入邮件，不渲染）。 */
   readonly mailLatestDate = signal<string | null>(null);
-  /** 票 296：运行中实时进度（按钮之外展示，不进按钮模板——按钮 spinner 归票 295）。 */
-  readonly mailRefreshProgress = signal<{ added: number; pending: number } | null>(null);
+  /** 票 296：运行中实时进度（按钮之外展示，不进按钮模板——按钮 spinner 归票 295）。
+      票 306：+ 扫描进度（scanned/checked/phase/backfillPage）与心跳（startedAt/stale）。 */
+  readonly mailRefreshProgress = signal<{
+    added: number; pending: number; scanned: number; checked: number; phase: string | null;
+    backfillPage: number | null; stale: boolean; startedAt: string | null;
+  } | null>(null);
   private mailRefreshSub: Subscription | null = null;
   private mailLatestSub: Subscription | null = null;
   /** 票305：轮询中上次见到的计数值；Running 分支仅在计数增长时增量重载列表。 */
@@ -513,7 +523,8 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   ngOnInit(): void {
     this.loadLatestMailDate();
     // 票 296：重进页面时若服务端有运行中的刷新任务，自动重挂轮询（任务不随组件销毁而停）。
-    this.interviewsApi.getMailboxRefreshStatus().subscribe({
+    // 票 306：按本条目槽重挂（设置页全局槽不再遮蔽条目页）。
+    this.interviewsApi.getMailboxRefreshStatus(this.entryId()).subscribe({
       next: (s) => {
         if (s.state === 'Running') {
           this.mailRefreshing.set(true);
@@ -556,17 +567,21 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
     });
   }
 
-  /** 票 296：3s 轮询任务状态；终态处理与今日同步语义一一对应（结果/snack/重载）。 */
+  /** 票 296：3s 轮询任务状态；终态处理与今日同步语义一一对应（结果/snack/重载）。
+      票 306：按本条目槽轮询。 */
   private pollMailboxRefresh(): void {
     this.mailRefreshSub?.unsubscribe();
     this.mailRefreshSub = interval(3000).pipe(
       startWith(0),
-      switchMap(() => this.interviewsApi.getMailboxRefreshStatus()),
+      switchMap(() => this.interviewsApi.getMailboxRefreshStatus(this.entryId())),
       takeWhile((s) => s.state === 'Running', true),
     ).subscribe({
       next: (s) => {
         if (s.state === 'Running') {
-          this.mailRefreshProgress.set({ added: s.added, pending: s.pending });
+          this.mailRefreshProgress.set({
+            added: s.added, pending: s.pending, scanned: s.scanned, checked: s.checked,
+            phase: s.phase, backfillPage: s.backfillPage, stale: s.stale, startedAt: s.startedAt,
+          });
           // 票305：计数增长 = 服务端已有新导入落库，增量重载列表（changed.emit() 走既有终态重载路径）；
           // 父级 load() 在已有条目时不显示加载态、不重建本组件，刷新按钮/进度/页签/展开态均保留。
           // 首个 Running 轮询（重进重挂时）只记基线不重载——详情页刚加载的条目已含此前导入。
@@ -617,7 +632,8 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
     this.mailRefreshSub?.unsubscribe();
     this.mailRefreshSub = null;
     // 服务端取消（任务停拉新、已落库保留）；即使请求失败，本地也按已取消处理，与今日语义一致。
-    this.interviewsApi.cancelMailboxRefresh().subscribe({ next: () => {}, error: () => {} });
+    // 票 306：按本条目槽取消。
+    this.interviewsApi.cancelMailboxRefresh(this.entryId()).subscribe({ next: () => {}, error: () => {} });
     this.mailRefreshing.set(false);
     this.mailRefreshProgress.set(null);
     this.mailSeenCounts = null;
@@ -625,11 +641,46 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
     this.changed.emit();
   }
 
-  /** 票 296：运行中进度行（与结果行同格式口径，实时计数）。 */
-  mailProgressLine(p: { added: number; pending: number }): string {
-    return this.i18n.t('mailbox.refreshProgress')
+  /** 票 306：强制取消（删服务端槽内条目，随后轮询见 None 即回空闲；用于心跳停滞的任务）。 */
+  forceCancelMailboxRefresh(): void {
+    this.mailRefreshSub?.unsubscribe();
+    this.mailRefreshSub = null;
+    this.interviewsApi.forceCancelMailboxRefresh(this.entryId()).subscribe({ next: () => {}, error: () => {} });
+    this.mailRefreshing.set(false);
+    this.mailRefreshProgress.set(null);
+    this.mailSeenCounts = null;
+    this.loadLatestMailDate();
+    this.changed.emit();
+  }
+
+  /** 票 296：运行中进度行（与结果行同格式口径，实时计数）。
+      票 306：+ 扫描计数/阶段/回填页/已运行时间/停滞提示；added/pending 仍为准。 */
+  mailProgressLine(p: {
+    added: number; pending: number; scanned: number; checked: number; phase: string | null;
+    backfillPage: number | null; stale: boolean; startedAt: string | null;
+  }): string {
+    let line = this.i18n.t('mailbox.refreshProgress')
       .replace('{added}', String(p.added))
       .replace('{pending}', String(p.pending));
+    if (p.scanned > 0 || p.checked > 0) {
+      line += ' · ' + this.i18n.t('mailbox.scanCounts')
+        .replace('{scanned}', String(p.scanned))
+        .replace('{checked}', String(p.checked));
+    }
+    if (p.phase === 'listing') line += ' · ' + this.i18n.t('mailbox.phaseListing');
+    else if (p.phase === 'fetching') line += ' · ' + this.i18n.t('mailbox.phaseFetching');
+    if (p.backfillPage != null) line += ' · ' + this.i18n.t('mailbox.backfillPage')
+      .replace('{page}', String(p.backfillPage));
+    if (p.startedAt) line += ' · ' + this.mailAgeLine(p.startedAt);
+    if (p.stale) line += ' · ' + this.i18n.t('mailbox.stalledNote');
+    return line;
+  }
+
+  /** 票 306：已运行时间（60 秒内按秒，之后按分钟向下取整；轮询每 3 秒刷新一次，时间自然走动）。 */
+  private mailAgeLine(startedAt: string): string {
+    const secs = Math.max(0, Math.floor((Date.now() - Date.parse(startedAt)) / 1000));
+    if (secs < 60) return this.i18n.t('mailbox.runningAgeSec').replace('{seconds}', String(secs));
+    return this.i18n.t('mailbox.runningAgeMin').replace('{minutes}', String(Math.floor(secs / 60)));
   }
 
   /** 刷新结果条：新增 N 封 · 待确认 M 封 · 跳过重复 K 封（失败另行 snack 提示）。 */
@@ -848,12 +899,17 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
    * 非邮件资产原序单条。
    */
   readonly displayGroups = computed(() => {
+    // 票 306：主列表 + 全部轮次邮件并集（按 id 去重，主列表优先）；轮次过滤只对邮件放开，条目作用域不变。
+    const byId = new Map<string, InterviewAsset>();
+    for (const a of this.assets()) byId.set(a.id, a);
+    for (const a of this.allRoundsMail()) if (!byId.has(a.id)) byId.set(a.id, a);
+    const all = [...byId.values()];
     const referenced = new Set<string>();
-    for (const a of this.assets()) {
+    for (const a of all) {
       const sid = this.metaOf(a)?.screenshotAssetId;
       if (sid) referenced.add(sid);
     }
-    const visible = this.assets().filter(a => !referenced.has(a.id));
+    const visible = all.filter(a => !referenced.has(a.id));
     interface DisplayGroup { key: string; subject: string; items: InterviewAsset[] }
     const groups: DisplayGroup[] = [];
     const byKey = new Map<string, DisplayGroup>();

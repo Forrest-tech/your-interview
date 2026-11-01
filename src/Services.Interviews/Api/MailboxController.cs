@@ -74,8 +74,9 @@ public sealed class MailboxController(
 
     /// <summary>
     /// 票 296：手动刷新改异步——立刻 202 返回任务标识，长活在服务端后台任务跑既有
-    /// RefreshMailboxCommandHandler（294 断点/去重/匹配一字不动）；进行中再点返回同一运行任务。
-    /// entryId 缺省 = 全部条目规则；否则仅该条目规则（运行中任务的作用域胜出）。
+    /// RefreshMailboxCommandHandler（294 断点/去重/匹配一字不动）；同槽进行中再点返回同一运行任务。
+    /// entryId 缺省 = 全部条目规则；否则仅该条目规则。
+    /// 票 306：任务按 (user, entry) 分槽——条目刷新起自己的槽，不再被全局任务遮蔽。
     /// </summary>
     [HttpPost("mailbox/refresh")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
@@ -94,22 +95,40 @@ public sealed class MailboxController(
             new { jobId = job.JobId, state = job.State.ToString() });
     }
 
-    /// <summary>票 296：刷新任务状态轮询（无任务时 state = None，前端视为空闲）。</summary>
+    /// <summary>
+    /// 票 296：刷新任务状态轮询（无任务时 state = None，前端视为空闲）。
+    /// 票 306：按作用域查槽——条目页传 entryId 查本条目槽，设置页不传查全局槽；互不遮蔽。
+    /// </summary>
     [HttpGet("mailbox/refresh/status")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsRead)]
-    public async Task<IResult> RefreshStatus(CancellationToken ct)
+    public async Task<IResult> RefreshStatus([FromQuery] Guid? entryId, CancellationToken ct)
     {
-        var r = await sender.Send(new GetMailboxRefreshStatusQuery(Me), ct);
+        var r = await sender.Send(new GetMailboxRefreshStatusQuery(Me, entryId), ct);
         return r.IsSuccess ? Results.Ok(r.Value) : r.ToProblemDetails();
     }
 
-    /// <summary>票 296：取消运行中的刷新任务（停拉新、已落库保留；无运行任务时 cancelled = false）。</summary>
+    /// <summary>
+    /// 票 296：取消运行中的刷新任务（停拉新、已落库保留；无运行任务时 cancelled = false）。
+    /// 票 306：按 body.entryId 取消对应槽（条目页传本条目、设置页不传取消全局槽）。
+    /// </summary>
     [HttpPost("mailbox/refresh/cancel")]
     [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
-    public IResult CancelRefresh()
+    public IResult CancelRefresh([FromBody] RefreshMailboxBody? body)
     {
-        var (cancelled, job) = jobs.TryCancel(Me);
+        var (cancelled, job) = jobs.TryCancel(Me, body?.EntryId);
         return Results.Ok(new { cancelled, state = job.State.ToString(), jobId = job.JobId });
+    }
+
+    /// <summary>
+    /// 票 306：强制取消——取消 CTS 并直接删槽内条目，随后轮询见 None 即回空闲。
+    /// 用于心跳停滞（Stale）的任务；迟到的后台收尾不会复活已删条目。
+    /// </summary>
+    [HttpPost("mailbox/refresh/force-cancel")]
+    [Authorize(Policy = PermissionPolicy.Prefix + Permissions.InterviewsWrite)]
+    public IResult ForceCancelRefresh([FromBody] RefreshMailboxBody? body)
+    {
+        var forced = jobs.TryForceCancel(Me, body?.EntryId);
+        return Results.Ok(new { forced });
     }
 
     [HttpGet("mailbox/pending")]

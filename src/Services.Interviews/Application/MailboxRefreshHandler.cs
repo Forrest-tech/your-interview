@@ -31,7 +31,8 @@ public sealed class RefreshMailboxCommandHandler(
     IMailboxProviderFactory providers,
     MailboxProtection protection,
     MailboxOAuthResolver oauth,
-    IOptions<MailboxOptions> options)
+    IOptions<MailboxOptions> options,
+    MailboxRefreshJobTracker jobs)
     : IRequestHandler<RefreshMailboxCommand, Result<RefreshMailboxResult>>
 {
     public async Task<Result<RefreshMailboxResult>> Handle(RefreshMailboxCommand request, CancellationToken ct)
@@ -160,6 +161,9 @@ public sealed class RefreshMailboxCommandHandler(
         var counters = new RefreshCounters();
         var cancelled = false;
 
+        // 票 306：列取完成即报扫描进度（最终列表封数；锚点过期重拉时以重拉后的列表为准）。
+        jobs.ReportListed(request.UserId, request.EntryId, fetch.Messages.Count);
+
         try
         {
             foreach (var message in fetch.Messages)
@@ -172,6 +176,7 @@ public sealed class RefreshMailboxCommandHandler(
                 counters.Skipped += r.Skipped;
                 counters.Failed += r.Failed;
                 counters.Reasons.AddRange(r.Reasons);
+                jobs.ReportChecked(request.UserId, request.EntryId);
             }
         }
         catch (OperationCanceledException)
@@ -357,6 +362,7 @@ public sealed class RefreshMailboxCommandHandler(
         {
             var page = await stream.ListHistoryPageAsync(access, conn.Cursor!, pageToken, ct);
             ids.AddRange(page.Ids);
+            jobs.ReportListed(request.UserId, request.EntryId, page.Ids.Count);
             pageToken = page.NextPageToken;
             newHistoryId = page.NewHistoryId;
         } while (pageToken is not null);
@@ -395,6 +401,8 @@ public sealed class RefreshMailboxCommandHandler(
             await db.SaveChangesAsync(ct);
             progress = null;
         }
+        // 票 306：本轮列出的回填页序（新起跑首列页 = 1；断点续跑时从 1 重计——页序只表本轮进展）。
+        var backfillPageNo = 0;
         if (progress is null)
         {
             // 票 298：有 latest 时新起跑只拉 [最新日期, 今天]（减 1 天安全垫见 BoundedWindowStart），
@@ -408,6 +416,9 @@ public sealed class RefreshMailboxCommandHandler(
             db.MailboxBackfillProgress.Add(progress);
             var first = await stream.ListIdsPageAsync(access, null, windowStart, ct);
             progress.StartPage(JsonSerializer.Serialize(first.Ids), first.NextPageToken);
+            jobs.ReportListed(request.UserId, request.EntryId, first.Ids.Count);
+            backfillPageNo = 1;
+            jobs.ReportBackfillPage(request.UserId, request.EntryId, backfillPageNo);
             await db.SaveChangesAsync(ct);
         }
 
@@ -428,6 +439,9 @@ public sealed class RefreshMailboxCommandHandler(
             if (progress.NextPageToken is null) break;
             var next = await stream.ListIdsPageAsync(access, progress.NextPageToken, progress.WindowStartUtc, ct);
             progress.StartPage(JsonSerializer.Serialize(next.Ids), next.NextPageToken);
+            jobs.ReportListed(request.UserId, request.EntryId, next.Ids.Count);
+            backfillPageNo++;
+            jobs.ReportBackfillPage(request.UserId, request.EntryId, backfillPageNo);
             await db.SaveChangesAsync(ct);
         }
 
@@ -444,6 +458,7 @@ public sealed class RefreshMailboxCommandHandler(
                 {
                     var page = await stream.ListHistoryPageAsync(access, anchor, catchPageToken, ct);
                     catchIds.AddRange(page.Ids);
+                    jobs.ReportListed(request.UserId, request.EntryId, page.Ids.Count);
                     catchPageToken = page.NextPageToken;
                     latestHistoryId = page.NewHistoryId;
                 } while (catchPageToken is not null);
@@ -552,6 +567,8 @@ public sealed class RefreshMailboxCommandHandler(
                 var label = string.IsNullOrWhiteSpace(messageSubject) ? id : Truncate(messageSubject);
                 counters.Reasons.Add($"《{label}》保存失败：{detail}");
             }
+            // 票 306：本封已处理（导入/待确认/跳过/失败均算），逐封进度 + 心跳。
+            jobs.ReportChecked(request.UserId, request.EntryId);
         }
     }
 

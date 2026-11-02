@@ -536,6 +536,8 @@ public sealed class RefreshMailboxCommandHandler(
     /// 票 300：单封落库失败不中断整轮 —— 每封保存前快照计数与新增跟踪项；
     /// 保存失败时只摘除本封新增实体（Added），Modified 的断点推进、游标/轮换类状态刻意保留，
     /// 随下一封保存落库；计数回滚后记 failed + 内层异常原因，继续下一封。
+    /// 票 312：单封取信失败同款隔离 —— 取信/原文/匹配抛错（取消、限流、授权除外）
+    /// 只记本封 failed + 原因并继续下一封，不再打断整轮；失败封断点照常推进（与 300 一致）。
     /// 限流与取消不捕获，由上层按已计计数返回；onAfterMessage 在每次落库前推进断点下标。
     /// </summary>
     private async Task ProcessIdBatchAsync(
@@ -567,19 +569,47 @@ public sealed class RefreshMailboxCommandHandler(
             }
             else
             {
-                var full = await stream.GetMessageFullAsync(access, id, ct);
-                if (full is not null)
+                // 票 312：单封取信失败不中断整轮（300 保存隔离的同款语义）——
+                // 取信/原文/匹配任一步抛错都只记本封 failed 并继续下一封；
+                // 取消、限流、授权按既有路径向上传播，不降格为单封失败。
+                try
                 {
-                    messageSubject = full.Subject;
-                    var r = await ProcessMessageAsync(full,
-                        (id, token) => stream.GetMessageRawAsync(access, id, token),
-                        entryById, rules,
-                        mapBySender, conn, stream, access, opts, request.UserId, ct);
-                    counters.Added += r.Added;
-                    counters.Pending += r.Pending;
-                    counters.Skipped += r.Skipped;
-                    counters.Failed += r.Failed;
-                    counters.Reasons.AddRange(r.Reasons);
+                    var full = await stream.GetMessageFullAsync(access, id, ct);
+                    if (full is not null)
+                    {
+                        messageSubject = full.Subject;
+                        var r = await ProcessMessageAsync(full,
+                            (id, token) => stream.GetMessageRawAsync(access, id, token),
+                            entryById, rules,
+                            mapBySender, conn, stream, access, opts, request.UserId, ct);
+                        counters.Added += r.Added;
+                        counters.Pending += r.Pending;
+                        counters.Skipped += r.Skipped;
+                        counters.Failed += r.Failed;
+                        counters.Reasons.AddRange(r.Reasons);
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException
+                    and not MailboxRateLimitedException
+                    and not MailboxAuthException)
+                {
+                    // 取信失败时本封尚未落库：摘除本封新增跟踪项（与 300 保存失败同款），
+                    // 计数回滚到本封之前，再记一笔 failed；断点推进仍走下方 onAfterMessage，
+                    // 故失败封在续跑时跳过（与 300 坏封语义一致，原因进结果供前端展示）。
+                    foreach (var tracked in db.ChangeTracker.Entries()
+                        .Where(e => e.State == EntityState.Added && !trackedAddedBefore.Contains(e.Entity))
+                        .ToList())
+                        tracked.State = EntityState.Detached;
+                    counters.Added = addedBefore;
+                    counters.Pending = pendingBefore;
+                    counters.Skipped = skippedBefore;
+                    counters.Failed = failedBefore;
+                    counters.Reasons.RemoveRange(reasonsBefore, counters.Reasons.Count - reasonsBefore);
+                    counters.Failed++;
+                    var detail = ex.Message;
+                    if (detail.Length > 300) detail = detail[..300];
+                    var label = string.IsNullOrWhiteSpace(messageSubject) ? id : Truncate(messageSubject);
+                    counters.Reasons.Add($"《{label}》取信失败：{detail}");
                 }
             }
             if (onAfterMessage is not null) await onAfterMessage(i + 1);

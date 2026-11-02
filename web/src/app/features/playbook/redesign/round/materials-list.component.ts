@@ -15,6 +15,7 @@ import {
 } from '../../../../core/api/interviews-api.service';
 import { EmailShotDialogComponent } from './email-shot-dialog.component';
 import { MailHtmlComponent } from './mail-html.component';
+import { formatSenderLine } from './email-sender.helpers';
 import {
   InterviewAsset, InterviewRound
 } from '../../../../core/models/api.models';
@@ -118,6 +119,8 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
                       <!-- 票307：展开详情头删除——发件人/日期/主题已在收起行，展开区自 parsed2 起。 -->
                       @if (metaOf(a); as m) {
                         <dl class="parsed2">
+                          <!-- 票 313：发件人邮箱行（收起行只有名字，地址只在此处；307 的详情头删除决定不动）。 -->
+                          @if (senderLine(a); as sl) { <div class="prow"><dt>{{ t('pb.v2.m.fFrom') }}</dt><dd>{{ sl }}</dd></div> }
                           @if (m.interviewAt) { <div class="prow"><dt>{{ t('pb.v2.m.fWhen') }}</dt><dd>{{ m.interviewAt }}</dd></div> }
                           @if (m.format) { <div class="prow"><dt>{{ t('pb.v2.m.fFormat') }}</dt><dd>{{ formatLabel(t, m.format) }}</dd></div> }
                           @if (interviewersOf(a)) { <div class="prow"><dt>{{ t('pb.v2.m.fInterviewers') }}</dt><dd>{{ interviewersOf(a) }}</dd></div> }
@@ -213,6 +216,8 @@ interface EmailBodyState { loading: boolean; error: boolean; text: string; seg: 
               <!-- 票307：展开详情头删除——发件人/日期/主题已在收起行，展开区自 parsed2 起。 -->
               @if (metaOf(a); as m) {
                 <dl class="parsed2">
+                  <!-- 票 313：发件人邮箱行（收起行只有名字，地址只在此处；307 的详情头删除决定不动）。 -->
+                  @if (senderLine(a); as sl) { <div class="prow"><dt>{{ t('pb.v2.m.fFrom') }}</dt><dd>{{ sl }}</dd></div> }
                   @if (m.interviewAt) { <div class="prow"><dt>{{ t('pb.v2.m.fWhen') }}</dt><dd>{{ m.interviewAt }}</dd></div> }
                   @if (m.format) { <div class="prow"><dt>{{ t('pb.v2.m.fFormat') }}</dt><dd>{{ formatLabel(t, m.format) }}</dd></div> }
                   @if (interviewersOf(a)) { <div class="prow"><dt>{{ t('pb.v2.m.fInterviewers') }}</dt><dd>{{ interviewersOf(a) }}</dd></div> }
@@ -869,6 +874,12 @@ export class MaterialsListComponent implements OnDestroy, OnInit {
   senderName(a: InterviewAsset): string {
     const m = this.metaOf(a);
     return m?.from || m?.fromEmail || '';
+  }
+
+  /** 票 313：展开区发件人行（名 + 地址；两者皆无返回 null，模板整行不渲染）。 */
+  senderLine(a: InterviewAsset): string | null {
+    const m = this.metaOf(a);
+    return m ? formatSenderLine(m.from, m.fromEmail) : null;
   }
 
   /** 票210：发件人头像首字母，无发件人时为信封符号。 */

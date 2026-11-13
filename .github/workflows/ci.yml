@@ -4,7 +4,7 @@
 # 仓库此前零 CI。本流水线只做守护,不改产品代码:
 #   - 触发:push / PR 到 develop-new-features(**不是 main** —— main 合并另需 Forrest 点头)
 #   - 后端:build + 全量测试(7 个测试项目)+ 覆盖率门(只升不降)
-#   - 前端:tsc --noEmit + ng build
+#   - 前端:tsc --noEmit + check-templates + Jest + ng build(票 315 补 check-templates 与 Jest)
 #
 # 覆盖率口径复用票 28 已落地的基建,不另立一套:
 #   - 各 *.Tests.csproj 已接入 coverlet.msbuild(中央版本 Directory.Packages.props)
@@ -191,6 +191,15 @@ jobs:
       - name: tsc --noEmit
         working-directory: web
         run: npx tsc --noEmit
+
+      - name: 模板结构检查 check-templates(票 315)
+        working-directory: web
+        run: node tools/check-templates.mjs
+
+      - name: Jest 单元测试(票 315)
+        working-directory: web
+        # 此前 CI 不跑 Jest(票 311a 账本更正);本步与本机 `npm test` 同口径
+        run: npm test -- --ci
 
       - name: mail-html 信任旁路静态门禁(票 309 测试 23)
         working-directory: web

@@ -45,3 +45,35 @@ dotnet test
 
 # 本地起停（Mac）：见仓库根 README-本地运行Mac.md；后端全栈 docker compose up -d（改哪个服务只编哪个：docker compose up -d --build <service>）
 ```
+
+## 当前交接状态（2026-11-13，由云端会话移交给本机桌面版会话）
+
+开发已从 Muse 移交给 Claude（PROTOCOL v1.1）。新会话开始时先读：
+1. `docs/fix-program/PROTOCOL.md`
+2. `docs/fix-program/FIX-STATUS.md` 末尾（票 307–313 与 311a 条目）
+3. `docs/fix-program/handover/MUSE-HANDOVER-NOTES.md`
+
+### 进行中
+- **票 311a**（邮件→轮次归属纯函数）：分支 `claude/311a-email-round-attribution`，PR #3，CI 全绿。
+  状态 **PUSHED**：CI 不跑 Jest，本 spec 只在垫片下跑过。首要动作：在本机 `cd web && npm ci && npx jest src/app/features/playbook/redesign/round/email-round-attribution.spec.ts`，
+  再跑全量 `npm test`；通过后在台账把 311a 记为 VERIFIED。
+- 规则 3 平局 → 未指派（不取更早轮次），以代码与台账为准。
+
+### 票序（用户已同意）
+1. 给 CI 加 Jest 与 check-templates 步骤（先问用户再改 CI；可能暴露既有失败）
+2. **314a** 邮箱刷新透明度：快照增加"无信号跳过"等计数（复用同一 reason 枚举）
+3. **311b1 → 311b3 → 311b2**（一起合入后才暴露入口）：按 311a 的归属结果分组展示。开工前需要 Muse 的完整 311 SPEC.md（目前只拿到部分）
+4. **314b** 新表：只存发件人域名、日期、reason 枚举、不透明 run id、计数；**不得存主题、正文、Gmail message id**；写失败吞掉；每用户 200 次、90 天清理；可回滚迁移；先只写不读
+5. **314c** 前端读取 + 确认对话框 + 撤销（只移除新加的域名，只走既有 rules 端点）
+
+### 工作约定
+- 和用户用中文沟通；用户不想亲自协调，需求确认、和 Muse 对接由 Claude 处理。
+- 方案取舍做独立评分（另起子代理、给中性需求，不让它看到自评）。
+- 每张票：功能分支 → 本机跑 Jest / tsc / check-templates / ng build / 相关 dotnet test → PR → CI 绿 → 台账记录。不推 develop-new-features 直推。
+- 商业方向（用户已定）：个人用户、北美、按月/年/永久收费；不同订阅的功能和限额由管理员配置。路线图见审计报告与交接文档（claude.ai 文档）。
+
+### Windows 本机命令
+```powershell
+cd web; npm ci; npm test; npx tsc --noEmit; node tools/check-templates.mjs; npx ng build
+cd ..; dotnet test src/YourInterview.sln
+```

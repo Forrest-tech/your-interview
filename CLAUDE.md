@@ -54,9 +54,9 @@ dotnet test
 3. `docs/fix-program/handover/MUSE-HANDOVER-NOTES.md`
 
 ### 进行中
-- **票 311a**（邮件→轮次归属纯函数）：分支 `claude/311a-email-round-attribution`，PR #3，CI 全绿。
-  状态 **PUSHED**：CI 不跑 Jest，本 spec 只在垫片下跑过。首要动作：在本机 `cd web && npm ci && npx jest src/app/features/playbook/redesign/round/email-round-attribution.spec.ts`，
-  再跑全量 `npm test`；通过后在台账把 311a 记为 VERIFIED。
+- **票 311a**（邮件→轮次归属纯函数）：**VERIFIED**（2026-11-13 本机真 Jest 72/72、全量 65 套件 / 1141 例），PR #3 已合入 `develop-new-features`（`a62ca59`）。
+- Windows 本机后端测试已知环境失败（非代码回归，CI 绿）：Interviews 15（系统时区非 UTC）、BuildingBlocks 17（测试写死 Unix 路径）、
+  Assessment 测试宿主栈溢出（`OpenLayerStore.LoadEcdict` 循环内 `stackalloc`）。详见 `docs/fix-program/evidence-311a/LOCAL-VERIFY-2026-11-13.md`。
 - 规则 3 平局 → 未指派（不取更早轮次），以代码与台账为准。
 
 ### 票序（用户已同意）

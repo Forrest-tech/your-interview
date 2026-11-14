@@ -16,7 +16,7 @@
 | 项目 | 说明 | 处理 |
 |---|---|---|
 | `sandbox-start.sh` 本地版 | 含 RabbitMQ 预建目录与 FRONTEND HOLD（option C，2026-10-28，脚本永不在 4200 起前端）。入库版仍会起 `ng serve` | 属于 Muse 沙箱的运维脚本，不影响应用；需要时再向 Muse 索取 |
-| 票 311 规格 `SPEC.md` | 见第 4 节摘要 | 实装时索取原文 |
+| 票 311 规格 `SPEC.md` | 见第 4 节摘要 | **已入库（2026-11-14）**：`docs/fix-program/source/specs/ticket311-SPEC.md`，Muse 在原线程分两条贴出全文，去空白后 SHA-256 与线程原文一致。注意：规格内无 311b1/b2/b3 拆分；§3 归属规则与 311a 落地规则有已定偏离（并列不猜、3 天上限、周报排除、needsReview），以 311a 台账为准；§6 的 4 个开放决策仍待 Forrest 定夺 |
 | `wb-verify/` 脚本与日志 | 2026-10-22/23 核查期工具 | 留在 Muse 沙箱 |
 | `aurora-ui-preview` 分支（3bf44146） | 视觉预览，34 个 `.scss`，用户未点头 | 留在 Muse 沙箱（已做成 patch） |
 | 旧 worktree 遗留 | wt-41、wt-82、wt-t124、wt-t127-review、wt-t128-review、wt-t141-recon、wt-t165-recon、wt-graphify-poc、wt-t234-impl | Muse 未逐一溯源，不确定其价值 |

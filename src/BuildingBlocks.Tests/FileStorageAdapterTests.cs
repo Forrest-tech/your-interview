@@ -18,7 +18,7 @@ public sealed class FileStorageAdapterTests: IDisposable
 {
 // 测试目录固定建在 /tmp 下:其祖先链无.git /.sln / docker-compose.yml,
 // 不会污染「向上找根」类用例(进程 TMPDIR 在 workspace 内,祖先不可控)。
-private readonly string _base = Path.Combine("/tmp", "t39tests-" + Guid.NewGuid().ToString("N"));
+private readonly string _base = Path.Combine(Path.GetTempPath(), "t39tests-" + Guid.NewGuid().ToString("N"));
 
 public FileStorageAdapterTests() => Directory.CreateDirectory(_base);
 public void Dispose() { try { Directory.Delete(_base, recursive: true);} catch { /* 清理失败不影响结论 */}}
@@ -215,7 +215,8 @@ StorageRootResolver.FindSolutionRoot(cur).Should().BeNull();
 
 // ---------------- ResolveGuarded(Interviews 读路径口径;票94 起规范判定) ----------------
 
-private const string Root = "/data/interviews";
+// 票 317：绝对根按平台取全路径（Linux 仍是 /data/interviews；Windows 为 C:datainterviews），断言才与被测的 GetFullPath 口径一致
+    private static readonly string Root = Path.GetFullPath("/data/interviews");
 
 [Theory] // 一律拒绝
 [InlineData(null)]
@@ -285,7 +286,7 @@ StorageRelativePaths.ResolveGuarded(Root, "e/" + name)
 public void Combine_NormalRelative()
 {
 StorageRelativePaths.CombineUnderRoot("/data/assessment", "abcd1234/2026/10/rec.mp3")
-.Should().Be(Path.Combine("/data/assessment", "abcd1234", "2026", "10", "rec.mp3"));
+.Should().Be(Path.Combine(Path.GetFullPath("/data/assessment"), "abcd1234", "2026", "10", "rec.mp3")); // 票 317：期望按平台取全路径
 }
 
 [Fact] // 票94 改期望(票55 先例,依据=票94 票面):".." 穿越自票94 起被规范守卫拒绝;

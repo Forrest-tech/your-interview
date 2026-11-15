@@ -493,8 +493,14 @@ public sealed class MailboxBackfillResumeTests : IAsyncLifetime, IDisposable
             Content = new StringContent(
                 GmailFullJson("m", "a@b.com", "Hi", "hello"), Encoding.UTF8, "application/json")
         };
-        var gmail = new GmailMailboxProvider(new HttpClient(stub),
-            TimeSpan.FromMilliseconds(200), TimeSpan.Zero);
+        var http = new HttpClient(stub);
+        // 票 317：先用另一个实例走一遍冷路径（HttpClient 管线/JSON 首次 JIT）。冷启动开销发生在
+        // 节流打点之后、请求到达桩之前，慢机上能吃掉近 100 ms 间隔造成偶发失败；预热不计入断言，
+        // 150 ms 阈值不放宽。
+        await new GmailMailboxProvider(http, TimeSpan.Zero, TimeSpan.Zero)
+            .GetMessageFullAsync("tok", "warm", CancellationToken.None);
+        stub.Requests.Clear();
+        var gmail = new GmailMailboxProvider(http, TimeSpan.FromMilliseconds(200), TimeSpan.Zero);
 
         await gmail.GetMessageFullAsync("tok", "m1", CancellationToken.None);
         await gmail.GetMessageFullAsync("tok", "m2", CancellationToken.None);

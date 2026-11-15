@@ -67,6 +67,10 @@ public sealed class OpenLayerStore
         var ecdict = new Dictionary<string, EcdictEntry>(91_599);
         var lemmaByForm = new Dictionary<string, string>();
         var text = DecompressText(ecdictGz).AsSpan();
+        // 票 316：stackalloc 必须在循环外。stackalloc 的内存到方法返回才释放，放在逐行循环里
+        // 每行再分配 64 B、整表累积约 5.6 MB（91,599 行），超过 Windows 默认 1 MB 线程栈即
+        // Stack overflow 崩溃（Linux 默认 8 MB 侥幸未触发）。每行只读本行写入的 cols，复用安全。
+        Span<Range> cols = stackalloc Range[8];
         while (text.Length > 0)
         {
             var nl = text.IndexOf('\n');
@@ -75,7 +79,6 @@ public sealed class OpenLayerStore
             if (line.Length == 0) continue;
             if (line[^1] == '\r') line = line[..^1];
 
-            Span<Range> cols = stackalloc Range[8];
             var colCount = 0;
             var rest = line;
             while (colCount < 8)

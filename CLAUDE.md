@@ -57,9 +57,9 @@ dotnet test
 - **票 311a**（邮件→轮次归属纯函数）：**VERIFIED**（2026-11-13 本机真 Jest 72/72、全量 65 套件 / 1141 例），PR #3 已合入 `develop-new-features`（`a62ca59`）。
 - **票 315**（CI 跑 Jest + check-templates）：VERIFIED。**票 311** 规格原文已入库（`docs/fix-program/source/specs/ticket311-SPEC.md`），
   §6 四决策已按独立评分定案、拆分 311b1 → 311b3 → 311b2（见 FIX-STATUS）；**311b1**（节点模型纯函数）VERIFIED，下一刀 311b3。
-- **票 316**：修 `OpenLayerStore.LoadEcdict` 循环内 `stackalloc`（Windows 上 Assessment 测试宿主与服务启动栈溢出）。
-- Windows 本机后端测试已知环境失败（非代码回归，CI 绿）：Interviews 15（系统时区非 UTC）、BuildingBlocks 17（测试写死 Unix 路径）。
-  详见 `docs/fix-program/evidence-311a/LOCAL-VERIFY-2026-11-13.md`。
+- **票 316**（`LoadEcdict` 循环内 `stackalloc` 栈溢出）：VERIFIED。**票 317**：提醒时刻以 UTC 写库（非 UTC 时区服务器保存即抛异常）
+  + BuildingBlocks 测试路径跨平台 + 节流测试冷启动抖动。合入后 Windows 本机 7 个后端测试项目应无已知失败；
+  本机跑后端测试前先 `stop-all.sh`（运行中的服务会锁住 bin 下的 DLL，编译失败）。
 - Windows 本机原生起全套（无 Docker）：仓库外 `C:\Claude Projects\run-local\start-all.sh` / `stop-all.sh`（本地测试密钥在同目录 `.env`，不入库）。
   无 RabbitMQ 时网关自动降级（关主动健康检查，跨服务异步消息不可用）。
 - 规则 3 平局 → 未指派（不取更早轮次），以代码与台账为准。

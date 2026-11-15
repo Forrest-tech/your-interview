@@ -15,9 +15,10 @@ namespace YourInterview.BuildingBlocks.Tests;
 /// </summary>
 public sealed class StoragePathTraversalGuardTests : IDisposable
 {
-    private const string Root = "/data/interviews";
+    // 票 317：绝对根按平台取全路径（Linux 仍是 /data/interviews；Windows 为 C:datainterviews），断言才与被测的 GetFullPath 口径一致
+    private static readonly string Root = Path.GetFullPath("/data/interviews");
 
-    private readonly string _base = Path.Combine("/tmp", "t94tests-" + Guid.NewGuid().ToString("N"));
+    private readonly string _base = Path.Combine(Path.GetTempPath(), "t94tests-" + Guid.NewGuid().ToString("N"));
 
     public StoragePathTraversalGuardTests() => Directory.CreateDirectory(_base);
     public void Dispose() { try { Directory.Delete(_base, recursive: true); } catch { /* 清理失败不影响结论 */ } }

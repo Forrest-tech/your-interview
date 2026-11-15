@@ -37,7 +37,7 @@ public sealed class RoundReminder : AuditableAggregateRoot
         EntryId = entryId;
         RoundId = roundId;
         Kind = kind;
-        RemindAt = remindAt;
+        RemindAt = remindAt.ToUniversalTime();
         Status = RoundReminderStatus.Pending;
     }
 
@@ -51,7 +51,12 @@ public sealed class RoundReminder : AuditableAggregateRoot
 
     public RoundReminderKind Kind { get; private set; }
 
-    /// <summary>触发时刻(开场时刻 −1 天 / −1 小时,口径见 ReminderSchedule)。</summary>
+    /// <summary>
+    /// 触发时刻(开场时刻 −1 天 / −1 小时,口径见 ReminderSchedule)。
+    /// 票 317:一律以 UTC(offset 0)保存——ReminderSchedule 按服务器本地时区给出带本地 offset 的时刻,
+    /// Npgsql 写 timestamptz 只接受 offset 0,非 UTC 时区的服务器(如 Windows 开发机)保存即抛异常。
+    /// 同一时刻,仅换表示;DateTimeOffset 比较按时刻,同步对账不受影响。
+    /// </summary>
     public DateTimeOffset RemindAt { get; private set; }
 
     public RoundReminderStatus Status { get; private set; }
@@ -66,7 +71,7 @@ public sealed class RoundReminder : AuditableAggregateRoot
     /// </summary>
     public void Reschedule(DateTimeOffset remindAt)
     {
-        RemindAt = remindAt;
+        RemindAt = remindAt.ToUniversalTime();
         Status = RoundReminderStatus.Pending;
         AcknowledgedAt = null;
         Touch();
